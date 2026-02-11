@@ -11,6 +11,11 @@ fn boot() -> Int {
   cors.withCors();
   csrf.withCsrf();
   auth.withAuth();
+  let raw = req.query("q");
+  validate.headerValue(raw);
+  sanitize.html(raw);
+  url.public(raw);
+  path.under(PathSafe(), raw);
   db.exec(DbCap());
   secrets.reveal(SecretsCap());
   1
@@ -29,6 +34,26 @@ fn boot() -> Int {
         .iter()
         .any(|call| call.tags.iter().any(|tag| tag == "effect.secrets.reveal")));
     assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "source.http.query")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.header.value")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.sanitize.html")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.url.public")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
+    assert!(map
         .middleware
         .iter()
         .any(|entry| entry.tags.iter().any(|tag| tag == "middleware.cors")));
@@ -36,6 +61,32 @@ fn boot() -> Int {
         .tags
         .iter()
         .any(|tag| tag == "middleware.security_headers")));
+}
+
+#[test]
+fn security_map_symbol_registry_contains_gate_and_source_tags() {
+    let source = r#"
+fn boot() -> Int {
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    let has_symbol_tag = |symbol: &str, tag: &str| {
+        map.symbols.iter().any(|entry| {
+            entry.sym == symbol && entry.tags.iter().any(|symbol_tag| symbol_tag.id == tag)
+        })
+    };
+
+    assert!(has_symbol_tag("req.query", "source.http.query"));
+    assert!(has_symbol_tag("req.pathParam", "source.http.path"));
+    assert!(has_symbol_tag("validate.headerValue", "gate.header.value"));
+    assert!(has_symbol_tag("sanitize.html", "gate.sanitize.html"));
+    assert!(has_symbol_tag("path.under", "gate.path.under"));
+    assert!(has_symbol_tag("url.public", "gate.url.public"));
+    assert!(has_symbol_tag("url.internal", "gate.url.internal"));
 }
 
 #[test]

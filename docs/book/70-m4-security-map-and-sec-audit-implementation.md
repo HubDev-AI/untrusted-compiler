@@ -59,6 +59,16 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - string validation/sanitization gates require first argument `Untrusted<String>`
     - path gate requires `(PathSafe, Untrusted<String>)`
   - semantic fixtures cover valid gate usage and contract violations
+- Expanded `security_map` marker coverage for gate/source symbols:
+  - callsite tags now include:
+    - `gate.header.value`
+    - `gate.sanitize.html`
+    - `gate.path.under`
+    - `gate.url.public`
+    - `gate.url.internal`
+    - source tags for `req.query`/`req.pathParam`/`req.header`/`req.body`
+  - intrinsic symbol registry now includes these gate and source entries for both underscore and dotted stdlib aliases
+  - `security_map` tests now assert gate/source call tagging and registry presence
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

@@ -47,6 +47,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `path.under` / `validate.pathUnder` -> `PathSafe`, requires `(PathSafe, Untrusted<String>)`.
     - `url.public` -> `PublicUrl` and `url.internal` -> `InternalUrl`.
   - Additional semantic fixtures cover trust-gate contract violations and valid gate input flows.
+  - `security_map` tag coverage was expanded for these trust gates and HTTP source boundaries:
+    - call tags now include `gate.header.value`, `gate.sanitize.html`, `gate.path.under`, `gate.url.public`, `gate.url.internal`.
+    - source tags now include dotted/underscore variants of `req.body`, `req.query`, `req.header`, and `req.pathParam`.
+    - symbol registry coverage and tests were extended to keep `sec.audit` marker detection deterministic.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,

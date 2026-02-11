@@ -276,6 +276,13 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "req_json" | "req.json" => {
             vec!["source.http.body", "gate.schema.json_decode", "effect.net"]
         }
+        "validate_header_value" | "validate.headerValue" => vec!["gate.header.value"],
+        "sanitize_html" | "sanitize.html" => vec!["gate.sanitize.html"],
+        "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder" => {
+            vec!["gate.path.under"]
+        }
+        "url_public" | "url.public" => vec!["gate.url.public", "effect.net"],
+        "url_internal" | "url.internal" => vec!["gate.url.internal", "effect.net"],
         "db_read" | "db.queryOne" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
         "db_write" | "db.exec" => vec!["sink.sql.exec", "effect.db.write", "capability.db"],
         "res_html" | "res.html" => vec!["sink.http.html"],
@@ -395,6 +402,10 @@ fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMi
 
 fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
     vec![
+        symbol("req_body", &[("source.http.body", TagKind::Source)]),
+        symbol("req_query", &[("source.http.query", TagKind::Source)]),
+        symbol("req_header", &[("source.http.header", TagKind::Source)]),
+        symbol("req_path_param", &[("source.http.path", TagKind::Source)]),
         symbol(
             "db_write",
             &[
@@ -449,6 +460,45 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
                 ("effect.net", TagKind::Effect),
             ],
         ),
+        symbol("res_html", &[("sink.http.html", TagKind::Sink)]),
+        symbol("set_header", &[("sink.http.header_set", TagKind::Sink)]),
+        symbol("set_cookie", &[("sink.http.cookie_set", TagKind::Sink)]),
+        symbol(
+            "fs_read",
+            &[
+                ("sink.fs.read", TagKind::Sink),
+                ("effect.fs.read", TagKind::Effect),
+                ("capability.fs", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "fs_write",
+            &[
+                ("sink.fs.write", TagKind::Sink),
+                ("effect.fs.write", TagKind::Effect),
+                ("capability.fs", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "validate_header_value",
+            &[("gate.header.value", TagKind::Gate)],
+        ),
+        symbol("sanitize_html", &[("gate.sanitize.html", TagKind::Gate)]),
+        symbol("path_under", &[("gate.path.under", TagKind::Gate)]),
+        symbol(
+            "url_public",
+            &[
+                ("gate.url.public", TagKind::Gate),
+                ("effect.net", TagKind::Effect),
+            ],
+        ),
+        symbol(
+            "url_internal",
+            &[
+                ("gate.url.internal", TagKind::Gate),
+                ("effect.net", TagKind::Effect),
+            ],
+        ),
         symbol(
             "res_json",
             &[("sink.json.encode_http_response", TagKind::Sink)],
@@ -477,9 +527,56 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
                 ("effect.net", TagKind::Effect),
             ],
         ),
+        symbol("req.body", &[("source.http.body", TagKind::Source)]),
+        symbol("req.query", &[("source.http.query", TagKind::Source)]),
+        symbol("req.header", &[("source.http.header", TagKind::Source)]),
+        symbol("req.pathParam", &[("source.http.path", TagKind::Source)]),
         symbol(
             "res.json",
             &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol("res.html", &[("sink.http.html", TagKind::Sink)]),
+        symbol("res.setHeader", &[("sink.http.header_set", TagKind::Sink)]),
+        symbol("res.addCookie", &[("sink.http.cookie_set", TagKind::Sink)]),
+        symbol(
+            "fs.read",
+            &[
+                ("sink.fs.read", TagKind::Sink),
+                ("effect.fs.read", TagKind::Effect),
+                ("capability.fs", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "fs.write",
+            &[
+                ("sink.fs.write", TagKind::Sink),
+                ("effect.fs.write", TagKind::Effect),
+                ("capability.fs", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "validate.headerValue",
+            &[("gate.header.value", TagKind::Gate)],
+        ),
+        symbol("sanitize.html", &[("gate.sanitize.html", TagKind::Gate)]),
+        symbol("path.under", &[("gate.path.under", TagKind::Gate)]),
+        symbol(
+            "validate.pathUnder",
+            &[("gate.path.under", TagKind::Gate)],
+        ),
+        symbol(
+            "url.public",
+            &[
+                ("gate.url.public", TagKind::Gate),
+                ("effect.net", TagKind::Effect),
+            ],
+        ),
+        symbol(
+            "url.internal",
+            &[
+                ("gate.url.internal", TagKind::Gate),
+                ("effect.net", TagKind::Effect),
+            ],
         ),
         symbol(
             "secrets.reveal",
