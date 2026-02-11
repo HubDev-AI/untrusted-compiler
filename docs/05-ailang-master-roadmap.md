@@ -34,6 +34,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `@allow(...)` annotations are validated during analysis and emitted into `security_map.allows` for audit reporting.
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
   - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
+  - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -487,10 +488,9 @@ Day 14:
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
 2. Add first-class trust-gate flow checks (`req.json(schema)`) and origin-trace sink diagnostics.
-3. Emit and enforce allowlist annotation metadata (`@allow`) in `security_map` and `sec.audit`.
-4. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
-5. Expand deterministic `sec.audit` findings for SQL/logging/privacy and exception expiry windows.
-6. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
+3. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
+4. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
+5. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 
 ---
 

@@ -219,8 +219,8 @@ fn collect_expr(
 ) {
     match &expr.kind {
         ExprKind::Call { callee, args } => {
-            if let ExprKind::Identifier(name) = &callee.kind {
-                if let Some(tags) = call_tags_for(name) {
+            if let Some(name) = callable_name(callee) {
+                if let Some(tags) = call_tags_for(name.as_str()) {
                     calls.push(SecurityCall {
                         loc: span_to_loc(&expr.span),
                         callee: name.clone(),
@@ -228,7 +228,7 @@ fn collect_expr(
                     });
                 }
 
-                if let Some(middleware_entry) = middleware_for(name, &expr.span, policy) {
+                if let Some(middleware_entry) = middleware_for(name.as_str(), &expr.span, policy) {
                     middleware.push(middleware_entry);
                 }
             }
@@ -243,6 +243,7 @@ fn collect_expr(
             collect_expr(left, calls, middleware, policy);
             collect_expr(right, calls, middleware, policy);
         }
+        ExprKind::Member { object, .. } => collect_expr(object, calls, middleware, policy),
         ExprKind::If {
             condition,
             then_branch,
@@ -268,28 +269,34 @@ fn collect_expr(
 
 fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
     let tags = match name {
-        "req_body" => vec!["source.http.body"],
-        "req_query" => vec!["source.http.query"],
-        "req_header" => vec!["source.http.header"],
-        "req_path_param" => vec!["source.http.path"],
-        "req_json" => vec!["source.http.body", "gate.schema.json_decode", "effect.net"],
-        "db_read" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
-        "db_write" => vec!["sink.sql.exec", "effect.db.write", "capability.db"],
-        "res_html" => vec!["sink.http.html"],
-        "set_header" => vec!["sink.http.header_set"],
-        "set_cookie" => vec!["sink.http.cookie_set"],
-        "res_json" => vec!["sink.json.encode_http_response"],
-        "net_call" => vec!["sink.net.public_request", "effect.net", "capability.net"],
-        "net_internal_call" => vec![
+        "req_body" | "req.body" => vec!["source.http.body"],
+        "req_query" | "req.query" => vec!["source.http.query"],
+        "req_header" | "req.header" => vec!["source.http.header"],
+        "req_path_param" | "req.pathParam" => vec!["source.http.path"],
+        "req_json" | "req.json" => {
+            vec!["source.http.body", "gate.schema.json_decode", "effect.net"]
+        }
+        "db_read" | "db.queryOne" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
+        "db_write" | "db.exec" => vec!["sink.sql.exec", "effect.db.write", "capability.db"],
+        "res_html" | "res.html" => vec!["sink.http.html"],
+        "set_header" | "res.setHeader" => vec!["sink.http.header_set"],
+        "set_cookie" | "res.addCookie" => vec!["sink.http.cookie_set"],
+        "res_json" | "res.json" => vec!["sink.json.encode_http_response"],
+        "net_call" | "httpClient.get" => {
+            vec!["sink.net.public_request", "effect.net", "capability.net"]
+        }
+        "net_internal_call" | "httpClient.getInternal" => vec![
             "sink.net.internal_request",
             "effect.net",
             "capability.internal_net",
         ],
-        "fs_read" => vec!["sink.fs.read", "effect.fs.read", "capability.fs"],
-        "fs_write" => vec!["sink.fs.write", "effect.fs.write", "capability.fs"],
-        "log" => vec!["sink.log.emit", "effect.log"],
-        "secret_read" => vec!["effect.secrets.read", "capability.secrets"],
-        "secret_reveal" => vec!["effect.secrets.reveal", "capability.secrets"],
+        "fs_read" | "fs.read" => vec!["sink.fs.read", "effect.fs.read", "capability.fs"],
+        "fs_write" | "fs.write" => vec!["sink.fs.write", "effect.fs.write", "capability.fs"],
+        "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => {
+            vec!["sink.log.emit", "effect.log"]
+        }
+        "secret_read" | "secrets.get" => vec!["effect.secrets.read", "capability.secrets"],
+        "secret_reveal" | "secrets.reveal" => vec!["effect.secrets.reveal", "capability.secrets"],
         _ => return None,
     };
 
@@ -299,7 +306,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
 fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMiddleware> {
     let mut attrs = HashMap::new();
     let (tag, attrs_fill): (&str, fn(&mut HashMap<String, TagAttr>, &Policy)) = match name {
-        "withCors" | "cors_with" => ("middleware.cors", |attrs, policy| {
+        "withCors" | "cors_with" | "cors.withCors" => ("middleware.cors", |attrs, policy| {
             attrs.insert(
                 "allowCredentials".to_string(),
                 TagAttr::Bool(policy.cors.allow_credentials),
@@ -317,7 +324,7 @@ fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMi
                 TagAttr::Bool(policy.cors.require_vary_origin),
             );
         }),
-        "withSecurityHeaders" | "sec_with_security_headers" => {
+        "withSecurityHeaders" | "sec_with_security_headers" | "sec.withSecurityHeaders" => {
             ("middleware.security_headers", |attrs, policy| {
                 attrs.insert(
                     "enabled".to_string(),
@@ -341,7 +348,7 @@ fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMi
                 );
             })
         }
-        "withCsrf" | "csrf_with" => ("middleware.csrf", |attrs, policy| {
+        "withCsrf" | "csrf_with" | "csrf.withCsrf" => ("middleware.csrf", |attrs, policy| {
             attrs.insert("enabled".to_string(), TagAttr::Bool(policy.csrf.enabled));
             attrs.insert(
                 "mode".to_string(),
@@ -356,7 +363,7 @@ fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMi
                 TagAttr::Bool(policy.csrf.secure_cookie),
             );
         }),
-        "withAuth" | "auth_with" => ("middleware.auth", |attrs, policy| {
+        "withAuth" | "auth_with" | "auth.withAuth" => ("middleware.auth", |attrs, policy| {
             attrs.insert(
                 "mode".to_string(),
                 TagAttr::String(policy.auth.mode.clone()),
@@ -446,6 +453,64 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             "res_json",
             &[("sink.json.encode_http_response", TagKind::Sink)],
         ),
+        symbol(
+            "db.exec",
+            &[
+                ("sink.sql.exec", TagKind::Sink),
+                ("effect.db.write", TagKind::Effect),
+                ("capability.db", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "db.queryOne",
+            &[
+                ("sink.sql.query", TagKind::Sink),
+                ("effect.db.read", TagKind::Effect),
+                ("capability.db", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "req.json",
+            &[
+                ("source.http.body", TagKind::Source),
+                ("gate.schema.json_decode", TagKind::Gate),
+                ("effect.net", TagKind::Effect),
+            ],
+        ),
+        symbol(
+            "res.json",
+            &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol(
+            "secrets.reveal",
+            &[
+                ("effect.secrets.reveal", TagKind::Effect),
+                ("capability.secrets", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "log.info",
+            &[
+                ("sink.log.emit", TagKind::Sink),
+                ("effect.log", TagKind::Effect),
+            ],
+        ),
+        symbol(
+            "httpClient.get",
+            &[
+                ("sink.net.public_request", TagKind::Sink),
+                ("effect.net", TagKind::Effect),
+                ("capability.net", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "httpClient.getInternal",
+            &[
+                ("sink.net.internal_request", TagKind::Sink),
+                ("effect.net", TagKind::Effect),
+                ("capability.internal_net", TagKind::Capability),
+            ],
+        ),
     ]
 }
 
@@ -468,6 +533,19 @@ fn span_to_loc(span: &Span) -> SourceLocation {
         file: span.file.display().to_string(),
         line: span.start_line,
         column: span.start_col,
+    }
+}
+
+fn callable_name(expr: &Expr) -> Option<String> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => Some(name.clone()),
+        ExprKind::Member { object, field } => {
+            let mut prefix = callable_name(object)?;
+            prefix.push('.');
+            prefix.push_str(field);
+            Some(prefix)
+        }
+        _ => None,
     }
 }
 

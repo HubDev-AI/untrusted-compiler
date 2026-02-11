@@ -1,0 +1,7 @@
+fn boot() -> Int {
+  cors.withCors();
+  sec.withSecurityHeaders();
+  db.exec(DbCap());
+  req.json(payload);
+  1
+}

@@ -7,12 +7,12 @@ use std::path::Path;
 fn security_map_collects_sensitive_calls_and_middleware() {
     let source = r#"
 fn boot() -> Int {
-  withSecurityHeaders();
-  withCors();
-  withCsrf();
-  withAuth();
-  db_write(DbCap());
-  secret_reveal(SecretsCap());
+  sec.withSecurityHeaders();
+  cors.withCors();
+  csrf.withCsrf();
+  auth.withAuth();
+  db.exec(DbCap());
+  secrets.reveal(SecretsCap());
   1
 }
 "#;
@@ -36,6 +36,26 @@ fn boot() -> Int {
         .tags
         .iter()
         .any(|tag| tag == "middleware.security_headers")));
+}
+
+#[test]
+fn security_map_still_supports_underscore_intrinsic_names() {
+    let source = r#"
+fn boot() -> Int {
+  db_write(DbCap());
+  secret_reveal(SecretsCap());
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(
+        |call| call.callee == "db_write" && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+    ));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "secret_reveal" && call.tags.iter().any(|tag| tag == "effect.secrets.reveal")
+    }));
 }
 
 #[test]

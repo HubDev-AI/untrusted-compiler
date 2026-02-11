@@ -149,6 +149,10 @@ pub enum ExprKind {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    Member {
+        object: Box<Expr>,
+        field: String,
+    },
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
@@ -205,10 +209,7 @@ pub struct Pattern {
 pub enum PatternKind {
     Wildcard,
     Identifier(String),
-    Variant {
-        name: String,
-        args: Vec<Pattern>,
-    },
+    Variant { name: String, args: Vec<Pattern> },
     Number(String),
     String(String),
     Bool(bool),

@@ -39,7 +39,11 @@ impl Type {
         match self {
             Type::Named { name, args } if args.is_empty() => name.clone(),
             Type::Named { name, args } => {
-                let args_text = args.iter().map(Type::describe).collect::<Vec<_>>().join(", ");
+                let args_text = args
+                    .iter()
+                    .map(Type::describe)
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("{name}<{args_text}>")
             }
             Type::Unit => "Unit".to_string(),
@@ -124,11 +128,35 @@ struct Catalog {
 impl Catalog {
     fn new() -> Self {
         let primitive_types = [
-            "Bool", "Int", "Int64", "Float64", "Decimal", "String", "Bytes", "Time",
-            "Duration", "Uuid", "Unit",
-            "DbCap", "TxCap", "NetCap", "InternalNetCap", "FsCap", "SecretsCap",
-            "SqlQuery", "HtmlSafe", "PublicUrl", "InternalUrl", "PathSafe", "HeaderName",
-            "HeaderValue", "Cookie", "LogValue", "Budget", "StdError", "Origin",
+            "Bool",
+            "Int",
+            "Int64",
+            "Float64",
+            "Decimal",
+            "String",
+            "Bytes",
+            "Time",
+            "Duration",
+            "Uuid",
+            "Unit",
+            "DbCap",
+            "TxCap",
+            "NetCap",
+            "InternalNetCap",
+            "FsCap",
+            "SecretsCap",
+            "SqlQuery",
+            "HtmlSafe",
+            "PublicUrl",
+            "InternalUrl",
+            "PathSafe",
+            "HeaderName",
+            "HeaderValue",
+            "Cookie",
+            "LogValue",
+            "Budget",
+            "StdError",
+            "Origin",
         ]
         .into_iter()
         .map(|item| item.to_string())
@@ -254,10 +282,16 @@ impl Analyzer {
                             .iter()
                             .map(|variant| EnumVariantInfo {
                                 name: variant.name.clone(),
-                                payload: variant.payload.iter().map(|field| field.ty.clone()).collect(),
+                                payload: variant
+                                    .payload
+                                    .iter()
+                                    .map(|field| field.ty.clone())
+                                    .collect(),
                             })
                             .collect::<Vec<_>>();
-                        self.catalog.enums.insert(decl.name.clone(), EnumInfo { variants });
+                        self.catalog
+                            .enums
+                            .insert(decl.name.clone(), EnumInfo { variants });
                     }
                 }
                 ItemKind::Function(_) => {}
@@ -304,17 +338,25 @@ impl Analyzer {
 
                 if self.policy.forbidden_effects.contains(&effect_name) {
                     self.diagnostics.push(
-                        Diagnostic::error("E2002", "effect forbidden by policy", effect.span.clone())
-                            .with_note(format!(
-                                "effect `{effect_name}` is forbidden by the active policy"
-                            )),
+                        Diagnostic::error(
+                            "E2002",
+                            "effect forbidden by policy",
+                            effect.span.clone(),
+                        )
+                        .with_note(format!(
+                            "effect `{effect_name}` is forbidden by the active policy"
+                        )),
                     );
                 }
 
                 if !declared_effects.insert(effect_name.clone()) {
                     self.diagnostics.push(
-                        Diagnostic::error("E4003", "duplicate effect declaration", effect.span.clone())
-                            .with_note(format!("effect `{effect_name}` is declared more than once")),
+                        Diagnostic::error(
+                            "E4003",
+                            "duplicate effect declaration",
+                            effect.span.clone(),
+                        )
+                        .with_note(format!("effect `{effect_name}` is declared more than once")),
                     );
                 }
             }
@@ -482,14 +524,12 @@ impl Analyzer {
     ) {
         match &stmt.kind {
             StmtKind::Let {
-                name,
-                ty,
-                value,
-                ..
+                name, ty, value, ..
             } => {
                 let value_type = self.analyze_expr(value, env, used_effects);
                 let bound_type = if let Some(annotation) = ty {
-                    let annotation_type = self.resolve_type_expr(annotation, annotation.span.clone());
+                    let annotation_type =
+                        self.resolve_type_expr(annotation, annotation.span.clone());
                     if !annotation_type.compatible_with(&value_type) {
                         self.diagnostics.push(
                             Diagnostic::error(
@@ -676,6 +716,10 @@ impl Analyzer {
                     }
                 }
             }
+            ExprKind::Member { object, .. } => {
+                let _ = self.analyze_expr(object, env, used_effects);
+                Type::Unknown
+            }
             ExprKind::Call { callee, args } => {
                 self.analyze_call(expr.span.clone(), callee, args, env, used_effects)
             }
@@ -734,10 +778,14 @@ impl Analyzer {
         env: &mut HashMap<String, Type>,
         used_effects: &mut HashSet<String>,
     ) -> Type {
-        let ExprKind::Identifier(name) = &callee.kind else {
+        let Some(name) = callable_name(callee) else {
             self.diagnostics.push(
-                Diagnostic::error("T3104", "unsupported callable expression", callee.span.clone())
-                    .with_note("only named functions/constructors are callable in v0.1-lite"),
+                Diagnostic::error(
+                    "T3104",
+                    "unsupported callable expression",
+                    callee.span.clone(),
+                )
+                .with_note("only named functions/constructors are callable in v0.1-lite"),
             );
             for arg in args {
                 self.analyze_expr(arg, env, used_effects);
@@ -745,19 +793,20 @@ impl Analyzer {
             return Type::Unknown;
         };
 
-        if let Some(signature) = self.catalog.functions.get(name).cloned() {
+        if let Some(signature) = self.catalog.functions.get(name.as_str()).cloned() {
             for effect in &signature.declared_effects {
                 used_effects.insert(effect.clone());
             }
 
             if signature.params.len() != args.len() {
                 self.diagnostics.push(
-                    Diagnostic::error("T3103", "function argument count mismatch", span)
-                        .with_note(format!(
+                    Diagnostic::error("T3103", "function argument count mismatch", span).with_note(
+                        format!(
                             "`{name}` expects {}, got {}",
                             signature.params.len(),
                             args.len()
-                        )),
+                        ),
+                    ),
                 );
             }
 
@@ -766,13 +815,17 @@ impl Analyzer {
                 if let Some(expected) = signature.params.get(index) {
                     if !expected.compatible_with(&arg_type) {
                         self.diagnostics.push(
-                            Diagnostic::error("T3101", "function argument type mismatch", arg.span.clone())
-                                .with_note(format!(
-                                    "argument {} expects `{}`, got `{}`",
-                                    index + 1,
-                                    expected.describe(),
-                                    arg_type.describe()
-                                )),
+                            Diagnostic::error(
+                                "T3101",
+                                "function argument type mismatch",
+                                arg.span.clone(),
+                            )
+                            .with_note(format!(
+                                "argument {} expects `{}`, got `{}`",
+                                index + 1,
+                                expected.describe(),
+                                arg_type.describe()
+                            )),
                         );
                     }
                 }
@@ -781,7 +834,7 @@ impl Analyzer {
             return signature.return_type;
         }
 
-        if let Some(intrinsic) = intrinsic_spec_for(name) {
+        if let Some(intrinsic) = intrinsic_spec_for(name.as_str()) {
             used_effects.insert(intrinsic.effect.to_string());
             let mut arg_types = Vec::with_capacity(args.len());
             for arg in args {
@@ -794,7 +847,7 @@ impl Analyzer {
                         self.diagnostics.push(
                             Diagnostic::error("E2003", "operation requires capability", span.clone())
                                 .with_note(format!(
-                                    "`{name}` requires first argument capability `{required_capability}`"
+                                "`{name}` requires first argument capability `{required_capability}`"
                                 )),
                         );
                     }
@@ -819,16 +872,20 @@ impl Analyzer {
         }
 
         if let Some(constructor) =
-            self.resolve_builtin_constructor(name, span.clone(), args, env, used_effects)
+            self.resolve_builtin_constructor(name.as_str(), span.clone(), args, env, used_effects)
         {
             return constructor;
         }
 
-        if self.catalog.structs.contains_key(name) {
+        if self.catalog.structs.contains_key(name.as_str()) {
             if !args.is_empty() {
                 self.diagnostics.push(
-                    Diagnostic::error("T3103", "struct constructor does not accept arguments", span)
-                        .with_note(format!("`{name}()` expects 0 arguments")),
+                    Diagnostic::error(
+                        "T3103",
+                        "struct constructor does not accept arguments",
+                        span,
+                    )
+                    .with_note(format!("`{name}()` expects 0 arguments")),
                 );
             }
 
@@ -836,10 +893,11 @@ impl Analyzer {
                 self.analyze_expr(arg, env, used_effects);
             }
 
-            return Type::named(name.clone());
+            return Type::named(name);
         }
 
-        if let Some((owner_enum, payload_types)) = self.find_enum_variant_constructor(name) {
+        if let Some((owner_enum, payload_types)) = self.find_enum_variant_constructor(name.as_str())
+        {
             if payload_types.len() != args.len() {
                 self.diagnostics.push(
                     Diagnostic::error("T3103", "enum constructor argument count mismatch", span)
@@ -856,13 +914,17 @@ impl Analyzer {
                 if let Some(expected) = payload_types.get(index) {
                     if !expected.compatible_with(&arg_type) {
                         self.diagnostics.push(
-                            Diagnostic::error("T3101", "enum constructor argument type mismatch", arg.span.clone())
-                                .with_note(format!(
-                                    "variant `{name}` argument {} expects `{}`, got `{}`",
-                                    index + 1,
-                                    expected.describe(),
-                                    arg_type.describe()
-                                )),
+                            Diagnostic::error(
+                                "T3101",
+                                "enum constructor argument type mismatch",
+                                arg.span.clone(),
+                            )
+                            .with_note(format!(
+                                "variant `{name}` argument {} expects `{}`, got `{}`",
+                                index + 1,
+                                expected.describe(),
+                                arg_type.describe()
+                            )),
                         );
                     }
                 }
@@ -872,8 +934,12 @@ impl Analyzer {
         }
 
         self.diagnostics.push(
-            Diagnostic::error("T3104", "unknown function or constructor", callee.span.clone())
-                .with_note(format!("`{name}` is not declared")),
+            Diagnostic::error(
+                "T3104",
+                "unknown function or constructor",
+                callee.span.clone(),
+            )
+            .with_note(format!("`{name}` is not declared")),
         );
         for arg in args {
             self.analyze_expr(arg, env, used_effects);
@@ -981,33 +1047,45 @@ impl Analyzer {
             PatternKind::Variant { name, args } => {
                 let Some((variants, payload_map)) = self.enum_variants_for_type(expected) else {
                     self.diagnostics.push(
-                        Diagnostic::error("T3108", "variant pattern requires enum/option/result type", pattern.span.clone())
-                            .with_note(format!("found `{}`", expected.describe())),
+                        Diagnostic::error(
+                            "T3108",
+                            "variant pattern requires enum/option/result type",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!("found `{}`", expected.describe())),
                     );
                     return PatternCoverage::Other;
                 };
 
                 if !variants.iter().any(|candidate| candidate == name) {
                     self.diagnostics.push(
-                        Diagnostic::error("T3109", "unknown variant in pattern", pattern.span.clone())
-                            .with_note(format!("variant `{name}` is not part of `{}`", expected.describe())),
+                        Diagnostic::error(
+                            "T3109",
+                            "unknown variant in pattern",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!(
+                            "variant `{name}` is not part of `{}`",
+                            expected.describe()
+                        )),
                     );
                     return PatternCoverage::Other;
                 }
 
-                let expected_payload = payload_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_default();
+                let expected_payload = payload_map.get(name).cloned().unwrap_or_default();
 
                 if expected_payload.len() != args.len() {
                     self.diagnostics.push(
-                        Diagnostic::error("T3103", "pattern argument count mismatch", pattern.span.clone())
-                            .with_note(format!(
-                                "variant `{name}` expects {}, got {}",
-                                expected_payload.len(),
-                                args.len()
-                            )),
+                        Diagnostic::error(
+                            "T3103",
+                            "pattern argument count mismatch",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!(
+                            "variant `{name}` expects {}, got {}",
+                            expected_payload.len(),
+                            args.len()
+                        )),
                     );
                 }
 
@@ -1024,8 +1102,12 @@ impl Analyzer {
             PatternKind::Number(_) => {
                 if !Type::named("Int").compatible_with(expected) {
                     self.diagnostics.push(
-                        Diagnostic::error("T3108", "number pattern type mismatch", pattern.span.clone())
-                            .with_note(format!("expected `{}`", expected.describe())),
+                        Diagnostic::error(
+                            "T3108",
+                            "number pattern type mismatch",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!("expected `{}`", expected.describe())),
                     );
                 }
                 PatternCoverage::Other
@@ -1033,8 +1115,12 @@ impl Analyzer {
             PatternKind::String(_) => {
                 if !Type::named("String").compatible_with(expected) {
                     self.diagnostics.push(
-                        Diagnostic::error("T3108", "string pattern type mismatch", pattern.span.clone())
-                            .with_note(format!("expected `{}`", expected.describe())),
+                        Diagnostic::error(
+                            "T3108",
+                            "string pattern type mismatch",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!("expected `{}`", expected.describe())),
                     );
                 }
                 PatternCoverage::Other
@@ -1042,8 +1128,12 @@ impl Analyzer {
             PatternKind::Bool(value) => {
                 if !Type::named("Bool").compatible_with(expected) {
                     self.diagnostics.push(
-                        Diagnostic::error("T3108", "boolean pattern type mismatch", pattern.span.clone())
-                            .with_note(format!("expected `{}`", expected.describe())),
+                        Diagnostic::error(
+                            "T3108",
+                            "boolean pattern type mismatch",
+                            pattern.span.clone(),
+                        )
+                        .with_note(format!("expected `{}`", expected.describe())),
                     );
                 }
 
@@ -1121,12 +1211,8 @@ impl Analyzer {
             "Some" => {
                 if args.len() != 1 {
                     self.diagnostics.push(
-                        Diagnostic::error(
-                            "T3103",
-                            "constructor argument count mismatch",
-                            span,
-                        )
-                        .with_note("`Some` expects exactly one argument"),
+                        Diagnostic::error("T3103", "constructor argument count mismatch", span)
+                            .with_note("`Some` expects exactly one argument"),
                     );
                     return Some(Type::option(Type::Unknown));
                 }
@@ -1244,46 +1330,59 @@ struct IntrinsicSpec {
 
 fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
     match name {
-        "log" => Some(IntrinsicSpec {
+        "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => Some(IntrinsicSpec {
             effect: "log",
             required_capability: None,
         }),
-        "time_now" => Some(IntrinsicSpec {
+        "time_now" | "time.now" => Some(IntrinsicSpec {
             effect: "time.now",
             required_capability: None,
         }),
-        "net_call" => Some(IntrinsicSpec {
+        "net_call" | "httpClient.get" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: Some("NetCap"),
         }),
-        "net_internal_call" => Some(IntrinsicSpec {
+        "net_internal_call" | "httpClient.getInternal" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: Some("InternalNetCap"),
         }),
-        "secret_read" => Some(IntrinsicSpec {
+        "secret_read" | "secrets.get" => Some(IntrinsicSpec {
             effect: "secrets.read",
             required_capability: Some("SecretsCap"),
         }),
-        "secret_reveal" => Some(IntrinsicSpec {
+        "secret_reveal" | "secrets.reveal" => Some(IntrinsicSpec {
             effect: "secrets.reveal",
             required_capability: Some("SecretsCap"),
         }),
-        "db_read" => Some(IntrinsicSpec {
+        "db_read" | "db.queryOne" => Some(IntrinsicSpec {
             effect: "db.read",
             required_capability: Some("DbCap"),
         }),
-        "db_write" => Some(IntrinsicSpec {
+        "db_write" | "db.exec" => Some(IntrinsicSpec {
             effect: "db.write",
             required_capability: Some("DbCap"),
         }),
-        "fs_read" => Some(IntrinsicSpec {
+        "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: "fs.read",
             required_capability: Some("FsCap"),
         }),
-        "fs_write" => Some(IntrinsicSpec {
+        "fs_write" | "fs.write" => Some(IntrinsicSpec {
             effect: "fs.write",
             required_capability: Some("FsCap"),
         }),
+        _ => None,
+    }
+}
+
+fn callable_name(expr: &Expr) -> Option<String> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => Some(name.clone()),
+        ExprKind::Member { object, field } => {
+            let mut prefix = callable_name(object)?;
+            prefix.push('.');
+            prefix.push_str(field);
+            Some(prefix)
+        }
         _ => None,
     }
 }

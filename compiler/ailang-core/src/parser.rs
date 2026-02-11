@@ -1,7 +1,7 @@
 use crate::ast::{
     BinaryOp, Block, EffectSpec, EnumDecl, EnumVariant, Expr, ExprKind, FieldDecl, FunctionDecl,
-    Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl, TypeExpr,
-    TypeExprKind, UnaryOp, VariantField,
+    Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl,
+    TypeExpr, TypeExprKind, UnaryOp, VariantField,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer;
@@ -42,12 +42,8 @@ impl Parser {
             } else {
                 let token = self.current().clone();
                 self.diagnostics.push(
-                    Diagnostic::error(
-                        "P2001",
-                        "expected top-level declaration",
-                        token.span,
-                    )
-                    .with_note("top-level items must start with `fn`, `struct`, or `enum`"),
+                    Diagnostic::error("P2001", "expected top-level declaration", token.span)
+                        .with_note("top-level items must start with `fn`, `struct`, or `enum`"),
                 );
                 self.synchronize_top_level();
                 continue;
@@ -88,7 +84,8 @@ impl Parser {
     }
 
     fn parse_function_item(&mut self, start: Token) -> Result<Item, Diagnostic> {
-        let (name, _name_token) = self.expect_identifier("P2002", "expected function name after `fn`")?;
+        let (name, _name_token) =
+            self.expect_identifier("P2002", "expected function name after `fn`")?;
         self.expect_symbol(Symbol::LParen, "P2003", "expected `(` after function name")?;
 
         let mut params = Vec::new();
@@ -112,7 +109,11 @@ impl Parser {
             }
         }
 
-        self.expect_symbol(Symbol::RParen, "P2006", "expected `)` after function parameters")?;
+        self.expect_symbol(
+            Symbol::RParen,
+            "P2006",
+            "expected `)` after function parameters",
+        )?;
 
         let mut effects = Vec::new();
         let mut return_type = None;
@@ -167,10 +168,7 @@ impl Parser {
                 break;
             }
 
-            return Err(self.error_current(
-                "P2008",
-                "expected `,` or `}` in effects declaration",
-            ));
+            return Err(self.error_current("P2008", "expected `,` or `}` in effects declaration"));
         }
 
         self.expect_symbol(
@@ -198,14 +196,19 @@ impl Parser {
     }
 
     fn parse_struct_item(&mut self, start: Token) -> Result<Item, Diagnostic> {
-        let (name, _name_token) = self.expect_identifier("P2010", "expected struct name after `struct`")?;
+        let (name, _name_token) =
+            self.expect_identifier("P2010", "expected struct name after `struct`")?;
         self.expect_symbol(Symbol::LBrace, "P2011", "expected `{` after struct name")?;
 
         let mut fields = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
             let (field_name, field_name_token) =
                 self.expect_identifier("P2012", "expected struct field name")?;
-            self.expect_symbol(Symbol::Colon, "P2013", "expected `:` after struct field name")?;
+            self.expect_symbol(
+                Symbol::Colon,
+                "P2013",
+                "expected `:` after struct field name",
+            )?;
             let field_type = self.parse_type()?;
             let field_span = join_spans(&field_name_token.span, &field_type.span);
             fields.push(FieldDecl {
@@ -234,7 +237,8 @@ impl Parser {
     }
 
     fn parse_enum_item(&mut self, start: Token) -> Result<Item, Diagnostic> {
-        let (name, _name_token) = self.expect_identifier("P2020", "expected enum name after `enum`")?;
+        let (name, _name_token) =
+            self.expect_identifier("P2020", "expected enum name after `enum`")?;
         self.expect_symbol(Symbol::LBrace, "P2021", "expected `{` after enum name")?;
 
         let mut variants = Vec::new();
@@ -296,10 +300,7 @@ impl Parser {
 
     fn parse_variant_field(&mut self) -> Result<VariantField, Diagnostic> {
         if let TokenKind::Identifier(name) = self.current().kind.clone() {
-            let is_named = matches!(
-                self.peek_kind(1),
-                Some(TokenKind::Symbol(Symbol::Colon))
-            );
+            let is_named = matches!(self.peek_kind(1), Some(TokenKind::Symbol(Symbol::Colon)));
 
             if is_named {
                 let name_token = self.bump();
@@ -335,7 +336,9 @@ impl Parser {
         let mut end_span = name_token.span.clone();
         if self.match_symbol(Symbol::Lt).is_some() {
             if self.check_symbol(Symbol::Gt) {
-                return Err(self.error_current("P2031", "generic type argument list cannot be empty"));
+                return Err(
+                    self.error_current("P2031", "generic type argument list cannot be empty")
+                );
             }
 
             loop {
@@ -348,7 +351,8 @@ impl Parser {
                 break;
             }
 
-            let gt = self.expect_symbol(Symbol::Gt, "P2032", "expected `>` after generic arguments")?;
+            let gt =
+                self.expect_symbol(Symbol::Gt, "P2032", "expected `>` after generic arguments")?;
             end_span = gt.span;
         }
 
@@ -414,10 +418,9 @@ impl Parser {
                 break;
             }
 
-            return Err(self.error_current(
-                "P2101",
-                "expected `;` or `}` after expression in block",
-            ));
+            return Err(
+                self.error_current("P2101", "expected `;` or `}` after expression in block")
+            );
         }
 
         let end = self.expect_symbol(Symbol::RBrace, "P2102", "expected `}` to close block")?;
@@ -694,31 +697,49 @@ impl Parser {
         let mut expr = self.parse_primary()?;
 
         loop {
-            if self.match_symbol(Symbol::LParen).is_none() {
-                break;
+            if self.match_symbol(Symbol::Dot).is_some() {
+                let (field, field_token) =
+                    self.expect_identifier("P2204", "expected member name after `.`")?;
+                let span = join_spans(&expr.span, &field_token.span);
+                expr = Expr {
+                    kind: ExprKind::Member {
+                        object: Box::new(expr),
+                        field,
+                    },
+                    span,
+                };
+                continue;
             }
 
-            let mut args = Vec::new();
-            if !self.check_symbol(Symbol::RParen) {
-                loop {
-                    args.push(self.parse_expr()?);
-                    if self.match_symbol(Symbol::Comma).is_some() {
-                        continue;
+            if self.match_symbol(Symbol::LParen).is_some() {
+                let mut args = Vec::new();
+                if !self.check_symbol(Symbol::RParen) {
+                    loop {
+                        args.push(self.parse_expr()?);
+                        if self.match_symbol(Symbol::Comma).is_some() {
+                            continue;
+                        }
+                        break;
                     }
-                    break;
                 }
+
+                let right_paren = self.expect_symbol(
+                    Symbol::RParen,
+                    "P2202",
+                    "expected `)` after call arguments",
+                )?;
+                let span = join_spans(&expr.span, &right_paren.span);
+                expr = Expr {
+                    kind: ExprKind::Call {
+                        callee: Box::new(expr),
+                        args,
+                    },
+                    span,
+                };
+                continue;
             }
 
-            let right_paren =
-                self.expect_symbol(Symbol::RParen, "P2202", "expected `)` after call arguments")?;
-            let span = join_spans(&expr.span, &right_paren.span);
-            expr = Expr {
-                kind: ExprKind::Call {
-                    callee: Box::new(expr),
-                    args,
-                },
-                span,
-            };
+            break;
         }
 
         Ok(expr)
@@ -790,10 +811,7 @@ impl Parser {
                     span,
                 }
             } else {
-                return Err(self.error_current(
-                    "P2211",
-                    "expected `if` or block after `else`",
-                ));
+                return Err(self.error_current("P2211", "expected `if` or block after `else`"));
             };
 
             end_span = expr.span.clone();
@@ -815,7 +833,11 @@ impl Parser {
     fn parse_match_expr(&mut self) -> Result<Expr, Diagnostic> {
         let start = self.expect_keyword(Keyword::Match, "P2220", "expected `match`")?;
         let scrutinee = self.parse_expr()?;
-        self.expect_symbol(Symbol::LBrace, "P2221", "expected `{` after match expression")?;
+        self.expect_symbol(
+            Symbol::LBrace,
+            "P2221",
+            "expected `{` after match expression",
+        )?;
 
         let mut arms = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
@@ -901,10 +923,8 @@ impl Parser {
                 kind: PatternKind::Bool(value),
                 span: token.span,
             }),
-            _ => Err(
-                Diagnostic::error("P2301", "expected pattern", token.span)
-                    .with_note(format!("found {}", token.kind.describe())),
-            ),
+            _ => Err(Diagnostic::error("P2301", "expected pattern", token.span)
+                .with_note(format!("found {}", token.kind.describe()))),
         }
     }
 
@@ -917,7 +937,9 @@ impl Parser {
     }
 
     fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
-        self.tokens.get(self.index + offset).map(|token| &token.kind)
+        self.tokens
+            .get(self.index + offset)
+            .map(|token| &token.kind)
     }
 
     fn bump(&mut self) -> Token {
@@ -974,10 +996,9 @@ impl Parser {
         if self.check_symbol(symbol) {
             Ok(self.bump())
         } else {
-            Err(
-                self.error_current(code, message)
-                    .with_note(format!("expected symbol `{}`", symbol.as_str())),
-            )
+            Err(self
+                .error_current(code, message)
+                .with_note(format!("expected symbol `{}`", symbol.as_str())))
         }
     }
 
@@ -990,10 +1011,8 @@ impl Parser {
         let name = match &token.kind {
             TokenKind::Identifier(name) => name.clone(),
             _ => {
-                return Err(
-                    Diagnostic::error(code, message, token.span)
-                        .with_note(format!("found {}", token.kind.describe())),
-                )
+                return Err(Diagnostic::error(code, message, token.span)
+                    .with_note(format!("found {}", token.kind.describe())))
             }
         };
 

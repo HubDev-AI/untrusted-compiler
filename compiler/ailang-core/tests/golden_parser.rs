@@ -21,7 +21,10 @@ fn collect_case_files(dir: &Path) -> Vec<PathBuf> {
 fn parser_fixtures_match_golden_output() {
     let dir = fixtures_dir();
     let case_files = collect_case_files(&dir);
-    assert!(!case_files.is_empty(), "expected at least one parser fixture");
+    assert!(
+        !case_files.is_empty(),
+        "expected at least one parser fixture"
+    );
 
     for case in case_files {
         let input = fs::read_to_string(&case).expect("fixture should be readable");
@@ -172,9 +175,11 @@ fn render_program_signature(program: &Program) -> String {
                                 .map(render_expr_kind)
                                 .unwrap_or_else(|| "none".to_string())
                         )),
-                        StmtKind::Expr { expr } => {
-                            out.push_str(&format!("  stmt{}=expr {}\n", index, render_expr_kind(expr)))
-                        }
+                        StmtKind::Expr { expr } => out.push_str(&format!(
+                            "  stmt{}=expr {}\n",
+                            index,
+                            render_expr_kind(expr)
+                        )),
                     }
                 }
             }
@@ -205,6 +210,9 @@ fn render_expr_kind(expr: &Expr) -> String {
         ExprKind::Bool(value) => format!("bool({value})"),
         ExprKind::Unary { .. } => "unary".to_string(),
         ExprKind::Binary { .. } => "binary".to_string(),
+        ExprKind::Member { object, field } => {
+            format!("member({}, field={field})", render_expr_kind(object))
+        }
         ExprKind::Call { callee, args } => {
             format!("call({}, args={})", render_expr_kind(callee), args.len())
         }

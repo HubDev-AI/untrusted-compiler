@@ -1,0 +1,4 @@
+fn persist(cap: DbCap) effects { db.write } -> Int {
+  db.exec(cap);
+  1
+}

@@ -23,6 +23,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - high-risk bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`)
   - expiry hygiene findings (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`)
   - exception-volume hygiene finding (`ALLOW_COUNT_HIGH`)
+- Added dotted stdlib call support for security/effect metadata paths:
+  - parser now supports member-call expressions (`module.fn(...)`)
+  - semantic intrinsic/effect/capability checks accept dotted aliases (e.g. `db.exec`, `req.json`, `secrets.reveal`)
+  - `security_map` call and middleware tag extraction supports dotted call names
+  - intrinsic symbol registry now includes dotted stdlib symbols alongside underscore aliases
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -42,11 +47,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - extended `compiler/ailang-core/tests/policy.rs` for csrf/auth/cors validations
 
 ## Current limitations
-- middleware detection currently relies on known callable identifiers (member-call syntax is future work).
+- middleware detection currently relies on known callable names (dynamic dispatch and indirect call targets are not yet mapped).
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add more policy-aware findings for SQL limits and logging privacy settings.
 3. Add richer source-origin traces in security findings and exception rendering.
-4. Add middleware/member-call tag coverage beyond direct identifier calls.
+4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.

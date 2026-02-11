@@ -1,0 +1,7 @@
+OK
+program.items=1
+fn boot() effects=[none] -> Int { stmts=4, tail=number(1) }
+  stmt0=expr call(member(ident(cors), field=withCors), args=0)
+  stmt1=expr call(member(ident(sec), field=withSecurityHeaders), args=0)
+  stmt2=expr call(member(ident(db), field=exec), args=1)
+  stmt3=expr call(member(ident(req), field=json), args=1)
