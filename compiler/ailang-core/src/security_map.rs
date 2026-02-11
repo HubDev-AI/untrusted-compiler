@@ -220,7 +220,11 @@ fn collect_expr(
     match &expr.kind {
         ExprKind::Call { callee, args } => {
             if let Some(name) = callable_name(callee) {
-                if let Some(tags) = call_tags_for(name.as_str()) {
+                let mut tags = call_tags_for(name.as_str()).unwrap_or_default();
+                tags.extend(dynamic_call_tags(name.as_str(), args));
+                dedupe_tags(&mut tags);
+
+                if !tags.is_empty() {
                     calls.push(SecurityCall {
                         loc: span_to_loc(&expr.span),
                         callee: name.clone(),
@@ -308,6 +312,82 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
     };
 
     Some(tags)
+}
+
+fn dynamic_call_tags(name: &str, args: &[Expr]) -> Vec<&'static str> {
+    let mut tags = Vec::new();
+    if sql_call_has_select_without_limit(name, args) {
+        tags.push("sql.select_without_limit");
+    }
+    tags
+}
+
+fn sql_call_has_select_without_limit(name: &str, args: &[Expr]) -> bool {
+    if !matches!(name, "db_write" | "db.exec" | "db_read" | "db.queryOne") {
+        return false;
+    }
+
+    let Some(sql_text) = sql_query_arg_text(args) else {
+        return false;
+    };
+
+    contains_sql_keyword(sql_text, "select") && !contains_sql_keyword(sql_text, "limit")
+}
+
+fn sql_query_arg_text(args: &[Expr]) -> Option<&str> {
+    let query_arg = args.get(1)?;
+    extract_sql_text(query_arg)
+}
+
+fn extract_sql_text(expr: &Expr) -> Option<&str> {
+    match &expr.kind {
+        ExprKind::String(text) => Some(text.as_str()),
+        ExprKind::Call { callee, args } => {
+            let name = callable_name(callee)?;
+            if !matches!(name.as_str(), "sql" | "sql_q" | "sql.q") {
+                return None;
+            }
+            let first = args.first()?;
+            if let ExprKind::String(text) = &first.kind {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn contains_sql_keyword(sql: &str, keyword: &str) -> bool {
+    let keyword_lower = keyword.to_ascii_lowercase();
+    let mut current = String::new();
+
+    for ch in sql.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            current.push(ch.to_ascii_lowercase());
+        } else if !current.is_empty() {
+            if current == keyword_lower {
+                return true;
+            }
+            current.clear();
+        }
+    }
+
+    if !current.is_empty() && current == keyword_lower {
+        return true;
+    }
+
+    false
+}
+
+fn dedupe_tags(tags: &mut Vec<&'static str>) {
+    let mut deduped = Vec::with_capacity(tags.len());
+    for tag in tags.iter().copied() {
+        if !deduped.contains(&tag) {
+            deduped.push(tag);
+        }
+    }
+    *tags = deduped;
 }
 
 fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMiddleware> {

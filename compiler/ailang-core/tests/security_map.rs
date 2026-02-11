@@ -90,6 +90,29 @@ fn boot() -> Int {
 }
 
 #[test]
+fn security_map_tags_sql_select_without_limit_calls() {
+    let source = r#"
+fn bad() -> Int {
+  db.exec(DbCap(), "SELECT id FROM users");
+  db.exec(DbCap(), "SELECT id FROM users LIMIT 1");
+  db.exec(DbCap(), sql.q("SELECT name FROM users", List()));
+  db.exec(DbCap(), sql.q("SELECT name FROM users LIMIT 5", List()));
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    let flagged = map
+        .calls
+        .iter()
+        .filter(|call| call.tags.iter().any(|tag| tag == "sql.select_without_limit"))
+        .count();
+
+    assert_eq!(flagged, 2);
+}
+
+#[test]
 fn security_map_still_supports_underscore_intrinsic_names() {
     let source = r#"
 fn boot() -> Int {

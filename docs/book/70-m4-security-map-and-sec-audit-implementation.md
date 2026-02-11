@@ -79,6 +79,13 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
   - policy and audit tests were extended for this coverage
+- Added callsite-driven SQL limit hygiene detection:
+  - `security_map` now tags SQL sink callsites with `sql.select_without_limit` when a query literal/template call contains `SELECT` and no `LIMIT`
+  - detection currently covers direct string SQL and `sql.q("...", ...)` call forms at `db.exec` / `db.queryOne` sinks
+  - `sec.audit` now emits `SQL_SELECT_WITHOUT_LIMIT` with deterministic severity mapping:
+    - `MEDIUM` when `sql.require_limit_on_select = "warn"`
+    - `HIGH` when `sql.require_limit_on_select = "enforce"`
+  - tests cover callsite tagging and severity mapping behavior
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -103,6 +110,6 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Add callsite-driven SQL limit hygiene findings (`SELECT` without `LIMIT`) with policy severity mapping.
-3. Extend trust-gate coverage to schema/validator families beyond current core gates (`validate.*`, decode/encode policy coupling).
-4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
+2. Extend trust-gate coverage to schema/validator families beyond current core gates (`validate.*`, decode/encode policy coupling).
+3. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
+4. Add richer SQL hygiene parsing (query normalization/AST) to reduce false positives from string heuristics.

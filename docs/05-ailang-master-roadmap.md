@@ -59,6 +59,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
   - policy parser now validates `sql.require_limit_on_select` values (`off|warn|enforce`) with dedicated diagnostics.
+  - `security_map` now adds callsite SQL hygiene tags (`sql.select_without_limit`) for SQL sink calls with unbounded `SELECT` literals.
+  - `sec.audit` now emits `SQL_SELECT_WITHOUT_LIMIT` with policy-mapped severity:
+    - `MEDIUM` for `sql.require_limit_on_select = "warn"`.
+    - `HIGH` for `sql.require_limit_on_select = "enforce"`.
+  - Tests now cover both SQL hygiene tag extraction and `sec.audit` severity mapping for warn/enforce modes.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,

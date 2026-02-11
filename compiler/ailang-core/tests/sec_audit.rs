@@ -229,3 +229,50 @@ require_limit_on_select = "off"
         finding.id == "SQL_LIMIT_RULE_DISABLED" && finding.severity == AuditSeverity::MEDIUM
     }));
 }
+
+#[test]
+fn sec_audit_flags_select_without_limit_with_policy_severity_mapping() {
+    let source = r#"
+fn bad() -> Int {
+  db.exec(DbCap(), "SELECT id FROM users");
+  db.exec(DbCap(), "SELECT id FROM users LIMIT 1");
+  1
+}
+"#;
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+
+    let warn_policy = parse_policy_str(
+        Path::new("ailang.policy"),
+        r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[sql]
+require_limit_on_select = "warn"
+"#,
+    )
+    .expect("warn policy should parse");
+    let warn_report = run_security_audit(&warn_policy, &build_security_map(&program, &warn_policy));
+    assert!(warn_report.findings.iter().any(|finding| {
+        finding.id == "SQL_SELECT_WITHOUT_LIMIT" && finding.severity == AuditSeverity::MEDIUM
+    }));
+
+    let enforce_policy = parse_policy_str(
+        Path::new("ailang.policy"),
+        r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[sql]
+require_limit_on_select = "enforce"
+"#,
+    )
+    .expect("enforce policy should parse");
+    let enforce_report =
+        run_security_audit(&enforce_policy, &build_security_map(&program, &enforce_policy));
+    assert!(enforce_report.findings.iter().any(|finding| {
+        finding.id == "SQL_SELECT_WITHOUT_LIMIT" && finding.severity == AuditSeverity::HIGH
+    }));
+}

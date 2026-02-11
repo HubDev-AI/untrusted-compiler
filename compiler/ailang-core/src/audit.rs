@@ -490,6 +490,26 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
         ));
     }
 
+    if policy.sql.require_limit_on_select != "off"
+        && has_call_tag(security_map, "sql.select_without_limit")
+    {
+        let severity = if policy.sql.require_limit_on_select == "enforce" {
+            AuditSeverity::HIGH
+        } else {
+            AuditSeverity::MEDIUM
+        };
+        findings.push(finding(
+            "SQL_SELECT_WITHOUT_LIMIT",
+            severity,
+            "sql",
+            json!({
+                "requireLimitOnSelect": policy.sql.require_limit_on_select,
+                "count": count_call_tag(security_map, "sql.select_without_limit"),
+            }),
+            "Add LIMIT to SELECT queries or justify the exception with a narrowly scoped allowlist.",
+        ));
+    }
+
     if attack_surface.secrets_reveal {
         let severity = if policy.forbidden_effects.contains("secrets.reveal") {
             AuditSeverity::CRITICAL
@@ -738,6 +758,14 @@ fn has_call_tag(security_map: &SecurityMap, tag: &str) -> bool {
         .calls
         .iter()
         .any(|call| call.tags.iter().any(|candidate| candidate == tag))
+}
+
+fn count_call_tag(security_map: &SecurityMap, tag: &str) -> usize {
+    security_map
+        .calls
+        .iter()
+        .filter(|call| call.tags.iter().any(|candidate| candidate == tag))
+        .count()
 }
 
 fn finding(
