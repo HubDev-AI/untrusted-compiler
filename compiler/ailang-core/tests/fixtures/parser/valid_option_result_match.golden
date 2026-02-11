@@ -1,0 +1,6 @@
+OK
+program.items=3
+struct User { id: Int, email: String }
+enum MaybeUser { Some(user: User), None }
+fn resolve_user(found: Bool) -> Result<Option<User>, String> { stmts=1, tail=ident(selected) }
+  stmt0=let selected: Option<User> = match(arms=2)

@@ -1,0 +1,17 @@
+struct User {
+  id: Int,
+  email: String,
+}
+
+enum MaybeUser {
+  Some(user: User),
+  None,
+}
+
+fn resolve_user(found: Bool) -> Result<Option<User>, String> {
+  let selected: Option<User> = match found {
+    true => Some(User()),
+    false => None,
+  };
+  selected
+}

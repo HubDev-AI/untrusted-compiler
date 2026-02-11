@@ -1,10 +1,5 @@
 # AILang Backend, Runtime, and ABI
 
-Source slice: `docs/ailang-requirements.md` lines 2100-3674
-
----
-Sure. The 'backend choice' is basically: **how your compiler turns MIR into something runnable**. In v0.1 you want *maximum progress with minimum engineering*, and this choice strongly affects your runtime ABI (strings/enums/async) and how easily you can bolt on HTTP/JSON.
-
 ## Option A - Emit C (then call `clang`)
 
 ### What it is
@@ -1734,13 +1729,3 @@ Pick these now to avoid churn:
 4.  **Option field present but null** - `None` (optional; consistent with many APIs)
 
 5.  **Encode None** - omit field (or set null). Omit is common for backends; pick one.
-
----
-
-If you want to proceed again, say 'yes' and I'll add:
-
-- the exact **JsonError** type + helper constructors (and how to build it in MIR),
-- a minimal **schema hashing** / stable field ordering plan (so derived codecs are deterministic),
-- and the v0.1 **handler error mapping** policy (how `Err(HttpError)` becomes a response consistently).
-
----

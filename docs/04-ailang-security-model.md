@@ -1,10 +1,5 @@
 # AILang Security Model
 
-Source slice: `docs/ailang-requirements.md` lines 3675-4555
-
----
-Yes - and if 'attack vectors' are first-class citizens, you'll want to model **security controls and security-relevant behaviors as part of the language + standard runtime**, not as optional ad-hoc libraries.
-
 The key idea: make 'security surfaces' **typed, effect-checked, and policy-checked** so unsafe patterns are hard to express without explicitly opting in.
 
 Below is a concrete design that fits the AILang spec + MIR/intrinsics approach.
@@ -976,7 +971,3 @@ This lint is intentionally shallow for v0.1. The type system does the heavy lift
 - the *sink* (e.g., SQL parameter)
 - the *missing gate* suggestion (`validate.uuid`, `sanitize.html`, etc.)
     That makes debugging security flows painless.
-
----
-
-That should give you a clean formal base and a minimal, implementable lint story while keeping security truly first-class.

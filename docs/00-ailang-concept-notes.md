@@ -1,8 +1,5 @@
 # AILang Concept Notes
 
-Source slice: `docs/ailang-requirements.md` lines 1-173
-
----
 # AILang Backend Requirements (Curated from Conversation)
 
 Source: `docs/AI and Programming Languages.mhtml`
@@ -175,9 +172,3 @@ Such a language would be:
 - **slower to write initially** (more annotations),
 - but **much faster to verify and maintain** (especially with AI),
   because the compiler and tools would catch nonsense immediately.
-
----
-
-If you tell me what domain you're imagining (web backend, smart contracts, ML pipelines, embedded), I can sketch a version optimized for that domain - those constraints change what 'AI-first' should prioritize.
-
----

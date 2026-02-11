@@ -1115,11 +1115,3 @@ PredLiteral   = Literal ;
    true, false, null, const
 *)
 ```
-
-If you want, I can also provide:
-
-- a **tokenization spec** (operators, precedence table, newline/semicolon rules),
-- a **fully unambiguous** grammar (LL(1)/LR-friendly) with precedence encoded,
-- or a **reference parser skeleton** (e.g., in Rust/Go) that matches this EBNF.
-
----

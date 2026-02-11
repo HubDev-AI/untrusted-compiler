@@ -1,0 +1,4 @@
+error[P2222]: expected `=>` in match arm
+  --> invalid_match_missing_arrow.ai:3:13
+  note: found identifier
+  note: expected symbol `=>`

@@ -1,0 +1,6 @@
+fn broken(value: Option<Int>) -> Int {
+  match value {
+    Some(v) v,
+    None => 0,
+  }
+}

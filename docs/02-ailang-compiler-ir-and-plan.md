@@ -1,8 +1,5 @@
 # AILang Compiler, IR, and Implementation Plan
 
-Source slice: `docs/ailang-requirements.md` lines 1254-2099
-
----
 ## 1) Minimal IR design (good for v0.1, web backend focus)
 
 A practical v0.1 pipeline is **AST - HIR (typed, resolved) - MIR (SSA-like, effect-aware) - LLVM/Cranelift/native C backend**. Keep it small:
@@ -920,9 +917,5 @@ This skeleton intentionally:
 - uses Pratt parsing for expressions (easiest to keep precedence correct),
 - leaves generics (`<...>`) and some tokens as TODO,
 - is still aligned with the earlier EBNF and the precedence-encoded grammar.
-
----
-
-If you want the 'next step,' tell me which backend you prefer for v0.1 codegen (**emit C** vs **Cranelift**). I'll tailor the MIR layout and runtime ABI around that choice (especially enums/strings/async + HTTP bindings).
 
 ---

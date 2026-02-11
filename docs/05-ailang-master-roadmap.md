@@ -6,9 +6,13 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
 
 ## Current Status (2026-02-11)
 
-- M0 bootstrap started and initial foundation implemented.
-- Rust workspace, CLI skeleton, manifest validation, diagnostics framework, and golden test scaffolding are in place.
-- M0 book chapters were added under `docs/book/`.
+- M0 bootstrap completed and committed.
+- M1 frontend bootstrap completed:
+  - Lexer/token model with span-aware diagnostics.
+  - Parser/AST for `fn`, `struct`, `enum`, blocks, expressions, `match`, and generic types (`Option`/`Result` forms).
+  - `ailang check --emit ast` output wired into CLI.
+  - Parser golden fixtures added in `compiler/ailang-core/tests/fixtures/parser`.
+- M0 and M1 documentation chapters are now under `docs/book/`.
 
 ## 0. Product Direction (Locked Constraints)
 
