@@ -41,6 +41,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - deterministic `sec.audit` contract,
   - compiler-emitted security metadata tags for robust audit tooling.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
+- Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -66,6 +67,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/68-auth-policy-keys-and-csrf-coupling.md`
 - `docs/book/69-auth-middleware-api-v0.md`
 - `docs/book/71-benchmarking-and-comparison-spec.md`
+- `docs/book/72-ailang-editor-tooling-and-zed-lsp-spec.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -149,6 +151,7 @@ Implementation order is intentionally linear to reduce thrash:
 10. Add security posture tooling (`security_map`, `sec.audit`, deterministic severity mapping, CI gating).
 11. Harden tests, diagnostics, packaging, and build integrity metadata.
 12. Run post-stability benchmark suite and publish cross-language comparison results.
+13. Implement official editor tooling stack (compiler service + LSP + Zed extension + tree-sitter grammar).
 
 ## 3. Milestone Plan
 
@@ -397,6 +400,38 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Benchmark Harness and Reproducibility Guide".
 - Chapter: "First Public Performance and Security Report".
 
+## M11 - Editor Tooling and Zed Integration
+### Trigger condition
+- Start M11 after core language/runtime behavior is stable enough for deterministic editor semantics (at minimum: M8 complete, ideally after M9 stabilization).
+
+### Build tasks
+- Expose compiler frontend as a tooling service API (AST/HIR/symbols/diagnostics/completions metadata).
+- Implement `ailang-language-server` using compiler APIs (no duplicated parser/typechecker).
+- Implement required LSP features:
+  - diagnostics, definition, references, hover, completion, rename, code actions
+- Implement incremental analysis and bounded execution:
+  - per-file caching, dependency invalidation, request time/memory budgets
+- Implement security-aware editor UX:
+  - tagged diagnostics for `security`/`taint`/`secret`
+  - source-to-sink notes and safe quick-fix families
+- Build `zed-ailang` extension:
+  - language config for `.ai`
+  - LSP wiring to `ailang-language-server --stdio`
+  - grammar registration via `tree-sitter-ailang`
+- Add tree-sitter grammar and baseline queries (`highlights`, optional `outline`/`indent`).
+
+### Exit criteria
+- Zed can open `.ai` files with working diagnostics, go-to-definition, hover, and completion.
+- Rename and references behave deterministically on multi-file test fixtures.
+- Security diagnostics in editor include stable codes, spans, tags, and actionable notes.
+- Tooling budgets are enforced and tested (no hangs on large/invalid inputs).
+- LSP server runs with safe defaults (no implicit code execution/network).
+
+### Docs/book outputs
+- Chapter: "AILang Editor Tooling and Zed LSP Spec".
+- Chapter: "LSP Protocol Mapping and Compiler Service API".
+- Chapter: "Zed Extension and Tree-sitter Integration Guide".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -491,6 +526,7 @@ Day 14:
 2. Add first-class trust-gate flow checks (`req.json(schema)`) and origin-trace sink diagnostics.
 3. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
+5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 
 ---
 

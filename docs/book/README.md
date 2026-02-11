@@ -37,5 +37,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `69-auth-middleware-api-v0.md`
 - `70-m4-security-map-and-sec-audit-implementation.md`
 - `71-benchmarking-and-comparison-spec.md`
+- `72-ailang-editor-tooling-and-zed-lsp-spec.md`
 
 As milestones progress, chapters will be added and linked from this index.
