@@ -35,5 +35,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `67-sec-audit-examples-and-policy-profiles.md`
 - `68-auth-policy-keys-and-csrf-coupling.md`
 - `69-auth-middleware-api-v0.md`
+- `70-m4-security-map-and-sec-audit-implementation.md`
 
 As milestones progress, chapters will be added and linked from this index.

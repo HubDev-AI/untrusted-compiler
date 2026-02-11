@@ -8,12 +8,14 @@
 - `ailang test --path <project>`
 - `ailang fmt --path <project>`
 - `ailang lint --path <project>`
+- `ailang sec audit --path <project> [--format text|json] [--fail-on 'risk>=HIGH']`
 
 ## Command behavior in M0
 
 - `check`: validate `ailang.toml` and entry file path/extension.
 - `build`: run `check` validations + write lockfile stub (`ailang.lock`).
 - `run`/`test`/`fmt`/`lint`: placeholders with deterministic messages and basic validation.
+- `sec audit`: validates project + semantic checks, emits `build/security_map.json`, then renders deterministic posture findings.
 
 ## Build flow (current)
 

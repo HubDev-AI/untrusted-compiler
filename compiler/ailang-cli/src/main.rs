@@ -1,4 +1,7 @@
-use ailang_core::{analyze_entry, write_lockfile_stub, Diagnostic};
+use ailang_core::{
+    analyze_entry, build_security_map, render_security_audit_text, run_security_audit, should_fail,
+    write_lockfile_stub, write_security_map, AuditSeverity, Diagnostic,
+};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::{Path, PathBuf};
 
@@ -37,6 +40,28 @@ enum Commands {
         #[arg(long, default_value = ".")]
         path: PathBuf,
     },
+    Sec {
+        #[command(subcommand)]
+        command: SecCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SecCommands {
+    Audit {
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_enum, default_value_t = AuditOutputFormat::Text)]
+        format: AuditOutputFormat,
+        #[arg(long)]
+        fail_on: Option<String>,
+    },
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum AuditOutputFormat {
+    Text,
+    Json,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -54,10 +79,88 @@ fn main() {
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
+        Commands::Sec { command } => cmd_sec(command),
     };
 
     if let Err(code) = result {
         std::process::exit(code);
+    }
+}
+
+fn cmd_sec(command: SecCommands) -> Result<(), i32> {
+    match command {
+        SecCommands::Audit {
+            path,
+            format,
+            fail_on,
+        } => cmd_sec_audit(&path, format, fail_on.as_deref()),
+    }
+}
+
+fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) -> Result<(), i32> {
+    match ailang_core::validate_project(path) {
+        Ok(manifest) => match analyze_entry(path, &manifest) {
+            Ok(program) => {
+                let policy = match ailang_core::policy::load_policy(path) {
+                    Ok(policy) => policy,
+                    Err(diagnostics) => {
+                        print_diagnostics(&diagnostics);
+                        return Err(1);
+                    }
+                };
+
+                let security_map = build_security_map(&program, &policy);
+                let security_map_path = match write_security_map(path, &security_map) {
+                    Ok(output_path) => output_path,
+                    Err(diagnostic) => {
+                        print_diagnostics(&[diagnostic]);
+                        return Err(1);
+                    }
+                };
+
+                let report = run_security_audit(&policy, &security_map);
+                match format {
+                    AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
+                    AuditOutputFormat::Json => {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&report)
+                                .expect("security audit report should serialize")
+                        );
+                    }
+                }
+
+                println!("security map: {}", security_map_path.display());
+
+                if let Some(threshold) = fail_on {
+                    let Some(threshold) = AuditSeverity::parse_threshold(threshold) else {
+                        eprintln!(
+                            "invalid --fail-on value `{}`; use values like `risk>=HIGH`, `HIGH`, `MEDIUM`",
+                            threshold
+                        );
+                        return Err(2);
+                    };
+
+                    if should_fail(&report, threshold) {
+                        eprintln!(
+                            "security audit failed: findings at or above threshold {:?}",
+                            threshold
+                        );
+                        return Err(1);
+                    }
+                }
+
+                Ok(())
+            }
+            Err(diagnostics) => {
+                print_diagnostics(&diagnostics);
+                Err(1)
+            }
+        },
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            Err(1)
+        }
     }
 }
 
@@ -79,7 +182,10 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
                 manifest.package.name,
                 manifest.entry_file()
             );
-            println!("wrote lockfile stub: {}", path.join("ailang.lock").display());
+            println!(
+                "wrote lockfile stub: {}",
+                path.join("ailang.lock").display()
+            );
             Ok(())
         }
         Err(diagnostics) => {

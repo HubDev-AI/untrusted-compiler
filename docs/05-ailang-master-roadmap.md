@@ -30,6 +30,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Forbidden-effect checks are policy-driven.
   - Capability-required intrinsic calls are enforced with dedicated diagnostics (`E2003`, `E2004`).
   - Initial M4 policy and semantic golden tests are in place.
+  - `security_map` metadata generation is implemented for baseline sensitive calls and middleware tags.
+  - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -249,6 +251,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Deterministic Severity Mapping for sec.audit".
 - Chapter: "Auth Policy Keys and CSRF Coupling".
 - Chapter: "Auth Middleware API".
+- Chapter: "M4 security_map and sec.audit Implementation".
 
 ## M5 - MIR Lowering + Introspection
 ### Build tasks
@@ -433,11 +436,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend M4 capability enforcement from intrinsic calls to typed stdlib sink APIs.
-2. Add first-class trust-gate checks (`req.json(schema)`) and sink-flow diagnostics with origin trace.
-3. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
-4. Expand policy validation coverage (`security_headers`, `csrf`, `auth`, plus existing runtime contract keys).
-5. Add security metadata tag emission (`security_map`) baseline and initial `sec.audit` skeleton with deterministic findings.
+1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
+2. Add first-class trust-gate flow checks (`req.json(schema)`) and origin-trace sink diagnostics.
+3. Emit and enforce allowlist annotation metadata (`@allow`) in `security_map` and `sec.audit`.
+4. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
+5. Expand deterministic `sec.audit` findings for SQL/logging/privacy and exception expiry windows.
 
 ---
 

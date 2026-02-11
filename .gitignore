@@ -1,3 +1,5 @@
 /target
 **/target
 .DS_Store
+
+**/build/security_map.json

@@ -3,7 +3,8 @@ use std::path::Path;
 
 #[test]
 fn policy_defaults_when_empty() {
-    let policy = parse_policy_str(Path::new("ailang.policy"), "").expect("empty policy should parse");
+    let policy =
+        parse_policy_str(Path::new("ailang.policy"), "").expect("empty policy should parse");
     assert_eq!(policy.name, "default-secure");
     assert_eq!(policy.version, "0.1");
     assert!(policy.forbidden_effects.contains("shell"));
@@ -47,5 +48,53 @@ max_redirects = 1
 
     let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
         .expect_err("invalid redirect combo must be rejected");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_csrf_none_without_secure_cookie() {
+    let source = r#"
+[csrf]
+same_site = "None"
+secure_cookie = false
+"#;
+
+    let diagnostics =
+        parse_policy_str(Path::new("ailang.policy"), source).expect_err("invalid csrf must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_cookie_auth_without_csrf() {
+    let source = r#"
+[auth]
+mode = "cookie"
+
+[csrf]
+enabled = false
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect_err("cookie auth must require csrf");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_cross_site_cookie_without_cors_credentials() {
+    let source = r#"
+[auth]
+mode = "cookie"
+cross_site_frontend = true
+
+[csrf]
+enabled = true
+
+[cors]
+allowed_origins = ["https://app.example.com"]
+allow_credentials = false
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect_err("cross-site cookie auth must require cors credentials");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }

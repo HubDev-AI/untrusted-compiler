@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::diagnostics::{Diagnostic, Span};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -14,15 +14,103 @@ pub enum PolicyMode {
     Warn,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CorsPolicyConfig {
+    pub enabled: bool,
+    pub allowed_origins: Vec<String>,
+    pub allow_credentials: bool,
+    pub forbid_any_origin: bool,
+    pub forbid_reflect_origin: bool,
+    pub require_vary_origin: bool,
+}
+
+impl CorsPolicyConfig {
+    pub fn has_wildcard_origin(&self) -> bool {
+        self.allowed_origins.iter().any(|origin| origin == "*")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SecurityHeadersPolicyConfig {
+    pub enabled: bool,
+    pub hsts_enabled: bool,
+    pub csp_enabled: bool,
+    pub csp_report_only: bool,
+    pub x_frame_options: String,
+    pub x_content_type_options: bool,
+    pub referrer_policy: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CsrfPolicyConfig {
+    pub enabled: bool,
+    pub mode: String,
+    pub same_site: String,
+    pub secure_cookie: bool,
+    pub protected_methods: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AuthPolicyConfig {
+    pub mode: String,
+    pub cross_site_frontend: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CapturePolicyConfig {
+    pub mode: String,
+    pub redact_headers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReplayPolicyConfig {
+    pub effects: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NetPublicPolicyConfig {
+    pub allow_redirects: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NetInternalPolicyConfig {
+    pub enabled: bool,
+    pub allowed_cidrs: Vec<String>,
+    pub allowed_domains: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NetSsrfPolicyConfig {
+    pub revalidate_redirects: bool,
+    pub resolve_dns: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FsPolicyConfig {
+    pub enabled: bool,
+    pub allowed_base_paths: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     pub name: String,
     pub version: String,
     pub mode: PolicyMode,
+    pub env: String,
     pub forbidden_effects: HashSet<String>,
     pub cors_forbid_any_origin: bool,
     pub cors_forbid_reflect_origin: bool,
     pub cors_require_vary_origin: bool,
+    pub cors: CorsPolicyConfig,
+    pub security_headers: SecurityHeadersPolicyConfig,
+    pub csrf: CsrfPolicyConfig,
+    pub auth: AuthPolicyConfig,
+    pub capture: CapturePolicyConfig,
+    pub replay: ReplayPolicyConfig,
+    pub net_public: NetPublicPolicyConfig,
+    pub net_internal: NetInternalPolicyConfig,
+    pub net_ssrf: NetSsrfPolicyConfig,
+    pub fs: FsPolicyConfig,
 }
 
 impl Default for Policy {
@@ -31,6 +119,7 @@ impl Default for Policy {
             name: "default-secure".to_string(),
             version: "0.1".to_string(),
             mode: PolicyMode::Enforce,
+            env: "prod".to_string(),
             forbidden_effects: ["shell", "unsafe", "secrets.reveal"]
                 .into_iter()
                 .map(|item| item.to_string())
@@ -38,8 +127,116 @@ impl Default for Policy {
             cors_forbid_any_origin: true,
             cors_forbid_reflect_origin: true,
             cors_require_vary_origin: true,
+            cors: CorsPolicyConfig {
+                enabled: true,
+                allowed_origins: vec!["https://app.example.com".to_string()],
+                allow_credentials: true,
+                forbid_any_origin: true,
+                forbid_reflect_origin: true,
+                require_vary_origin: true,
+            },
+            security_headers: SecurityHeadersPolicyConfig {
+                enabled: true,
+                hsts_enabled: true,
+                csp_enabled: true,
+                csp_report_only: false,
+                x_frame_options: "DENY".to_string(),
+                x_content_type_options: true,
+                referrer_policy: "strict-origin-when-cross-origin".to_string(),
+            },
+            csrf: CsrfPolicyConfig {
+                enabled: true,
+                mode: "double_submit".to_string(),
+                same_site: "Lax".to_string(),
+                secure_cookie: true,
+                protected_methods: vec![
+                    "POST".to_string(),
+                    "PUT".to_string(),
+                    "PATCH".to_string(),
+                    "DELETE".to_string(),
+                ],
+            },
+            auth: AuthPolicyConfig {
+                mode: "token".to_string(),
+                cross_site_frontend: false,
+            },
+            capture: CapturePolicyConfig {
+                mode: "errors".to_string(),
+                redact_headers: vec![
+                    "authorization".to_string(),
+                    "cookie".to_string(),
+                    "set-cookie".to_string(),
+                    "x-api-key".to_string(),
+                    "x-auth-token".to_string(),
+                ],
+            },
+            replay: ReplayPolicyConfig {
+                effects: "deny".to_string(),
+            },
+            net_public: NetPublicPolicyConfig {
+                allow_redirects: false,
+            },
+            net_internal: NetInternalPolicyConfig {
+                enabled: false,
+                allowed_cidrs: Vec::new(),
+                allowed_domains: Vec::new(),
+            },
+            net_ssrf: NetSsrfPolicyConfig {
+                revalidate_redirects: true,
+                resolve_dns: true,
+            },
+            fs: FsPolicyConfig {
+                enabled: false,
+                allowed_base_paths: Vec::new(),
+            },
         }
     }
+}
+
+impl Policy {
+    pub fn mode_as_str(&self) -> &'static str {
+        match self.mode {
+            PolicyMode::Enforce => "enforce",
+            PolicyMode::Warn => "warn",
+        }
+    }
+
+    pub fn policy_hash(&self) -> String {
+        let mut forbidden_effects = self.forbidden_effects.iter().cloned().collect::<Vec<_>>();
+        forbidden_effects.sort();
+
+        let normalized = serde_json::json!({
+            "name": self.name,
+            "version": self.version,
+            "mode": self.mode_as_str(),
+            "env": self.env,
+            "forbidden_effects": forbidden_effects,
+            "cors": self.cors,
+            "security_headers": self.security_headers,
+            "csrf": self.csrf,
+            "auth": self.auth,
+            "capture": self.capture,
+            "replay": self.replay,
+            "net_public": self.net_public,
+            "net_internal": self.net_internal,
+            "net_ssrf": self.net_ssrf,
+            "fs": self.fs,
+        });
+
+        let serialized =
+            serde_json::to_vec(&normalized).expect("policy normalization should serialize");
+        let hash = fnv1a64(&serialized);
+        format!("pol_{hash:016x}")
+    }
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,6 +268,12 @@ struct PolicyFile {
     replay: Option<ReplaySection>,
     #[serde(default)]
     cors: Option<CorsSection>,
+    #[serde(default)]
+    security_headers: Option<SecurityHeadersSection>,
+    #[serde(default)]
+    csrf: Option<CsrfSection>,
+    #[serde(default)]
+    auth: Option<AuthSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,6 +285,8 @@ struct PolicySection {
     name: Option<String>,
     #[serde(default)]
     mode: Option<String>,
+    #[serde(default)]
+    env: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,6 +510,107 @@ struct CorsSection {
     require_vary_origin: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecurityHeadersSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    strip_server_header: Option<bool>,
+    #[serde(default)]
+    x_content_type_options: Option<bool>,
+    #[serde(default)]
+    x_frame_options: Option<String>,
+    #[serde(default)]
+    referrer_policy: Option<String>,
+    #[serde(default)]
+    hsts: Option<SecurityHeadersHstsSection>,
+    #[serde(default)]
+    csp: Option<SecurityHeadersCspSection>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecurityHeadersHstsSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    max_age_seconds: Option<i64>,
+    #[serde(default)]
+    include_subdomains: Option<bool>,
+    #[serde(default)]
+    preload: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecurityHeadersCspSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    report_only: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsrfSection {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    cookie_name: Option<String>,
+    #[serde(default)]
+    header_name: Option<String>,
+    #[serde(default)]
+    same_site: Option<String>,
+    #[serde(default)]
+    secure_cookie: Option<bool>,
+    #[serde(default)]
+    http_only_cookie: Option<bool>,
+    #[serde(default)]
+    protected_methods: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuthSection {
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    cross_site_frontend: Option<bool>,
+    #[serde(default)]
+    cookie: Option<AuthCookieSection>,
+    #[serde(default)]
+    token: Option<AuthTokenSection>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuthCookieSection {
+    #[serde(default)]
+    cookie_name: Option<String>,
+    #[serde(default)]
+    same_site: Option<String>,
+    #[serde(default)]
+    secure: Option<bool>,
+    #[serde(default)]
+    http_only: Option<bool>,
+    #[serde(default)]
+    domain: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuthTokenSection {
+    #[serde(default)]
+    header_name: Option<String>,
+    #[serde(default)]
+    scheme: Option<String>,
+}
+
 pub fn load_policy(project_root: &Path) -> Result<Policy, Vec<Diagnostic>> {
     let policy_path = project_root.join(POLICY_FILE_NAME);
     if !policy_path.exists() {
@@ -312,14 +618,12 @@ pub fn load_policy(project_root: &Path) -> Result<Policy, Vec<Diagnostic>> {
     }
 
     let source = fs::read_to_string(&policy_path).map_err(|err| {
-        vec![
-            Diagnostic::error(
-                "P6001",
-                "could not read policy file",
-                Span::point(policy_path.clone(), 1, 1),
-            )
-            .with_note(err.to_string()),
-        ]
+        vec![Diagnostic::error(
+            "P6001",
+            "could not read policy file",
+            Span::point(policy_path.clone(), 1, 1),
+        )
+        .with_note(err.to_string())]
     })?;
 
     parse_policy_str(&policy_path, &source)
@@ -327,14 +631,12 @@ pub fn load_policy(project_root: &Path) -> Result<Policy, Vec<Diagnostic>> {
 
 pub fn parse_policy_str(policy_path: &Path, source: &str) -> Result<Policy, Vec<Diagnostic>> {
     let raw: PolicyFile = toml::from_str(source).map_err(|err| {
-        vec![
-            Diagnostic::error(
-                "P6002",
-                "failed to parse policy file",
-                Span::point(policy_path.to_path_buf(), 1, 1),
-            )
-            .with_note(err.to_string()),
-        ]
+        vec![Diagnostic::error(
+            "P6002",
+            "failed to parse policy file",
+            Span::point(policy_path.to_path_buf(), 1, 1),
+        )
+        .with_note(err.to_string())]
     })?;
 
     build_policy(policy_path, raw)
@@ -368,6 +670,19 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 }
             };
         }
+        if let Some(env) = section.env {
+            match env.as_str() {
+                "dev" | "staging" | "prod" => policy.env = env,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid policy environment",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("policy.env must be `dev`, `staging`, or `prod`"),
+                ),
+            }
+        }
     }
 
     if let Some(section) = raw.effects {
@@ -377,21 +692,34 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
     }
 
     if let Some(section) = raw.cors {
+        if let Some(value) = section.enabled {
+            policy.cors.enabled = value;
+        }
+        if let Some(value) = section.allowed_origins {
+            policy.cors.allowed_origins = value;
+        }
+        if let Some(value) = section.allow_credentials {
+            policy.cors.allow_credentials = value;
+        }
         if let Some(value) = section.forbid_any_origin {
             policy.cors_forbid_any_origin = value;
+            policy.cors.forbid_any_origin = value;
         }
         if let Some(value) = section.forbid_reflect_origin {
             policy.cors_forbid_reflect_origin = value;
+            policy.cors.forbid_reflect_origin = value;
         }
         if let Some(value) = section.require_vary_origin {
             policy.cors_require_vary_origin = value;
+            policy.cors.require_vary_origin = value;
         }
 
-        if section.allow_credentials.unwrap_or(false)
-            && section
+        if policy.cors.allow_credentials
+            && policy
+                .cors
                 .allowed_origins
-                .as_ref()
-                .is_some_and(|origins| origins.iter().any(|item| item == "*"))
+                .iter()
+                .any(|origin| origin == "*")
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -404,10 +732,11 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
 
         if policy.cors_forbid_any_origin
-            && section
+            && policy
+                .cors
                 .allowed_origins
-                .as_ref()
-                .is_some_and(|origins| origins.iter().any(|item| item == "*"))
+                .iter()
+                .any(|origin| origin == "*")
         {
             diagnostics.push(
                 Diagnostic::error(
@@ -422,6 +751,9 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
 
     if let Some(net) = raw.net {
         if let Some(public) = net.public {
+            if let Some(allow_redirects) = public.allow_redirects {
+                policy.net_public.allow_redirects = allow_redirects;
+            }
             if let Some(allowed_schemes) = public.allowed_schemes {
                 if allowed_schemes.is_empty()
                     || !allowed_schemes
@@ -434,7 +766,9 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                             "invalid net.public.allowed_schemes",
                             Span::point(policy_path.to_path_buf(), 1, 1),
                         )
-                        .with_note("allowed schemes must be non-empty and only include `http` or `https`"),
+                        .with_note(
+                            "allowed schemes must be non-empty and only include `http` or `https`",
+                        ),
                     );
                 }
             }
@@ -450,6 +784,27 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             }
         }
+
+        if let Some(internal) = net.internal {
+            if let Some(enabled) = internal.enabled {
+                policy.net_internal.enabled = enabled;
+            }
+            if let Some(allowed_cidrs) = internal.allowed_cidrs {
+                policy.net_internal.allowed_cidrs = allowed_cidrs;
+            }
+            if let Some(allowed_domains) = internal.allowed_domains {
+                policy.net_internal.allowed_domains = allowed_domains;
+            }
+        }
+
+        if let Some(ssrf) = net.ssrf {
+            if let Some(revalidate_redirects) = ssrf.revalidate_redirects {
+                policy.net_ssrf.revalidate_redirects = revalidate_redirects;
+            }
+            if let Some(resolve_dns) = ssrf.resolve_dns {
+                policy.net_ssrf.resolve_dns = resolve_dns;
+            }
+        }
     }
 
     if let Some(json) = raw.json {
@@ -461,6 +816,189 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     Span::point(policy_path.to_path_buf(), 1, 1),
                 )
                 .with_note("json.max_depth must be >= 1"),
+            );
+        }
+    }
+
+    if let Some(fs) = raw.fs {
+        if let Some(enabled) = fs.enabled {
+            policy.fs.enabled = enabled;
+        }
+        if let Some(allowed_base_paths) = fs.allowed_base_paths {
+            policy.fs.allowed_base_paths = allowed_base_paths;
+        }
+    }
+
+    if let Some(capture) = raw.capture {
+        if let Some(mode) = capture.mode {
+            policy.capture.mode = mode;
+        }
+        if let Some(redact_headers) = capture.redact_headers {
+            policy.capture.redact_headers = redact_headers;
+        }
+    }
+
+    if let Some(replay) = raw.replay {
+        if let Some(effects) = replay.effects {
+            policy.replay.effects = effects;
+        }
+    }
+
+    if let Some(section) = raw.security_headers {
+        if let Some(enabled) = section.enabled {
+            policy.security_headers.enabled = enabled;
+        }
+        if let Some(x_content_type_options) = section.x_content_type_options {
+            policy.security_headers.x_content_type_options = x_content_type_options;
+        }
+        if let Some(x_frame_options) = section.x_frame_options {
+            match x_frame_options.as_str() {
+                "DENY" | "SAMEORIGIN" => policy.security_headers.x_frame_options = x_frame_options,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid security_headers.x_frame_options",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("x_frame_options must be `DENY` or `SAMEORIGIN`"),
+                ),
+            }
+        }
+        if let Some(referrer_policy) = section.referrer_policy {
+            policy.security_headers.referrer_policy = referrer_policy;
+        }
+
+        if let Some(hsts) = section.hsts {
+            if let Some(enabled) = hsts.enabled {
+                policy.security_headers.hsts_enabled = enabled;
+            }
+        }
+
+        if let Some(csp) = section.csp {
+            if let Some(enabled) = csp.enabled {
+                policy.security_headers.csp_enabled = enabled;
+            }
+            if let Some(report_only) = csp.report_only {
+                policy.security_headers.csp_report_only = report_only;
+            }
+        }
+    }
+
+    if let Some(section) = raw.csrf {
+        if let Some(enabled) = section.enabled {
+            policy.csrf.enabled = enabled;
+        }
+        if let Some(mode) = section.mode {
+            match mode.as_str() {
+                "off" | "double_submit" | "synchronizer_token" => policy.csrf.mode = mode,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.mode",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.mode must be `off`, `double_submit`, or `synchronizer_token`"),
+                ),
+            }
+        }
+        if let Some(same_site) = section.same_site {
+            match same_site.as_str() {
+                "Lax" | "Strict" | "None" => policy.csrf.same_site = same_site,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.same_site",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.same_site must be `Lax`, `Strict`, or `None`"),
+                ),
+            }
+        }
+        if let Some(secure_cookie) = section.secure_cookie {
+            policy.csrf.secure_cookie = secure_cookie;
+        }
+        if let Some(methods) = section.protected_methods {
+            policy.csrf.protected_methods = methods;
+        }
+
+        if policy.csrf.same_site == "None" && !policy.csrf.secure_cookie {
+            diagnostics.push(
+                Diagnostic::error(
+                    "P6003",
+                    "invalid csrf policy: SameSite=None requires secure_cookie=true",
+                    Span::point(policy_path.to_path_buf(), 1, 1),
+                )
+                .with_note("set csrf.secure_cookie=true when csrf.same_site=\"None\""),
+            );
+        }
+    }
+
+    if let Some(section) = raw.auth {
+        if let Some(mode) = section.mode {
+            match mode.as_str() {
+                "token" | "cookie" | "mixed" => policy.auth.mode = mode,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid auth.mode",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("auth.mode must be `token`, `cookie`, or `mixed`"),
+                ),
+            }
+        }
+        if let Some(cross_site_frontend) = section.cross_site_frontend {
+            policy.auth.cross_site_frontend = cross_site_frontend;
+        }
+
+        if let Some(cookie) = section.cookie {
+            if let Some(same_site) = cookie.same_site {
+                if same_site == "None" && cookie.secure == Some(false) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid auth.cookie policy: SameSite=None requires secure=true",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note(
+                            "set auth.cookie.secure=true when auth.cookie.same_site=\"None\"",
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    if matches!(policy.auth.mode.as_str(), "cookie" | "mixed") && !policy.csrf.enabled {
+        diagnostics.push(
+            Diagnostic::error(
+                "P6003",
+                "invalid auth/csrf policy: csrf.enabled is required for cookie or mixed auth",
+                Span::point(policy_path.to_path_buf(), 1, 1),
+            )
+            .with_note("set csrf.enabled=true or switch auth.mode=token"),
+        );
+    }
+
+    if policy.auth.cross_site_frontend && matches!(policy.auth.mode.as_str(), "cookie" | "mixed") {
+        if !policy.cors.allow_credentials {
+            diagnostics.push(
+                Diagnostic::error(
+                    "P6003",
+                    "invalid auth/cors policy: cross-site cookie auth requires cors.allow_credentials=true",
+                    Span::point(policy_path.to_path_buf(), 1, 1),
+                )
+                .with_note("set cors.allow_credentials=true for cross-site cookie auth"),
+            );
+        }
+        if policy.cors.has_wildcard_origin() {
+            diagnostics.push(
+                Diagnostic::error(
+                    "P6003",
+                    "invalid auth/cors policy: cross-site cookie auth forbids wildcard origin",
+                    Span::point(policy_path.to_path_buf(), 1, 1),
+                )
+                .with_note("set explicit cors.allowed_origins for cross-site cookie auth"),
             );
         }
     }
