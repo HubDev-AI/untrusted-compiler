@@ -103,6 +103,9 @@ fn bad() -> Int {
   db.exec(DbCap(), "SELECT id FROM users LIMIT 1");
   db.exec(DbCap(), sql.q("SELECT name FROM users", List()));
   db.exec(DbCap(), sql.q("SELECT name FROM users LIMIT 5", List()));
+  db.exec(DbCap(), "SELECT 'limit' as marker FROM users");
+  db.exec(DbCap(), "SELECT id FROM users -- limit\n");
+  db.exec(DbCap(), "SELECT id FROM users /* limit */");
   1
 }
 "#;
@@ -115,7 +118,7 @@ fn bad() -> Int {
         .filter(|call| call.tags.iter().any(|tag| tag == "sql.select_without_limit"))
         .count();
 
-    assert_eq!(flagged, 2);
+    assert_eq!(flagged, 5);
 }
 
 #[test]

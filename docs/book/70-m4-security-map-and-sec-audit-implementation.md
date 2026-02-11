@@ -86,6 +86,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `MEDIUM` when `sql.require_limit_on_select = "warn"`
     - `HIGH` when `sql.require_limit_on_select = "enforce"`
   - tests cover callsite tagging and severity mapping behavior
+  - keyword scanning now ignores quoted string segments and SQL comments (`-- ...`, `/* ... */`) to reduce false positives/negatives from naive text matching
 - Expanded validator gate coverage beyond single-function mappings:
   - semantic trust-gate enforcement now covers core `validate.*`/`sanitize.*` string gates with required `Untrusted<String>` input contracts
   - intrinsic return typing now includes:
@@ -134,5 +135,5 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
-3. Add richer SQL hygiene parsing (query normalization/AST) to reduce false positives from string heuristics.
+3. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 4. Extend strict schema enforcement from argument-count checks to typed schema-value pairing checks.

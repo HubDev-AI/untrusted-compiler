@@ -64,6 +64,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `MEDIUM` for `sql.require_limit_on_select = "warn"`.
     - `HIGH` for `sql.require_limit_on_select = "enforce"`.
   - Tests now cover both SQL hygiene tag extraction and `sec.audit` severity mapping for warn/enforce modes.
+  - SQL keyword scanning now ignores quoted SQL strings and SQL comments, reducing false positives/negatives in `sql.select_without_limit` tagging.
   - Trust-gate enforcement now covers broader validator/sanitizer families (`validate.*`, `sanitize.*`) for `Untrusted<String>` input contracts.
   - Intrinsic return typing now includes core validator outputs (`Email`, `Uuid`, `Int64`, and `String` for `validate.nonEmpty`).
   - `security_map` gate marker coverage now includes validator tags:

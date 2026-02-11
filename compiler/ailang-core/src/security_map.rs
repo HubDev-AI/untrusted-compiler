@@ -364,24 +364,109 @@ fn extract_sql_text(expr: &Expr) -> Option<&str> {
 
 fn contains_sql_keyword(sql: &str, keyword: &str) -> bool {
     let keyword_lower = keyword.to_ascii_lowercase();
-    let mut current = String::new();
+    sql_tokens(sql)
+        .iter()
+        .any(|token| token == &keyword_lower)
+}
 
-    for ch in sql.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            current.push(ch.to_ascii_lowercase());
-        } else if !current.is_empty() {
-            if current == keyword_lower {
-                return true;
+fn sql_tokens(sql: &str) -> Vec<String> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum State {
+        Normal,
+        SingleQuoted,
+        DoubleQuoted,
+        LineComment,
+        BlockComment,
+    }
+
+    let bytes = sql.as_bytes();
+    let mut state = State::Normal;
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+
+        match state {
+            State::Normal => {
+                if byte == b'\'' {
+                    flush_sql_token(&mut current, &mut tokens);
+                    state = State::SingleQuoted;
+                    index += 1;
+                    continue;
+                }
+                if byte == b'"' {
+                    flush_sql_token(&mut current, &mut tokens);
+                    state = State::DoubleQuoted;
+                    index += 1;
+                    continue;
+                }
+                if byte == b'-' && index + 1 < bytes.len() && bytes[index + 1] == b'-' {
+                    flush_sql_token(&mut current, &mut tokens);
+                    state = State::LineComment;
+                    index += 2;
+                    continue;
+                }
+                if byte == b'/' && index + 1 < bytes.len() && bytes[index + 1] == b'*' {
+                    flush_sql_token(&mut current, &mut tokens);
+                    state = State::BlockComment;
+                    index += 2;
+                    continue;
+                }
+
+                if byte.is_ascii_alphanumeric() || byte == b'_' {
+                    current.push((byte as char).to_ascii_lowercase());
+                } else {
+                    flush_sql_token(&mut current, &mut tokens);
+                }
+                index += 1;
             }
-            current.clear();
+            State::SingleQuoted => {
+                if byte == b'\'' {
+                    if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                        index += 2;
+                        continue;
+                    }
+                    state = State::Normal;
+                }
+                index += 1;
+            }
+            State::DoubleQuoted => {
+                if byte == b'"' {
+                    if index + 1 < bytes.len() && bytes[index + 1] == b'"' {
+                        index += 2;
+                        continue;
+                    }
+                    state = State::Normal;
+                }
+                index += 1;
+            }
+            State::LineComment => {
+                if byte == b'\n' {
+                    state = State::Normal;
+                }
+                index += 1;
+            }
+            State::BlockComment => {
+                if byte == b'*' && index + 1 < bytes.len() && bytes[index + 1] == b'/' {
+                    state = State::Normal;
+                    index += 2;
+                    continue;
+                }
+                index += 1;
+            }
         }
     }
 
-    if !current.is_empty() && current == keyword_lower {
-        return true;
-    }
+    flush_sql_token(&mut current, &mut tokens);
+    tokens
+}
 
-    false
+fn flush_sql_token(current: &mut String, tokens: &mut Vec<String>) {
+    if !current.is_empty() {
+        tokens.push(std::mem::take(current));
+    }
 }
 
 fn dedupe_tags(tags: &mut Vec<&'static str>) {
