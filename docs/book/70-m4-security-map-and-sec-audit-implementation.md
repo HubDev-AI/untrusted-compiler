@@ -38,6 +38,16 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - filesystem sinks (`fs.read`, `fs.write`)
     - header/cookie sinks (`res.setHeader`, `res.addCookie`)
   - error codes actively exercised in semantic fixtures: `E1002`, `E1003`, `E1004`, `E1005`
+- Added first-class trust-gate semantics for request boundary APIs:
+  - request sources now return explicit untrusted wrappers:
+    - `req.body` -> `Untrusted<Bytes>`
+    - `req.query`, `req.pathParam`, `req.header` -> `Untrusted<String>`
+  - `req.json(schema)` is enforced as an explicit schema gate:
+    - missing schema argument is rejected with `E4001`
+    - diagnostic explains canonical gate usage and trust-boundary intent
+  - semantic fixtures added for:
+    - missing schema gate argument rejection
+    - untrusted `req.query` flow into SQL sink rejection
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -63,5 +73,5 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add more policy-aware findings for SQL limits and logging privacy settings.
-3. Add first-class trust-gate semantics (`req.json(schema)` and validator gates producing trusted/safe types).
+3. Extend trust-gate typing from `req.*` primitives to validator/sanitizer gate functions that yield trusted sink types.
 4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.

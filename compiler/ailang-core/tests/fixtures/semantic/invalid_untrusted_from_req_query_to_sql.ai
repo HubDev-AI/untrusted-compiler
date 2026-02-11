@@ -1,0 +1,5 @@
+fn bad(cap: DbCap) effects { net, db.write } -> Int {
+  let q = req.query("id");
+  db.exec(cap, q);
+  1
+}

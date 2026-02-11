@@ -35,6 +35,13 @@ impl Type {
         }
     }
 
+    fn untrusted(inner: Type) -> Self {
+        Self::Named {
+            name: "Untrusted".to_string(),
+            args: vec![inner],
+        }
+    }
+
     fn describe(&self) -> String {
         match self {
             Type::Named { name, args } if args.is_empty() => name.clone(),
@@ -861,6 +868,7 @@ impl Analyzer {
 
         if let Some(intrinsic) = intrinsic_spec_for(name.as_str()) {
             used_effects.insert(intrinsic.effect.to_string());
+            self.enforce_trust_gate_requirements(name.as_str(), span.clone(), args);
 
             if let Some(required_capability) = intrinsic.required_capability {
                 match arg_types.first() {
@@ -889,7 +897,7 @@ impl Analyzer {
                 }
             }
 
-            return Type::Unit;
+            return intrinsic.return_ty.to_type();
         }
 
         if let Some(constructor) =
@@ -1287,6 +1295,16 @@ impl Analyzer {
         }
     }
 
+    fn enforce_trust_gate_requirements(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        if is_req_json_gate(callee_name) && args.is_empty() {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "schema gate requires schema argument", span)
+                    .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
+                    .with_note("this gate converts inbound untrusted payload into trusted typed data"),
+            );
+        }
+    }
+
     fn bind_pattern(
         &mut self,
         pattern: &Pattern,
@@ -1591,6 +1609,26 @@ impl Analyzer {
 struct IntrinsicSpec {
     effect: &'static str,
     required_capability: Option<&'static str>,
+    return_ty: IntrinsicReturnTy,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IntrinsicReturnTy {
+    Unit,
+    Unknown,
+    UntrustedString,
+    UntrustedBytes,
+}
+
+impl IntrinsicReturnTy {
+    fn to_type(self) -> Type {
+        match self {
+            Self::Unit => Type::Unit,
+            Self::Unknown => Type::Unknown,
+            Self::UntrustedString => Type::untrusted(Type::named("String")),
+            Self::UntrustedBytes => Type::untrusted(Type::named("Bytes")),
+        }
+    }
 }
 
 fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
@@ -1598,62 +1636,88 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => Some(IntrinsicSpec {
             effect: "log",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
+        }),
+        "req_body" | "req.body" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::UntrustedBytes,
+        }),
+        "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
+        | "req.header" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::UntrustedString,
         }),
         "req_json" | "req.json" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "res_json" | "res.json" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         "res_html" | "res.html" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         "set_header" | "res.setHeader" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         "set_cookie" | "res.addCookie" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         "time_now" | "time.now" => Some(IntrinsicSpec {
             effect: "time.now",
             required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "net_call" | "httpClient.get" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: Some("NetCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "net_internal_call" | "httpClient.getInternal" => Some(IntrinsicSpec {
             effect: "net",
             required_capability: Some("InternalNetCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "secret_read" | "secrets.get" => Some(IntrinsicSpec {
             effect: "secrets.read",
             required_capability: Some("SecretsCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "secret_reveal" | "secrets.reveal" => Some(IntrinsicSpec {
             effect: "secrets.reveal",
             required_capability: Some("SecretsCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "db_read" | "db.queryOne" => Some(IntrinsicSpec {
             effect: "db.read",
             required_capability: Some("DbCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "db_write" | "db.exec" => Some(IntrinsicSpec {
             effect: "db.write",
             required_capability: Some("DbCap"),
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: "fs.read",
             required_capability: Some("FsCap"),
+            return_ty: IntrinsicReturnTy::Unknown,
         }),
         "fs_write" | "fs.write" => Some(IntrinsicSpec {
             effect: "fs.write",
             required_capability: Some("FsCap"),
+            return_ty: IntrinsicReturnTy::Unit,
         }),
         _ => None,
     }
@@ -1729,6 +1793,10 @@ fn sink_user_arg_start_index(name: &str) -> usize {
     } else {
         0
     }
+}
+
+fn is_req_json_gate(name: &str) -> bool {
+    matches!(name, "req_json" | "req.json")
 }
 
 fn flow_origin_note(expr: &Expr, ty: &Type) -> String {

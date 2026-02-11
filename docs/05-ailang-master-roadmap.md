@@ -36,6 +36,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values across log, JSON, SQL, URL/net, filesystem, and header/cookie sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`, `E1005`).
+  - Request boundary trust-gate semantics are now enforced:
+    - `req.body` is typed as `Untrusted<Bytes>`.
+    - `req.query`, `req.pathParam`, and `req.header` are typed as `Untrusted<String>`.
+    - `req.json(schema)` now requires an explicit schema argument (`E4001` when missing).
+  - New semantic fixtures cover missing schema gate arguments and untrusted `req.query` to SQL sink rejection.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
