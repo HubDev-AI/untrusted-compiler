@@ -92,6 +92,16 @@ impl Type {
         self.contains_named("Untrusted")
     }
 
+    fn is_untrusted_string(&self) -> bool {
+        matches!(
+            self,
+            Type::Named { name, args }
+                if name == "Untrusted"
+                    && args.len() == 1
+                    && args[0].is_named("String")
+        )
+    }
+
     fn compatible_with(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::Unknown, _) | (_, Type::Unknown) => true,
@@ -867,8 +877,10 @@ impl Analyzer {
         }
 
         if let Some(intrinsic) = intrinsic_spec_for(name.as_str()) {
-            used_effects.insert(intrinsic.effect.to_string());
-            self.enforce_trust_gate_requirements(name.as_str(), span.clone(), args);
+            if let Some(effect) = intrinsic.effect {
+                used_effects.insert(effect.to_string());
+            }
+            self.enforce_trust_gate_requirements(name.as_str(), span.clone(), args, &arg_types);
 
             if let Some(required_capability) = intrinsic.required_capability {
                 match arg_types.first() {
@@ -1295,13 +1307,79 @@ impl Analyzer {
         }
     }
 
-    fn enforce_trust_gate_requirements(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_trust_gate_requirements(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         if is_req_json_gate(callee_name) && args.is_empty() {
             self.diagnostics.push(
-                Diagnostic::error("E4001", "schema gate requires schema argument", span)
+                Diagnostic::error("E4001", "schema gate requires schema argument", span.clone())
                     .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
                     .with_note("this gate converts inbound untrusted payload into trusted typed data"),
             );
+        }
+
+        if is_untrusted_string_gate(callee_name) {
+            if args.is_empty() {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "trust gate requires input argument", span.clone())
+                        .with_note(format!(
+                            "`{callee_name}` expects `Untrusted<String>` as its first argument"
+                        )),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_untrusted_string() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "trust gate expects `Untrusted<String>` input",
+                        args[0].span.clone(),
+                    )
+                    .with_note(format!(
+                        "`{callee_name}` requires first argument type `Untrusted<String>`"
+                    ))
+                    .with_note(format!("found `{}`", arg_types[0].describe())),
+                );
+            }
+        }
+
+        if is_path_under_gate(callee_name) {
+            if args.len() < 2 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "path gate requires base path and input", span)
+                        .with_note(format!(
+                            "`{callee_name}` expects `(PathSafe, Untrusted<String>)`"
+                        )),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("PathSafe") {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "path gate expects `PathSafe` base", args[0].span.clone())
+                        .with_note(format!("`{callee_name}` first argument must be `PathSafe`"))
+                        .with_note(format!("found `{}`", arg_types[0].describe())),
+                );
+            }
+
+            if !arg_types[1].is_untrusted_string() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "path gate expects `Untrusted<String>` input",
+                        args[1].span.clone(),
+                    )
+                    .with_note(format!(
+                        "`{callee_name}` second argument must be `Untrusted<String>`"
+                    ))
+                    .with_note(format!("found `{}`", arg_types[1].describe())),
+                );
+            }
         }
     }
 
@@ -1607,7 +1685,7 @@ impl Analyzer {
 
 #[derive(Debug, Clone, Copy)]
 struct IntrinsicSpec {
-    effect: &'static str,
+    effect: Option<&'static str>,
     required_capability: Option<&'static str>,
     return_ty: IntrinsicReturnTy,
 }
@@ -1618,6 +1696,7 @@ enum IntrinsicReturnTy {
     Unknown,
     UntrustedString,
     UntrustedBytes,
+    Named(&'static str),
 }
 
 impl IntrinsicReturnTy {
@@ -1627,6 +1706,7 @@ impl IntrinsicReturnTy {
             Self::Unknown => Type::Unknown,
             Self::UntrustedString => Type::untrusted(Type::named("String")),
             Self::UntrustedBytes => Type::untrusted(Type::named("Bytes")),
+            Self::Named(name) => Type::named(name),
         }
     }
 }
@@ -1634,91 +1714,118 @@ impl IntrinsicReturnTy {
 fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
     match name {
         "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => Some(IntrinsicSpec {
-            effect: "log",
+            effect: Some("log"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "req_body" | "req.body" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedBytes,
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
         | "req.header" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
         }),
         "req_json" | "req.json" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "res_json" | "res.json" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "res_html" | "res.html" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "set_header" | "res.setHeader" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "set_cookie" | "res.addCookie" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "time_now" | "time.now" => Some(IntrinsicSpec {
-            effect: "time.now",
+            effect: Some("time.now"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "net_call" | "httpClient.get" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: Some("NetCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "net_internal_call" | "httpClient.getInternal" => Some(IntrinsicSpec {
-            effect: "net",
+            effect: Some("net"),
             required_capability: Some("InternalNetCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "secret_read" | "secrets.get" => Some(IntrinsicSpec {
-            effect: "secrets.read",
+            effect: Some("secrets.read"),
             required_capability: Some("SecretsCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "secret_reveal" | "secrets.reveal" => Some(IntrinsicSpec {
-            effect: "secrets.reveal",
+            effect: Some("secrets.reveal"),
             required_capability: Some("SecretsCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "db_read" | "db.queryOne" => Some(IntrinsicSpec {
-            effect: "db.read",
+            effect: Some("db.read"),
             required_capability: Some("DbCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "db_write" | "db.exec" => Some(IntrinsicSpec {
-            effect: "db.write",
+            effect: Some("db.write"),
             required_capability: Some("DbCap"),
             return_ty: IntrinsicReturnTy::Unit,
         }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
-            effect: "fs.read",
+            effect: Some("fs.read"),
             required_capability: Some("FsCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
         "fs_write" | "fs.write" => Some(IntrinsicSpec {
-            effect: "fs.write",
+            effect: Some("fs.write"),
             required_capability: Some("FsCap"),
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "validate_header_value" | "validate.headerValue" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("HeaderValue"),
+        }),
+        "sanitize_html" | "sanitize.html" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("HtmlSafe"),
+        }),
+        "url_public" | "url.public" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("PublicUrl"),
+        }),
+        "url_internal" | "url.internal" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("InternalUrl"),
+        }),
+        "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder" => {
+            Some(IntrinsicSpec {
+                effect: None,
+                required_capability: None,
+                return_ty: IntrinsicReturnTy::Named("PathSafe"),
+            })
+        }
         _ => None,
     }
 }
@@ -1797,6 +1904,27 @@ fn sink_user_arg_start_index(name: &str) -> usize {
 
 fn is_req_json_gate(name: &str) -> bool {
     matches!(name, "req_json" | "req.json")
+}
+
+fn is_untrusted_string_gate(name: &str) -> bool {
+    matches!(
+        name,
+        "validate_header_value"
+            | "validate.headerValue"
+            | "sanitize_html"
+            | "sanitize.html"
+            | "url_public"
+            | "url.public"
+            | "url_internal"
+            | "url.internal"
+    )
+}
+
+fn is_path_under_gate(name: &str) -> bool {
+    matches!(
+        name,
+        "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder"
+    )
 }
 
 fn flow_origin_note(expr: &Expr, ty: &Type) -> String {

@@ -41,6 +41,12 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `req.query`, `req.pathParam`, and `req.header` are typed as `Untrusted<String>`.
     - `req.json(schema)` now requires an explicit schema argument (`E4001` when missing).
   - New semantic fixtures cover missing schema gate arguments and untrusted `req.query` to SQL sink rejection.
+  - Core validator/sanitizer trust gates are now typed and contract-checked:
+    - `validate.headerValue` -> `HeaderValue`, requires `Untrusted<String>`.
+    - `sanitize.html` -> `HtmlSafe`, requires `Untrusted<String>`.
+    - `path.under` / `validate.pathUnder` -> `PathSafe`, requires `(PathSafe, Untrusted<String>)`.
+    - `url.public` -> `PublicUrl` and `url.internal` -> `InternalUrl`.
+  - Additional semantic fixtures cover trust-gate contract violations and valid gate input flows.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,

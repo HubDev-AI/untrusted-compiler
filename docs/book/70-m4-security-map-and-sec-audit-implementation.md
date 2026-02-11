@@ -48,6 +48,17 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - semantic fixtures added for:
     - missing schema gate argument rejection
     - untrusted `req.query` flow into SQL sink rejection
+- Added typed validator/sanitizer trust-gate contracts:
+  - gate outputs are now typed for core safe wrappers:
+    - `validate.headerValue` -> `HeaderValue`
+    - `sanitize.html` -> `HtmlSafe`
+    - `path.under` / `validate.pathUnder` -> `PathSafe`
+    - `url.public` -> `PublicUrl`
+    - `url.internal` -> `InternalUrl`
+  - gates enforce canonical argument contracts:
+    - string validation/sanitization gates require first argument `Untrusted<String>`
+    - path gate requires `(PathSafe, Untrusted<String>)`
+  - semantic fixtures cover valid gate usage and contract violations
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -73,5 +84,5 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add more policy-aware findings for SQL limits and logging privacy settings.
-3. Extend trust-gate typing from `req.*` primitives to validator/sanitizer gate functions that yield trusted sink types.
+3. Extend trust-gate coverage to schema/validator families beyond current core gates (`validate.*`, decode/encode policy coupling).
 4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.

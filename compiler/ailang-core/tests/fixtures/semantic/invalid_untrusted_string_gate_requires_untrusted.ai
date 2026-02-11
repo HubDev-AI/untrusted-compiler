@@ -1,0 +1,4 @@
+fn bad(raw: String) -> Int {
+  validate.headerValue(raw);
+  1
+}

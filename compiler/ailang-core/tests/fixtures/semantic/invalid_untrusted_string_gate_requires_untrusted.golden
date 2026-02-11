@@ -1,0 +1,4 @@
+error[E4001]: trust gate expects `Untrusted<String>` input
+  --> invalid_untrusted_string_gate_requires_untrusted.ai:2:24
+  note: `validate.headerValue` requires first argument type `Untrusted<String>`
+  note: found `String`

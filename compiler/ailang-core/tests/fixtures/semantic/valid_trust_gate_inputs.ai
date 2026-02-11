@@ -1,0 +1,5 @@
+fn ok(raw: Untrusted<String>, base: PathSafe) -> Int {
+  validate.headerValue(raw);
+  path.under(base, raw);
+  1
+}
