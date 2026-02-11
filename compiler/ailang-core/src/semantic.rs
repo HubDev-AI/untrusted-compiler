@@ -68,6 +68,23 @@ impl Type {
         matches!(self, Type::Named { name, args } if name == expected && args.is_empty())
     }
 
+    fn contains_named(&self, target: &str) -> bool {
+        match self {
+            Type::Named { name, args } => {
+                name == target || args.iter().any(|arg| arg.contains_named(target))
+            }
+            Type::Unit | Type::Unknown => false,
+        }
+    }
+
+    fn contains_secret(&self) -> bool {
+        self.contains_named("Secret")
+    }
+
+    fn contains_untrusted(&self) -> bool {
+        self.contains_named("Untrusted")
+    }
+
     fn compatible_with(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::Unknown, _) | (_, Type::Unknown) => true,
@@ -168,6 +185,8 @@ impl Catalog {
             ("List".to_string(), 1),
             ("Map".to_string(), 2),
             ("Set".to_string(), 1),
+            ("Secret".to_string(), 1),
+            ("Untrusted".to_string(), 1),
         ]
         .into_iter()
         .collect::<HashMap<_, _>>();
@@ -793,6 +812,12 @@ impl Analyzer {
             return Type::Unknown;
         };
 
+        let arg_types = args
+            .iter()
+            .map(|arg| self.analyze_expr(arg, env, used_effects))
+            .collect::<Vec<_>>();
+        self.enforce_sink_flow_restrictions(name.as_str(), args, &arg_types);
+
         if let Some(signature) = self.catalog.functions.get(name.as_str()).cloned() {
             for effect in &signature.declared_effects {
                 used_effects.insert(effect.clone());
@@ -811,9 +836,9 @@ impl Analyzer {
             }
 
             for (index, arg) in args.iter().enumerate() {
-                let arg_type = self.analyze_expr(arg, env, used_effects);
+                let arg_type = &arg_types[index];
                 if let Some(expected) = signature.params.get(index) {
-                    if !expected.compatible_with(&arg_type) {
+                    if !expected.compatible_with(arg_type) {
                         self.diagnostics.push(
                             Diagnostic::error(
                                 "T3101",
@@ -836,10 +861,6 @@ impl Analyzer {
 
         if let Some(intrinsic) = intrinsic_spec_for(name.as_str()) {
             used_effects.insert(intrinsic.effect.to_string());
-            let mut arg_types = Vec::with_capacity(args.len());
-            for arg in args {
-                arg_types.push(self.analyze_expr(arg, env, used_effects));
-            }
 
             if let Some(required_capability) = intrinsic.required_capability {
                 match arg_types.first() {
@@ -889,10 +910,6 @@ impl Analyzer {
                 );
             }
 
-            for arg in args {
-                self.analyze_expr(arg, env, used_effects);
-            }
-
             return Type::named(name);
         }
 
@@ -910,9 +927,9 @@ impl Analyzer {
             }
 
             for (index, arg) in args.iter().enumerate() {
-                let arg_type = self.analyze_expr(arg, env, used_effects);
+                let arg_type = &arg_types[index];
                 if let Some(expected) = payload_types.get(index) {
-                    if !expected.compatible_with(&arg_type) {
+                    if !expected.compatible_with(arg_type) {
                         self.diagnostics.push(
                             Diagnostic::error(
                                 "T3101",
@@ -941,9 +958,6 @@ impl Analyzer {
             )
             .with_note(format!("`{name}` is not declared")),
         );
-        for arg in args {
-            self.analyze_expr(arg, env, used_effects);
-        }
         Type::Unknown
     }
 
@@ -1020,6 +1034,88 @@ impl Analyzer {
         }
 
         arm_result.unwrap_or(Type::Unit)
+    }
+
+    fn enforce_sink_flow_restrictions(
+        &mut self,
+        callee_name: &str,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        for (index, (arg, arg_type)) in args.iter().zip(arg_types).enumerate() {
+            if is_log_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1003",
+                            "secret value cannot be logged",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("use `redact(secret)` or remove the secret from log payload"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into log sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!("sink `{callee_name}` requires trusted log values"))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("validate/sanitize input before constructing log payload"),
+                    );
+                }
+                continue;
+            }
+
+            if is_json_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1004",
+                            "secret value cannot be JSON-encoded",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("return a redacted or derived non-secret value"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into JSON response sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!("sink `{callee_name}` requires trusted values"))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("decode/validate input with schema before encoding"),
+                    );
+                }
+            }
+        }
     }
 
     fn bind_pattern(
@@ -1334,6 +1430,26 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             effect: "log",
             required_capability: None,
         }),
+        "req_json" | "req.json" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+        }),
+        "res_json" | "res.json" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+        }),
+        "res_html" | "res.html" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+        }),
+        "set_header" | "res.setHeader" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+        }),
+        "set_cookie" | "res.addCookie" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: None,
+        }),
         "time_now" | "time.now" => Some(IntrinsicSpec {
             effect: "time.now",
             required_capability: None,
@@ -1384,6 +1500,45 @@ fn callable_name(expr: &Expr) -> Option<String> {
             Some(prefix)
         }
         _ => None,
+    }
+}
+
+fn is_log_sink(name: &str) -> bool {
+    matches!(
+        name,
+        "log" | "log.emit" | "log.info" | "log.warn" | "log.error"
+    )
+}
+
+fn is_json_sink(name: &str) -> bool {
+    matches!(name, "res_json" | "res.json")
+}
+
+fn flow_origin_note(expr: &Expr, ty: &Type) -> String {
+    match &expr.kind {
+        ExprKind::Identifier(name) => {
+            format!(
+                "origin: identifier `{name}` carries type `{}`",
+                ty.describe()
+            )
+        }
+        ExprKind::Call { callee, .. } => {
+            if let Some(name) = callable_name(callee) {
+                format!("origin: value comes from call `{name}(...)`")
+            } else {
+                format!(
+                    "origin: value comes from call expression of type `{}`",
+                    ty.describe()
+                )
+            }
+        }
+        ExprKind::Member { .. } => {
+            format!(
+                "origin: value comes from member expression of type `{}`",
+                ty.describe()
+            )
+        }
+        _ => format!("origin: expression has type `{}`", ty.describe()),
     }
 }
 

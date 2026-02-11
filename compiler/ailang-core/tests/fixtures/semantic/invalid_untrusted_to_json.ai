@@ -1,0 +1,4 @@
+fn bad(input: Untrusted<String>) effects { net } -> Int {
+  res.json(input);
+  1
+}

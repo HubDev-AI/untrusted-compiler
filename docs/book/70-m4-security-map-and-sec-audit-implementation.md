@@ -28,6 +28,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - semantic intrinsic/effect/capability checks accept dotted aliases (e.g. `db.exec`, `req.json`, `secrets.reveal`)
   - `security_map` call and middleware tag extraction supports dotted call names
   - intrinsic symbol registry now includes dotted stdlib symbols alongside underscore aliases
+- Added semantic sink flow enforcement for secrets/untrusted data:
+  - generic wrappers `Secret<T>` and `Untrusted<T>` are recognized in the type catalog
+  - log sinks reject `Secret<_>` and `Untrusted<_>` values with origin-aware diagnostics
+  - JSON response sinks reject `Secret<_>` and `Untrusted<_>` values with origin-aware diagnostics
+  - new error codes actively exercised in semantic fixtures: `E1002`, `E1003`, `E1004`
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -53,5 +58,5 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add more policy-aware findings for SQL limits and logging privacy settings.
-3. Add richer source-origin traces in security findings and exception rendering.
+3. Extend sink-flow enforcement from log/JSON into additional typed sinks (headers, URLs, filesystem, SQL params).
 4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.

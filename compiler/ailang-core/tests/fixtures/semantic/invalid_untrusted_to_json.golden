@@ -1,0 +1,6 @@
+error[E1002]: untrusted value cannot flow into JSON response sink
+  --> invalid_untrusted_to_json.ai:2:12
+  note: sink `res.json` requires trusted values
+  note: argument 1 has type `Untrusted<String>`
+  note: origin: identifier `input` carries type `Untrusted<String>`
+  note: decode/validate input with schema before encoding
