@@ -1042,7 +1042,12 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
+        let start_index = sink_user_arg_start_index(callee_name);
         for (index, (arg, arg_type)) in args.iter().zip(arg_types).enumerate() {
+            if index < start_index {
+                continue;
+            }
+
             if is_log_sink(callee_name) {
                 if arg_type.contains_secret() {
                     self.diagnostics.push(
@@ -1112,6 +1117,170 @@ impl Analyzer {
                         ))
                         .with_note(flow_origin_note(arg, arg_type))
                         .with_note("decode/validate input with schema before encoding"),
+                    );
+                }
+                continue;
+            }
+
+            if is_sql_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1005",
+                            "secret value cannot flow into SQL sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` rejects `Secret<_>` values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("use non-secret identifiers/values when building SqlQuery"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into SQL sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` requires trusted SQL inputs"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("validate input and construct typed `SqlQuery`"),
+                    );
+                }
+                continue;
+            }
+
+            if is_url_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1005",
+                            "secret value cannot flow into URL sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` rejects `Secret<_>` values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("derive a non-secret `PublicUrl`/`InternalUrl` through URL validation gates"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into URL sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` requires typed safe URLs"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("validate input via `url.public(...)` / `url.internal(...)`"),
+                    );
+                }
+                continue;
+            }
+
+            if is_fs_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1005",
+                            "secret value cannot flow into filesystem sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` rejects `Secret<_>` values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("use non-secret `PathSafe` values for filesystem operations"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into filesystem sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` requires trusted `PathSafe` values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("validate input via `path.under(...)` before filesystem access"),
+                    );
+                }
+                continue;
+            }
+
+            if is_header_sink(callee_name) {
+                if arg_type.contains_secret() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1005",
+                            "secret value cannot flow into header/cookie sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` rejects `Secret<_>` values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("use redacted/derived values and validated header or cookie builders"),
+                    );
+                } else if arg_type.contains_untrusted() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E1002",
+                            "untrusted value cannot flow into header/cookie sink",
+                            arg.span.clone(),
+                        )
+                        .with_note(format!(
+                            "sink `{callee_name}` requires validated header/cookie values"
+                        ))
+                        .with_note(format!(
+                            "argument {} has type `{}`",
+                            index + 1,
+                            arg_type.describe()
+                        ))
+                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note("validate via `validate.headerValue(...)` or typed cookie builders"),
                     );
                 }
             }
@@ -1512,6 +1681,54 @@ fn is_log_sink(name: &str) -> bool {
 
 fn is_json_sink(name: &str) -> bool {
     matches!(name, "res_json" | "res.json")
+}
+
+fn is_sql_sink(name: &str) -> bool {
+    matches!(name, "db_write" | "db.exec" | "db_read" | "db.queryOne")
+}
+
+fn is_url_sink(name: &str) -> bool {
+    matches!(
+        name,
+        "net_call" | "httpClient.get" | "net_internal_call" | "httpClient.getInternal"
+    )
+}
+
+fn is_fs_sink(name: &str) -> bool {
+    matches!(name, "fs_read" | "fs.read" | "fs_write" | "fs.write")
+}
+
+fn is_header_sink(name: &str) -> bool {
+    matches!(
+        name,
+        "set_header" | "res.setHeader" | "set_cookie" | "res.addCookie"
+    )
+}
+
+fn sink_user_arg_start_index(name: &str) -> usize {
+    if matches!(
+        name,
+        "db_write"
+            | "db.exec"
+            | "db_read"
+            | "db.queryOne"
+            | "fs_read"
+            | "fs.read"
+            | "fs_write"
+            | "fs.write"
+            | "net_call"
+            | "httpClient.get"
+            | "net_internal_call"
+            | "httpClient.getInternal"
+            | "secret_read"
+            | "secrets.get"
+            | "secret_reveal"
+            | "secrets.reveal"
+    ) {
+        1
+    } else {
+        0
+    }
 }
 
 fn flow_origin_note(expr: &Expr, ty: &Type) -> String {

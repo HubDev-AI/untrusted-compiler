@@ -35,7 +35,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
   - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
-  - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values in log and JSON response sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`).
+  - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values across log, JSON, SQL, URL/net, filesystem, and header/cookie sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`, `E1005`).
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -489,9 +489,8 @@ Day 14:
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
 2. Add first-class trust-gate flow checks (`req.json(schema)`) and origin-trace sink diagnostics.
-3. Extend secret/untrusted flow restrictions from log/JSON to remaining typed sinks (SQL, headers, URLs, filesystem).
-4. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
-5. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
+3. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
+4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 
 ---
 

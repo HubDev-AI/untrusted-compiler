@@ -32,7 +32,12 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - generic wrappers `Secret<T>` and `Untrusted<T>` are recognized in the type catalog
   - log sinks reject `Secret<_>` and `Untrusted<_>` values with origin-aware diagnostics
   - JSON response sinks reject `Secret<_>` and `Untrusted<_>` values with origin-aware diagnostics
-  - new error codes actively exercised in semantic fixtures: `E1002`, `E1003`, `E1004`
+  - additional typed sinks now enforce `Secret`/`Untrusted` boundaries:
+    - SQL sinks (`db.exec`, `db.queryOne`)
+    - URL/network sinks (`httpClient.get`, `httpClient.getInternal`)
+    - filesystem sinks (`fs.read`, `fs.write`)
+    - header/cookie sinks (`res.setHeader`, `res.addCookie`)
+  - error codes actively exercised in semantic fixtures: `E1002`, `E1003`, `E1004`, `E1005`
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -58,5 +63,5 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add more policy-aware findings for SQL limits and logging privacy settings.
-3. Extend sink-flow enforcement from log/JSON into additional typed sinks (headers, URLs, filesystem, SQL params).
+3. Add first-class trust-gate semantics (`req.json(schema)` and validator gates producing trusted/safe types).
 4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.

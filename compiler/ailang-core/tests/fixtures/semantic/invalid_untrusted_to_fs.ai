@@ -1,0 +1,4 @@
+fn bad(cap: FsCap, path: Untrusted<String>) effects { fs.read } -> Int {
+  fs.read(cap, path);
+  1
+}

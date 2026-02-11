@@ -1,0 +1,4 @@
+fn bad(cap: DbCap, query: Untrusted<String>) effects { db.write } -> Int {
+  db.exec(cap, query);
+  1
+}
