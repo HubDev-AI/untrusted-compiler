@@ -15,5 +15,7 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `41-type-system-v0.1-lite.md`
 - `42-structural-composition-not-inheritance.md`
 - `43-ailang-v0-scope.md`
+- `50-effect-system-and-auditable-side-effects.md`
+- `51-trust-boundaries-and-untrusted-data.md`
 
 As milestones progress, chapters will be added and linked from this index.

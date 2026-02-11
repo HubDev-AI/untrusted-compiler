@@ -3,7 +3,7 @@ use crate::ast::{
     StmtKind, TypeExpr, TypeExprKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Type {
@@ -89,6 +89,7 @@ impl Type {
 struct FunctionSig {
     params: Vec<Type>,
     return_type: Type,
+    declared_effects: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -112,6 +113,7 @@ struct Catalog {
     enums: HashMap<String, EnumInfo>,
     structs: HashMap<String, StructInfo>,
     functions: HashMap<String, FunctionSig>,
+    known_effects: HashSet<String>,
 }
 
 impl Catalog {
@@ -140,6 +142,22 @@ impl Catalog {
             enums: HashMap::new(),
             structs: HashMap::new(),
             functions: HashMap::new(),
+            known_effects: [
+                "log",
+                "time.now",
+                "net",
+                "secrets.read",
+                "secrets.reveal",
+                "db.read",
+                "db.write",
+                "fs.read",
+                "fs.write",
+                "shell",
+                "unsafe",
+            ]
+            .into_iter()
+            .map(|item| item.to_string())
+            .collect::<HashSet<_>>(),
         }
     }
 
@@ -256,11 +274,31 @@ impl Analyzer {
                 .map(|ty| self.resolve_type_expr(ty, ty.span.clone()))
                 .unwrap_or(Type::Unit);
 
+            let mut declared_effects = HashSet::new();
+            for effect in &function.effects {
+                let effect_name = effect.as_name();
+                if !self.catalog.known_effects.contains(&effect_name) {
+                    self.diagnostics.push(
+                        Diagnostic::error("E4001", "unknown effect name", effect.span.clone())
+                            .with_note(format!("effect `{effect_name}` is not recognized")),
+                    );
+                    continue;
+                }
+
+                if !declared_effects.insert(effect_name.clone()) {
+                    self.diagnostics.push(
+                        Diagnostic::error("E4003", "duplicate effect declaration", effect.span.clone())
+                            .with_note(format!("effect `{effect_name}` is declared more than once")),
+                    );
+                }
+            }
+
             self.catalog.functions.insert(
                 function.name.clone(),
                 FunctionSig {
                     params,
                     return_type,
+                    declared_effects,
                 },
             );
         }
@@ -307,6 +345,7 @@ impl Analyzer {
                 .unwrap_or(FunctionSig {
                     params: Vec::new(),
                     return_type: Type::Unknown,
+                    declared_effects: HashSet::new(),
                 });
 
             let mut env = HashMap::new();
@@ -327,7 +366,13 @@ impl Analyzer {
                 env.insert(param.name.clone(), param_type);
             }
 
-            let body_type = self.analyze_block(&function.body, &mut env, &signature.return_type);
+            let mut used_effects = HashSet::new();
+            let body_type = self.analyze_block(
+                &function.body,
+                &mut env,
+                &signature.return_type,
+                &mut used_effects,
+            );
 
             if !signature.return_type.compatible_with(&body_type) {
                 self.diagnostics.push(
@@ -343,6 +388,24 @@ impl Analyzer {
                     )),
                 );
             }
+
+            let undeclared = used_effects
+                .difference(&signature.declared_effects)
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for effect in undeclared {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4002",
+                        "effect used but not declared",
+                        function.body.span.clone(),
+                    )
+                    .with_note(format!(
+                        "function `{}` uses `{effect}` but does not declare it in `effects {{ ... }}`",
+                        function.name
+                    )),
+                );
+            }
         }
     }
 
@@ -351,15 +414,16 @@ impl Analyzer {
         block: &Block,
         env: &mut HashMap<String, Type>,
         expected_return: &Type,
+        used_effects: &mut HashSet<String>,
     ) -> Type {
         let mut scoped = env.clone();
 
         for stmt in &block.statements {
-            self.analyze_statement(stmt, &mut scoped, expected_return);
+            self.analyze_statement(stmt, &mut scoped, expected_return, used_effects);
         }
 
         if let Some(tail) = &block.tail {
-            self.analyze_expr(tail, &mut scoped)
+            self.analyze_expr(tail, &mut scoped, used_effects)
         } else {
             Type::Unit
         }
@@ -370,6 +434,7 @@ impl Analyzer {
         stmt: &Stmt,
         env: &mut HashMap<String, Type>,
         expected_return: &Type,
+        used_effects: &mut HashSet<String>,
     ) {
         match &stmt.kind {
             StmtKind::Let {
@@ -378,7 +443,7 @@ impl Analyzer {
                 value,
                 ..
             } => {
-                let value_type = self.analyze_expr(value, env);
+                let value_type = self.analyze_expr(value, env, used_effects);
                 let bound_type = if let Some(annotation) = ty {
                     let annotation_type = self.resolve_type_expr(annotation, annotation.span.clone());
                     if !annotation_type.compatible_with(&value_type) {
@@ -404,7 +469,7 @@ impl Analyzer {
             }
             StmtKind::Return { value } => {
                 let return_type = if let Some(value) = value {
-                    self.analyze_expr(value, env)
+                    self.analyze_expr(value, env, used_effects)
                 } else {
                     Type::Unit
                 };
@@ -421,12 +486,17 @@ impl Analyzer {
                 }
             }
             StmtKind::Expr { expr } => {
-                self.analyze_expr(expr, env);
+                self.analyze_expr(expr, env, used_effects);
             }
         }
     }
 
-    fn analyze_expr(&mut self, expr: &Expr, env: &mut HashMap<String, Type>) -> Type {
+    fn analyze_expr(
+        &mut self,
+        expr: &Expr,
+        env: &mut HashMap<String, Type>,
+        used_effects: &mut HashSet<String>,
+    ) -> Type {
         match &expr.kind {
             ExprKind::Identifier(name) => env.get(name).cloned().unwrap_or_else(|| {
                 self.diagnostics.push(
@@ -445,7 +515,7 @@ impl Analyzer {
             ExprKind::String(_) => Type::named("String"),
             ExprKind::Bool(_) => Type::named("Bool"),
             ExprKind::Unary { op, expr: inner } => {
-                let inner_type = self.analyze_expr(inner, env);
+                let inner_type = self.analyze_expr(inner, env, used_effects);
                 match op {
                     UnaryOp::Neg => {
                         if !inner_type.is_numeric() {
@@ -480,8 +550,8 @@ impl Analyzer {
                 }
             }
             ExprKind::Binary { op, left, right } => {
-                let left_type = self.analyze_expr(left, env);
-                let right_type = self.analyze_expr(right, env);
+                let left_type = self.analyze_expr(left, env, used_effects);
+                let right_type = self.analyze_expr(right, env, used_effects);
 
                 match op {
                     BinaryOp::Add
@@ -562,13 +632,15 @@ impl Analyzer {
                     }
                 }
             }
-            ExprKind::Call { callee, args } => self.analyze_call(expr.span.clone(), callee, args, env),
+            ExprKind::Call { callee, args } => {
+                self.analyze_call(expr.span.clone(), callee, args, env, used_effects)
+            }
             ExprKind::If {
                 condition,
                 then_branch,
                 else_branch,
             } => {
-                let condition_type = self.analyze_expr(condition, env);
+                let condition_type = self.analyze_expr(condition, env, used_effects);
                 if !condition_type.is_bool() {
                     self.diagnostics.push(
                         Diagnostic::error(
@@ -580,9 +652,9 @@ impl Analyzer {
                     );
                 }
 
-                let then_type = self.analyze_block(then_branch, env, &Type::Unknown);
+                let then_type = self.analyze_block(then_branch, env, &Type::Unknown, used_effects);
                 if let Some(else_expr) = else_branch {
-                    let else_type = self.analyze_expr(else_expr, env);
+                    let else_type = self.analyze_expr(else_expr, env, used_effects);
                     if !then_type.compatible_with(&else_type) {
                         self.diagnostics.push(
                             Diagnostic::error(
@@ -603,10 +675,10 @@ impl Analyzer {
                 }
             }
             ExprKind::Match { scrutinee, arms } => {
-                let scrutinee_type = self.analyze_expr(scrutinee, env);
-                self.analyze_match(expr.span.clone(), &scrutinee_type, arms, env)
+                let scrutinee_type = self.analyze_expr(scrutinee, env, used_effects);
+                self.analyze_match(expr.span.clone(), &scrutinee_type, arms, env, used_effects)
             }
-            ExprKind::Block(block) => self.analyze_block(block, env, &Type::Unknown),
+            ExprKind::Block(block) => self.analyze_block(block, env, &Type::Unknown, used_effects),
         }
     }
 
@@ -616,6 +688,7 @@ impl Analyzer {
         callee: &Expr,
         args: &[Expr],
         env: &mut HashMap<String, Type>,
+        used_effects: &mut HashSet<String>,
     ) -> Type {
         let ExprKind::Identifier(name) = &callee.kind else {
             self.diagnostics.push(
@@ -623,12 +696,16 @@ impl Analyzer {
                     .with_note("only named functions/constructors are callable in v0.1-lite"),
             );
             for arg in args {
-                self.analyze_expr(arg, env);
+                self.analyze_expr(arg, env, used_effects);
             }
             return Type::Unknown;
         };
 
         if let Some(signature) = self.catalog.functions.get(name).cloned() {
+            for effect in &signature.declared_effects {
+                used_effects.insert(effect.clone());
+            }
+
             if signature.params.len() != args.len() {
                 self.diagnostics.push(
                     Diagnostic::error("T3103", "function argument count mismatch", span)
@@ -641,7 +718,7 @@ impl Analyzer {
             }
 
             for (index, arg) in args.iter().enumerate() {
-                let arg_type = self.analyze_expr(arg, env);
+                let arg_type = self.analyze_expr(arg, env, used_effects);
                 if let Some(expected) = signature.params.get(index) {
                     if !expected.compatible_with(&arg_type) {
                         self.diagnostics.push(
@@ -660,7 +737,17 @@ impl Analyzer {
             return signature.return_type;
         }
 
-        if let Some(constructor) = self.resolve_builtin_constructor(name, span.clone(), args, env) {
+        if let Some(intrinsic_effect) = intrinsic_effect_for(name) {
+            used_effects.insert(intrinsic_effect.to_string());
+            for arg in args {
+                self.analyze_expr(arg, env, used_effects);
+            }
+            return Type::Unit;
+        }
+
+        if let Some(constructor) =
+            self.resolve_builtin_constructor(name, span.clone(), args, env, used_effects)
+        {
             return constructor;
         }
 
@@ -673,7 +760,7 @@ impl Analyzer {
             }
 
             for arg in args {
-                self.analyze_expr(arg, env);
+                self.analyze_expr(arg, env, used_effects);
             }
 
             return Type::named(name.clone());
@@ -692,7 +779,7 @@ impl Analyzer {
             }
 
             for (index, arg) in args.iter().enumerate() {
-                let arg_type = self.analyze_expr(arg, env);
+                let arg_type = self.analyze_expr(arg, env, used_effects);
                 if let Some(expected) = payload_types.get(index) {
                     if !expected.compatible_with(&arg_type) {
                         self.diagnostics.push(
@@ -716,7 +803,7 @@ impl Analyzer {
                 .with_note(format!("`{name}` is not declared")),
         );
         for arg in args {
-            self.analyze_expr(arg, env);
+            self.analyze_expr(arg, env, used_effects);
         }
         Type::Unknown
     }
@@ -727,6 +814,7 @@ impl Analyzer {
         scrutinee_type: &Type,
         arms: &[MatchArm],
         env: &mut HashMap<String, Type>,
+        used_effects: &mut HashSet<String>,
     ) -> Type {
         let mut seen_bool_true = false;
         let mut seen_bool_false = false;
@@ -748,7 +836,7 @@ impl Analyzer {
                 PatternCoverage::Other => {}
             }
 
-            let value_type = self.analyze_expr(&arm.value, &mut arm_env);
+            let value_type = self.analyze_expr(&arm.value, &mut arm_env, used_effects);
             if let Some(existing) = &arm_result {
                 if !existing.compatible_with(&value_type) {
                     self.diagnostics.push(
@@ -954,6 +1042,7 @@ impl Analyzer {
         span: Span,
         args: &[Expr],
         env: &mut HashMap<String, Type>,
+        used_effects: &mut HashSet<String>,
     ) -> Option<Type> {
         match name {
             "Some" => {
@@ -968,7 +1057,7 @@ impl Analyzer {
                     );
                     return Some(Type::option(Type::Unknown));
                 }
-                let inner = self.analyze_expr(&args[0], env);
+                let inner = self.analyze_expr(&args[0], env, used_effects);
                 Some(Type::option(inner))
             }
             "None" => {
@@ -979,7 +1068,7 @@ impl Analyzer {
                     );
                 }
                 for arg in args {
-                    self.analyze_expr(arg, env);
+                    self.analyze_expr(arg, env, used_effects);
                 }
                 Some(Type::option(Type::Unknown))
             }
@@ -990,11 +1079,11 @@ impl Analyzer {
                             .with_note("`Ok` expects exactly one argument"),
                     );
                     for arg in args {
-                        self.analyze_expr(arg, env);
+                        self.analyze_expr(arg, env, used_effects);
                     }
                     return Some(Type::result(Type::Unknown, Type::Unknown));
                 }
-                let ok = self.analyze_expr(&args[0], env);
+                let ok = self.analyze_expr(&args[0], env, used_effects);
                 Some(Type::result(ok, Type::Unknown))
             }
             "Err" => {
@@ -1004,11 +1093,11 @@ impl Analyzer {
                             .with_note("`Err` expects exactly one argument"),
                     );
                     for arg in args {
-                        self.analyze_expr(arg, env);
+                        self.analyze_expr(arg, env, used_effects);
                     }
                     return Some(Type::result(Type::Unknown, Type::Unknown));
                 }
-                let err = self.analyze_expr(&args[0], env);
+                let err = self.analyze_expr(&args[0], env, used_effects);
                 Some(Type::result(Type::Unknown, err))
             }
             _ => None,
@@ -1071,6 +1160,21 @@ impl Analyzer {
             }
             _ => None,
         }
+    }
+}
+
+fn intrinsic_effect_for(name: &str) -> Option<&'static str> {
+    match name {
+        "log" => Some("log"),
+        "time_now" => Some("time.now"),
+        "net_call" => Some("net"),
+        "secret_read" => Some("secrets.read"),
+        "secret_reveal" => Some("secrets.reveal"),
+        "db_read" => Some("db.read"),
+        "db_write" => Some("db.write"),
+        "fs_read" => Some("fs.read"),
+        "fs_write" => Some("fs.write"),
+        _ => None,
     }
 }
 

@@ -55,6 +55,8 @@ If it cannot, it is mostly convention.
 - M0 completed: workspace + CLI skeleton + diagnostics + manifest/lockfile basics.
 - M1 completed: lexer/parser/AST + `check --emit ast` + parser golden tests.
 - M2 completed: name resolution + minimal type checker + semantic golden tests.
+- M3 effects slice completed: parsed `effects { ... }` declarations + compile-time effect usage enforcement.
+- M3 boundary slice pending: `Untrusted<T>` trust gates and typed sink flow checks.
 
 Roadmap: `docs/05-ailang-master-roadmap.md`
 Book docs: `docs/book/README.md`

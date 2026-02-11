@@ -5,6 +5,7 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Keyword {
     Fn,
+    Effects,
     Let,
     Const,
     Mut,
@@ -20,6 +21,7 @@ impl Keyword {
     pub fn as_str(self) -> &'static str {
         match self {
             Keyword::Fn => "fn",
+            Keyword::Effects => "effects",
             Keyword::Let => "let",
             Keyword::Const => "const",
             Keyword::Mut => "mut",

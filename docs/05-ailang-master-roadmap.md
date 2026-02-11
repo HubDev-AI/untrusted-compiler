@@ -17,7 +17,13 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Minimal type checker for bindings, returns, calls, operators, and branch compatibility.
   - Match exhaustiveness checks for `Bool`, user enums, and `Option`/`Result` forms.
   - Semantic golden fixtures added in `compiler/ailang-core/tests/fixtures/semantic`.
-- M0, M1, and M2 documentation chapters are now under `docs/book/`.
+- M3 effects slice completed:
+  - Parser support for `effects { ... }` on function declarations.
+  - Semantic validation of effect names and duplicate declarations.
+  - Enforcement of `used_effects` subset of `declared_effects` for function bodies.
+  - Effect golden fixtures added under semantic tests.
+- M3 trust-boundary model is documented and queued as the next slice.
+- M0 through M3 documentation chapters are now under `docs/book/`.
 
 ## 0. Product Direction (Locked Constraints)
 

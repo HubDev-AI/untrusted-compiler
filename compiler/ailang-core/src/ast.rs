@@ -30,8 +30,21 @@ pub enum ItemKind {
 pub struct FunctionDecl {
     pub name: String,
     pub params: Vec<Param>,
+    pub effects: Vec<EffectSpec>,
     pub return_type: Option<TypeExpr>,
     pub body: Block,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct EffectSpec {
+    pub path: Vec<String>,
+    pub span: Span,
+}
+
+impl EffectSpec {
+    pub fn as_name(&self) -> String {
+        self.path.join(".")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

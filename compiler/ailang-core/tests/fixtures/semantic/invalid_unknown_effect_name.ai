@@ -1,0 +1,3 @@
+fn handler() effects { db.mutate } -> Int {
+  1
+}

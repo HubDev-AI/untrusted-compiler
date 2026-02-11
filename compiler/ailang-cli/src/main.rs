@@ -75,7 +75,7 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
             }
 
             println!(
-                "build succeeded (M2 semantics): package={}, entry={}",
+                "build succeeded (M3 effects): package={}, entry={}",
                 manifest.package.name,
                 manifest.entry_file()
             );
@@ -94,7 +94,7 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
         Ok(manifest) => match analyze_entry(path, &manifest) {
             Ok(program) => {
                 println!(
-                    "check succeeded (M2 semantics): package={}, entry={}",
+                    "check succeeded (M3 effects): package={}, entry={}",
                     manifest.package.name,
                     manifest.entry_file()
                 );

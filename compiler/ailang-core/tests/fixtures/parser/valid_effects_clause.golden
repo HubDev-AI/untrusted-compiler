@@ -1,0 +1,5 @@
+OK
+program.items=2
+fn write_db() effects=[db.write] -> Int { stmts=0, tail=number(1) }
+fn handler() effects=[db.write,log] -> Int { stmts=1, tail=call(ident(write_db), args=0) }
+  stmt0=expr call(ident(log), args=1)

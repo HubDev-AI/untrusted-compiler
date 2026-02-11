@@ -198,6 +198,7 @@ impl Lexer {
 
         let kind = match text.as_str() {
             "fn" => TokenKind::Keyword(Keyword::Fn),
+            "effects" => TokenKind::Keyword(Keyword::Effects),
             "let" => TokenKind::Keyword(Keyword::Let),
             "const" => TokenKind::Keyword(Keyword::Const),
             "mut" => TokenKind::Keyword(Keyword::Mut),

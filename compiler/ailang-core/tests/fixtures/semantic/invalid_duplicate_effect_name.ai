@@ -1,0 +1,3 @@
+fn handler() effects { db.write, db.write } -> Int {
+  1
+}

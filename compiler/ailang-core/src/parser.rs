@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOp, Block, EnumDecl, EnumVariant, Expr, ExprKind, FieldDecl, FunctionDecl, Item, ItemKind,
-    MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl, TypeExpr,
+    BinaryOp, Block, EffectSpec, EnumDecl, EnumVariant, Expr, ExprKind, FieldDecl, FunctionDecl,
+    Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl, TypeExpr,
     TypeExprKind, UnaryOp, VariantField,
 };
 use crate::diagnostics::{Diagnostic, Span};
@@ -114,11 +114,23 @@ impl Parser {
 
         self.expect_symbol(Symbol::RParen, "P2006", "expected `)` after function parameters")?;
 
-        let return_type = if self.match_symbol(Symbol::Arrow).is_some() {
-            Some(self.parse_type()?)
-        } else {
-            None
-        };
+        let mut effects = Vec::new();
+        let mut return_type = None;
+        loop {
+            if effects.is_empty() {
+                if let Some(effects_keyword) = self.match_keyword(Keyword::Effects) {
+                    effects = self.parse_effects_clause(effects_keyword)?;
+                    continue;
+                }
+            }
+
+            if return_type.is_none() && self.match_symbol(Symbol::Arrow).is_some() {
+                return_type = Some(self.parse_type()?);
+                continue;
+            }
+
+            break;
+        }
 
         let body = self.parse_block()?;
         let span = join_spans(&start.span, &body.span);
@@ -127,11 +139,62 @@ impl Parser {
             kind: ItemKind::Function(FunctionDecl {
                 name,
                 params,
+                effects,
                 return_type,
                 body,
             }),
             span,
         })
+    }
+
+    fn parse_effects_clause(&mut self, _start: Token) -> Result<Vec<EffectSpec>, Diagnostic> {
+        self.expect_symbol(
+            Symbol::LBrace,
+            "P2007",
+            "expected `{` after `effects` keyword",
+        )?;
+
+        let mut effects = Vec::new();
+        while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            let effect = self.parse_effect_path()?;
+            effects.push(effect);
+
+            if self.match_symbol(Symbol::Comma).is_some() {
+                continue;
+            }
+
+            if self.check_symbol(Symbol::RBrace) {
+                break;
+            }
+
+            return Err(self.error_current(
+                "P2008",
+                "expected `,` or `}` in effects declaration",
+            ));
+        }
+
+        self.expect_symbol(
+            Symbol::RBrace,
+            "P2009",
+            "expected `}` to close effects declaration",
+        )?;
+
+        Ok(effects)
+    }
+
+    fn parse_effect_path(&mut self) -> Result<EffectSpec, Diagnostic> {
+        let (segment, token) = self.expect_identifier("P2040", "expected effect name segment")?;
+        let mut path = vec![segment];
+        let mut span = token.span;
+
+        while self.match_symbol(Symbol::Dot).is_some() {
+            let (next, next_token) =
+                self.expect_identifier("P2041", "expected effect segment after `.`")?;
+            span = join_spans(&span, &next_token.span);
+            path.push(next);
+        }
+
+        Ok(EffectSpec { path, span })
     }
 
     fn parse_struct_item(&mut self, start: Token) -> Result<Item, Diagnostic> {

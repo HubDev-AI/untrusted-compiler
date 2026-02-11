@@ -110,11 +110,21 @@ fn render_program_signature(program: &Program) -> String {
                     .as_ref()
                     .map(render_type)
                     .unwrap_or_else(|| "Unit".to_string());
+                let effects = if decl.effects.is_empty() {
+                    "none".to_string()
+                } else {
+                    decl.effects
+                        .iter()
+                        .map(|effect| effect.as_name())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
 
                 out.push_str(&format!(
-                    "fn {}({}) -> {} {{ stmts={}, tail={} }}\n",
+                    "fn {}({}) effects=[{}] -> {} {{ stmts={}, tail={} }}\n",
                     decl.name,
                     params,
+                    effects,
                     return_type,
                     decl.body.statements.len(),
                     decl.body
