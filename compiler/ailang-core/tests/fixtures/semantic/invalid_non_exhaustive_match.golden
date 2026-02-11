@@ -1,0 +1,3 @@
+error[T3107]: non-exhaustive match
+  --> invalid_non_exhaustive_match.ai:7:3
+  note: missing variants: Off

@@ -1,0 +1,18 @@
+enum State {
+  On,
+  Off,
+}
+
+fn choose(flag: Bool) -> Int {
+  match flag {
+    true => 1,
+    false => 0,
+  }
+}
+
+fn resolve(s: State) -> Int {
+  match s {
+    On => 1,
+    Off => 0,
+  }
+}

@@ -3,11 +3,13 @@ pub mod diagnostics;
 pub mod lexer;
 pub mod manifest;
 pub mod parser;
+pub mod semantic;
 pub mod token;
 
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use parser::parse_source;
+pub use semantic::analyze_program;
 
 use std::fs;
 use std::path::Path;
@@ -47,4 +49,13 @@ pub fn parse_entry_ast(
     };
 
     parser::parse_source(&manifest.entry_path(project_root), &source)
+}
+
+pub fn analyze_entry(
+    project_root: &Path,
+    manifest: &Manifest,
+) -> Result<ast::Program, Vec<Diagnostic>> {
+    let program = parse_entry_ast(project_root, manifest)?;
+    semantic::analyze_program(&program)?;
+    Ok(program)
 }

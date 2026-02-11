@@ -12,13 +12,19 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Parser/AST for `fn`, `struct`, `enum`, blocks, expressions, `match`, and generic types (`Option`/`Result` forms).
   - `ailang check --emit ast` output wired into CLI.
   - Parser golden fixtures added in `compiler/ailang-core/tests/fixtures/parser`.
-- M0 and M1 documentation chapters are now under `docs/book/`.
+- M2 semantic bootstrap completed:
+  - Name resolution for declared types/functions and local identifiers.
+  - Minimal type checker for bindings, returns, calls, operators, and branch compatibility.
+  - Match exhaustiveness checks for `Bool`, user enums, and `Option`/`Result` forms.
+  - Semantic golden fixtures added in `compiler/ailang-core/tests/fixtures/semantic`.
+- M0, M1, and M2 documentation chapters are now under `docs/book/`.
 
 ## 0. Product Direction (Locked Constraints)
 
 These constraints come from current AILang docs and the new files:
-- `/Users/vladimirtrifonov/src/ai/AILang/docs/06-ailang-typescript-like-profile.md`
-- `/Users/vladimirtrifonov/src/ai/AILang/docs/07-ailang-no-inheritance-composition-model.md`
+- `docs/06-ailang-typescript-like-profile.md`
+- `docs/07-ailang-no-inheritance-composition-model.md`
+- `docs/book/43-ailang-v0-scope.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -38,16 +44,38 @@ These constraints come from current AILang docs and the new files:
 - Typed sinks (`SqlQuery`, `HtmlSafe`, etc.).
 - Security policies and lints integrated into compilation pipeline.
 
+### 0.4 Non-negotiable compile-time guarantees (v0 scope alignment)
+- Reject `Untrusted<T>` flowing into trusted sinks without explicit gates.
+- Enforce typed sink-only APIs (`SqlQuery`, `HtmlSafe`, `UrlSafe`, `PathSafe`).
+- Reject `Secret<T>` leakage in logs/JSON/string formatting unless explicitly redacted/revealed under policy.
+- Enforce effects declarations (`used_effects` subset of `declared_effects`).
+
+### 0.5 Explicit out-of-scope for v0
+- No traits/interfaces, macros/derives, advanced generics, operator overloading, or manual memory model.
+
+### 0.6 Plan Alignment Check vs `docs/book/43-ailang-v0-scope.md`
+Aligned:
+- TypeScript-like surface with small, explicit compiler stages.
+- C backend-first strategy (`emit C` + `clang`) with backend-neutral MIR.
+- No trait/interface inheritance architecture for v0.
+
+Adjusted in this roadmap:
+- M3 explicitly enforces declared-effect checking and capability effect propagation.
+- M6 explicitly requires schema-gated trust boundaries for request decoding.
+- M7 explicitly expands typed sink enforcement beyond SQL and tightens `Secret<T>` leak restrictions.
+- Added explicit compile-time acceptance tests section (`4.5`) to prove v0 is not syntax sugar.
+
 ## 1. Definition of Done (Minimal Real Working AILang)
 
 A minimal real working AILang (v0.1-alpha) means:
 - Compiler CLI exists and builds a runnable binary from `.ai` source.
 - Lexer + parser + name resolution + minimal type checking are operational.
+- Core semantic checks include unknown-name detection, type mismatch detection, and non-exhaustive match detection.
 - MIR lowering exists and can be emitted for inspection.
 - One backend exists (C emission first), producing working executables.
 - Runtime ABI supports at least: strings/bytes, JSON parse/encode, HTTP serve, simple logging.
 - End-to-end app works: `GET /health` and one JSON `POST` endpoint.
-- Security gates/sinks are enforced for at least one path (e.g., SQL + request decode).
+- Security gates/sinks are enforced for at least one path (schema gate + typed sink check).
 - Tests are automated for parser, type checks, MIR, and E2E sample.
 - Documentation is updated for every implemented subsystem and can be read as a coherent book.
 
@@ -100,7 +128,7 @@ Implementation order is intentionally linear to reduce thrash:
 
 ## M2 - Name Resolution + Type Checking (v0.1-lite)
 ### Build tasks
-- Implement module/import resolution.
+- Implement module/import resolution (next M2 slice; current M2 bootstrap is single-file).
 - Build symbol tables for types/functions/fields.
 - Implement minimal type checker with Option/Result flow and match exhaustiveness.
 - Add structural shape compatibility checks (no nominal trait system).
@@ -118,7 +146,8 @@ Implementation order is intentionally linear to reduce thrash:
 ### Build tasks
 - Parse and validate function `effects { ... }` declarations.
 - Enforce effect usage against declarations.
-- Wire request boundary model (`Untrusted`/schema decode path).
+- Enforce `used_effects` subset of `declared_effects` for function bodies and capability calls.
+- Wire request boundary model (`Untrusted` + schema decode path).
 
 ### Exit criteria
 - Compiler rejects undeclared effect use.
@@ -163,6 +192,7 @@ Implementation order is intentionally linear to reduce thrash:
 ### Build tasks
 - Implement minimal HTTP router/runtime bridge.
 - Implement JSON parse/encode primitives and schema decode path.
+- Enforce schema-gated request decoding as the default trusted-input path.
 - Build sample service with `/health` + one typed POST endpoint.
 
 ### Exit criteria
@@ -177,7 +207,8 @@ Implementation order is intentionally linear to reduce thrash:
 ## M7 - Security-by-Construction Slice
 ### Build tasks
 - Enforce typed SQL sink path (`sql"..."` to `SqlQuery`).
-- Enforce secret handling policy for logging/encoding.
+- Enforce typed sink-only APIs for SQL/HTML/URL/Path sinks.
+- Enforce secret handling policy for logging/encoding/string formatting.
 - Add lints/policy config for forbidden patterns.
 
 ### Exit criteria
@@ -242,6 +273,13 @@ Each milestone completion requires:
 - One end-to-end worked example.
 - One troubleshooting subsection.
 - One "AI implementation notes" subsection to improve future agent consistency.
+
+## 4.5 v0 acceptance tests (must pass by M7)
+1. Reject raw SQL concatenation.
+2. Reject unescaped raw HTML output without `HtmlSafe`.
+3. Reject logging/encoding of `Secret<_>`.
+4. Reject missing declared effects.
+5. Require schema gate for decoding request body into trusted types.
 
 ## 5. Day-to-Day Development Loop
 

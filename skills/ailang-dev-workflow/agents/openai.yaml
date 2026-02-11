@@ -1,0 +1,4 @@
+interface:
+  display_name: "AILang Dev Workflow"
+  short_description: "Build AILang with tests, docs, and explainers"
+  default_prompt: "Implement AILang tasks with tests, docs updates, and clear explanations for each part."

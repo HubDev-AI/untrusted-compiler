@@ -4,12 +4,12 @@ This file defines the minimum working agreement for any AI agent contributing to
 
 ## Project Root
 
-- `/Users/vladimirtrifonov/src/ai/AILang`
+- `.`
 
 ## Source of Truth
 
-- Master roadmap: `/Users/vladimirtrifonov/src/ai/AILang/docs/05-ailang-master-roadmap.md`
-- Book index: `/Users/vladimirtrifonov/src/ai/AILang/docs/book/README.md`
+- Master roadmap: `docs/05-ailang-master-roadmap.md`
+- Book index: `docs/book/README.md`
 
 ## Development Mode
 

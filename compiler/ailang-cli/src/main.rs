@@ -1,4 +1,4 @@
-use ailang_core::{parse_entry_ast, write_lockfile_stub, Diagnostic};
+use ailang_core::{analyze_entry, write_lockfile_stub, Diagnostic};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::{Path, PathBuf};
 
@@ -64,7 +64,7 @@ fn main() {
 fn cmd_build(path: &Path) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
         Ok(manifest) => {
-            if let Err(diagnostics) = parse_entry_ast(path, &manifest) {
+            if let Err(diagnostics) = analyze_entry(path, &manifest) {
                 print_diagnostics(&diagnostics);
                 return Err(1);
             }
@@ -75,7 +75,7 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
             }
 
             println!(
-                "build succeeded (M1 parser): package={}, entry={}",
+                "build succeeded (M2 semantics): package={}, entry={}",
                 manifest.package.name,
                 manifest.entry_file()
             );
@@ -91,10 +91,10 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
 
 fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
-        Ok(manifest) => match parse_entry_ast(path, &manifest) {
+        Ok(manifest) => match analyze_entry(path, &manifest) {
             Ok(program) => {
                 println!(
-                    "check succeeded (M1 parser): package={}, entry={}",
+                    "check succeeded (M2 semantics): package={}, entry={}",
                     manifest.package.name,
                     manifest.entry_file()
                 );

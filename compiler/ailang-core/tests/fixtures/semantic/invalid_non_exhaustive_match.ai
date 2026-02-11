@@ -1,0 +1,10 @@
+enum State {
+  On,
+  Off,
+}
+
+fn bad(s: State) -> Int {
+  match s {
+    On => 1,
+  }
+}

@@ -54,6 +54,8 @@ If it cannot, it is mostly convention.
 
 - M0 completed: workspace + CLI skeleton + diagnostics + manifest/lockfile basics.
 - M1 completed: lexer/parser/AST + `check --emit ast` + parser golden tests.
+- M2 completed: name resolution + minimal type checker + semantic golden tests.
 
-Roadmap: `/Users/vladimirtrifonov/src/ai/AILang/docs/05-ailang-master-roadmap.md`
-Book docs: `/Users/vladimirtrifonov/src/ai/AILang/docs/book/README.md`
+Roadmap: `docs/05-ailang-master-roadmap.md`
+Book docs: `docs/book/README.md`
+v0 scope (one-page): `docs/book/43-ailang-v0-scope.md`

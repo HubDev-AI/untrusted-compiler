@@ -1,0 +1,7 @@
+error[T3101]: type mismatch in variable binding
+  --> invalid_type_mismatch.ai:2:3
+  note: variable `x` expects `String`, got `Int`
+
+error[T3105]: function body type does not match declared return type
+  --> invalid_type_mismatch.ai:1:17
+  note: declared `Int`, but block evaluates to `String`
