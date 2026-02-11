@@ -6,6 +6,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const ALLOW_EXPIRING_SOON_DAYS: i64 = 14;
+const ALLOW_COUNT_HIGH_THRESHOLD: usize = 10;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum AuditSeverity {
     LOW,
@@ -255,6 +258,8 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
     };
 
     let mut findings = Vec::new();
+    let today = current_utc_iso_date();
+    let today_days = days_from_iso_date(&today).unwrap_or(0);
 
     if posture.cors.allow_credentials && posture.cors.wildcard {
         findings.push(finding(
@@ -450,6 +455,81 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
         ));
     }
 
+    for allow in &security_map.allows {
+        let evidence = json!({
+            "policyKey": &allow.policy,
+            "ticket": &allow.ticket,
+            "location": {
+                "file": &allow.loc.file,
+                "line": allow.loc.line,
+                "column": allow.loc.column,
+            },
+            "expires": &allow.expires,
+            "bypass": &allow.bypass,
+        });
+
+        if allow
+            .bypass
+            .iter()
+            .any(|tag| tag == "effect.secrets.reveal")
+        {
+            findings.push(finding(
+                "SECRETS_REVEAL_ALLOWLISTED",
+                AuditSeverity::HIGH,
+                "secrets",
+                evidence.clone(),
+                "Confine secret reveal bypasses to minimal dev-only scope and enforce short expiry windows.",
+            ));
+        }
+
+        if allow
+            .bypass
+            .iter()
+            .any(|tag| tag == "sink.net.internal_request")
+        {
+            findings.push(finding(
+                "INTERNAL_NET_CALL_ALLOWLISTED",
+                AuditSeverity::HIGH,
+                "ssrf",
+                evidence.clone(),
+                "Validate internal net bypass scope and keep CIDR/domain allowlists strict.",
+            ));
+        }
+
+        if let Some(expiry_days) = days_from_iso_date(&allow.expires) {
+            if expiry_days < today_days {
+                findings.push(finding(
+                    "ALLOW_EXPIRED",
+                    AuditSeverity::HIGH,
+                    "policy",
+                    evidence.clone(),
+                    "Remove or renew expired @allow exceptions immediately.",
+                ));
+            } else if (expiry_days - today_days) <= ALLOW_EXPIRING_SOON_DAYS {
+                findings.push(finding(
+                    "ALLOW_EXPIRING_SOON",
+                    AuditSeverity::MEDIUM,
+                    "policy",
+                    evidence,
+                    "Review and renew/remove this @allow before expiry.",
+                ));
+            }
+        }
+    }
+
+    if security_map.allows.len() > ALLOW_COUNT_HIGH_THRESHOLD {
+        findings.push(finding(
+            "ALLOW_COUNT_HIGH",
+            AuditSeverity::LOW,
+            "policy",
+            json!({
+                "count": security_map.allows.len(),
+                "threshold": ALLOW_COUNT_HIGH_THRESHOLD,
+            }),
+            "Reduce active @allow exceptions to keep security posture maintainable.",
+        ));
+    }
+
     findings.sort_by(|left, right| {
         right
             .severity
@@ -637,7 +717,7 @@ fn map_allow_to_exception(allow: &SecurityAllow) -> AuditException {
         reason: allow.reason.clone(),
         ticket: allow.ticket.clone(),
         expires: allow.expires.clone(),
-        severity: AuditSeverity::HIGH,
+        severity: exception_severity(allow),
     }
 }
 
@@ -646,4 +726,70 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or(0)
+}
+
+fn exception_severity(allow: &SecurityAllow) -> AuditSeverity {
+    if allow.bypass.iter().any(|tag| {
+        matches!(
+            tag.as_str(),
+            "effect.secrets.reveal" | "sink.net.internal_request" | "sink.fs.write"
+        )
+    }) {
+        AuditSeverity::HIGH
+    } else {
+        AuditSeverity::MEDIUM
+    }
+}
+
+fn current_utc_iso_date() -> String {
+    let days_since_unix_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| (duration.as_secs() / 86_400) as i64)
+        .unwrap_or(0);
+    let (year, month, day) = civil_from_days(days_since_unix_epoch);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+fn days_from_iso_date(input: &str) -> Option<i64> {
+    let mut parts = input.split('-');
+    let year = parts.next()?.parse::<i64>().ok()?;
+    let month = parts.next()?.parse::<i64>().ok()?;
+    let day = parts.next()?.parse::<i64>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some(days_from_civil(year, month, day))
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let adjusted_year = year - if month <= 2 { 1 } else { 0 };
+    let era = if adjusted_year >= 0 {
+        adjusted_year
+    } else {
+        adjusted_year - 399
+    } / 400;
+    let yoe = adjusted_year - era * 400;
+    let mp = month + if month > 2 { -3 } else { 9 };
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    if month <= 2 {
+        year += 1;
+    }
+    (year, month, day)
 }

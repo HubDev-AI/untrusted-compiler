@@ -1,6 +1,7 @@
 use ailang_core::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations, parse_source,
-    policy::parse_policy_str, run_security_audit, should_fail, AuditSeverity, Policy,
+    policy::parse_policy_str, run_security_audit, security_map::SourceLocation, should_fail,
+    AuditSeverity, Policy, SecurityAllow,
 };
 use std::path::Path;
 
@@ -111,4 +112,70 @@ fn boot() -> Int {
     assert_eq!(report.exceptions[0].policy_key, "net.internal.enabled");
     assert_eq!(report.exceptions[0].ticket, "SEC-123");
     assert_eq!(report.exceptions[0].severity, AuditSeverity::HIGH);
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "INTERNAL_NET_CALL_ALLOWLISTED" && finding.severity == AuditSeverity::HIGH
+    }));
+}
+
+#[test]
+fn sec_audit_flags_secret_reveal_allowlisted_bypass() {
+    let source = r#"
+@allow(
+  policy = "effects.forbid",
+  bypass = ["effect.secrets.reveal"],
+  reason = "dev debug helper",
+  ticket = "SEC-200",
+  expires = "2099-06-01",
+)
+fn boot() -> Int { 1 }
+"#;
+
+    let stripped = ailang_core::strip_allow_annotations(source);
+    let program = parse_source(Path::new("main.ai"), &stripped).expect("source should parse");
+    let allows = parse_allow_annotations(Path::new("main.ai"), source).expect("allow should parse");
+    let policy = Policy::default();
+    let map = build_security_map_with_allows(&program, &policy, allows);
+    let report = run_security_audit(&policy, &map);
+
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "SECRETS_REVEAL_ALLOWLISTED" && finding.severity == AuditSeverity::HIGH
+    }));
+}
+
+#[test]
+fn sec_audit_flags_allow_hygiene_findings() {
+    let source = "fn boot() -> Int { 1 }";
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy = Policy::default();
+
+    let mut allows = Vec::new();
+    for index in 0..11 {
+        allows.push(SecurityAllow {
+            loc: SourceLocation {
+                file: "main.ai".to_string(),
+                line: index + 1,
+                column: 1,
+            },
+            policy: "effects.forbid".to_string(),
+            bypass: vec!["sink.net.public_request".to_string()],
+            reason: "temporary exception".to_string(),
+            ticket: format!("SEC-{index:03}"),
+            expires: if index == 0 {
+                "2000-01-01".to_string()
+            } else {
+                "2099-01-01".to_string()
+            },
+        });
+    }
+
+    let map = build_security_map_with_allows(&program, &policy, allows);
+    let report = run_security_audit(&policy, &map);
+
+    assert!(report
+        .findings
+        .iter()
+        .any(|finding| finding.id == "ALLOW_EXPIRED" && finding.severity == AuditSeverity::HIGH));
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "ALLOW_COUNT_HIGH" && finding.severity == AuditSeverity::LOW
+    }));
 }

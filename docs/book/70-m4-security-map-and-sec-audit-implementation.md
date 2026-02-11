@@ -19,6 +19,10 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - annotation parser validates required fields (`policy`, `bypass`, `reason`, `ticket`, `expires`)
   - expired annotations are rejected during analysis
   - parsed allowlist entries are emitted in `security_map.allows` and surfaced in `sec.audit` exceptions
+- Added deterministic allowlist hygiene findings in `sec.audit`:
+  - high-risk bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`)
+  - expiry hygiene findings (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`)
+  - exception-volume hygiene finding (`ALLOW_COUNT_HIGH`)
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -43,6 +47,6 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Add soon-expiring exception findings in `sec.audit` (not just expired compile-time rejection).
-3. Add more policy-aware findings for SQL limits and logging privacy settings.
-4. Add richer source-origin traces in security findings and exception rendering.
+2. Add more policy-aware findings for SQL limits and logging privacy settings.
+3. Add richer source-origin traces in security findings and exception rendering.
+4. Add middleware/member-call tag coverage beyond direct identifier calls.

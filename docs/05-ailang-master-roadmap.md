@@ -33,6 +33,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `security_map` metadata generation is implemented for baseline sensitive calls and middleware tags.
   - `@allow(...)` annotations are validated during analysis and emitted into `security_map.allows` for audit reporting.
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
+  - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
