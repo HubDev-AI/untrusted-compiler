@@ -1323,6 +1323,20 @@ impl Analyzer {
             );
         }
 
+        if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode && args.len() < 2 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4004",
+                    "json response encoding requires explicit schema argument",
+                    span.clone(),
+                )
+                .with_note(
+                    "strict mode requires `res.json(schema, value)` (or `res.json(status, schema, value)`)",
+                )
+                .with_note("set `json.require_schema_for_encode = false` in policy to disable strict mode"),
+            );
+        }
+
         if is_untrusted_string_gate(callee_name) {
             if args.is_empty() {
                 self.diagnostics.push(

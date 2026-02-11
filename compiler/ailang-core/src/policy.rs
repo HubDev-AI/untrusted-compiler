@@ -81,6 +81,11 @@ pub struct SqlPolicyConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct JsonPolicyConfig {
+    pub require_schema_for_encode: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
 }
@@ -122,6 +127,7 @@ pub struct Policy {
     pub replay: ReplayPolicyConfig,
     pub logging: LoggingPolicyConfig,
     pub sql: SqlPolicyConfig,
+    pub json: JsonPolicyConfig,
     pub net_public: NetPublicPolicyConfig,
     pub net_internal: NetInternalPolicyConfig,
     pub net_ssrf: NetSsrfPolicyConfig,
@@ -197,6 +203,9 @@ impl Default for Policy {
                 forbid_raw: true,
                 require_limit_on_select: "warn".to_string(),
             },
+            json: JsonPolicyConfig {
+                require_schema_for_encode: true,
+            },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
             },
@@ -243,6 +252,7 @@ impl Policy {
             "replay": self.replay,
             "logging": self.logging,
             "sql": self.sql,
+            "json": self.json,
             "net_public": self.net_public,
             "net_internal": self.net_internal,
             "net_ssrf": self.net_ssrf,
@@ -867,6 +877,9 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
     }
 
     if let Some(json) = raw.json {
+        if let Some(require_schema_for_encode) = json.require_schema_for_encode {
+            policy.json.require_schema_for_encode = require_schema_for_encode;
+        }
         if json.max_depth.unwrap_or(1) < 1 {
             diagnostics.push(
                 Diagnostic::error(

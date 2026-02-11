@@ -101,6 +101,14 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `gate.validate.uuid`
     - `gate.validate.int64`
     - `gate.validate.non_empty`
+- Added strict JSON encode schema policy coupling:
+  - policy model now carries `json.require_schema_for_encode` (default `true`)
+  - semantic trust-gate checks now enforce minimum schema-argument contract for `res.json` in strict mode
+  - encoding without schema argument emits `E4004` with explicit strict-mode guidance
+  - semantic fixtures now cover:
+    - strict-mode rejection for single-argument `res.json(...)` calls
+    - valid `res.json(schema, value)` path
+  - policy tests now cover toggling `json.require_schema_for_encode`
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -125,6 +133,6 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Extend trust-gate coverage to schema/decode+encode policy coupling (`req.json(schema)` + strict encode schema checks).
-3. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
-4. Add richer SQL hygiene parsing (query normalization/AST) to reduce false positives from string heuristics.
+2. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
+3. Add richer SQL hygiene parsing (query normalization/AST) to reduce false positives from string heuristics.
+4. Extend strict schema enforcement from argument-count checks to typed schema-value pairing checks.

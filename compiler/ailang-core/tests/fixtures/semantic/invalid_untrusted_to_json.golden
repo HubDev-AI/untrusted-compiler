@@ -4,3 +4,8 @@ error[E1002]: untrusted value cannot flow into JSON response sink
   note: argument 1 has type `Untrusted<String>`
   note: origin: identifier `input` carries type `Untrusted<String>`
   note: decode/validate input with schema before encoding
+
+error[E4004]: json response encoding requires explicit schema argument
+  --> invalid_untrusted_to_json.ai:2:3
+  note: strict mode requires `res.json(schema, value)` (or `res.json(status, schema, value)`)
+  note: set `json.require_schema_for_encode = false` in policy to disable strict mode

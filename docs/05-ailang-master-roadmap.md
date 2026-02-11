@@ -72,6 +72,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `gate.validate.int64`
     - `gate.validate.non_empty`
   - Semantic and security_map tests now cover these expanded validator gate paths.
+  - Policy model now includes `json.require_schema_for_encode` (default strict mode enabled).
+  - Semantic checks now enforce strict JSON encode schema requirements on `res.json(...)` calls (`E4004` when schema argument is missing).
+  - Semantic fixtures now include strict-mode rejection for single-argument JSON responses and a valid schema-argument encoding case.
+  - Policy tests now cover toggling strict JSON encode schema mode.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,

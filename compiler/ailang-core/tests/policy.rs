@@ -10,6 +10,7 @@ fn policy_defaults_when_empty() {
     assert!(policy.forbidden_effects.contains("shell"));
     assert!(policy.forbidden_effects.contains("unsafe"));
     assert!(policy.forbidden_effects.contains("secrets.reveal"));
+    assert!(policy.json.require_schema_for_encode);
 }
 
 #[test]
@@ -109,4 +110,16 @@ require_limit_on_select = "invalid"
     let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
         .expect_err("invalid sql.require_limit_on_select must fail");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_allows_toggling_json_schema_encode_requirement() {
+    let source = r#"
+[json]
+require_schema_for_encode = false
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect("json schema encode flag should parse");
+    assert!(!policy.json.require_schema_for_encode);
 }
