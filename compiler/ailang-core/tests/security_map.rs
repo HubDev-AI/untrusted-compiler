@@ -12,6 +12,7 @@ fn boot() -> Int {
   csrf.withCsrf();
   auth.withAuth();
   let raw = req.query("q");
+  validate.email(raw);
   validate.headerValue(raw);
   sanitize.html(raw);
   url.public(raw);
@@ -37,6 +38,10 @@ fn boot() -> Int {
         .calls
         .iter()
         .any(|call| call.tags.iter().any(|tag| tag == "source.http.query")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.validate.email")));
     assert!(map
         .calls
         .iter()
@@ -83,6 +88,7 @@ fn boot() -> Int {
     assert!(has_symbol_tag("req.query", "source.http.query"));
     assert!(has_symbol_tag("req.pathParam", "source.http.path"));
     assert!(has_symbol_tag("validate.headerValue", "gate.header.value"));
+    assert!(has_symbol_tag("validate.email", "gate.validate.email"));
     assert!(has_symbol_tag("sanitize.html", "gate.sanitize.html"));
     assert!(has_symbol_tag("path.under", "gate.path.under"));
     assert!(has_symbol_tag("url.public", "gate.url.public"));

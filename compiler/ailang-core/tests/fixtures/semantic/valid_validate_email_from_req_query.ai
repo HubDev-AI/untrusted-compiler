@@ -1,0 +1,5 @@
+fn ok() effects { net } -> Int {
+  let raw = req.query("email");
+  validate.email(raw);
+  1
+}

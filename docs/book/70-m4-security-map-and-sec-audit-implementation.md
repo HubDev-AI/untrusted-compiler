@@ -86,6 +86,21 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `MEDIUM` when `sql.require_limit_on_select = "warn"`
     - `HIGH` when `sql.require_limit_on_select = "enforce"`
   - tests cover callsite tagging and severity mapping behavior
+- Expanded validator gate coverage beyond single-function mappings:
+  - semantic trust-gate enforcement now covers core `validate.*`/`sanitize.*` string gates with required `Untrusted<String>` input contracts
+  - intrinsic return typing now includes:
+    - `validate.email` -> `Email`
+    - `validate.uuid` -> `Uuid`
+    - `validate.int64` -> `Int64`
+    - `validate.nonEmpty` -> `String`
+  - new semantic fixtures cover:
+    - invalid `validate.email(String)` rejection
+    - valid `validate.email(req.query(...))` flow
+  - `security_map` marker coverage now includes validator gate tags:
+    - `gate.validate.email`
+    - `gate.validate.uuid`
+    - `gate.validate.int64`
+    - `gate.validate.non_empty`
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -110,6 +125,6 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Extend trust-gate coverage to schema/validator families beyond current core gates (`validate.*`, decode/encode policy coupling).
+2. Extend trust-gate coverage to schema/decode+encode policy coupling (`req.json(schema)` + strict encode schema checks).
 3. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
 4. Add richer SQL hygiene parsing (query normalization/AST) to reduce false positives from string heuristics.

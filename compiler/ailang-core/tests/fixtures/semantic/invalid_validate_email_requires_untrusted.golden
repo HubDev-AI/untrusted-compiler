@@ -1,0 +1,4 @@
+error[E4001]: trust gate expects `Untrusted<String>` input
+  --> invalid_validate_email_requires_untrusted.ai:2:18
+  note: `validate.email` requires first argument type `Untrusted<String>`
+  note: found `String`

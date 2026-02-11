@@ -281,6 +281,10 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
             vec!["source.http.body", "gate.schema.json_decode", "effect.net"]
         }
         "validate_header_value" | "validate.headerValue" => vec!["gate.header.value"],
+        "validate_email" | "validate.email" => vec!["gate.validate.email"],
+        "validate_uuid" | "validate.uuid" => vec!["gate.validate.uuid"],
+        "validate_int64" | "validate.int64" => vec!["gate.validate.int64"],
+        "validate_non_empty" | "validate.nonEmpty" => vec!["gate.validate.non_empty"],
         "sanitize_html" | "sanitize.html" => vec!["gate.sanitize.html"],
         "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder" => {
             vec!["gate.path.under"]
@@ -563,6 +567,13 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             "validate_header_value",
             &[("gate.header.value", TagKind::Gate)],
         ),
+        symbol("validate_email", &[("gate.validate.email", TagKind::Gate)]),
+        symbol("validate_uuid", &[("gate.validate.uuid", TagKind::Gate)]),
+        symbol("validate_int64", &[("gate.validate.int64", TagKind::Gate)]),
+        symbol(
+            "validate_non_empty",
+            &[("gate.validate.non_empty", TagKind::Gate)],
+        ),
         symbol("sanitize_html", &[("gate.sanitize.html", TagKind::Gate)]),
         symbol("path_under", &[("gate.path.under", TagKind::Gate)]),
         symbol(
@@ -637,6 +648,13 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol(
             "validate.headerValue",
             &[("gate.header.value", TagKind::Gate)],
+        ),
+        symbol("validate.email", &[("gate.validate.email", TagKind::Gate)]),
+        symbol("validate.uuid", &[("gate.validate.uuid", TagKind::Gate)]),
+        symbol("validate.int64", &[("gate.validate.int64", TagKind::Gate)]),
+        symbol(
+            "validate.nonEmpty",
+            &[("gate.validate.non_empty", TagKind::Gate)],
         ),
         symbol("sanitize.html", &[("gate.sanitize.html", TagKind::Gate)]),
         symbol("path.under", &[("gate.path.under", TagKind::Gate)]),

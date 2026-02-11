@@ -172,6 +172,7 @@ impl Catalog {
             "Time",
             "Duration",
             "Uuid",
+            "Email",
             "Unit",
             "DbCap",
             "TxCap",
@@ -1804,6 +1805,26 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Named("HeaderValue"),
         }),
+        "validate_email" | "validate.email" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Email"),
+        }),
+        "validate_uuid" | "validate.uuid" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Uuid"),
+        }),
+        "validate_int64" | "validate.int64" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Int64"),
+        }),
+        "validate_non_empty" | "validate.nonEmpty" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("String"),
+        }),
         "sanitize_html" | "sanitize.html" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
@@ -1907,17 +1928,32 @@ fn is_req_json_gate(name: &str) -> bool {
 }
 
 fn is_untrusted_string_gate(name: &str) -> bool {
+    if is_path_under_gate(name) {
+        return false;
+    }
+
     matches!(
         name,
         "validate_header_value"
             | "validate.headerValue"
+            | "validate_email"
+            | "validate.email"
+            | "validate_uuid"
+            | "validate.uuid"
+            | "validate_int64"
+            | "validate.int64"
+            | "validate_non_empty"
+            | "validate.nonEmpty"
             | "sanitize_html"
             | "sanitize.html"
             | "url_public"
             | "url.public"
             | "url_internal"
             | "url.internal"
-    )
+    ) || name.starts_with("validate.")
+        || name.starts_with("validate_")
+        || name.starts_with("sanitize.")
+        || name.starts_with("sanitize_")
 }
 
 fn is_path_under_gate(name: &str) -> bool {
