@@ -179,3 +179,53 @@ fn sec_audit_flags_allow_hygiene_findings() {
         finding.id == "ALLOW_COUNT_HIGH" && finding.severity == AuditSeverity::LOW
     }));
 }
+
+#[test]
+fn sec_audit_flags_logging_and_sql_policy_weakening() {
+    let source = r#"
+fn boot() -> Int {
+  withSecurityHeaders();
+  withCors();
+  withCsrf();
+  withAuth();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[logging]
+structured_only = false
+include_remote_ip = true
+include_user_agent = true
+
+[sql]
+forbid_raw = false
+require_limit_on_select = "off"
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for logging/sql audit test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "LOG_STRUCTURED_ONLY_DISABLED" && finding.severity == AuditSeverity::HIGH
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "LOG_REMOTE_IP_ENABLED" && finding.severity == AuditSeverity::MEDIUM
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "LOG_USER_AGENT_ENABLED" && finding.severity == AuditSeverity::LOW
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "SQL_RAW_ALLOWED_BY_POLICY" && finding.severity == AuditSeverity::HIGH
+    }));
+    assert!(report.findings.iter().any(|finding| {
+        finding.id == "SQL_LIMIT_RULE_DISABLED" && finding.severity == AuditSeverity::MEDIUM
+    }));
+}

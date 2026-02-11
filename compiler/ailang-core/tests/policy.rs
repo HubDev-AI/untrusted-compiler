@@ -98,3 +98,15 @@ allow_credentials = false
         .expect_err("cross-site cookie auth must require cors credentials");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
+
+#[test]
+fn policy_rejects_invalid_sql_limit_mode() {
+    let source = r#"
+[sql]
+require_limit_on_select = "invalid"
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect_err("invalid sql.require_limit_on_select must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}

@@ -440,6 +440,56 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
         ));
     }
 
+    if !policy.logging.structured_only {
+        findings.push(finding(
+            "LOG_STRUCTURED_ONLY_DISABLED",
+            AuditSeverity::HIGH,
+            "logging",
+            json!({"structuredOnly": false}),
+            "Enable structured-only logging to reduce injection and data-leak risk.",
+        ));
+    }
+
+    if policy.logging.include_remote_ip {
+        findings.push(finding(
+            "LOG_REMOTE_IP_ENABLED",
+            AuditSeverity::MEDIUM,
+            "logging",
+            json!({"includeRemoteIp": true}),
+            "Review remote IP logging necessity and privacy impact for this environment.",
+        ));
+    }
+
+    if policy.logging.include_user_agent {
+        findings.push(finding(
+            "LOG_USER_AGENT_ENABLED",
+            AuditSeverity::LOW,
+            "logging",
+            json!({"includeUserAgent": true}),
+            "User-Agent logging can increase PII footprint; keep only if operationally required.",
+        ));
+    }
+
+    if !policy.sql.forbid_raw {
+        findings.push(finding(
+            "SQL_RAW_ALLOWED_BY_POLICY",
+            AuditSeverity::HIGH,
+            "sql",
+            json!({"forbidRaw": false}),
+            "Set sql.forbid_raw=true to keep raw SQL execution disabled by policy.",
+        ));
+    }
+
+    if policy.sql.require_limit_on_select == "off" {
+        findings.push(finding(
+            "SQL_LIMIT_RULE_DISABLED",
+            AuditSeverity::MEDIUM,
+            "sql",
+            json!({"requireLimitOnSelect": "off"}),
+            "Enable SELECT limit policy (`warn` or `enforce`) to reduce unbounded query risk.",
+        ));
+    }
+
     if attack_surface.secrets_reveal {
         let severity = if policy.forbidden_effects.contains("secrets.reveal") {
             AuditSeverity::CRITICAL

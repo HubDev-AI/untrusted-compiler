@@ -68,6 +68,19 @@ pub struct ReplayPolicyConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LoggingPolicyConfig {
+    pub structured_only: bool,
+    pub include_remote_ip: bool,
+    pub include_user_agent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SqlPolicyConfig {
+    pub forbid_raw: bool,
+    pub require_limit_on_select: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
 }
@@ -107,6 +120,8 @@ pub struct Policy {
     pub auth: AuthPolicyConfig,
     pub capture: CapturePolicyConfig,
     pub replay: ReplayPolicyConfig,
+    pub logging: LoggingPolicyConfig,
+    pub sql: SqlPolicyConfig,
     pub net_public: NetPublicPolicyConfig,
     pub net_internal: NetInternalPolicyConfig,
     pub net_ssrf: NetSsrfPolicyConfig,
@@ -173,6 +188,15 @@ impl Default for Policy {
             replay: ReplayPolicyConfig {
                 effects: "deny".to_string(),
             },
+            logging: LoggingPolicyConfig {
+                structured_only: true,
+                include_remote_ip: false,
+                include_user_agent: false,
+            },
+            sql: SqlPolicyConfig {
+                forbid_raw: true,
+                require_limit_on_select: "warn".to_string(),
+            },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
             },
@@ -217,6 +241,8 @@ impl Policy {
             "auth": self.auth,
             "capture": self.capture,
             "replay": self.replay,
+            "logging": self.logging,
+            "sql": self.sql,
             "net_public": self.net_public,
             "net_internal": self.net_internal,
             "net_ssrf": self.net_ssrf,
@@ -688,6 +714,39 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
     if let Some(section) = raw.effects {
         if let Some(forbid) = section.forbid {
             policy.forbidden_effects = forbid.into_iter().collect();
+        }
+    }
+
+    if let Some(section) = raw.logging {
+        if let Some(structured_only) = section.structured_only {
+            policy.logging.structured_only = structured_only;
+        }
+        if let Some(include_remote_ip) = section.include_remote_ip {
+            policy.logging.include_remote_ip = include_remote_ip;
+        }
+        if let Some(include_user_agent) = section.include_user_agent {
+            policy.logging.include_user_agent = include_user_agent;
+        }
+    }
+
+    if let Some(section) = raw.sql {
+        if let Some(forbid_raw) = section.forbid_raw {
+            policy.sql.forbid_raw = forbid_raw;
+        }
+        if let Some(require_limit_on_select) = section.require_limit_on_select {
+            match require_limit_on_select.as_str() {
+                "off" | "warn" | "enforce" => {
+                    policy.sql.require_limit_on_select = require_limit_on_select;
+                }
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid sql.require_limit_on_select",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("sql.require_limit_on_select must be `off`, `warn`, or `enforce`"),
+                ),
+            }
         }
     }
 

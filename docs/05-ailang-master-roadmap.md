@@ -51,6 +51,14 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - call tags now include `gate.header.value`, `gate.sanitize.html`, `gate.path.under`, `gate.url.public`, `gate.url.internal`.
     - source tags now include dotted/underscore variants of `req.body`, `req.query`, `req.header`, and `req.pathParam`.
     - symbol registry coverage and tests were extended to keep `sec.audit` marker detection deterministic.
+  - `[logging]` and `[sql]` policy sections are now ingested into the typed policy model.
+  - `sec.audit` now emits deterministic logging/SQL posture findings:
+    - `LOG_STRUCTURED_ONLY_DISABLED`
+    - `LOG_REMOTE_IP_ENABLED`
+    - `LOG_USER_AGENT_ENABLED`
+    - `SQL_RAW_ALLOWED_BY_POLICY`
+    - `SQL_LIMIT_RULE_DISABLED`
+  - policy parser now validates `sql.require_limit_on_select` values (`off|warn|enforce`) with dedicated diagnostics.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,

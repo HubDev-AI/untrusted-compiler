@@ -69,6 +69,16 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - source tags for `req.query`/`req.pathParam`/`req.header`/`req.body`
   - intrinsic symbol registry now includes these gate and source entries for both underscore and dotted stdlib aliases
   - `security_map` tests now assert gate/source call tagging and registry presence
+- Added logging/SQL policy ingestion and deterministic audit findings:
+  - `Policy` now carries parsed `[logging]` and `[sql]` posture fields
+  - parser validation now enforces valid `sql.require_limit_on_select` values (`off|warn|enforce`)
+  - `sec.audit` now emits policy-aware findings:
+    - `LOG_STRUCTURED_ONLY_DISABLED`
+    - `LOG_REMOTE_IP_ENABLED`
+    - `LOG_USER_AGENT_ENABLED`
+    - `SQL_RAW_ALLOWED_BY_POLICY`
+    - `SQL_LIMIT_RULE_DISABLED`
+  - policy and audit tests were extended for this coverage
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -93,6 +103,6 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Add more policy-aware findings for SQL limits and logging privacy settings.
+2. Add callsite-driven SQL limit hygiene findings (`SELECT` without `LIMIT`) with policy severity mapping.
 3. Extend trust-gate coverage to schema/validator families beyond current core gates (`validate.*`, decode/encode policy coupling).
 4. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
