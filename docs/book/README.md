@@ -17,5 +17,11 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `43-ailang-v0-scope.md`
 - `50-effect-system-and-auditable-side-effects.md`
 - `51-trust-boundaries-and-untrusted-data.md`
+- `52-security-first-priorities.md`
+- `53-v0-security-baseline.md`
+- `54-v0-stdlib-security-surface.md`
+- `55-v0-typing-effects-security-rules.md`
+- `56-security-diagnostics-taxonomy.md`
+- `57-standard-runtime-error-model.md`
 
 As milestones progress, chapters will be added and linked from this index.

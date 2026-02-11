@@ -10,12 +10,16 @@ This file defines the minimum working agreement for any AI agent contributing to
 
 - Master roadmap: `docs/05-ailang-master-roadmap.md`
 - Book index: `docs/book/README.md`
+- Security baseline: `docs/book/53-v0-security-baseline.md`
+- Security stdlib/API contract: `docs/book/54-v0-stdlib-security-surface.md`
+- Security typing/effects rules: `docs/book/55-v0-typing-effects-security-rules.md`
 
 ## Development Mode
 
 - Build in milestone order (`M0` -> `M8`), one milestone-sized slice at a time.
 - Prefer the smallest end-to-end, verifiable increment.
 - Keep v0.1-lite constraints: no inheritance/trait complexity, no unnecessary language features.
+- Follow security-first constraints: capabilities + effects + policy + typed sinks + explicit trust gates.
 
 ## Required Workflow Per Milestone
 

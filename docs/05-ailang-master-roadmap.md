@@ -22,8 +22,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Semantic validation of effect names and duplicate declarations.
   - Enforcement of `used_effects` subset of `declared_effects` for function bodies.
   - Effect golden fixtures added under semantic tests.
-- M3 trust-boundary model is documented and queued as the next slice.
-- M0 through M3 documentation chapters are now under `docs/book/`.
+- Security-first baseline documentation has been expanded and locked as mandatory input for upcoming milestones.
+- Roadmap is now realigned to insert a dedicated security-hardening milestone before MIR/backend work.
+- M0 through M3 implementation is complete; M4 (security hardening) is the active next milestone.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -31,6 +32,12 @@ These constraints come from current AILang docs and the new files:
 - `docs/06-ailang-typescript-like-profile.md`
 - `docs/07-ailang-no-inheritance-composition-model.md`
 - `docs/book/43-ailang-v0-scope.md`
+- `docs/book/52-security-first-priorities.md`
+- `docs/book/53-v0-security-baseline.md`
+- `docs/book/54-v0-stdlib-security-surface.md`
+- `docs/book/55-v0-typing-effects-security-rules.md`
+- `docs/book/56-security-diagnostics-taxonomy.md`
+- `docs/book/57-standard-runtime-error-model.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -46,30 +53,35 @@ These constraints come from current AILang docs and the new files:
 - Effects remain first-class and auditable.
 
 ### 0.3 Security baseline for v0.1
-- `Untrusted<T>` and `Secret<T>` semantics (or equivalent enforced boundary model).
-- Typed sinks (`SqlQuery`, `HtmlSafe`, etc.).
-- Security policies and lints integrated into compilation pipeline.
+- `Untrusted<T>` and `Secret<T>` are opaque wrappers with no implicit unwrapping.
+- Typed sinks are mandatory (`SqlQuery`, `HtmlSafe`, `PublicUrl`/`InternalUrl`, `PathSafe`, `HeaderValue`, `LogValue`).
+- Security policy is compiler-enforced (hard errors), not lint-only guidance.
+- Capabilities + effects are both required for sensitive operations.
 
 ### 0.4 Non-negotiable compile-time guarantees (v0 scope alignment)
 - Reject `Untrusted<T>` flowing into trusted sinks without explicit gates.
-- Enforce typed sink-only APIs (`SqlQuery`, `HtmlSafe`, `UrlSafe`, `PathSafe`).
+- Enforce typed sink-only APIs (`SqlQuery`, `HtmlSafe`, `PublicUrl`, `InternalUrl`, `PathSafe`, `HeaderValue`, `LogValue`).
 - Reject `Secret<T>` leakage in logs/JSON/string formatting unless explicitly redacted/revealed under policy.
 - Enforce effects declarations (`used_effects` subset of `declared_effects`).
+- Enforce capability availability (`DbCap`, `NetCap`, `FsCap`, `SecretsCap`, `InternalNetCap`) for sensitive APIs.
+- Enforce schema-gated trust boundaries for handler input decoding.
 
 ### 0.5 Explicit out-of-scope for v0
 - No traits/interfaces, macros/derives, advanced generics, operator overloading, or manual memory model.
 
-### 0.6 Plan Alignment Check vs `docs/book/43-ailang-v0-scope.md`
+### 0.6 Plan Alignment Check
 Aligned:
 - TypeScript-like surface with small, explicit compiler stages.
 - C backend-first strategy (`emit C` + `clang`) with backend-neutral MIR.
 - No trait/interface inheritance architecture for v0.
+- Security-by-construction as a compile-time contract, not conventions.
 
 Adjusted in this roadmap:
 - M3 explicitly enforces declared-effect checking and capability effect propagation.
-- M6 explicitly requires schema-gated trust boundaries for request decoding.
-- M7 explicitly expands typed sink enforcement beyond SQL and tightens `Secret<T>` leak restrictions.
-- Added explicit compile-time acceptance tests section (`4.5`) to prove v0 is not syntax sugar.
+- New M4 (Security Foundation Hardening) is inserted before MIR.
+- URL security model is split (`PublicUrl` vs `InternalUrl`) with runtime SSRF checks.
+- Structured logging, typed headers/cookies, and request budgets are now mandatory security primitives.
+- Policy-as-code and diagnostics taxonomy are explicitly scheduled as compiler features.
 
 ## 1. Definition of Done (Minimal Real Working AILang)
 
@@ -81,7 +93,9 @@ A minimal real working AILang (v0.1-alpha) means:
 - One backend exists (C emission first), producing working executables.
 - Runtime ABI supports at least: strings/bytes, JSON parse/encode, HTTP serve, simple logging.
 - End-to-end app works: `GET /health` and one JSON `POST` endpoint.
-- Security gates/sinks are enforced for at least one path (schema gate + typed sink check).
+- Security gates/sinks are enforced for at least one path (schema gate + typed sink check + capability + effect enforcement).
+- Policy file enforcement is active and reflected in build metadata.
+- Security diagnostics include origin trace + sink + fix path for core flow violations.
 - Tests are automated for parser, type checks, MIR, and E2E sample.
 - Documentation is updated for every implemented subsystem and can be read as a coherent book.
 
@@ -92,11 +106,12 @@ Implementation order is intentionally linear to reduce thrash:
 2. Bootstrap compiler workspace + CLI.
 3. Implement frontend pipeline (lexer/parser/AST).
 4. Add semantic layer (names/types/effects minimal subset).
-5. Lower to MIR + add MIR text output.
-6. Implement C backend + runtime ABI stubs.
-7. Add HTTP/JSON vertical slice.
-8. Add security constraints and lints for chosen sinks.
-9. Harden tests, diagnostics, packaging.
+5. Security-hardening foundation: capabilities, policies, typed boundaries, diagnostics taxonomy, runtime safety contracts.
+6. Lower to MIR + add MIR text output.
+7. Implement C backend + runtime ABI stubs.
+8. Add HTTP/JSON vertical slice with strict schema/budget defaults.
+9. Add advanced security-by-construction constraints and policy checks.
+10. Harden tests, diagnostics, packaging, and build integrity metadata.
 
 ## 3. Milestone Plan
 
@@ -152,18 +167,43 @@ Implementation order is intentionally linear to reduce thrash:
 ### Build tasks
 - Parse and validate function `effects { ... }` declarations.
 - Enforce effect usage against declarations.
-- Enforce `used_effects` subset of `declared_effects` for function bodies and capability calls.
-- Wire request boundary model (`Untrusted` + schema decode path).
+- Enforce `used_effects` subset of `declared_effects` for function bodies.
 
 ### Exit criteria
 - Compiler rejects undeclared effect use.
-- Minimal security boundary rules are enforced in sample service.
+- Effect diagnostics are stable and covered by golden tests.
 
 ### Docs/book outputs
 - Chapter: "Effect System and Auditable Side Effects".
 - Chapter: "Trust Boundaries and Untrusted Data".
 
-## M4 - MIR Lowering + Introspection
+## M4 - Security Foundation Hardening (Pre-MIR)
+### Build tasks
+- Add capability model for sensitive operations (`DbCap`, `NetCap`, `FsCap`, `SecretsCap`, `InternalNetCap`, `TxCap`).
+- Require capability + effect for sensitive API usage.
+- Add policy-as-code compiler integration (`ailang.policy` / equivalent) with hard-error enforcement.
+- Introduce typed security primitives and sinks:
+  - `PublicUrl` / `InternalUrl`
+  - `HeaderName` / `HeaderValue`
+  - `LogValue`
+  - `Budget`
+- Define and enforce schema-gated input trust boundaries (`req.json(schema)` canonical path).
+- Lock diagnostics taxonomy and standard error model contracts.
+
+### Exit criteria
+- Compiler can reject missing capability and forbidden effect/policy combinations.
+- Compiler can reject untrusted/secret misuse in at least one representative path per sink family.
+- Baseline security acceptance tests are implemented and passing for this milestone scope.
+
+### Docs/book outputs
+- Chapter: "Security-First Priorities".
+- Chapter: "v0 Security Baseline".
+- Chapter: "v0 Security Stdlib Surface".
+- Chapter: "Typing and Effects Security Rules".
+- Chapter: "Security Diagnostics Taxonomy".
+- Chapter: "Standard Runtime Error Model".
+
+## M5 - MIR Lowering + Introspection
 ### Build tasks
 - Design and implement backend-neutral MIR structures.
 - Lower typed AST/HIR into MIR.
@@ -178,7 +218,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Lowering Rules".
 - Chapter: "How to Read MIR".
 
-## M5 - C Backend + Runtime ABI (First Runnable Target)
+## M6 - C Backend + Runtime ABI (First Runnable Target)
 ### Build tasks
 - Implement ABI-lowering pass.
 - Emit C code from MIR (single binary target first).
@@ -194,11 +234,12 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "C Emission Strategy".
 - Chapter: "Runtime Intrinsics".
 
-## M6 - HTTP/JSON Vertical Slice
+## M7 - HTTP/JSON Vertical Slice
 ### Build tasks
 - Implement minimal HTTP router/runtime bridge.
 - Implement JSON parse/encode primitives and schema decode path.
 - Enforce schema-gated request decoding as the default trusted-input path.
+- Enforce budgeted decode defaults (`maxBodyBytes`, `maxJsonBytes`, `maxJsonDepth`, deadlines).
 - Build sample service with `/health` + one typed POST endpoint.
 
 ### Exit criteria
@@ -210,27 +251,31 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Schema-Driven JSON".
 - Chapter: "Building Your First AILang API".
 
-## M7 - Security-by-Construction Slice
+## M8 - Security-by-Construction Enforcement
 ### Build tasks
 - Enforce typed SQL sink path (`sql"..."` to `SqlQuery`).
-- Enforce typed sink-only APIs for SQL/HTML/URL/Path sinks.
-- Enforce secret handling policy for logging/encoding/string formatting.
-- Add lints/policy config for forbidden patterns.
+- Enforce typed sink-only APIs for SQL/HTML/URL/Path/Header/Log sinks.
+- Enforce secret handling policy for logging/encoding/string formatting/interpolation.
+- Enforce URL tiering rules (`PublicUrl` vs `InternalUrl`) and redirect/internal-network policy constraints.
+- Enforce structured logging and response/header safety rules.
+- Add policy config and allowlist annotation flow for strictly controlled exceptions.
 
 ### Exit criteria
 - Compiler/linter rejects representative insecure patterns.
 - Security tests included in CI.
+- Policy hash and compiler version are embedded in build metadata.
 
 ### Docs/book outputs
 - Chapter: "Security Model".
 - Chapter: "Typed Sinks and Safe Boundaries".
 - Chapter: "Policy and Lint Rules".
 
-## M8 - Release Hardening
+## M9 - Release Hardening
 ### Build tasks
 - Improve diagnostics quality and error explainability.
 - Add deterministic build controls and lock strategy.
 - Finalize minimal stdlib and sample apps.
+- Add reproducible build metadata and optional SBOM generation.
 - Prepare alpha release checklist.
 
 ### Exit criteria
@@ -280,12 +325,15 @@ Each milestone completion requires:
 - One troubleshooting subsection.
 - One "AI implementation notes" subsection to improve future agent consistency.
 
-## 4.5 v0 acceptance tests (must pass by M7)
+## 4.5 v0 acceptance tests (must pass by M8)
 1. Reject raw SQL concatenation.
 2. Reject unescaped raw HTML output without `HtmlSafe`.
 3. Reject logging/encoding of `Secret<_>`.
 4. Reject missing declared effects.
 5. Require schema gate for decoding request body into trusted types.
+6. Reject internal URL access without internal capability/policy.
+7. Reject unsafe header setting without `HeaderValue` validation.
+8. Enforce budgeted request decode behavior and limit diagnostics.
 
 ## 5. Day-to-Day Development Loop
 
@@ -312,21 +360,21 @@ Days 6-8:
 - M2 names/types minimal + type chapter.
 
 Days 9-10:
-- M3 effects boundaries minimal + effects/security chapter update.
+- M3 effects implementation + diagnostics stabilization.
 
 Days 11-13:
-- M4 MIR + emit + MIR chapter.
+- M4 security foundation hardening (capabilities, policy, boundary/sink typing).
 
 Day 14:
-- Consolidation, tests, docs cleanup, next sprint planning.
+- Consolidation, acceptance test delta review, and next sprint planning for MIR.
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Freeze v0.1-lite feature matrix from existing docs + two new files.
-2. Decide implementation language/toolchain for compiler and runtime.
-3. Create repo structure and CLI skeleton (M0).
-4. Create `docs/book/` skeleton and wire milestone chapter ownership.
-5. Start M1 with parser fixtures first (tests before full parser completion).
+1. Implement M4 capability type system and capability-required call checks.
+2. Add policy file parsing and hard-error enforcement path.
+3. Add security primitive types (`PublicUrl`, `InternalUrl`, `HeaderValue`, `LogValue`, `Budget`) to semantic model and stdlib signatures.
+4. Add first-class trust-gate checks (`req.json(schema)`) and sink-flow diagnostics with origin trace.
+5. Extend golden tests for security flow, policy violations, and capability/effect combinations.
 
 ---
 

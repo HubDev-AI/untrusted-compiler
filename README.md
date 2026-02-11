@@ -56,8 +56,9 @@ If it cannot, it is mostly convention.
 - M1 completed: lexer/parser/AST + `check --emit ast` + parser golden tests.
 - M2 completed: name resolution + minimal type checker + semantic golden tests.
 - M3 effects slice completed: parsed `effects { ... }` declarations + compile-time effect usage enforcement.
-- M3 boundary slice pending: `Untrusted<T>` trust gates and typed sink flow checks.
+- Security-first M4 planning/spec is now locked in docs (capabilities, policy-as-code, typed sink expansion, strict baseline).
 
 Roadmap: `docs/05-ailang-master-roadmap.md`
 Book docs: `docs/book/README.md`
 v0 scope (one-page): `docs/book/43-ailang-v0-scope.md`
+security baseline: `docs/book/53-v0-security-baseline.md`
