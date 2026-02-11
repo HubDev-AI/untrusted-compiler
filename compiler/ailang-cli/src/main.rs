@@ -1,6 +1,7 @@
 use ailang_core::{
-    analyze_entry, build_security_map, render_security_audit_text, run_security_audit, should_fail,
-    write_lockfile_stub, write_security_map, AuditSeverity, Diagnostic,
+    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows,
+    render_security_audit_text, run_security_audit, should_fail, write_lockfile_stub,
+    write_security_map, AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::{Path, PathBuf};
@@ -99,8 +100,8 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
 
 fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
-        Ok(manifest) => match analyze_entry(path, &manifest) {
-            Ok(program) => {
+        Ok(manifest) => match analyze_entry_with_allows(path, &manifest) {
+            Ok((program, allows)) => {
                 let policy = match ailang_core::policy::load_policy(path) {
                     Ok(policy) => policy,
                     Err(diagnostics) => {
@@ -109,7 +110,7 @@ fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) 
                     }
                 };
 
-                let security_map = build_security_map(&program, &policy);
+                let security_map = build_security_map_with_allows(&program, &policy, allows);
                 let security_map_path = match write_security_map(path, &security_map) {
                     Ok(output_path) => output_path,
                     Err(diagnostic) => {

@@ -1,8 +1,11 @@
 use crate::ast::{Block, Expr, ExprKind, ItemKind, Program, StmtKind};
+use crate::diagnostics::Diagnostic;
 use crate::policy::Policy;
 use crate::Span;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const SECURITY_MAP_FILE_NAME: &str = "security_map.json";
 
@@ -81,6 +84,8 @@ pub struct SecurityMap {
     pub allows: Vec<SecurityAllow>,
 }
 
+const ALLOW_REQUIRED_FIELDS: [&str; 5] = ["policy", "bypass", "reason", "ticket", "expires"];
+
 pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
     let mut calls = Vec::new();
     let mut middleware = Vec::new();
@@ -100,6 +105,86 @@ pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
         calls,
         middleware,
         allows: Vec::new(),
+    }
+}
+
+pub fn build_security_map_with_allows(
+    program: &Program,
+    policy: &Policy,
+    allows: Vec<SecurityAllow>,
+) -> SecurityMap {
+    let mut map = build_security_map(program, policy);
+    map.allows = allows;
+    map
+}
+
+pub fn strip_allow_annotations(source: &str) -> String {
+    let mut stripped = String::with_capacity(source.len());
+    let mut cursor = 0usize;
+
+    while let Some(found) = source[cursor..].find("@allow(") {
+        let start = cursor + found;
+        stripped.push_str(&source[cursor..start]);
+
+        let open_paren = start + "@allow".len();
+        let Some(close_paren) = find_matching_paren(source, open_paren) else {
+            stripped.push_str(&source[start..]);
+            return stripped;
+        };
+
+        for ch in source[start..=close_paren].chars() {
+            if ch == '\n' {
+                stripped.push('\n');
+            } else {
+                stripped.push(' ');
+            }
+        }
+
+        cursor = close_paren + 1;
+    }
+
+    stripped.push_str(&source[cursor..]);
+    stripped
+}
+
+pub fn parse_allow_annotations(
+    file_path: &Path,
+    source: &str,
+) -> Result<Vec<SecurityAllow>, Vec<Diagnostic>> {
+    let mut annotations = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut cursor = 0usize;
+
+    while let Some(found) = source[cursor..].find("@allow(") {
+        let start = cursor + found;
+        let open_paren = start + "@allow".len();
+        let Some(close_paren) = find_matching_paren(source, open_paren) else {
+            diagnostics.push(
+                Diagnostic::error(
+                    "A7001",
+                    "unterminated @allow annotation",
+                    span_from_offset(file_path, source, start),
+                )
+                .with_note("expected `)` to close @allow annotation"),
+            );
+            break;
+        };
+
+        let payload = &source[(open_paren + 1)..close_paren];
+        let span = span_from_offset(file_path, source, start);
+        match parse_allow_payload(file_path, payload, &span) {
+            Ok(annotation) => annotations.push(annotation),
+            Err(diags) => diagnostics.extend(diags),
+        }
+
+        cursor = close_paren + 1;
+    }
+
+    if diagnostics.is_empty() {
+        Ok(annotations)
+    } else {
+        diagnostics.sort_by(|left, right| left.code.cmp(&right.code));
+        Err(diagnostics)
     }
 }
 
@@ -384,4 +469,286 @@ fn span_to_loc(span: &Span) -> SourceLocation {
         line: span.start_line,
         column: span.start_col,
     }
+}
+
+fn find_matching_paren(source: &str, open_paren_index: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut prev_was_escape = false;
+
+    for (index, ch) in source.char_indices().skip(open_paren_index) {
+        if in_string {
+            if ch == '"' && !prev_was_escape {
+                in_string = false;
+            }
+            prev_was_escape = ch == '\\' && !prev_was_escape;
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '(' => depth += 1,
+            ')' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn parse_allow_payload(
+    file_path: &Path,
+    payload: &str,
+    span: &Span,
+) -> Result<SecurityAllow, Vec<Diagnostic>> {
+    let mut values = HashMap::<String, String>::new();
+    let mut bypass = Vec::<String>::new();
+    let mut diagnostics = Vec::new();
+
+    for part in split_top_level(payload, ',') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let Some(eq_index) = find_assignment_equals(trimmed) else {
+            diagnostics.push(
+                Diagnostic::error("A7001", "invalid @allow assignment", span.clone())
+                    .with_note(format!("expected `key = value`, got `{trimmed}`")),
+            );
+            continue;
+        };
+
+        let key = trimmed[..eq_index].trim().to_string();
+        let value = trimmed[(eq_index + 1)..].trim();
+
+        match key.as_str() {
+            "bypass" => match parse_string_list(value) {
+                Ok(list) => bypass = list,
+                Err(message) => diagnostics.push(
+                    Diagnostic::error("A7001", "invalid @allow bypass list", span.clone())
+                        .with_note(message),
+                ),
+            },
+            "policy" | "reason" | "ticket" | "expires" => match parse_quoted_string(value) {
+                Ok(parsed) => {
+                    values.insert(key, parsed);
+                }
+                Err(message) => diagnostics.push(
+                    Diagnostic::error("A7001", "invalid @allow string value", span.clone())
+                        .with_note(format!("{message}; key `{key}`")),
+                ),
+            },
+            unknown => diagnostics.push(
+                Diagnostic::error("A7001", "unknown @allow field", span.clone())
+                    .with_note(format!("unsupported key `{unknown}` in @allow annotation")),
+            ),
+        }
+    }
+
+    for required in ALLOW_REQUIRED_FIELDS {
+        if required == "bypass" {
+            if bypass.is_empty() {
+                diagnostics.push(
+                    Diagnostic::error("A7001", "missing required @allow field", span.clone())
+                        .with_note("`bypass` must include at least one tag id"),
+                );
+            }
+            continue;
+        }
+
+        if !values.contains_key(required) {
+            diagnostics.push(
+                Diagnostic::error("A7001", "missing required @allow field", span.clone())
+                    .with_note(format!("`{required}` is required in @allow annotation")),
+            );
+        }
+    }
+
+    if let Some(expiry) = values.get("expires") {
+        let today = current_utc_iso_date();
+        if !is_iso_date(expiry) {
+            diagnostics.push(
+                Diagnostic::error("A7001", "invalid @allow expiry format", span.clone())
+                    .with_note("expires must be formatted as YYYY-MM-DD"),
+            );
+        } else if expiry.as_str() < today.as_str() {
+            diagnostics.push(
+                Diagnostic::error("A7002", "expired @allow annotation", span.clone()).with_note(
+                    format!("expires `{}` is in the past (today is {})", expiry, today),
+                ),
+            );
+        }
+    }
+
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+
+    Ok(SecurityAllow {
+        loc: SourceLocation {
+            file: file_path.display().to_string(),
+            line: span.start_line,
+            column: span.start_col,
+        },
+        policy: values.remove("policy").unwrap_or_default(),
+        bypass,
+        reason: values.remove("reason").unwrap_or_default(),
+        ticket: values.remove("ticket").unwrap_or_default(),
+        expires: values.remove("expires").unwrap_or_default(),
+    })
+}
+
+fn split_top_level(input: &str, delimiter: char) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut start = 0usize;
+    let mut depth_square = 0usize;
+    let mut depth_paren = 0usize;
+    let mut in_string = false;
+    let mut prev_escape = false;
+
+    for (index, ch) in input.char_indices() {
+        if in_string {
+            if ch == '"' && !prev_escape {
+                in_string = false;
+            }
+            prev_escape = ch == '\\' && !prev_escape;
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '[' => depth_square += 1,
+            ']' => depth_square = depth_square.saturating_sub(1),
+            '(' => depth_paren += 1,
+            ')' => depth_paren = depth_paren.saturating_sub(1),
+            _ if ch == delimiter && depth_square == 0 && depth_paren == 0 => {
+                parts.push(input[start..index].to_string());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    if start < input.len() {
+        parts.push(input[start..].to_string());
+    }
+
+    parts
+}
+
+fn find_assignment_equals(input: &str) -> Option<usize> {
+    let mut in_string = false;
+    let mut depth_square = 0usize;
+    let mut prev_escape = false;
+
+    for (index, ch) in input.char_indices() {
+        if in_string {
+            if ch == '"' && !prev_escape {
+                in_string = false;
+            }
+            prev_escape = ch == '\\' && !prev_escape;
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '[' => depth_square += 1,
+            ']' => depth_square = depth_square.saturating_sub(1),
+            '=' if depth_square == 0 => return Some(index),
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn parse_string_list(raw: &str) -> Result<Vec<String>, String> {
+    let trimmed = raw.trim();
+    if !(trimmed.starts_with('[') && trimmed.ends_with(']')) {
+        return Err("bypass must be a list literal like [\"tag.one\", \"tag.two\"]".to_string());
+    }
+
+    let inner = &trimmed[1..(trimmed.len() - 1)];
+    if inner.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut values = Vec::new();
+    for part in split_top_level(inner, ',') {
+        values.push(parse_quoted_string(part.trim())?);
+    }
+    Ok(values)
+}
+
+fn parse_quoted_string(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.len() < 2 || !trimmed.starts_with('"') || !trimmed.ends_with('"') {
+        return Err(format!("expected quoted string, got `{trimmed}`"));
+    }
+    Ok(trimmed[1..(trimmed.len() - 1)].to_string())
+}
+
+fn is_iso_date(input: &str) -> bool {
+    let bytes = input.as_bytes();
+    if bytes.len() != 10 {
+        return false;
+    }
+    matches!(bytes[4], b'-')
+        && matches!(bytes[7], b'-')
+        && bytes.iter().enumerate().all(|(index, byte)| {
+            if index == 4 || index == 7 {
+                true
+            } else {
+                byte.is_ascii_digit()
+            }
+        })
+}
+
+fn span_from_offset(file_path: &Path, source: &str, offset: usize) -> Span {
+    let mut line = 1usize;
+    let mut col = 1usize;
+    for ch in source[..offset].chars() {
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    Span::point(file_path.to_path_buf(), line, col)
+}
+
+fn current_utc_iso_date() -> String {
+    let days_since_unix_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| (duration.as_secs() / 86_400) as i64)
+        .unwrap_or(0);
+    let (year, month, day) = civil_from_days(days_since_unix_epoch);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, i64, i64) {
+    // Gregorian calendar conversion adapted from Howard Hinnant's civil-from-days algorithm.
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    if month <= 2 {
+        year += 1;
+    }
+    (year, month, day)
 }

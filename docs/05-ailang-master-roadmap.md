@@ -31,6 +31,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Capability-required intrinsic calls are enforced with dedicated diagnostics (`E2003`, `E2004`).
   - Initial M4 policy and semantic golden tests are in place.
   - `security_map` metadata generation is implemented for baseline sensitive calls and middleware tags.
+  - `@allow(...)` annotations are validated during analysis and emitted into `security_map.allows` for audit reporting.
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),

@@ -1,6 +1,6 @@
 use ailang_core::{
-    build_security_map, parse_source, policy::parse_policy_str, run_security_audit, should_fail,
-    AuditSeverity, Policy,
+    build_security_map, build_security_map_with_allows, parse_allow_annotations, parse_source,
+    policy::parse_policy_str, run_security_audit, should_fail, AuditSeverity, Policy,
 };
 use std::path::Path;
 
@@ -79,4 +79,36 @@ effects = "allow"
         .any(|finding| finding.id == "SECRETS_REVEAL_USED"
             && finding.severity == AuditSeverity::CRITICAL));
     assert!(should_fail(&report, AuditSeverity::HIGH));
+}
+
+#[test]
+fn sec_audit_reports_allow_annotations_as_exceptions() {
+    let source = r#"
+@allow(
+  policy = "net.internal.enabled",
+  bypass = ["sink.net.internal_request"],
+  reason = "Calls internal inventory service",
+  ticket = "SEC-123",
+  expires = "2099-06-01",
+)
+fn boot() -> Int {
+  withCors();
+  withSecurityHeaders();
+  withCsrf();
+  withAuth();
+  1
+}
+"#;
+
+    let stripped = ailang_core::strip_allow_annotations(source);
+    let program = parse_source(Path::new("main.ai"), &stripped).expect("source should parse");
+    let allows = parse_allow_annotations(Path::new("main.ai"), source).expect("allow should parse");
+    let policy = Policy::default();
+    let map = build_security_map_with_allows(&program, &policy, allows);
+    let report = run_security_audit(&policy, &map);
+
+    assert_eq!(report.exceptions.len(), 1);
+    assert_eq!(report.exceptions[0].policy_key, "net.internal.enabled");
+    assert_eq!(report.exceptions[0].ticket, "SEC-123");
+    assert_eq!(report.exceptions[0].severity, AuditSeverity::HIGH);
 }

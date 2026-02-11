@@ -16,7 +16,10 @@ pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use parser::parse_source;
 pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
-pub use security_map::{build_security_map, SecurityMap, SECURITY_MAP_FILE_NAME};
+pub use security_map::{
+    build_security_map, build_security_map_with_allows, parse_allow_annotations,
+    strip_allow_annotations, SecurityAllow, SecurityMap, SECURITY_MAP_FILE_NAME,
+};
 pub use semantic::analyze_program;
 
 use std::fs;
@@ -42,31 +45,35 @@ pub fn parse_entry_ast(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<ast::Program, Vec<Diagnostic>> {
-    let entry_path = manifest.entry_path(project_root);
-    let source = match fs::read_to_string(&entry_path) {
-        Ok(source) => source,
-        Err(err) => {
-            let diagnostic = Diagnostic::error(
-                "M0103",
-                "could not read entry source file",
-                Span::point(entry_path, 1, 1),
-            )
-            .with_note(err.to_string());
-            return Err(vec![diagnostic]);
-        }
-    };
+    let (entry_path, source) = read_entry_source(project_root, manifest)?;
+    let source_for_parser = security_map::strip_allow_annotations(&source);
+    parser::parse_source(&entry_path, &source_for_parser)
+}
 
-    parser::parse_source(&manifest.entry_path(project_root), &source)
+pub fn collect_allow_annotations(
+    project_root: &Path,
+    manifest: &Manifest,
+) -> Result<Vec<SecurityAllow>, Vec<Diagnostic>> {
+    let (entry_path, source) = read_entry_source(project_root, manifest)?;
+    security_map::parse_allow_annotations(&entry_path, &source)
+}
+
+pub fn analyze_entry_with_allows(
+    project_root: &Path,
+    manifest: &Manifest,
+) -> Result<(ast::Program, Vec<SecurityAllow>), Vec<Diagnostic>> {
+    let program = parse_entry_ast(project_root, manifest)?;
+    let policy = policy::load_policy(project_root)?;
+    semantic::analyze_program_with_policy(&program, &policy)?;
+    let allows = collect_allow_annotations(project_root, manifest)?;
+    Ok((program, allows))
 }
 
 pub fn analyze_entry(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<ast::Program, Vec<Diagnostic>> {
-    let program = parse_entry_ast(project_root, manifest)?;
-    let policy = policy::load_policy(project_root)?;
-    semantic::analyze_program_with_policy(&program, &policy)?;
-    Ok(program)
+    analyze_entry_with_allows(project_root, manifest).map(|(program, _)| program)
 }
 
 pub fn write_security_map(
@@ -96,4 +103,25 @@ pub fn write_security_map(
     }
 
     Ok(output_path)
+}
+
+fn read_entry_source(
+    project_root: &Path,
+    manifest: &Manifest,
+) -> Result<(PathBuf, String), Vec<Diagnostic>> {
+    let entry_path = manifest.entry_path(project_root);
+    let source = match fs::read_to_string(&entry_path) {
+        Ok(source) => source,
+        Err(err) => {
+            let diagnostic = Diagnostic::error(
+                "M0103",
+                "could not read entry source file",
+                Span::point(entry_path, 1, 1),
+            )
+            .with_note(err.to_string());
+            return Err(vec![diagnostic]);
+        }
+    };
+
+    Ok((entry_path, source))
 }

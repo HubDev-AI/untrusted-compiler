@@ -14,6 +14,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - text + JSON report output
 - Added CLI command:
   - `ailang sec audit --path <project> [--format text|json] [--fail-on 'risk>=HIGH']`
+- Added `@allow(...)` annotation pipeline:
+  - parser-compatible source preprocessing strips `@allow(...)` before AST parsing
+  - annotation parser validates required fields (`policy`, `bypass`, `reason`, `ticket`, `expires`)
+  - expired annotations are rejected during analysis
+  - parsed allowlist entries are emitted in `security_map.allows` and surfaced in `sec.audit` exceptions
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -33,12 +38,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - extended `compiler/ailang-core/tests/policy.rs` for csrf/auth/cors validations
 
 ## Current limitations
-- allowlist annotations are not yet parsed into `security_map.allows`.
 - middleware detection currently relies on known callable identifiers (member-call syntax is future work).
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Emit allowlist metadata (`@allow`) into `security_map`.
-2. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-3. Wire `sec.audit` CI mode to include expired/soon-expiring exception checks.
-4. Add more policy-aware findings for SQL limits and logging privacy settings.
+1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
+2. Add soon-expiring exception findings in `sec.audit` (not just expired compile-time rejection).
+3. Add more policy-aware findings for SQL limits and logging privacy settings.
+4. Add richer source-origin traces in security findings and exception rendering.
