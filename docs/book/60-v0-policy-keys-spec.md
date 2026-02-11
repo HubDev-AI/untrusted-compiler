@@ -163,7 +163,65 @@ Rules:
 - if credentials are allowed, wildcard origin must be forbidden.
 - if wildcard origin is configured while `forbid_any_origin=true`, fail compile/policy check.
 
-## 12) Schema validation rules for policy file
+## 12) Security headers policy
+
+```toml
+[security_headers]
+enabled = true
+strip_server_header = true
+x_content_type_options = true
+x_frame_options = "DENY"
+referrer_policy = "strict-origin-when-cross-origin"
+
+[security_headers.hsts]
+enabled = true
+max_age_seconds = 15552000
+include_subdomains = true
+preload = false
+
+[security_headers.csp]
+enabled = true
+report_only = false
+```
+
+Rules:
+- HSTS can be warned/disabled in development HTTP-only mode by policy.
+- CSP should be enabled by default, with optional report-only rollout mode.
+
+## 13) CSRF and auth policy
+
+```toml
+[csrf]
+enabled = true
+mode = "double_submit"   # "off" | "double_submit" | "synchronizer_token"
+cookie_name = "csrf"
+header_name = "x-csrf-token"
+same_site = "Lax"
+secure_cookie = true
+http_only_cookie = false
+protected_methods = ["POST", "PUT", "PATCH", "DELETE"]
+
+[auth]
+mode = "token"           # "token" | "cookie" | "mixed"
+cross_site_frontend = false
+
+[auth.cookie]
+cookie_name = "session"
+same_site = "Lax"
+secure = true
+http_only = true
+
+[auth.token]
+header_name = "authorization"
+scheme = "bearer"
+```
+
+Rules:
+- `auth.mode in {"cookie","mixed"}` requires `csrf.enabled=true` unless explicitly allowlisted.
+- `same_site="None"` requires secure cookies.
+- cross-site cookie auth requires explicit CORS origin allowlist and credentials enabled.
+
+## 14) Schema validation rules for policy file
 
 On load:
 - unknown keys are errors
@@ -171,3 +229,5 @@ On load:
 - scheme lists validated
 - redirect/max_redirect coherence checked
 - internal-network disabled state validated against internal allowlist fields
+- wildcard-origin and credentials incompatibility is enforced
+- csrf/auth coupling rules are validated deterministically

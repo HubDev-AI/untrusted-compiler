@@ -28,5 +28,12 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `60-v0-policy-keys-spec.md`
 - `61-cors-typed-security-spec.md`
 - `62-m4-security-foundation-implementation.md`
+- `63-security-middleware-baseline.md`
+- `64-sec-audit-spec.md`
+- `65-sensitive-api-markers-and-security-map.md`
+- `66-deterministic-severity-mapping-for-sec-audit.md`
+- `67-sec-audit-examples-and-policy-profiles.md`
+- `68-auth-policy-keys-and-csrf-coupling.md`
+- `69-auth-middleware-api-v0.md`
 
 As milestones progress, chapters will be added and linked from this index.

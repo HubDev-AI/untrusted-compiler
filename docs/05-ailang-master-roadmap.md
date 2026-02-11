@@ -30,6 +30,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Forbidden-effect checks are policy-driven.
   - Capability-required intrinsic calls are enforced with dedicated diagnostics (`E2003`, `E2004`).
   - Initial M4 policy and semantic golden tests are in place.
+- Security posture specs were expanded with:
+  - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
+  - deterministic `sec.audit` contract,
+  - compiler-emitted security metadata tags for robust audit tooling.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -47,6 +51,13 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/59-request-capture-and-deterministic-replay.md`
 - `docs/book/60-v0-policy-keys-spec.md`
 - `docs/book/61-cors-typed-security-spec.md`
+- `docs/book/63-security-middleware-baseline.md`
+- `docs/book/64-sec-audit-spec.md`
+- `docs/book/65-sensitive-api-markers-and-security-map.md`
+- `docs/book/66-deterministic-severity-mapping-for-sec-audit.md`
+- `docs/book/67-sec-audit-examples-and-policy-profiles.md`
+- `docs/book/68-auth-policy-keys-and-csrf-coupling.md`
+- `docs/book/69-auth-middleware-api-v0.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -66,6 +77,7 @@ These constraints come from current AILang docs and the new files:
 - Typed sinks are mandatory (`SqlQuery`, `HtmlSafe`, `PublicUrl`/`InternalUrl`, `PathSafe`, `HeaderValue`, `LogValue`).
 - Security policy is compiler-enforced (hard errors), not lint-only guidance.
 - Capabilities + effects are both required for sensitive operations.
+- Security middleware (`cors`, `sec`, `csrf`, `auth`) is typed, policy-driven, and non-optional in router bootstrap for relevant services.
 
 ### 0.4 Non-negotiable compile-time guarantees (v0 scope alignment)
 - Reject `Untrusted<T>` flowing into trusted sinks without explicit gates.
@@ -75,6 +87,7 @@ These constraints come from current AILang docs and the new files:
 - Enforce capability availability (`DbCap`, `NetCap`, `FsCap`, `SecretsCap`, `InternalNetCap`) for sensitive APIs.
 - Enforce schema-gated trust boundaries for handler input decoding.
 - Enforce typed CORS configuration and policy constraints (credentials/wildcard/reflection rules).
+- Enforce deterministic auth/CSRF coupling via policy (`auth.mode`, cross-site cookie constraints).
 
 ### 0.5 Explicit out-of-scope for v0
 - No traits/interfaces, macros/derives, advanced generics, operator overloading, or manual memory model.
@@ -93,6 +106,7 @@ Adjusted in this roadmap:
 - Structured logging, typed headers/cookies, and request budgets are now mandatory security primitives.
 - Policy-as-code and diagnostics taxonomy are explicitly scheduled as compiler features.
 - Success envelope/log-event schema, capture/replay, policy-key schema, and typed CORS behavior are now explicit roadmap inputs.
+- Deterministic security posture reporting (`sec.audit`) and metadata tags (`security_map`) are explicit implementation targets.
 
 ## 1. Definition of Done (Minimal Real Working AILang)
 
@@ -107,6 +121,8 @@ A minimal real working AILang (v0.1-alpha) means:
 - Security gates/sinks are enforced for at least one path (schema gate + typed sink check + capability + effect enforcement).
 - Policy file enforcement is active and reflected in build metadata.
 - Security diagnostics include origin trace + sink + fix path for core flow violations.
+- Canonical router bootstrap supports typed `security_headers`, `cors`, `csrf`, and `auth` middleware from policy.
+- `sec.audit` can emit text/json posture reports and CI-gate on severity thresholds.
 - Tests are automated for parser, type checks, MIR, and E2E sample.
 - Documentation is updated for every implemented subsystem and can be read as a coherent book.
 
@@ -122,7 +138,8 @@ Implementation order is intentionally linear to reduce thrash:
 7. Implement C backend + runtime ABI stubs.
 8. Add HTTP/JSON vertical slice with strict schema/budget defaults.
 9. Add advanced security-by-construction constraints and policy checks.
-10. Harden tests, diagnostics, packaging, and build integrity metadata.
+10. Add security posture tooling (`security_map`, `sec.audit`, deterministic severity mapping, CI gating).
+11. Harden tests, diagnostics, packaging, and build integrity metadata.
 
 ## 3. Milestone Plan
 
@@ -203,12 +220,16 @@ Implementation order is intentionally linear to reduce thrash:
 - Define standard success envelope and structured log event contracts.
 - Define capture/replay format contracts and replay-policy integration points.
 - Define typed CORS config rules and credentials-origin safety checks.
+- Add policy schema support for `security_headers`, `csrf`, and `auth` keys with deterministic validation rules.
+- Define security marker/tag registry and `security_map` metadata contract for audit tooling.
 
 ### Exit criteria
 - Compiler can reject missing capability and forbidden effect/policy combinations.
 - Compiler can reject untrusted/secret misuse in at least one representative path per sink family.
 - Baseline security acceptance tests are implemented and passing for this milestone scope.
 - Policy schema keys for effects/net/logging/cors/capture can be parsed and validated.
+- Policy schema keys for `security_headers`/`csrf`/`auth` can be parsed and validated.
+- Baseline metadata tag coverage exists for core sensitive APIs and middleware symbols.
 
 ### Docs/book outputs
 - Chapter: "Security-First Priorities".
@@ -222,6 +243,12 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "v0 Policy Keys Spec".
 - Chapter: "CORS Typed Security Spec".
 - Chapter: "M4 Security Foundation Implementation (Current Slice)".
+- Chapter: "Security Middleware Baseline".
+- Chapter: "sec.audit Spec".
+- Chapter: "Sensitive API Markers and security_map".
+- Chapter: "Deterministic Severity Mapping for sec.audit".
+- Chapter: "Auth Policy Keys and CSRF Coupling".
+- Chapter: "Auth Middleware API".
 
 ## M5 - MIR Lowering + Introspection
 ### Build tasks
@@ -261,11 +288,13 @@ Implementation order is intentionally linear to reduce thrash:
 - Enforce schema-gated request decoding as the default trusted-input path.
 - Enforce budgeted decode defaults (`maxBodyBytes`, `maxJsonBytes`, `maxJsonDepth`, deadlines).
 - Implement optional standard success envelope support controlled by policy.
+- Implement canonical router security bootstrap (`security_headers`, `cors`, `csrf`, `auth`) from policy.
 - Build sample service with `/health` + one typed POST endpoint.
 
 ### Exit criteria
 - `ailang run examples/hello-api` serves both endpoints.
 - E2E tests verify status, decode behavior, and errors.
+- Middleware behavior tests cover CORS preflight, header emission, and CSRF gate behavior.
 
 ### Docs/book outputs
 - Chapter: "HTTP Runtime and Request Lifecycle".
@@ -282,11 +311,14 @@ Implementation order is intentionally linear to reduce thrash:
 - Enforce typed CORS policy constraints and safe preflight/header behavior.
 - Enforce capture/replay policy constraints and replay-effect blocking defaults.
 - Add policy config and allowlist annotation flow for strictly controlled exceptions.
+- Emit `security_map` metadata with sensitive API/middleware tags and allowlist bypass records.
+- Implement `ailang sec audit` text/json report based on tags + policy + deterministic severity mapping.
 
 ### Exit criteria
 - Compiler/linter rejects representative insecure patterns.
 - Security tests included in CI.
 - Policy hash and compiler version are embedded in build metadata.
+- `sec.audit` can fail CI by configured threshold (`--fail-on risk>=...`).
 
 ### Docs/book outputs
 - Chapter: "Security Model".
@@ -299,6 +331,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Add deterministic build controls and lock strategy.
 - Finalize minimal stdlib and sample apps.
 - Add reproducible build metadata and optional SBOM generation.
+- Finalize secure policy profiles (`default-secure-prod`, `permissive-dev`) and release audit baselines.
 - Prepare alpha release checklist.
 
 ### Exit criteria
@@ -359,6 +392,11 @@ Each milestone completion requires:
 8. Enforce budgeted request decode behavior and limit diagnostics.
 9. Reject unsafe CORS configurations (credentials + wildcard/reflection when forbidden by policy).
 10. Ensure replay deny mode blocks external effects without capabilities.
+11. Enforce CORS preflight and `Vary: Origin` correctness for allowlist mode.
+12. Enforce security headers presence on success and error paths.
+13. Enforce CSRF token validation for protected methods in cookie-auth mode.
+14. Enforce deterministic auth-mode to CSRF requirements via policy.
+15. Produce deterministic `sec.audit` findings for equivalent code/policy inputs.
 
 ## 5. Day-to-Day Development Loop
 
@@ -398,8 +436,8 @@ Day 14:
 1. Extend M4 capability enforcement from intrinsic calls to typed stdlib sink APIs.
 2. Add first-class trust-gate checks (`req.json(schema)`) and sink-flow diagnostics with origin trace.
 3. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
-4. Expand policy validation coverage (budget/logging/capture/replay keys used by runtime contracts).
-5. Extend golden tests for trust/secret/sink violations and policy-configured behavior.
+4. Expand policy validation coverage (`security_headers`, `csrf`, `auth`, plus existing runtime contract keys).
+5. Add security metadata tag emission (`security_map`) baseline and initial `sec.audit` skeleton with deterministic findings.
 
 ---
 
