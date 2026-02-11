@@ -1,0 +1,3 @@
+fn bad() effects { shell } -> Int {
+  1
+}

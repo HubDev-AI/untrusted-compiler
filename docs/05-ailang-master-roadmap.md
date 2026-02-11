@@ -24,7 +24,12 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Effect golden fixtures added under semantic tests.
 - Security-first baseline documentation has been expanded and locked as mandatory input for upcoming milestones.
 - Roadmap is now realigned to insert a dedicated security-hardening milestone before MIR/backend work.
-- M0 through M3 implementation is complete; M4 (security hardening) is the active next milestone.
+- M0 through M3 implementation is complete.
+- M4 implementation is in progress:
+  - Policy file loading/parsing is wired into semantic analysis entry flow.
+  - Forbidden-effect checks are policy-driven.
+  - Capability-required intrinsic calls are enforced with dedicated diagnostics (`E2003`, `E2004`).
+  - Initial M4 policy and semantic golden tests are in place.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -38,6 +43,10 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/55-v0-typing-effects-security-rules.md`
 - `docs/book/56-security-diagnostics-taxonomy.md`
 - `docs/book/57-standard-runtime-error-model.md`
+- `docs/book/58-success-envelope-and-log-event-schema.md`
+- `docs/book/59-request-capture-and-deterministic-replay.md`
+- `docs/book/60-v0-policy-keys-spec.md`
+- `docs/book/61-cors-typed-security-spec.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -65,6 +74,7 @@ These constraints come from current AILang docs and the new files:
 - Enforce effects declarations (`used_effects` subset of `declared_effects`).
 - Enforce capability availability (`DbCap`, `NetCap`, `FsCap`, `SecretsCap`, `InternalNetCap`) for sensitive APIs.
 - Enforce schema-gated trust boundaries for handler input decoding.
+- Enforce typed CORS configuration and policy constraints (credentials/wildcard/reflection rules).
 
 ### 0.5 Explicit out-of-scope for v0
 - No traits/interfaces, macros/derives, advanced generics, operator overloading, or manual memory model.
@@ -82,6 +92,7 @@ Adjusted in this roadmap:
 - URL security model is split (`PublicUrl` vs `InternalUrl`) with runtime SSRF checks.
 - Structured logging, typed headers/cookies, and request budgets are now mandatory security primitives.
 - Policy-as-code and diagnostics taxonomy are explicitly scheduled as compiler features.
+- Success envelope/log-event schema, capture/replay, policy-key schema, and typed CORS behavior are now explicit roadmap inputs.
 
 ## 1. Definition of Done (Minimal Real Working AILang)
 
@@ -189,11 +200,15 @@ Implementation order is intentionally linear to reduce thrash:
   - `Budget`
 - Define and enforce schema-gated input trust boundaries (`req.json(schema)` canonical path).
 - Lock diagnostics taxonomy and standard error model contracts.
+- Define standard success envelope and structured log event contracts.
+- Define capture/replay format contracts and replay-policy integration points.
+- Define typed CORS config rules and credentials-origin safety checks.
 
 ### Exit criteria
 - Compiler can reject missing capability and forbidden effect/policy combinations.
 - Compiler can reject untrusted/secret misuse in at least one representative path per sink family.
 - Baseline security acceptance tests are implemented and passing for this milestone scope.
+- Policy schema keys for effects/net/logging/cors/capture can be parsed and validated.
 
 ### Docs/book outputs
 - Chapter: "Security-First Priorities".
@@ -202,6 +217,11 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Typing and Effects Security Rules".
 - Chapter: "Security Diagnostics Taxonomy".
 - Chapter: "Standard Runtime Error Model".
+- Chapter: "Standard Success Envelope and Log Event Schema".
+- Chapter: "Request Capture and Deterministic Replay".
+- Chapter: "v0 Policy Keys Spec".
+- Chapter: "CORS Typed Security Spec".
+- Chapter: "M4 Security Foundation Implementation (Current Slice)".
 
 ## M5 - MIR Lowering + Introspection
 ### Build tasks
@@ -240,6 +260,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Implement JSON parse/encode primitives and schema decode path.
 - Enforce schema-gated request decoding as the default trusted-input path.
 - Enforce budgeted decode defaults (`maxBodyBytes`, `maxJsonBytes`, `maxJsonDepth`, deadlines).
+- Implement optional standard success envelope support controlled by policy.
 - Build sample service with `/health` + one typed POST endpoint.
 
 ### Exit criteria
@@ -258,6 +279,8 @@ Implementation order is intentionally linear to reduce thrash:
 - Enforce secret handling policy for logging/encoding/string formatting/interpolation.
 - Enforce URL tiering rules (`PublicUrl` vs `InternalUrl`) and redirect/internal-network policy constraints.
 - Enforce structured logging and response/header safety rules.
+- Enforce typed CORS policy constraints and safe preflight/header behavior.
+- Enforce capture/replay policy constraints and replay-effect blocking defaults.
 - Add policy config and allowlist annotation flow for strictly controlled exceptions.
 
 ### Exit criteria
@@ -334,6 +357,8 @@ Each milestone completion requires:
 6. Reject internal URL access without internal capability/policy.
 7. Reject unsafe header setting without `HeaderValue` validation.
 8. Enforce budgeted request decode behavior and limit diagnostics.
+9. Reject unsafe CORS configurations (credentials + wildcard/reflection when forbidden by policy).
+10. Ensure replay deny mode blocks external effects without capabilities.
 
 ## 5. Day-to-Day Development Loop
 
@@ -370,11 +395,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M4 capability type system and capability-required call checks.
-2. Add policy file parsing and hard-error enforcement path.
-3. Add security primitive types (`PublicUrl`, `InternalUrl`, `HeaderValue`, `LogValue`, `Budget`) to semantic model and stdlib signatures.
-4. Add first-class trust-gate checks (`req.json(schema)`) and sink-flow diagnostics with origin trace.
-5. Extend golden tests for security flow, policy violations, and capability/effect combinations.
+1. Extend M4 capability enforcement from intrinsic calls to typed stdlib sink APIs.
+2. Add first-class trust-gate checks (`req.json(schema)`) and sink-flow diagnostics with origin trace.
+3. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
+4. Expand policy validation coverage (budget/logging/capture/replay keys used by runtime contracts).
+5. Extend golden tests for trust/secret/sink violations and policy-configured behavior.
 
 ---
 

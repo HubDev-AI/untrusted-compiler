@@ -3,12 +3,14 @@ pub mod diagnostics;
 pub mod lexer;
 pub mod manifest;
 pub mod parser;
+pub mod policy;
 pub mod semantic;
 pub mod token;
 
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use parser::parse_source;
+pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
 pub use semantic::analyze_program;
 
 use std::fs;
@@ -56,6 +58,7 @@ pub fn analyze_entry(
     manifest: &Manifest,
 ) -> Result<ast::Program, Vec<Diagnostic>> {
     let program = parse_entry_ast(project_root, manifest)?;
-    semantic::analyze_program(&program)?;
+    let policy = policy::load_policy(project_root)?;
+    semantic::analyze_program_with_policy(&program, &policy)?;
     Ok(program)
 }

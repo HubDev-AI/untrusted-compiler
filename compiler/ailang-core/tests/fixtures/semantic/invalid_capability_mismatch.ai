@@ -1,0 +1,4 @@
+fn bad(net: NetCap) effects { db.read } -> Int {
+  db_read(net);
+  1
+}

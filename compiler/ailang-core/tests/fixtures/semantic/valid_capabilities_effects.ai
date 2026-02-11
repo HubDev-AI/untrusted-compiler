@@ -1,0 +1,7 @@
+fn ok(db: DbCap, net: NetCap, sec: SecretsCap, fs: FsCap) effects { db.read, net, secrets.read, fs.write } -> Int {
+  db_read(db);
+  net_call(net);
+  secret_read(sec);
+  fs_write(fs);
+  1
+}

@@ -3,6 +3,7 @@ use crate::ast::{
     StmtKind, TypeExpr, TypeExprKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
+use crate::policy::Policy;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +58,10 @@ impl Type {
             if args.is_empty()
                 && matches!(name.as_str(), "Int" | "Int64" | "Float64" | "Decimal")
         )
+    }
+
+    fn is_named(&self, expected: &str) -> bool {
+        matches!(self, Type::Named { name, args } if name == expected && args.is_empty())
     }
 
     fn compatible_with(&self, other: &Type) -> bool {
@@ -121,6 +126,9 @@ impl Catalog {
         let primitive_types = [
             "Bool", "Int", "Int64", "Float64", "Decimal", "String", "Bytes", "Time",
             "Duration", "Uuid", "Unit",
+            "DbCap", "TxCap", "NetCap", "InternalNetCap", "FsCap", "SecretsCap",
+            "SqlQuery", "HtmlSafe", "PublicUrl", "InternalUrl", "PathSafe", "HeaderName",
+            "HeaderValue", "Cookie", "LogValue", "Budget", "StdError", "Origin",
         ]
         .into_iter()
         .map(|item| item.to_string())
@@ -171,12 +179,21 @@ impl Catalog {
 
 struct Analyzer {
     catalog: Catalog,
+    policy: Policy,
     diagnostics: Vec<Diagnostic>,
 }
 
 pub fn analyze_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy(program, &Policy::default())
+}
+
+pub fn analyze_program_with_policy(
+    program: &Program,
+    policy: &Policy,
+) -> Result<(), Vec<Diagnostic>> {
     let mut analyzer = Analyzer {
         catalog: Catalog::new(),
+        policy: policy.clone(),
         diagnostics: Vec::new(),
     };
 
@@ -283,6 +300,15 @@ impl Analyzer {
                             .with_note(format!("effect `{effect_name}` is not recognized")),
                     );
                     continue;
+                }
+
+                if self.policy.forbidden_effects.contains(&effect_name) {
+                    self.diagnostics.push(
+                        Diagnostic::error("E2002", "effect forbidden by policy", effect.span.clone())
+                            .with_note(format!(
+                                "effect `{effect_name}` is forbidden by the active policy"
+                            )),
+                    );
                 }
 
                 if !declared_effects.insert(effect_name.clone()) {
@@ -402,6 +428,24 @@ impl Analyzer {
                     )
                     .with_note(format!(
                         "function `{}` uses `{effect}` but does not declare it in `effects {{ ... }}`",
+                        function.name
+                    )),
+                );
+            }
+
+            let forbidden_used = used_effects
+                .intersection(&self.policy.forbidden_effects)
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for effect in forbidden_used {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E2002",
+                        "effect forbidden by policy",
+                        function.body.span.clone(),
+                    )
+                    .with_note(format!(
+                        "function `{}` uses forbidden effect `{effect}` under active policy",
                         function.name
                     )),
                 );
@@ -737,11 +781,40 @@ impl Analyzer {
             return signature.return_type;
         }
 
-        if let Some(intrinsic_effect) = intrinsic_effect_for(name) {
-            used_effects.insert(intrinsic_effect.to_string());
+        if let Some(intrinsic) = intrinsic_spec_for(name) {
+            used_effects.insert(intrinsic.effect.to_string());
+            let mut arg_types = Vec::with_capacity(args.len());
             for arg in args {
-                self.analyze_expr(arg, env, used_effects);
+                arg_types.push(self.analyze_expr(arg, env, used_effects));
             }
+
+            if let Some(required_capability) = intrinsic.required_capability {
+                match arg_types.first() {
+                    None => {
+                        self.diagnostics.push(
+                            Diagnostic::error("E2003", "operation requires capability", span.clone())
+                                .with_note(format!(
+                                    "`{name}` requires first argument capability `{required_capability}`"
+                                )),
+                        );
+                    }
+                    Some(actual) if !actual.is_named(required_capability) => {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "E2004",
+                                "capability type mismatch",
+                                args[0].span.clone(),
+                            )
+                            .with_note(format!(
+                                "`{name}` expects capability `{required_capability}`, got `{}`",
+                                actual.describe()
+                            )),
+                        );
+                    }
+                    Some(_) => {}
+                }
+            }
+
             return Type::Unit;
         }
 
@@ -1163,17 +1236,54 @@ impl Analyzer {
     }
 }
 
-fn intrinsic_effect_for(name: &str) -> Option<&'static str> {
+#[derive(Debug, Clone, Copy)]
+struct IntrinsicSpec {
+    effect: &'static str,
+    required_capability: Option<&'static str>,
+}
+
+fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
     match name {
-        "log" => Some("log"),
-        "time_now" => Some("time.now"),
-        "net_call" => Some("net"),
-        "secret_read" => Some("secrets.read"),
-        "secret_reveal" => Some("secrets.reveal"),
-        "db_read" => Some("db.read"),
-        "db_write" => Some("db.write"),
-        "fs_read" => Some("fs.read"),
-        "fs_write" => Some("fs.write"),
+        "log" => Some(IntrinsicSpec {
+            effect: "log",
+            required_capability: None,
+        }),
+        "time_now" => Some(IntrinsicSpec {
+            effect: "time.now",
+            required_capability: None,
+        }),
+        "net_call" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: Some("NetCap"),
+        }),
+        "net_internal_call" => Some(IntrinsicSpec {
+            effect: "net",
+            required_capability: Some("InternalNetCap"),
+        }),
+        "secret_read" => Some(IntrinsicSpec {
+            effect: "secrets.read",
+            required_capability: Some("SecretsCap"),
+        }),
+        "secret_reveal" => Some(IntrinsicSpec {
+            effect: "secrets.reveal",
+            required_capability: Some("SecretsCap"),
+        }),
+        "db_read" => Some(IntrinsicSpec {
+            effect: "db.read",
+            required_capability: Some("DbCap"),
+        }),
+        "db_write" => Some(IntrinsicSpec {
+            effect: "db.write",
+            required_capability: Some("DbCap"),
+        }),
+        "fs_read" => Some(IntrinsicSpec {
+            effect: "fs.read",
+            required_capability: Some("FsCap"),
+        }),
+        "fs_write" => Some(IntrinsicSpec {
+            effect: "fs.write",
+            required_capability: Some("FsCap"),
+        }),
         _ => None,
     }
 }

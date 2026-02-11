@@ -1,0 +1,4 @@
+fn bad() effects { db.write } -> Int {
+  db_write();
+  1
+}

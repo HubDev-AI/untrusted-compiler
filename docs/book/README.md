@@ -23,5 +23,10 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `55-v0-typing-effects-security-rules.md`
 - `56-security-diagnostics-taxonomy.md`
 - `57-standard-runtime-error-model.md`
+- `58-success-envelope-and-log-event-schema.md`
+- `59-request-capture-and-deterministic-replay.md`
+- `60-v0-policy-keys-spec.md`
+- `61-cors-typed-security-spec.md`
+- `62-m4-security-foundation-implementation.md`
 
 As milestones progress, chapters will be added and linked from this index.
