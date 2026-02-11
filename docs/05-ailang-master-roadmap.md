@@ -38,6 +38,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
   - compiler-emitted security metadata tags for robust audit tooling.
+- Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -62,6 +63,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/67-sec-audit-examples-and-policy-profiles.md`
 - `docs/book/68-auth-policy-keys-and-csrf-coupling.md`
 - `docs/book/69-auth-middleware-api-v0.md`
+- `docs/book/71-benchmarking-and-comparison-spec.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -144,6 +146,7 @@ Implementation order is intentionally linear to reduce thrash:
 9. Add advanced security-by-construction constraints and policy checks.
 10. Add security posture tooling (`security_map`, `sec.audit`, deterministic severity mapping, CI gating).
 11. Harden tests, diagnostics, packaging, and build integrity metadata.
+12. Run post-stability benchmark suite and publish cross-language comparison results.
 
 ## 3. Milestone Plan
 
@@ -348,6 +351,50 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Known Limits of v0.1-alpha".
 - Chapter: "Road to v0.2".
 
+## M10 - Post-Stability Benchmarking and Comparative Validation
+### Trigger condition
+- Start M10 only after AILang is stable and working end-to-end (M9 exit criteria met).
+
+### Build tasks
+- Create benchmark suite with identical service behavior across implementations:
+  - Endpoint A: `GET /ping` (hello HTTP overhead)
+  - Endpoint B: `POST /decode` (JSON + schema validation path)
+  - Endpoint C: `POST /users` and `GET /users/:id` (real DB write/read workloads)
+  - Optional Endpoint D (later): fanout path with outbound call (`/enrich/:id`)
+- Implement comparison services for:
+  - AILang (C + clang backend)
+  - Go
+  - Node.js TypeScript
+  - Rust
+  - Optional reference floor: minimal C server
+- Standardize fairness controls:
+  - same machine and runtime envelope
+  - same DB schema/indexes/query text/pool size/timeouts
+  - same payload shapes and validation rules
+  - same load profile (constant-rate + step-load)
+- Run benchmark matrix and collect:
+  - throughput, p50/p95/p99, error rate
+  - CPU and RSS memory
+  - binary size and startup time (optional)
+- Add AILang-specific validation tracks:
+  - security-defaults-on cost (schema gates, typed sinks, URL safety)
+  - deterministic replay demo (`capture -> replay -> same error code`)
+  - `sec.audit` posture output with policy/build stamping
+- Publish reproducible harness:
+  - benchmark scripts, raw outputs, summaries, and plots
+  - one-command runner for each endpoint profile
+
+### Exit criteria
+- Benchmark suite runs end-to-end with reproducible scripts and documented environment.
+- Cross-language comparison report is generated from raw captured results.
+- Tail-latency behavior (`p99`) and failure-mode behavior are explicitly analyzed.
+- Security-cost and debugging-workflow benchmarks are included in final report.
+
+### Docs/book outputs
+- Chapter: "Benchmarking and Comparison Spec".
+- Chapter: "Benchmark Harness and Reproducibility Guide".
+- Chapter: "First Public Performance and Security Report".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -443,6 +490,7 @@ Day 14:
 3. Emit and enforce allowlist annotation metadata (`@allow`) in `security_map` and `sec.audit`.
 4. Add secret-flow restrictions for logging/JSON/string interpolation at semantic level.
 5. Expand deterministic `sec.audit` findings for SQL/logging/privacy and exception expiry windows.
+6. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 
 ---
 
