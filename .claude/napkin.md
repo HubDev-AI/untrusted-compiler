@@ -44,3 +44,4 @@
 - Extended M5 MIR control-flow lowering with tail-`match` to `switch` + per-arm blocks.
 - Added `build --emit mir-json` JSON-only stdout mode for machine-readable MIR integration.
 - Extended M5 MIR lowering beyond tail forms for explicit `return if` and `return match`, with shared lowering helpers and fixture coverage.
+- Extended M5 MIR lowering for statement-level `if`/`match` expressions into explicit continuation CFG blocks using `goto` join targets.

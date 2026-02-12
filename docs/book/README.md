@@ -40,5 +40,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `72-ailang-editor-tooling-and-zed-lsp-spec.md`
 - `73-m5-mir-bootstrap-and-introspection.md`
 - `74-m5-return-control-flow-lowering.md`
+- `75-m5-statement-control-flow-continuations.md`
 
 As milestones progress, chapters will be added and linked from this index.

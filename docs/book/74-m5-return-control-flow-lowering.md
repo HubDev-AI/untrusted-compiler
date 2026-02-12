@@ -2,6 +2,8 @@
 
 This chapter captures the next M5 vertical slice after MIR bootstrap: lowering control flow when it appears inside explicit `return` expressions.
 
+Follow-up continuation-based statement control-flow lowering is documented in `docs/book/75-m5-statement-control-flow-continuations.md`.
+
 ## Scope delivered
 - MIR lowering now recognizes explicit return expressions that are control flow:
   - `return if ... { ... } else { ... };`
@@ -39,4 +41,4 @@ This chapter captures the next M5 vertical slice after MIR bootstrap: lowering c
 - General statement-level lowering (for example non-tail `if`/`match` expressions requiring continuation/join blocks) is still pending.
 
 ## Next step
-- Extend MIR to lower statement-level control-flow into continuation blocks (join/goto form), not just tail and return-site forms.
+- Extend MIR with recursive nested CFG lowering inside branch bodies and block-tail expressions.

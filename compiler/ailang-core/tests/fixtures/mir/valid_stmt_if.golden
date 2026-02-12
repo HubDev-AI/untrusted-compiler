@@ -1,0 +1,12 @@
+OK
+fn flow(x: Int) -> Int
+  bb0:
+    branch (x > 0) ? bb1 : bb2
+  bb1:
+    eval 1
+    goto bb3
+  bb2:
+    eval 0
+    goto bb3
+  bb3:
+    return 5

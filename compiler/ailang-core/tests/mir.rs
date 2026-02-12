@@ -169,3 +169,62 @@ fn pick(x: Bool) -> Int {
         "return-match should be lowered into explicit switch blocks"
     );
 }
+
+#[test]
+fn mir_lowering_splits_statement_if_into_continuation_blocks() {
+    let source = r#"
+fn flow(x: Int) -> Int {
+  if x > 0 {
+    1
+  } else {
+    0
+  };
+  5
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 4);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("branch (x > 0) ? bb1 : bb2"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("return 5"));
+}
+
+#[test]
+fn mir_lowering_splits_statement_match_into_continuation_blocks() {
+    let source = r#"
+fn flow(x: Bool) -> Int {
+  match x {
+    true => 1,
+    false => 0
+  };
+  5
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 4);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("switch x { true => bb1, false => bb2 }"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("return 5"));
+}
