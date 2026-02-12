@@ -193,6 +193,11 @@ impl Catalog {
             "Budget",
             "StdError",
             "Origin",
+            "Router",
+            "Request",
+            "Response",
+            "HttpError",
+            "Handler",
         ]
         .into_iter()
         .map(|item| item.to_string())

@@ -924,6 +924,55 @@ entry = "src/main.ai"
 }
 
 #[test]
+fn build_emit_c_bin_accepts_http_surface_types_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin http surface type integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-http-surface-types");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "httpsurfacetypesdemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn wireRoutes(router: Router, request: Request, response: Response) effects { net } -> Int {
+  http.get(router, 1, 1);
+  http.post(router, 1, 1);
+  http.serve(1, router);
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should accept http surface type names"
+    );
+
+    let binary_path = project_dir.join("build").join("httpsurfacetypesdemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+}
+
+#[test]
 fn run_command_executes_compiled_binary_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping run integration test: clang not available");

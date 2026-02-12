@@ -62,5 +62,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `94-m7-hello-api-bootstrap-example.md`
 - `95-m7-hello-api-run-flow-validation.md`
 - `96-m7-security-middleware-intrinsic-bootstrap.md`
+- `97-m7-http-surface-type-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.
