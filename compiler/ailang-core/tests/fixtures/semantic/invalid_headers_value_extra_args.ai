@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  headers.value("ok", "extra");
+  0
+}

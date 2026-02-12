@@ -119,3 +119,4 @@
 - Added strict call-shape checks for `req.json` arity and `res.text(status, body)` typing, and updated CLI req/res integration fixtures to use string text bodies.
 - Added `res.html` sink signature hardening (`HtmlSafe`-only + exact arity) with tagged diagnostics, semantic fixture coverage, and updated req/res `c-bin` integration fixture to use `sanitize.html(...)` gate flow.
 - Added typed header/cookie sink signature hardening (`res.setHeader` with `HeaderName`/`HeaderValue`, `res.addCookie` with `Cookie`) with tagged diagnostics and updated header/cookie `c-bin` integration fixture to use `headers.name/value` constructors.
+- Added signature hardening for `headers.name/value` constructors (exact one-arg `String` contract) and updated gate/header integration fixtures to use string inputs.

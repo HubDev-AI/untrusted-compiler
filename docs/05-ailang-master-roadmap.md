@@ -265,6 +265,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `res.addCookie(cookie)` requires `Cookie`,
     - violations emit tagged `E4001` sink diagnostics.
   - Header/cookie `c-bin` integration coverage now uses typed constructor flow (`headers.name`/`headers.value`/`cookie.build`) before sink calls.
+  - Header constructor helpers are now signature-checked:
+    - `headers.name(value)` and `headers.value(value)` require exactly one `String` argument,
+    - malformed arity/type calls emit `E4001` with security-tagged diagnostics.
+  - Gate and header/cookie `c-bin` integration fixtures now exercise string-based header constructor inputs for parity with the tightened contracts.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 

@@ -1762,6 +1762,7 @@ impl Analyzer {
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
+        self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2383,6 +2384,50 @@ impl Analyzer {
                     .with_note("construct cookies with `cookie.build(...)`"),
                 );
             }
+        }
+    }
+
+    fn enforce_header_builder_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !(is_headers_name_call(callee_name) || is_headers_value_call(callee_name)) {
+            return;
+        }
+
+        let call_name = if is_headers_name_call(callee_name) {
+            "headers.name"
+        } else {
+            "headers.value"
+        };
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    format!("{call_name} expects exactly one argument"),
+                    span,
+                )
+                .with_tag("security")
+                .with_note(format!("use `{call_name}(\"value\")`")),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    format!("{call_name} argument must be `String`"),
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note(format!("use string input for `{call_name}`")),
+            );
         }
     }
 
@@ -3434,6 +3479,14 @@ fn is_set_header_call(name: &str) -> bool {
 
 fn is_add_cookie_call(name: &str) -> bool {
     matches!(name, "set_cookie" | "res.addCookie")
+}
+
+fn is_headers_name_call(name: &str) -> bool {
+    matches!(name, "headers_name" | "headers.name")
+}
+
+fn is_headers_value_call(name: &str) -> bool {
+    matches!(name, "headers_value" | "headers.value")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
