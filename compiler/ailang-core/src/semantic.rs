@@ -2451,6 +2451,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "res_text" | "res.text" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
+        }),
         "set_header" | "res.setHeader" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,

@@ -90,6 +90,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_res_ok();"));
     assert!(header.contains("int64_t ailang_rt_res_ok_meta();"));
     assert!(header.contains("int64_t ailang_rt_res_html();"));
+    assert!(header.contains("int64_t ailang_rt_res_text();"));
     assert!(header.contains("int64_t ailang_rt_set_header();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
     assert!(header.contains("int64_t ailang_rt_db_exec();"));
@@ -166,6 +167,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_res_ok()"));
     assert!(source.contains("int64_t ailang_rt_res_ok_meta()"));
     assert!(source.contains("int64_t ailang_rt_res_html()"));
+    assert!(source.contains("int64_t ailang_rt_res_text()"));
     assert!(source.contains("int64_t ailang_rt_set_header()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
     assert!(source.contains("int64_t ailang_rt_db_exec()"));
@@ -300,6 +302,7 @@ fn main() effects { net } -> Int {
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
   res.html(1);
+  res.text(200, 1);
   0
 }
 "#;
@@ -317,6 +320,7 @@ fn main() effects { net } -> Int {
     assert!(c.contains("(void)(ailang_rt_res_ok(201, schema, 1));"));
     assert!(c.contains("(void)(ailang_rt_res_ok_meta(201, schema, 1, 2));"));
     assert!(c.contains("(void)(ailang_rt_res_html(1));"));
+    assert!(c.contains("(void)(ailang_rt_res_text(200, 1));"));
 }
 
 #[test]

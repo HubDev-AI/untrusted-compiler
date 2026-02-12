@@ -589,6 +589,7 @@ fn encode(schema: Schema<Int>) effects { net } -> Int {
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
   res.html(1);
+  res.text(200, 1);
   0
 }
 
@@ -619,6 +620,7 @@ fn main() -> Int {
     assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok_meta(201, schema, 1, 2)"));
     assert!(generated_c.contains("ailang_rt_res_html(1)"));
+    assert!(generated_c.contains("ailang_rt_res_text(200, 1)"));
 
     let binary_path = project_dir.join("build").join("reqresdemo");
     assert!(binary_path.exists(), "compiled binary should exist");
@@ -1514,7 +1516,7 @@ fn build_emit_c_bin_compiles_hello_api_example_when_clang_available() {
     assert!(generated_c.contains("ailang_rt_http_router()"));
     assert!(generated_c.contains("ailang_rt_req_json(schema)"));
     assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
-    assert!(generated_c.contains("ailang_rt_res_html(1)"));
+    assert!(generated_c.contains("ailang_rt_res_text(200, 1)"));
 
     let binary_path = hello_api_path.join("build").join("hello-api");
     assert!(binary_path.exists(), "hello-api binary should exist");

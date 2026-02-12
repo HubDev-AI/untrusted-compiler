@@ -87,6 +87,10 @@ int64_t ailang_rt_res_html() {
   return 0;
 }
 
+int64_t ailang_rt_res_text() {
+  return 0;
+}
+
 int64_t ailang_rt_set_header() {
   return 0;
 }

@@ -1,5 +1,5 @@
 fn health() effects { net } -> Int {
-  res.html(1);
+  res.text(200, 1);
   0
 }
 

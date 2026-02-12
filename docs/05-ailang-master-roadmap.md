@@ -225,6 +225,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Semantic + C runtime bridge now includes security middleware intrinsics (`withSecurityHeaders`, `withCors`, `withCsrf`, `withAuth`) with dotted namespace forms.
   - Semantic primitive type catalog now includes core HTTP surface names (`Router`, `Request`, `Response`, `HttpError`, `Handler`) for API-shaped signatures.
   - Semantic + C runtime bridge now includes standard error-model helper intrinsics (`err.validation`, `err.auth`, `err.notFound`, `err.conflict`, `err.rateLimit`, `err.internal`, `err.withPath`, `err.withDetail`, `err.withLimit`, `err.withDependency`, `err.withCause`) with runtime stubs and clang-gated `c-bin` coverage.
+  - Semantic + C runtime bridge now includes `res.text` plain-text response intrinsic with runtime stubs and req/res `c-bin` integration coverage.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -289,6 +290,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/106-m7-path-header-redact-helper-bridge.md`
 - `docs/book/107-m7-json-helper-intrinsic-bridge.md`
 - `docs/book/108-m7-error-builder-intrinsic-bridge.md`
+- `docs/book/109-m7-res-text-intrinsic-bridge.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -571,6 +573,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
+- Chapter: "M7 Slice: res.text Intrinsic Bridge".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

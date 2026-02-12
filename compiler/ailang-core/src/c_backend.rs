@@ -223,6 +223,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("res_ok(", "__AILANG_INTRINSIC_RES_OK__(");
     lowered = lowered.replace("res.html(", "__AILANG_INTRINSIC_RES_HTML__(");
     lowered = lowered.replace("res_html(", "__AILANG_INTRINSIC_RES_HTML__(");
+    lowered = lowered.replace("res.text(", "__AILANG_INTRINSIC_RES_TEXT__(");
+    lowered = lowered.replace("res_text(", "__AILANG_INTRINSIC_RES_TEXT__(");
     lowered = lowered.replace("res.setHeader(", "__AILANG_INTRINSIC_SET_HEADER__(");
     lowered = lowered.replace("set_header(", "__AILANG_INTRINSIC_SET_HEADER__(");
     lowered = lowered.replace("res.addCookie(", "__AILANG_INTRINSIC_SET_COOKIE__(");
@@ -386,6 +388,7 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK__(", "ailang_rt_res_ok(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK_META__(", "ailang_rt_res_ok_meta(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_HTML__(", "ailang_rt_res_html(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_RES_TEXT__(", "ailang_rt_res_text(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_HEADER__(", "ailang_rt_set_header(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_COOKIE__(", "ailang_rt_set_cookie(");
     lowered = lowered.replace("__AILANG_INTRINSIC_DB_EXEC__(", "ailang_rt_db_exec(");

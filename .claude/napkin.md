@@ -95,3 +95,4 @@
 - Added helper bridge for `path.base`, `headers.name/value`, and `secrets.redact`, including runtime ABI stubs and `security_map` gate tags.
 - Added JSON helper bridge for `json.decode` / `json.encode` plus `Json` primitive type support and `security_map` gate/sink tagging.
 - Added std-error helper bridge for `err.*` constructors/enrichers across semantic intrinsics, C lowering, runtime ABI stubs, and clang-gated `c-bin` integration tests.
+- Added `res.text` plain-text response bridge across semantic intrinsics, C lowering, runtime ABI stubs, and req/res integration coverage.
