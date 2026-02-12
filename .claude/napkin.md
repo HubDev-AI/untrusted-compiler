@@ -40,3 +40,4 @@
 - Started M5 bootstrap: added MIR module + lowering + `build --emit mir` CLI path with tests.
 - Extended M5 MIR lowering with tail-`if` branch blocks and explicit `branch` terminators.
 - Added fixture-based MIR golden tests to lock textual MIR output behavior.
+- Extended M5 MIR control-flow lowering with tail-`match` to `switch` + per-arm blocks.

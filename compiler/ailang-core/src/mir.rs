@@ -65,6 +65,12 @@ pub enum MirInstructionKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct MirSwitchTarget {
+    pub pattern: String,
+    pub target: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MirTerminator {
     Return {
         value: Option<String>,
@@ -78,6 +84,11 @@ pub enum MirTerminator {
         condition: String,
         then_target: usize,
         else_target: usize,
+        span: Span,
+    },
+    Switch {
+        scrutinee: String,
+        targets: Vec<MirSwitchTarget>,
         span: Span,
     },
 }
@@ -171,6 +182,34 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
                     terminator: else_terminator,
                 },
             ]
+        } else if let ExprKind::Match { scrutinee, arms } = &tail.kind {
+            let mut blocks = vec![MirBlock {
+                id: 0,
+                instructions: entry_instructions,
+                terminator: MirTerminator::Switch {
+                    scrutinee: expr_to_string(scrutinee),
+                    targets: arms
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arm)| MirSwitchTarget {
+                            pattern: pattern_to_string(&arm.pattern),
+                            target: index + 1,
+                        })
+                        .collect(),
+                    span: tail.span.clone(),
+                },
+            }];
+
+            for (index, arm) in arms.iter().enumerate() {
+                let (instructions, terminator) = lower_expr_as_block(&arm.value);
+                blocks.push(MirBlock {
+                    id: index + 1,
+                    instructions,
+                    terminator,
+                });
+            }
+
+            blocks
         } else {
             vec![MirBlock {
                 id: 0,
@@ -268,6 +307,19 @@ fn lower_else_branch(
     }
 }
 
+fn lower_expr_as_block(expr: &Expr) -> (Vec<MirInstruction>, MirTerminator) {
+    match &expr.kind {
+        ExprKind::Block(block) => lower_block(block),
+        _ => (
+            Vec::new(),
+            MirTerminator::Return {
+                value: Some(expr_to_string(expr)),
+                span: expr.span.clone(),
+            },
+        ),
+    }
+}
+
 fn lower_stmt_to_instruction(stmt: &ast::Stmt) -> Option<MirInstruction> {
     match &stmt.kind {
         StmtKind::Let { name, value, .. } => Some(MirInstruction {
@@ -345,6 +397,17 @@ fn render_function(out: &mut String, function: &MirFunction) {
                     condition, then_target, else_target
                 )
                 .expect("write to string must succeed");
+            }
+            MirTerminator::Switch {
+                scrutinee, targets, ..
+            } => {
+                let targets_text = targets
+                    .iter()
+                    .map(|target| format!("{} => bb{}", target.pattern, target.target))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                writeln!(out, "    switch {} {{ {} }}", scrutinee, targets_text)
+                    .expect("write to string must succeed");
             }
         }
     }

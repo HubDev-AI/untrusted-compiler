@@ -80,3 +80,29 @@ fn classify(x: Int) -> Int {
     assert!(rendered.contains("bb2:"));
     assert!(rendered.contains("return 0"));
 }
+
+#[test]
+fn mir_lowering_splits_tail_match_into_switch_blocks() {
+    let source = r#"
+fn pick(x: Bool) -> Int {
+  match x {
+    true => 1,
+    false => 0
+  }
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 3);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("bb0:"));
+    assert!(rendered.contains("switch x { true => bb1, false => bb2 }"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 0"));
+}
