@@ -110,6 +110,7 @@ pub struct NetSsrfPolicyConfig {
 pub struct FsPolicyConfig {
     pub enabled: bool,
     pub allowed_base_paths: Vec<String>,
+    pub forbid_symlinks: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,6 +228,7 @@ impl Default for Policy {
             fs: FsPolicyConfig {
                 enabled: false,
                 allowed_base_paths: Vec::new(),
+                forbid_symlinks: "enforce".to_string(),
             },
         }
     }
@@ -928,6 +930,19 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
         if let Some(allowed_base_paths) = fs.allowed_base_paths {
             policy.fs.allowed_base_paths = allowed_base_paths;
+        }
+        if let Some(forbid_symlinks) = fs.forbid_symlinks {
+            match forbid_symlinks.as_str() {
+                "off" | "warn" | "enforce" => policy.fs.forbid_symlinks = forbid_symlinks,
+                _ => diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid fs.forbid_symlinks",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("fs.forbid_symlinks must be `off`, `warn`, or `enforce`"),
+                ),
+            }
         }
     }
 

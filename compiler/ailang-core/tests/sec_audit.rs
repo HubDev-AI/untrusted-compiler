@@ -330,6 +330,77 @@ allowed_base_paths = []
 }
 
 #[test]
+fn sec_audit_flags_weak_symlink_policy_with_sample_calls() {
+    let source = r#"
+fn risky() -> Int {
+  fs.write(FsCap(), "/tmp/a", "payload");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let weak_policy = parse_policy_str(
+        Path::new("ailang.policy"),
+        r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[fs]
+enabled = true
+allowed_base_paths = ["/srv/data"]
+forbid_symlinks = "warn"
+"#,
+    )
+    .expect("weak symlink policy should parse");
+    let weak_report = run_security_audit(&weak_policy, &build_security_map(&program, &weak_policy));
+
+    let weak = weak_report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SYMLINK_POLICY_WEAK")
+        .expect("SYMLINK_POLICY_WEAK should be present");
+    assert_eq!(weak.severity, AuditSeverity::MEDIUM);
+    let weak_samples = weak
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("SYMLINK_POLICY_WEAK should include sampleCalls");
+    assert!(weak_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "fs.write")
+    }));
+
+    let enforce_policy = parse_policy_str(
+        Path::new("ailang.policy"),
+        r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[fs]
+enabled = true
+allowed_base_paths = ["/srv/data"]
+forbid_symlinks = "enforce"
+"#,
+    )
+    .expect("enforced symlink policy should parse");
+    let enforce_report = run_security_audit(
+        &enforce_policy,
+        &build_security_map(&program, &enforce_policy),
+    );
+    assert!(
+        enforce_report
+            .findings
+            .iter()
+            .all(|finding| finding.id != "SYMLINK_POLICY_WEAK"),
+        "SYMLINK_POLICY_WEAK should not be emitted when fs.forbid_symlinks=\"enforce\""
+    );
+}
+
+#[test]
 fn sec_audit_includes_sample_calls_for_redirect_capture_and_replay_findings() {
     let source = r#"
 fn risky(net: NetCap) effects { net } -> Int {

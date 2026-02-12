@@ -76,6 +76,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `[net.public]` domain policy lists are now ingested into the typed policy model:
     - `allowed_domains`
     - `blocked_domains`
+  - `[fs]` symlink posture is now ingested/validated in the typed policy model:
+    - `forbid_symlinks` (`off|warn|enforce`)
   - `sec.audit` now emits deterministic logging/SQL posture findings:
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
@@ -149,6 +151,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
+    - `SYMLINK_POLICY_WEAK`
     - `CSRF_PROTECTED_METHODS_INCOMPLETE`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
     - `DNS_RESOLUTION_DISABLED`

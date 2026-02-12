@@ -100,6 +100,31 @@ blocked_domains = ["169.254.169.254"]
 }
 
 #[test]
+fn policy_parses_fs_forbid_symlinks_mode() {
+    let source = r#"
+[fs]
+enabled = true
+forbid_symlinks = "warn"
+"#;
+
+    let policy =
+        parse_policy_str(Path::new("ailang.policy"), source).expect("fs symlink mode should parse");
+    assert_eq!(policy.fs.forbid_symlinks, "warn");
+}
+
+#[test]
+fn policy_rejects_invalid_fs_forbid_symlinks_mode() {
+    let source = r#"
+[fs]
+forbid_symlinks = "invalid"
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect_err("invalid fs.forbid_symlinks must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
 fn policy_rejects_csrf_none_without_secure_cookie() {
     let source = r#"
 [csrf]

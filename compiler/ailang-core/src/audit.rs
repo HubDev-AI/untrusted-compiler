@@ -586,6 +586,23 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if policy.fs.enabled && policy.fs.forbid_symlinks != "enforce" {
+        findings.push(finding(
+            "SYMLINK_POLICY_WEAK",
+            AuditSeverity::MEDIUM,
+            "fs",
+            json!({
+                "forbidSymlinks": policy.fs.forbid_symlinks,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["sink.fs.read", "sink.fs.write"],
+                    5,
+                ),
+            }),
+            "Set fs.forbid_symlinks=\"enforce\" to hard-block symlink traversal paths.",
+        ));
+    }
+
     if policy.fs.enabled && policy.fs.allowed_base_paths.is_empty() {
         findings.push(finding(
             "FS_ENABLED_NO_BASE_ALLOWLIST",

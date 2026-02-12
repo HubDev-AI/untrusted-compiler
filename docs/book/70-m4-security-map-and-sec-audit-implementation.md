@@ -156,6 +156,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
+    - `SYMLINK_POLICY_WEAK`
     - `CSRF_PROTECTED_METHODS_INCOMPLETE`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
     - `PUBLIC_EGRESS_NO_DOMAIN_POLICY`
@@ -1399,6 +1400,50 @@ Partial method protection (`POST` only, for example) creates easy bypass paths t
 #### 7) Tradeoffs and next steps
 - v0 rule uses a fixed baseline method set and does not yet model per-route custom method posture.
 - next step is route-aware CSRF posture checks tied to normalized router method metadata.
+
+### Slice Explanation: Filesystem Symlink Posture Finding (`SYMLINK_POLICY_WEAK`)
+
+#### 1) What it is
+This slice adds typed-policy support for filesystem symlink posture and a deterministic audit finding when symlink restrictions are not enforced.
+
+#### 2) Why it exists
+`fs.enabled=true` without strong symlink policy can allow traversal bypasses even with base-path controls. The audit now highlights weaker modes explicitly.
+
+#### 3) How it works internally
+- policy model now persists:
+  - `fs.forbid_symlinks` with accepted values `off|warn|enforce`.
+- parser validation now rejects invalid values with `P6003`.
+- `sec.audit` emits `SYMLINK_POLICY_WEAK` when:
+  - `fs.enabled=true`, and
+  - `fs.forbid_symlinks != "enforce"`.
+- evidence includes:
+  - effective `forbidSymlinks` value,
+  - bounded `sampleCalls` from `sink.fs.read`/`sink.fs.write`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective filesystem policy (`enabled`, `forbid_symlinks`),
+  - filesystem sink tags from `security_map`.
+- Output:
+  - `SYMLINK_POLICY_WEAK` finding with severity `MEDIUM`.
+- Constraints:
+  - finding is posture-level and independent of specific path normalization implementation details.
+
+#### 5) Failure modes and diagnostics
+- invalid policy value emits parser diagnostic:
+  - `P6003 invalid fs.forbid_symlinks`.
+- with valid policy, this is audit-only and produces deterministic posture evidence.
+
+#### 6) Example usage
+- policy:
+  - `[fs] enabled = true`
+  - `forbid_symlinks = "warn"`
+- audit:
+  - emits `SYMLINK_POLICY_WEAK` with filesystem call samples when present.
+
+#### 7) Tradeoffs and next steps
+- v0 checks policy posture, not runtime symlink resolution behavior.
+- next step is runtime-level fs path canonicalization tests that tie directly to this policy signal.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
