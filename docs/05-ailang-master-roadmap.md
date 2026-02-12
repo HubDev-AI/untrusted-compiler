@@ -277,6 +277,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - requires exactly one `String` argument,
     - malformed arity/type calls emit `E4001` with security-tagged diagnostics.
   - Gate intrinsic `c-bin` integration fixtures now use string base-path constructor inputs (`path.base("/tmp/base")`) to match the hardened constructor contract.
+  - `req.body(...)` is now signature-checked:
+    - requires exact call shape `req.body(ctx, request)`,
+    - argument types must be `Ctx` and `Request`,
+    - malformed arity/type calls emit `E4001` with `security` + `schema` tags.
+  - req/res `c-bin` integration fixtures now thread explicit `ctx`/`req` symbols through `req.body(...)`, matching the hardened trust-boundary contract.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 

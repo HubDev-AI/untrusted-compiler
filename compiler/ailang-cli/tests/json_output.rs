@@ -587,8 +587,8 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn decode(schema: Schema<Int>) effects { net } -> Int {
-  req.body(1, 2);
+        r#"fn decode(ctx: Ctx, req: Request, schema: Schema<Int>) effects { net } -> Int {
+  req.body(ctx, req);
   req.query("q");
   req.pathParam("id");
   req.header("authorization");
@@ -625,7 +625,7 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_req_body(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_body(ctx, req)"));
     assert!(generated_c.contains("ailang_rt_req_query(\"q\")"));
     assert!(generated_c.contains("ailang_rt_req_path_param(\"id\")"));
     assert!(generated_c.contains("ailang_rt_req_header(\"authorization\")"));

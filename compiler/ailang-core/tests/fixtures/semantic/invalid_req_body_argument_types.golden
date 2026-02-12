@@ -1,0 +1,9 @@
+error[E4001]: req.body first argument must be `Ctx`
+  --> invalid_req_body_argument_types.ai:2:12
+  note: found `Int`
+  note: pass handler context as the first argument
+
+error[E4001]: req.body second argument must be `Request`
+  --> invalid_req_body_argument_types.ai:2:15
+  note: found `Int`
+  note: pass the request value as the second argument

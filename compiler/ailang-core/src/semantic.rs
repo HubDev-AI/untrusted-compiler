@@ -2440,6 +2440,43 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
+        if is_req_body_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "req.body expects `(ctx, request)` arguments", span)
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note("use `req.body(ctx, request)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("Ctx") {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "req.body first argument must be `Ctx`", args[0].span.clone())
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(format!("found `{}`", arg_types[0].describe()))
+                        .with_note("pass handler context as the first argument"),
+                );
+            }
+
+            if !arg_types[1].is_named("Request") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "req.body second argument must be `Request`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass the request value as the second argument"),
+                );
+            }
+            return;
+        }
+
         if !(is_req_query_call(callee_name)
             || is_req_path_param_call(callee_name)
             || is_req_header_call(callee_name))
@@ -3578,6 +3615,10 @@ fn is_headers_value_call(name: &str) -> bool {
 
 fn is_req_query_call(name: &str) -> bool {
     matches!(name, "req_query" | "req.query")
+}
+
+fn is_req_body_call(name: &str) -> bool {
+    matches!(name, "req_body" | "req.body")
 }
 
 fn is_req_path_param_call(name: &str) -> bool {

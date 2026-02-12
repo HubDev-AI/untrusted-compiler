@@ -122,3 +122,4 @@
 - Added signature hardening for `headers.name/value` constructors (exact one-arg `String` contract) and updated gate/header integration fixtures to use string inputs.
 - Added request-source signature hardening for `req.query`/`req.pathParam`/`req.header` (single `String` key argument), with schema/security-tagged diagnostics and updated req/res + cors integration fixtures.
 - Added `path.base` signature hardening (single `String` argument) with constructor diagnostics and updated gate integration fixtures to use explicit base-path literals.
+- Added `req.body` signature hardening (`req.body(ctx, request)` with typed `Ctx`/`Request` arguments) and updated req/res integration fixtures accordingly.
