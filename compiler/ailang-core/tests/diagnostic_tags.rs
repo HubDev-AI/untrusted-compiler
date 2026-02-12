@@ -265,6 +265,22 @@ fn bad(fs: FsCap) effects { fs.write } -> Int {
 }
 
 #[test]
+fn secret_source_shape_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(sec: SecretsCap) effects { secrets.read } -> Int {
+  secrets.get(sec);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn allow_annotation_diagnostic_has_security_policy_tags() {
     let source = r#"
 @allow(

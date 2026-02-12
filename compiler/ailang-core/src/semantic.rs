@@ -1768,6 +1768,7 @@ impl Analyzer {
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
+        self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2673,7 +2674,28 @@ impl Analyzer {
             Diagnostic::error("E4001", "fs sink call has invalid argument shape", span)
                 .with_tag("security")
                 .with_tag("sink")
-                .with_note(note),
+            .with_note(note),
+        );
+    }
+
+    fn enforce_secret_source_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        if !is_secret_get_call(callee_name) {
+            return;
+        }
+
+        if matches!(args.len(), 2 | 3) {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                "E4001",
+                "secret source call has invalid argument shape",
+                span,
+            )
+            .with_tag("security")
+            .with_tag("secret")
+            .with_note("use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`"),
         );
     }
 
@@ -3781,6 +3803,10 @@ fn is_fs_read_call(name: &str) -> bool {
 
 fn is_fs_write_call(name: &str) -> bool {
     matches!(name, "fs_write" | "fs.write")
+}
+
+fn is_secret_get_call(name: &str) -> bool {
+    matches!(name, "secret_read" | "secrets.get")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

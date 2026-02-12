@@ -867,7 +867,7 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
-  secrets.get(sec, 1);
+  secrets.get(sec, "TOKEN");
   secrets.redact(1);
   0
 }
@@ -890,7 +890,7 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_secret_get(sec, 1)"));
+    assert!(generated_c.contains("ailang_rt_secret_get(sec, \"TOKEN\")"));
     assert!(generated_c.contains("ailang_rt_secret_redact(1)"));
 
     let binary_path = project_dir.join("build").join("secretreaddemo");
