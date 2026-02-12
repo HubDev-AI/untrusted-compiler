@@ -190,14 +190,14 @@ fn flow(x: Int) -> Int {
     assert_eq!(mir.functions[0].blocks.len(), 4);
 
     let rendered = mir.render_text();
-    assert!(rendered.contains("branch (x > 0) ? bb2 : bb3"));
-    assert!(rendered.contains("bb2:"));
-    assert!(rendered.contains("eval 1"));
-    assert!(rendered.contains("goto bb1"));
-    assert!(rendered.contains("bb3:"));
-    assert!(rendered.contains("eval 0"));
-    assert!(rendered.contains("goto bb1"));
+    assert!(rendered.contains("branch (x > 0) ? bb1 : bb2"));
     assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb3:"));
     assert!(rendered.contains("return 5"));
 }
 
@@ -220,14 +220,14 @@ fn flow(x: Bool) -> Int {
     assert_eq!(mir.functions[0].blocks.len(), 4);
 
     let rendered = mir.render_text();
-    assert!(rendered.contains("switch x { true => bb2, false => bb3 }"));
-    assert!(rendered.contains("bb2:"));
-    assert!(rendered.contains("eval 1"));
-    assert!(rendered.contains("goto bb1"));
-    assert!(rendered.contains("bb3:"));
-    assert!(rendered.contains("eval 0"));
-    assert!(rendered.contains("goto bb1"));
+    assert!(rendered.contains("switch x { true => bb1, false => bb2 }"));
     assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("bb3:"));
     assert!(rendered.contains("return 5"));
 }
 
@@ -252,16 +252,16 @@ fn nested(x: Int, y: Bool) -> Int {
     let mir = lower_program_to_mir(&program);
     let rendered = mir.render_text();
 
-    assert!(rendered.contains("branch (x > 0) ? bb2 : bb3"));
-    assert!(rendered.contains("bb2:"));
-    assert!(rendered.contains("branch y ? bb4 : bb5"));
-    assert!(rendered.contains("bb4:"));
-    assert!(rendered.contains("return 1") || rendered.contains("eval 1"));
-    assert!(rendered.contains("bb5:"));
-    assert!(rendered.contains("return 2") || rendered.contains("eval 2"));
-    assert!(rendered.contains("bb3:"));
-    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("branch (x > 0) ? bb1 : bb4"));
     assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("branch y ? bb2 : bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 1") || rendered.contains("eval 1"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("return 2") || rendered.contains("eval 2"));
+    assert!(rendered.contains("bb4:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("bb5:"));
     assert!(rendered.contains("return 9"));
 }
 
@@ -284,13 +284,13 @@ fn nested(x: Bool, y: Bool) -> Int {
     let mir = lower_program_to_mir(&program);
     let rendered = mir.render_text();
 
-    assert!(rendered.contains("branch x ? bb1 : bb2"));
+    assert!(rendered.contains("branch x ? bb1 : bb4"));
     assert!(rendered.contains("bb1:"));
-    assert!(rendered.contains("switch y { true => bb3, false => bb4 }"));
-    assert!(rendered.contains("bb3:"));
-    assert!(rendered.contains("return 1"));
-    assert!(rendered.contains("bb4:"));
-    assert!(rendered.contains("return 2"));
+    assert!(rendered.contains("switch y { true => bb2, false => bb3 }"));
     assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("return 2"));
+    assert!(rendered.contains("bb4:"));
     assert!(rendered.contains("return 0"));
 }

@@ -195,6 +195,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - explicit `return if` and `return match` expressions now lower into explicit branch/switch blocks (not inline expression returns).
   - statement-level `if`/`match` expression statements now lower into explicit continuation CFG blocks using `goto` join targets.
   - nested `if`/`match` control flow inside branch bodies/block tails now lowers recursively into explicit CFG blocks in both return and continuation contexts.
+  - MIR output now applies deterministic canonical block-id remapping after lowering, including terminator target rewrites.
   - `ailang build --emit mir` now prints textual MIR for inspection.
   - `ailang build --emit mir-json` now emits machine-readable MIR JSON (JSON-only stdout mode).
   - MIR unit tests, MIR fixture-based golden tests, and CLI integration tests cover lowering and emit-path behavior.
@@ -230,6 +231,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/74-m5-return-control-flow-lowering.md`
 - `docs/book/75-m5-statement-control-flow-continuations.md`
 - `docs/book/76-m5-nested-cfg-lowering.md`
+- `docs/book/77-m5-canonical-block-id-normalization.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -444,6 +446,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M5 Slice: Return-Site Control-Flow Lowering".
 - Chapter: "M5 Slice: Statement Control-Flow Continuations".
 - Chapter: "M5 Slice: Nested CFG Lowering".
+- Chapter: "M5 Slice: Canonical Block ID Normalization".
 
 ## M6 - C Backend + Runtime ABI (First Runnable Target)
 ### Build tasks

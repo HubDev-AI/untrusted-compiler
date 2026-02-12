@@ -2,6 +2,8 @@
 
 This chapter documents the next M5 step: recursive MIR lowering for nested control-flow expressions inside branch bodies and block tails.
 
+Follow-up MIR block-id normalization is documented in `docs/book/77-m5-canonical-block-id-normalization.md`.
+
 ## Scope delivered
 - MIR lowering now recursively lowers nested `if`/`match` expressions in:
   - return-context block tails
@@ -37,4 +39,4 @@ This chapter documents the next M5 step: recursive MIR lowering for nested contr
 - Some expression rendering remains for non-control-flow values (expected in current MIR stage).
 
 ## Next step
-- Introduce explicit temporary locals/value slots for branch-produced values where upcoming backend passes require SSA-like normalization.
+- Normalize block ids after lowering so nested CFG output remains compact and deterministic for tooling/backends.

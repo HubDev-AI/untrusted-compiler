@@ -1,12 +1,12 @@
 OK
 fn flow(x: Bool) -> Int
   bb0:
-    switch x { true => bb2, false => bb3 }
-  bb2:
-    eval 1
-    goto bb1
-  bb3:
-    eval 0
-    goto bb1
+    switch x { true => bb1, false => bb2 }
   bb1:
+    eval 1
+    goto bb3
+  bb2:
+    eval 0
+    goto bb3
+  bb3:
     return 5

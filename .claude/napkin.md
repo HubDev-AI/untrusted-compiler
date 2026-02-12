@@ -47,3 +47,4 @@
 - Extended M5 MIR lowering beyond tail forms for explicit `return if` and `return match`, with shared lowering helpers and fixture coverage.
 - Extended M5 MIR lowering for statement-level `if`/`match` expressions into explicit continuation CFG blocks using `goto` join targets.
 - Refactored MIR lowering into recursive return/continuation CFG helpers to lower nested control flow in branch bodies and block tails.
+- Added MIR block-id canonicalization pass with target remapping for branch/goto/switch terminators to stabilize textual and JSON output.

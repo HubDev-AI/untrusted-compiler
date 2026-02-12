@@ -125,7 +125,12 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
 
     let return_type = function.return_type.as_ref().map(type_expr_to_string);
     let mut next_block_id = 1usize;
-    let blocks = lower_block_to_return_blocks(0, Vec::new(), &function.body, &mut next_block_id);
+    let blocks = canonicalize_block_ids(lower_block_to_return_blocks(
+        0,
+        Vec::new(),
+        &function.body,
+        &mut next_block_id,
+    ));
 
     MirFunction {
         name: function.name.clone(),
@@ -135,6 +140,57 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
         blocks,
         span: span.clone(),
     }
+}
+
+fn canonicalize_block_ids(blocks: Vec<MirBlock>) -> Vec<MirBlock> {
+    let mut id_map = std::collections::BTreeMap::new();
+    let mut next_id = 0usize;
+
+    for block in &blocks {
+        id_map.entry(block.id).or_insert_with(|| {
+            let assigned = next_id;
+            next_id += 1;
+            assigned
+        });
+    }
+
+    blocks
+        .into_iter()
+        .map(|mut block| {
+            let old_id = block.id;
+            block.id = *id_map
+                .get(&old_id)
+                .expect("block id must exist in canonicalization map");
+            match &mut block.terminator {
+                MirTerminator::Return { .. } => {}
+                MirTerminator::Goto { target, .. } => {
+                    *target = *id_map
+                        .get(target)
+                        .expect("goto target id must exist in canonicalization map");
+                }
+                MirTerminator::Branch {
+                    then_target,
+                    else_target,
+                    ..
+                } => {
+                    *then_target = *id_map
+                        .get(then_target)
+                        .expect("branch then target id must exist in canonicalization map");
+                    *else_target = *id_map
+                        .get(else_target)
+                        .expect("branch else target id must exist in canonicalization map");
+                }
+                MirTerminator::Switch { targets, .. } => {
+                    for target in targets {
+                        target.target = *id_map
+                            .get(&target.target)
+                            .expect("switch target id must exist in canonicalization map");
+                    }
+                }
+            }
+            block
+        })
+        .collect()
 }
 
 fn alloc_block_id(next_block_id: &mut usize) -> usize {
