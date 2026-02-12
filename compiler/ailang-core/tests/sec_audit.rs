@@ -238,6 +238,64 @@ fn boot() -> Int {
 }
 
 #[test]
+fn sec_audit_flags_weak_xfo_and_nosniff_with_sample_calls() {
+    let source = r#"
+fn boot() -> Int {
+  withSecurityHeaders();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mut policy = Policy::default();
+    policy.security_headers.x_frame_options = "SAMEORIGIN".to_string();
+    policy.security_headers.x_content_type_options = false;
+
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let xfo = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "XFO_DISABLED")
+        .expect("XFO_DISABLED should be present");
+    assert_eq!(xfo.severity, AuditSeverity::LOW);
+    let xfo_samples = xfo
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("XFO_DISABLED should include sampleCalls");
+    assert!(xfo_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| {
+                matches!(callee, "withSecurityHeaders" | "sec.withSecurityHeaders")
+            })
+    }));
+
+    let nosniff = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "NOSNIFF_DISABLED")
+        .expect("NOSNIFF_DISABLED should be present");
+    assert_eq!(nosniff.severity, AuditSeverity::LOW);
+    let nosniff_samples = nosniff
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("NOSNIFF_DISABLED should include sampleCalls");
+    assert!(nosniff_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| {
+                matches!(callee, "withSecurityHeaders" | "sec.withSecurityHeaders")
+            })
+    }));
+}
+
+#[test]
 fn sec_audit_flags_critical_internal_net_and_secret_reveal_usage() {
     let source = r#"
 fn risky() -> Int {

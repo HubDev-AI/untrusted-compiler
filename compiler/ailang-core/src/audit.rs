@@ -431,6 +431,40 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if posture.security_headers.enabled && !policy.security_headers.x_content_type_options {
+        findings.push(finding(
+            "NOSNIFF_DISABLED",
+            AuditSeverity::LOW,
+            "headers",
+            json!({
+                "xContentTypeOptions": false,
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
+            "Enable X-Content-Type-Options: nosniff to reduce content-sniffing risks.",
+        ));
+    }
+
+    if posture.security_headers.enabled && policy.security_headers.x_frame_options != "DENY" {
+        findings.push(finding(
+            "XFO_DISABLED",
+            AuditSeverity::LOW,
+            "headers",
+            json!({
+                "xFrameOptions": policy.security_headers.x_frame_options,
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
+            "Set X-Frame-Options to DENY for strongest clickjacking protection.",
+        ));
+    }
+
     if matches!(policy.auth.mode.as_str(), "cookie" | "mixed") && !policy.csrf.enabled {
         findings.push(finding(
             "CSRF_REQUIRED_BUT_DISABLED",

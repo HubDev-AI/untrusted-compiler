@@ -152,6 +152,8 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SECRETS_REVEAL_USED`
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
+    - `XFO_DISABLED`
+    - `NOSNIFF_DISABLED`
     - `REFERRER_POLICY_WEAK`
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
@@ -1489,6 +1491,47 @@ Referrer policy is part of baseline response-hardening posture. Weak values can 
 #### 7) Tradeoffs and next steps
 - v0 uses a fixed weak-policy set and does not yet differentiate environment-specific acceptable values.
 - next step is environment-aware posture mapping for referrer policy strictness.
+
+### Slice Explanation: Security-Header Hardening Findings (`XFO_DISABLED`, `NOSNIFF_DISABLED`)
+
+#### 1) What it is
+This slice adds low-severity posture findings for two baseline response-hardening controls:
+- frame embedding protection posture (`XFO_DISABLED`)
+- MIME sniffing protection posture (`NOSNIFF_DISABLED`)
+
+#### 2) Why it exists
+These headers are small but high-frequency hardening controls. Weak settings should be visible in audit output even when the broader security-header middleware is enabled.
+
+#### 3) How it works internally
+- when `security_headers.enabled=true`:
+  - audit emits `XFO_DISABLED` if `x_frame_options != "DENY"`.
+  - audit emits `NOSNIFF_DISABLED` if `x_content_type_options=false`.
+- both findings attach deterministic middleware evidence:
+  - bounded `sampleCalls` from `middleware.security_headers`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective `security_headers` policy fields,
+  - security-header middleware call tags.
+- Output:
+  - low-severity posture findings with deterministic callsite evidence.
+- Constraints:
+  - `x_frame_options` remains parser-validated (`DENY|SAMEORIGIN`), so this rule distinguishes strongest (`DENY`) vs weaker posture.
+
+#### 5) Failure modes and diagnostics
+- these are audit-only posture findings; no parser/typechecker diagnostics are changed by this slice.
+- both findings can co-exist with other security-header posture findings (`CSP_*`, `REFERRER_POLICY_WEAK`).
+
+#### 6) Example usage
+- policy:
+  - `[security_headers] x_frame_options = "SAMEORIGIN"`
+  - `[security_headers] x_content_type_options = false`
+- audit:
+  - emits `XFO_DISABLED` and `NOSNIFF_DISABLED` with middleware sample calls.
+
+#### 7) Tradeoffs and next steps
+- v0 currently uses strict baseline expectations and does not model route-specific framing exceptions.
+- next step is policy-scoped route/module exceptions with explicit `@allow` governance for narrowly scoped embedding cases.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
