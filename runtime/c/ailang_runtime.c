@@ -163,6 +163,14 @@ int64_t ailang_rt_sec_default_headers() {
   return 0;
 }
 
+int64_t ailang_rt_sec_csp() {
+  return 0;
+}
+
+int64_t ailang_rt_sec_csp_add() {
+  return 0;
+}
+
 int64_t ailang_rt_cors_from_policy() {
   return 0;
 }

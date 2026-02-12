@@ -294,6 +294,10 @@ fn lower_c_expr(expr: &str) -> String {
         "sec_default_headers(",
         "__AILANG_INTRINSIC_SEC_DEFAULT_HEADERS__(",
     );
+    lowered = lowered.replace("sec.cspAdd(", "__AILANG_INTRINSIC_SEC_CSP_ADD__(");
+    lowered = lowered.replace("sec_csp_add(", "__AILANG_INTRINSIC_SEC_CSP_ADD__(");
+    lowered = lowered.replace("sec.csp(", "__AILANG_INTRINSIC_SEC_CSP__(");
+    lowered = lowered.replace("sec_csp(", "__AILANG_INTRINSIC_SEC_CSP__(");
     lowered = lowered.replace("cors.fromPolicy(", "__AILANG_INTRINSIC_CORS_FROM_POLICY__(");
     lowered = lowered.replace("cors_from_policy(", "__AILANG_INTRINSIC_CORS_FROM_POLICY__(");
     lowered = lowered.replace("cors.origin(", "__AILANG_INTRINSIC_CORS_ORIGIN__(");
@@ -389,6 +393,8 @@ fn lower_c_expr(expr: &str) -> String {
         "__AILANG_INTRINSIC_SEC_DEFAULT_HEADERS__(",
         "ailang_rt_sec_default_headers(",
     );
+    lowered = lowered.replace("__AILANG_INTRINSIC_SEC_CSP__(", "ailang_rt_sec_csp(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_SEC_CSP_ADD__(", "ailang_rt_sec_csp_add(");
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_CORS_FROM_POLICY__(",
         "ailang_rt_cors_from_policy(",

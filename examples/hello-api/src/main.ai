@@ -21,6 +21,8 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 
 fn main() effects { net } -> Int {
   sec.defaultHeaders();
+  let csp = sec.csp();
+  sec.cspAdd(csp, 1, 2);
   cors.fromPolicy();
   csrf.fromPolicy();
   auth.fromPolicy();

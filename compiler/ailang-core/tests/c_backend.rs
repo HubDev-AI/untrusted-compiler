@@ -109,6 +109,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_with_csrf();"));
     assert!(header.contains("int64_t ailang_rt_with_auth();"));
     assert!(header.contains("int64_t ailang_rt_sec_default_headers();"));
+    assert!(header.contains("int64_t ailang_rt_sec_csp();"));
+    assert!(header.contains("int64_t ailang_rt_sec_csp_add();"));
     assert!(header.contains("int64_t ailang_rt_cors_from_policy();"));
     assert!(header.contains("int64_t ailang_rt_cors_origin();"));
     assert!(header.contains("int64_t ailang_rt_csrf_from_policy();"));
@@ -159,6 +161,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_with_csrf()"));
     assert!(source.contains("int64_t ailang_rt_with_auth()"));
     assert!(source.contains("int64_t ailang_rt_sec_default_headers()"));
+    assert!(source.contains("int64_t ailang_rt_sec_csp()"));
+    assert!(source.contains("int64_t ailang_rt_sec_csp_add()"));
     assert!(source.contains("int64_t ailang_rt_cors_from_policy()"));
     assert!(source.contains("int64_t ailang_rt_cors_origin()"));
     assert!(source.contains("int64_t ailang_rt_csrf_from_policy()"));
@@ -381,6 +385,8 @@ fn c_backend_rewrites_policy_config_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() -> Int {
   sec.defaultHeaders();
+  let csp = sec.csp();
+  sec.cspAdd(csp, 1, 2);
   cors.fromPolicy();
   csrf.fromPolicy();
   auth.fromPolicy();
@@ -393,6 +399,8 @@ fn main() -> Int {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("(void)(ailang_rt_sec_default_headers());"));
+    assert!(c.contains("ailang_rt_sec_csp();"));
+    assert!(c.contains("(void)(ailang_rt_sec_csp_add(csp, 1, 2));"));
     assert!(c.contains("(void)(ailang_rt_cors_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_csrf_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_auth_from_policy());"));

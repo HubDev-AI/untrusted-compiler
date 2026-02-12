@@ -19,6 +19,7 @@
 | 2026-02-12 | self | Replaced bare middleware names before dotted names in C intrinsic rewriting, producing invalid forms like `sec.ailang_rt_*`. | In string-based intrinsic rewrites, replace dotted forms before bare aliases to avoid partial-prefix corruption. |
 | 2026-02-12 | self | Used `register` as a fixture function name; it maps directly to C and collides with the C keyword `register`. | Avoid C reserved keywords in AILang integration fixtures until backend identifier mangling is implemented. |
 | 2026-02-12 | self | Added an extra schema-note text to existing `E4004` diagnostics and broke semantic golden fixtures. | Preserve established diagnostic wording unless intentionally updating goldens as part of the slice. |
+| 2026-02-12 | self | Asserted an exact emitted C local declaration shape (`int64_t csp = ...`) for a non-primitive typed binding, causing brittle test failure. | Assert intrinsic call lowering substrings rather than exact local declaration spelling unless declaration shape is the behavior under test. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -86,3 +87,4 @@
 - Added auth helper intrinsic bridge (`auth.require`, `auth.requireRole`) across semantic registry, C lowering, runtime ABI, and `c-bin` integration coverage.
 - Added typed CORS origin gate bridge (`cors.origin`) with semantic gate enforcement, runtime lowering, security-map tags, and `c-bin` integration coverage.
 - Added CSRF token-issue helper bridge (`csrf.issueToken`) with `net` effect semantics, runtime lowering, security-map effect tag, and `c-bin` integration coverage.
+- Added CSP builder bridge (`sec.csp`, `sec.cspAdd`) and security-config surface type-name catalog so spec-shaped config signatures compile through `c-bin`.

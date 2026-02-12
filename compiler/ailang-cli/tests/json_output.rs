@@ -959,6 +959,8 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn main() -> Int {
   sec.defaultHeaders();
+  let csp = sec.csp();
+  sec.cspAdd(csp, 1, 2);
   cors.fromPolicy();
   csrf.fromPolicy();
   auth.fromPolicy();
@@ -980,6 +982,8 @@ entry = "src/main.ai"
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_sec_default_headers()"));
+    assert!(generated_c.contains("ailang_rt_sec_csp()"));
+    assert!(generated_c.contains("ailang_rt_sec_csp_add(csp, 1, 2)"));
     assert!(generated_c.contains("ailang_rt_cors_from_policy()"));
     assert!(generated_c.contains("ailang_rt_csrf_from_policy()"));
     assert!(generated_c.contains("ailang_rt_auth_from_policy()"));
@@ -1199,6 +1203,64 @@ fn main() -> Int {
     );
 
     let binary_path = project_dir.join("build").join("httpsurfacetypesdemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+}
+
+#[test]
+fn build_emit_c_bin_accepts_security_config_surface_types_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin security config surface type integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-security-config-surface-types");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "securityconfigsurfacetypesdemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn configShapes(
+  corsCfg: CorsConfig,
+  headersCfg: SecurityHeadersConfig,
+  csrfCfg: CsrfConfig,
+  authCfg: AuthConfig,
+  cspCfg: CspConfig,
+  cspPolicy: CspPolicy,
+  principal: Principal,
+  caps: Caps,
+  origin: Origin,
+  originPattern: OriginPattern,
+  origins: CorsOrigins
+) -> Int {
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should accept security config surface type names"
+    );
+
+    let binary_path = project_dir.join("build").join("securityconfigsurfacetypesdemo");
     assert!(binary_path.exists(), "compiled binary should exist");
 }
 

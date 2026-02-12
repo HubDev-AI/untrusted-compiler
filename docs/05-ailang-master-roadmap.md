@@ -554,6 +554,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Auth Requirement Intrinsic Bootstrap".
 - Chapter: "M7 Slice: CORS Origin Gate Intrinsic Bootstrap".
 - Chapter: "M7 Slice: CSRF IssueToken Intrinsic Bootstrap".
+- Chapter: "M7 Slice: CSP Builder and Security Config Surface Bootstrap".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
