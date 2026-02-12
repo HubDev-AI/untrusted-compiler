@@ -243,6 +243,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `csrf.fromPolicy()` -> `CsrfConfig`
     - `auth.fromPolicy()` -> `AuthConfig`
     - `sec.withSecurityHeaders(router, cfg)` / `cors.withCors(router, cfg)` / `csrf.withCsrf(router, cfg)` / `auth.withAuth(router, cfg)` require typed `(Router, Config)` arguments and return `Router`.
+  - HTTP intrinsic call-shape checks now enforce:
+    - `http.get/post(router, path, handler)` require first argument `Router`,
+    - `http.serve(port, router)` requires numeric port and `Router` as second argument.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -602,6 +605,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Function Symbol Handler Wiring for hello-api".
 - Chapter: "M7 Slice: Route Registration Contract Checks".
 - Chapter: "M7 Slice: Typed Router Security Bootstrap Contracts".
+- Chapter: "M7 Slice: HTTP Call-Shape Contract Checks".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

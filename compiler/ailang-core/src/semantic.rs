@@ -1701,6 +1701,7 @@ impl Analyzer {
             arg_types,
             callable_aliases,
         );
+        self.enforce_http_serve_requirements(callee_name, span.clone(), args, arg_types);
         self.enforce_router_security_bootstrap_requirements(
             callee_name,
             span.clone(),
@@ -1811,6 +1812,21 @@ impl Analyzer {
                 .with_note("use `http.get(router, \"/path\", handler)` or `http.post(...)`"),
             );
             return;
+        }
+
+        if !arg_types[0].is_named("Router") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route registration expects `Router` as first argument",
+                    args[0].span.clone(),
+                )
+                .with_note(format!(
+                    "`{callee_name}` argument 1 expects `Router`, got `{}`",
+                    arg_types[0].describe()
+                ))
+                .with_note("create router with `http.router()` and pass that value"),
+            );
         }
 
         if !arg_types[1].is_named("String") {
@@ -1936,6 +1952,50 @@ impl Analyzer {
                     .with_note(usage_note),
                 );
             }
+        }
+    }
+
+    fn enforce_http_serve_requirements(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_http_serve_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 2 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "http.serve requires `(port, router)` arguments",
+                    span,
+                )
+                .with_note("use `http.serve(8080, router)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "http.serve port must be numeric", args[0].span.clone())
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use `Int`/`Int64` port values such as `8080`"),
+            );
+        }
+
+        if !arg_types[1].is_named("Router") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "http.serve router argument must be `Router`",
+                    args[1].span.clone(),
+                )
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("pass router returned from `http.router()` or middleware chain"),
+            );
         }
     }
 
@@ -3124,6 +3184,10 @@ fn is_http_route_registration(name: &str) -> bool {
         name,
         "http_get_route" | "http.get" | "http_post_route" | "http.post"
     )
+}
+
+fn is_http_serve_call(name: &str) -> bool {
+    matches!(name, "http_serve" | "http.serve")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

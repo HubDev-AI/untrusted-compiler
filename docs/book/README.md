@@ -82,5 +82,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `114-m7-function-symbol-handler-wiring-for-hello-api.md`
 - `115-m7-route-registration-contract-checks.md`
 - `116-m7-typed-router-security-bootstrap-contracts.md`
+- `117-m7-http-call-shape-contract-checks.md`
 
 As milestones progress, chapters will be added and linked from this index.

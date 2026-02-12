@@ -108,3 +108,4 @@
 - Added initial semantic route contract checks for `http.get/http.post` (string path + function-symbol handler + handler `effects { net }`) and updated router fixtures to explicit path/handler forms.
 - Reconfirmed that even two-test parallel cargo runs create lock-wait noise; keep all Cargo invocations strictly sequential during implementation/verification.
 - Added typed semantic contracts for canonical router security bootstrap calls (`*.fromPolicy`, `*.with*`) so bootstrap chains are now shape-checked and return `Router`/typed configs.
+- Added HTTP call-shape checks for router intrinsics (`http.get/post` require `Router`, `http.serve` requires numeric port + `Router`), reducing placeholder-style misuse in API wiring.

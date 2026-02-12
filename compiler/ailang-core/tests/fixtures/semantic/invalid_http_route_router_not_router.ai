@@ -1,0 +1,8 @@
+fn health() effects { net } -> Int {
+  0
+}
+
+fn main() effects { net } -> Int {
+  http.get(1, "/health", health);
+  0
+}

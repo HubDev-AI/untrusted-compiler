@@ -1,0 +1,4 @@
+fn main(router: Router) effects { net } -> Int {
+  http.serve("8080", router);
+  0
+}
