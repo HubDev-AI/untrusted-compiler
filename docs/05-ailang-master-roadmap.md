@@ -646,6 +646,12 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Route Handler Return-Type Bridge Contract".
 - Chapter: "M7 Slice: req.json Schema-Argument Contract Hardening".
 - Chapter: "M7 Slice: req/res Call-Shape Signature Hardening".
+- Chapter: "M7 Slice: res.html Signature Hardening".
+- Chapter: "M7 Slice: Header/Cookie Sink Signature Hardening".
+- Chapter: "M7 Slice: Header Constructor Signature Hardening".
+- Chapter: "M7 Slice: Request Source Signature Hardening".
+- Chapter: "M7 Slice: path.base Signature Hardening".
+- Chapter: "M7 Slice: req.body Signature Hardening".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
