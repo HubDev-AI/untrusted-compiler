@@ -60,3 +60,4 @@
 - Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `ailang_rt_time_now` with runtime stub coverage and C emitter tests.
 - Added non-trivial `c-bin` integration coverage using a temp project fixture with helper-function call + `if/else` control flow.
 - Moved runtime ABI C sources from Rust string literals into `runtime/c/` files and switched emitter helpers to `include_str!` those canonical runtime assets.
+- Added clang-gated CLI integration coverage for `time.now` projects to validate semantic effects checks plus intrinsic rewrite/runtime linkage through full `c-bin` builds.
