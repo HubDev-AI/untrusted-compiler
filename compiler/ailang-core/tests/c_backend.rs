@@ -21,7 +21,7 @@ fn main() -> Int {
     assert!(c.contains("int main(void);"));
     assert!(c.contains("int main(void) {"));
     assert!(c.contains("bb0:"));
-    assert!(c.contains("return 0;"));
+    assert!(c.contains("return ailang_rt_identity_i64(0);"));
 }
 
 #[test]
@@ -43,7 +43,23 @@ fn flow(x: Int) -> Int {
 
     assert!(c.contains("if ((x > 0)) goto bb1; else goto bb2;"));
     assert!(c.contains("goto bb3;"));
-    assert!(c.contains("return 5;"));
+    assert!(c.contains("return ailang_rt_identity_i64(5);"));
+}
+
+#[test]
+fn c_backend_routes_bool_returns_through_runtime_identity() {
+    let source = r#"
+fn truthy(flag: Bool) -> Bool {
+  flag
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("bool truthy(bool flag);"));
+    assert!(c.contains("return ailang_rt_identity_bool(flag);"));
 }
 
 #[test]

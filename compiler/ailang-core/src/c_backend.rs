@@ -54,6 +54,7 @@ bool ailang_rt_identity_bool(bool value) {
 
 fn render_function(out: &mut String, function: &MirFunction) {
     writeln!(out, "{} {{", c_function_signature(function)).expect("write to string must succeed");
+    let runtime_return_identity = runtime_identity_for_return_type(function.return_type.as_deref());
 
     let locals = collect_locals(function);
     for local in &locals {
@@ -81,7 +82,12 @@ fn render_function(out: &mut String, function: &MirFunction) {
         match &block.terminator {
             MirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
-                    writeln!(out, "  return {};", value).expect("write to string must succeed");
+                    if let Some(identity_fn) = runtime_return_identity {
+                        writeln!(out, "  return {}({});", identity_fn, value)
+                            .expect("write to string must succeed");
+                    } else {
+                        writeln!(out, "  return {};", value).expect("write to string must succeed");
+                    }
                 } else {
                     writeln!(out, "  return;").expect("write to string must succeed");
                 }
@@ -172,5 +178,13 @@ fn c_type(type_name: Option<&str>) -> &'static str {
         Some("Int") | Some("Int64") => "int64_t",
         None => "void",
         Some(_) => "int64_t",
+    }
+}
+
+fn runtime_identity_for_return_type(type_name: Option<&str>) -> Option<&'static str> {
+    match type_name {
+        Some("Bool") => Some("ailang_rt_identity_bool"),
+        Some("Int") | Some("Int64") => Some("ailang_rt_identity_i64"),
+        _ => None,
     }
 }

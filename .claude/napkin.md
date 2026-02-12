@@ -55,3 +55,4 @@
 - Updated `examples/hello/build/.gitignore` to ignore all generated build artifacts (including security_map) for a clean working tree.
 - Wired `ailang run` to build via `c-bin` and execute the produced binary; added clang-gated integration coverage.
 - Added M6 runtime ABI scaffolding: C backend now includes `ailang_runtime.h`, CLI writes runtime header/source into `build/`, and clang compiles generated + runtime translation units together.
+- Routed scalar C return paths through runtime ABI identity helpers (`ailang_rt_identity_i64` / `ailang_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
