@@ -1,0 +1,4 @@
+fn bad(input: Untrusted<String>) -> Int {
+  validate.email(input, input);
+  0
+}

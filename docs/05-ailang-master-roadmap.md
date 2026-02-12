@@ -282,6 +282,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - argument types must be `Ctx` and `Request`,
     - malformed arity/type calls emit `E4001` with `security` + `schema` tags.
   - req/res `c-bin` integration fixtures now thread explicit `ctx`/`req` symbols through `req.body(...)`, matching the hardened trust-boundary contract.
+  - Trust-gate arity contracts are now tightened:
+    - single-input trust gates (for example `validate.*`, `sanitize.*`, `url.*`, `cors.origin`) require exactly one argument,
+    - `path.under(...)` requires exactly two arguments,
+    - malformed arity calls emit tagged `E4001` diagnostics.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -652,6 +656,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Request Source Signature Hardening".
 - Chapter: "M7 Slice: path.base Signature Hardening".
 - Chapter: "M7 Slice: req.body Signature Hardening".
+- Chapter: "M7 Slice: Trust-Gate Arity Hardening".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

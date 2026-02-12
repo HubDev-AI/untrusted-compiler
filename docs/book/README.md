@@ -93,5 +93,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `125-m7-request-source-signature-hardening.md`
 - `126-m7-path-base-signature-hardening.md`
 - `127-m7-req-body-signature-hardening.md`
+- `128-m7-trust-gate-arity-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

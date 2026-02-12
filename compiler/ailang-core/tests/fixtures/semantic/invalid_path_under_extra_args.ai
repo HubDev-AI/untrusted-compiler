@@ -1,0 +1,4 @@
+fn bad(base: PathSafe, input: Untrusted<String>) -> Int {
+  path.under(base, input, input);
+  0
+}

@@ -1771,11 +1771,17 @@ impl Analyzer {
         }
 
         if is_untrusted_string_gate(callee_name) {
-            if args.is_empty() {
+            if args.len() != 1 {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "trust gate requires input argument", span.clone())
+                    Diagnostic::error(
+                        "E4001",
+                        "trust gate expects exactly one input argument",
+                        span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
                         .with_note(format!(
-                            "`{callee_name}` expects `Untrusted<String>` as its first argument"
+                            "`{callee_name}` call shape is `{callee_name}(input)`"
                         )),
                 );
                 return;
@@ -1788,6 +1794,8 @@ impl Analyzer {
                         "trust gate expects `Untrusted<String>` input",
                         args[0].span.clone(),
                     )
+                    .with_tag("security")
+                    .with_tag("schema")
                     .with_note(format!(
                         "`{callee_name}` requires first argument type `Untrusted<String>`"
                     ))
@@ -1797,11 +1805,17 @@ impl Analyzer {
         }
 
         if is_path_under_gate(callee_name) {
-            if args.len() < 2 {
+            if args.len() != 2 {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "path gate requires base path and input", span)
+                    Diagnostic::error(
+                        "E4001",
+                        "path gate expects exactly two arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
                         .with_note(format!(
-                            "`{callee_name}` expects `(PathSafe, Untrusted<String>)`"
+                            "`{callee_name}` call shape is `{callee_name}(base, input)`"
                         )),
                 );
                 return;
@@ -1814,6 +1828,8 @@ impl Analyzer {
                         "path gate expects `PathSafe` base",
                         args[0].span.clone(),
                     )
+                    .with_tag("security")
+                    .with_tag("schema")
                     .with_note(format!("`{callee_name}` first argument must be `PathSafe`"))
                     .with_note(format!("found `{}`", arg_types[0].describe())),
                 );
@@ -1826,6 +1842,8 @@ impl Analyzer {
                         "path gate expects `Untrusted<String>` input",
                         args[1].span.clone(),
                     )
+                    .with_tag("security")
+                    .with_tag("schema")
                     .with_note(format!(
                         "`{callee_name}` second argument must be `Untrusted<String>`"
                     ))

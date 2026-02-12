@@ -123,3 +123,4 @@
 - Added request-source signature hardening for `req.query`/`req.pathParam`/`req.header` (single `String` key argument), with schema/security-tagged diagnostics and updated req/res + cors integration fixtures.
 - Added `path.base` signature hardening (single `String` argument) with constructor diagnostics and updated gate integration fixtures to use explicit base-path literals.
 - Added `req.body` signature hardening (`req.body(ctx, request)` with typed `Ctx`/`Request` arguments) and updated req/res integration fixtures accordingly.
+- Tightened trust-gate arity contracts: single-input gates now require exactly one argument and `path.under` requires exactly two, with schema/security-tagged diagnostics and fixture coverage.
