@@ -850,6 +850,50 @@ Canonicalized origin notes already reported the final source call (for example `
 - this improves explainability while keeping diagnostics single-line and compact.
 - next step is exposing richer multi-step provenance (for example trace arrays) in editor tooling surfaces (hover/code actions/LSP diagnostics data).
 
+### Slice Explanation: Let-Bound Provenance Notes for Sink Diagnostics
+
+#### 1) What it is
+This slice adds scoped value-origin tracking in semantic analysis so sink diagnostics can explain provenance for identifier arguments, not only inline call expressions.
+
+#### 2) Why it exists
+Before this slice, diagnostics for `db.exec(cap, raw)` where `raw` was produced by a helper (`let raw = getRaw()`) only showed generic identifier type origin. That hid the trust-boundary path.
+
+#### 3) How it works internally
+- analyzer now keeps a scoped `value_origins` map during function-body analysis.
+- on each `let` binding, it infers/stores origin messages when the value comes from:
+  - call expressions (including callable-summary forwarding chains),
+  - identifier forwarding,
+  - selected member forwarding.
+- block analysis snapshots/restores origin state so shadowing and lexical scope stay deterministic.
+- sink-flow checks consume this map and upgrade identifier origin notes when available.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - function body statements/tail expressions,
+  - callable alias/forward summary context.
+- Output:
+  - improved diagnostic note text:
+    - from `origin: identifier raw carries type ...`
+    - to `origin: value comes from call req.query(...) via forwarding chain ...` when inferable.
+- Constraints:
+  - origin tracking is intentionally lightweight and text-oriented in v0.1-lite,
+  - it does not yet emit structured trace arrays in semantic diagnostics.
+
+#### 5) Failure modes and diagnostics
+- no new diagnostic codes were added.
+- if provenance cannot be inferred for a binding, diagnostics fall back to existing identifier/type-based origin notes.
+
+#### 6) Example usage
+- source:
+  - `let raw = getRaw();`
+  - `db.exec(cap, raw);`
+- diagnostic note now includes canonical source and helper chain:
+  - `origin: value comes from call req.query(...) via forwarding chain getRaw -> req.query`.
+
+#### 7) Tradeoffs and next steps
+- this raises explainability for common helper-and-variable flows with minimal analysis overhead.
+- next step is to expose the same provenance in structured diagnostic metadata for editor/LSP quick-fix tooling.
+
 ### Slice Explanation: Expiry-Window Aging Metrics and Severity Inputs in `sec.audit`
 
 #### 1) What it is

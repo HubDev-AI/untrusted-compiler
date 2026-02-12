@@ -248,6 +248,7 @@ struct Analyzer {
     catalog: Catalog,
     policy: Policy,
     callable_forward_summaries: HashMap<String, String>,
+    value_origins: HashMap<String, String>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -263,6 +264,7 @@ pub fn analyze_program_with_policy(
         catalog: Catalog::new(),
         policy: policy.clone(),
         callable_forward_summaries: HashMap::new(),
+        value_origins: HashMap::new(),
         diagnostics: Vec::new(),
     };
 
@@ -578,6 +580,7 @@ impl Analyzer {
             let mut used_effects = HashSet::new();
             let mut callable_aliases =
                 seed_callable_aliases_from_params(&function.params, &signature.params);
+            self.value_origins.clear();
             let body_type = self.analyze_block(
                 &function.body,
                 &mut env,
@@ -649,6 +652,7 @@ impl Analyzer {
     ) -> Type {
         let mut scoped = env.clone();
         let mut scoped_aliases = callable_aliases.clone();
+        let outer_value_origins = self.value_origins.clone();
 
         for stmt in &block.statements {
             self.analyze_statement(
@@ -660,11 +664,13 @@ impl Analyzer {
             );
         }
 
-        if let Some(tail) = &block.tail {
+        let result = if let Some(tail) = &block.tail {
             self.analyze_expr(tail, &mut scoped, used_effects, &mut scoped_aliases)
         } else {
             Type::Unit
-        }
+        };
+        self.value_origins = outer_value_origins;
+        result
     }
 
     fn analyze_statement(
@@ -709,6 +715,18 @@ impl Analyzer {
                     callable_aliases.insert(name.clone(), namespace.to_string());
                 } else {
                     callable_aliases.remove(name);
+                }
+
+                if let Some(origin) = infer_value_origin_message(
+                    value,
+                    &bound_type,
+                    callable_aliases,
+                    &self.callable_forward_summaries,
+                    &self.value_origins,
+                ) {
+                    self.value_origins.insert(name.clone(), origin);
+                } else {
+                    self.value_origins.remove(name);
                 }
             }
             StmtKind::Return { value } => {
@@ -989,7 +1007,14 @@ impl Analyzer {
             .iter()
             .map(|arg| self.analyze_expr(arg, env, used_effects, callable_aliases))
             .collect::<Vec<_>>();
-        self.enforce_sink_flow_restrictions(name.as_str(), args, &arg_types, callable_aliases);
+        let value_origins = self.value_origins.clone();
+        self.enforce_sink_flow_restrictions(
+            name.as_str(),
+            args,
+            &arg_types,
+            callable_aliases,
+            &value_origins,
+        );
 
         if let Some(signature) = self.catalog.functions.get(name.as_str()).cloned() {
             for effect in &signature.declared_effects {
@@ -1265,6 +1290,7 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
         callable_aliases: &HashMap<String, String>,
+        value_origins: &HashMap<String, String>,
     ) {
         let start_index = sink_user_arg_start_index(callee_name, args.len());
         for (index, (arg, arg_type)) in args.iter().zip(arg_types).enumerate() {
@@ -1291,6 +1317,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("use `redact(secret)` or remove the secret from log payload"),
                     );
@@ -1312,6 +1339,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("validate/sanitize input before constructing log payload"),
                     );
@@ -1343,6 +1371,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("return a redacted or derived non-secret value"),
                     );
@@ -1364,6 +1393,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("decode/validate input with schema before encoding"),
                     );
@@ -1390,6 +1420,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("use non-secret identifiers/values when building SqlQuery"),
                     );
@@ -1411,6 +1442,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("validate input and construct typed `SqlQuery`"),
                     );
@@ -1434,7 +1466,13 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type, callable_aliases, &self.callable_forward_summaries))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                            value_origins,
+                        ))
                         .with_note("derive a non-secret `PublicUrl`/`InternalUrl` through URL validation gates"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1455,6 +1493,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("validate input via `url.public(...)` / `url.internal(...)`"),
                     );
@@ -1481,6 +1520,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("use non-secret `PathSafe` values for filesystem operations"),
                     );
@@ -1504,6 +1544,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note("validate input via `path.under(...)` before filesystem access"),
                     );
@@ -1530,6 +1571,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note(
                             "use redacted/derived values and validated header or cookie builders",
@@ -1555,6 +1597,7 @@ impl Analyzer {
                             arg_type,
                             callable_aliases,
                             &self.callable_forward_summaries,
+                            value_origins,
                         ))
                         .with_note(
                             "validate via `validate.headerValue(...)` or typed cookie builders",
@@ -2531,37 +2574,27 @@ fn flow_origin_note(
     ty: &Type,
     callable_aliases: &HashMap<String, String>,
     callable_summaries: &HashMap<String, String>,
+    value_origins: &HashMap<String, String>,
 ) -> String {
     match &expr.kind {
-        ExprKind::Identifier(name) => {
-            format!(
-                "origin: identifier `{name}` carries type `{}`",
-                ty.describe()
-            )
-        }
-        ExprKind::Call { callee, .. } => {
-            if let Some(name) = resolve_callable_name(callee, callable_aliases) {
-                let chain = callable_summary_chain(name, callable_summaries);
-                let resolved = chain
-                    .last()
-                    .cloned()
-                    .unwrap_or_else(|| "<unknown>".to_string());
-                if chain.len() > 1 {
-                    format!(
-                        "origin: value comes from call `{resolved}(...)` via forwarding chain `{}`",
-                        chain.join(" -> ")
-                    )
-                } else {
-                    format!("origin: value comes from call `{resolved}(...)`")
-                }
-            } else if let Some(name) = callable_name(callee) {
-                format!("origin: value comes from call `{name}(...)`")
-            } else {
+        ExprKind::Identifier(name) => value_origins
+            .get(name)
+            .map(|origin| format!("origin: {origin}"))
+            .unwrap_or_else(|| {
                 format!(
-                    "origin: value comes from call expression of type `{}`",
+                    "origin: identifier `{name}` carries type `{}`",
                     ty.describe()
                 )
-            }
+            }),
+        ExprKind::Call { callee, .. } => {
+            infer_call_origin_message(callee, callable_aliases, callable_summaries)
+                .map(|origin| format!("origin: {origin}"))
+                .unwrap_or_else(|| {
+                    format!(
+                        "origin: value comes from call expression of type `{}`",
+                        ty.describe()
+                    )
+                })
         }
         ExprKind::Member { .. } => {
             format!(
@@ -2570,6 +2603,55 @@ fn flow_origin_note(
             )
         }
         _ => format!("origin: expression has type `{}`", ty.describe()),
+    }
+}
+
+fn infer_value_origin_message(
+    expr: &Expr,
+    ty: &Type,
+    callable_aliases: &HashMap<String, String>,
+    callable_summaries: &HashMap<String, String>,
+    value_origins: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => value_origins.get(name).cloned(),
+        ExprKind::Call { callee, .. } => {
+            infer_call_origin_message(callee, callable_aliases, callable_summaries)
+        }
+        ExprKind::Member { object, field } => {
+            let base = infer_value_origin_message(
+                object,
+                ty,
+                callable_aliases,
+                callable_summaries,
+                value_origins,
+            )?;
+            Some(format!("{base} via member `{field}`"))
+        }
+        _ => None,
+    }
+}
+
+fn infer_call_origin_message(
+    callee: &Expr,
+    callable_aliases: &HashMap<String, String>,
+    callable_summaries: &HashMap<String, String>,
+) -> Option<String> {
+    if let Some(name) = resolve_callable_name(callee, callable_aliases) {
+        let chain = callable_summary_chain(name, callable_summaries);
+        let resolved = chain.last().cloned().unwrap_or_else(|| "<unknown>".to_string());
+        if chain.len() > 1 {
+            Some(format!(
+                "value comes from call `{resolved}(...)` via forwarding chain `{}`",
+                chain.join(" -> ")
+            ))
+        } else {
+            Some(format!("value comes from call `{resolved}(...)`"))
+        }
+    } else if let Some(name) = callable_name(callee) {
+        Some(format!("value comes from call `{name}(...)`"))
+    } else {
+        None
     }
 }
 
