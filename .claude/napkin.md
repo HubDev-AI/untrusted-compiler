@@ -72,3 +72,4 @@
 - Added secrets intrinsic C-lowering coverage (`secrets.get`, `secrets.reveal`) with runtime stubs plus end-to-end `c-bin` coverage for `secrets.get` (non-forbidden default policy path).
 - Added validator/sanitizer/url/path gate intrinsic C-lowering coverage (`validate.*`, `sanitize.html`, `url.*`, `path.under`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added HTTP router intrinsic C-lowering coverage (`http.router/get/post/serve`) with runtime stubs and end-to-end `c-bin` integration tests.
+- Added `examples/hello-api` as an M7 bootstrap sample plus clang-gated `c-bin` integration coverage asserting router + req/res lowering in generated C.

@@ -888,6 +888,35 @@ fn run_command_executes_compiled_binary_when_clang_available() {
 }
 
 #[test]
+fn build_emit_c_bin_compiles_hello_api_example_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping hello-api c-bin integration test: clang not available");
+        return;
+    }
+
+    let hello_api_path = workspace_root().join("examples/hello-api");
+    let hello_api = hello_api_path
+        .to_str()
+        .expect("hello-api path should be valid utf-8");
+
+    let output = run_cli(&["build", "--path", hello_api, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "hello-api should compile through c-bin pipeline"
+    );
+
+    let generated_c = fs::read_to_string(hello_api_path.join("build").join("generated.c"))
+        .expect("generated C should exist for hello-api");
+    assert!(generated_c.contains("ailang_rt_http_router()"));
+    assert!(generated_c.contains("ailang_rt_req_json(schema)"));
+    assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
+    assert!(generated_c.contains("ailang_rt_res_html(1)"));
+
+    let binary_path = hello_api_path.join("build").join("hello-api");
+    assert!(binary_path.exists(), "hello-api binary should exist");
+}
+
+#[test]
 fn build_emit_mir_json_writes_only_json_on_stdout() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

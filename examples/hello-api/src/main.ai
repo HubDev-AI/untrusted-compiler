@@ -1,0 +1,18 @@
+fn health() effects { net } -> Int {
+  res.html(1);
+  0
+}
+
+fn createUser(schema: Schema<Int>) effects { net } -> Int {
+  req.json(schema);
+  res.json(schema, 1);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, 1, 1);
+  http.post(router, 1, 1);
+  http.serve(1, router);
+  0
+}
