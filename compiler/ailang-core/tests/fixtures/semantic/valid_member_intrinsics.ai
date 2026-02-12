@@ -1,4 +1,4 @@
 fn persist(cap: DbCap) effects { db.write } -> Int {
-  db.exec(cap);
+  db.exec(cap, "SELECT id FROM users");
   1
 }

@@ -1,3 +1,7 @@
 error[E2003]: operation requires capability
   --> invalid_member_missing_capability.ai:2:3
   note: `db.exec` requires argument 1 capability `DbCap`
+
+error[E4001]: db sink call has invalid argument shape
+  --> invalid_member_missing_capability.ai:2:3
+  note: use `db.exec(capability, query)` or `db.exec(ctx, capability, query)`

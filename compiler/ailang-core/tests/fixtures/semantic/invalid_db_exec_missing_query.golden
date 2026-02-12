@@ -1,0 +1,3 @@
+error[E4001]: db sink call has invalid argument shape
+  --> invalid_db_exec_missing_query.ai:2:3
+  note: use `db.exec(capability, query)` or `db.exec(ctx, capability, query)`

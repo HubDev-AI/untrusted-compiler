@@ -1,4 +1,4 @@
 fn bad(net: NetCap) effects { db.read } -> Int {
-  db_read(net);
+  db.queryOne(net, "SELECT id FROM users LIMIT 1", "Row");
   1
 }

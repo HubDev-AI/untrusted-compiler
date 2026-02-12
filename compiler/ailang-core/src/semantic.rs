@@ -1765,6 +1765,7 @@ impl Analyzer {
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2571,6 +2572,45 @@ impl Analyzer {
                 .with_note("use string base path values"),
             );
         }
+    }
+
+    fn enforce_db_query_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        let (is_target, valid_shape, note) = if is_db_exec_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 2 | 3),
+                "use `db.exec(capability, query)` or `db.exec(ctx, capability, query)`",
+            )
+        } else if is_db_exec_tx_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 2 | 3),
+                "use `db.execTx(tx, query)` or `db.execTx(ctx, tx, query)`",
+            )
+        } else if is_db_query_one_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 3 | 4),
+                "use `db.queryOne(capability, query, rowSchema)` or `db.queryOne(ctx, capability, query, rowSchema)`",
+            )
+        } else {
+            (false, true, "")
+        };
+
+        if !is_target || valid_shape {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                "E4001",
+                "db sink call has invalid argument shape",
+                span,
+            )
+            .with_tag("security")
+            .with_tag("sink")
+            .with_note(note),
+        );
     }
 
     fn bind_pattern(
@@ -3649,6 +3689,18 @@ fn is_req_header_call(name: &str) -> bool {
 
 fn is_path_base_call(name: &str) -> bool {
     matches!(name, "path_base" | "path.base")
+}
+
+fn is_db_exec_call(name: &str) -> bool {
+    matches!(name, "db_write" | "db.exec")
+}
+
+fn is_db_exec_tx_call(name: &str) -> bool {
+    matches!(name, "db_exec_tx" | "db.execTx")
+}
+
+fn is_db_query_one_call(name: &str) -> bool {
+    matches!(name, "db_read" | "db.queryOne")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

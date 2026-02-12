@@ -286,6 +286,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - single-input trust gates (for example `validate.*`, `sanitize.*`, `url.*`, `cors.origin`) require exactly one argument,
     - `path.under(...)` requires exactly two arguments,
     - malformed arity calls emit tagged `E4001` diagnostics.
+  - DB sink call-shape contracts are now hardened:
+    - `db.exec` requires `(capability, query)` or `(ctx, capability, query)`,
+    - `db.execTx` requires `(tx, query)` or `(ctx, tx, query)`,
+    - `db.queryOne` requires `(capability, query, rowSchema)` or `(ctx, capability, query, rowSchema)`,
+    - malformed shapes emit tagged `E4001` sink diagnostics.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -657,6 +662,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: path.base Signature Hardening".
 - Chapter: "M7 Slice: req.body Signature Hardening".
 - Chapter: "M7 Slice: Trust-Gate Arity Hardening".
+- Chapter: "M7 Slice: DB Sink Call-Shape Hardening".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
