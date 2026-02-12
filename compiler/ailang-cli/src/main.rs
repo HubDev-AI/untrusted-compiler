@@ -547,9 +547,33 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
 }
 
 fn cmd_run(path: &Path) -> Result<(), i32> {
-    cmd_check(path, None)?;
-    println!("run not implemented yet (M0): this command will execute compiled output in M6+");
-    Ok(())
+    let manifest = match ailang_core::validate_project(path) {
+        Ok(manifest) => manifest,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+
+    cmd_build(path, Some(BuildEmitTarget::CBin))?;
+
+    let binary_path = path.join("build").join(&manifest.package.name);
+    let status = match Command::new(&binary_path).status() {
+        Ok(status) => status,
+        Err(err) => {
+            eprintln!(
+                "could not execute binary `{}`: {err}",
+                binary_path.display()
+            );
+            return Err(2);
+        }
+    };
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(status.code().unwrap_or(1))
+    }
 }
 
 fn cmd_test(path: &Path) -> Result<(), i32> {

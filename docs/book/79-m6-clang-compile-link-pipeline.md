@@ -2,6 +2,8 @@
 
 This chapter documents the next M6 vertical slice: compiling emitted C into a runnable binary from the CLI.
 
+Follow-up run-command integration is documented in `docs/book/80-m6-run-command-via-c-bin.md`.
+
 ## Scope delivered
 - Added CLI emit target:
   - `ailang build --emit c-bin`
@@ -36,4 +38,4 @@ This chapter documents the next M6 vertical slice: compiling emitted C into a ru
 - C emission remains intentionally simple; richer ABI/runtime integration is still pending.
 
 ## Next step
-- Add runtime ABI integration and explicit intrinsic linking contracts so non-trivial stdlib/effectful programs can compile and run via the C backend.
+- Wire `ailang run` to execute binaries produced by the C compile pipeline.

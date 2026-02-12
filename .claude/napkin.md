@@ -53,3 +53,4 @@
 - Extended M6 with `build --emit c-bin`: writes generated C and compiles a runnable binary via `clang`.
 - Added `examples/hello/build/.gitignore` to keep generated C/binary artifacts out of git status while retaining `security_map.json`.
 - Updated `examples/hello/build/.gitignore` to ignore all generated build artifacts (including security_map) for a clean working tree.
+- Wired `ailang run` to build via `c-bin` and execute the produced binary; added clang-gated integration coverage.
