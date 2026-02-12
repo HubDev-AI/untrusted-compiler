@@ -716,6 +716,12 @@ fn infer_callable_alias(
 
 fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
     let tags = match name {
+        "withCors" | "cors_with" | "cors.withCors" => vec!["middleware.cors"],
+        "withSecurityHeaders" | "sec_with_security_headers" | "sec.withSecurityHeaders" => {
+            vec!["middleware.security_headers"]
+        }
+        "withCsrf" | "csrf_with" | "csrf.withCsrf" => vec!["middleware.csrf"],
+        "withAuth" | "auth_with" | "auth.withAuth" => vec!["middleware.auth"],
         "req_body" | "req.body" => vec!["source.http.body"],
         "req_query" | "req.query" => vec!["source.http.query"],
         "req_header" | "req.header" => vec!["source.http.header"],

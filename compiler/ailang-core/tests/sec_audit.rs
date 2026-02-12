@@ -32,6 +32,85 @@ fn boot() -> Int {
 }
 
 #[test]
+fn sec_audit_includes_sample_calls_for_cors_headers_and_csrf_auth_findings() {
+    let source = r#"
+fn boot() -> Int {
+  withSecurityHeaders();
+  withCors();
+  withCsrf();
+  withAuth();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mut policy = Policy::default();
+    policy.cors.allowed_origins = vec!["*".to_string()];
+    policy.cors.allow_credentials = false;
+    policy.cors.forbid_any_origin = false;
+    policy.security_headers.csp_enabled = false;
+    policy.auth.mode = "cookie".to_string();
+    policy.auth.cross_site_frontend = true;
+    policy.csrf.enabled = false;
+
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let cors_any = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CORS_ANY_ORIGIN")
+        .expect("CORS_ANY_ORIGIN finding should be present");
+    let cors_samples = cors_any
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("CORS_ANY_ORIGIN should include sampleCalls");
+    assert!(cors_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "withCors" | "cors.withCors"))
+    }));
+
+    let csp_disabled = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CSP_DISABLED")
+        .expect("CSP_DISABLED finding should be present");
+    let csp_samples = csp_disabled
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("CSP_DISABLED should include sampleCalls");
+    assert!(csp_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| {
+                matches!(callee, "withSecurityHeaders" | "sec.withSecurityHeaders")
+            })
+    }));
+
+    let csrf_missing = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CSRF_REQUIRED_BUT_DISABLED")
+        .expect("CSRF_REQUIRED_BUT_DISABLED finding should be present");
+    let csrf_samples = csrf_missing
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("CSRF_REQUIRED_BUT_DISABLED should include sampleCalls");
+    assert!(csrf_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "withAuth" | "auth.withAuth"))
+    }));
+}
+
+#[test]
 fn sec_audit_flags_critical_internal_net_and_secret_reveal_usage() {
     let source = r#"
 fn risky() -> Int {

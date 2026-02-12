@@ -266,7 +266,11 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CORS_CREDENTIALS_WITH_WILDCARD",
             AuditSeverity::CRITICAL,
             "cors",
-            json!({"allowCredentials": true, "wildcard": true}),
+            json!({
+                "allowCredentials": true,
+                "wildcard": true,
+                "sampleCalls": call_samples_for_tag(security_map, "middleware.cors", 5),
+            }),
             "Use explicit allowed origins; wildcard cannot be combined with credentials.",
         ));
     }
@@ -276,7 +280,11 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CORS_ANY_ORIGIN",
             AuditSeverity::MEDIUM,
             "cors",
-            json!({"wildcard": true, "allowCredentials": false}),
+            json!({
+                "wildcard": true,
+                "allowCredentials": false,
+                "sampleCalls": call_samples_for_tag(security_map, "middleware.cors", 5),
+            }),
             "Prefer explicit origin allowlist even when credentials are disabled.",
         ));
     }
@@ -290,7 +298,10 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CORS_VARY_ORIGIN_MISSING",
             AuditSeverity::LOW,
             "cors",
-            json!({"requireVaryOrigin": true}),
+            json!({
+                "requireVaryOrigin": true,
+                "sampleCalls": call_samples_for_tag(security_map, "middleware.cors", 5),
+            }),
             "Ensure CORS middleware emits Vary: Origin for allowlist origin mode.",
         ));
     }
@@ -300,7 +311,14 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CSP_DISABLED",
             AuditSeverity::HIGH,
             "headers",
-            json!({"cspEnabled": false}),
+            json!({
+                "cspEnabled": false,
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
             "Enable CSP in security_headers policy (report-only can be used for rollout).",
         ));
     }
@@ -315,7 +333,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CSP_REPORT_ONLY",
             severity,
             "headers",
-            json!({"reportOnly": true, "env": policy.env}),
+            json!({
+                "reportOnly": true,
+                "env": policy.env,
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
             "Use report-only temporarily, then enforce CSP in production.",
         ));
     }
@@ -325,7 +351,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "HSTS_DISABLED_IN_PROD",
             AuditSeverity::MEDIUM,
             "headers",
-            json!({"hstsEnabled": false, "env": "prod"}),
+            json!({
+                "hstsEnabled": false,
+                "env": "prod",
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
             "Enable HSTS for HTTPS production deployments.",
         ));
     }
@@ -335,7 +369,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CSRF_REQUIRED_BUT_DISABLED",
             AuditSeverity::HIGH,
             "csrf",
-            json!({"authMode": policy.auth.mode, "csrfEnabled": false}),
+            json!({
+                "authMode": policy.auth.mode,
+                "csrfEnabled": false,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["middleware.auth", "middleware.csrf"],
+                    5,
+                ),
+            }),
             "Enable CSRF for cookie/mixed auth or switch to token-only auth mode.",
         ));
     }
@@ -348,7 +390,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "COOKIE_CROSS_SITE_WITHOUT_CORS_CREDS",
             AuditSeverity::MEDIUM,
             "cors",
-            json!({"crossSiteFrontend": true, "allowCredentials": false}),
+            json!({
+                "crossSiteFrontend": true,
+                "allowCredentials": false,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["middleware.cors", "middleware.auth"],
+                    5,
+                ),
+            }),
             "Enable CORS credentials for cross-site cookie authentication.",
         ));
     }
@@ -361,7 +411,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN",
             AuditSeverity::HIGH,
             "cors",
-            json!({"crossSiteFrontend": true, "wildcard": true}),
+            json!({
+                "crossSiteFrontend": true,
+                "wildcard": true,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["middleware.cors", "middleware.auth"],
+                    5,
+                ),
+            }),
             "Cross-site cookie auth requires explicit CORS origin allowlist.",
         ));
     }
@@ -371,7 +429,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "COOKIE_SAMESITE_NONE_WITHOUT_SECURE",
             AuditSeverity::HIGH,
             "csrf",
-            json!({"sameSite": "None", "secureCookie": false}),
+            json!({
+                "sameSite": "None",
+                "secureCookie": false,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["middleware.csrf", "middleware.auth"],
+                    5,
+                ),
+            }),
             "Set secure_cookie=true when same_site is None.",
         ));
     }

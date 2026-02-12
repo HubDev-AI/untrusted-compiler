@@ -60,6 +60,22 @@ fn boot() -> Int {
         .calls
         .iter()
         .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.cors")));
+    assert!(map.calls.iter().any(|call| call
+        .tags
+        .iter()
+        .any(|tag| tag == "middleware.security_headers")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.csrf")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.auth")));
     assert!(map.calls.iter().any(|call| {
         call.callee == "res.json"
             && call

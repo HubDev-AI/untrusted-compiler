@@ -160,6 +160,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `CAPTURE_REDACTION_INCOMPLETE`
     - `CAPTURE_ALL_IN_PROD`
     - `REPLAY_EFFECTS_ALLOW`
+    - CORS/security-headers/auth/CSRF posture findings via middleware-tagged sample callsites
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
 - Added context-first stdlib capability signature support:
@@ -291,10 +292,48 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 - `SQL_SELECT_WITHOUT_LIMIT` evidence now includes callsite objects like:
   - `{ callee: "db.exec", location: { file, line, column }, argRoles: [...] }`
 - `SECRETS_REVEAL_USED` evidence now includes reveal callsite samples for triage.
+- `CORS_ANY_ORIGIN` evidence now includes router middleware callsites (for example `withCors`).
 
 #### 7) Tradeoffs and next steps
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
-- Next step is to expand sample evidence coverage to additional high-signal findings (for example CORS/security-headers and auth/CSRF coupling posture families).
+- Next step is to expand evidence coverage for remaining policy/exception hygiene findings with similarly deterministic samples.
+
+### Slice Explanation: Middleware-Tagged Posture Evidence in `sec.audit`
+
+#### 1) What it is
+This slice extends `sec.audit` evidence to include middleware-tagged `sampleCalls` for CORS, security-headers, and auth/CSRF posture findings.
+
+#### 2) Why it exists
+Posture findings previously showed only policy state, without concrete code locations that configured router security. Middleware-tagged samples make these findings actionable.
+
+#### 3) How it works internally
+- `security_map.call_tags_for` now tags middleware bootstrap calls:
+  - `middleware.cors`
+  - `middleware.security_headers`
+  - `middleware.csrf`
+  - `middleware.auth`
+- `run_security_audit` now attaches `sampleCalls` for posture findings by selecting these tags.
+- coupling findings (for example cross-site cookie auth) sample across multiple middleware tags to preserve context.
+
+#### 4) Inputs/outputs and constraints
+- Input: middleware call tags in `SecurityMap.calls` plus policy posture.
+- Output: finding evidence includes bounded middleware call samples.
+- Constraints:
+  - if middleware is configured externally and not present in source, samples may be empty,
+  - sampling remains bounded and deterministic.
+
+#### 5) Failure modes and diagnostics
+- this slice does not change compile-time diagnostics.
+- missing middleware call tags only affects evidence richness; finding detection still runs from policy posture.
+
+#### 6) Example usage
+- `CORS_ANY_ORIGIN` now carries `sampleCalls` with `withCors` / `cors.withCors` callsites.
+- `CSP_DISABLED` now carries `sampleCalls` with `withSecurityHeaders` callsites.
+- `CSRF_REQUIRED_BUT_DISABLED` now carries `sampleCalls` from `withAuth`/`withCsrf` context.
+
+#### 7) Tradeoffs and next steps
+- evidence is still callsite-centric; it does not yet include middleware attribute diffs per call in findings.
+- next step is extending deterministic evidence to policy/exception hygiene families where location context is available.
 
 ### Slice Explanation: Context-First Stdlib Capability Signatures
 
