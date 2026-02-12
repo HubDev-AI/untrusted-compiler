@@ -128,3 +128,4 @@
 - Added net sink arity hardening for `httpClient.get` / `httpClient.getInternal` so URL arguments are required in compact and context-first forms, with sink-tagged diagnostics.
 - Added FS sink arity hardening for `fs.read` / `fs.write` so path/payload arguments are required in compact and context-first forms, with sink-tagged diagnostics.
 - Added `secrets.get` arity hardening so secret-name arguments are required in compact and context-first forms, with secret-tagged diagnostics.
+- Added `secrets.redact` arity hardening so exactly one secret argument is required, with secret-tagged diagnostics.
