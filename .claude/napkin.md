@@ -88,3 +88,4 @@
 - Added typed CORS origin gate bridge (`cors.origin`) with semantic gate enforcement, runtime lowering, security-map tags, and `c-bin` integration coverage.
 - Added CSRF token-issue helper bridge (`csrf.issueToken`) with `net` effect semantics, runtime lowering, security-map effect tag, and `c-bin` integration coverage.
 - Added CSP builder bridge (`sec.csp`, `sec.cspAdd`) and security-config surface type-name catalog so spec-shaped config signatures compile through `c-bin`.
+- Added structured log builder bridge (`log.event/field/obj/str/i64/bool/redacted`) so spec logging constructors compile through semantic + runtime bridge.

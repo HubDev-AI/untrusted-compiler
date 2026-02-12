@@ -2250,6 +2250,13 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "log_event" | "log.event" | "log_field" | "log.field" | "log_obj" | "log.obj"
+        | "log_str" | "log.str" | "log_i64" | "log.i64" | "log_bool" | "log.bool"
+        | "log_redacted" | "log.redacted" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("LogValue"),
+        }),
         "http_router" | "http.router" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,

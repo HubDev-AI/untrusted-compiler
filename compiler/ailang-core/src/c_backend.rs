@@ -187,6 +187,20 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("log_warn(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("log_error(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("log_emit(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log.event(", "__AILANG_INTRINSIC_LOG_EVENT__(");
+    lowered = lowered.replace("log_event(", "__AILANG_INTRINSIC_LOG_EVENT__(");
+    lowered = lowered.replace("log.field(", "__AILANG_INTRINSIC_LOG_FIELD__(");
+    lowered = lowered.replace("log_field(", "__AILANG_INTRINSIC_LOG_FIELD__(");
+    lowered = lowered.replace("log.obj(", "__AILANG_INTRINSIC_LOG_OBJ__(");
+    lowered = lowered.replace("log_obj(", "__AILANG_INTRINSIC_LOG_OBJ__(");
+    lowered = lowered.replace("log.str(", "__AILANG_INTRINSIC_LOG_STR__(");
+    lowered = lowered.replace("log_str(", "__AILANG_INTRINSIC_LOG_STR__(");
+    lowered = lowered.replace("log.i64(", "__AILANG_INTRINSIC_LOG_I64__(");
+    lowered = lowered.replace("log_i64(", "__AILANG_INTRINSIC_LOG_I64__(");
+    lowered = lowered.replace("log.bool(", "__AILANG_INTRINSIC_LOG_BOOL__(");
+    lowered = lowered.replace("log_bool(", "__AILANG_INTRINSIC_LOG_BOOL__(");
+    lowered = lowered.replace("log.redacted(", "__AILANG_INTRINSIC_LOG_REDACTED__(");
+    lowered = lowered.replace("log_redacted(", "__AILANG_INTRINSIC_LOG_REDACTED__(");
     lowered = lowered.replace("req.json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("req.body(", "__AILANG_INTRINSIC_REQ_BODY__(");
@@ -314,6 +328,16 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("auth_require(", "__AILANG_INTRINSIC_AUTH_REQUIRE__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_EVENT__(", "ailang_rt_log_event(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_FIELD__(", "ailang_rt_log_field(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_OBJ__(", "ailang_rt_log_obj(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_STR__(", "ailang_rt_log_str(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_I64__(", "ailang_rt_log_i64(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_BOOL__(", "ailang_rt_log_bool(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_LOG_REDACTED__(",
+        "ailang_rt_log_redacted(",
+    );
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_BODY__(", "ailang_rt_req_body(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_QUERY__(", "ailang_rt_req_query(");

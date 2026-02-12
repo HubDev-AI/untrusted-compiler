@@ -15,6 +15,34 @@ int64_t ailang_rt_time_now(void) {
 void ailang_rt_log_any() {
 }
 
+int64_t ailang_rt_log_event() {
+  return 0;
+}
+
+int64_t ailang_rt_log_field() {
+  return 0;
+}
+
+int64_t ailang_rt_log_obj() {
+  return 0;
+}
+
+int64_t ailang_rt_log_str() {
+  return 0;
+}
+
+int64_t ailang_rt_log_i64() {
+  return 0;
+}
+
+int64_t ailang_rt_log_bool() {
+  return 0;
+}
+
+int64_t ailang_rt_log_redacted() {
+  return 0;
+}
+
 int64_t ailang_rt_req_json() {
   return 0;
 }

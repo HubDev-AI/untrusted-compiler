@@ -72,6 +72,13 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("bool ailang_rt_identity_bool(bool value);"));
     assert!(header.contains("int64_t ailang_rt_time_now(void);"));
     assert!(header.contains("void ailang_rt_log_any();"));
+    assert!(header.contains("int64_t ailang_rt_log_event();"));
+    assert!(header.contains("int64_t ailang_rt_log_field();"));
+    assert!(header.contains("int64_t ailang_rt_log_obj();"));
+    assert!(header.contains("int64_t ailang_rt_log_str();"));
+    assert!(header.contains("int64_t ailang_rt_log_i64();"));
+    assert!(header.contains("int64_t ailang_rt_log_bool();"));
+    assert!(header.contains("int64_t ailang_rt_log_redacted();"));
     assert!(header.contains("int64_t ailang_rt_req_json();"));
     assert!(header.contains("int64_t ailang_rt_req_body();"));
     assert!(header.contains("int64_t ailang_rt_req_query();"));
@@ -124,6 +131,13 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("bool ailang_rt_identity_bool(bool value)"));
     assert!(source.contains("int64_t ailang_rt_time_now(void)"));
     assert!(source.contains("void ailang_rt_log_any()"));
+    assert!(source.contains("int64_t ailang_rt_log_event()"));
+    assert!(source.contains("int64_t ailang_rt_log_field()"));
+    assert!(source.contains("int64_t ailang_rt_log_obj()"));
+    assert!(source.contains("int64_t ailang_rt_log_str()"));
+    assert!(source.contains("int64_t ailang_rt_log_i64()"));
+    assert!(source.contains("int64_t ailang_rt_log_bool()"));
+    assert!(source.contains("int64_t ailang_rt_log_redacted()"));
     assert!(source.contains("int64_t ailang_rt_req_json()"));
     assert!(source.contains("int64_t ailang_rt_req_body()"));
     assert!(source.contains("int64_t ailang_rt_req_query()"));
@@ -201,6 +215,41 @@ fn main() effects { log } -> Int {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("(void)(ailang_rt_log_any(1));"));
+}
+
+#[test]
+fn c_backend_rewrites_log_builder_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  let event = log.event(1);
+  let field = log.field(1, 2);
+  let obj = log.obj(1);
+  let text = log.str(1);
+  let num = log.i64(1);
+  let flag = log.bool(1);
+  let secret = log.redacted(1);
+  event;
+  field;
+  obj;
+  text;
+  num;
+  flag;
+  secret;
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("ailang_rt_log_event(1);"));
+    assert!(c.contains("ailang_rt_log_field(1, 2);"));
+    assert!(c.contains("ailang_rt_log_obj(1);"));
+    assert!(c.contains("ailang_rt_log_str(1);"));
+    assert!(c.contains("ailang_rt_log_i64(1);"));
+    assert!(c.contains("ailang_rt_log_bool(1);"));
+    assert!(c.contains("ailang_rt_log_redacted(1);"));
 }
 
 #[test]
