@@ -59,3 +59,4 @@
 - Routed scalar C return paths through runtime ABI identity helpers (`ailang_rt_identity_i64` / `ailang_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
 - Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `ailang_rt_time_now` with runtime stub coverage and C emitter tests.
 - Added non-trivial `c-bin` integration coverage using a temp project fixture with helper-function call + `if/else` control flow.
+- Moved runtime ABI C sources from Rust string literals into `runtime/c/` files and switched emitter helpers to `include_str!` those canonical runtime assets.

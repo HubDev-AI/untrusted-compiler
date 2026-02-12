@@ -26,35 +26,11 @@ pub fn emit_c_program(program: &MirProgram) -> String {
 }
 
 pub fn emit_runtime_header() -> &'static str {
-    r#"#ifndef AILANG_RUNTIME_H
-#define AILANG_RUNTIME_H
-
-#include <stdbool.h>
-#include <stdint.h>
-
-int64_t ailang_rt_identity_i64(int64_t value);
-bool ailang_rt_identity_bool(bool value);
-int64_t ailang_rt_time_now(void);
-
-#endif
-"#
+    include_str!("../../../runtime/c/ailang_runtime.h")
 }
 
 pub fn emit_runtime_source() -> &'static str {
-    r#"#include "ailang_runtime.h"
-
-int64_t ailang_rt_identity_i64(int64_t value) {
-  return value;
-}
-
-bool ailang_rt_identity_bool(bool value) {
-  return value;
-}
-
-int64_t ailang_rt_time_now(void) {
-  return 0;
-}
-"#
+    include_str!("../../../runtime/c/ailang_runtime.c")
 }
 
 fn render_function(out: &mut String, function: &MirFunction) {
