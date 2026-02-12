@@ -1051,6 +1051,7 @@ impl Analyzer {
     ) -> Option<String> {
         let name = resolve_callable_name(expr, callable_aliases)?;
         if intrinsic_spec_for(name.as_str()).is_some()
+            || is_intrinsic_namespace(name.as_str())
             || self.catalog.functions.contains_key(name.as_str())
         {
             Some(name)
@@ -2048,12 +2049,50 @@ fn resolve_callable_name(
 fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, String>) -> String {
     let mut seen = HashSet::new();
     while seen.insert(name.clone()) {
-        let Some(next) = callable_aliases.get(name.as_str()) else {
+        if let Some(next) = callable_aliases.get(name.as_str()) {
+            name = next.clone();
+            continue;
+        }
+
+        let Some((head, tail)) = name.split_once('.') else {
             break;
         };
-        name = next.clone();
+        let resolved_head = resolve_alias_atom(head, callable_aliases);
+        if resolved_head == head {
+            break;
+        }
+        name = format!("{resolved_head}.{tail}");
     }
     name
+}
+
+fn resolve_alias_atom(name: &str, callable_aliases: &HashMap<String, String>) -> String {
+    let mut current = name.to_string();
+    let mut seen = HashSet::new();
+    while seen.insert(current.clone()) {
+        let Some(next) = callable_aliases.get(current.as_str()) else {
+            break;
+        };
+        current = next.clone();
+    }
+    current
+}
+
+fn is_intrinsic_namespace(name: &str) -> bool {
+    matches!(
+        name,
+        "db" | "fs"
+            | "httpClient"
+            | "log"
+            | "path"
+            | "req"
+            | "res"
+            | "sanitize"
+            | "secrets"
+            | "time"
+            | "url"
+            | "validate"
+    )
 }
 
 fn is_log_sink(name: &str) -> bool {

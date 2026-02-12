@@ -681,7 +681,10 @@ fn infer_callable_alias(
     summaries: &HashMap<String, FunctionOriginSummary>,
 ) -> Option<String> {
     let name = resolve_callable_name(expr, callable_aliases)?;
-    if call_tags_for(name.as_str()).is_some() || summaries.contains_key(name.as_str()) {
+    if call_tags_for(name.as_str()).is_some()
+        || is_tagged_call_namespace(name.as_str())
+        || summaries.contains_key(name.as_str())
+    {
         Some(name)
     } else {
         None
@@ -1363,12 +1366,56 @@ fn resolve_callable_name(
 fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, String>) -> String {
     let mut seen = HashSet::new();
     while seen.insert(name.clone()) {
-        let Some(next) = callable_aliases.get(name.as_str()) else {
+        if let Some(next) = callable_aliases.get(name.as_str()) {
+            name = next.clone();
+            continue;
+        }
+
+        let Some((head, tail)) = name.split_once('.') else {
             break;
         };
-        name = next.clone();
+        let resolved_head = resolve_alias_atom(head, callable_aliases);
+        if resolved_head == head {
+            break;
+        }
+        name = format!("{resolved_head}.{tail}");
     }
     name
+}
+
+fn resolve_alias_atom(name: &str, callable_aliases: &HashMap<String, String>) -> String {
+    let mut current = name.to_string();
+    let mut seen = HashSet::new();
+    while seen.insert(current.clone()) {
+        let Some(next) = callable_aliases.get(current.as_str()) else {
+            break;
+        };
+        current = next.clone();
+    }
+    current
+}
+
+fn is_tagged_call_namespace(name: &str) -> bool {
+    matches!(
+        name,
+        "auth"
+            | "cors"
+            | "csrf"
+            | "db"
+            | "fs"
+            | "http"
+            | "httpClient"
+            | "log"
+            | "path"
+            | "req"
+            | "res"
+            | "sanitize"
+            | "sec"
+            | "secrets"
+            | "time"
+            | "url"
+            | "validate"
+    )
 }
 
 fn find_matching_paren(source: &str, open_paren_index: usize) -> Option<usize> {

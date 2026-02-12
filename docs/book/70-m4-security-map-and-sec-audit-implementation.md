@@ -175,6 +175,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - semantic member-expression handling now avoids false `unknown identifier` diagnostics for intrinsic symbol references in alias bindings
   - `security_map` now resolves alias-invoked callsites to canonical callees and preserves tags/arg-roles/origin-edges
   - semantic and security-map tests now cover alias-invoked intrinsic calls
+  - member alias paths are now canonicalized as well (for example `let repo = db; repo.exec(...)` -> `db.exec(...)`)
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -370,7 +371,44 @@ Without alias resolution, code like `let exec = db.exec; exec(...)` bypasses can
 
 #### 7) Tradeoffs and next steps
 - current alias support is lexical and local, without cross-function symbol-table propagation.
-- next step is to extend typed symbol metadata to deeper value-call patterns (for example capability-object function fields).
+- next step is to extend typed symbol metadata through deeper interprocedural value-call forwarding.
+
+### Slice Explanation: Typed Symbol Resolution for Member Alias Value Calls
+
+#### 1) What it is
+This slice extends alias-aware call resolution from direct callable aliases to member value-call aliases such as `let repo = db; repo.exec(...)`.
+
+#### 2) Why it exists
+Without member alias canonicalization, capability/effect/sink checks could miss real stdlib sink calls when the callee is reached through a value alias plus member access.
+
+#### 3) How it works internally
+- alias inference now accepts typed stdlib namespace stems as alias targets (for example `db`, `fs`, `secrets`).
+- callee resolution now supports dotted prefix alias rewrites:
+  - if a direct alias exists, it is resolved first.
+  - otherwise, for dotted names, the head segment is alias-resolved and the full callee is rebuilt (for example `repo.exec` -> `db.exec`).
+- the same resolution path is implemented in both semantic analysis and `security_map` collection/origin inference.
+
+#### 4) Inputs/outputs and constraints
+- Input: local value aliases whose callsites are member expressions.
+- Output: canonical callee names for enforcement and metadata (`db.exec` instead of `repo.exec`).
+- Constraints:
+  - resolution remains lexical and local-scope,
+  - namespace matching is currently stdlib-family based.
+
+#### 5) Failure modes and diagnostics
+- capability mismatches continue to emit `E2004`, now also for member alias forms.
+- unresolved member alias paths fall back to existing unknown-call behavior (no false positive sink tagging).
+
+#### 6) Example usage
+- valid:
+  - `let repo = db;`
+  - `repo.exec(dbCap, "SELECT id FROM users");`
+- invalid:
+  - `repo.exec(netCap, "SELECT id FROM users");` -> `E2004` (expects `DbCap`).
+
+#### 7) Tradeoffs and next steps
+- current namespace stem detection is explicit and conservative.
+- next step is deeper value-call forwarding across function boundaries and richer callable-value shapes.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -394,7 +432,7 @@ Without alias resolution, code like `let exec = db.exec; exec(...)` bypasses can
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Expand typed stdlib symbol metadata from local alias calls into richer value-call patterns (for example capability-object function fields).
+1. Expand typed stdlib symbol metadata from local/member alias calls into deeper interprocedural forwarding paths.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Extend source-origin tracing beyond local bindings into interprocedural call chains.
