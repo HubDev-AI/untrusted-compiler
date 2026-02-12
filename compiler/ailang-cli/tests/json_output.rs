@@ -917,6 +917,31 @@ fn build_emit_c_bin_compiles_hello_api_example_when_clang_available() {
 }
 
 #[test]
+fn run_command_executes_hello_api_example_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping hello-api run integration test: clang not available");
+        return;
+    }
+
+    let hello_api_path = workspace_root().join("examples/hello-api");
+    let hello_api = hello_api_path
+        .to_str()
+        .expect("hello-api path should be valid utf-8");
+
+    let output = run_cli(&["run", "--path", hello_api]);
+    assert!(
+        output.status.success(),
+        "run command should succeed for hello-api example"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("compiled binary:"),
+        "run command should compile hello-api through c-bin pipeline"
+    );
+}
+
+#[test]
 fn build_emit_mir_json_writes_only_json_on_stdout() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

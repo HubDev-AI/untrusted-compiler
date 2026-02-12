@@ -73,3 +73,4 @@
 - Added validator/sanitizer/url/path gate intrinsic C-lowering coverage (`validate.*`, `sanitize.html`, `url.*`, `path.under`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added HTTP router intrinsic C-lowering coverage (`http.router/get/post/serve`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added `examples/hello-api` as an M7 bootstrap sample plus clang-gated `c-bin` integration coverage asserting router + req/res lowering in generated C.
+- Added `ailang run` integration coverage for `examples/hello-api` so both build and run flows are pinned for the bootstrap API sample.
