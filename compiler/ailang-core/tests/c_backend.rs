@@ -80,6 +80,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_log_bool();"));
     assert!(header.contains("int64_t ailang_rt_log_redacted();"));
     assert!(header.contains("int64_t ailang_rt_req_json();"));
+    assert!(header.contains("int64_t ailang_rt_json_decode();"));
+    assert!(header.contains("int64_t ailang_rt_json_encode();"));
     assert!(header.contains("int64_t ailang_rt_req_body();"));
     assert!(header.contains("int64_t ailang_rt_req_query();"));
     assert!(header.contains("int64_t ailang_rt_req_path_param();"));
@@ -143,6 +145,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_log_bool()"));
     assert!(source.contains("int64_t ailang_rt_log_redacted()"));
     assert!(source.contains("int64_t ailang_rt_req_json()"));
+    assert!(source.contains("int64_t ailang_rt_json_decode()"));
+    assert!(source.contains("int64_t ailang_rt_json_encode()"));
     assert!(source.contains("int64_t ailang_rt_req_body()"));
     assert!(source.contains("int64_t ailang_rt_req_query()"));
     assert!(source.contains("int64_t ailang_rt_req_path_param()"));
@@ -291,6 +295,24 @@ fn main() effects { net } -> Int {
     assert!(c.contains("(void)(ailang_rt_res_ok(201, schema, 1));"));
     assert!(c.contains("(void)(ailang_rt_res_ok_meta(201, schema, 1, 2));"));
     assert!(c.contains("(void)(ailang_rt_res_html(1));"));
+}
+
+#[test]
+fn c_backend_rewrites_json_helper_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  json.decode(1, 2, 3);
+  json.encode(2, 3);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_json_decode(1, 2, 3));"));
+    assert!(c.contains("(void)(ailang_rt_json_encode(2, 3));"));
 }
 
 #[test]

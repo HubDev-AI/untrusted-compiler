@@ -168,6 +168,7 @@ impl Catalog {
             "Float64",
             "Decimal",
             "String",
+            "Json",
             "Bytes",
             "Time",
             "Duration",
@@ -2365,6 +2366,16 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "json_decode" | "json.decode" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "json_encode" | "json.encode" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Json"),
+        }),
         "res_json" | "res.json" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
@@ -2638,6 +2649,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
         "db" | "fs"
             | "http"
             | "httpClient"
+            | "json"
             | "log"
             | "path"
             | "headers"

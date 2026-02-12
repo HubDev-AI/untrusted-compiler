@@ -1049,6 +1049,8 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "req_json" | "req.json" => {
             vec!["source.http.body", "gate.schema.json_decode", "effect.net"]
         }
+        "json_decode" | "json.decode" => vec!["gate.schema.json_decode"],
+        "json_encode" | "json.encode" => vec!["sink.json.encode"],
         "validate_header_value" | "validate.headerValue" => vec!["gate.header.value"],
         "validate_email" | "validate.email" => vec!["gate.validate.email"],
         "validate_uuid" | "validate.uuid" => vec!["gate.validate.uuid"],
@@ -1307,6 +1309,16 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["value"]
             }
         }
+        "json_decode" | "json.decode" => {
+            if arg_count >= 3 {
+                vec!["context", "schema", "raw"]
+            } else if arg_count >= 2 {
+                vec!["schema", "raw"]
+            } else {
+                vec!["raw"]
+            }
+        }
+        "json_encode" | "json.encode" => vec!["schema", "value"],
         "path_base" | "path.base" => vec!["path"],
         "headers_name" | "headers.name" => vec!["name"],
         "headers_value" | "headers.value" => vec!["value"],
@@ -1624,10 +1636,14 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
                 ("effect.net", TagKind::Effect),
             ],
         ),
+        symbol("json_decode", &[("gate.schema.json_decode", TagKind::Gate)]),
+        symbol("json_encode", &[("sink.json.encode", TagKind::Sink)]),
         symbol("req.body", &[("source.http.body", TagKind::Source)]),
         symbol("req.query", &[("source.http.query", TagKind::Source)]),
         symbol("req.header", &[("source.http.header", TagKind::Source)]),
         symbol("req.pathParam", &[("source.http.path", TagKind::Source)]),
+        symbol("json.decode", &[("gate.schema.json_decode", TagKind::Gate)]),
+        symbol("json.encode", &[("sink.json.encode", TagKind::Sink)]),
         symbol(
             "res.json",
             &[("sink.json.encode_http_response", TagKind::Sink)],

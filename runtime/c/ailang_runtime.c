@@ -47,6 +47,14 @@ int64_t ailang_rt_req_json() {
   return 0;
 }
 
+int64_t ailang_rt_json_decode() {
+  return 0;
+}
+
+int64_t ailang_rt_json_encode() {
+  return 0;
+}
+
 int64_t ailang_rt_req_body() {
   return 0;
 }

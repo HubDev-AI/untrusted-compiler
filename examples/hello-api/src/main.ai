@@ -18,6 +18,8 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
   cors.origin(origin);
   path.under(base, origin);
   req.json(schema);
+  json.decode(1, schema, 1);
+  json.encode(schema, 1);
   res.json(schema, 1);
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);

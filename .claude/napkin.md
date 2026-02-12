@@ -90,3 +90,4 @@
 - Added CSP builder bridge (`sec.csp`, `sec.cspAdd`) and security-config surface type-name catalog so spec-shaped config signatures compile through `c-bin`.
 - Added structured log builder bridge (`log.event/field/obj/str/i64/bool/redacted`) so spec logging constructors compile through semantic + runtime bridge.
 - Added helper bridge for `path.base`, `headers.name/value`, and `secrets.redact`, including runtime ABI stubs and `security_map` gate tags.
+- Added JSON helper bridge for `json.decode` / `json.encode` plus `Json` primitive type support and `security_map` gate/sink tagging.

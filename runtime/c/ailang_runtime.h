@@ -16,6 +16,8 @@ int64_t ailang_rt_log_i64();
 int64_t ailang_rt_log_bool();
 int64_t ailang_rt_log_redacted();
 int64_t ailang_rt_req_json();
+int64_t ailang_rt_json_decode();
+int64_t ailang_rt_json_encode();
 int64_t ailang_rt_req_body();
 int64_t ailang_rt_req_query();
 int64_t ailang_rt_req_path_param();

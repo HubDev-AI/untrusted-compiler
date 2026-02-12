@@ -203,6 +203,10 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("log_redacted(", "__AILANG_INTRINSIC_LOG_REDACTED__(");
     lowered = lowered.replace("req.json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
+    lowered = lowered.replace("json.decode(", "__AILANG_INTRINSIC_JSON_DECODE__(");
+    lowered = lowered.replace("json_decode(", "__AILANG_INTRINSIC_JSON_DECODE__(");
+    lowered = lowered.replace("json.encode(", "__AILANG_INTRINSIC_JSON_ENCODE__(");
+    lowered = lowered.replace("json_encode(", "__AILANG_INTRINSIC_JSON_ENCODE__(");
     lowered = lowered.replace("req.body(", "__AILANG_INTRINSIC_REQ_BODY__(");
     lowered = lowered.replace("req_body(", "__AILANG_INTRINSIC_REQ_BODY__(");
     lowered = lowered.replace("req.query(", "__AILANG_INTRINSIC_REQ_QUERY__(");
@@ -347,6 +351,8 @@ fn lower_c_expr(expr: &str) -> String {
         "ailang_rt_log_redacted(",
     );
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_JSON_DECODE__(", "ailang_rt_json_decode(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_JSON_ENCODE__(", "ailang_rt_json_encode(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_BODY__(", "ailang_rt_req_body(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_QUERY__(", "ailang_rt_req_query(");
     lowered = lowered.replace(
