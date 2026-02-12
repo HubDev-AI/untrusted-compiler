@@ -52,3 +52,4 @@
 - Started M6 with MIR-to-C emission (`build --emit c`) and added core+CLI tests for generated C output.
 - Extended M6 with `build --emit c-bin`: writes generated C and compiles a runnable binary via `clang`.
 - Added `examples/hello/build/.gitignore` to keep generated C/binary artifacts out of git status while retaining `security_map.json`.
+- Updated `examples/hello/build/.gitignore` to ignore all generated build artifacts (including security_map) for a clean working tree.
