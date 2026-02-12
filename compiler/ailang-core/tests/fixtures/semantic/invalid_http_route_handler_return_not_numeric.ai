@@ -1,0 +1,8 @@
+fn health() effects { net } -> Bool {
+  true
+}
+
+fn main(router: Router) -> Int {
+  http.get(router, "/health", health);
+  0
+}

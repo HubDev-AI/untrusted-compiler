@@ -1878,6 +1878,23 @@ impl Analyzer {
             );
         }
 
+        if !handler_sig.return_type.is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route handler must return `Int`/`Int64` in v0 runtime bridge",
+                    args[2].span.clone(),
+                )
+                .with_note(format!(
+                    "function `{handler_name}` returns `{}`",
+                    handler_sig.return_type.describe()
+                ))
+                .with_note(
+                    "adjust handler return type to `Int` or `Int64` for current runtime bridge compatibility",
+                ),
+            );
+        }
+
         if !handler_sig.declared_effects.contains("net") {
             self.diagnostics.push(
                 Diagnostic::error(

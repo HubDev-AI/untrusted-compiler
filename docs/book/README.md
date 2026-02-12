@@ -84,5 +84,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `116-m7-typed-router-security-bootstrap-contracts.md`
 - `117-m7-http-call-shape-contract-checks.md`
 - `118-m7-route-handler-compatibility-zero-arg-bridge-contract.md`
+- `119-m7-route-handler-return-type-bridge-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.
