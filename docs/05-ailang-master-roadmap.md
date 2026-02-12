@@ -216,6 +216,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - C emission now lowers `secrets.get` / `secrets.reveal` intrinsics to runtime symbols with stub implementations (plus `secrets.get` `c-bin` integration coverage).
   - C emission now lowers validator/sanitizer/url/path gate intrinsics (`validate.*`, `sanitize.html`, `url.*`, `path.under`) to runtime symbols with stub implementations and `c-bin` integration coverage.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
+- M7 bootstrap has started:
+  - Semantic layer now recognizes router intrinsics (`http.router`, `http.get`, `http.post`, `http.serve`) with `http.serve` requiring `effects { net }`.
+  - C emission now lowers router intrinsics to runtime symbols (`ailang_rt_http_router`, `ailang_rt_http_route_get`, `ailang_rt_http_route_post`, `ailang_rt_http_serve`).
+  - Runtime ABI now includes router bridge stubs for these symbols, with clang-gated `c-bin` integration coverage.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -264,6 +268,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/90-m6-db-fs-net-intrinsic-runtime-lowering.md`
 - `docs/book/91-m6-secrets-intrinsic-runtime-lowering.md`
 - `docs/book/92-m6-validator-sanitizer-url-path-intrinsic-runtime-lowering.md`
+- `docs/book/93-m7-http-router-intrinsic-bootstrap.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -530,6 +535,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "HTTP Runtime and Request Lifecycle".
 - Chapter: "Schema-Driven JSON".
 - Chapter: "Building Your First AILang API".
+- Chapter: "M7 Bootstrap: HTTP Router Intrinsic Runtime Bridge".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

@@ -245,6 +245,14 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
     lowered = lowered.replace("validate.pathUnder(", "__AILANG_INTRINSIC_PATH_UNDER__(");
     lowered = lowered.replace("validate_path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
+    lowered = lowered.replace("http.router(", "__AILANG_INTRINSIC_HTTP_ROUTER__(");
+    lowered = lowered.replace("http_router(", "__AILANG_INTRINSIC_HTTP_ROUTER__(");
+    lowered = lowered.replace("http.get(", "__AILANG_INTRINSIC_HTTP_ROUTE_GET__(");
+    lowered = lowered.replace("http_get_route(", "__AILANG_INTRINSIC_HTTP_ROUTE_GET__(");
+    lowered = lowered.replace("http.post(", "__AILANG_INTRINSIC_HTTP_ROUTE_POST__(");
+    lowered = lowered.replace("http_post_route(", "__AILANG_INTRINSIC_HTTP_ROUTE_POST__(");
+    lowered = lowered.replace("http.serve(", "__AILANG_INTRINSIC_HTTP_SERVE__(");
+    lowered = lowered.replace("http_serve(", "__AILANG_INTRINSIC_HTTP_SERVE__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -296,5 +304,15 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_URL_PUBLIC__(", "ailang_rt_url_public(");
     lowered = lowered.replace("__AILANG_INTRINSIC_URL_INTERNAL__(", "ailang_rt_url_internal(");
     lowered = lowered.replace("__AILANG_INTRINSIC_PATH_UNDER__(", "ailang_rt_path_under(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_HTTP_ROUTER__(", "ailang_rt_http_router(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_HTTP_ROUTE_GET__(",
+        "ailang_rt_http_route_get(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_HTTP_ROUTE_POST__(",
+        "ailang_rt_http_route_post(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_HTTP_SERVE__(", "ailang_rt_http_serve(");
     lowered
 }

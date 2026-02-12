@@ -94,6 +94,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_url_public();"));
     assert!(header.contains("int64_t ailang_rt_url_internal();"));
     assert!(header.contains("int64_t ailang_rt_path_under();"));
+    assert!(header.contains("int64_t ailang_rt_http_router();"));
+    assert!(header.contains("int64_t ailang_rt_http_route_get();"));
+    assert!(header.contains("int64_t ailang_rt_http_route_post();"));
+    assert!(header.contains("int64_t ailang_rt_http_serve();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -122,6 +126,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_url_public()"));
     assert!(source.contains("int64_t ailang_rt_url_internal()"));
     assert!(source.contains("int64_t ailang_rt_path_under()"));
+    assert!(source.contains("int64_t ailang_rt_http_router()"));
+    assert!(source.contains("int64_t ailang_rt_http_route_get()"));
+    assert!(source.contains("int64_t ailang_rt_http_route_post()"));
+    assert!(source.contains("int64_t ailang_rt_http_serve()"));
 }
 
 #[test]
@@ -270,4 +278,30 @@ fn main() -> Int {
     assert!(c.contains("(void)(ailang_rt_url_public(input));"));
     assert!(c.contains("(void)(ailang_rt_url_internal(input));"));
     assert!(c.contains("(void)(ailang_rt_path_under(base, input));"));
+}
+
+#[test]
+fn c_backend_rewrites_http_router_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn handler() -> Int {
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, 1, handler);
+  http.post(router, 1, handler);
+  http.serve(1, router);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("router = ailang_rt_http_router();"));
+    assert!(c.contains("(void)(ailang_rt_http_route_get(router, 1, handler));"));
+    assert!(c.contains("(void)(ailang_rt_http_route_post(router, 1, handler));"));
+    assert!(c.contains("(void)(ailang_rt_http_serve(1, router));"));
 }

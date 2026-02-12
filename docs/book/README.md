@@ -58,5 +58,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `90-m6-db-fs-net-intrinsic-runtime-lowering.md`
 - `91-m6-secrets-intrinsic-runtime-lowering.md`
 - `92-m6-validator-sanitizer-url-path-intrinsic-runtime-lowering.md`
+- `93-m7-http-router-intrinsic-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.

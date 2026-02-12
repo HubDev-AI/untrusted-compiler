@@ -30,5 +30,9 @@ int64_t ailang_rt_sanitize_html();
 int64_t ailang_rt_url_public();
 int64_t ailang_rt_url_internal();
 int64_t ailang_rt_path_under();
+int64_t ailang_rt_http_router();
+int64_t ailang_rt_http_route_get();
+int64_t ailang_rt_http_route_post();
+int64_t ailang_rt_http_serve();
 
 #endif

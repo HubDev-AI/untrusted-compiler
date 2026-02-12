@@ -102,3 +102,19 @@ int64_t ailang_rt_url_internal() {
 int64_t ailang_rt_path_under() {
   return 0;
 }
+
+int64_t ailang_rt_http_router() {
+  return 0;
+}
+
+int64_t ailang_rt_http_route_get() {
+  return 0;
+}
+
+int64_t ailang_rt_http_route_post() {
+  return 0;
+}
+
+int64_t ailang_rt_http_serve() {
+  return 0;
+}

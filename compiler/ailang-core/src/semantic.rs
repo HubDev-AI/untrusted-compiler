@@ -2171,6 +2171,26 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "http_router" | "http.router" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "http_get_route" | "http.get" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "http_post_route" | "http.post" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "http_serve" | "http.serve" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
         "req_body" | "req.body" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
@@ -2428,6 +2448,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
     matches!(
         name,
         "db" | "fs"
+            | "http"
             | "httpClient"
             | "log"
             | "path"
