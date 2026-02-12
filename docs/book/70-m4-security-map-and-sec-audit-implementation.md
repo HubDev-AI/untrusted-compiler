@@ -125,6 +125,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - semantic fixtures now cover:
     - valid typed schema encoding (`Schema<Int>` + `Int` payload)
     - invalid typed schema mismatch (`Schema<Int>` + `String` payload)
+- Added callsite argument-role metadata for audit explainability:
+  - `security_map.calls[]` now optionally includes `arg_roles`
+  - role labels are emitted for core sensitive APIs (for example capability/query/url/schema/value/path)
+  - JSON roles adapt to signature form (`schema,value` vs `status,schema,value`)
+  - tests now assert role metadata for representative callsites (`res.json`, `db.exec`)
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -192,6 +197,6 @@ Arity-only validation still allowed malformed response calls (wrong status type,
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
+2. Add source-origin edge metadata in `security_map` call records (not just call-level tags).
 3. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
-4. Extend strict schema enforcement from signature checks to typed schema-value pairing checks.
+4. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.

@@ -55,6 +55,8 @@ pub struct SecurityCall {
     pub loc: SourceLocation,
     pub callee: String,
     pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arg_roles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -229,6 +231,7 @@ fn collect_expr(
                         loc: span_to_loc(&expr.span),
                         callee: name.clone(),
                         tags: tags.into_iter().map(str::to_string).collect(),
+                        arg_roles: call_arg_roles(name.as_str(), args.len()),
                     });
                 }
 
@@ -477,6 +480,47 @@ fn dedupe_tags(tags: &mut Vec<&'static str>) {
         }
     }
     *tags = deduped;
+}
+
+fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
+    let roles = match name {
+        "db_write" | "db.exec" => vec!["capability", "query"],
+        "db_read" | "db.queryOne" => vec!["capability", "query", "row_schema"],
+        "res_json" | "res.json" => {
+            if arg_count == 2 {
+                vec!["schema", "value"]
+            } else if arg_count == 3 {
+                vec!["status", "schema", "value"]
+            } else {
+                vec!["value"]
+            }
+        }
+        "res_html" | "res.html" => vec!["html"],
+        "set_header" | "res.setHeader" => vec!["name", "value"],
+        "set_cookie" | "res.addCookie" => vec!["cookie"],
+        "net_call" | "httpClient.get" => vec!["capability", "url"],
+        "net_internal_call" | "httpClient.getInternal" => vec!["capability", "url"],
+        "fs_read" | "fs.read" => vec!["capability", "path"],
+        "fs_write" | "fs.write" => vec!["capability", "path", "bytes"],
+        "secret_read" | "secrets.get" => vec!["capability", "name"],
+        "secret_reveal" | "secrets.reveal" => vec!["capability", "secret"],
+        "req_json" | "req.json" => vec!["schema"],
+        "req_query" | "req.query" | "req_header" | "req.header" | "req_path_param"
+        | "req.pathParam" => vec!["name"],
+        "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => vec!["value"],
+        _ => return None,
+    };
+
+    let capped = roles
+        .into_iter()
+        .take(arg_count.max(1))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if capped.is_empty() {
+        None
+    } else {
+        Some(capped)
+    }
 }
 
 fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMiddleware> {

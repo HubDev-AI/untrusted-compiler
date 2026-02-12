@@ -17,6 +17,7 @@ fn boot() -> Int {
   sanitize.html(raw);
   url.public(raw);
   path.under(PathSafe(), raw);
+  res.json("UserSchema", 1);
   db.exec(DbCap());
   secrets.reveal(SecretsCap());
   1
@@ -58,6 +59,20 @@ fn boot() -> Int {
         .calls
         .iter()
         .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "res.json"
+            && call.arg_roles.as_ref().is_some_and(|roles| roles == &vec![
+                "schema".to_string(),
+                "value".to_string()
+            ])
+    }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string()])
+    }));
     assert!(map
         .middleware
         .iter()

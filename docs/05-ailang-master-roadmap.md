@@ -91,6 +91,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - compatible payload types pass,
     - mismatches emit `E4004` with expected/actual type notes.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
+  - `security_map` call records now include optional `arg_roles` metadata for explainability.
+  - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
+  - JSON role labels adapt to the detected call signature form.
+  - security_map tests now assert argument-role metadata presence for representative sink calls.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
