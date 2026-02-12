@@ -760,6 +760,55 @@ Tag-only origin summaries answered "what source family reached the sink" but not
 - traces expose forwarding history but do not yet encode branch-sensitive alternatives as separate paths.
 - next step is to surface these traces directly in compiler diagnostics and editor/tooling explainability.
 
+### Slice Explanation: Capability-Typed Namespace Seeding for Member Calls
+
+#### 1) What it is
+This slice seeds callable alias resolution from capability-typed parameters and typed `let` bindings so member callsites can canonicalize without requiring explicit local alias assignment.
+
+#### 2) Why it exists
+Before this slice, canonicalization for member calls depended on value aliases like `let repo = db; repo.exec(...)`. That missed realistic shapes where the capability is already named differently in the signature (for example `repo: DbCap`) or forwarded through helper functions.
+
+#### 3) How it works internally
+- semantic analyzer now seeds callable alias state from capability-typed parameters using a deterministic mapping:
+  - `DbCap`/`TxCap` -> `db`
+  - `NetCap`/`InternalNetCap` -> `httpClient`
+  - `FsCap` -> `fs`
+  - `SecretsCap` -> `secrets`
+- the same seed mapping is applied in callable-forwarding summary inference, so helper returns like `fn getExec(repo: DbCap) { repo.exec }` canonicalize to `db.exec`.
+- typed `let` bindings now also fallback to namespace seeding when value-based alias inference is unavailable.
+- `security_map` uses the same seed rules in call collection, origin inference, and forwarding summaries, keeping metadata and semantic diagnostics aligned.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - function parameter type annotations,
+  - optional `let` type annotations,
+  - member call expressions and callable forwarding helpers.
+- Output:
+  - canonical call names for enforcement/metadata (`db.exec` instead of `repo.exec`),
+  - preserved sink tags, capability/effect checks, and origin edge tracking on those calls.
+- Constraints:
+  - mapping is intentionally explicit to known capability types in v0.1-lite,
+  - this does not yet infer arbitrary user-defined callable object shapes.
+
+#### 5) Failure modes and diagnostics
+- no new diagnostic codes were introduced.
+- capability errors remain existing stable codes:
+  - `E2003` for missing capability argument,
+  - `E2004` for capability type mismatch.
+- unresolved non-capability member call patterns still fall back to existing unknown callable behavior.
+
+#### 6) Example usage
+- direct typed member call (no local alias required):
+  - `fn ok(repo: DbCap) effects { db.write } -> Int { repo.exec(repo, "..."); 1 }`
+- forwarded typed member callable:
+  - `fn getExec(repo: DbCap) { repo.exec }`
+  - `let exec = getExec(repo); exec(repo, raw);`
+- both semantic checks and `security_map` treat these as canonical `db.exec`.
+
+#### 7) Tradeoffs and next steps
+- capability namespace seeding removes a practical blind spot while preserving deterministic, local analysis.
+- next step is extending this approach beyond built-in capability names to richer user-defined callable object field shapes.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -782,8 +831,8 @@ Tag-only origin summaries answered "what source family reached the sink" but not
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Expand callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
+1. Extend callable/member canonicalization beyond built-in capability namespace seeding into richer user-defined callable object field shapes.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface provenance trace chains from audit/security-map metadata into compiler diagnostics and tooling outputs.
-5. Expand `sec.audit` non-call policy evidence from exception-count snapshots to expiry-window rollups.
+5. Expand `sec.audit` policy rollups with trend/aging signals and policy-tunable severity weighting.

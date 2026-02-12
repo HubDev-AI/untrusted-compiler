@@ -1,0 +1,4 @@
+fn bad(repo: DbCap, net: NetCap) effects { db.write } -> Int {
+  repo.exec(net, "SELECT id FROM users");
+  1
+}

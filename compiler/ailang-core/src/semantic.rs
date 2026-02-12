@@ -456,7 +456,7 @@ impl Analyzer {
         function: &FunctionDecl,
         summaries: &HashMap<String, String>,
     ) -> Option<String> {
-        let mut callable_aliases = HashMap::new();
+        let mut callable_aliases = seed_callable_aliases_from_param_type_exprs(&function.params);
         for stmt in &function.body.statements {
             if let StmtKind::Let { name, value, .. } = &stmt.kind {
                 if let Some(target) =
@@ -576,7 +576,8 @@ impl Analyzer {
             }
 
             let mut used_effects = HashSet::new();
-            let mut callable_aliases = HashMap::new();
+            let mut callable_aliases =
+                seed_callable_aliases_from_params(&function.params, &signature.params);
             let body_type = self.analyze_block(
                 &function.body,
                 &mut env,
@@ -701,9 +702,11 @@ impl Analyzer {
                     value_type
                 };
 
-                env.insert(name.clone(), bound_type);
+                env.insert(name.clone(), bound_type.clone());
                 if let Some(alias) = self.infer_callable_alias(value, callable_aliases) {
                     callable_aliases.insert(name.clone(), alias);
+                } else if let Some(namespace) = capability_namespace_alias_for_type(&bound_type) {
+                    callable_aliases.insert(name.clone(), namespace.to_string());
                 } else {
                     callable_aliases.remove(name);
                 }
@@ -2262,6 +2265,63 @@ fn resolve_alias_atom(name: &str, callable_aliases: &HashMap<String, String>) ->
         current = next.clone();
     }
     current
+}
+
+fn seed_callable_aliases_from_params(
+    params: &[crate::ast::Param],
+    resolved_param_types: &[Type],
+) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for (index, param) in params.iter().enumerate() {
+        let namespace = resolved_param_types
+            .get(index)
+            .and_then(capability_namespace_alias_for_type)
+            .or_else(|| capability_namespace_alias_for_type_expr(&param.ty));
+        if let Some(namespace) = namespace {
+            aliases.insert(param.name.clone(), namespace.to_string());
+        }
+    }
+    aliases
+}
+
+fn seed_callable_aliases_from_param_type_exprs(
+    params: &[crate::ast::Param],
+) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for param in params {
+        if let Some(namespace) = capability_namespace_alias_for_type_expr(&param.ty) {
+            aliases.insert(param.name.clone(), namespace.to_string());
+        }
+    }
+    aliases
+}
+
+fn capability_namespace_alias_for_type(ty: &Type) -> Option<&'static str> {
+    match ty {
+        Type::Named { name, args } if args.is_empty() => {
+            capability_namespace_alias_for_type_name(name)
+        }
+        _ => None,
+    }
+}
+
+fn capability_namespace_alias_for_type_expr(ty: &TypeExpr) -> Option<&'static str> {
+    match &ty.kind {
+        TypeExprKind::Named { name, args } if args.is_empty() => {
+            capability_namespace_alias_for_type_name(name)
+        }
+        _ => None,
+    }
+}
+
+fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> {
+    match name {
+        "DbCap" | "TxCap" => Some("db"),
+        "NetCap" | "InternalNetCap" => Some("httpClient"),
+        "FsCap" => Some("fs"),
+        "SecretsCap" => Some("secrets"),
+        _ => None,
+    }
 }
 
 fn is_intrinsic_namespace(name: &str) -> bool {

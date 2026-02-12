@@ -1,0 +1,4 @@
+fn ok(repo: DbCap) effects { db.write } -> Int {
+  repo.exec(repo, "SELECT id FROM users");
+  1
+}

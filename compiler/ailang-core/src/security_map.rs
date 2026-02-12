@@ -131,7 +131,7 @@ pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
         };
 
         let mut origins = HashMap::new();
-        let mut callable_aliases = HashMap::new();
+        let mut callable_aliases = seed_callable_aliases_from_params(&function.params);
         collect_block(
             &function.body,
             &mut calls,
@@ -249,7 +249,9 @@ fn collect_block(
 
     for stmt in &block.statements {
         match &stmt.kind {
-            StmtKind::Let { name, value, .. } => {
+            StmtKind::Let {
+                name, ty, value, ..
+            } => {
                 let inferred = infer_expr_origin(
                     value,
                     &scoped,
@@ -276,6 +278,11 @@ fn collect_block(
                 }
                 if let Some(resolved) = alias {
                     scoped_aliases.insert(name.clone(), resolved);
+                } else if let Some(namespace) = ty
+                    .as_ref()
+                    .and_then(capability_namespace_alias_for_type_expr)
+                {
+                    scoped_aliases.insert(name.clone(), namespace.to_string());
                 } else {
                     scoped_aliases.remove(name);
                 }
@@ -699,7 +706,10 @@ fn infer_block_origin(
     let mut scoped = origins.clone();
     let mut scoped_aliases = callable_aliases.clone();
     for stmt in &block.statements {
-        if let StmtKind::Let { name, value, .. } = &stmt.kind {
+        if let StmtKind::Let {
+            name, ty, value, ..
+        } = &stmt.kind
+        {
             if let Some(origin) = infer_expr_origin(
                 value,
                 &scoped,
@@ -715,6 +725,11 @@ fn infer_block_origin(
                 infer_callable_alias(value, &scoped_aliases, summaries, callable_summaries)
             {
                 scoped_aliases.insert(name.clone(), alias);
+            } else if let Some(namespace) = ty
+                .as_ref()
+                .and_then(capability_namespace_alias_for_type_expr)
+            {
+                scoped_aliases.insert(name.clone(), namespace.to_string());
             } else {
                 scoped_aliases.remove(name);
             }
@@ -804,13 +819,21 @@ fn summarize_function_callable_forward(
     summaries: &HashMap<String, String>,
     function_names: &HashSet<String>,
 ) -> Option<String> {
-    let mut callable_aliases = HashMap::new();
+    let mut callable_aliases = seed_callable_aliases_from_params(&function.params);
     for stmt in &function.body.statements {
-        if let StmtKind::Let { name, value, .. } = &stmt.kind {
+        if let StmtKind::Let {
+            name, ty, value, ..
+        } = &stmt.kind
+        {
             if let Some(target) =
                 infer_callable_forward_expr(value, &callable_aliases, summaries, function_names)
             {
                 callable_aliases.insert(name.clone(), target);
+            } else if let Some(namespace) = ty
+                .as_ref()
+                .and_then(capability_namespace_alias_for_type_expr)
+            {
+                callable_aliases.insert(name.clone(), namespace.to_string());
             } else {
                 callable_aliases.remove(name);
             }
@@ -924,7 +947,7 @@ fn summarize_function_origin(
     callable_summaries: &HashMap<String, String>,
 ) -> Option<FunctionOriginSummary> {
     let mut param_origins = HashMap::new();
-    let callable_aliases = HashMap::new();
+    let callable_aliases = seed_callable_aliases_from_params(&function.params);
     for (index, param) in function.params.iter().enumerate() {
         param_origins.insert(
             param.name.clone(),
@@ -1661,6 +1684,35 @@ fn span_to_loc(span: &Span) -> SourceLocation {
         file: span.file.display().to_string(),
         line: span.start_line,
         column: span.start_col,
+    }
+}
+
+fn seed_callable_aliases_from_params(params: &[crate::ast::Param]) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for param in params {
+        if let Some(namespace) = capability_namespace_alias_for_type_expr(&param.ty) {
+            aliases.insert(param.name.clone(), namespace.to_string());
+        }
+    }
+    aliases
+}
+
+fn capability_namespace_alias_for_type_expr(ty: &crate::ast::TypeExpr) -> Option<&'static str> {
+    match &ty.kind {
+        crate::ast::TypeExprKind::Named { name, args } if args.is_empty() => {
+            capability_namespace_alias_for_type_name(name)
+        }
+        _ => None,
+    }
+}
+
+fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> {
+    match name {
+        "DbCap" | "TxCap" => Some("db"),
+        "NetCap" | "InternalNetCap" => Some("httpClient"),
+        "FsCap" => Some("fs"),
+        "SecretsCap" => Some("secrets"),
+        _ => None,
     }
 }
 

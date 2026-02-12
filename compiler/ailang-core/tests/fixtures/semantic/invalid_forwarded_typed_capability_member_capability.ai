@@ -1,0 +1,9 @@
+fn getExec(repo: DbCap) {
+  repo.exec
+}
+
+fn bad(repo: DbCap, net: NetCap) effects { db.write } -> Int {
+  let exec = getExec(repo);
+  exec(net, "SELECT id FROM users");
+  1
+}

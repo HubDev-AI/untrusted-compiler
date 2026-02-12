@@ -35,6 +35,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
   - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
+  - Callable/member resolution now seeds namespace aliases from capability-typed parameters/bindings (`DbCap`, `TxCap`, `NetCap`, `InternalNetCap`, `FsCap`, `SecretsCap`):
+    - direct member calls like `repo.exec(...)` resolve to canonical sink symbols (`db.exec`) without requiring `let repo = db`.
+    - helper-forwarded callable members like `getExec(repo)` also resolve to canonical symbols for semantic checks and `security_map`.
   - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values across log, JSON, SQL, URL/net, filesystem, and header/cookie sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`, `E1005`).
   - Sink-flow origin notes in diagnostics are now callable-summary aware for call expressions, so helper-forwarded sources report canonical origin calls (for example `req.query(...)`).
   - Request boundary trust-gate semantics are now enforced:
@@ -627,7 +630,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
+1. Extend callable/member canonicalization beyond capability namespace seeding into user-defined capability-object function fields and other non-stdlib callable-value shapes.
 2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
 3. Expand deterministic `sec.audit` non-call policy rollups with aging/trend signals and severity tuning inputs.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
