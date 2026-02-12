@@ -219,6 +219,32 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("secret_read(", "__AILANG_INTRINSIC_SECRET_GET__(");
     lowered = lowered.replace("secrets.reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
     lowered = lowered.replace("secret_reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
+    lowered = lowered.replace(
+        "validate.headerValue(",
+        "__AILANG_INTRINSIC_VALIDATE_HEADER_VALUE__(",
+    );
+    lowered = lowered.replace(
+        "validate_header_value(",
+        "__AILANG_INTRINSIC_VALIDATE_HEADER_VALUE__(",
+    );
+    lowered = lowered.replace("validate.email(", "__AILANG_INTRINSIC_VALIDATE_EMAIL__(");
+    lowered = lowered.replace("validate_email(", "__AILANG_INTRINSIC_VALIDATE_EMAIL__(");
+    lowered = lowered.replace("validate.uuid(", "__AILANG_INTRINSIC_VALIDATE_UUID__(");
+    lowered = lowered.replace("validate_uuid(", "__AILANG_INTRINSIC_VALIDATE_UUID__(");
+    lowered = lowered.replace("validate.int64(", "__AILANG_INTRINSIC_VALIDATE_INT64__(");
+    lowered = lowered.replace("validate_int64(", "__AILANG_INTRINSIC_VALIDATE_INT64__(");
+    lowered = lowered.replace("validate.nonEmpty(", "__AILANG_INTRINSIC_VALIDATE_NON_EMPTY__(");
+    lowered = lowered.replace("validate_non_empty(", "__AILANG_INTRINSIC_VALIDATE_NON_EMPTY__(");
+    lowered = lowered.replace("sanitize.html(", "__AILANG_INTRINSIC_SANITIZE_HTML__(");
+    lowered = lowered.replace("sanitize_html(", "__AILANG_INTRINSIC_SANITIZE_HTML__(");
+    lowered = lowered.replace("url.public(", "__AILANG_INTRINSIC_URL_PUBLIC__(");
+    lowered = lowered.replace("url_public(", "__AILANG_INTRINSIC_URL_PUBLIC__(");
+    lowered = lowered.replace("url.internal(", "__AILANG_INTRINSIC_URL_INTERNAL__(");
+    lowered = lowered.replace("url_internal(", "__AILANG_INTRINSIC_URL_INTERNAL__(");
+    lowered = lowered.replace("path.under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
+    lowered = lowered.replace("path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
+    lowered = lowered.replace("validate.pathUnder(", "__AILANG_INTRINSIC_PATH_UNDER__(");
+    lowered = lowered.replace("validate_path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -243,5 +269,32 @@ fn lower_c_expr(expr: &str) -> String {
         "__AILANG_INTRINSIC_SECRET_REVEAL__(",
         "ailang_rt_secret_reveal(",
     );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_VALIDATE_HEADER_VALUE__(",
+        "ailang_rt_validate_header_value(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_VALIDATE_EMAIL__(",
+        "ailang_rt_validate_email(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_VALIDATE_UUID__(",
+        "ailang_rt_validate_uuid(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_VALIDATE_INT64__(",
+        "ailang_rt_validate_int64(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_VALIDATE_NON_EMPTY__(",
+        "ailang_rt_validate_non_empty(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_SANITIZE_HTML__(",
+        "ailang_rt_sanitize_html(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_URL_PUBLIC__(", "ailang_rt_url_public(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_URL_INTERNAL__(", "ailang_rt_url_internal(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_PATH_UNDER__(", "ailang_rt_path_under(");
     lowered
 }

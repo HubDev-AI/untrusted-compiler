@@ -214,6 +214,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - C emission now lowers `res.setHeader` and `res.addCookie` intrinsics to runtime symbols with stub implementations and `c-bin` integration coverage.
   - C emission now lowers core IO intrinsics (`db.*`, `fs.*`, `httpClient.get*`) to runtime symbols with stub implementations and `c-bin` integration coverage.
   - C emission now lowers `secrets.get` / `secrets.reveal` intrinsics to runtime symbols with stub implementations (plus `secrets.get` `c-bin` integration coverage).
+  - C emission now lowers validator/sanitizer/url/path gate intrinsics (`validate.*`, `sanitize.html`, `url.*`, `path.under`) to runtime symbols with stub implementations and `c-bin` integration coverage.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
@@ -262,6 +263,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/89-m6-header-cookie-intrinsic-runtime-lowering.md`
 - `docs/book/90-m6-db-fs-net-intrinsic-runtime-lowering.md`
 - `docs/book/91-m6-secrets-intrinsic-runtime-lowering.md`
+- `docs/book/92-m6-validator-sanitizer-url-path-intrinsic-runtime-lowering.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -507,6 +509,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M6 Slice: Header/Cookie Intrinsic Runtime Lowering".
 - Chapter: "M6 Slice: DB/FS/Net Intrinsic Runtime Lowering".
 - Chapter: "M6 Slice: Secrets Intrinsic Runtime Lowering".
+- Chapter: "M6 Slice: Validator/Sanitizer/URL/Path Intrinsic Runtime Lowering".
 
 ## M7 - HTTP/JSON Vertical Slice
 ### Build tasks

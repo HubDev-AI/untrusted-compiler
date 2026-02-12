@@ -21,5 +21,14 @@ int64_t ailang_rt_http_get();
 int64_t ailang_rt_http_get_internal();
 int64_t ailang_rt_secret_get();
 int64_t ailang_rt_secret_reveal();
+int64_t ailang_rt_validate_header_value();
+int64_t ailang_rt_validate_email();
+int64_t ailang_rt_validate_uuid();
+int64_t ailang_rt_validate_int64();
+int64_t ailang_rt_validate_non_empty();
+int64_t ailang_rt_sanitize_html();
+int64_t ailang_rt_url_public();
+int64_t ailang_rt_url_internal();
+int64_t ailang_rt_path_under();
 
 #endif

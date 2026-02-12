@@ -85,6 +85,15 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_http_get_internal();"));
     assert!(header.contains("int64_t ailang_rt_secret_get();"));
     assert!(header.contains("int64_t ailang_rt_secret_reveal();"));
+    assert!(header.contains("int64_t ailang_rt_validate_header_value();"));
+    assert!(header.contains("int64_t ailang_rt_validate_email();"));
+    assert!(header.contains("int64_t ailang_rt_validate_uuid();"));
+    assert!(header.contains("int64_t ailang_rt_validate_int64();"));
+    assert!(header.contains("int64_t ailang_rt_validate_non_empty();"));
+    assert!(header.contains("int64_t ailang_rt_sanitize_html();"));
+    assert!(header.contains("int64_t ailang_rt_url_public();"));
+    assert!(header.contains("int64_t ailang_rt_url_internal();"));
+    assert!(header.contains("int64_t ailang_rt_path_under();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -104,6 +113,15 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_http_get_internal()"));
     assert!(source.contains("int64_t ailang_rt_secret_get()"));
     assert!(source.contains("int64_t ailang_rt_secret_reveal()"));
+    assert!(source.contains("int64_t ailang_rt_validate_header_value()"));
+    assert!(source.contains("int64_t ailang_rt_validate_email()"));
+    assert!(source.contains("int64_t ailang_rt_validate_uuid()"));
+    assert!(source.contains("int64_t ailang_rt_validate_int64()"));
+    assert!(source.contains("int64_t ailang_rt_validate_non_empty()"));
+    assert!(source.contains("int64_t ailang_rt_sanitize_html()"));
+    assert!(source.contains("int64_t ailang_rt_url_public()"));
+    assert!(source.contains("int64_t ailang_rt_url_internal()"));
+    assert!(source.contains("int64_t ailang_rt_path_under()"));
 }
 
 #[test]
@@ -218,4 +236,38 @@ fn main() effects { secrets.read, secrets.reveal } -> Int {
 
     assert!(c.contains("(void)(ailang_rt_secret_get(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_secret_reveal(1, 2));"));
+}
+
+#[test]
+fn c_backend_rewrites_gate_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  let input = 1;
+  let base = 2;
+  validate.headerValue(input);
+  validate.email(input);
+  validate.uuid(input);
+  validate.int64(input);
+  validate.nonEmpty(input);
+  sanitize.html(input);
+  url.public(input);
+  url.internal(input);
+  path.under(base, input);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_validate_header_value(input));"));
+    assert!(c.contains("(void)(ailang_rt_validate_email(input));"));
+    assert!(c.contains("(void)(ailang_rt_validate_uuid(input));"));
+    assert!(c.contains("(void)(ailang_rt_validate_int64(input));"));
+    assert!(c.contains("(void)(ailang_rt_validate_non_empty(input));"));
+    assert!(c.contains("(void)(ailang_rt_sanitize_html(input));"));
+    assert!(c.contains("(void)(ailang_rt_url_public(input));"));
+    assert!(c.contains("(void)(ailang_rt_url_internal(input));"));
+    assert!(c.contains("(void)(ailang_rt_path_under(base, input));"));
 }

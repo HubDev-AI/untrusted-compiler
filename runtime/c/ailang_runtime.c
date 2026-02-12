@@ -66,3 +66,39 @@ int64_t ailang_rt_secret_get() {
 int64_t ailang_rt_secret_reveal() {
   return 0;
 }
+
+int64_t ailang_rt_validate_header_value() {
+  return 0;
+}
+
+int64_t ailang_rt_validate_email() {
+  return 0;
+}
+
+int64_t ailang_rt_validate_uuid() {
+  return 0;
+}
+
+int64_t ailang_rt_validate_int64() {
+  return 0;
+}
+
+int64_t ailang_rt_validate_non_empty() {
+  return 0;
+}
+
+int64_t ailang_rt_sanitize_html() {
+  return 0;
+}
+
+int64_t ailang_rt_url_public() {
+  return 0;
+}
+
+int64_t ailang_rt_url_internal() {
+  return 0;
+}
+
+int64_t ailang_rt_path_under() {
+  return 0;
+}
