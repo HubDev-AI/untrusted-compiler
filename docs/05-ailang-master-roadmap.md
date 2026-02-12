@@ -99,6 +99,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Origin edges capture argument index, canonical origin labels, and source/gate tag context.
   - Local `let`-bound origin propagation is tracked for call/member/unary expression shapes.
   - security_map tests now assert sink-argument origin tracing for `req.query -> db.exec` flow.
+  - `sec.audit` findings now include bounded `sampleCalls` evidence for key finding families.
+  - Sample call evidence includes callee, source location, argument roles, and origin edges when present.
+  - Initial callsite evidence coverage is enabled for `SQL_SELECT_WITHOUT_LIMIT` and `SECRETS_REVEAL_USED`.
+  - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -587,7 +591,7 @@ Day 14:
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
 2. Extend origin-trace coverage from local bindings to richer expression shapes and interprocedural paths.
-3. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
+3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

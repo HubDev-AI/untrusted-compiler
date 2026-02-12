@@ -505,6 +505,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             json!({
                 "requireLimitOnSelect": policy.sql.require_limit_on_select,
                 "count": count_call_tag(security_map, "sql.select_without_limit"),
+                "sampleCalls": call_samples_for_tag(security_map, "sql.select_without_limit", 5),
             }),
             "Add LIMIT to SELECT queries or justify the exception with a narrowly scoped allowlist.",
         ));
@@ -520,7 +521,10 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "SECRETS_REVEAL_USED",
             severity,
             "secrets",
-            json!({"forbiddenByPolicy": policy.forbidden_effects.contains("secrets.reveal")}),
+            json!({
+                "forbiddenByPolicy": policy.forbidden_effects.contains("secrets.reveal"),
+                "sampleCalls": call_samples_for_tag(security_map, "effect.secrets.reveal", 5),
+            }),
             "Avoid secrets.reveal or isolate it behind audited modules and strict expiry-bound allowlists.",
         ));
     }
@@ -766,6 +770,46 @@ fn count_call_tag(security_map: &SecurityMap, tag: &str) -> usize {
         .iter()
         .filter(|call| call.tags.iter().any(|candidate| candidate == tag))
         .count()
+}
+
+fn call_samples_for_tag(security_map: &SecurityMap, tag: &str, limit: usize) -> Vec<Value> {
+    security_map
+        .calls
+        .iter()
+        .filter(|call| call.tags.iter().any(|candidate| candidate == tag))
+        .take(limit)
+        .map(|call| {
+            let mut sample = serde_json::Map::new();
+            sample.insert("callee".to_string(), json!(call.callee));
+            sample.insert(
+                "location".to_string(),
+                json!({
+                    "file": call.loc.file,
+                    "line": call.loc.line,
+                    "column": call.loc.column,
+                }),
+            );
+            if let Some(roles) = &call.arg_roles {
+                sample.insert("argRoles".to_string(), json!(roles));
+            }
+            if let Some(edges) = &call.origin_edges {
+                let mapped = edges
+                    .iter()
+                    .map(|edge| {
+                        json!({
+                            "argIndex": edge.arg_index,
+                            "origin": edge.origin,
+                            "tags": edge.tags,
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                if !mapped.is_empty() {
+                    sample.insert("originEdges".to_string(), Value::Array(mapped));
+                }
+            }
+            Value::Object(sample)
+        })
+        .collect()
 }
 
 fn finding(

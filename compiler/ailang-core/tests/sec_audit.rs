@@ -74,11 +74,23 @@ effects = "allow"
         .iter()
         .any(|finding| finding.id == "INTERNAL_NET_ENABLED_NO_ALLOWLIST"
             && finding.severity == AuditSeverity::CRITICAL));
-    assert!(report
+    let reveal = report
         .findings
         .iter()
-        .any(|finding| finding.id == "SECRETS_REVEAL_USED"
-            && finding.severity == AuditSeverity::CRITICAL));
+        .find(|finding| finding.id == "SECRETS_REVEAL_USED")
+        .expect("secrets reveal finding should be present");
+    assert_eq!(reveal.severity, AuditSeverity::CRITICAL);
+    let reveal_samples = reveal
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("secrets reveal finding should include sampleCalls evidence");
+    assert!(reveal_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "secret_reveal")
+    }));
     assert!(should_fail(&report, AuditSeverity::HIGH));
 }
 
@@ -254,8 +266,22 @@ require_limit_on_select = "warn"
     )
     .expect("warn policy should parse");
     let warn_report = run_security_audit(&warn_policy, &build_security_map(&program, &warn_policy));
-    assert!(warn_report.findings.iter().any(|finding| {
-        finding.id == "SQL_SELECT_WITHOUT_LIMIT" && finding.severity == AuditSeverity::MEDIUM
+    let warn_finding = warn_report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SQL_SELECT_WITHOUT_LIMIT")
+        .expect("warn report should include sql select without limit finding");
+    assert_eq!(warn_finding.severity, AuditSeverity::MEDIUM);
+    let warn_samples = warn_finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("sql select finding should include sampleCalls evidence");
+    assert!(warn_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "db.exec")
     }));
 
     let enforce_policy = parse_policy_str(
@@ -274,7 +300,21 @@ require_limit_on_select = "enforce"
         &enforce_policy,
         &build_security_map(&program, &enforce_policy),
     );
-    assert!(enforce_report.findings.iter().any(|finding| {
-        finding.id == "SQL_SELECT_WITHOUT_LIMIT" && finding.severity == AuditSeverity::HIGH
+    let enforce_finding = enforce_report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SQL_SELECT_WITHOUT_LIMIT")
+        .expect("enforce report should include sql select without limit finding");
+    assert_eq!(enforce_finding.severity, AuditSeverity::HIGH);
+    let enforce_samples = enforce_finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("sql select finding should include sampleCalls evidence");
+    assert!(enforce_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "db.exec")
     }));
 }

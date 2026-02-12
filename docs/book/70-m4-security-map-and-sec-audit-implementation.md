@@ -135,6 +135,13 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - each edge captures `arg_index`, canonical origin label (for example `call:req.query`), and source/gate tag context
   - origin tracking currently follows local `let` bindings and propagates through member/unary wrappers
   - tests now assert sink-argument origin tracing for `db.exec(DbCap(), raw)` where `raw` originates from `req.query`
+- Added richer deterministic callsite evidence in `sec.audit` findings:
+  - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
+  - each sample includes callee, location, argument roles, and available origin-edge metadata
+  - currently enabled for:
+    - `SQL_SELECT_WITHOUT_LIMIT`
+    - `SECRETS_REVEAL_USED`
+  - audit tests now assert presence and shape of `sampleCalls` evidence
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -217,6 +224,43 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 - Current origin inference is intentionally conservative and local-scope only.
 - Next step is to extend origin tracing across function boundaries and richer expression forms.
 
+### Slice Explanation: `sec.audit` Callsite Evidence
+
+#### 1) What it is
+This slice enriches audit findings with deterministic `sampleCalls` evidence extracted from `security_map.calls`.
+
+#### 2) Why it exists
+Count-only findings hide which callsites triggered risk. Sample call evidence makes findings actionable in CI and review without requiring a separate metadata inspection step.
+
+#### 3) How it works internally
+- `run_security_audit` now attaches `sampleCalls` for selected findings.
+- `call_samples_for_tag` filters tagged call records and emits a bounded list.
+- each sample includes:
+  - callee,
+  - source location,
+  - optional `argRoles`,
+  - optional `originEdges` (when available from security-map origin tracking).
+
+#### 4) Inputs/outputs and constraints
+- Input: `SecurityMap.calls[]` plus finding tag id.
+- Output: JSON evidence field `sampleCalls`.
+- Constraints:
+  - sample set is bounded (currently top 5 callsites per finding),
+  - ordering follows deterministic AST traversal order.
+
+#### 5) Failure modes and diagnostics
+- If no tagged callsites exist, `sampleCalls` is empty or absent based on finding trigger conditions.
+- No new compile diagnostics are introduced by this slice.
+
+#### 6) Example usage
+- `SQL_SELECT_WITHOUT_LIMIT` evidence now includes callsite objects like:
+  - `{ callee: "db.exec", location: { file, line, column }, argRoles: [...] }`
+- `SECRETS_REVEAL_USED` evidence now includes reveal callsite samples for triage.
+
+#### 7) Tradeoffs and next steps
+- Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
+- Next step is to expand sample evidence coverage to additional high-signal findings.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -243,3 +287,4 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Extend source-origin tracing beyond local bindings into interprocedural call chains.
+5. Expand `sec.audit` sample-call evidence coverage across more finding families.
