@@ -2,6 +2,8 @@
 
 This chapter documents the first M6 vertical slice: emitting C source from MIR through the AILang CLI.
 
+Follow-up clang compile/link integration is documented in `docs/book/79-m6-clang-compile-link-pipeline.md`.
+
 ## Scope delivered
 - Added a C backend emitter in `ailang-core`:
   - `emit_c_program(&MirProgram) -> String`
@@ -39,4 +41,4 @@ This chapter documents the first M6 vertical slice: emitting C source from MIR t
 - Pattern/switch lowering is intentionally simple in this slice and will need deeper semantic typing in later M6 work.
 
 ## Next step
-- Add ABI/runtime integration slice: emit or link required runtime intrinsics and establish a compile/link pipeline via `clang`.
+- Add compile/link orchestration via `clang` so emitted C can be built into a runnable binary from the CLI.

@@ -6,6 +6,7 @@ use ailang_core::{
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -80,6 +81,7 @@ enum BuildEmitTarget {
     Mir,
     MirJson,
     C,
+    CBin,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -377,6 +379,14 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
             }
 
             let mir = emit.map(|_| ailang_core::lower_program_to_mir(&program));
+            let c_source = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
+                Some(emit_c_program(
+                    mir.as_ref()
+                        .expect("MIR should be lowered when emit target is set"),
+                ))
+            } else {
+                None
+            };
 
             if !mir_json_mode {
                 println!(
@@ -410,11 +420,21 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
                 Some(BuildEmitTarget::C) => {
                     println!(
                         "{}",
-                        emit_c_program(
-                            mir.as_ref()
-                                .expect("MIR should be lowered when emit target is set"),
-                        )
+                        c_source
+                            .as_ref()
+                            .expect("C source should be available for c emit target")
                     );
+                }
+                Some(BuildEmitTarget::CBin) => {
+                    let (c_path, bin_path) = compile_c_binary(
+                        path,
+                        &manifest.package.name,
+                        c_source
+                            .as_ref()
+                            .expect("C source should be available for c-bin emit target"),
+                    )?;
+                    println!("generated c source: {}", c_path.display());
+                    println!("compiled binary: {}", bin_path.display());
                 }
                 None => {}
             }
@@ -425,6 +445,58 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
             Err(1)
         }
     }
+}
+
+fn compile_c_binary(
+    project_root: &Path,
+    package_name: &str,
+    c_source: &str,
+) -> Result<(PathBuf, PathBuf), i32> {
+    let build_dir = project_root.join("build");
+    if let Err(err) = fs::create_dir_all(&build_dir) {
+        eprintln!(
+            "could not create build directory `{}`: {err}",
+            build_dir.display()
+        );
+        return Err(2);
+    }
+
+    let c_path = build_dir.join("generated.c");
+    if let Err(err) = fs::write(&c_path, c_source) {
+        eprintln!("could not write generated C `{}`: {err}", c_path.display());
+        return Err(2);
+    }
+
+    let binary_path = build_dir.join(package_name);
+    let output = match Command::new("clang")
+        .arg(&c_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+    {
+        Ok(output) => output,
+        Err(err) => {
+            eprintln!("could not execute clang: {err}");
+            return Err(2);
+        }
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("clang failed while compiling `{}`", c_path.display());
+        if !stdout.trim().is_empty() {
+            eprintln!("{stdout}");
+        }
+        if !stderr.trim().is_empty() {
+            eprintln!("{stderr}");
+        }
+        return Err(1);
+    }
+
+    Ok((c_path, binary_path))
 }
 
 fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {

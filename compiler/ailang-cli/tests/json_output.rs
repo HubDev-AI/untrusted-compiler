@@ -23,6 +23,14 @@ fn run_cli(args: &[&str]) -> Output {
         .expect("ailang CLI should run")
 }
 
+fn clang_available() -> bool {
+    Command::new("clang")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 fn unique_suffix() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -258,7 +266,7 @@ fn build_emit_c_prints_generated_c_source() {
         "C output should include standard integer header"
     );
     assert!(
-        stdout.contains("int64_t main(void)"),
+        stdout.contains("int main(void)"),
         "C output should include generated main signature"
     );
 
@@ -266,6 +274,39 @@ fn build_emit_c_prints_generated_c_source() {
     assert!(
         stderr.trim().is_empty(),
         "stderr should stay empty for successful build --emit c"
+    );
+}
+
+#[test]
+fn build_emit_c_bin_compiles_binary_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin integration test: clang not available");
+        return;
+    }
+
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&["build", "--path", hello, "--emit", "c-bin"]);
+    assert!(output.status.success(), "expected success status");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("compiled binary:"),
+        "build output should include compiled binary location"
+    );
+
+    let binary_path = hello_path.join("build").join("hello");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "compiled binary should exit successfully"
     );
 }
 

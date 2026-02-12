@@ -15,8 +15,8 @@ fn main() -> Int {
 
     assert!(c.contains("#include <stdbool.h>"));
     assert!(c.contains("#include <stdint.h>"));
-    assert!(c.contains("int64_t main(void);"));
-    assert!(c.contains("int64_t main(void) {"));
+    assert!(c.contains("int main(void);"));
+    assert!(c.contains("int main(void) {"));
     assert!(c.contains("bb0:"));
     assert!(c.contains("return 0;"));
 }

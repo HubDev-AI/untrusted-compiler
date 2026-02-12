@@ -201,6 +201,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - MIR unit tests, MIR fixture-based golden tests, and CLI integration tests cover lowering and emit-path behavior.
 - M6 bootstrap has started:
   - `ailang build --emit c` now emits C source from lowered MIR.
+  - `ailang build --emit c-bin` now writes generated C and compiles a runnable binary via `clang`.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
@@ -236,6 +237,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/76-m5-nested-cfg-lowering.md`
 - `docs/book/77-m5-canonical-block-id-normalization.md`
 - `docs/book/78-m6-c-emitter-bootstrap.md`
+- `docs/book/79-m6-clang-compile-link-pipeline.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -468,6 +470,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "C Emission Strategy".
 - Chapter: "Runtime Intrinsics".
 - Chapter: "M6 Bootstrap: C Emitter from MIR".
+- Chapter: "M6 Slice: Clang Compile/Link Pipeline".
 
 ## M7 - HTTP/JSON Vertical Slice
 ### Build tasks

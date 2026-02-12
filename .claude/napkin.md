@@ -10,6 +10,7 @@
 | 2026-02-12 | self | Inserted a new Rust test block inside an existing raw string, which produced cascading parser errors. | After patching large test files, immediately inspect the surrounding lines with `nl -ba` before running broad test suites. |
 | 2026-02-12 | self | Ran `cargo test` with multiple bare test-name args, which Cargo treats as unexpected arguments. | Use one test filter, or run explicit targets (`cargo test --test <name>`). |
 | 2026-02-12 | self | Assumed statement-level continuation block numbering would match previous branch-first ordering. | Reserve block IDs intentionally and update MIR tests/goldens to assert the actual deterministic numbering strategy. |
+| 2026-02-12 | self | Generated C `main` with `int64_t` return type, which clang rejects. | Force emitted `main` signature to return `int` even when AILang return type maps to `Int`/`Int64`. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -49,3 +50,4 @@
 - Refactored MIR lowering into recursive return/continuation CFG helpers to lower nested control flow in branch bodies and block tails.
 - Added MIR block-id canonicalization pass with target remapping for branch/goto/switch terminators to stabilize textual and JSON output.
 - Started M6 with MIR-to-C emission (`build --emit c`) and added core+CLI tests for generated C output.
+- Extended M6 with `build --emit c-bin`: writes generated C and compiles a runnable binary via `clang`.

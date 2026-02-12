@@ -119,7 +119,11 @@ fn collect_locals(function: &MirFunction) -> BTreeSet<String> {
 }
 
 fn c_function_signature(function: &MirFunction) -> String {
-    let return_type = c_type(function.return_type.as_deref());
+    let return_type = if function.name == "main" {
+        "int"
+    } else {
+        c_type(function.return_type.as_deref())
+    };
     let params = function
         .params
         .iter()
