@@ -67,3 +67,4 @@
 - Added req/res intrinsic C-lowering coverage (`req.json`, `res.json`, `res.html`) with runtime stubs and end-to-end `c-bin` integration tests using valid `Schema<T>` parameters.
 - Added header/cookie intrinsic C-lowering coverage (`res.setHeader`, `res.addCookie`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added db/fs/net intrinsic C-lowering coverage (`db.*`, `fs.*`, `httpClient.get*`) with runtime stubs and end-to-end `c-bin` integration tests using capability-typed parameters.
+- Added secrets intrinsic C-lowering coverage (`secrets.get`, `secrets.reveal`) with runtime stubs plus end-to-end `c-bin` coverage for `secrets.get` (non-forbidden default policy path).

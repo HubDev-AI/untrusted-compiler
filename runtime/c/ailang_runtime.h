@@ -19,5 +19,7 @@ int64_t ailang_rt_fs_read();
 int64_t ailang_rt_fs_write();
 int64_t ailang_rt_http_get();
 int64_t ailang_rt_http_get_internal();
+int64_t ailang_rt_secret_get();
+int64_t ailang_rt_secret_reveal();
 
 #endif

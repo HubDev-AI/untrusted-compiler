@@ -676,6 +676,62 @@ fn main() -> Int {
 }
 
 #[test]
+fn build_emit_c_bin_handles_secret_read_intrinsic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin secret intrinsic integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-secret-read");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "secretreaddemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
+  secrets.get(sec, 1);
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for secret-read intrinsic project"
+    );
+
+    let generated_c =
+        fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_secret_get(sec, 1)"));
+
+    let binary_path = project_dir.join("build").join("secretreaddemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(run.status.success(), "compiled binary should exit successfully");
+}
+
+#[test]
 fn run_command_executes_compiled_binary_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping run integration test: clang not available");

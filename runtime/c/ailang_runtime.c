@@ -58,3 +58,11 @@ int64_t ailang_rt_http_get() {
 int64_t ailang_rt_http_get_internal() {
   return 0;
 }
+
+int64_t ailang_rt_secret_get() {
+  return 0;
+}
+
+int64_t ailang_rt_secret_reveal() {
+  return 0;
+}

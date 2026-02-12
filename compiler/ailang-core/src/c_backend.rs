@@ -215,6 +215,10 @@ fn lower_c_expr(expr: &str) -> String {
         "net_internal_call(",
         "__AILANG_INTRINSIC_HTTP_GET_INTERNAL__(",
     );
+    lowered = lowered.replace("secrets.get(", "__AILANG_INTRINSIC_SECRET_GET__(");
+    lowered = lowered.replace("secret_read(", "__AILANG_INTRINSIC_SECRET_GET__(");
+    lowered = lowered.replace("secrets.reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
+    lowered = lowered.replace("secret_reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -233,6 +237,11 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_HTTP_GET_INTERNAL__(",
         "ailang_rt_http_get_internal(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_SECRET_GET__(", "ailang_rt_secret_get(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_SECRET_REVEAL__(",
+        "ailang_rt_secret_reveal(",
     );
     lowered
 }

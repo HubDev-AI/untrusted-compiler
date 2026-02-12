@@ -83,6 +83,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_fs_write();"));
     assert!(header.contains("int64_t ailang_rt_http_get();"));
     assert!(header.contains("int64_t ailang_rt_http_get_internal();"));
+    assert!(header.contains("int64_t ailang_rt_secret_get();"));
+    assert!(header.contains("int64_t ailang_rt_secret_reveal();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -100,6 +102,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_fs_write()"));
     assert!(source.contains("int64_t ailang_rt_http_get()"));
     assert!(source.contains("int64_t ailang_rt_http_get_internal()"));
+    assert!(source.contains("int64_t ailang_rt_secret_get()"));
+    assert!(source.contains("int64_t ailang_rt_secret_reveal()"));
 }
 
 #[test]
@@ -196,4 +200,22 @@ fn main() effects { db.write, db.read, fs.read, fs.write, net } -> Int {
     assert!(c.contains("(void)(ailang_rt_fs_write(1, 2, 3));"));
     assert!(c.contains("(void)(ailang_rt_http_get(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_http_get_internal(1, 2));"));
+}
+
+#[test]
+fn c_backend_rewrites_secret_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() effects { secrets.read, secrets.reveal } -> Int {
+  secrets.get(1, 2);
+  secrets.reveal(1, 2);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_secret_get(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_secret_reveal(1, 2));"));
 }
