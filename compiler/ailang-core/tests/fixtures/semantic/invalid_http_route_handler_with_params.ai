@@ -1,0 +1,9 @@
+fn createUser(schema: Schema<Int>) effects { net } -> Int {
+  req.json(schema);
+  0
+}
+
+fn main(router: Router) -> Int {
+  http.post(router, "/users", createUser);
+  0
+}

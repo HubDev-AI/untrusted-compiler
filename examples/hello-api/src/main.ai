@@ -3,9 +3,9 @@ fn health() effects { net } -> Int {
   0
 }
 
-fn createUser(schema: Schema<Int>) effects { net } -> Int {
-  req.json(schema);
-  res.ok(201, schema, 1);
+fn createUser() effects { net } -> Int {
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
   0
 }
 

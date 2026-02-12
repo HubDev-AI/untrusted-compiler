@@ -1861,6 +1861,23 @@ impl Analyzer {
             return;
         };
 
+        if !handler_sig.params.is_empty() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route handler must not declare parameters in v0 runtime bridge",
+                    args[2].span.clone(),
+                )
+                .with_note(format!(
+                    "function `{handler_name}` declares {} parameter(s); route handlers are currently zero-arg",
+                    handler_sig.params.len()
+                ))
+                .with_note(
+                    "move request/schema acquisition into the handler body (for example via `req.json(...)`)",
+                ),
+            );
+        }
+
         if !handler_sig.declared_effects.contains("net") {
             self.diagnostics.push(
                 Diagnostic::error(

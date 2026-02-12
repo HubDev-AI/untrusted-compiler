@@ -246,6 +246,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - HTTP intrinsic call-shape checks now enforce:
     - `http.get/post(router, path, handler)` require first argument `Router`,
     - `http.serve(port, router)` requires numeric port and `Router` as second argument.
+  - Route handler compatibility now requires zero-argument handlers in the current v0 runtime bridge (`http.get/post`), with compile-time diagnostics for parameterized handler functions.
+  - `examples/hello-api` create-user route is now aligned to this bridge contract (`createUser()`), with schema-gate and response schema names resolved in-handler.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -606,6 +608,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Route Registration Contract Checks".
 - Chapter: "M7 Slice: Typed Router Security Bootstrap Contracts".
 - Chapter: "M7 Slice: HTTP Call-Shape Contract Checks".
+- Chapter: "M7 Slice: Route Handler Compatibility (Zero-Arg Bridge Contract)".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

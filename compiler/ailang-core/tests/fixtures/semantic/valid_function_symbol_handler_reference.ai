@@ -3,13 +3,13 @@ fn health() effects { net } -> Int {
   0
 }
 
-fn createUser(schema: Schema<Int>) effects { net } -> Int {
-  req.json(schema);
-  res.ok(201, schema, 1);
+fn createUser() effects { net } -> Int {
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
   0
 }
 
-fn wire(router: Router, schema: Schema<Int>) -> Int {
+fn wire(router: Router) -> Int {
   http.get(router, "/health", health);
   http.post(router, "/users", createUser);
   0
