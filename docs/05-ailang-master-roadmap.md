@@ -33,7 +33,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `security_map` metadata generation is implemented for baseline sensitive calls and middleware tags.
   - `@allow(...)` annotations are validated during analysis and emitted into `security_map.allows` for audit reporting.
   - `ailang sec audit` CLI command is implemented with deterministic text/json findings and threshold gating.
-  - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
+  - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, exception-count posture signal) plus expiry-window aging metrics and explicit severity-input thresholds.
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Callable/member resolution now seeds namespace aliases from capability-typed parameters/bindings (`DbCap`, `TxCap`, `NetCap`, `InternalNetCap`, `FsCap`, `SecretsCap`):
     - direct member calls like `repo.exec(...)` resolve to canonical sink symbols (`db.exec`) without requiring `let repo = db`.
@@ -632,7 +632,7 @@ Day 14:
 
 1. Extend callable/member canonicalization beyond capability namespace seeding into user-defined capability-object function fields and other non-stdlib callable-value shapes.
 2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
-3. Expand deterministic `sec.audit` non-call policy rollups with aging/trend signals and severity tuning inputs.
+3. Expand deterministic `sec.audit` rollups with longitudinal trend deltas across runs (building on current aging metrics and severity-input evidence).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

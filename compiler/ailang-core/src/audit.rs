@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ALLOW_EXPIRING_SOON_DAYS: i64 = 14;
+const ALLOW_EXPIRING_SOON_HIGH_THRESHOLD: usize = 5;
 const ALLOW_COUNT_HIGH_THRESHOLD: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -732,20 +733,53 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
     if !expired_allows.is_empty() || !expiring_soon_allows.is_empty() {
         let mut window = expired_allows.clone();
         window.extend(expiring_soon_allows.clone());
+        let rollup_severity = if !expired_allows.is_empty()
+            || expiring_soon_allows.len() >= ALLOW_EXPIRING_SOON_HIGH_THRESHOLD
+        {
+            AuditSeverity::HIGH
+        } else {
+            AuditSeverity::MEDIUM
+        };
+        let stats = expiry_window_stats(&window, today_days);
+        let mut evidence = json!({
+            "expiredCount": expired_allows.len(),
+            "expiringSoonCount": expiring_soon_allows.len(),
+            "windowDays": ALLOW_EXPIRING_SOON_DAYS,
+            "sampleExceptions": exception_samples(&window, 5),
+            "severityInputs": {
+                "expiredTriggersHigh": true,
+                "expiringSoonHighThreshold": ALLOW_EXPIRING_SOON_HIGH_THRESHOLD,
+            },
+        });
+        if let Some(stats) = stats {
+            if let Some(obj) = evidence.as_object_mut() {
+                obj.insert(
+                    "minDaysUntilExpiry".to_string(),
+                    json!(stats.min_days_until_expiry),
+                );
+                obj.insert(
+                    "maxDaysUntilExpiry".to_string(),
+                    json!(stats.max_days_until_expiry),
+                );
+                obj.insert(
+                    "medianDaysUntilExpiry".to_string(),
+                    json!(stats.median_days_until_expiry),
+                );
+                obj.insert(
+                    "expiringIn7DaysCount".to_string(),
+                    json!(stats.expiring_in_7_days),
+                );
+                obj.insert(
+                    "expiringIn30DaysCount".to_string(),
+                    json!(stats.expiring_in_30_days),
+                );
+            }
+        }
         findings.push(finding(
             "ALLOW_EXPIRY_WINDOW_ROLLUP",
-            if expired_allows.is_empty() {
-                AuditSeverity::MEDIUM
-            } else {
-                AuditSeverity::HIGH
-            },
+            rollup_severity,
             "policy",
-            json!({
-                "expiredCount": expired_allows.len(),
-                "expiringSoonCount": expiring_soon_allows.len(),
-                "windowDays": ALLOW_EXPIRING_SOON_DAYS,
-                "sampleExceptions": exception_samples(&window, 5),
-            }),
+            evidence,
             "Reduce expiring/expired @allow exceptions and keep exception windows short and explicit.",
         ));
     }
@@ -1075,6 +1109,46 @@ fn exception_samples(allows: &[SecurityAllow], limit: usize) -> Vec<Value> {
             })
         })
         .collect()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ExpiryWindowStats {
+    min_days_until_expiry: i64,
+    max_days_until_expiry: i64,
+    median_days_until_expiry: i64,
+    expiring_in_7_days: usize,
+    expiring_in_30_days: usize,
+}
+
+fn expiry_window_stats(allows: &[SecurityAllow], today_days: i64) -> Option<ExpiryWindowStats> {
+    let mut deltas = allows
+        .iter()
+        .filter_map(|allow| days_from_iso_date(&allow.expires).map(|expiry| expiry - today_days))
+        .collect::<Vec<_>>();
+    if deltas.is_empty() {
+        return None;
+    }
+    deltas.sort_unstable();
+
+    let min_days_until_expiry = *deltas.first().unwrap_or(&0);
+    let max_days_until_expiry = *deltas.last().unwrap_or(&0);
+    let median_days_until_expiry = deltas[deltas.len() / 2];
+    let expiring_in_7_days = deltas
+        .iter()
+        .filter(|delta| **delta >= 0 && **delta <= 7)
+        .count();
+    let expiring_in_30_days = deltas
+        .iter()
+        .filter(|delta| **delta >= 0 && **delta <= 30)
+        .count();
+
+    Some(ExpiryWindowStats {
+        min_days_until_expiry,
+        max_days_until_expiry,
+        median_days_until_expiry,
+        expiring_in_7_days,
+        expiring_in_30_days,
+    })
 }
 
 fn finding(

@@ -515,6 +515,38 @@ fn sec_audit_flags_allow_hygiene_findings() {
             .is_some_and(|samples| !samples.is_empty()),
         "rollup should include sampled exceptions"
     );
+    assert!(
+        expiry_rollup
+            .evidence
+            .get("minDaysUntilExpiry")
+            .and_then(|value| value.as_i64())
+            .is_some(),
+        "rollup should expose minDaysUntilExpiry"
+    );
+    assert!(
+        expiry_rollup
+            .evidence
+            .get("medianDaysUntilExpiry")
+            .and_then(|value| value.as_i64())
+            .is_some(),
+        "rollup should expose medianDaysUntilExpiry"
+    );
+    assert!(
+        expiry_rollup
+            .evidence
+            .get("maxDaysUntilExpiry")
+            .and_then(|value| value.as_i64())
+            .is_some(),
+        "rollup should expose maxDaysUntilExpiry"
+    );
+    assert_eq!(
+        expiry_rollup
+            .evidence
+            .get("severityInputs")
+            .and_then(|value| value.get("expiringSoonHighThreshold"))
+            .and_then(|value| value.as_u64()),
+        Some(5)
+    );
     let allow_count = report
         .findings
         .iter()

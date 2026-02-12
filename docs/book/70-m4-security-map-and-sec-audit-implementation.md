@@ -850,6 +850,52 @@ Canonicalized origin notes already reported the final source call (for example `
 - this improves explainability while keeping diagnostics single-line and compact.
 - next step is exposing richer multi-step provenance (for example trace arrays) in editor tooling surfaces (hover/code actions/LSP diagnostics data).
 
+### Slice Explanation: Expiry-Window Aging Metrics and Severity Inputs in `sec.audit`
+
+#### 1) What it is
+This slice extends `ALLOW_EXPIRY_WINDOW_ROLLUP` evidence with deterministic aging metrics and explicit severity-input metadata.
+
+#### 2) Why it exists
+The rollup previously provided counts and samples, but not enough structured age context to explain risk pressure or tune policy thresholds transparently.
+
+#### 3) How it works internally
+- audit now computes per-window expiry deltas (`expiry_day - today_day`) for expired/soon-expiring exceptions.
+- rollup evidence now includes:
+  - `minDaysUntilExpiry`
+  - `medianDaysUntilExpiry`
+  - `maxDaysUntilExpiry`
+  - `expiringIn7DaysCount`
+  - `expiringIn30DaysCount`
+  - `severityInputs.expiringSoonHighThreshold`
+- rollup severity remains deterministic and now uses explicit inputs:
+  - `HIGH` if any expired exception exists,
+  - `HIGH` if expiring-soon count crosses configured threshold,
+  - otherwise `MEDIUM`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - parsed `@allow` expiry dates,
+  - current UTC day index used elsewhere in audit.
+- Output:
+  - richer `ALLOW_EXPIRY_WINDOW_ROLLUP` evidence payload for text/json consumers.
+- Constraints:
+  - date parsing remains strict ISO-like (`YYYY-MM-DD`),
+  - metrics are static, deterministic, and bounded to current report data only (no historical storage yet).
+
+#### 5) Failure modes and diagnostics
+- no new compiler diagnostics were added.
+- if no valid expiry dates are available in the window, rollup falls back to existing count/sample evidence.
+
+#### 6) Example usage
+- a report with one expired allow now includes both:
+  - `expiredCount: 1`
+  - age fields such as `minDaysUntilExpiry` and `medianDaysUntilExpiry`,
+  - plus `severityInputs.expiringSoonHighThreshold` for explainable severity mapping.
+
+#### 7) Tradeoffs and next steps
+- this gives deterministic aging context in a single report but does not yet compute longitudinal trends across multiple runs.
+- next step is adding persisted trend deltas (for example day-over-day expiry pressure change) while keeping audits reproducible.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -876,4 +922,4 @@ Canonicalized origin notes already reported the final source call (for example `
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
-5. Expand `sec.audit` policy rollups with trend/aging signals and policy-tunable severity weighting.
+5. Expand `sec.audit` rollups with persisted longitudinal trend deltas across runs (aging pressure over time).
