@@ -41,3 +41,4 @@
 - Extended M5 MIR lowering with tail-`if` branch blocks and explicit `branch` terminators.
 - Added fixture-based MIR golden tests to lock textual MIR output behavior.
 - Extended M5 MIR control-flow lowering with tail-`match` to `switch` + per-arm blocks.
+- Added `build --emit mir-json` JSON-only stdout mode for machine-readable MIR integration.

@@ -78,6 +78,7 @@ enum AuditOutputFormat {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum BuildEmitTarget {
     Mir,
+    MirJson,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -358,6 +359,7 @@ fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<Path
 }
 
 fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
+    let mir_json_mode = matches!(emit, Some(BuildEmitTarget::MirJson));
     match ailang_core::validate_project(path) {
         Ok(manifest) => {
             let program = match analyze_entry(path, &manifest) {
@@ -373,19 +375,38 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
                 return Err(1);
             }
 
-            println!(
-                "build succeeded (M3 effects): package={}, entry={}",
-                manifest.package.name,
-                manifest.entry_file()
-            );
-            println!(
-                "wrote lockfile stub: {}",
-                path.join("ailang.lock").display()
-            );
+            let mir = emit.map(|_| ailang_core::lower_program_to_mir(&program));
 
-            if matches!(emit, Some(BuildEmitTarget::Mir)) {
-                let mir = ailang_core::lower_program_to_mir(&program);
-                println!("{}", mir.render_text());
+            if !mir_json_mode {
+                println!(
+                    "build succeeded (M3 effects): package={}, entry={}",
+                    manifest.package.name,
+                    manifest.entry_file()
+                );
+                println!(
+                    "wrote lockfile stub: {}",
+                    path.join("ailang.lock").display()
+                );
+            }
+
+            match emit {
+                Some(BuildEmitTarget::Mir) => {
+                    println!(
+                        "{}",
+                        mir.as_ref()
+                            .expect("MIR should be lowered when emit target is set")
+                            .render_text()
+                    );
+                }
+                Some(BuildEmitTarget::MirJson) => {
+                    println!(
+                        "{}",
+                        mir.as_ref()
+                            .expect("MIR should be lowered when emit target is set")
+                            .to_pretty_json()
+                    );
+                }
+                None => {}
             }
             Ok(())
         }

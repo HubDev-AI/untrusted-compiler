@@ -237,3 +237,33 @@ fn build_emit_mir_prints_textual_mir() {
         "stderr should stay empty for successful build --emit mir"
     );
 }
+
+#[test]
+fn build_emit_mir_json_writes_only_json_on_stdout() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&["build", "--path", hello, "--emit", "mir-json"]);
+    assert!(output.status.success(), "expected success status");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value =
+        serde_json::from_str(&stdout).expect("stdout should be machine-parseable JSON");
+    assert!(
+        parsed
+            .get("functions")
+            .and_then(|value| value.as_array())
+            .is_some_and(|functions| !functions.is_empty()),
+        "MIR JSON output should include at least one function"
+    );
+    assert!(!stdout.contains("build succeeded"));
+    assert!(!stdout.contains("wrote lockfile stub"));
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should stay empty for successful build --emit mir-json"
+    );
+}

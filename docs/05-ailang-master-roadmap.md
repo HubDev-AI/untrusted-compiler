@@ -193,6 +193,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - tail `if` expressions now lower into explicit branch control-flow with multiple blocks (`bb0` -> `bb1` / `bb2`).
   - tail `match` expressions now lower into `switch` terminators with per-arm blocks.
   - `ailang build --emit mir` now prints textual MIR for inspection.
+  - `ailang build --emit mir-json` now emits machine-readable MIR JSON (JSON-only stdout mode).
   - MIR unit tests, MIR fixture-based golden tests, and CLI integration tests cover lowering and emit-path behavior.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).

@@ -17,6 +17,7 @@ This chapter documents the first M5 slice that introduces a backend-neutral MIR 
   - `MirProgram::render_text()`
 - Added CLI integration:
   - `ailang build --emit mir`
+  - `ailang build --emit mir-json`
 - Added tests:
   - core MIR lowering tests in `compiler/ailang-core/tests/mir.rs`
   - fixture-based MIR golden tests in `compiler/ailang-core/tests/golden_mir.rs`
@@ -65,11 +66,14 @@ MIR is a compiler-internal, backend-neutral representation between AST/semantic 
 
 Build now supports:
 - `ailang build --path <project> --emit mir`
+- `ailang build --path <project> --emit mir-json`
 
 Behavior:
 1. project validation + semantic analysis run as before
 2. lockfile stub is written as before
-3. MIR is lowered from analyzed AST and printed in text form
+3. MIR is lowered from analyzed AST and emitted as:
+   - text form for `--emit mir`
+   - JSON-only stdout for `--emit mir-json`
 
 ## Example output shape
 ```text
@@ -83,6 +87,7 @@ fn main() -> Int
 - `mir_lowering_honors_explicit_return_terminator`
 - `mir_fixtures_match_golden_output` (fixture + golden snapshots)
 - `build_emit_mir_prints_textual_mir`
+- `build_emit_mir_json_writes_only_json_on_stdout`
 
 ## Tradeoffs
 - Current MIR is linear and single-block per function.
