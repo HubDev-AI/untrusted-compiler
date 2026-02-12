@@ -1094,7 +1094,13 @@ impl Analyzer {
             if let Some(effect) = intrinsic.effect {
                 used_effects.insert(effect.to_string());
             }
-            self.enforce_trust_gate_requirements(name.as_str(), span.clone(), args, &arg_types);
+            self.enforce_trust_gate_requirements(
+                name.as_str(),
+                span.clone(),
+                args,
+                &arg_types,
+                callable_aliases,
+            );
 
             if let Some(required_capability) = intrinsic.required_capability {
                 let capability_index = capability_arg_index(name.as_str(), args.len());
@@ -1686,7 +1692,16 @@ impl Analyzer {
         span: Span,
         args: &[Expr],
         arg_types: &[Type],
+        callable_aliases: &HashMap<String, String>,
     ) {
+        self.enforce_http_route_requirements(
+            callee_name,
+            span.clone(),
+            args,
+            arg_types,
+            callable_aliases,
+        );
+
         if is_req_json_gate(callee_name) && args.is_empty() {
             self.diagnostics.push(
                 Diagnostic::error(
@@ -1765,6 +1780,77 @@ impl Analyzer {
                     .with_note(format!("found `{}`", arg_types[1].describe())),
                 );
             }
+        }
+    }
+
+    fn enforce_http_route_requirements(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+        callable_aliases: &HashMap<String, String>,
+    ) {
+        if !is_http_route_registration(callee_name) {
+            return;
+        }
+
+        if args.len() != 3 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route registration requires `(router, path, handler)` arguments",
+                    span,
+                )
+                .with_note("use `http.get(router, \"/path\", handler)` or `http.post(...)`"),
+            );
+            return;
+        }
+
+        if !arg_types[1].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "route path must be `String`", args[1].span.clone())
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use a string path such as `\"/health\"`"),
+            );
+        }
+
+        let Some(handler_name) = resolve_callable_name(&args[2], callable_aliases) else {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route handler must reference a declared function symbol",
+                    args[2].span.clone(),
+                )
+                .with_note("pass a function symbol like `health` as the third argument"),
+            );
+            return;
+        };
+
+        let Some(handler_sig) = self.catalog.functions.get(handler_name.as_str()) else {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "route handler must reference a declared function symbol",
+                    args[2].span.clone(),
+                )
+                .with_note(format!("`{handler_name}` is not a declared function")),
+            );
+            return;
+        };
+
+        if !handler_sig.declared_effects.contains("net") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4002",
+                    "route handler must declare `net` effect",
+                    args[2].span.clone(),
+                )
+                .with_tag("effects")
+                .with_note(format!(
+                    "function `{handler_name}` should declare `effects {{ net }}` to be used as an HTTP handler"
+                )),
+            );
         }
     }
 
@@ -2946,6 +3032,13 @@ fn capability_arg_index(name: &str, arg_len: usize) -> usize {
 
 fn is_req_json_gate(name: &str) -> bool {
     matches!(name, "req_json" | "req.json")
+}
+
+fn is_http_route_registration(name: &str) -> bool {
+    matches!(
+        name,
+        "http_get_route" | "http.get" | "http_post_route" | "http.post"
+    )
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

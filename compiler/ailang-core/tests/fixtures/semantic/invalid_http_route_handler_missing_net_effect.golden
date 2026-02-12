@@ -1,0 +1,3 @@
+error[E4002]: route handler must declare `net` effect
+  --> invalid_http_route_handler_missing_net_effect.ai:6:31
+  note: function `health` should declare `effects { net }` to be used as an HTTP handler

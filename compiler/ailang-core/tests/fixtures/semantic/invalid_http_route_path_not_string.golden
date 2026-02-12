@@ -1,0 +1,4 @@
+error[E4001]: route path must be `String`
+  --> invalid_http_route_path_not_string.ai:6:21
+  note: found `Int`
+  note: use a string path such as `"/health"`

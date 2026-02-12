@@ -25,6 +25,7 @@
 | 2026-02-12 | self | Inserted a new Rust test block before closing an existing raw string literal, breaking test-file parsing. | After adding tests, inspect surrounding lines with `nl -ba` to confirm raw-string boundaries are intact. |
 | 2026-02-12 | self | Repeated a brittle C-backend assertion using an exact local declaration shape for `sql.q` lowering. | Assert runtime-call substrings (`ailang_rt_*`) instead of exact declaration text unless declaration shape is explicitly under test. |
 | 2026-02-12 | self | Introduced a local variable named `cookie` initialized from `cookie.build(...)`, which triggered alias expansion growth (`cookie.build.build...`) and made semantic analysis appear stuck. | Guard alias-name expansion against recursive suffix growth and cap alias-resolution steps; treat namespace-shadowing call aliases as a hot path for regressions. |
+| 2026-02-12 | self | Used parallel tool calls for multiple Cargo test invocations again, causing lock waits/noisy output. | Run Cargo commands sequentially in this repo; parallelize reads/searches only. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -103,3 +104,4 @@
 - Added SQL query-construction helper bridge for `sql.q`, including semantic namespace support, runtime lowering, and `security_map` `gate.sql.parameterize` tagging.
 - Added cookie-builder helper bridge for `cookie.build`, including runtime lowering and `security_map` `gate.cookie.build` tagging, and hardened alias resolution against runaway suffix expansion.
 - Route handler wiring needed function-symbol identifiers to be accepted as value expressions; semantic fallback to cataloged function names unblocks `http.get(..., health)` style samples without weakening unknown-name diagnostics for non-functions.
+- Added initial semantic route contract checks for `http.get/http.post` (string path + function-symbol handler + handler `effects { net }`) and updated router fixtures to explicit path/handler forms.

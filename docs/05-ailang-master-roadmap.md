@@ -233,6 +233,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Alias resolution now includes recursion guards for namespace-shadowing call aliases, preventing runaway expansion patterns like `cookie.build.build...` during semantic/security analysis.
   - Semantic analysis now accepts declared function symbols as value expressions for handler-style routing/wiring (for example `http.get(router, "/health", health)`).
   - `examples/hello-api` now uses explicit `/health` and `/users` route paths with function-symbol handlers (`health`, `createUser`) and policy-driven middleware wiring chain (`security headers -> CORS -> CSRF -> auth`).
+  - Route registration semantics now enforce an initial handler contract for `http.get`/`http.post`:
+    - path argument must be `String`,
+    - handler argument must resolve to a declared function symbol,
+    - handler must declare `effects { net }`.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -590,6 +594,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: SQL Query Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: Cookie Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: Function Symbol Handler Wiring for hello-api".
+- Chapter: "M7 Slice: Route Registration Contract Checks".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

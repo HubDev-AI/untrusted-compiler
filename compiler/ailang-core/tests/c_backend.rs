@@ -490,8 +490,8 @@ fn handler() -> Int {
 
 fn main() effects { net } -> Int {
   let router = http.router();
-  http.get(router, 1, handler);
-  http.post(router, 1, handler);
+  http.get(router, "/health", handler);
+  http.post(router, "/users", handler);
   http.serve(1, router);
   0
 }
@@ -502,8 +502,8 @@ fn main() effects { net } -> Int {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("router = ailang_rt_http_router();"));
-    assert!(c.contains("(void)(ailang_rt_http_route_get(router, 1, handler));"));
-    assert!(c.contains("(void)(ailang_rt_http_route_post(router, 1, handler));"));
+    assert!(c.contains("(void)(ailang_rt_http_route_get(router, \"/health\", handler));"));
+    assert!(c.contains("(void)(ailang_rt_http_route_post(router, \"/users\", handler));"));
     assert!(c.contains("(void)(ailang_rt_http_serve(1, router));"));
 }
 

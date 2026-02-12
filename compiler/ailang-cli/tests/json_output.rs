@@ -994,10 +994,18 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn buildRouter() effects { net } -> Int {
+        r#"fn health() effects { net } -> Int {
+  0
+}
+
+fn createUser() effects { net } -> Int {
+  0
+}
+
+fn buildRouter() effects { net } -> Int {
   let router = http.router();
-  http.get(router, 1, 1);
-  http.post(router, 1, 1);
+  http.get(router, "/health", health);
+  http.post(router, "/users", createUser);
   http.serve(1, router);
   0
 }
@@ -1021,8 +1029,8 @@ fn main() -> Int {
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_http_router()"));
-    assert!(generated_c.contains("ailang_rt_http_route_get(router, 1, 1)"));
-    assert!(generated_c.contains("ailang_rt_http_route_post(router, 1, 1)"));
+    assert!(generated_c.contains("ailang_rt_http_route_get(router, \"/health\", health)"));
+    assert!(generated_c.contains("ailang_rt_http_route_post(router, \"/users\", createUser)"));
     assert!(generated_c.contains("ailang_rt_http_serve(1, router)"));
 
     let binary_path = project_dir.join("build").join("httprouterdemo");
@@ -1408,9 +1416,19 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn wireRoutes(router: Router, request: Request, response: Response) effects { net } -> Int {
-  http.get(router, 1, 1);
-  http.post(router, 1, 1);
+        r#"fn health() effects { net } -> Int {
+  0
+}
+
+fn createUser() effects { net } -> Int {
+  0
+}
+
+fn wireRoutes(router: Router, request: Request, response: Response) effects { net } -> Int {
+  request;
+  response;
+  http.get(router, "/health", health);
+  http.post(router, "/users", createUser);
   http.serve(1, router);
   0
 }

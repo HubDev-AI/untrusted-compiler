@@ -1,0 +1,8 @@
+fn health() effects { net } -> Int {
+  0
+}
+
+fn main(router: Router) effects { net } -> Int {
+  http.post(router, 1, health);
+  0
+}
