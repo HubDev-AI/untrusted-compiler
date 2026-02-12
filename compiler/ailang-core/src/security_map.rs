@@ -122,7 +122,8 @@ enum FunctionOriginSummary {
 pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
     let mut calls = Vec::new();
     let mut middleware = Vec::new();
-    let summaries = build_function_origin_summaries(program);
+    let callable_summaries = build_callable_forward_summaries(program);
+    let summaries = build_function_origin_summaries(program, &callable_summaries);
 
     for item in &program.items {
         let ItemKind::Function(function) = &item.kind else {
@@ -139,6 +140,7 @@ pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
             &mut origins,
             &mut callable_aliases,
             &summaries,
+            &callable_summaries,
         );
     }
 
@@ -240,6 +242,7 @@ fn collect_block(
     origins: &mut HashMap<String, TrackedOrigin>,
     callable_aliases: &mut HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) {
     let mut scoped = origins.clone();
     let mut scoped_aliases = callable_aliases.clone();
@@ -247,8 +250,15 @@ fn collect_block(
     for stmt in &block.statements {
         match &stmt.kind {
             StmtKind::Let { name, value, .. } => {
-                let inferred = infer_expr_origin(value, &scoped, &scoped_aliases, summaries);
-                let alias = infer_callable_alias(value, &scoped_aliases, summaries);
+                let inferred = infer_expr_origin(
+                    value,
+                    &scoped,
+                    &scoped_aliases,
+                    summaries,
+                    callable_summaries,
+                );
+                let alias =
+                    infer_callable_alias(value, &scoped_aliases, summaries, callable_summaries);
                 collect_expr(
                     value,
                     calls,
@@ -257,6 +267,7 @@ fn collect_block(
                     &mut scoped,
                     &mut scoped_aliases,
                     summaries,
+                    callable_summaries,
                 );
                 if let Some(origin) = inferred {
                     scoped.insert(name.clone(), origin);
@@ -279,6 +290,7 @@ fn collect_block(
                         &mut scoped,
                         &mut scoped_aliases,
                         summaries,
+                        callable_summaries,
                     );
                 }
             }
@@ -290,6 +302,7 @@ fn collect_block(
                 &mut scoped,
                 &mut scoped_aliases,
                 summaries,
+                callable_summaries,
             ),
         }
     }
@@ -303,6 +316,7 @@ fn collect_block(
             &mut scoped,
             &mut scoped_aliases,
             summaries,
+            callable_summaries,
         );
     }
 }
@@ -315,6 +329,7 @@ fn collect_expr(
     origins: &mut HashMap<String, TrackedOrigin>,
     callable_aliases: &mut HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) {
     match &expr.kind {
         ExprKind::Call { callee, args } => {
@@ -329,7 +344,13 @@ fn collect_expr(
                         callee: name.clone(),
                         tags: tags.into_iter().map(str::to_string).collect(),
                         arg_roles: call_arg_roles(name.as_str(), args.len()),
-                        origin_edges: call_origin_edges(args, origins, callable_aliases, summaries),
+                        origin_edges: call_origin_edges(
+                            args,
+                            origins,
+                            callable_aliases,
+                            summaries,
+                            callable_summaries,
+                        ),
                     });
                 }
 
@@ -346,6 +367,7 @@ fn collect_expr(
                 origins,
                 callable_aliases,
                 summaries,
+                callable_summaries,
             );
             for arg in args {
                 collect_expr(
@@ -356,6 +378,7 @@ fn collect_expr(
                     origins,
                     callable_aliases,
                     summaries,
+                    callable_summaries,
                 );
             }
         }
@@ -367,6 +390,7 @@ fn collect_expr(
             origins,
             callable_aliases,
             summaries,
+            callable_summaries,
         ),
         ExprKind::Binary { left, right, .. } => {
             collect_expr(
@@ -377,6 +401,7 @@ fn collect_expr(
                 origins,
                 callable_aliases,
                 summaries,
+                callable_summaries,
             );
             collect_expr(
                 right,
@@ -386,6 +411,7 @@ fn collect_expr(
                 origins,
                 callable_aliases,
                 summaries,
+                callable_summaries,
             );
         }
         ExprKind::Member { object, .. } => collect_expr(
@@ -396,6 +422,7 @@ fn collect_expr(
             origins,
             callable_aliases,
             summaries,
+            callable_summaries,
         ),
         ExprKind::If {
             condition,
@@ -410,6 +437,7 @@ fn collect_expr(
                 origins,
                 callable_aliases,
                 summaries,
+                callable_summaries,
             );
             let mut then_scope = origins.clone();
             let mut then_aliases = callable_aliases.clone();
@@ -421,6 +449,7 @@ fn collect_expr(
                 &mut then_scope,
                 &mut then_aliases,
                 summaries,
+                callable_summaries,
             );
             if let Some(else_expr) = else_branch {
                 let mut else_scope = origins.clone();
@@ -433,6 +462,7 @@ fn collect_expr(
                     &mut else_scope,
                     &mut else_aliases,
                     summaries,
+                    callable_summaries,
                 );
             }
         }
@@ -445,6 +475,7 @@ fn collect_expr(
                 origins,
                 callable_aliases,
                 summaries,
+                callable_summaries,
             );
             for arm in arms {
                 let mut arm_scope = origins.clone();
@@ -457,6 +488,7 @@ fn collect_expr(
                     &mut arm_scope,
                     &mut arm_aliases,
                     summaries,
+                    callable_summaries,
                 );
             }
         }
@@ -471,6 +503,7 @@ fn collect_expr(
                 &mut block_scope,
                 &mut block_aliases,
                 summaries,
+                callable_summaries,
             )
         }
         ExprKind::Identifier(_) | ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => {
@@ -483,10 +516,17 @@ fn call_origin_edges(
     origins: &HashMap<String, TrackedOrigin>,
     callable_aliases: &HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) -> Option<Vec<SecurityOriginEdge>> {
     let mut edges = Vec::new();
     for (index, arg) in args.iter().enumerate() {
-        if let Some(origin) = infer_expr_origin(arg, origins, callable_aliases, summaries) {
+        if let Some(origin) = infer_expr_origin(
+            arg,
+            origins,
+            callable_aliases,
+            summaries,
+            callable_summaries,
+        ) {
             edges.push(SecurityOriginEdge {
                 arg_index: index,
                 origin: origin.origin,
@@ -508,12 +548,25 @@ fn infer_expr_origin(
     origins: &HashMap<String, TrackedOrigin>,
     callable_aliases: &HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) -> Option<TrackedOrigin> {
     match &expr.kind {
         ExprKind::Identifier(name) => origins.get(name).cloned(),
         ExprKind::Binary { left, right, .. } => {
-            let left_origin = infer_expr_origin(left, origins, callable_aliases, summaries);
-            let right_origin = infer_expr_origin(right, origins, callable_aliases, summaries);
+            let left_origin = infer_expr_origin(
+                left,
+                origins,
+                callable_aliases,
+                summaries,
+                callable_summaries,
+            );
+            let right_origin = infer_expr_origin(
+                right,
+                origins,
+                callable_aliases,
+                summaries,
+                callable_summaries,
+            );
             merge_origins(left_origin, right_origin)
         }
         ExprKind::Call { callee, args } => {
@@ -534,7 +587,13 @@ fn infer_expr_origin(
                         forwarded_calls,
                     }) => {
                         let mut origin = args.get(*index).and_then(|arg| {
-                            infer_expr_origin(arg, origins, callable_aliases, summaries)
+                            infer_expr_origin(
+                                arg,
+                                origins,
+                                callable_aliases,
+                                summaries,
+                                callable_summaries,
+                            )
                         })?;
                         for forwarded in forwarded_calls {
                             append_trace_marker(&mut origin.trace, forwarded.clone());
@@ -562,7 +621,13 @@ fn infer_expr_origin(
             }
         }
         ExprKind::Member { object, field } => {
-            let mut origin = infer_expr_origin(object, origins, callable_aliases, summaries)?;
+            let mut origin = infer_expr_origin(
+                object,
+                origins,
+                callable_aliases,
+                summaries,
+                callable_summaries,
+            )?;
             origin.origin = format!("{}.{}", origin.origin, field);
             Some(origin)
         }
@@ -571,17 +636,34 @@ fn infer_expr_origin(
             else_branch,
             ..
         } => {
-            let then_origin = infer_block_origin(then_branch, origins, callable_aliases, summaries);
-            let else_origin = else_branch
-                .as_ref()
-                .and_then(|expr| infer_expr_origin(expr, origins, callable_aliases, summaries));
+            let then_origin = infer_block_origin(
+                then_branch,
+                origins,
+                callable_aliases,
+                summaries,
+                callable_summaries,
+            );
+            let else_origin = else_branch.as_ref().and_then(|expr| {
+                infer_expr_origin(
+                    expr,
+                    origins,
+                    callable_aliases,
+                    summaries,
+                    callable_summaries,
+                )
+            });
             merge_origins(then_origin, else_origin)
         }
         ExprKind::Match { arms, .. } => {
             let mut merged: Option<TrackedOrigin> = None;
             for arm in arms {
-                let arm_origin =
-                    infer_expr_origin(&arm.value, origins, callable_aliases, summaries);
+                let arm_origin = infer_expr_origin(
+                    &arm.value,
+                    origins,
+                    callable_aliases,
+                    summaries,
+                    callable_summaries,
+                );
                 merged = merge_origins(merged, arm_origin);
                 if merged.is_none() {
                     return None;
@@ -589,10 +671,20 @@ fn infer_expr_origin(
             }
             merged
         }
-        ExprKind::Block(block) => infer_block_origin(block, origins, callable_aliases, summaries),
-        ExprKind::Unary { expr: inner, .. } => {
-            infer_expr_origin(inner, origins, callable_aliases, summaries)
-        }
+        ExprKind::Block(block) => infer_block_origin(
+            block,
+            origins,
+            callable_aliases,
+            summaries,
+            callable_summaries,
+        ),
+        ExprKind::Unary { expr: inner, .. } => infer_expr_origin(
+            inner,
+            origins,
+            callable_aliases,
+            summaries,
+            callable_summaries,
+        ),
         _ => None,
     }
 }
@@ -602,27 +694,41 @@ fn infer_block_origin(
     origins: &HashMap<String, TrackedOrigin>,
     callable_aliases: &HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) -> Option<TrackedOrigin> {
     let mut scoped = origins.clone();
     let mut scoped_aliases = callable_aliases.clone();
     for stmt in &block.statements {
         if let StmtKind::Let { name, value, .. } = &stmt.kind {
-            if let Some(origin) = infer_expr_origin(value, &scoped, &scoped_aliases, summaries) {
+            if let Some(origin) = infer_expr_origin(
+                value,
+                &scoped,
+                &scoped_aliases,
+                summaries,
+                callable_summaries,
+            ) {
                 scoped.insert(name.clone(), origin);
             } else {
                 scoped.remove(name);
             }
-            if let Some(alias) = infer_callable_alias(value, &scoped_aliases, summaries) {
+            if let Some(alias) =
+                infer_callable_alias(value, &scoped_aliases, summaries, callable_summaries)
+            {
                 scoped_aliases.insert(name.clone(), alias);
             } else {
                 scoped_aliases.remove(name);
             }
         }
     }
-    block
-        .tail
-        .as_ref()
-        .and_then(|tail| infer_expr_origin(tail, &scoped, &scoped_aliases, summaries))
+    block.tail.as_ref().and_then(|tail| {
+        infer_expr_origin(
+            tail,
+            &scoped,
+            &scoped_aliases,
+            summaries,
+            callable_summaries,
+        )
+    })
 }
 
 fn merge_origins(
@@ -652,7 +758,130 @@ fn merge_origins(
     }
 }
 
-fn build_function_origin_summaries(program: &Program) -> HashMap<String, FunctionOriginSummary> {
+fn build_callable_forward_summaries(program: &Program) -> HashMap<String, String> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            ItemKind::Function(function) => Some(function),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let function_names = functions
+        .iter()
+        .map(|function| function.name.clone())
+        .collect::<HashSet<_>>();
+
+    let mut summaries = HashMap::new();
+    let max_rounds = functions.len().max(1);
+    for _ in 0..max_rounds {
+        let mut changed = false;
+        for function in &functions {
+            let next = summarize_function_callable_forward(function, &summaries, &function_names);
+            match next {
+                Some(target) => {
+                    if summaries.get(function.name.as_str()) != Some(&target) {
+                        summaries.insert(function.name.clone(), target);
+                        changed = true;
+                    }
+                }
+                None => {
+                    if summaries.remove(function.name.as_str()).is_some() {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    summaries
+}
+
+fn summarize_function_callable_forward(
+    function: &FunctionDecl,
+    summaries: &HashMap<String, String>,
+    function_names: &HashSet<String>,
+) -> Option<String> {
+    let mut callable_aliases = HashMap::new();
+    for stmt in &function.body.statements {
+        if let StmtKind::Let { name, value, .. } = &stmt.kind {
+            if let Some(target) =
+                infer_callable_forward_expr(value, &callable_aliases, summaries, function_names)
+            {
+                callable_aliases.insert(name.clone(), target);
+            } else {
+                callable_aliases.remove(name);
+            }
+        }
+    }
+    function.body.tail.as_ref().and_then(|tail| {
+        infer_callable_forward_expr(tail, &callable_aliases, summaries, function_names)
+    })
+}
+
+fn infer_callable_forward_expr(
+    expr: &Expr,
+    callable_aliases: &HashMap<String, String>,
+    summaries: &HashMap<String, String>,
+    function_names: &HashSet<String>,
+) -> Option<String> {
+    if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+        return normalize_callable_forward_target(name, summaries, function_names, true);
+    }
+
+    if let ExprKind::Call { callee, .. } = &expr.kind {
+        let callee_name = resolve_callable_name(callee, callable_aliases)?;
+        return normalize_callable_forward_target(callee_name, summaries, function_names, false);
+    }
+
+    None
+}
+
+fn normalize_callable_forward_target(
+    name: String,
+    summaries: &HashMap<String, String>,
+    function_names: &HashSet<String>,
+    allow_function_fallback: bool,
+) -> Option<String> {
+    let resolved = resolve_forward_summary_name(name, summaries);
+    if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
+        Some(resolved)
+    } else if allow_function_fallback && function_names.contains(resolved.as_str()) {
+        Some(resolved)
+    } else {
+        None
+    }
+}
+
+fn normalize_callable_summary_target(
+    name: String,
+    summaries: &HashMap<String, String>,
+) -> Option<String> {
+    let resolved = resolve_forward_summary_name(name, summaries);
+    if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
+        Some(resolved)
+    } else {
+        None
+    }
+}
+
+fn resolve_forward_summary_name(mut name: String, summaries: &HashMap<String, String>) -> String {
+    let mut seen = HashSet::new();
+    while seen.insert(name.clone()) {
+        let Some(next) = summaries.get(name.as_str()) else {
+            break;
+        };
+        name = next.clone();
+    }
+    name
+}
+
+fn build_function_origin_summaries(
+    program: &Program,
+    callable_summaries: &HashMap<String, String>,
+) -> HashMap<String, FunctionOriginSummary> {
     let functions = program
         .items
         .iter()
@@ -667,7 +896,7 @@ fn build_function_origin_summaries(program: &Program) -> HashMap<String, Functio
     for _ in 0..max_rounds {
         let mut changed = false;
         for function in &functions {
-            let next = summarize_function_origin(function, &summaries);
+            let next = summarize_function_origin(function, &summaries, callable_summaries);
             match next {
                 Some(summary) => {
                     if summaries.get(function.name.as_str()) != Some(&summary) {
@@ -692,6 +921,7 @@ fn build_function_origin_summaries(program: &Program) -> HashMap<String, Functio
 fn summarize_function_origin(
     function: &FunctionDecl,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) -> Option<FunctionOriginSummary> {
     let mut param_origins = HashMap::new();
     let callable_aliases = HashMap::new();
@@ -706,8 +936,13 @@ fn summarize_function_origin(
         );
     }
 
-    let inferred =
-        infer_block_origin(&function.body, &param_origins, &callable_aliases, summaries)?;
+    let inferred = infer_block_origin(
+        &function.body,
+        &param_origins,
+        &callable_aliases,
+        summaries,
+        callable_summaries,
+    )?;
     if let Some(index) = parse_param_origin_index(inferred.origin.as_str()) {
         let forwarded_calls = inferred
             .trace
@@ -750,16 +985,26 @@ fn infer_callable_alias(
     expr: &Expr,
     callable_aliases: &HashMap<String, String>,
     summaries: &HashMap<String, FunctionOriginSummary>,
+    callable_summaries: &HashMap<String, String>,
 ) -> Option<String> {
-    let name = resolve_callable_name(expr, callable_aliases)?;
-    if call_tags_for(name.as_str()).is_some()
-        || is_tagged_call_namespace(name.as_str())
-        || summaries.contains_key(name.as_str())
-    {
-        Some(name)
-    } else {
-        None
+    if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+        if call_tags_for(name.as_str()).is_some()
+            || is_tagged_call_namespace(name.as_str())
+            || summaries.contains_key(name.as_str())
+        {
+            return Some(name);
+        }
+
+        if let Some(target) = normalize_callable_summary_target(name, callable_summaries) {
+            return Some(target);
+        }
     }
+
+    if let ExprKind::Call { callee, .. } = &expr.kind {
+        let callee_name = resolve_callable_name(callee, callable_aliases)?;
+        return normalize_callable_summary_target(callee_name, callable_summaries);
+    }
+    None
 }
 
 fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {

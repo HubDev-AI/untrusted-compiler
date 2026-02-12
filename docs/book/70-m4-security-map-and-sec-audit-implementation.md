@@ -180,6 +180,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - `security_map` now resolves alias-invoked callsites to canonical callees and preserves tags/arg-roles/origin-edges
   - semantic and security-map tests now cover alias-invoked intrinsic calls
   - member alias paths are now canonicalized as well (for example `let repo = db; repo.exec(...)` -> `db.exec(...)`)
+  - interprocedural callable-forwarding summaries now canonicalize helper-function aliases (for example `let exec = getExec(); exec(...)` when `getExec` forwards `db.exec`)
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -523,6 +524,48 @@ Without member alias canonicalization, capability/effect/sink checks could miss 
 - current namespace stem detection is explicit and conservative.
 - next step is deeper value-call forwarding across function boundaries and richer callable-value shapes.
 
+### Slice Explanation: Interprocedural Callable-Forwarding Alias Resolution
+
+#### 1) What it is
+This slice adds callable-forwarding summaries so alias resolution can traverse helper-function returns, not only direct local/member alias bindings.
+
+#### 2) Why it exists
+Patterns like `let exec = getExec(); exec(...)` previously lost canonical sink identity when `getExec` returned a stdlib callable symbol. That weakened sink enforcement and metadata consistency.
+
+#### 3) How it works internally
+- semantic analyzer now computes iterative callable-forwarding summaries per function body.
+- security-map builder computes the same summary class for canonical call tagging.
+- alias inference can now resolve:
+  - direct/local aliases,
+  - member aliases,
+  - helper-call aliases via forwarding summaries.
+- canonicalization still resolves to stable stdlib/middleware symbols (for example `db.exec`).
+
+#### 4) Inputs/outputs and constraints
+- Input: function bodies with tail expressions that forward callable symbols.
+- Output: canonical alias targets used by semantic checks and security-map call records.
+- Constraints:
+  - summaries are conservative and expression-structure based,
+  - callable-forwarding currently targets stdlib/middleware families and known callable symbols.
+
+#### 5) Failure modes and diagnostics
+- no new diagnostic codes were introduced.
+- unresolved/non-forwarding helper returns fall back to existing call resolution behavior.
+- capability/effect diagnostics (`E2003`, `E2004`) remain unchanged and now apply to forwarded alias paths.
+
+#### 6) Example usage
+- helper:
+  - `fn getExec() { db.exec }`
+- caller:
+  - `let exec = getExec();`
+  - `exec(dbCap, "SELECT id FROM users");`
+- result:
+  - semantic checks and `security_map` both treat the call as canonical `db.exec`.
+
+#### 7) Tradeoffs and next steps
+- forwarding summaries are intentionally lightweight and avoid full higher-order callable typing.
+- next step is extending this to richer callable-value shapes (for example capability-object function fields).
+
 ### Slice Explanation: Iterative Interprocedural Origin Summaries
 
 #### 1) What it is
@@ -623,7 +666,7 @@ Tag-only origin summaries answered "what source family reached the sink" but not
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Expand typed stdlib symbol metadata from local/member alias calls into deeper interprocedural forwarding paths.
+1. Expand callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface provenance trace chains from audit/security-map metadata into compiler diagnostics and tooling outputs.

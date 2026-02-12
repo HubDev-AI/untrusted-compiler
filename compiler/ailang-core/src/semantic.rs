@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOp, Block, Expr, ExprKind, ItemKind, MatchArm, Pattern, PatternKind, Program, Stmt,
-    StmtKind, TypeExpr, TypeExprKind, UnaryOp,
+    BinaryOp, Block, Expr, ExprKind, FunctionDecl, ItemKind, MatchArm, Pattern, PatternKind,
+    Program, Stmt, StmtKind, TypeExpr, TypeExprKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::policy::Policy;
@@ -247,6 +247,7 @@ impl Catalog {
 struct Analyzer {
     catalog: Catalog,
     policy: Policy,
+    callable_forward_summaries: HashMap<String, String>,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -261,11 +262,13 @@ pub fn analyze_program_with_policy(
     let mut analyzer = Analyzer {
         catalog: Catalog::new(),
         policy: policy.clone(),
+        callable_forward_summaries: HashMap::new(),
         diagnostics: Vec::new(),
     };
 
     analyzer.collect_types(program);
     analyzer.collect_functions(program);
+    analyzer.build_callable_forward_summaries(program);
     analyzer.check_type_references(program);
     analyzer.check_function_bodies(program);
 
@@ -408,6 +411,105 @@ impl Analyzer {
                     declared_effects,
                 },
             );
+        }
+    }
+
+    fn build_callable_forward_summaries(&mut self, program: &Program) {
+        let functions = program
+            .items
+            .iter()
+            .filter_map(|item| match &item.kind {
+                ItemKind::Function(function) => Some(function),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        let mut summaries = HashMap::new();
+        let max_rounds = functions.len().max(1);
+        for _ in 0..max_rounds {
+            let mut changed = false;
+            for function in &functions {
+                let next = self.infer_function_callable_forward(function, &summaries);
+                match next {
+                    Some(target) => {
+                        if summaries.get(function.name.as_str()) != Some(&target) {
+                            summaries.insert(function.name.clone(), target);
+                            changed = true;
+                        }
+                    }
+                    None => {
+                        if summaries.remove(function.name.as_str()).is_some() {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        self.callable_forward_summaries = summaries;
+    }
+
+    fn infer_function_callable_forward(
+        &self,
+        function: &FunctionDecl,
+        summaries: &HashMap<String, String>,
+    ) -> Option<String> {
+        let mut callable_aliases = HashMap::new();
+        for stmt in &function.body.statements {
+            if let StmtKind::Let { name, value, .. } = &stmt.kind {
+                if let Some(target) =
+                    self.infer_callable_forward_expr(value, &callable_aliases, summaries)
+                {
+                    callable_aliases.insert(name.clone(), target);
+                } else {
+                    callable_aliases.remove(name);
+                }
+            }
+        }
+
+        function
+            .body
+            .tail
+            .as_ref()
+            .and_then(|expr| self.infer_callable_forward_expr(expr, &callable_aliases, summaries))
+    }
+
+    fn infer_callable_forward_expr(
+        &self,
+        expr: &Expr,
+        callable_aliases: &HashMap<String, String>,
+        summaries: &HashMap<String, String>,
+    ) -> Option<String> {
+        if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+            return self.normalize_callable_forward_target(name, summaries, true);
+        }
+
+        if let ExprKind::Call { callee, .. } = &expr.kind {
+            let callee_name = resolve_callable_name(callee, callable_aliases)?;
+            return self.normalize_callable_forward_target(callee_name, summaries, false);
+        }
+
+        None
+    }
+
+    fn normalize_callable_forward_target(
+        &self,
+        name: String,
+        summaries: &HashMap<String, String>,
+        allow_function_fallback: bool,
+    ) -> Option<String> {
+        let resolved = resolve_summary_name(name, summaries);
+        if intrinsic_spec_for(resolved.as_str()).is_some()
+            || is_intrinsic_namespace(resolved.as_str())
+        {
+            Some(resolved)
+        } else if allow_function_fallback && self.catalog.functions.contains_key(resolved.as_str())
+        {
+            Some(resolved)
+        } else {
+            None
         }
     }
 
@@ -1049,15 +1151,32 @@ impl Analyzer {
         expr: &Expr,
         callable_aliases: &HashMap<String, String>,
     ) -> Option<String> {
-        let name = resolve_callable_name(expr, callable_aliases)?;
-        if intrinsic_spec_for(name.as_str()).is_some()
-            || is_intrinsic_namespace(name.as_str())
-            || self.catalog.functions.contains_key(name.as_str())
-        {
-            Some(name)
-        } else {
-            None
+        if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+            if intrinsic_spec_for(name.as_str()).is_some() || is_intrinsic_namespace(name.as_str())
+            {
+                return Some(name);
+            }
+            if let Some(summary_target) = self.normalize_callable_forward_target(
+                name.clone(),
+                &self.callable_forward_summaries,
+                false,
+            ) {
+                return Some(summary_target);
+            }
+            if self.catalog.functions.contains_key(name.as_str()) {
+                return Some(name);
+            }
         }
+
+        if let ExprKind::Call { callee, .. } = &expr.kind {
+            let callee_name = resolve_callable_name(callee, callable_aliases)?;
+            return self.normalize_callable_forward_target(
+                callee_name,
+                &self.callable_forward_summaries,
+                false,
+            );
+        }
+        None
     }
 
     fn analyze_match(
@@ -2062,6 +2181,17 @@ fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, Strin
             break;
         }
         name = format!("{resolved_head}.{tail}");
+    }
+    name
+}
+
+fn resolve_summary_name(mut name: String, summaries: &HashMap<String, String>) -> String {
+    let mut seen = HashSet::new();
+    while seen.insert(name.clone()) {
+        let Some(next) = summaries.get(name.as_str()) else {
+            break;
+        };
+        name = next.clone();
     }
     name
 }

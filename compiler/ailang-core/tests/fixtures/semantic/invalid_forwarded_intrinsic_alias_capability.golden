@@ -1,0 +1,3 @@
+error[E2004]: capability type mismatch
+  --> invalid_forwarded_intrinsic_alias_capability.ai:7:8
+  note: `db.exec` expects capability `DbCap` at argument 1, got `NetCap`

@@ -137,6 +137,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `security_map` resolves alias-invoked callsites to canonical callee names for deterministic tags/roles/origin edges.
   - Semantic/security_map fixtures now cover alias-invoked intrinsic calls (`let exec = db.exec; exec(...)`).
   - Alias resolution now also supports member value-call paths rooted in typed stdlib/capability stems (`let repo = db; repo.exec(...)`), preserving canonical `db.exec` enforcement and metadata.
+  - Callable-forwarding summaries now allow interprocedural alias resolution through helper functions (`let exec = getExec(); exec(...)` where `getExec` forwards `db.exec`).
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -623,7 +624,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend typed stdlib symbol metadata from local/member alias paths into deeper interprocedural value-call forwarding.
+1. Extend callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
 2. Extend provenance traces from audit metadata into compiler diagnostics and explainability surfaces.
 3. Expand deterministic `sec.audit` non-call evidence from exception-count snapshots to expiring/soon-expiring exception rollups.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
