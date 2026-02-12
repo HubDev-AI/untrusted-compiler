@@ -10,6 +10,8 @@ This chapter documents the first M5 slice that introduces a backend-neutral MIR 
   - `MirInstruction` and `MirTerminator`
 - Added AST -> MIR lowering entrypoint:
   - `lower_program_to_mir(&Program) -> MirProgram`
+- Added first control-flow lowering step:
+  - tail `if` expressions lower into branch terminators and separate blocks (`bb0`, `bb1`, `bb2`)
 - Added deterministic textual MIR rendering:
   - `MirProgram::render_text()`
 - Added CLI integration:
@@ -33,8 +35,11 @@ MIR is a compiler-internal, backend-neutral representation between AST/semantic 
 - Struct/enum declarations are not lowered in this slice.
 
 ### 2) Block model
-- Each function lowers to one block: `bb0`.
-- The block contains linear instructions derived from statement order.
+- Linear functions lower to one block: `bb0`.
+- Tail `if` expressions lower to branch form:
+  - `bb0` with `branch <cond> ? bb1 : bb2`
+  - `bb1` for then-branch
+  - `bb2` for else-branch
 
 ### 3) Instruction lowering
 - `let name = expr;` -> `MirInstructionKind::Let { name, value }`
@@ -82,3 +87,4 @@ fn main() -> Int
 1. Introduce multi-block lowering for `if`/`match`.
 2. Add explicit temporary locals and branch terminators.
 3. Add MIR golden fixtures for deterministic regression checks.
+4. Extend multi-block lowering beyond tail `if` into broader `if`/`match` placements.

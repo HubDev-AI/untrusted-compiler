@@ -53,3 +53,30 @@ fn main() -> Int {
         "tail expression after explicit return should not become terminator"
     );
 }
+
+#[test]
+fn mir_lowering_splits_tail_if_into_branch_blocks() {
+    let source = r#"
+fn classify(x: Int) -> Int {
+  if x > 0 {
+    1
+  } else {
+    0
+  }
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 3);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("bb0:"));
+    assert!(rendered.contains("branch (x > 0) ? bb1 : bb2"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 0"));
+}

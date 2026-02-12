@@ -38,3 +38,4 @@
 - Added `XFO_DISABLED` and `NOSNIFF_DISABLED` sec.audit posture findings for baseline security-header hardening gaps.
 - `REPLAY_EFFECTS_ALLOW` severity now maps by environment (`HIGH` in prod, `MEDIUM` otherwise).
 - Started M5 bootstrap: added MIR module + lowering + `build --emit mir` CLI path with tests.
+- Extended M5 MIR lowering with tail-`if` branch blocks and explicit `branch` terminators.

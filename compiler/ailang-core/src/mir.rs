@@ -66,7 +66,20 @@ pub enum MirInstructionKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum MirTerminator {
-    Return { value: Option<String>, span: Span },
+    Return {
+        value: Option<String>,
+        span: Span,
+    },
+    Goto {
+        target: usize,
+        span: Span,
+    },
+    Branch {
+        condition: String,
+        then_target: usize,
+        else_target: usize,
+        span: Span,
+    },
 }
 
 pub fn lower_program_to_mir(program: &ast::Program) -> MirProgram {
@@ -100,18 +113,91 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
         .collect::<Vec<_>>();
 
     let return_type = function.return_type.as_ref().map(type_expr_to_string);
-    let (instructions, terminator) = lower_block(&function.body);
+
+    let mut entry_instructions = Vec::new();
+    let mut explicit_terminator = None;
+
+    for stmt in &function.body.statements {
+        match &stmt.kind {
+            StmtKind::Let { .. } | StmtKind::Expr { .. } => {
+                if let Some(instruction) = lower_stmt_to_instruction(stmt) {
+                    entry_instructions.push(instruction);
+                }
+            }
+            StmtKind::Return { value } => {
+                explicit_terminator = Some(MirTerminator::Return {
+                    value: value.as_ref().map(expr_to_string),
+                    span: stmt.span.clone(),
+                });
+                break;
+            }
+        }
+    }
+
+    let blocks = if let Some(terminator) = explicit_terminator {
+        vec![MirBlock {
+            id: 0,
+            instructions: entry_instructions,
+            terminator,
+        }]
+    } else if let Some(tail) = &function.body.tail {
+        if let ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } = &tail.kind
+        {
+            let (then_instructions, then_terminator) = lower_block(then_branch);
+            let (else_instructions, else_terminator) = lower_else_branch(else_branch, &tail.span);
+            vec![
+                MirBlock {
+                    id: 0,
+                    instructions: entry_instructions,
+                    terminator: MirTerminator::Branch {
+                        condition: expr_to_string(condition),
+                        then_target: 1,
+                        else_target: 2,
+                        span: tail.span.clone(),
+                    },
+                },
+                MirBlock {
+                    id: 1,
+                    instructions: then_instructions,
+                    terminator: then_terminator,
+                },
+                MirBlock {
+                    id: 2,
+                    instructions: else_instructions,
+                    terminator: else_terminator,
+                },
+            ]
+        } else {
+            vec![MirBlock {
+                id: 0,
+                instructions: entry_instructions,
+                terminator: MirTerminator::Return {
+                    value: Some(expr_to_string(tail)),
+                    span: function.body.span.clone(),
+                },
+            }]
+        }
+    } else {
+        vec![MirBlock {
+            id: 0,
+            instructions: entry_instructions,
+            terminator: MirTerminator::Return {
+                value: None,
+                span: function.body.span.clone(),
+            },
+        }]
+    };
 
     MirFunction {
         name: function.name.clone(),
         params,
         effects,
         return_type,
-        blocks: vec![MirBlock {
-            id: 0,
-            instructions,
-            terminator,
-        }],
+        blocks,
         span: span.clone(),
     }
 }
@@ -157,6 +243,50 @@ fn lower_block(block: &Block) -> (Vec<MirInstruction>, MirTerminator) {
     (instructions, terminator)
 }
 
+fn lower_else_branch(
+    else_expr: &Option<Box<Expr>>,
+    fallback_span: &Span,
+) -> (Vec<MirInstruction>, MirTerminator) {
+    match else_expr {
+        Some(expr) => match &expr.kind {
+            ExprKind::Block(block) => lower_block(block),
+            _ => (
+                Vec::new(),
+                MirTerminator::Return {
+                    value: Some(expr_to_string(expr)),
+                    span: expr.span.clone(),
+                },
+            ),
+        },
+        None => (
+            Vec::new(),
+            MirTerminator::Return {
+                value: None,
+                span: fallback_span.clone(),
+            },
+        ),
+    }
+}
+
+fn lower_stmt_to_instruction(stmt: &ast::Stmt) -> Option<MirInstruction> {
+    match &stmt.kind {
+        StmtKind::Let { name, value, .. } => Some(MirInstruction {
+            kind: MirInstructionKind::Let {
+                name: name.clone(),
+                value: expr_to_string(value),
+            },
+            span: stmt.span.clone(),
+        }),
+        StmtKind::Expr { expr } => Some(MirInstruction {
+            kind: MirInstructionKind::Eval {
+                value: expr_to_string(expr),
+            },
+            span: stmt.span.clone(),
+        }),
+        StmtKind::Return { .. } => None,
+    }
+}
+
 fn render_function(out: &mut String, function: &MirFunction) {
     let params = function
         .params
@@ -199,6 +329,22 @@ fn render_function(out: &mut String, function: &MirFunction) {
                 } else {
                     writeln!(out, "    return").expect("write to string must succeed");
                 }
+            }
+            MirTerminator::Goto { target, .. } => {
+                writeln!(out, "    goto bb{}", target).expect("write to string must succeed");
+            }
+            MirTerminator::Branch {
+                condition,
+                then_target,
+                else_target,
+                ..
+            } => {
+                writeln!(
+                    out,
+                    "    branch {} ? bb{} : bb{}",
+                    condition, then_target, else_target
+                )
+                .expect("write to string must succeed");
             }
         }
     }

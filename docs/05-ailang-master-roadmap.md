@@ -190,6 +190,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
 - M5 bootstrap has started:
   - backend-neutral MIR module is now implemented in `ailang-core` (`MirProgram`, `MirFunction`, `MirBlock`).
   - AST function bodies now lower into deterministic single-block MIR (`bb0`) with explicit `return` terminators.
+  - tail `if` expressions now lower into explicit branch control-flow with multiple blocks (`bb0` -> `bb1` / `bb2`).
   - `ailang build --emit mir` now prints textual MIR for inspection.
   - MIR unit tests and CLI integration tests cover lowering and emit-path behavior.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
