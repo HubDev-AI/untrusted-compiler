@@ -2,6 +2,8 @@
 
 This chapter documents the first M5 slice that introduces a backend-neutral MIR layer and an introspection path in the CLI.
 
+Follow-up M5 control-flow widening for explicit `return if` / `return match` is documented in `docs/book/74-m5-return-control-flow-lowering.md`.
+
 ## Scope delivered
 - Added a new MIR module in `ailang-core`:
   - `MirProgram`
@@ -95,7 +97,6 @@ fn main() -> Int
 - Expression values are currently represented via deterministic rendered forms; richer typed MIR values will come incrementally.
 
 ## Next steps
-1. Introduce multi-block lowering for `if`/`match`.
-2. Add explicit temporary locals and branch terminators.
-3. Add MIR golden fixtures for deterministic regression checks.
-4. Extend multi-block lowering beyond tail forms into broader `if`/`match` placements.
+1. Add explicit temporary locals and branch terminators for non-tail statement control flow.
+2. Extend multi-block lowering beyond tail/return forms into broader statement-level `if`/`match` placements.
+3. Keep expanding MIR golden fixtures for deterministic regression checks.

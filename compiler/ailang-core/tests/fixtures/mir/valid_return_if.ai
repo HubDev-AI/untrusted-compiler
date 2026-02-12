@@ -1,0 +1,8 @@
+fn classify(x: Int) -> Int {
+  let marker = 1;
+  return if x > 0 {
+    1
+  } else {
+    0
+  };
+}

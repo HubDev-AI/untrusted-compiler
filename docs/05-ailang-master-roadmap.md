@@ -192,6 +192,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - AST function bodies now lower into deterministic single-block MIR (`bb0`) with explicit `return` terminators.
   - tail `if` expressions now lower into explicit branch control-flow with multiple blocks (`bb0` -> `bb1` / `bb2`).
   - tail `match` expressions now lower into `switch` terminators with per-arm blocks.
+  - explicit `return if` and `return match` expressions now lower into explicit branch/switch blocks (not inline expression returns).
   - `ailang build --emit mir` now prints textual MIR for inspection.
   - `ailang build --emit mir-json` now emits machine-readable MIR JSON (JSON-only stdout mode).
   - MIR unit tests, MIR fixture-based golden tests, and CLI integration tests cover lowering and emit-path behavior.
@@ -224,6 +225,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/71-benchmarking-and-comparison-spec.md`
 - `docs/book/72-ailang-editor-tooling-and-zed-lsp-spec.md`
 - `docs/book/73-m5-mir-bootstrap-and-introspection.md`
+- `docs/book/74-m5-return-control-flow-lowering.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -434,6 +436,8 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "MIR Design".
 - Chapter: "Lowering Rules".
 - Chapter: "How to Read MIR".
+- Chapter: "M5 Bootstrap: MIR Lowering and Introspection".
+- Chapter: "M5 Slice: Return-Site Control-Flow Lowering".
 
 ## M6 - C Backend + Runtime ABI (First Runnable Target)
 ### Build tasks

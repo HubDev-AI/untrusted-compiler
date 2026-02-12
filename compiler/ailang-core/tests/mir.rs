@@ -106,3 +106,66 @@ fn pick(x: Bool) -> Int {
     assert!(rendered.contains("bb2:"));
     assert!(rendered.contains("return 0"));
 }
+
+#[test]
+fn mir_lowering_splits_return_if_into_branch_blocks() {
+    let source = r#"
+fn classify(x: Int) -> Int {
+  let marker = 1;
+  return if x > 0 {
+    1
+  } else {
+    0
+  };
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 3);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("let marker = 1"));
+    assert!(rendered.contains("branch (x > 0) ? bb1 : bb2"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 0"));
+    assert!(
+        !rendered.contains("return if"),
+        "return-if should be lowered into explicit branch blocks"
+    );
+}
+
+#[test]
+fn mir_lowering_splits_return_match_into_switch_blocks() {
+    let source = r#"
+fn pick(x: Bool) -> Int {
+  let marker = 1;
+  return match x {
+    true => 1,
+    false => 0
+  };
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+
+    assert_eq!(mir.functions.len(), 1);
+    assert_eq!(mir.functions[0].blocks.len(), 3);
+
+    let rendered = mir.render_text();
+    assert!(rendered.contains("let marker = 1"));
+    assert!(rendered.contains("switch x { true => bb1, false => bb2 }"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 0"));
+    assert!(
+        !rendered.contains("return match"),
+        "return-match should be lowered into explicit switch blocks"
+    );
+}

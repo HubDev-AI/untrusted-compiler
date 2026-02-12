@@ -127,6 +127,7 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
 
     let mut entry_instructions = Vec::new();
     let mut explicit_terminator = None;
+    let mut explicit_blocks = None;
 
     for stmt in &function.body.statements {
         match &stmt.kind {
@@ -136,16 +137,51 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
                 }
             }
             StmtKind::Return { value } => {
-                explicit_terminator = Some(MirTerminator::Return {
-                    value: value.as_ref().map(expr_to_string),
-                    span: stmt.span.clone(),
-                });
+                match value {
+                    Some(expr) => match &expr.kind {
+                        ExprKind::If {
+                            condition,
+                            then_branch,
+                            else_branch,
+                        } => {
+                            explicit_blocks = Some(lower_if_blocks(
+                                std::mem::take(&mut entry_instructions),
+                                condition,
+                                then_branch,
+                                else_branch,
+                                &expr.span,
+                            ));
+                        }
+                        ExprKind::Match { scrutinee, arms } => {
+                            explicit_blocks = Some(lower_match_blocks(
+                                std::mem::take(&mut entry_instructions),
+                                scrutinee,
+                                arms,
+                                &expr.span,
+                            ));
+                        }
+                        _ => {
+                            explicit_terminator = Some(MirTerminator::Return {
+                                value: Some(expr_to_string(expr)),
+                                span: stmt.span.clone(),
+                            });
+                        }
+                    },
+                    None => {
+                        explicit_terminator = Some(MirTerminator::Return {
+                            value: None,
+                            span: stmt.span.clone(),
+                        });
+                    }
+                }
                 break;
             }
         }
     }
 
-    let blocks = if let Some(terminator) = explicit_terminator {
+    let blocks = if let Some(blocks) = explicit_blocks {
+        blocks
+    } else if let Some(terminator) = explicit_terminator {
         vec![MirBlock {
             id: 0,
             instructions: entry_instructions,
@@ -158,58 +194,15 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
             else_branch,
         } = &tail.kind
         {
-            let (then_instructions, then_terminator) = lower_block(then_branch);
-            let (else_instructions, else_terminator) = lower_else_branch(else_branch, &tail.span);
-            vec![
-                MirBlock {
-                    id: 0,
-                    instructions: entry_instructions,
-                    terminator: MirTerminator::Branch {
-                        condition: expr_to_string(condition),
-                        then_target: 1,
-                        else_target: 2,
-                        span: tail.span.clone(),
-                    },
-                },
-                MirBlock {
-                    id: 1,
-                    instructions: then_instructions,
-                    terminator: then_terminator,
-                },
-                MirBlock {
-                    id: 2,
-                    instructions: else_instructions,
-                    terminator: else_terminator,
-                },
-            ]
+            lower_if_blocks(
+                entry_instructions,
+                condition,
+                then_branch,
+                else_branch,
+                &tail.span,
+            )
         } else if let ExprKind::Match { scrutinee, arms } = &tail.kind {
-            let mut blocks = vec![MirBlock {
-                id: 0,
-                instructions: entry_instructions,
-                terminator: MirTerminator::Switch {
-                    scrutinee: expr_to_string(scrutinee),
-                    targets: arms
-                        .iter()
-                        .enumerate()
-                        .map(|(index, arm)| MirSwitchTarget {
-                            pattern: pattern_to_string(&arm.pattern),
-                            target: index + 1,
-                        })
-                        .collect(),
-                    span: tail.span.clone(),
-                },
-            }];
-
-            for (index, arm) in arms.iter().enumerate() {
-                let (instructions, terminator) = lower_expr_as_block(&arm.value);
-                blocks.push(MirBlock {
-                    id: index + 1,
-                    instructions,
-                    terminator,
-                });
-            }
-
-            blocks
+            lower_match_blocks(entry_instructions, scrutinee, arms, &tail.span)
         } else {
             vec![MirBlock {
                 id: 0,
@@ -239,6 +232,75 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
         blocks,
         span: span.clone(),
     }
+}
+
+fn lower_if_blocks(
+    entry_instructions: Vec<MirInstruction>,
+    condition: &Expr,
+    then_branch: &Block,
+    else_branch: &Option<Box<Expr>>,
+    span: &Span,
+) -> Vec<MirBlock> {
+    let (then_instructions, then_terminator) = lower_block(then_branch);
+    let (else_instructions, else_terminator) = lower_else_branch(else_branch, span);
+
+    vec![
+        MirBlock {
+            id: 0,
+            instructions: entry_instructions,
+            terminator: MirTerminator::Branch {
+                condition: expr_to_string(condition),
+                then_target: 1,
+                else_target: 2,
+                span: span.clone(),
+            },
+        },
+        MirBlock {
+            id: 1,
+            instructions: then_instructions,
+            terminator: then_terminator,
+        },
+        MirBlock {
+            id: 2,
+            instructions: else_instructions,
+            terminator: else_terminator,
+        },
+    ]
+}
+
+fn lower_match_blocks(
+    entry_instructions: Vec<MirInstruction>,
+    scrutinee: &Expr,
+    arms: &[ast::MatchArm],
+    span: &Span,
+) -> Vec<MirBlock> {
+    let mut blocks = vec![MirBlock {
+        id: 0,
+        instructions: entry_instructions,
+        terminator: MirTerminator::Switch {
+            scrutinee: expr_to_string(scrutinee),
+            targets: arms
+                .iter()
+                .enumerate()
+                .map(|(index, arm)| MirSwitchTarget {
+                    pattern: pattern_to_string(&arm.pattern),
+                    target: index + 1,
+                })
+                .collect(),
+            span: span.clone(),
+        },
+    }];
+
+    for (index, arm) in arms.iter().enumerate() {
+        let (instructions, terminator) = lower_expr_as_block(&arm.value);
+        blocks.push(MirBlock {
+            id: index + 1,
+            instructions,
+            terminator,
+        });
+    }
+
+    blocks
 }
 
 fn lower_block(block: &Block) -> (Vec<MirInstruction>, MirTerminator) {

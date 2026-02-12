@@ -1,0 +1,9 @@
+OK
+fn pick(x: Bool) -> Int
+  bb0:
+    let marker = 1
+    switch x { true => bb1, false => bb2 }
+  bb1:
+    return 1
+  bb2:
+    return 0

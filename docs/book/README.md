@@ -38,5 +38,7 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `70-m4-security-map-and-sec-audit-implementation.md`
 - `71-benchmarking-and-comparison-spec.md`
 - `72-ailang-editor-tooling-and-zed-lsp-spec.md`
+- `73-m5-mir-bootstrap-and-introspection.md`
+- `74-m5-return-control-flow-lowering.md`
 
 As milestones progress, chapters will be added and linked from this index.

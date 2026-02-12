@@ -1,0 +1,7 @@
+fn pick(x: Bool) -> Int {
+  let marker = 1;
+  return match x {
+    true => 1,
+    false => 0
+  };
+}

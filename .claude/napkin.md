@@ -8,6 +8,7 @@
 | 2026-02-12 | self | Treated runtime hang as persistent for the full session. | Re-run full runtime verification after environment hiccups; blockers can be transient. |
 | 2026-02-12 | self | Deferred baseline verification too early due blocker assumption. | Keep full baseline verification (`cargo test`, `check`, `emit ast`, `build`) in the same slice once execution recovers. |
 | 2026-02-12 | self | Inserted a new Rust test block inside an existing raw string, which produced cascading parser errors. | After patching large test files, immediately inspect the surrounding lines with `nl -ba` before running broad test suites. |
+| 2026-02-12 | self | Ran `cargo test` with multiple bare test-name args, which Cargo treats as unexpected arguments. | Use one test filter, or run explicit targets (`cargo test --test <name>`). |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -42,3 +43,4 @@
 - Added fixture-based MIR golden tests to lock textual MIR output behavior.
 - Extended M5 MIR control-flow lowering with tail-`match` to `switch` + per-arm blocks.
 - Added `build --emit mir-json` JSON-only stdout mode for machine-readable MIR integration.
+- Extended M5 MIR lowering beyond tail forms for explicit `return if` and `return match`, with shared lowering helpers and fixture coverage.
