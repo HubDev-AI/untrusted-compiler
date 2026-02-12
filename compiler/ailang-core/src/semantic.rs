@@ -2415,6 +2415,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: Some("SecretsCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "secret_redact" | "secrets.redact" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("String"),
+        }),
         "secret_reveal" | "secrets.reveal" => Some(IntrinsicSpec {
             effect: Some("secrets.reveal"),
             required_capability: Some("SecretsCap"),
@@ -2487,6 +2492,21 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
                 return_ty: IntrinsicReturnTy::Named("PathSafe"),
             })
         }
+        "path_base" | "path.base" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("PathSafe"),
+        }),
+        "headers_name" | "headers.name" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("HeaderName"),
+        }),
+        "headers_value" | "headers.value" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("HeaderValue"),
+        }),
         _ => None,
     }
 }
@@ -2620,6 +2640,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
             | "httpClient"
             | "log"
             | "path"
+            | "headers"
             | "req"
             | "res"
             | "sanitize"

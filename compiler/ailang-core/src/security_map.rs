@@ -1058,6 +1058,9 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder" => {
             vec!["gate.path.under"]
         }
+        "path_base" | "path.base" => vec!["gate.path.base"],
+        "headers_name" | "headers.name" => vec!["gate.header.name"],
+        "headers_value" | "headers.value" => vec!["gate.header.value"],
         "url_public" | "url.public" => vec!["gate.url.public", "effect.net"],
         "url_internal" | "url.internal" => vec!["gate.url.internal", "effect.net"],
         "db_read" | "db.queryOne" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
@@ -1082,6 +1085,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
             vec!["sink.log.emit", "effect.log"]
         }
         "secret_read" | "secrets.get" => vec!["effect.secrets.read", "capability.secrets"],
+        "secret_redact" | "secrets.redact" => vec!["gate.secret.redact"],
         "secret_reveal" | "secrets.reveal" => vec!["effect.secrets.reveal", "capability.secrets"],
         _ => return None,
     };
@@ -1303,6 +1307,10 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["value"]
             }
         }
+        "path_base" | "path.base" => vec!["path"],
+        "headers_name" | "headers.name" => vec!["name"],
+        "headers_value" | "headers.value" => vec!["value"],
+        "secret_redact" | "secrets.redact" => vec!["secret"],
         "csrf_issue_token" | "csrf.issueToken" => vec!["context"],
         "cors_origin" | "cors.origin" => vec!["origin"],
         "res_html" | "res.html" => vec!["html"],
@@ -1562,6 +1570,10 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         ),
         symbol("sanitize_html", &[("gate.sanitize.html", TagKind::Gate)]),
         symbol("path_under", &[("gate.path.under", TagKind::Gate)]),
+        symbol("path_base", &[("gate.path.base", TagKind::Gate)]),
+        symbol("headers_name", &[("gate.header.name", TagKind::Gate)]),
+        symbol("headers_value", &[("gate.header.value", TagKind::Gate)]),
+        symbol("secret_redact", &[("gate.secret.redact", TagKind::Gate)]),
         symbol(
             "url_public",
             &[
@@ -1661,6 +1673,9 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         ),
         symbol("sanitize.html", &[("gate.sanitize.html", TagKind::Gate)]),
         symbol("path.under", &[("gate.path.under", TagKind::Gate)]),
+        symbol("path.base", &[("gate.path.base", TagKind::Gate)]),
+        symbol("headers.name", &[("gate.header.name", TagKind::Gate)]),
+        symbol("headers.value", &[("gate.header.value", TagKind::Gate)]),
         symbol("validate.pathUnder", &[("gate.path.under", TagKind::Gate)]),
         symbol(
             "url.public",
@@ -1683,6 +1698,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
                 ("capability.secrets", TagKind::Capability),
             ],
         ),
+        symbol("secrets.redact", &[("gate.secret.redact", TagKind::Gate)]),
         symbol(
             "log.info",
             &[

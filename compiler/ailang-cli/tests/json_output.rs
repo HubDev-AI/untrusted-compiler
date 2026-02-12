@@ -782,6 +782,7 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
   secrets.get(sec, 1);
+  secrets.redact(1);
   0
 }
 
@@ -804,6 +805,7 @@ fn main() -> Int {
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_secret_get(sec, 1)"));
+    assert!(generated_c.contains("ailang_rt_secret_redact(1)"));
 
     let binary_path = project_dir.join("build").join("secretreaddemo");
     assert!(binary_path.exists(), "compiled binary should exist");
@@ -846,6 +848,9 @@ entry = "src/main.ai"
   url.public(input);
   url.internal(input);
   path.under(base, input);
+  path.base(1);
+  headers.name(1);
+  headers.value(1);
   0
 }
 
@@ -876,6 +881,9 @@ fn main() -> Int {
     assert!(generated_c.contains("ailang_rt_url_public(input)"));
     assert!(generated_c.contains("ailang_rt_url_internal(input)"));
     assert!(generated_c.contains("ailang_rt_path_under(base, input)"));
+    assert!(generated_c.contains("ailang_rt_path_base(1)"));
+    assert!(generated_c.contains("ailang_rt_headers_name(1)"));
+    assert!(generated_c.contains("ailang_rt_headers_value(1)"));
 
     let binary_path = project_dir.join("build").join("gatesdemo");
     assert!(binary_path.exists(), "compiled binary should exist");

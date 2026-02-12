@@ -97,6 +97,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_http_get();"));
     assert!(header.contains("int64_t ailang_rt_http_get_internal();"));
     assert!(header.contains("int64_t ailang_rt_secret_get();"));
+    assert!(header.contains("int64_t ailang_rt_secret_redact();"));
     assert!(header.contains("int64_t ailang_rt_secret_reveal();"));
     assert!(header.contains("int64_t ailang_rt_validate_header_value();"));
     assert!(header.contains("int64_t ailang_rt_validate_email();"));
@@ -107,6 +108,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_url_public();"));
     assert!(header.contains("int64_t ailang_rt_url_internal();"));
     assert!(header.contains("int64_t ailang_rt_path_under();"));
+    assert!(header.contains("int64_t ailang_rt_path_base();"));
+    assert!(header.contains("int64_t ailang_rt_headers_name();"));
+    assert!(header.contains("int64_t ailang_rt_headers_value();"));
     assert!(header.contains("int64_t ailang_rt_http_router();"));
     assert!(header.contains("int64_t ailang_rt_http_route_get();"));
     assert!(header.contains("int64_t ailang_rt_http_route_post();"));
@@ -156,6 +160,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_http_get()"));
     assert!(source.contains("int64_t ailang_rt_http_get_internal()"));
     assert!(source.contains("int64_t ailang_rt_secret_get()"));
+    assert!(source.contains("int64_t ailang_rt_secret_redact()"));
     assert!(source.contains("int64_t ailang_rt_secret_reveal()"));
     assert!(source.contains("int64_t ailang_rt_validate_header_value()"));
     assert!(source.contains("int64_t ailang_rt_validate_email()"));
@@ -166,6 +171,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_url_public()"));
     assert!(source.contains("int64_t ailang_rt_url_internal()"));
     assert!(source.contains("int64_t ailang_rt_path_under()"));
+    assert!(source.contains("int64_t ailang_rt_path_base()"));
+    assert!(source.contains("int64_t ailang_rt_headers_name()"));
+    assert!(source.contains("int64_t ailang_rt_headers_value()"));
     assert!(source.contains("int64_t ailang_rt_http_router()"));
     assert!(source.contains("int64_t ailang_rt_http_route_get()"));
     assert!(source.contains("int64_t ailang_rt_http_route_post()"));
@@ -334,6 +342,7 @@ fn c_backend_rewrites_secret_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { secrets.read, secrets.reveal } -> Int {
   secrets.get(1, 2);
+  secrets.redact(2);
   secrets.reveal(1, 2);
   0
 }
@@ -344,6 +353,7 @@ fn main() effects { secrets.read, secrets.reveal } -> Int {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("(void)(ailang_rt_secret_get(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_secret_redact(2));"));
     assert!(c.contains("(void)(ailang_rt_secret_reveal(1, 2));"));
 }
 
@@ -362,6 +372,9 @@ fn main() -> Int {
   url.public(input);
   url.internal(input);
   path.under(base, input);
+  path.base(1);
+  headers.name(1);
+  headers.value(1);
   0
 }
 "#;
@@ -379,6 +392,9 @@ fn main() -> Int {
     assert!(c.contains("(void)(ailang_rt_url_public(input));"));
     assert!(c.contains("(void)(ailang_rt_url_internal(input));"));
     assert!(c.contains("(void)(ailang_rt_path_under(base, input));"));
+    assert!(c.contains("(void)(ailang_rt_path_base(1));"));
+    assert!(c.contains("(void)(ailang_rt_headers_name(1));"));
+    assert!(c.contains("(void)(ailang_rt_headers_value(1));"));
 }
 
 #[test]

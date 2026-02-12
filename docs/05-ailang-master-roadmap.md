@@ -556,6 +556,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: CSRF IssueToken Intrinsic Bootstrap".
 - Chapter: "M7 Slice: CSP Builder and Security Config Surface Bootstrap".
 - Chapter: "M7 Slice: Log Builder Intrinsic Bootstrap".
+- Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

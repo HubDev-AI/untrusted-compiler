@@ -71,5 +71,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `103-m7-csrf-issue-token-intrinsic-bootstrap.md`
 - `104-m7-csp-builder-and-security-config-surface-bootstrap.md`
 - `105-m7-log-builder-intrinsic-bootstrap.md`
+- `106-m7-path-header-redact-helper-bridge.md`
 
 As milestones progress, chapters will be added and linked from this index.

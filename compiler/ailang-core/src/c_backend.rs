@@ -243,6 +243,8 @@ fn lower_c_expr(expr: &str) -> String {
     );
     lowered = lowered.replace("secrets.get(", "__AILANG_INTRINSIC_SECRET_GET__(");
     lowered = lowered.replace("secret_read(", "__AILANG_INTRINSIC_SECRET_GET__(");
+    lowered = lowered.replace("secrets.redact(", "__AILANG_INTRINSIC_SECRET_REDACT__(");
+    lowered = lowered.replace("secret_redact(", "__AILANG_INTRINSIC_SECRET_REDACT__(");
     lowered = lowered.replace("secrets.reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
     lowered = lowered.replace("secret_reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
     lowered = lowered.replace(
@@ -271,6 +273,12 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
     lowered = lowered.replace("validate.pathUnder(", "__AILANG_INTRINSIC_PATH_UNDER__(");
     lowered = lowered.replace("validate_path_under(", "__AILANG_INTRINSIC_PATH_UNDER__(");
+    lowered = lowered.replace("path.base(", "__AILANG_INTRINSIC_PATH_BASE__(");
+    lowered = lowered.replace("path_base(", "__AILANG_INTRINSIC_PATH_BASE__(");
+    lowered = lowered.replace("headers.name(", "__AILANG_INTRINSIC_HEADERS_NAME__(");
+    lowered = lowered.replace("headers_name(", "__AILANG_INTRINSIC_HEADERS_NAME__(");
+    lowered = lowered.replace("headers.value(", "__AILANG_INTRINSIC_HEADERS_VALUE__(");
+    lowered = lowered.replace("headers_value(", "__AILANG_INTRINSIC_HEADERS_VALUE__(");
     lowered = lowered.replace("http.router(", "__AILANG_INTRINSIC_HTTP_ROUTER__(");
     lowered = lowered.replace("http_router(", "__AILANG_INTRINSIC_HTTP_ROUTER__(");
     lowered = lowered.replace("http.get(", "__AILANG_INTRINSIC_HTTP_ROUTE_GET__(");
@@ -366,6 +374,10 @@ fn lower_c_expr(expr: &str) -> String {
     );
     lowered = lowered.replace("__AILANG_INTRINSIC_SECRET_GET__(", "ailang_rt_secret_get(");
     lowered = lowered.replace(
+        "__AILANG_INTRINSIC_SECRET_REDACT__(",
+        "ailang_rt_secret_redact(",
+    );
+    lowered = lowered.replace(
         "__AILANG_INTRINSIC_SECRET_REVEAL__(",
         "ailang_rt_secret_reveal(",
     );
@@ -396,6 +408,12 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_URL_PUBLIC__(", "ailang_rt_url_public(");
     lowered = lowered.replace("__AILANG_INTRINSIC_URL_INTERNAL__(", "ailang_rt_url_internal(");
     lowered = lowered.replace("__AILANG_INTRINSIC_PATH_UNDER__(", "ailang_rt_path_under(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_PATH_BASE__(", "ailang_rt_path_base(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_HEADERS_NAME__(", "ailang_rt_headers_name(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_HEADERS_VALUE__(",
+        "ailang_rt_headers_value(",
+    );
     lowered = lowered.replace("__AILANG_INTRINSIC_HTTP_ROUTER__(", "ailang_rt_http_router(");
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_HTTP_ROUTE_GET__(",

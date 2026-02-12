@@ -115,6 +115,10 @@ int64_t ailang_rt_secret_get() {
   return 0;
 }
 
+int64_t ailang_rt_secret_redact() {
+  return 0;
+}
+
 int64_t ailang_rt_secret_reveal() {
   return 0;
 }
@@ -152,6 +156,18 @@ int64_t ailang_rt_url_internal() {
 }
 
 int64_t ailang_rt_path_under() {
+  return 0;
+}
+
+int64_t ailang_rt_path_base() {
+  return 0;
+}
+
+int64_t ailang_rt_headers_name() {
+  return 0;
+}
+
+int64_t ailang_rt_headers_value() {
   return 0;
 }
 
