@@ -205,6 +205,7 @@ impl Catalog {
             ("Set".to_string(), 1),
             ("Secret".to_string(), 1),
             ("Untrusted".to_string(), 1),
+            ("Schema".to_string(), 1),
         ]
         .into_iter()
         .collect::<HashMap<_, _>>();
@@ -1433,6 +1434,7 @@ impl Analyzer {
         }
 
         let schema_index = if args.len() == 2 { 0 } else { 1 };
+        let value_index = json_sink_value_arg_index(args.len()).unwrap_or(args.len().saturating_sub(1));
         let schema_ty = &arg_types[schema_index];
         if schema_ty.is_numeric() || schema_ty.is_bool() || schema_ty.contains_secret() || schema_ty.contains_untrusted() {
             self.diagnostics.push(
@@ -1444,6 +1446,25 @@ impl Analyzer {
                 .with_note(format!("found `{}`", schema_ty.describe()))
                 .with_note("schema argument should be a schema symbol/descriptor, not numeric/boolean/untrusted/secret data"),
             );
+        }
+
+        if let Some(expected_value_ty) = schema_value_type(schema_ty) {
+            let actual_value_ty = &arg_types[value_index];
+            if !expected_value_ty.compatible_with(actual_value_ty) {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4004",
+                        "json response value does not match schema type",
+                        args[value_index].span.clone(),
+                    )
+                    .with_note(format!(
+                        "schema expects `{}`, got `{}`",
+                        expected_value_ty.describe(),
+                        actual_value_ty.describe()
+                    ))
+                    .with_note("adjust response value type or use a matching schema"),
+                );
+            }
         }
     }
 
@@ -1996,6 +2017,13 @@ fn json_sink_value_arg_index(arg_len: usize) -> Option<usize> {
         1 => Some(0),
         2 => Some(1),
         _ => Some(arg_len - 1),
+    }
+}
+
+fn schema_value_type(ty: &Type) -> Option<&Type> {
+    match ty {
+        Type::Named { name, args } if name == "Schema" && args.len() == 1 => args.first(),
+        _ => None,
     }
 }
 

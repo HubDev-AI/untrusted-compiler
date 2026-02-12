@@ -1,0 +1,4 @@
+fn bad(schema: Schema<Int>) effects { net } -> Int {
+  res.json(schema, "oops");
+  1
+}

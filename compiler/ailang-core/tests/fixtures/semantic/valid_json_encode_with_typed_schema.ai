@@ -1,0 +1,4 @@
+fn ok(schema: Schema<Int>) effects { net } -> Int {
+  res.json(schema, 123);
+  1
+}

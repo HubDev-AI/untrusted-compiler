@@ -1,0 +1,4 @@
+error[E4004]: json response value does not match schema type
+  --> invalid_json_encode_schema_value_mismatch.ai:2:20
+  note: schema expects `Int`, got `String`
+  note: adjust response value type or use a matching schema

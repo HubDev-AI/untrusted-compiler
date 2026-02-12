@@ -118,6 +118,13 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - invalid arity, non-numeric status, and invalid schema argument each produce dedicated `E4004` diagnostics
   - JSON sink flow checks now evaluate only the value argument (last payload arg), avoiding schema/status false positives
   - semantic fixtures now cover invalid status type, invalid schema type, invalid arity, and valid status+schema+value form
+- Added typed schema-value pairing checks for JSON responses:
+  - introduced generic `Schema<T>` type recognition in semantic type catalog
+  - when `res.json` receives a typed `Schema<T>` argument, compiler now checks payload compatibility with `T`
+  - mismatches produce `E4004` (`json response value does not match schema type`) with expected/actual type notes
+  - semantic fixtures now cover:
+    - valid typed schema encoding (`Schema<Int>` + `Int` payload)
+    - invalid typed schema mismatch (`Schema<Int>` + `String` payload)
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -159,7 +166,8 @@ Arity-only validation still allowed malformed response calls (wrong status type,
 
 #### 7) Tradeoffs and next steps
 - Current schema argument validation is structural/heuristic, not true schema-type pairing.
-- Next step is full typed schema-value pairing enforcement in semantic rules.
+- Typed schema pairing now works for `Schema<T>` arguments, but untyped schema descriptors (for example string placeholders) still rely on structural checks.
+- Next step is to move from descriptor-style schema arguments to richer typed schema symbols across stdlib APIs.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

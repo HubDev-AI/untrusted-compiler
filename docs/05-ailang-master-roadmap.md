@@ -86,6 +86,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - invalid schema argument type/taint.
   - JSON sink flow checks now evaluate only the value argument, avoiding false positives on status/schema arguments.
   - Additional semantic fixtures now cover invalid status type, invalid schema type, invalid arity, and valid status+schema+value encoding.
+  - Generic `Schema<T>` is now recognized in semantic type rules.
+  - `res.json` now enforces typed schema-value pairing when schema argument is `Schema<T>`:
+    - compatible payload types pass,
+    - mismatches emit `E4004` with expected/actual type notes.
+  - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
