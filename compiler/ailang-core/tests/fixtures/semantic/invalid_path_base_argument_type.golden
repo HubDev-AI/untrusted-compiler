@@ -1,0 +1,4 @@
+error[E4001]: path.base argument must be `String`
+  --> invalid_path_base_argument_type.ai:2:13
+  note: found `Int`
+  note: use string base path values

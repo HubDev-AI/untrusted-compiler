@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  path.base("/tmp", "extra");
+  0
+}

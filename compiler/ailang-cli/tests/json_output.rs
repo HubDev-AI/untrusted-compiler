@@ -934,7 +934,7 @@ entry = "src/main.ai"
   url.public(input);
   url.internal(input);
   path.under(base, input);
-  path.base(1);
+  path.base("/tmp/base");
   headers.name("X-Test");
   headers.value("ok");
   0
@@ -967,7 +967,7 @@ fn main() -> Int {
     assert!(generated_c.contains("ailang_rt_url_public(input)"));
     assert!(generated_c.contains("ailang_rt_url_internal(input)"));
     assert!(generated_c.contains("ailang_rt_path_under(base, input)"));
-    assert!(generated_c.contains("ailang_rt_path_base(1)"));
+    assert!(generated_c.contains("ailang_rt_path_base(\"/tmp/base\")"));
     assert!(generated_c.contains("ailang_rt_headers_name(\"X-Test\")"));
     assert!(generated_c.contains("ailang_rt_headers_value(\"ok\")"));
 

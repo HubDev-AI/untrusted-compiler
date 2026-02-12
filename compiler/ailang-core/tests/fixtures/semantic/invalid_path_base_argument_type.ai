@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  path.base(1);
+  0
+}

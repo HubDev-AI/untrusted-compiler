@@ -1764,6 +1764,7 @@ impl Analyzer {
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
+        self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2479,6 +2480,40 @@ impl Analyzer {
                 .with_tag("schema")
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note(format!("use string key input for `{call_name}`")),
+            );
+        }
+    }
+
+    fn enforce_path_base_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_path_base_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "path.base expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_note("use `path.base(\"/base/path\")`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "path.base argument must be `String`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use string base path values"),
             );
         }
     }
@@ -3551,6 +3586,10 @@ fn is_req_path_param_call(name: &str) -> bool {
 
 fn is_req_header_call(name: &str) -> bool {
     matches!(name, "req_header" | "req.header")
+}
+
+fn is_path_base_call(name: &str) -> bool {
+    matches!(name, "path_base" | "path.base")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
