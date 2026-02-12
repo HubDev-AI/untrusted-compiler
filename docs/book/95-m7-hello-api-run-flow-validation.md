@@ -37,7 +37,7 @@ The test verifies `ailang run --path examples/hello-api` succeeds and compiles t
 ### Example usage
 
 ```bash
-cargo run -p ailang -- run --path /Users/vladimirtrifonov/src/ai/AILang/examples/hello-api
+cargo run -p ailang -- run --path examples/hello-api
 ```
 
 ### Tradeoffs and next steps

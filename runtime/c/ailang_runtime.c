@@ -134,3 +134,19 @@ int64_t ailang_rt_with_csrf() {
 int64_t ailang_rt_with_auth() {
   return 0;
 }
+
+int64_t ailang_rt_sec_default_headers() {
+  return 0;
+}
+
+int64_t ailang_rt_cors_from_policy() {
+  return 0;
+}
+
+int64_t ailang_rt_csrf_from_policy() {
+  return 0;
+}
+
+int64_t ailang_rt_auth_from_policy() {
+  return 0;
+}

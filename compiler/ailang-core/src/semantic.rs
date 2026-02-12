@@ -2218,6 +2218,26 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "sec_default_headers" | "sec.defaultHeaders" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "cors_from_policy" | "cors.fromPolicy" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "csrf_from_policy" | "csrf.fromPolicy" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "auth_from_policy" | "auth.fromPolicy" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
         "req_body" | "req.body" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,

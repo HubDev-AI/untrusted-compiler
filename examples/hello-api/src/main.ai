@@ -10,6 +10,10 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 }
 
 fn main() effects { net } -> Int {
+  sec.defaultHeaders();
+  cors.fromPolicy();
+  csrf.fromPolicy();
+  auth.fromPolicy();
   sec.withSecurityHeaders();
   cors.withCors();
   csrf.withCsrf();

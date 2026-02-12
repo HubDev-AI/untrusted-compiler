@@ -274,6 +274,20 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("auth.withAuth(", "__AILANG_INTRINSIC_WITH_AUTH__(");
     lowered = lowered.replace("withAuth(", "__AILANG_INTRINSIC_WITH_AUTH__(");
     lowered = lowered.replace("auth_with(", "__AILANG_INTRINSIC_WITH_AUTH__(");
+    lowered = lowered.replace(
+        "sec.defaultHeaders(",
+        "__AILANG_INTRINSIC_SEC_DEFAULT_HEADERS__(",
+    );
+    lowered = lowered.replace(
+        "sec_default_headers(",
+        "__AILANG_INTRINSIC_SEC_DEFAULT_HEADERS__(",
+    );
+    lowered = lowered.replace("cors.fromPolicy(", "__AILANG_INTRINSIC_CORS_FROM_POLICY__(");
+    lowered = lowered.replace("cors_from_policy(", "__AILANG_INTRINSIC_CORS_FROM_POLICY__(");
+    lowered = lowered.replace("csrf.fromPolicy(", "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(");
+    lowered = lowered.replace("csrf_from_policy(", "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(");
+    lowered = lowered.replace("auth.fromPolicy(", "__AILANG_INTRINSIC_AUTH_FROM_POLICY__(");
+    lowered = lowered.replace("auth_from_policy(", "__AILANG_INTRINSIC_AUTH_FROM_POLICY__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -342,5 +356,21 @@ fn lower_c_expr(expr: &str) -> String {
     );
     lowered = lowered.replace("__AILANG_INTRINSIC_WITH_CSRF__(", "ailang_rt_with_csrf(");
     lowered = lowered.replace("__AILANG_INTRINSIC_WITH_AUTH__(", "ailang_rt_with_auth(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_SEC_DEFAULT_HEADERS__(",
+        "ailang_rt_sec_default_headers(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_CORS_FROM_POLICY__(",
+        "ailang_rt_cors_from_policy(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(",
+        "ailang_rt_csrf_from_policy(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_AUTH_FROM_POLICY__(",
+        "ailang_rt_auth_from_policy(",
+    );
     lowered
 }

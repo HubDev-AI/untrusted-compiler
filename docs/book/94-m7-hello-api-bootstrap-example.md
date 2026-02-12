@@ -7,9 +7,9 @@ This chapter documents the next M7 bootstrap slice: adding a concrete HTTP/JSON-
 ### What it is
 
 Added a new example project:
-- `/Users/vladimirtrifonov/src/ai/AILang/examples/hello-api/ailang.toml`
-- `/Users/vladimirtrifonov/src/ai/AILang/examples/hello-api/src/main.ai`
-- `/Users/vladimirtrifonov/src/ai/AILang/examples/hello-api/build/.gitignore`
+- `examples/hello-api/ailang.toml`
+- `examples/hello-api/src/main.ai`
+- `examples/hello-api/build/.gitignore`
 
 It demonstrates:
 - security middleware bootstrap calls (`sec.withSecurityHeaders`, `cors.withCors`, `csrf.withCsrf`, `auth.withAuth`)
@@ -49,7 +49,7 @@ M7 needs a sample service path. This slice introduces a stable example target fo
 ### Example usage
 
 ```bash
-cargo run -p ailang -- build --path /Users/vladimirtrifonov/src/ai/AILang/examples/hello-api --emit c-bin
+cargo run -p ailang -- build --path examples/hello-api --emit c-bin
 ```
 
 ### Tradeoffs and next steps

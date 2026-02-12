@@ -548,6 +548,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: hello-api run Flow Validation".
 - Chapter: "M7 Slice: Security Middleware Intrinsic Bootstrap".
 - Chapter: "M7 Slice: HTTP Surface Type Bootstrap".
+- Chapter: "M7 Slice: Policy-Config Intrinsic Bootstrap".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
