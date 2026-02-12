@@ -138,11 +138,12 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - binary wrappers with single-origin or same-origin operands
     - `if`/`match` expressions when branch origins are consistent
     - block-tail expressions with local shadow bindings
-    - one-hop interprocedural forwarding via function origin summaries (`from-param` and source/gate-tagged return summaries)
+    - interprocedural forwarding via iterative function origin summaries (`from-param` and source/gate-tagged return summaries)
   - tests now assert sink-argument origin tracing for:
     - direct `db.exec(DbCap(), raw)` flow from `req.query`
     - composite expression flows (`binary`, `if`, `match`, `block`)
     - forwarding function flows (`queryParam -> passThrough -> db.exec`)
+    - deeper forwarding chains (`queryParam -> passThrough -> passthroughTwice -> wrap -> db.exec`)
 - Added richer deterministic callsite evidence in `sec.audit` findings:
   - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
   - each sample includes callee, location, argument roles, and available origin-edge metadata
@@ -240,7 +241,7 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 - Input: function body expressions and local `let` bindings.
 - Output: optional `origin_edges` array on each `security_map.calls[]` entry.
 - Constraints:
-  - flow tracking is local and structural (no interprocedural dataflow yet),
+  - flow tracking is structural with summary-based interprocedural forwarding,
   - only source/gate-tagged origins are attached.
 
 #### 5) Failure modes and diagnostics
@@ -255,8 +256,8 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
   - `{ arg_index: 1, origin: "call:req.query", tags: ["source.http.query"] }`
 
 #### 7) Tradeoffs and next steps
-- Current origin inference is intentionally conservative and local-scope only.
-- Next step is to extend interprocedural origin tracing beyond one-hop forwarding summaries (for example deeper call chains and branch-sensitive summaries).
+- Current origin inference is intentionally conservative and tag-oriented (origin chain details are flattened in summaries).
+- Next step is to extend provenance detail beyond summary tags (for example branch-sensitive call-chain traces).
 
 ### Slice Explanation: `sec.audit` Callsite Evidence
 
@@ -410,6 +411,45 @@ Without member alias canonicalization, capability/effect/sink checks could miss 
 - current namespace stem detection is explicit and conservative.
 - next step is deeper value-call forwarding across function boundaries and richer callable-value shapes.
 
+### Slice Explanation: Iterative Interprocedural Origin Summaries
+
+#### 1) What it is
+This slice upgrades function-origin summarization from a single-pass snapshot to an iterative fixed-point computation so deeper forwarding chains preserve source tags.
+
+#### 2) Why it exists
+Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper chains could drop source-origin tags before reaching sinks, weakening `security_map` evidence.
+
+#### 3) How it works internally
+- `build_function_origin_summaries` now:
+  - gathers all functions,
+  - recomputes summaries iteratively using currently known summaries,
+  - stops when no summary changes or when bounded rounds are exhausted.
+- summary inference still uses deterministic forms:
+  - `FromParam { index }` for pure forwarders,
+  - `Tagged { tags }` for source/gate-returning functions.
+- call argument origin inference consumes these converged summaries, so sink edges retain source tags across deeper helper stacks.
+
+#### 4) Inputs/outputs and constraints
+- Input: full program function set.
+- Output: converged summary map used by origin inference.
+- Constraints:
+  - round count is bounded by function count (deterministic runtime),
+  - summaries intentionally carry tags/param indices, not full path traces.
+
+#### 5) Failure modes and diagnostics
+- this path does not add compile diagnostics directly.
+- if no stable informative summary is inferable, function summary is omitted and downstream edges may be absent.
+
+#### 6) Example usage
+- flow:
+  - `queryParam()` -> `passThrough()` -> `passthroughTwice()` -> `wrap()` -> `db.exec(...)`
+- result:
+  - sink argument edge keeps `source.http.query` tag instead of losing origin through helper depth.
+
+#### 7) Tradeoffs and next steps
+- summaries remain intentionally compact and avoid path explosion.
+- next step is richer call-chain provenance output while keeping deterministic bounded analysis.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -435,5 +475,5 @@ Without member alias canonicalization, capability/effect/sink checks could miss 
 1. Expand typed stdlib symbol metadata from local/member alias calls into deeper interprocedural forwarding paths.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
-4. Extend source-origin tracing beyond local bindings into interprocedural call chains.
+4. Extend source-origin tracing from converged tag summaries into richer call-chain provenance details.
 5. Expand `sec.audit` sample-call evidence coverage across more finding families.

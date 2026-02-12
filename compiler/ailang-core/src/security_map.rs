@@ -619,14 +619,37 @@ fn merge_origins(
 }
 
 fn build_function_origin_summaries(program: &Program) -> HashMap<String, FunctionOriginSummary> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            ItemKind::Function(function) => Some(function),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
     let mut summaries = HashMap::new();
-    let empty = HashMap::new();
-    for item in &program.items {
-        let ItemKind::Function(function) = &item.kind else {
-            continue;
-        };
-        if let Some(summary) = summarize_function_origin(function, &empty) {
-            summaries.insert(function.name.clone(), summary);
+    let max_rounds = functions.len().max(1);
+    for _ in 0..max_rounds {
+        let mut changed = false;
+        for function in &functions {
+            let next = summarize_function_origin(function, &summaries);
+            match next {
+                Some(summary) => {
+                    if summaries.get(function.name.as_str()) != Some(&summary) {
+                        summaries.insert(function.name.clone(), summary);
+                        changed = true;
+                    }
+                }
+                None => {
+                    if summaries.remove(function.name.as_str()).is_some() {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
         }
     }
     summaries

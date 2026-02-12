@@ -277,6 +277,46 @@ fn boot() -> Int {
 }
 
 #[test]
+fn security_map_tracks_origin_edges_across_multi_hop_forwarding_functions() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn passThrough(input: String) -> String {
+  input
+}
+
+fn passthroughTwice(input: String) -> String {
+  passThrough(input)
+}
+
+fn wrap() -> String {
+  passthroughTwice(queryParam())
+}
+
+fn boot() -> Int {
+  let raw = wrap();
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && (edge.origin == "call:wrap" || edge.origin == "call:queryParam")
+                })
+            })
+    }));
+}
+
+#[test]
 fn security_map_resolves_intrinsic_alias_value_calls() {
     let source = r#"
 fn boot() -> Int {
