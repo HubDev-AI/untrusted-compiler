@@ -33,6 +33,7 @@ int64_t ailang_rt_res_html();
 int64_t ailang_rt_res_text();
 int64_t ailang_rt_set_header();
 int64_t ailang_rt_set_cookie();
+int64_t ailang_rt_sql_q();
 int64_t ailang_rt_db_exec();
 int64_t ailang_rt_db_tx();
 int64_t ailang_rt_db_exec_tx();

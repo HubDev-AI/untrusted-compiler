@@ -786,10 +786,12 @@ entry = "src/main.ai"
   path: PathSafe,
   url: PublicUrl
 ) effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
+  let built = sql.q(1, 2);
   db.tx(db);
-  db.execTx(tx, query);
-  db.exec(db, query);
-  db.queryOne(db, query, 1);
+  db.execTx(tx, built);
+  db.exec(db, built);
+  db.queryOne(db, built, 1);
+  query;
   fs.read(fs, path);
   fs.write(fs, path, 1);
   httpClient.get(net, url);
@@ -814,10 +816,11 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_sql_q(1, 2)"));
     assert!(generated_c.contains("ailang_rt_db_tx(db)"));
-    assert!(generated_c.contains("ailang_rt_db_exec_tx(tx, query)"));
-    assert!(generated_c.contains("ailang_rt_db_exec(db, query)"));
-    assert!(generated_c.contains("ailang_rt_db_query_one(db, query, 1)"));
+    assert!(generated_c.contains("ailang_rt_db_exec_tx(tx, built)"));
+    assert!(generated_c.contains("ailang_rt_db_exec(db, built)"));
+    assert!(generated_c.contains("ailang_rt_db_query_one(db, built, 1)"));
     assert!(generated_c.contains("ailang_rt_fs_read(fs, path)"));
     assert!(generated_c.contains("ailang_rt_fs_write(fs, path, 1)"));
     assert!(generated_c.contains("ailang_rt_http_get(net, url)"));

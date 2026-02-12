@@ -243,6 +243,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("set_header(", "__AILANG_INTRINSIC_SET_HEADER__(");
     lowered = lowered.replace("res.addCookie(", "__AILANG_INTRINSIC_SET_COOKIE__(");
     lowered = lowered.replace("set_cookie(", "__AILANG_INTRINSIC_SET_COOKIE__(");
+    lowered = lowered.replace("sql.q(", "__AILANG_INTRINSIC_SQL_Q__(");
+    lowered = lowered.replace("sql_q(", "__AILANG_INTRINSIC_SQL_Q__(");
     lowered = lowered.replace("db.execTx(", "__AILANG_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db_exec_tx(", "__AILANG_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db.tx(", "__AILANG_INTRINSIC_DB_TX__(");
@@ -425,6 +427,7 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_TEXT__(", "ailang_rt_res_text(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_HEADER__(", "ailang_rt_set_header(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_COOKIE__(", "ailang_rt_set_cookie(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_SQL_Q__(", "ailang_rt_sql_q(");
     lowered = lowered.replace("__AILANG_INTRINSIC_DB_EXEC__(", "ailang_rt_db_exec(");
     lowered = lowered.replace("__AILANG_INTRINSIC_DB_TX__(", "ailang_rt_db_tx(");
     lowered = lowered.replace("__AILANG_INTRINSIC_DB_EXEC_TX__(", "ailang_rt_db_exec_tx(");

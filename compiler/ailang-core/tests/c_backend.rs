@@ -97,6 +97,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_res_text();"));
     assert!(header.contains("int64_t ailang_rt_set_header();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
+    assert!(header.contains("int64_t ailang_rt_sql_q();"));
     assert!(header.contains("int64_t ailang_rt_db_exec();"));
     assert!(header.contains("int64_t ailang_rt_db_tx();"));
     assert!(header.contains("int64_t ailang_rt_db_exec_tx();"));
@@ -180,6 +181,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_res_text()"));
     assert!(source.contains("int64_t ailang_rt_set_header()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
+    assert!(source.contains("int64_t ailang_rt_sql_q()"));
     assert!(source.contains("int64_t ailang_rt_db_exec()"));
     assert!(source.contains("int64_t ailang_rt_db_tx()"));
     assert!(source.contains("int64_t ailang_rt_db_exec_tx()"));
@@ -387,10 +389,11 @@ fn main() effects { net } -> Int {
 fn c_backend_rewrites_db_fs_and_net_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
+  let query = sql.q(1, 2);
   db.tx(1);
-  db.execTx(1, 2);
-  db.exec(1, 2);
-  db.queryOne(1, 2, 3);
+  db.execTx(1, query);
+  db.exec(1, query);
+  db.queryOne(1, query, 3);
   fs.read(1, 2);
   fs.write(1, 2, 3);
   httpClient.get(1, 2);
@@ -403,10 +406,11 @@ fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
+    assert!(c.contains("ailang_rt_sql_q(1, 2);"));
     assert!(c.contains("(void)(ailang_rt_db_tx(1));"));
-    assert!(c.contains("(void)(ailang_rt_db_exec_tx(1, 2));"));
-    assert!(c.contains("(void)(ailang_rt_db_exec(1, 2));"));
-    assert!(c.contains("(void)(ailang_rt_db_query_one(1, 2, 3));"));
+    assert!(c.contains("(void)(ailang_rt_db_exec_tx(1, query));"));
+    assert!(c.contains("(void)(ailang_rt_db_exec(1, query));"));
+    assert!(c.contains("(void)(ailang_rt_db_query_one(1, query, 3));"));
     assert!(c.contains("(void)(ailang_rt_fs_read(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_fs_write(1, 2, 3));"));
     assert!(c.contains("(void)(ailang_rt_http_get(1, 2));"));

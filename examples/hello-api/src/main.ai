@@ -43,8 +43,10 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 }
 
 fn txDemo(db: DbCap, tx: TxCap, query: SqlQuery) effects { db.tx, db.write } -> Int {
+  let built = sql.q(1, 2);
   db.tx(db);
-  db.execTx(tx, query);
+  db.execTx(tx, built);
+  query;
   0
 }
 

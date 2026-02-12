@@ -1051,6 +1051,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         }
         "json_decode" | "json.decode" => vec!["gate.schema.json_decode"],
         "json_encode" | "json.encode" => vec!["sink.json.encode"],
+        "sql_q" | "sql.q" => vec!["gate.sql.parameterize"],
         "validate_header_value" | "validate.headerValue" => vec!["gate.header.value"],
         "validate_email" | "validate.email" => vec!["gate.validate.email"],
         "validate_uuid" | "validate.uuid" => vec!["gate.validate.uuid"],
@@ -1314,6 +1315,7 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["capability", "query"]
             }
         }
+        "sql_q" | "sql.q" => vec!["template", "params"],
         "res_json" | "res.json" => {
             if arg_count == 2 {
                 vec!["schema", "value"]
@@ -1595,6 +1597,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol("res_html", &[("sink.http.html", TagKind::Sink)]),
         symbol("set_header", &[("sink.http.header_set", TagKind::Sink)]),
         symbol("set_cookie", &[("sink.http.cookie_set", TagKind::Sink)]),
+        symbol("sql_q", &[("gate.sql.parameterize", TagKind::Gate)]),
         symbol(
             "fs_read",
             &[
@@ -1717,6 +1720,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol("res.html", &[("sink.http.html", TagKind::Sink)]),
         symbol("res.setHeader", &[("sink.http.header_set", TagKind::Sink)]),
         symbol("res.addCookie", &[("sink.http.cookie_set", TagKind::Sink)]),
+        symbol("sql.q", &[("gate.sql.parameterize", TagKind::Gate)]),
         symbol(
             "fs.read",
             &[

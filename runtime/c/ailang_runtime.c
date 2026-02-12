@@ -115,6 +115,10 @@ int64_t ailang_rt_set_cookie() {
   return 0;
 }
 
+int64_t ailang_rt_sql_q() {
+  return 0;
+}
+
 int64_t ailang_rt_db_exec() {
   return 0;
 }

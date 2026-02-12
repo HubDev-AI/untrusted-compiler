@@ -2539,6 +2539,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: Some("TxCap"),
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "sql_q" | "sql.q" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("SqlQuery"),
+        }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: Some("fs.read"),
             required_capability: Some("FsCap"),
@@ -2739,7 +2744,7 @@ fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> 
 fn is_intrinsic_namespace(name: &str) -> bool {
     matches!(
         name,
-        "db" | "fs"
+        "db" | "fs" | "sql"
             | "http"
             | "httpClient"
             | "json"
