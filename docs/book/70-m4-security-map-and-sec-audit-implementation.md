@@ -940,6 +940,52 @@ The rollup previously provided counts and samples, but not enough structured age
 - this gives deterministic aging context in a single report but does not yet compute longitudinal trends across multiple runs.
 - next step is adding persisted trend deltas (for example day-over-day expiry pressure change) while keeping audits reproducible.
 
+### Slice Explanation: Baseline Trend Deltas for `sec.audit`
+
+#### 1) What it is
+This slice adds optional baseline comparison to `sec.audit` and emits deterministic trend deltas in the audit report.
+
+#### 2) Why it exists
+Single-report posture is useful, but teams also need quick answers to "did risk get better or worse since last stable run?" without introducing non-deterministic storage dependencies.
+
+#### 3) How it works internally
+- core audit now supports `run_security_audit_with_baseline(...)` alongside the existing default runner.
+- when a baseline report is provided, output includes `trend` with:
+  - `baselinePolicyHash`
+  - `baselineRiskScore`
+  - `riskScoreDelta`
+  - `findingCountDelta`
+  - `severityDeltas` (`LOW|MEDIUM|HIGH|CRITICAL`)
+  - bounded `addedFindingIds` / `resolvedFindingIds`
+- CLI `sec audit` accepts `--baseline <path>` and parses prior JSON report to populate trend output.
+- text rendering includes a compact trend summary line plus added/resolved IDs when present.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - current policy/security_map,
+  - optional prior `AuditReport` JSON.
+- Output:
+  - regular audit report plus optional `trend` object.
+- Constraints:
+  - comparison is purely ID/count/score based and deterministic,
+  - no hidden state; caller controls baseline file selection,
+  - added/resolved finding ID lists are bounded.
+
+#### 5) Failure modes and diagnostics
+- baseline loading/parsing errors are explicit CLI failures with non-zero exit (`Err(2)` path).
+- missing baseline keeps existing behavior (no trend field emitted).
+
+#### 6) Example usage
+- run once:
+  - `ailang sec audit --path . --format json > build/audit-baseline.json`
+- compare later:
+  - `ailang sec audit --path . --format text --baseline build/audit-baseline.json`
+- output shows whether risk score and finding counts increased or decreased and which finding IDs were added/resolved.
+
+#### 7) Tradeoffs and next steps
+- this enables deterministic two-point comparison but does not yet persist/aggregate multi-run history.
+- next step is opt-in history storage and windowed trend aggregation (for example 7-day/30-day delta summaries).
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -966,4 +1012,4 @@ The rollup previously provided counts and samples, but not enough structured age
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
-5. Expand `sec.audit` rollups with persisted longitudinal trend deltas across runs (aging pressure over time).
+5. Add opt-in persisted trend history and windowed multi-run trend aggregation for `sec.audit`.

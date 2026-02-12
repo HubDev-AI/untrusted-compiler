@@ -1,16 +1,16 @@
 use crate::policy::Policy;
 use crate::security_map::{SecurityAllow, SecurityMap, TagAttr};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ALLOW_EXPIRING_SOON_DAYS: i64 = 14;
 const ALLOW_EXPIRING_SOON_HIGH_THRESHOLD: usize = 5;
 const ALLOW_COUNT_HIGH_THRESHOLD: usize = 10;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AuditSeverity {
     LOW,
     MEDIUM,
@@ -67,7 +67,7 @@ impl PartialOrd for AuditSeverity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditPolicySummary {
     pub name: String,
     pub version: String,
@@ -76,7 +76,7 @@ pub struct AuditPolicySummary {
     pub env: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditBuildSummary {
     #[serde(rename = "compilerHash")]
     pub compiler_hash: String,
@@ -86,7 +86,7 @@ pub struct AuditBuildSummary {
     pub time_ms: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditCorsPosture {
     pub enabled: bool,
     #[serde(rename = "allowCredentials")]
@@ -97,14 +97,14 @@ pub struct AuditCorsPosture {
     pub allow_redirects: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditCspPosture {
     pub enabled: bool,
     #[serde(rename = "reportOnly")]
     pub report_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditSecurityHeadersPosture {
     pub enabled: bool,
     pub hsts: bool,
@@ -116,7 +116,7 @@ pub struct AuditSecurityHeadersPosture {
     pub referrer_policy: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditCsrfPosture {
     pub enabled: bool,
     pub mode: String,
@@ -126,19 +126,19 @@ pub struct AuditCsrfPosture {
     pub secure_cookie: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditCapturePosture {
     pub mode: String,
     #[serde(rename = "redactHeaders")]
     pub redact_headers: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditReplayPosture {
     pub effects: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditPosture {
     pub cors: AuditCorsPosture,
     #[serde(rename = "securityHeaders")]
@@ -148,7 +148,7 @@ pub struct AuditPosture {
     pub replay: AuditReplayPosture,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditAttackSurface {
     #[serde(rename = "sqlRaw")]
     pub sql_raw: bool,
@@ -164,7 +164,7 @@ pub struct AuditAttackSurface {
     pub public_redirects: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditException {
     #[serde(rename = "policyKey")]
     pub policy_key: String,
@@ -175,14 +175,14 @@ pub struct AuditException {
     pub severity: AuditSeverity,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditLocation {
     pub file: String,
     pub line: usize,
     pub column: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuditFinding {
     pub id: String,
     pub severity: AuditSeverity,
@@ -191,7 +191,7 @@ pub struct AuditFinding {
     pub suggestion: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditSummary {
     #[serde(rename = "riskScore")]
     pub risk_score: i64,
@@ -201,7 +201,7 @@ pub struct AuditSummary {
     pub finding_counts: HashMap<String, i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuditReport {
     pub version: String,
     pub policy: AuditPolicySummary,
@@ -212,9 +212,37 @@ pub struct AuditReport {
     pub exceptions: Vec<AuditException>,
     pub findings: Vec<AuditFinding>,
     pub summary: AuditSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trend: Option<AuditTrend>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditTrend {
+    #[serde(rename = "baselinePolicyHash")]
+    pub baseline_policy_hash: String,
+    #[serde(rename = "baselineRiskScore")]
+    pub baseline_risk_score: i64,
+    #[serde(rename = "riskScoreDelta")]
+    pub risk_score_delta: i64,
+    #[serde(rename = "findingCountDelta")]
+    pub finding_count_delta: i64,
+    #[serde(rename = "severityDeltas")]
+    pub severity_deltas: HashMap<String, i64>,
+    #[serde(rename = "addedFindingIds")]
+    pub added_finding_ids: Vec<String>,
+    #[serde(rename = "resolvedFindingIds")]
+    pub resolved_finding_ids: Vec<String>,
 }
 
 pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditReport {
+    run_security_audit_with_baseline(policy, security_map, None)
+}
+
+pub fn run_security_audit_with_baseline(
+    policy: &Policy,
+    security_map: &SecurityMap,
+    baseline: Option<&AuditReport>,
+) -> AuditReport {
     let posture = AuditPosture {
         cors: AuditCorsPosture {
             enabled: policy.cors.enabled,
@@ -832,7 +860,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
         }
     }
 
-    AuditReport {
+    let mut report = AuditReport {
         version: "0.1".to_string(),
         policy: AuditPolicySummary {
             name: policy.name.clone(),
@@ -855,7 +883,11 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             highest_severity,
             finding_counts,
         },
-    }
+        trend: None,
+    };
+
+    report.trend = baseline.map(|baseline_report| compute_trend(&report, baseline_report));
+    report
 }
 
 pub fn should_fail(report: &AuditReport, threshold: AuditSeverity) -> bool {
@@ -863,6 +895,48 @@ pub fn should_fail(report: &AuditReport, threshold: AuditSeverity) -> bool {
         .findings
         .iter()
         .any(|finding| finding.severity >= threshold)
+}
+
+fn compute_trend(current: &AuditReport, baseline: &AuditReport) -> AuditTrend {
+    let severity_keys = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+    let mut severity_deltas = HashMap::new();
+    for key in severity_keys {
+        let current_count = current.summary.finding_counts.get(key).copied().unwrap_or(0);
+        let baseline_count = baseline.summary.finding_counts.get(key).copied().unwrap_or(0);
+        severity_deltas.insert(key.to_string(), current_count - baseline_count);
+    }
+
+    let current_ids = current
+        .findings
+        .iter()
+        .map(|finding| finding.id.clone())
+        .collect::<BTreeSet<_>>();
+    let baseline_ids = baseline
+        .findings
+        .iter()
+        .map(|finding| finding.id.clone())
+        .collect::<BTreeSet<_>>();
+
+    let added_finding_ids = current_ids
+        .difference(&baseline_ids)
+        .take(20)
+        .cloned()
+        .collect::<Vec<_>>();
+    let resolved_finding_ids = baseline_ids
+        .difference(&current_ids)
+        .take(20)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    AuditTrend {
+        baseline_policy_hash: baseline.policy.hash.clone(),
+        baseline_risk_score: baseline.summary.risk_score,
+        risk_score_delta: current.summary.risk_score - baseline.summary.risk_score,
+        finding_count_delta: current.findings.len() as i64 - baseline.findings.len() as i64,
+        severity_deltas,
+        added_finding_ids,
+        resolved_finding_ids,
+    }
 }
 
 pub fn render_security_audit_text(report: &AuditReport) -> String {
@@ -930,6 +1004,25 @@ pub fn render_security_audit_text(report: &AuditReport) -> String {
         "Summary: riskScore={}, highestSeverity={:?}, counts={:?}",
         report.summary.risk_score, report.summary.highest_severity, report.summary.finding_counts
     ));
+    if let Some(trend) = &report.trend {
+        lines.push(format!(
+            "Trend: baselinePolicyHash={}, baselineRiskScore={}, riskScoreDelta={}, findingCountDelta={}, severityDeltas={:?}",
+            trend.baseline_policy_hash,
+            trend.baseline_risk_score,
+            trend.risk_score_delta,
+            trend.finding_count_delta,
+            trend.severity_deltas
+        ));
+        if !trend.added_finding_ids.is_empty() {
+            lines.push(format!("Trend added: {}", trend.added_finding_ids.join(", ")));
+        }
+        if !trend.resolved_finding_ids.is_empty() {
+            lines.push(format!(
+                "Trend resolved: {}",
+                trend.resolved_finding_ids.join(", ")
+            ));
+        }
+    }
 
     lines.join("\n")
 }

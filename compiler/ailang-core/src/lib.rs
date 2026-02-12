@@ -10,7 +10,8 @@ pub mod semantic;
 pub mod token;
 
 pub use audit::{
-    render_security_audit_text, run_security_audit, should_fail, AuditReport, AuditSeverity,
+    render_security_audit_text, run_security_audit, run_security_audit_with_baseline, should_fail,
+    AuditReport, AuditSeverity, AuditTrend,
 };
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};

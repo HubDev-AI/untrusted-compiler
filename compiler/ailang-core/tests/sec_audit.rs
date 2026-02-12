@@ -1,6 +1,7 @@
 use ailang_core::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations, parse_source,
     policy::parse_policy_str, render_security_audit_text, run_security_audit,
+    run_security_audit_with_baseline,
     security_map::SourceLocation, should_fail, AuditSeverity, Policy, SecurityAllow,
 };
 use std::path::Path;
@@ -569,6 +570,50 @@ fn sec_audit_flags_allow_hygiene_findings() {
             .and_then(|value| value.as_str())
             .is_some_and(|ticket| ticket == "SEC-000")
     }));
+}
+
+#[test]
+fn sec_audit_computes_trend_against_baseline_report() {
+    let source = r#"
+fn boot() -> Int {
+  withSecurityHeaders();
+  withCors();
+  withCsrf();
+  withAuth();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let baseline_policy = Policy::default();
+    let baseline_map = build_security_map(&program, &baseline_policy);
+    let baseline_report = run_security_audit(&baseline_policy, &baseline_map);
+    assert_eq!(baseline_report.summary.risk_score, 0);
+
+    let mut current_policy = baseline_policy.clone();
+    current_policy.cors.allowed_origins = vec!["*".to_string()];
+    current_policy.cors.allow_credentials = false;
+    current_policy.cors.forbid_any_origin = false;
+    let current_map = build_security_map(&program, &current_policy);
+    let report =
+        run_security_audit_with_baseline(&current_policy, &current_map, Some(&baseline_report));
+
+    let trend = report.trend.expect("trend data should be present");
+    assert_eq!(trend.baseline_policy_hash, baseline_report.policy.hash);
+    assert_eq!(trend.baseline_risk_score, 0);
+    assert!(trend.risk_score_delta > 0);
+    assert!(trend.finding_count_delta > 0);
+    assert!(
+        trend
+            .added_finding_ids
+            .iter()
+            .any(|id| id == "CORS_ANY_ORIGIN")
+    );
+    assert_eq!(trend.resolved_finding_ids.len(), 0);
+    assert!(trend
+        .severity_deltas
+        .get("MEDIUM")
+        .is_some_and(|delta| *delta > 0));
 }
 
 #[test]

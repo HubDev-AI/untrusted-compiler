@@ -1,9 +1,10 @@
 use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows,
-    render_security_audit_text, run_security_audit, should_fail, write_lockfile_stub,
-    write_security_map, AuditSeverity, Diagnostic,
+    render_security_audit_text, run_security_audit_with_baseline, should_fail, write_lockfile_stub,
+    write_security_map, AuditReport, AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -55,6 +56,8 @@ enum SecCommands {
         #[arg(long, value_enum, default_value_t = AuditOutputFormat::Text)]
         format: AuditOutputFormat,
         #[arg(long)]
+        baseline: Option<PathBuf>,
+        #[arg(long)]
         fail_on: Option<String>,
     },
 }
@@ -93,12 +96,18 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
         SecCommands::Audit {
             path,
             format,
+            baseline,
             fail_on,
-        } => cmd_sec_audit(&path, format, fail_on.as_deref()),
+        } => cmd_sec_audit(&path, format, baseline.as_deref(), fail_on.as_deref()),
     }
 }
 
-fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) -> Result<(), i32> {
+fn cmd_sec_audit(
+    path: &Path,
+    format: AuditOutputFormat,
+    baseline_path: Option<&Path>,
+    fail_on: Option<&str>,
+) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
         Ok(manifest) => match analyze_entry_with_allows(path, &manifest) {
             Ok((program, allows)) => {
@@ -119,7 +128,13 @@ fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) 
                     }
                 };
 
-                let report = run_security_audit(&policy, &security_map);
+                let baseline_report = if let Some(baseline_path) = baseline_path {
+                    Some(load_audit_baseline(baseline_path)?)
+                } else {
+                    None
+                };
+                let report =
+                    run_security_audit_with_baseline(&policy, &security_map, baseline_report.as_ref());
                 match format {
                     AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
                     AuditOutputFormat::Json => {
@@ -161,6 +176,27 @@ fn cmd_sec_audit(path: &Path, format: AuditOutputFormat, fail_on: Option<&str>) 
         Err(diagnostics) => {
             print_diagnostics(&diagnostics);
             Err(1)
+        }
+    }
+}
+
+fn load_audit_baseline(path: &Path) -> Result<AuditReport, i32> {
+    let raw = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) => {
+            eprintln!("could not read baseline report `{}`: {err}", path.display());
+            return Err(2);
+        }
+    };
+
+    match serde_json::from_str::<AuditReport>(&raw) {
+        Ok(report) => Ok(report),
+        Err(err) => {
+            eprintln!(
+                "could not parse baseline report `{}` as audit JSON: {err}",
+                path.display()
+            );
+            Err(2)
         }
     }
 }
