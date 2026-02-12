@@ -190,13 +190,14 @@ fn flow(x: Int) -> Int {
     assert_eq!(mir.functions[0].blocks.len(), 4);
 
     let rendered = mir.render_text();
-    assert!(rendered.contains("branch (x > 0) ? bb1 : bb2"));
-    assert!(rendered.contains("bb1:"));
-    assert!(rendered.contains("eval 1"));
-    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("branch (x > 0) ? bb2 : bb3"));
     assert!(rendered.contains("bb2:"));
-    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb1"));
     assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("goto bb1"));
+    assert!(rendered.contains("bb1:"));
     assert!(rendered.contains("return 5"));
 }
 
@@ -219,12 +220,77 @@ fn flow(x: Bool) -> Int {
     assert_eq!(mir.functions[0].blocks.len(), 4);
 
     let rendered = mir.render_text();
-    assert!(rendered.contains("switch x { true => bb1, false => bb2 }"));
-    assert!(rendered.contains("bb1:"));
-    assert!(rendered.contains("eval 1"));
-    assert!(rendered.contains("goto bb3"));
+    assert!(rendered.contains("switch x { true => bb2, false => bb3 }"));
     assert!(rendered.contains("bb2:"));
-    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("eval 1"));
+    assert!(rendered.contains("goto bb1"));
     assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("goto bb1"));
+    assert!(rendered.contains("bb1:"));
     assert!(rendered.contains("return 5"));
+}
+
+#[test]
+fn mir_lowering_recurses_nested_statement_if_in_branch_tail() {
+    let source = r#"
+fn nested(x: Int, y: Bool) -> Int {
+  if x > 0 {
+    if y {
+      1
+    } else {
+      2
+    }
+  } else {
+    0
+  };
+  9
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let rendered = mir.render_text();
+
+    assert!(rendered.contains("branch (x > 0) ? bb2 : bb3"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("branch y ? bb4 : bb5"));
+    assert!(rendered.contains("bb4:"));
+    assert!(rendered.contains("return 1") || rendered.contains("eval 1"));
+    assert!(rendered.contains("bb5:"));
+    assert!(rendered.contains("return 2") || rendered.contains("eval 2"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("eval 0"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("return 9"));
+}
+
+#[test]
+fn mir_lowering_recurses_nested_return_if_match() {
+    let source = r#"
+fn nested(x: Bool, y: Bool) -> Int {
+  return if x {
+    match y {
+      true => 1,
+      false => 2
+    }
+  } else {
+    0
+  };
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let rendered = mir.render_text();
+
+    assert!(rendered.contains("branch x ? bb1 : bb2"));
+    assert!(rendered.contains("bb1:"));
+    assert!(rendered.contains("switch y { true => bb3, false => bb4 }"));
+    assert!(rendered.contains("bb3:"));
+    assert!(rendered.contains("return 1"));
+    assert!(rendered.contains("bb4:"));
+    assert!(rendered.contains("return 2"));
+    assert!(rendered.contains("bb2:"));
+    assert!(rendered.contains("return 0"));
 }

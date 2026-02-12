@@ -1,12 +1,17 @@
 OK
-fn flow(x: Int) -> Int
+fn nested(x: Int, y: Bool) -> Int
   bb0:
     branch (x > 0) ? bb2 : bb3
   bb2:
+    branch y ? bb4 : bb5
+  bb4:
     eval 1
+    goto bb1
+  bb5:
+    eval 2
     goto bb1
   bb3:
     eval 0
     goto bb1
   bb1:
-    return 5
+    return 9

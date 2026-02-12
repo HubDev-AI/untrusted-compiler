@@ -1,0 +1,10 @@
+fn nested(x: Bool, y: Bool) -> Int {
+  return if x {
+    match y {
+      true => 1,
+      false => 2
+    }
+  } else {
+    0
+  };
+}

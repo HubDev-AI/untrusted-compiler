@@ -124,140 +124,70 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
         .collect::<Vec<_>>();
 
     let return_type = function.return_type.as_ref().map(type_expr_to_string);
-
-    let mut blocks = Vec::new();
     let mut next_block_id = 1usize;
-    let mut current_block_id = 0usize;
-    let mut current_instructions = Vec::new();
+    let blocks = lower_block_to_return_blocks(0, Vec::new(), &function.body, &mut next_block_id);
+
+    MirFunction {
+        name: function.name.clone(),
+        params,
+        effects,
+        return_type,
+        blocks,
+        span: span.clone(),
+    }
+}
+
+fn alloc_block_id(next_block_id: &mut usize) -> usize {
+    let id = *next_block_id;
+    *next_block_id += 1;
+    id
+}
+
+fn lower_block_to_return_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    block: &Block,
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    let mut blocks = Vec::new();
+    let mut current_block_id = entry_id;
+    let mut current_instructions = entry_instructions;
     let mut terminated = false;
 
-    for stmt in &function.body.statements {
+    for stmt in &block.statements {
         match &stmt.kind {
             StmtKind::Let { .. } => {
                 if let Some(instruction) = lower_stmt_to_instruction(stmt) {
                     current_instructions.push(instruction);
                 }
             }
-            StmtKind::Expr { expr } => match &expr.kind {
-                ExprKind::If {
-                    condition,
-                    then_branch,
-                    else_branch,
-                } => {
-                    let then_target = alloc_block_id(&mut next_block_id);
-                    let else_target = alloc_block_id(&mut next_block_id);
-                    let continuation_target = alloc_block_id(&mut next_block_id);
-
-                    blocks.push(MirBlock {
-                        id: current_block_id,
-                        instructions: std::mem::take(&mut current_instructions),
-                        terminator: MirTerminator::Branch {
-                            condition: expr_to_string(condition),
-                            then_target,
-                            else_target,
-                            span: expr.span.clone(),
-                        },
-                    });
-
-                    let (then_instructions, then_terminator) =
-                        lower_block_for_continuation(then_branch, continuation_target);
-                    blocks.push(MirBlock {
-                        id: then_target,
-                        instructions: then_instructions,
-                        terminator: then_terminator,
-                    });
-
-                    let (else_instructions, else_terminator) =
-                        lower_else_for_continuation(else_branch, continuation_target, &expr.span);
-                    blocks.push(MirBlock {
-                        id: else_target,
-                        instructions: else_instructions,
-                        terminator: else_terminator,
-                    });
-
+            StmtKind::Expr { expr } => {
+                if matches!(&expr.kind, ExprKind::If { .. } | ExprKind::Match { .. }) {
+                    let continuation_target = alloc_block_id(next_block_id);
+                    blocks.extend(lower_expr_to_continuation_blocks(
+                        current_block_id,
+                        std::mem::take(&mut current_instructions),
+                        expr,
+                        continuation_target,
+                        &expr.span,
+                        next_block_id,
+                    ));
                     current_block_id = continuation_target;
+                } else if let Some(instruction) = lower_stmt_to_instruction(stmt) {
+                    current_instructions.push(instruction);
                 }
-                ExprKind::Match { scrutinee, arms } => {
-                    let arm_targets = arms
-                        .iter()
-                        .map(|_| alloc_block_id(&mut next_block_id))
-                        .collect::<Vec<_>>();
-                    let continuation_target = alloc_block_id(&mut next_block_id);
-
-                    blocks.push(MirBlock {
-                        id: current_block_id,
-                        instructions: std::mem::take(&mut current_instructions),
-                        terminator: MirTerminator::Switch {
-                            scrutinee: expr_to_string(scrutinee),
-                            targets: arms
-                                .iter()
-                                .enumerate()
-                                .map(|(index, arm)| MirSwitchTarget {
-                                    pattern: pattern_to_string(&arm.pattern),
-                                    target: arm_targets[index],
-                                })
-                                .collect(),
-                            span: expr.span.clone(),
-                        },
-                    });
-
-                    for (index, arm) in arms.iter().enumerate() {
-                        let (instructions, terminator) =
-                            lower_expr_for_continuation(&arm.value, continuation_target);
-                        blocks.push(MirBlock {
-                            id: arm_targets[index],
-                            instructions,
-                            terminator,
-                        });
-                    }
-
-                    current_block_id = continuation_target;
-                }
-                _ => {
-                    if let Some(instruction) = lower_stmt_to_instruction(stmt) {
-                        current_instructions.push(instruction);
-                    }
-                }
-            },
+            }
             StmtKind::Return { value } => {
                 match value {
-                    Some(expr) => match &expr.kind {
-                        ExprKind::If {
-                            condition,
-                            then_branch,
-                            else_branch,
-                        } => {
-                            blocks.extend(lower_if_return_blocks(
-                                current_block_id,
-                                std::mem::take(&mut current_instructions),
-                                condition,
-                                then_branch,
-                                else_branch,
-                                &expr.span,
-                                &mut next_block_id,
-                            ));
-                        }
-                        ExprKind::Match { scrutinee, arms } => {
-                            blocks.extend(lower_match_return_blocks(
-                                current_block_id,
-                                std::mem::take(&mut current_instructions),
-                                scrutinee,
-                                arms,
-                                &expr.span,
-                                &mut next_block_id,
-                            ));
-                        }
-                        _ => {
-                            blocks.push(MirBlock {
-                                id: current_block_id,
-                                instructions: std::mem::take(&mut current_instructions),
-                                terminator: MirTerminator::Return {
-                                    value: Some(expr_to_string(expr)),
-                                    span: stmt.span.clone(),
-                                },
-                            });
-                        }
-                    },
+                    Some(expr) => {
+                        blocks.extend(lower_expr_to_return_blocks(
+                            current_block_id,
+                            std::mem::take(&mut current_instructions),
+                            expr,
+                            &stmt.span,
+                            next_block_id,
+                        ));
+                    }
                     None => {
                         blocks.push(MirBlock {
                             id: current_block_id,
@@ -276,116 +206,272 @@ fn lower_function(function: &FunctionDecl, span: &Span) -> MirFunction {
     }
 
     if !terminated {
-        if let Some(tail) = &function.body.tail {
-            match &tail.kind {
-                ExprKind::If {
-                    condition,
-                    then_branch,
-                    else_branch,
-                } => {
-                    blocks.extend(lower_if_return_blocks(
-                        current_block_id,
-                        std::mem::take(&mut current_instructions),
-                        condition,
-                        then_branch,
-                        else_branch,
-                        &tail.span,
-                        &mut next_block_id,
-                    ));
-                }
-                ExprKind::Match { scrutinee, arms } => {
-                    blocks.extend(lower_match_return_blocks(
-                        current_block_id,
-                        std::mem::take(&mut current_instructions),
-                        scrutinee,
-                        arms,
-                        &tail.span,
-                        &mut next_block_id,
-                    ));
-                }
-                _ => {
-                    blocks.push(MirBlock {
-                        id: current_block_id,
-                        instructions: std::mem::take(&mut current_instructions),
-                        terminator: MirTerminator::Return {
-                            value: Some(expr_to_string(tail)),
-                            span: function.body.span.clone(),
-                        },
-                    });
-                }
-            }
+        if let Some(tail) = &block.tail {
+            blocks.extend(lower_expr_to_return_blocks(
+                current_block_id,
+                std::mem::take(&mut current_instructions),
+                tail,
+                &block.span,
+                next_block_id,
+            ));
         } else {
             blocks.push(MirBlock {
                 id: current_block_id,
                 instructions: std::mem::take(&mut current_instructions),
                 terminator: MirTerminator::Return {
                     value: None,
-                    span: function.body.span.clone(),
+                    span: block.span.clone(),
                 },
             });
         }
     }
 
-    MirFunction {
-        name: function.name.clone(),
-        params,
-        effects,
-        return_type,
-        blocks,
-        span: span.clone(),
+    blocks
+}
+
+fn lower_block_to_continuation_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    block: &Block,
+    continuation_target: usize,
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    let mut blocks = Vec::new();
+    let mut current_block_id = entry_id;
+    let mut current_instructions = entry_instructions;
+    let mut terminated = false;
+
+    for stmt in &block.statements {
+        match &stmt.kind {
+            StmtKind::Let { .. } => {
+                if let Some(instruction) = lower_stmt_to_instruction(stmt) {
+                    current_instructions.push(instruction);
+                }
+            }
+            StmtKind::Expr { expr } => {
+                if matches!(&expr.kind, ExprKind::If { .. } | ExprKind::Match { .. }) {
+                    let next_statement_target = alloc_block_id(next_block_id);
+                    blocks.extend(lower_expr_to_continuation_blocks(
+                        current_block_id,
+                        std::mem::take(&mut current_instructions),
+                        expr,
+                        next_statement_target,
+                        &expr.span,
+                        next_block_id,
+                    ));
+                    current_block_id = next_statement_target;
+                } else if let Some(instruction) = lower_stmt_to_instruction(stmt) {
+                    current_instructions.push(instruction);
+                }
+            }
+            StmtKind::Return { value } => {
+                match value {
+                    Some(expr) => {
+                        blocks.extend(lower_expr_to_return_blocks(
+                            current_block_id,
+                            std::mem::take(&mut current_instructions),
+                            expr,
+                            &stmt.span,
+                            next_block_id,
+                        ));
+                    }
+                    None => {
+                        blocks.push(MirBlock {
+                            id: current_block_id,
+                            instructions: std::mem::take(&mut current_instructions),
+                            terminator: MirTerminator::Return {
+                                value: None,
+                                span: stmt.span.clone(),
+                            },
+                        });
+                    }
+                }
+                terminated = true;
+                break;
+            }
+        }
+    }
+
+    if !terminated {
+        if let Some(tail) = &block.tail {
+            blocks.extend(lower_expr_to_continuation_blocks(
+                current_block_id,
+                std::mem::take(&mut current_instructions),
+                tail,
+                continuation_target,
+                &block.span,
+                next_block_id,
+            ));
+        } else {
+            blocks.push(MirBlock {
+                id: current_block_id,
+                instructions: std::mem::take(&mut current_instructions),
+                terminator: MirTerminator::Goto {
+                    target: continuation_target,
+                    span: block.span.clone(),
+                },
+            });
+        }
+    }
+
+    blocks
+}
+
+fn lower_expr_to_return_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    expr: &Expr,
+    fallback_span: &Span,
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    match &expr.kind {
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => lower_if_to_return_blocks(
+            entry_id,
+            entry_instructions,
+            condition,
+            then_branch,
+            else_branch,
+            fallback_span,
+            next_block_id,
+        ),
+        ExprKind::Match { scrutinee, arms } => lower_match_to_return_blocks(
+            entry_id,
+            entry_instructions,
+            scrutinee,
+            arms,
+            next_block_id,
+        ),
+        ExprKind::Block(block) => {
+            lower_block_to_return_blocks(entry_id, entry_instructions, block, next_block_id)
+        }
+        _ => vec![MirBlock {
+            id: entry_id,
+            instructions: entry_instructions,
+            terminator: MirTerminator::Return {
+                value: Some(expr_to_string(expr)),
+                span: expr.span.clone(),
+            },
+        }],
     }
 }
 
-fn alloc_block_id(next_block_id: &mut usize) -> usize {
-    let id = *next_block_id;
-    *next_block_id += 1;
-    id
+fn lower_expr_to_continuation_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    expr: &Expr,
+    continuation_target: usize,
+    fallback_span: &Span,
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    match &expr.kind {
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => lower_if_to_continuation_blocks(
+            entry_id,
+            entry_instructions,
+            condition,
+            then_branch,
+            else_branch,
+            continuation_target,
+            fallback_span,
+            next_block_id,
+        ),
+        ExprKind::Match { scrutinee, arms } => lower_match_to_continuation_blocks(
+            entry_id,
+            entry_instructions,
+            scrutinee,
+            arms,
+            continuation_target,
+            next_block_id,
+        ),
+        ExprKind::Block(block) => lower_block_to_continuation_blocks(
+            entry_id,
+            entry_instructions,
+            block,
+            continuation_target,
+            next_block_id,
+        ),
+        _ => {
+            let mut instructions = entry_instructions;
+            instructions.push(MirInstruction {
+                kind: MirInstructionKind::Eval {
+                    value: expr_to_string(expr),
+                },
+                span: expr.span.clone(),
+            });
+            vec![MirBlock {
+                id: entry_id,
+                instructions,
+                terminator: MirTerminator::Goto {
+                    target: continuation_target,
+                    span: expr.span.clone(),
+                },
+            }]
+        }
+    }
 }
 
-fn lower_if_return_blocks(
+fn lower_if_to_return_blocks(
     entry_id: usize,
     entry_instructions: Vec<MirInstruction>,
     condition: &Expr,
     then_branch: &Block,
     else_branch: &Option<Box<Expr>>,
-    span: &Span,
+    fallback_span: &Span,
     next_block_id: &mut usize,
 ) -> Vec<MirBlock> {
     let then_target = alloc_block_id(next_block_id);
     let else_target = alloc_block_id(next_block_id);
-    let (then_instructions, then_terminator) = lower_block(then_branch);
-    let (else_instructions, else_terminator) = lower_else_branch(else_branch, span);
+    let mut blocks = vec![MirBlock {
+        id: entry_id,
+        instructions: entry_instructions,
+        terminator: MirTerminator::Branch {
+            condition: expr_to_string(condition),
+            then_target,
+            else_target,
+            span: condition.span.clone(),
+        },
+    }];
 
-    vec![
-        MirBlock {
-            id: entry_id,
-            instructions: entry_instructions,
-            terminator: MirTerminator::Branch {
-                condition: expr_to_string(condition),
-                then_target,
-                else_target,
-                span: span.clone(),
-            },
-        },
-        MirBlock {
-            id: then_target,
-            instructions: then_instructions,
-            terminator: then_terminator,
-        },
-        MirBlock {
+    blocks.extend(lower_block_to_return_blocks(
+        then_target,
+        Vec::new(),
+        then_branch,
+        next_block_id,
+    ));
+
+    match else_branch {
+        Some(expr) => blocks.extend(lower_expr_to_return_blocks(
+            else_target,
+            Vec::new(),
+            expr,
+            fallback_span,
+            next_block_id,
+        )),
+        None => blocks.push(MirBlock {
             id: else_target,
-            instructions: else_instructions,
-            terminator: else_terminator,
-        },
-    ]
+            instructions: Vec::new(),
+            terminator: MirTerminator::Return {
+                value: None,
+                span: fallback_span.clone(),
+            },
+        }),
+    }
+
+    blocks
 }
 
-fn lower_match_return_blocks(
+fn lower_match_to_return_blocks(
     entry_id: usize,
     entry_instructions: Vec<MirInstruction>,
     scrutinee: &Expr,
     arms: &[ast::MatchArm],
-    span: &Span,
     next_block_id: &mut usize,
 ) -> Vec<MirBlock> {
     let arm_targets = arms
@@ -406,180 +492,119 @@ fn lower_match_return_blocks(
                     target: arm_targets[index],
                 })
                 .collect(),
-            span: span.clone(),
+            span: scrutinee.span.clone(),
         },
     }];
 
     for (index, arm) in arms.iter().enumerate() {
-        let (instructions, terminator) = lower_expr_as_block(&arm.value);
-        blocks.push(MirBlock {
-            id: arm_targets[index],
-            instructions,
-            terminator,
-        });
+        blocks.extend(lower_expr_to_return_blocks(
+            arm_targets[index],
+            Vec::new(),
+            &arm.value,
+            &arm.span,
+            next_block_id,
+        ));
     }
 
     blocks
 }
 
-fn lower_else_for_continuation(
-    else_expr: &Option<Box<Expr>>,
+fn lower_if_to_continuation_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    condition: &Expr,
+    then_branch: &Block,
+    else_branch: &Option<Box<Expr>>,
     continuation_target: usize,
     fallback_span: &Span,
-) -> (Vec<MirInstruction>, MirTerminator) {
-    match else_expr {
-        Some(expr) => lower_expr_for_continuation(expr, continuation_target),
-        None => (
-            Vec::new(),
-            MirTerminator::Goto {
-                target: continuation_target,
-                span: fallback_span.clone(),
-            },
-        ),
-    }
-}
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    let then_target = alloc_block_id(next_block_id);
+    let else_target = alloc_block_id(next_block_id);
 
-fn lower_expr_for_continuation(
-    expr: &Expr,
-    continuation_target: usize,
-) -> (Vec<MirInstruction>, MirTerminator) {
-    match &expr.kind {
-        ExprKind::Block(block) => lower_block_for_continuation(block, continuation_target),
-        _ => (
-            vec![MirInstruction {
-                kind: MirInstructionKind::Eval {
-                    value: expr_to_string(expr),
-                },
-                span: expr.span.clone(),
-            }],
-            MirTerminator::Goto {
-                target: continuation_target,
-                span: expr.span.clone(),
-            },
-        ),
-    }
-}
-
-fn lower_block_for_continuation(
-    block: &Block,
-    continuation_target: usize,
-) -> (Vec<MirInstruction>, MirTerminator) {
-    let mut instructions = Vec::new();
-    let mut terminator = None;
-
-    for stmt in &block.statements {
-        match &stmt.kind {
-            StmtKind::Let { .. } | StmtKind::Expr { .. } => {
-                if let Some(instruction) = lower_stmt_to_instruction(stmt) {
-                    instructions.push(instruction);
-                }
-            }
-            StmtKind::Return { value } => {
-                terminator = Some(MirTerminator::Return {
-                    value: value.as_ref().map(expr_to_string),
-                    span: stmt.span.clone(),
-                });
-                break;
-            }
-        }
-    }
-
-    if terminator.is_none() {
-        if let Some(tail) = &block.tail {
-            instructions.push(MirInstruction {
-                kind: MirInstructionKind::Eval {
-                    value: expr_to_string(tail),
-                },
-                span: tail.span.clone(),
-            });
-        }
-    }
-
-    let terminator = terminator.unwrap_or_else(|| MirTerminator::Goto {
-        target: continuation_target,
-        span: block.span.clone(),
-    });
-
-    (instructions, terminator)
-}
-
-fn lower_block(block: &Block) -> (Vec<MirInstruction>, MirTerminator) {
-    let mut instructions = Vec::new();
-    let mut terminator = None;
-
-    for stmt in &block.statements {
-        match &stmt.kind {
-            StmtKind::Let { name, value, .. } => {
-                instructions.push(MirInstruction {
-                    kind: MirInstructionKind::Let {
-                        name: name.clone(),
-                        value: expr_to_string(value),
-                    },
-                    span: stmt.span.clone(),
-                });
-            }
-            StmtKind::Expr { expr } => {
-                instructions.push(MirInstruction {
-                    kind: MirInstructionKind::Eval {
-                        value: expr_to_string(expr),
-                    },
-                    span: stmt.span.clone(),
-                });
-            }
-            StmtKind::Return { value } => {
-                terminator = Some(MirTerminator::Return {
-                    value: value.as_ref().map(expr_to_string),
-                    span: stmt.span.clone(),
-                });
-                break;
-            }
-        }
-    }
-
-    let terminator = terminator.unwrap_or_else(|| MirTerminator::Return {
-        value: block.tail.as_ref().map(|expr| expr_to_string(expr)),
-        span: block.span.clone(),
-    });
-
-    (instructions, terminator)
-}
-
-fn lower_else_branch(
-    else_expr: &Option<Box<Expr>>,
-    fallback_span: &Span,
-) -> (Vec<MirInstruction>, MirTerminator) {
-    match else_expr {
-        Some(expr) => match &expr.kind {
-            ExprKind::Block(block) => lower_block(block),
-            _ => (
-                Vec::new(),
-                MirTerminator::Return {
-                    value: Some(expr_to_string(expr)),
-                    span: expr.span.clone(),
-                },
-            ),
+    let mut blocks = vec![MirBlock {
+        id: entry_id,
+        instructions: entry_instructions,
+        terminator: MirTerminator::Branch {
+            condition: expr_to_string(condition),
+            then_target,
+            else_target,
+            span: condition.span.clone(),
         },
-        None => (
+    }];
+
+    blocks.extend(lower_block_to_continuation_blocks(
+        then_target,
+        Vec::new(),
+        then_branch,
+        continuation_target,
+        next_block_id,
+    ));
+
+    match else_branch {
+        Some(expr) => blocks.extend(lower_expr_to_continuation_blocks(
+            else_target,
             Vec::new(),
-            MirTerminator::Return {
-                value: None,
+            expr,
+            continuation_target,
+            fallback_span,
+            next_block_id,
+        )),
+        None => blocks.push(MirBlock {
+            id: else_target,
+            instructions: Vec::new(),
+            terminator: MirTerminator::Goto {
+                target: continuation_target,
                 span: fallback_span.clone(),
             },
-        ),
+        }),
     }
+
+    blocks
 }
 
-fn lower_expr_as_block(expr: &Expr) -> (Vec<MirInstruction>, MirTerminator) {
-    match &expr.kind {
-        ExprKind::Block(block) => lower_block(block),
-        _ => (
+fn lower_match_to_continuation_blocks(
+    entry_id: usize,
+    entry_instructions: Vec<MirInstruction>,
+    scrutinee: &Expr,
+    arms: &[ast::MatchArm],
+    continuation_target: usize,
+    next_block_id: &mut usize,
+) -> Vec<MirBlock> {
+    let arm_targets = arms
+        .iter()
+        .map(|_| alloc_block_id(next_block_id))
+        .collect::<Vec<_>>();
+
+    let mut blocks = vec![MirBlock {
+        id: entry_id,
+        instructions: entry_instructions,
+        terminator: MirTerminator::Switch {
+            scrutinee: expr_to_string(scrutinee),
+            targets: arms
+                .iter()
+                .enumerate()
+                .map(|(index, arm)| MirSwitchTarget {
+                    pattern: pattern_to_string(&arm.pattern),
+                    target: arm_targets[index],
+                })
+                .collect(),
+            span: scrutinee.span.clone(),
+        },
+    }];
+
+    for (index, arm) in arms.iter().enumerate() {
+        blocks.extend(lower_expr_to_continuation_blocks(
+            arm_targets[index],
             Vec::new(),
-            MirTerminator::Return {
-                value: Some(expr_to_string(expr)),
-                span: expr.span.clone(),
-            },
-        ),
+            &arm.value,
+            continuation_target,
+            &arm.span,
+            next_block_id,
+        ));
     }
+
+    blocks
 }
 
 fn lower_stmt_to_instruction(stmt: &ast::Stmt) -> Option<MirInstruction> {

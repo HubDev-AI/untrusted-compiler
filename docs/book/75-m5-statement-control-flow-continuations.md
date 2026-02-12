@@ -2,6 +2,8 @@
 
 This chapter documents the next M5 step: lowering statement-level control flow into explicit continuation blocks.
 
+Follow-up recursive nested CFG lowering is documented in `docs/book/76-m5-nested-cfg-lowering.md`.
+
 ## Scope delivered
 - Function-body expression statements now lower structured control flow for:
   - `if ... { ... } else ...;`
@@ -37,4 +39,4 @@ This chapter documents the next M5 step: lowering statement-level control flow i
 - Continuation blocks may be emitted even when both predecessor branches return.
 
 ## Next step
-- Add recursive/nested control-flow CFG lowering inside branch bodies and block tails to reduce remaining inline-expression fallback paths.
+- Introduce explicit temporary locals/value slots for branch-produced values where backend passes need explicit value materialization.

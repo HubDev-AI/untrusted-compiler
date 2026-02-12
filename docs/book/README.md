@@ -41,5 +41,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `73-m5-mir-bootstrap-and-introspection.md`
 - `74-m5-return-control-flow-lowering.md`
 - `75-m5-statement-control-flow-continuations.md`
+- `76-m5-nested-cfg-lowering.md`
 
 As milestones progress, chapters will be added and linked from this index.
