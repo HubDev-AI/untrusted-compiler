@@ -1140,6 +1140,41 @@ Tooling and editor integrations require parseable stdout payloads without human 
 - this keeps compatibility for human workflows while making JSON modes deterministic for automation.
 - next step is wiring the same contract into future LSP transport/output utilities and CI adapters.
 
+### Slice Explanation: Uniform Logging Sample-Call Evidence (`LOG_USER_AGENT_ENABLED`)
+
+#### 1) What it is
+This slice extends `LOG_USER_AGENT_ENABLED` findings to include deterministic `sampleCalls` evidence, matching the existing logging finding format.
+
+#### 2) Why it exists
+`LOG_STRUCTURED_ONLY_DISABLED` and `LOG_REMOTE_IP_ENABLED` already carried callsite evidence. `LOG_USER_AGENT_ENABLED` was still count-only, which made triage less actionable.
+
+#### 3) How it works internally
+- audit rule payload for `LOG_USER_AGENT_ENABLED` now adds:
+  - `sampleCalls: call_samples_for_tag(security_map, "sink.log.emit", 5)`.
+- call sampling reuses the existing bounded/deterministic call extraction path used by other logging findings.
+- `sec_audit` tests now assert sample evidence presence and expected callee content for this finding.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - policy with `logging.include_user_agent = true`,
+  - `security_map` call records containing log sink callsites.
+- Output:
+  - finding evidence now includes `includeUserAgent` + `sampleCalls`.
+- Constraints:
+  - evidence is bounded (max 5 samples) and deterministic by existing traversal order.
+
+#### 5) Failure modes and diagnostics
+- if no log sink callsites are tagged, the finding still emits with empty sample set.
+- no compiler diagnostic codes changed; this is audit evidence enrichment only.
+
+#### 6) Example usage
+- finding payload now resembles:
+  - `{ "includeUserAgent": true, "sampleCalls": [{ "callee": "log.info", ... }] }`
+
+#### 7) Tradeoffs and next steps
+- this improves evidence parity for logging posture but does not yet add module-level grouping for logging hotspots.
+- next step is optional grouping/aggregation of sample evidence by module/service area.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.

@@ -615,7 +615,10 @@ pub fn run_security_audit_with_baseline(
             "LOG_USER_AGENT_ENABLED",
             AuditSeverity::LOW,
             "logging",
-            json!({"includeUserAgent": true}),
+            json!({
+                "includeUserAgent": true,
+                "sampleCalls": call_samples_for_tag(security_map, "sink.log.emit", 5),
+            }),
             "User-Agent logging can increase PII footprint; keep only if operationally required.",
         ));
     }

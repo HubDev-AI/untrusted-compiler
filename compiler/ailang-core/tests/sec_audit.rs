@@ -685,8 +685,22 @@ require_limit_on_select = "off"
             .is_some_and(|callee| callee == "log.info")
     }));
 
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "LOG_USER_AGENT_ENABLED" && finding.severity == AuditSeverity::LOW
+    let user_agent = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "LOG_USER_AGENT_ENABLED")
+        .expect("user agent finding should be present");
+    assert_eq!(user_agent.severity, AuditSeverity::LOW);
+    let user_agent_samples = user_agent
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("user agent finding should include sampleCalls");
+    assert!(user_agent_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "log.info")
     }));
     let sql_raw = report
         .findings
