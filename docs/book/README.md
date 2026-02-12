@@ -53,5 +53,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `85-m6-runtime-c-assets-externalized.md`
 - `86-m6-time-now-end-to-end-c-bin-validation.md`
 - `87-m6-log-intrinsic-runtime-lowering.md`
+- `88-m6-req-res-intrinsic-runtime-lowering.md`
 
 As milestones progress, chapters will be added and linked from this index.

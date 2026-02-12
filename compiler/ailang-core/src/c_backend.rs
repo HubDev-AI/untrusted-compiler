@@ -187,7 +187,16 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("log_warn(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("log_error(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("log_emit(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("req.json(", "__AILANG_INTRINSIC_REQ_JSON__(");
+    lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
+    lowered = lowered.replace("res.json(", "__AILANG_INTRINSIC_RES_JSON__(");
+    lowered = lowered.replace("res_json(", "__AILANG_INTRINSIC_RES_JSON__(");
+    lowered = lowered.replace("res.html(", "__AILANG_INTRINSIC_RES_HTML__(");
+    lowered = lowered.replace("res_html(", "__AILANG_INTRINSIC_RES_HTML__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_RES_JSON__(", "ailang_rt_res_json(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_RES_HTML__(", "ailang_rt_res_html(");
     lowered
 }

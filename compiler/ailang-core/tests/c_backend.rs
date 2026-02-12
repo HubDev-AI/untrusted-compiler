@@ -72,12 +72,18 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("bool ailang_rt_identity_bool(bool value);"));
     assert!(header.contains("int64_t ailang_rt_time_now(void);"));
     assert!(header.contains("void ailang_rt_log_any();"));
+    assert!(header.contains("int64_t ailang_rt_req_json();"));
+    assert!(header.contains("int64_t ailang_rt_res_json();"));
+    assert!(header.contains("int64_t ailang_rt_res_html();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
     assert!(source.contains("bool ailang_rt_identity_bool(bool value)"));
     assert!(source.contains("int64_t ailang_rt_time_now(void)"));
     assert!(source.contains("void ailang_rt_log_any()"));
+    assert!(source.contains("int64_t ailang_rt_req_json()"));
+    assert!(source.contains("int64_t ailang_rt_res_json()"));
+    assert!(source.contains("int64_t ailang_rt_res_html()"));
 }
 
 #[test]
@@ -109,4 +115,25 @@ fn main() effects { log } -> Int {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("(void)(ailang_rt_log_any(1));"));
+}
+
+#[test]
+fn c_backend_rewrites_req_and_res_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() effects { net } -> Int {
+  let schema = 1;
+  req.json(schema);
+  res.json(schema, 1);
+  res.html(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_req_json(schema));"));
+    assert!(c.contains("(void)(ailang_rt_res_json(schema, 1));"));
+    assert!(c.contains("(void)(ailang_rt_res_html(1));"));
 }
