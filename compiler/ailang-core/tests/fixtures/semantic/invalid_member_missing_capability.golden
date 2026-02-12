@@ -1,3 +1,3 @@
 error[E2003]: operation requires capability
   --> invalid_member_missing_capability.ai:2:3
-  note: `db.exec` requires first argument capability `DbCap`
+  note: `db.exec` requires argument 1 capability `DbCap`

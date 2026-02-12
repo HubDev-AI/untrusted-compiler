@@ -19,6 +19,7 @@ fn boot() -> Int {
   path.under(PathSafe(), raw);
   res.json("UserSchema", 1);
   db.exec(DbCap());
+  db.exec(Ctx(), DbCap(), raw);
   secrets.reveal(SecretsCap());
   1
 }
@@ -73,6 +74,24 @@ fn boot() -> Int {
                 .as_ref()
                 .is_some_and(|roles| roles == &vec!["capability".to_string()])
     }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.arg_roles.as_ref().is_some_and(|roles| {
+                roles
+                    == &vec![
+                        "context".to_string(),
+                        "capability".to_string(),
+                        "query".to_string(),
+                    ]
+            })
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 2
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
     assert!(map
         .middleware
         .iter()
@@ -115,7 +134,9 @@ fn security_map_tags_sql_select_without_limit_calls() {
     let source = r#"
 fn bad() -> Int {
   db.exec(DbCap(), "SELECT id FROM users");
+  db.exec(Ctx(), DbCap(), "SELECT email FROM users");
   db.exec(DbCap(), "SELECT id FROM users LIMIT 1");
+  db.exec(Ctx(), DbCap(), "SELECT email FROM users LIMIT 10");
   db.exec(DbCap(), sql.q("SELECT name FROM users", List()));
   db.exec(DbCap(), sql.q("SELECT name FROM users LIMIT 5", List()));
   db.exec(DbCap(), "SELECT 'limit' as marker FROM users");
@@ -137,7 +158,7 @@ fn bad() -> Int {
         })
         .count();
 
-    assert_eq!(flagged, 5);
+    assert_eq!(flagged, 6);
 }
 
 #[test]

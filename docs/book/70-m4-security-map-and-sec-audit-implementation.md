@@ -153,6 +153,14 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SQL_LIMIT_RULE_DISABLED`
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
+- Added context-first stdlib capability signature support:
+  - semantic capability checks now resolve capability argument positions for both compact and context-first forms:
+    - compact examples: `db.exec(cap, query)`, `httpClient.get(cap, url)`
+    - context-first examples: `db.exec(ctx, cap, query)`, `httpClient.get(ctx, cap, url)`
+  - sink-flow restriction offsets now adapt to call shape, so context/capability arguments are not misclassified as user payloads
+  - `security_map` SQL query extraction now supports both `db.exec(cap, query)` and `db.exec(ctx, cap, query)` patterns
+  - `security_map` argument-role metadata now emits context-aware roles (`context`, `capability`, `query`, etc.) for extended call forms
+  - semantic and security-map fixtures now cover valid and invalid context-first capability paths
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -272,6 +280,45 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
 - Next step is to expand sample evidence coverage to additional high-signal findings (for example network/filesystem and capture/replay posture families).
 
+### Slice Explanation: Context-First Stdlib Capability Signatures
+
+#### 1) What it is
+This slice extends capability/effect enforcement and sink indexing to handle both compact and context-first stdlib call signatures.
+
+#### 2) Why it exists
+The security stdlib contract models handlers around `Ctx` plus capabilities. Previous capability checks assumed the first argument was always the capability, which misaligned with `ctx, cap, ...` forms.
+
+#### 3) How it works internally
+- semantic analyzer now computes capability argument index per intrinsic family and argument count.
+- sink-flow start offsets are computed with the same call-shape logic.
+- security-map SQL query argument extraction now branches by call form for `db.exec`/`db.queryOne`.
+- security-map role mapping now emits context-aware role labels for these forms.
+
+#### 4) Inputs/outputs and constraints
+- Input: intrinsic call name + argument list length.
+- Output:
+  - capability diagnostics pinned to the correct argument index,
+  - sink checks applied to payload arguments only,
+  - security-map roles/query extraction aligned to call shape.
+- Constraints:
+  - shape inference is currently arity-based,
+  - only known intrinsic families are covered.
+
+#### 5) Failure modes and diagnostics
+- missing capability argument still emits `E2003`.
+- wrong capability type emits `E2004` and now reports the exact argument position.
+
+#### 6) Example usage
+- valid:
+  - `db.exec(dbCap, "SELECT ...")`
+  - `db.exec(ctx, dbCap, "SELECT ...")`
+- invalid:
+  - `db.exec(ctx, netCap, "SELECT ...")` -> `E2004` at argument 2.
+
+#### 7) Tradeoffs and next steps
+- current mapping is intrinsic-name based and arity-driven.
+- next step is to lift this into richer typed stdlib symbol metadata so alias/value-call paths can share the same enforcement.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -294,7 +341,7 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
+1. Expand sink tagging and capability enforcement beyond intrinsic call names into typed stdlib symbol metadata.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Extend source-origin tracing beyond local bindings into interprocedural call chains.

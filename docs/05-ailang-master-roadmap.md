@@ -114,6 +114,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
+  - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).
+  - `E2003`/`E2004` diagnostics now report the precise capability argument index for these call forms.
+  - Sink-flow argument indexing now adapts to call shape so context/capability arguments are excluded from payload checks.
+  - `security_map` SQL query extraction and argument roles now support context-first `db.exec`/`db.queryOne` forms.
+  - Semantic/security_map fixtures now cover valid and invalid context-first capability paths.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -600,7 +605,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
+1. Extend capability/sink enforcement from intrinsic calls to typed stdlib symbol metadata (including alias/value-call paths).
 2. Extend origin-trace coverage from local expression flow into interprocedural paths.
 3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families (network/filesystem/capture-replay posture).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.

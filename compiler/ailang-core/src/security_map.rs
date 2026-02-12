@@ -501,15 +501,31 @@ fn sql_call_has_select_without_limit(name: &str, args: &[Expr]) -> bool {
         return false;
     }
 
-    let Some(sql_text) = sql_query_arg_text(args) else {
+    let Some(sql_text) = sql_query_arg_text(name, args) else {
         return false;
     };
 
     contains_sql_keyword(sql_text, "select") && !contains_sql_keyword(sql_text, "limit")
 }
 
-fn sql_query_arg_text(args: &[Expr]) -> Option<&str> {
-    let query_arg = args.get(1)?;
+fn sql_query_arg_text<'a>(name: &str, args: &'a [Expr]) -> Option<&'a str> {
+    let query_arg = match name {
+        "db_write" | "db.exec" => {
+            if args.len() >= 3 {
+                args.get(2)?
+            } else {
+                args.get(1)?
+            }
+        }
+        "db_read" | "db.queryOne" => {
+            if args.len() >= 4 {
+                args.get(2)?
+            } else {
+                args.get(1)?
+            }
+        }
+        _ => args.get(1)?,
+    };
     extract_sql_text(query_arg)
 }
 
@@ -649,8 +665,20 @@ fn dedupe_tags(tags: &mut Vec<&'static str>) {
 
 fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
     let roles = match name {
-        "db_write" | "db.exec" => vec!["capability", "query"],
-        "db_read" | "db.queryOne" => vec!["capability", "query", "row_schema"],
+        "db_write" | "db.exec" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "query"]
+            } else {
+                vec!["capability", "query"]
+            }
+        }
+        "db_read" | "db.queryOne" => {
+            if arg_count >= 4 {
+                vec!["context", "capability", "query", "row_schema"]
+            } else {
+                vec!["capability", "query", "row_schema"]
+            }
+        }
         "res_json" | "res.json" => {
             if arg_count == 2 {
                 vec!["schema", "value"]
@@ -663,13 +691,55 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
         "res_html" | "res.html" => vec!["html"],
         "set_header" | "res.setHeader" => vec!["name", "value"],
         "set_cookie" | "res.addCookie" => vec!["cookie"],
-        "net_call" | "httpClient.get" => vec!["capability", "url"],
-        "net_internal_call" | "httpClient.getInternal" => vec!["capability", "url"],
-        "fs_read" | "fs.read" => vec!["capability", "path"],
-        "fs_write" | "fs.write" => vec!["capability", "path", "bytes"],
-        "secret_read" | "secrets.get" => vec!["capability", "name"],
-        "secret_reveal" | "secrets.reveal" => vec!["capability", "secret"],
-        "req_json" | "req.json" => vec!["schema"],
+        "net_call" | "httpClient.get" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "url"]
+            } else {
+                vec!["capability", "url"]
+            }
+        }
+        "net_internal_call" | "httpClient.getInternal" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "url"]
+            } else {
+                vec!["capability", "url"]
+            }
+        }
+        "fs_read" | "fs.read" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "path"]
+            } else {
+                vec!["capability", "path"]
+            }
+        }
+        "fs_write" | "fs.write" => {
+            if arg_count >= 4 {
+                vec!["context", "capability", "path", "bytes"]
+            } else {
+                vec!["capability", "path", "bytes"]
+            }
+        }
+        "secret_read" | "secrets.get" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "name"]
+            } else {
+                vec!["capability", "name"]
+            }
+        }
+        "secret_reveal" | "secrets.reveal" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "secret"]
+            } else {
+                vec!["capability", "secret"]
+            }
+        }
+        "req_json" | "req.json" => {
+            if arg_count >= 3 {
+                vec!["context", "request", "schema"]
+            } else {
+                vec!["schema"]
+            }
+        }
         "req_query" | "req.query" | "req_header" | "req.header" | "req_path_param"
         | "req.pathParam" => vec!["name"],
         "log" | "log.emit" | "log.info" | "log.warn" | "log.error" => vec!["value"],

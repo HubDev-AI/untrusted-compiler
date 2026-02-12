@@ -174,6 +174,7 @@ impl Catalog {
             "Uuid",
             "Email",
             "Unit",
+            "Ctx",
             "DbCap",
             "TxCap",
             "NetCap",
@@ -885,13 +886,19 @@ impl Analyzer {
             self.enforce_trust_gate_requirements(name.as_str(), span.clone(), args, &arg_types);
 
             if let Some(required_capability) = intrinsic.required_capability {
-                match arg_types.first() {
+                let capability_index = capability_arg_index(name.as_str(), args.len());
+                match arg_types.get(capability_index) {
                     None => {
                         self.diagnostics.push(
-                            Diagnostic::error("E2003", "operation requires capability", span.clone())
-                                .with_note(format!(
-                                "`{name}` requires first argument capability `{required_capability}`"
-                                )),
+                            Diagnostic::error(
+                                "E2003",
+                                "operation requires capability",
+                                span.clone(),
+                            )
+                            .with_note(format!(
+                                "`{name}` requires argument {} capability `{required_capability}`",
+                                capability_index + 1
+                            )),
                         );
                     }
                     Some(actual) if !actual.is_named(required_capability) => {
@@ -899,10 +906,11 @@ impl Analyzer {
                             Diagnostic::error(
                                 "E2004",
                                 "capability type mismatch",
-                                args[0].span.clone(),
+                                args[capability_index].span.clone(),
                             )
                             .with_note(format!(
-                                "`{name}` expects capability `{required_capability}`, got `{}`",
+                                "`{name}` expects capability `{required_capability}` at argument {}, got `{}`",
+                                capability_index + 1,
                                 actual.describe()
                             )),
                         );
@@ -1064,7 +1072,7 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
-        let start_index = sink_user_arg_start_index(callee_name);
+        let start_index = sink_user_arg_start_index(callee_name, args.len());
         for (index, (arg, arg_type)) in args.iter().zip(arg_types).enumerate() {
             if index < start_index {
                 continue;
@@ -1991,29 +1999,99 @@ fn is_header_sink(name: &str) -> bool {
     )
 }
 
-fn sink_user_arg_start_index(name: &str) -> usize {
-    if matches!(
-        name,
-        "db_write"
-            | "db.exec"
-            | "db_read"
-            | "db.queryOne"
-            | "fs_read"
-            | "fs.read"
-            | "fs_write"
-            | "fs.write"
-            | "net_call"
-            | "httpClient.get"
-            | "net_internal_call"
-            | "httpClient.getInternal"
-            | "secret_read"
-            | "secrets.get"
-            | "secret_reveal"
-            | "secrets.reveal"
-    ) {
-        1
-    } else {
-        0
+fn sink_user_arg_start_index(name: &str, arg_len: usize) -> usize {
+    match name {
+        "db_write" | "db.exec" => {
+            if arg_len >= 3 {
+                2
+            } else {
+                1
+            }
+        }
+        "db_read" | "db.queryOne" => {
+            if arg_len >= 4 {
+                2
+            } else {
+                1
+            }
+        }
+        "net_call" | "httpClient.get" | "net_internal_call" | "httpClient.getInternal" => {
+            if arg_len >= 3 {
+                2
+            } else {
+                1
+            }
+        }
+        "fs_read" | "fs.read" => {
+            if arg_len >= 3 {
+                2
+            } else {
+                1
+            }
+        }
+        "fs_write" | "fs.write" => {
+            if arg_len >= 4 {
+                2
+            } else {
+                1
+            }
+        }
+        "secret_read" | "secrets.get" | "secret_reveal" | "secrets.reveal" => {
+            if arg_len >= 3 {
+                2
+            } else {
+                1
+            }
+        }
+        _ => 0,
+    }
+}
+
+fn capability_arg_index(name: &str, arg_len: usize) -> usize {
+    match name {
+        "db_write" | "db.exec" => {
+            if arg_len >= 3 {
+                1
+            } else {
+                0
+            }
+        }
+        "db_read" | "db.queryOne" => {
+            if arg_len >= 4 {
+                1
+            } else {
+                0
+            }
+        }
+        "net_call" | "httpClient.get" | "net_internal_call" | "httpClient.getInternal" => {
+            if arg_len >= 3 {
+                1
+            } else {
+                0
+            }
+        }
+        "fs_read" | "fs.read" => {
+            if arg_len >= 3 {
+                1
+            } else {
+                0
+            }
+        }
+        "fs_write" | "fs.write" => {
+            if arg_len >= 4 {
+                1
+            } else {
+                0
+            }
+        }
+        "secret_read" | "secrets.get" | "secret_reveal" | "secrets.reveal" => {
+            if arg_len >= 3 {
+                1
+            } else {
+                0
+            }
+        }
+        _ => 0,
     }
 }
 

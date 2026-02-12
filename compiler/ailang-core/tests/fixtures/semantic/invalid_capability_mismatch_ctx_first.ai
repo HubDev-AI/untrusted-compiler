@@ -1,0 +1,4 @@
+fn bad(ctx: Ctx, net: NetCap) effects { db.write } -> Int {
+  db.exec(ctx, net, "SELECT id FROM users");
+  1
+}
