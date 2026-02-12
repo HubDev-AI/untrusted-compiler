@@ -132,7 +132,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - tests now assert role metadata for representative callsites (`res.json`, `db.exec`)
 - Added source-origin edge metadata for call arguments:
   - `security_map.calls[]` now optionally includes `origin_edges`
-  - each edge captures `arg_index`, canonical origin label (for example `call:req.query`), and source/gate tag context
+  - each edge captures `arg_index`, canonical origin label (for example `call:req.query`), source/gate tag context, and deterministic provenance `trace` chain
   - origin tracking currently follows local `let` bindings and propagates through:
     - member/unary wrappers
     - binary wrappers with single-origin or same-origin operands
@@ -499,8 +499,8 @@ Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper 
   - recomputes summaries iteratively using currently known summaries,
   - stops when no summary changes or when bounded rounds are exhausted.
 - summary inference still uses deterministic forms:
-  - `FromParam { index }` for pure forwarders,
-  - `Tagged { tags }` for source/gate-returning functions.
+  - `FromParam { index, forwarded_calls }` for forwarding functions,
+  - `Tagged { tags, trace }` for source/gate-returning functions.
 - call argument origin inference consumes these converged summaries, so sink edges retain source tags across deeper helper stacks.
 
 #### 4) Inputs/outputs and constraints
@@ -508,7 +508,7 @@ Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper 
 - Output: converged summary map used by origin inference.
 - Constraints:
   - round count is bounded by function count (deterministic runtime),
-  - summaries intentionally carry tags/param indices, not full path traces.
+  - summaries intentionally carry compact forwarding/source trace fragments, not unbounded control-flow path graphs.
 
 #### 5) Failure modes and diagnostics
 - this path does not add compile diagnostics directly.
@@ -523,6 +523,45 @@ Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper 
 #### 7) Tradeoffs and next steps
 - summaries remain intentionally compact and avoid path explosion.
 - next step is richer call-chain provenance output while keeping deterministic bounded analysis.
+
+### Slice Explanation: Origin Edge Provenance Trace Chains
+
+#### 1) What it is
+This slice extends `origin_edges` with a deterministic `trace` list that records source-to-sink forwarding steps across helper calls.
+
+#### 2) Why it exists
+Tag-only origin summaries answered "what source family reached the sink" but not "how it got there". Trace chains make multi-hop provenance inspectable without introducing dynamic analysis.
+
+#### 3) How it works internally
+- `TrackedOrigin` now carries:
+  - canonical `origin` label,
+  - source/gate `tags`,
+  - ordered `trace` call markers.
+- direct source/gate calls initialize trace with their call marker.
+- param-forwarding summaries append forwarded call markers plus current call marker.
+- tagged summaries preserve source traces and append the current callee marker.
+- merge points keep deterministic behavior by requiring the same canonical origin and using common trace-prefix merging.
+
+#### 4) Inputs/outputs and constraints
+- Input: expression-level origin inference + function origin summaries.
+- Output: `security_map.calls[].origin_edges[].trace`.
+- Constraints:
+  - trace depth remains bounded by static call expression depth and summary rounds,
+  - traces are deterministic and deduplicated for repeated adjacent markers.
+
+#### 5) Failure modes and diagnostics
+- no new compile-time diagnostics are emitted by this slice.
+- if branches diverge to incompatible origins, merge yields no edge (same as prior conservative behavior).
+
+#### 6) Example usage
+- flow:
+  - `queryParam -> passThrough -> wrap -> db.exec`
+- emitted edge includes trace markers such as:
+  - `call:req.query`, `call:queryParam`, `call:passThrough`, `call:wrap`.
+
+#### 7) Tradeoffs and next steps
+- traces expose forwarding history but do not yet encode branch-sensitive alternatives as separate paths.
+- next step is to surface these traces directly in compiler diagnostics and editor/tooling explainability.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -549,5 +588,5 @@ Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper 
 1. Expand typed stdlib symbol metadata from local/member alias calls into deeper interprocedural forwarding paths.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
-4. Extend source-origin tracing from converged tag summaries into richer call-chain provenance details.
+4. Surface provenance trace chains from audit/security-map metadata into compiler diagnostics and tooling outputs.
 5. Expand `sec.audit` evidence coverage for non-call policy hygiene findings and posture snapshots.

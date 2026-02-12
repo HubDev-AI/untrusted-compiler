@@ -686,3 +686,73 @@ require_limit_on_select = "enforce"
             .is_some_and(|callee| callee == "db.exec")
     }));
 }
+
+#[test]
+fn sec_audit_sample_calls_include_origin_trace_chains() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn passThrough(input: String) -> String {
+  input
+}
+
+fn wrap() -> String {
+  passThrough(queryParam())
+}
+
+fn boot() -> Int {
+  let raw = wrap();
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[sql]
+forbid_raw = false
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for trace-chain sample test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let sql_raw = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SQL_RAW_ALLOWED_BY_POLICY")
+        .expect("sql raw finding should be present");
+    let samples = sql_raw
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("sql raw finding should include sampleCalls");
+    let traced = samples.iter().any(|sample| {
+        sample
+            .get("originEdges")
+            .and_then(|value| value.as_array())
+            .is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    let trace = edge.get("trace").and_then(|value| value.as_array());
+                    trace.is_some_and(|trace| {
+                        let steps = trace
+                            .iter()
+                            .filter_map(|value| value.as_str())
+                            .collect::<Vec<_>>();
+                        steps.contains(&"call:req.query")
+                            && steps.contains(&"call:queryParam")
+                            && steps.contains(&"call:passThrough")
+                            && steps.contains(&"call:wrap")
+                    })
+                })
+            })
+    });
+    assert!(traced, "expected SQL sample call with origin trace chain");
+}

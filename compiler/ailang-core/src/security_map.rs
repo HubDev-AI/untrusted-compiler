@@ -67,6 +67,8 @@ pub struct SecurityOriginEdge {
     pub origin: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trace: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -102,12 +104,19 @@ const ALLOW_REQUIRED_FIELDS: [&str; 5] = ["policy", "bypass", "reason", "ticket"
 struct TrackedOrigin {
     origin: String,
     tags: Vec<String>,
+    trace: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FunctionOriginSummary {
-    FromParam { index: usize },
-    Tagged { tags: Vec<String> },
+    FromParam {
+        index: usize,
+        forwarded_calls: Vec<String>,
+    },
+    Tagged {
+        tags: Vec<String>,
+        trace: Vec<String>,
+    },
 }
 
 pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
@@ -482,6 +491,7 @@ fn call_origin_edges(
                 arg_index: index,
                 origin: origin.origin,
                 tags: origin.tags,
+                trace: origin.trace,
             });
         }
     }
@@ -519,21 +529,35 @@ fn infer_expr_origin(
                 .collect::<Vec<_>>();
             if origin_tags.is_empty() {
                 match summaries.get(name.as_str()) {
-                    Some(FunctionOriginSummary::FromParam { index }) => {
-                        args.get(*index).and_then(|arg| {
+                    Some(FunctionOriginSummary::FromParam {
+                        index,
+                        forwarded_calls,
+                    }) => {
+                        let mut origin = args.get(*index).and_then(|arg| {
                             infer_expr_origin(arg, origins, callable_aliases, summaries)
+                        })?;
+                        for forwarded in forwarded_calls {
+                            append_trace_marker(&mut origin.trace, forwarded.clone());
+                        }
+                        append_trace_marker(&mut origin.trace, format!("call:{name}"));
+                        Some(origin)
+                    }
+                    Some(FunctionOriginSummary::Tagged { tags, trace }) => {
+                        let mut trace_chain = trace.clone();
+                        append_trace_marker(&mut trace_chain, format!("call:{name}"));
+                        Some(TrackedOrigin {
+                            origin: format!("call:{name}"),
+                            tags: tags.clone(),
+                            trace: trace_chain,
                         })
                     }
-                    Some(FunctionOriginSummary::Tagged { tags }) => Some(TrackedOrigin {
-                        origin: format!("call:{name}"),
-                        tags: tags.clone(),
-                    }),
                     None => None,
                 }
             } else {
                 Some(TrackedOrigin {
                     origin: format!("call:{name}"),
                     tags: origin_tags,
+                    trace: vec![format!("call:{name}")],
                 })
             }
         }
@@ -609,7 +633,17 @@ fn merge_origins(
         (Some(origin), None) | (None, Some(origin)) => Some(origin),
         (Some(left_origin), Some(right_origin)) => {
             if left_origin.origin == right_origin.origin {
-                Some(left_origin)
+                let mut tags = left_origin.tags.clone();
+                for tag in &right_origin.tags {
+                    if !tags.iter().any(|existing| existing == tag) {
+                        tags.push(tag.clone());
+                    }
+                }
+                Some(TrackedOrigin {
+                    origin: left_origin.origin,
+                    tags,
+                    trace: common_trace_prefix(&left_origin.trace, &right_origin.trace),
+                })
             } else {
                 None
             }
@@ -667,6 +701,7 @@ fn summarize_function_origin(
             TrackedOrigin {
                 origin: format!("param:{index}"),
                 tags: Vec::new(),
+                trace: vec![format!("param:{index}")],
             },
         );
     }
@@ -674,13 +709,26 @@ fn summarize_function_origin(
     let inferred =
         infer_block_origin(&function.body, &param_origins, &callable_aliases, summaries)?;
     if let Some(index) = parse_param_origin_index(inferred.origin.as_str()) {
-        return Some(FunctionOriginSummary::FromParam { index });
+        let forwarded_calls = inferred
+            .trace
+            .into_iter()
+            .filter(|marker| !marker.starts_with("param:"))
+            .collect::<Vec<_>>();
+        return Some(FunctionOriginSummary::FromParam {
+            index,
+            forwarded_calls,
+        });
     }
     if inferred.tags.is_empty() {
         None
     } else {
+        let mut trace = inferred.trace;
+        if trace.is_empty() {
+            trace.push(inferred.origin);
+        }
         Some(FunctionOriginSummary::Tagged {
             tags: inferred.tags,
+            trace,
         })
     }
 }
@@ -1445,6 +1493,25 @@ fn is_tagged_call_namespace(name: &str) -> bool {
             | "url"
             | "validate"
     )
+}
+
+fn append_trace_marker(trace: &mut Vec<String>, marker: String) {
+    if trace.last().is_some_and(|current| current == &marker) {
+        return;
+    }
+    trace.push(marker);
+}
+
+fn common_trace_prefix(left: &[String], right: &[String]) -> Vec<String> {
+    let mut prefix = Vec::new();
+    for (left_item, right_item) in left.iter().zip(right.iter()) {
+        if left_item == right_item {
+            prefix.push(left_item.clone());
+        } else {
+            break;
+        }
+    }
+    prefix
 }
 
 fn find_matching_paren(source: &str, open_paren_index: usize) -> Option<usize> {

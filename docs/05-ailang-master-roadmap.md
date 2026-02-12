@@ -107,6 +107,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - security_map tests now also assert deterministic origin tracing through composite expression wrappers.
   - security_map tests now also assert one-hop interprocedural forwarding flows (`queryParam -> passThrough -> db.exec`).
   - Function-origin summaries now converge iteratively, so source-origin tags propagate across deeper forwarding chains (`queryParam -> passThrough -> passthroughTwice -> wrap -> db.exec`).
+  - `security_map.origin_edges` now include deterministic provenance trace chains (`trace`) showing multi-hop source-to-sink forwarding steps.
   - `sec.audit` findings now include bounded `sampleCalls` evidence for key finding families.
   - Sample call evidence includes callee, source location, argument roles, and origin edges when present.
   - Callsite evidence coverage currently includes:
@@ -622,7 +623,7 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Extend typed stdlib symbol metadata from local/member alias paths into deeper interprocedural value-call forwarding.
-2. Extend origin-trace diagnostics from multi-hop tag propagation into richer call-chain provenance details.
+2. Extend provenance traces from audit metadata into compiler diagnostics and explainability surfaces.
 3. Expand deterministic `sec.audit` evidence for non-call policy hygiene families (for example exception-count posture snapshots).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.

@@ -287,6 +287,8 @@ fn boot() -> Int {
                     edge.arg_index == 1
                         && edge.origin == "call:queryParam"
                         && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                        && edge.trace.iter().any(|step| step == "call:passThrough")
                 })
             })
     }));
@@ -326,7 +328,15 @@ fn boot() -> Int {
                 edges.iter().any(|edge| {
                     edge.arg_index == 1
                         && edge.tags.iter().any(|tag| tag == "source.http.query")
-                        && (edge.origin == "call:wrap" || edge.origin == "call:queryParam")
+                        && edge.origin == "call:wrap"
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                        && edge.trace.iter().any(|step| step == "call:queryParam")
+                        && edge.trace.iter().any(|step| step == "call:passThrough")
+                        && edge
+                            .trace
+                            .iter()
+                            .any(|step| step == "call:passthroughTwice")
+                        && edge.trace.iter().any(|step| step == "call:wrap")
                 })
             })
     }));

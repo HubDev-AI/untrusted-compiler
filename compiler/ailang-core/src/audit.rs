@@ -938,11 +938,14 @@ fn call_samples_for_tags(security_map: &SecurityMap, tags: &[&str], limit: usize
                 let mapped = edges
                     .iter()
                     .map(|edge| {
-                        json!({
-                            "argIndex": edge.arg_index,
-                            "origin": edge.origin,
-                            "tags": edge.tags,
-                        })
+                        let mut item = serde_json::Map::new();
+                        item.insert("argIndex".to_string(), json!(edge.arg_index));
+                        item.insert("origin".to_string(), json!(edge.origin));
+                        item.insert("tags".to_string(), json!(edge.tags));
+                        if !edge.trace.is_empty() {
+                            item.insert("trace".to_string(), json!(edge.trace));
+                        }
+                        Value::Object(item)
                     })
                     .collect::<Vec<_>>();
                 if !mapped.is_empty() {
