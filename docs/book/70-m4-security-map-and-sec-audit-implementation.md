@@ -138,9 +138,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - binary wrappers with single-origin or same-origin operands
     - `if`/`match` expressions when branch origins are consistent
     - block-tail expressions with local shadow bindings
+    - one-hop interprocedural forwarding via function origin summaries (`from-param` and source/gate-tagged return summaries)
   - tests now assert sink-argument origin tracing for:
     - direct `db.exec(DbCap(), raw)` flow from `req.query`
     - composite expression flows (`binary`, `if`, `match`, `block`)
+    - forwarding function flows (`queryParam -> passThrough -> db.exec`)
 - Added richer deterministic callsite evidence in `sec.audit` findings:
   - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
   - each sample includes callee, location, argument roles, and available origin-edge metadata
@@ -247,7 +249,7 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 
 #### 7) Tradeoffs and next steps
 - Current origin inference is intentionally conservative and local-scope only.
-- Next step is to extend origin tracing across function boundaries (interprocedural flow).
+- Next step is to extend interprocedural origin tracing beyond one-hop forwarding summaries (for example deeper call chains and branch-sensitive summaries).
 
 ### Slice Explanation: `sec.audit` Callsite Evidence
 

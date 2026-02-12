@@ -245,6 +245,38 @@ fn boot() -> Int {
 }
 
 #[test]
+fn security_map_tracks_origin_edges_across_forwarding_functions() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn passThrough(input: String) -> String {
+  input
+}
+
+fn boot() -> Int {
+  let raw = passThrough(queryParam());
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:queryParam"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
 fn parse_allow_annotations_reads_valid_annotation() {
     let source = r#"
 @allow(

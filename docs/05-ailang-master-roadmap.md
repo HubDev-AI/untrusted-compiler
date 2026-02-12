@@ -102,8 +102,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - binary expressions with single-origin or same-origin operands,
     - `if`/`match` branches when origin is consistent,
     - block-tail expressions with local shadow bindings.
+  - security_map now computes simple function origin summaries and propagates one-hop forwarding origins across function calls.
   - security_map tests now assert sink-argument origin tracing for `req.query -> db.exec` flow.
   - security_map tests now also assert deterministic origin tracing through composite expression wrappers.
+  - security_map tests now also assert one-hop interprocedural forwarding flows (`queryParam -> passThrough -> db.exec`).
   - `sec.audit` findings now include bounded `sampleCalls` evidence for key finding families.
   - Sample call evidence includes callee, source location, argument roles, and origin edges when present.
   - Callsite evidence coverage currently includes:
@@ -612,7 +614,7 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib symbol metadata (including alias/value-call paths).
-2. Extend origin-trace coverage from local expression flow into interprocedural paths.
+2. Extend origin-trace coverage from local/one-hop interprocedural flow into deeper interprocedural paths.
 3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families (CORS/security-headers and auth/CSRF posture).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
