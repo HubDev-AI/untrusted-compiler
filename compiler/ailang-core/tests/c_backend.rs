@@ -77,6 +77,12 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_res_html();"));
     assert!(header.contains("int64_t ailang_rt_set_header();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
+    assert!(header.contains("int64_t ailang_rt_db_exec();"));
+    assert!(header.contains("int64_t ailang_rt_db_query_one();"));
+    assert!(header.contains("int64_t ailang_rt_fs_read();"));
+    assert!(header.contains("int64_t ailang_rt_fs_write();"));
+    assert!(header.contains("int64_t ailang_rt_http_get();"));
+    assert!(header.contains("int64_t ailang_rt_http_get_internal();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -88,6 +94,12 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_res_html()"));
     assert!(source.contains("int64_t ailang_rt_set_header()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
+    assert!(source.contains("int64_t ailang_rt_db_exec()"));
+    assert!(source.contains("int64_t ailang_rt_db_query_one()"));
+    assert!(source.contains("int64_t ailang_rt_fs_read()"));
+    assert!(source.contains("int64_t ailang_rt_fs_write()"));
+    assert!(source.contains("int64_t ailang_rt_http_get()"));
+    assert!(source.contains("int64_t ailang_rt_http_get_internal()"));
 }
 
 #[test]
@@ -158,4 +170,30 @@ fn main() effects { net } -> Int {
 
     assert!(c.contains("(void)(ailang_rt_set_header(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_set_cookie(1));"));
+}
+
+#[test]
+fn c_backend_rewrites_db_fs_and_net_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() effects { db.write, db.read, fs.read, fs.write, net } -> Int {
+  db.exec(1, 2);
+  db.queryOne(1, 2, 3);
+  fs.read(1, 2);
+  fs.write(1, 2, 3);
+  httpClient.get(1, 2);
+  httpClient.getInternal(1, 2);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_db_exec(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_db_query_one(1, 2, 3));"));
+    assert!(c.contains("(void)(ailang_rt_fs_read(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_fs_write(1, 2, 3));"));
+    assert!(c.contains("(void)(ailang_rt_http_get(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_http_get_internal(1, 2));"));
 }

@@ -197,6 +197,24 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("set_header(", "__AILANG_INTRINSIC_SET_HEADER__(");
     lowered = lowered.replace("res.addCookie(", "__AILANG_INTRINSIC_SET_COOKIE__(");
     lowered = lowered.replace("set_cookie(", "__AILANG_INTRINSIC_SET_COOKIE__(");
+    lowered = lowered.replace("db.exec(", "__AILANG_INTRINSIC_DB_EXEC__(");
+    lowered = lowered.replace("db_write(", "__AILANG_INTRINSIC_DB_EXEC__(");
+    lowered = lowered.replace("db.queryOne(", "__AILANG_INTRINSIC_DB_QUERY_ONE__(");
+    lowered = lowered.replace("db_read(", "__AILANG_INTRINSIC_DB_QUERY_ONE__(");
+    lowered = lowered.replace("fs.read(", "__AILANG_INTRINSIC_FS_READ__(");
+    lowered = lowered.replace("fs_read(", "__AILANG_INTRINSIC_FS_READ__(");
+    lowered = lowered.replace("fs.write(", "__AILANG_INTRINSIC_FS_WRITE__(");
+    lowered = lowered.replace("fs_write(", "__AILANG_INTRINSIC_FS_WRITE__(");
+    lowered = lowered.replace("httpClient.get(", "__AILANG_INTRINSIC_HTTP_GET__(");
+    lowered = lowered.replace("net_call(", "__AILANG_INTRINSIC_HTTP_GET__(");
+    lowered = lowered.replace(
+        "httpClient.getInternal(",
+        "__AILANG_INTRINSIC_HTTP_GET_INTERNAL__(",
+    );
+    lowered = lowered.replace(
+        "net_internal_call(",
+        "__AILANG_INTRINSIC_HTTP_GET_INTERNAL__(",
+    );
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -204,5 +222,17 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_HTML__(", "ailang_rt_res_html(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_HEADER__(", "ailang_rt_set_header(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_COOKIE__(", "ailang_rt_set_cookie(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_DB_EXEC__(", "ailang_rt_db_exec(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_DB_QUERY_ONE__(",
+        "ailang_rt_db_query_one(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_FS_READ__(", "ailang_rt_fs_read(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_FS_WRITE__(", "ailang_rt_fs_write(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_HTTP_GET__(", "ailang_rt_http_get(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_HTTP_GET_INTERNAL__(",
+        "ailang_rt_http_get_internal(",
+    );
     lowered
 }

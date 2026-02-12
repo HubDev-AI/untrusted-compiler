@@ -34,3 +34,27 @@ int64_t ailang_rt_set_header() {
 int64_t ailang_rt_set_cookie() {
   return 0;
 }
+
+int64_t ailang_rt_db_exec() {
+  return 0;
+}
+
+int64_t ailang_rt_db_query_one() {
+  return 0;
+}
+
+int64_t ailang_rt_fs_read() {
+  return 0;
+}
+
+int64_t ailang_rt_fs_write() {
+  return 0;
+}
+
+int64_t ailang_rt_http_get() {
+  return 0;
+}
+
+int64_t ailang_rt_http_get_internal() {
+  return 0;
+}

@@ -13,5 +13,11 @@ int64_t ailang_rt_res_json();
 int64_t ailang_rt_res_html();
 int64_t ailang_rt_set_header();
 int64_t ailang_rt_set_cookie();
+int64_t ailang_rt_db_exec();
+int64_t ailang_rt_db_query_one();
+int64_t ailang_rt_fs_read();
+int64_t ailang_rt_fs_write();
+int64_t ailang_rt_http_get();
+int64_t ailang_rt_http_get_internal();
 
 #endif

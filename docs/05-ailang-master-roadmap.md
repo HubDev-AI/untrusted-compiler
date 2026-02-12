@@ -212,6 +212,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - C emission now lowers `log.info/warn/error/emit` intrinsic calls to runtime symbol `ailang_rt_log_any`, with runtime stub and `c-bin` integration coverage.
   - C emission now lowers `req.json`, `res.json`, and `res.html` intrinsics to runtime symbols with stub implementations and `c-bin` integration coverage.
   - C emission now lowers `res.setHeader` and `res.addCookie` intrinsics to runtime symbols with stub implementations and `c-bin` integration coverage.
+  - C emission now lowers core IO intrinsics (`db.*`, `fs.*`, `httpClient.get*`) to runtime symbols with stub implementations and `c-bin` integration coverage.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
@@ -258,6 +259,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/87-m6-log-intrinsic-runtime-lowering.md`
 - `docs/book/88-m6-req-res-intrinsic-runtime-lowering.md`
 - `docs/book/89-m6-header-cookie-intrinsic-runtime-lowering.md`
+- `docs/book/90-m6-db-fs-net-intrinsic-runtime-lowering.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -501,6 +503,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M6 Slice: Log Intrinsic Runtime Lowering".
 - Chapter: "M6 Slice: req/res Intrinsic Runtime Lowering".
 - Chapter: "M6 Slice: Header/Cookie Intrinsic Runtime Lowering".
+- Chapter: "M6 Slice: DB/FS/Net Intrinsic Runtime Lowering".
 
 ## M7 - HTTP/JSON Vertical Slice
 ### Build tasks
