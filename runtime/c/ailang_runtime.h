@@ -10,6 +10,8 @@ int64_t ailang_rt_time_now(void);
 void ailang_rt_log_any();
 int64_t ailang_rt_req_json();
 int64_t ailang_rt_res_json();
+int64_t ailang_rt_res_ok();
+int64_t ailang_rt_res_ok_meta();
 int64_t ailang_rt_res_html();
 int64_t ailang_rt_set_header();
 int64_t ailang_rt_set_cookie();

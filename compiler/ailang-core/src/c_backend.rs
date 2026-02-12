@@ -191,6 +191,10 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("res.json(", "__AILANG_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res_json(", "__AILANG_INTRINSIC_RES_JSON__(");
+    lowered = lowered.replace("res.okMeta(", "__AILANG_INTRINSIC_RES_OK_META__(");
+    lowered = lowered.replace("res_ok_meta(", "__AILANG_INTRINSIC_RES_OK_META__(");
+    lowered = lowered.replace("res.ok(", "__AILANG_INTRINSIC_RES_OK__(");
+    lowered = lowered.replace("res_ok(", "__AILANG_INTRINSIC_RES_OK__(");
     lowered = lowered.replace("res.html(", "__AILANG_INTRINSIC_RES_HTML__(");
     lowered = lowered.replace("res_html(", "__AILANG_INTRINSIC_RES_HTML__(");
     lowered = lowered.replace("res.setHeader(", "__AILANG_INTRINSIC_SET_HEADER__(");
@@ -292,6 +296,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_JSON__(", "ailang_rt_res_json(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK__(", "ailang_rt_res_ok(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK_META__(", "ailang_rt_res_ok_meta(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_HTML__(", "ailang_rt_res_html(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_HEADER__(", "ailang_rt_set_header(");
     lowered = lowered.replace("__AILANG_INTRINSIC_SET_COOKIE__(", "ailang_rt_set_cookie(");

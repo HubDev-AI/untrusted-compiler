@@ -1063,7 +1063,9 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "res_html" | "res.html" => vec!["sink.http.html"],
         "set_header" | "res.setHeader" => vec!["sink.http.header_set"],
         "set_cookie" | "res.addCookie" => vec!["sink.http.cookie_set"],
-        "res_json" | "res.json" => vec!["sink.json.encode_http_response"],
+        "res_json" | "res.json" | "res_ok" | "res.ok" | "res_ok_meta" | "res.okMeta" => {
+            vec!["sink.json.encode_http_response"]
+        }
         "net_call" | "httpClient.get" => {
             vec!["sink.net.public_request", "effect.net", "capability.net"]
         }
@@ -1281,6 +1283,20 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["schema", "value"]
             } else if arg_count == 3 {
                 vec!["status", "schema", "value"]
+            } else {
+                vec!["value"]
+            }
+        }
+        "res_ok" | "res.ok" => {
+            if arg_count >= 3 {
+                vec!["status", "schema", "value"]
+            } else {
+                vec!["value"]
+            }
+        }
+        "res_ok_meta" | "res.okMeta" => {
+            if arg_count >= 4 {
+                vec!["status", "schema", "value", "meta"]
             } else {
                 vec!["value"]
             }
@@ -1560,6 +1576,14 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             &[("sink.json.encode_http_response", TagKind::Sink)],
         ),
         symbol(
+            "res_ok",
+            &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol(
+            "res_ok_meta",
+            &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol(
             "db.exec",
             &[
                 ("sink.sql.exec", TagKind::Sink),
@@ -1589,6 +1613,14 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol("req.pathParam", &[("source.http.path", TagKind::Source)]),
         symbol(
             "res.json",
+            &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol(
+            "res.ok",
+            &[("sink.json.encode_http_response", TagKind::Sink)],
+        ),
+        symbol(
+            "res.okMeta",
             &[("sink.json.encode_http_response", TagKind::Sink)],
         ),
         symbol("res.html", &[("sink.http.html", TagKind::Sink)]),

@@ -18,6 +18,7 @@
 | 2026-02-12 | self | Used a function symbol (`handler`) as a value argument in CLI integration fixture; current semantic model does not resolve function names as first-class values there. | In compile-path fixtures, pass literal/place-holder values unless first-class function values are explicitly implemented. |
 | 2026-02-12 | self | Replaced bare middleware names before dotted names in C intrinsic rewriting, producing invalid forms like `sec.ailang_rt_*`. | In string-based intrinsic rewrites, replace dotted forms before bare aliases to avoid partial-prefix corruption. |
 | 2026-02-12 | self | Used `register` as a fixture function name; it maps directly to C and collides with the C keyword `register`. | Avoid C reserved keywords in AILang integration fixtures until backend identifier mangling is implemented. |
+| 2026-02-12 | self | Added an extra schema-note text to existing `E4004` diagnostics and broke semantic golden fixtures. | Preserve established diagnostic wording unless intentionally updating goldens as part of the slice. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -80,3 +81,4 @@
 - Added HTTP surface primitive type support (`Router`, `Request`, `Response`, `HttpError`, `Handler`) so API-shaped signatures pass semantic type resolution in compile-path fixtures.
 - Added policy-config intrinsic C-lowering coverage (`sec.defaultHeaders`, `cors.fromPolicy`, `csrf.fromPolicy`, `auth.fromPolicy`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Removed absolute local machine paths from M7 `hello-api` book chapters to keep docs repository-safe.
+- Added success-envelope intrinsic bridge (`res.ok`, `res.okMeta`) across semantic checks, C lowering, runtime stubs, security-map tagging, and req/res `c-bin` integration coverage.

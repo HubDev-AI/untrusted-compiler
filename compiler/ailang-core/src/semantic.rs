@@ -1370,8 +1370,7 @@ impl Analyzer {
             }
 
             if is_json_sink(callee_name) {
-                let value_index = json_sink_value_arg_index(args.len()).unwrap_or(index);
-                if index != value_index {
+                if !is_json_data_arg(callee_name, index, args.len()) {
                     continue;
                 }
 
@@ -1680,7 +1679,7 @@ impl Analyzer {
         }
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
-            self.enforce_json_encode_signature(span.clone(), args, arg_types);
+            self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
         }
 
         if is_untrusted_string_gate(callee_name) {
@@ -1748,57 +1747,122 @@ impl Analyzer {
         }
     }
 
-    fn enforce_json_encode_signature(&mut self, span: Span, args: &[Expr], arg_types: &[Type]) {
-        let expected_note =
-            "strict mode requires `res.json(schema, value)` or `res.json(status, schema, value)`";
-        if args.len() < 2 {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    "E4004",
-                    "json response encoding requires explicit schema argument",
-                    span,
-                )
-                .with_tag("security")
-                .with_tag("schema")
-                .with_note(expected_note)
-                .with_note(
-                    "set `json.require_schema_for_encode = false` in policy to disable strict mode",
-                ),
-            );
-            return;
+    fn enforce_json_encode_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        let expected_note = match callee_name {
+            "res_ok" | "res.ok" => "strict mode requires `res.ok(status, schema, value)`",
+            "res_ok_meta" | "res.okMeta" => {
+                "strict mode requires `res.okMeta(status, schema, value, meta)`"
+            }
+            _ => "strict mode requires `res.json(schema, value)` or `res.json(status, schema, value)`",
+        };
+
+        let (status_index, schema_index, value_index) = match callee_name {
+            "res_ok" | "res.ok" => {
+                if args.len() != 3 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4004",
+                            "json response encoding has invalid argument count",
+                            span,
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(expected_note),
+                    );
+                    return;
+                }
+                (Some(0), 1, 2)
+            }
+            "res_ok_meta" | "res.okMeta" => {
+                if args.len() != 4 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4004",
+                            "json response encoding has invalid argument count",
+                            span,
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(expected_note),
+                    );
+                    return;
+                }
+                (Some(0), 1, 2)
+            }
+            _ => {
+                if args.len() < 2 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4004",
+                            "json response encoding requires explicit schema argument",
+                            span,
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(expected_note)
+                        .with_note(
+                            "set `json.require_schema_for_encode = false` in policy to disable strict mode",
+                        ),
+                    );
+                    return;
+                }
+
+                if args.len() > 3 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4004",
+                            "json response encoding has invalid argument count",
+                            span,
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(expected_note),
+                    );
+                    return;
+                }
+
+                if args.len() == 2 {
+                    (None, 0, 1)
+                } else {
+                    (Some(0), 1, 2)
+                }
+            }
+        };
+
+        if let Some(status_index) = status_index {
+            if !arg_types[status_index].is_numeric() {
+                let status_note = match callee_name {
+                    "res_ok" | "res.ok" => {
+                        "use an `Int`/`Int64` status code in `res.ok(status, schema, value)`"
+                    }
+                    "res_ok_meta" | "res.okMeta" => {
+                        "use an `Int`/`Int64` status code in `res.okMeta(status, schema, value, meta)`"
+                    }
+                    _ => {
+                        "use an `Int`/`Int64` status code in `res.json(status, schema, value)`"
+                    }
+                };
+
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4004",
+                        "json response status must be numeric",
+                        args[status_index].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note(format!("found `{}`", arg_types[status_index].describe()))
+                    .with_note(status_note),
+                );
+            }
         }
 
-        if args.len() > 3 {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    "E4004",
-                    "json response encoding has invalid argument count",
-                    span,
-                )
-                .with_tag("security")
-                .with_tag("schema")
-                .with_note(expected_note),
-            );
-            return;
-        }
-
-        if args.len() == 3 && !arg_types[0].is_numeric() {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    "E4004",
-                    "json response status must be numeric",
-                    args[0].span.clone(),
-                )
-                .with_tag("security")
-                .with_tag("schema")
-                .with_note(format!("found `{}`", arg_types[0].describe()))
-                .with_note("use an `Int`/`Int64` status code in `res.json(status, schema, value)`"),
-            );
-        }
-
-        let schema_index = if args.len() == 2 { 0 } else { 1 };
-        let value_index =
-            json_sink_value_arg_index(args.len()).unwrap_or(args.len().saturating_sub(1));
         let schema_ty = &arg_types[schema_index];
         if schema_ty.is_numeric()
             || schema_ty.is_bool()
@@ -2259,6 +2323,16 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "res_ok" | "res.ok" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
+        }),
+        "res_ok_meta" | "res.okMeta" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unit,
+        }),
         "res_html" | "res.html" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
@@ -2521,7 +2595,10 @@ fn is_log_sink(name: &str) -> bool {
 }
 
 fn is_json_sink(name: &str) -> bool {
-    matches!(name, "res_json" | "res.json")
+    matches!(
+        name,
+        "res_json" | "res.json" | "res_ok" | "res.ok" | "res_ok_meta" | "res.okMeta"
+    )
 }
 
 fn is_sql_sink(name: &str) -> bool {
@@ -2646,12 +2723,28 @@ fn is_req_json_gate(name: &str) -> bool {
     matches!(name, "req_json" | "req.json")
 }
 
-fn json_sink_value_arg_index(arg_len: usize) -> Option<usize> {
-    match arg_len {
-        0 => None,
-        1 => Some(0),
-        2 => Some(1),
-        _ => Some(arg_len - 1),
+fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
+    match name {
+        "res_ok_meta" | "res.okMeta" => {
+            if arg_len >= 4 {
+                index == 2 || index == 3
+            } else {
+                index + 1 == arg_len
+            }
+        }
+        "res_ok" | "res.ok" => {
+            if arg_len >= 3 {
+                index == 2
+            } else {
+                index + 1 == arg_len
+            }
+        }
+        _ => match arg_len {
+            0 => false,
+            1 => index == 0,
+            2 => index == 1,
+            _ => index == arg_len - 1,
+        },
     }
 }
 

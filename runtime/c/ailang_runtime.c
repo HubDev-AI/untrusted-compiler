@@ -23,6 +23,14 @@ int64_t ailang_rt_res_json() {
   return 0;
 }
 
+int64_t ailang_rt_res_ok() {
+  return 0;
+}
+
+int64_t ailang_rt_res_ok_meta() {
+  return 0;
+}
+
 int64_t ailang_rt_res_html() {
   return 0;
 }

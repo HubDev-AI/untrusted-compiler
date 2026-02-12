@@ -74,6 +74,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("void ailang_rt_log_any();"));
     assert!(header.contains("int64_t ailang_rt_req_json();"));
     assert!(header.contains("int64_t ailang_rt_res_json();"));
+    assert!(header.contains("int64_t ailang_rt_res_ok();"));
+    assert!(header.contains("int64_t ailang_rt_res_ok_meta();"));
     assert!(header.contains("int64_t ailang_rt_res_html();"));
     assert!(header.contains("int64_t ailang_rt_set_header();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
@@ -114,6 +116,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("void ailang_rt_log_any()"));
     assert!(source.contains("int64_t ailang_rt_req_json()"));
     assert!(source.contains("int64_t ailang_rt_res_json()"));
+    assert!(source.contains("int64_t ailang_rt_res_ok()"));
+    assert!(source.contains("int64_t ailang_rt_res_ok_meta()"));
     assert!(source.contains("int64_t ailang_rt_res_html()"));
     assert!(source.contains("int64_t ailang_rt_set_header()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
@@ -186,6 +190,8 @@ fn main() effects { net } -> Int {
   let schema = 1;
   req.json(schema);
   res.json(schema, 1);
+  res.ok(201, schema, 1);
+  res.okMeta(201, schema, 1, 2);
   res.html(1);
   0
 }
@@ -197,6 +203,8 @@ fn main() effects { net } -> Int {
 
     assert!(c.contains("(void)(ailang_rt_req_json(schema));"));
     assert!(c.contains("(void)(ailang_rt_res_json(schema, 1));"));
+    assert!(c.contains("(void)(ailang_rt_res_ok(201, schema, 1));"));
+    assert!(c.contains("(void)(ailang_rt_res_ok_meta(201, schema, 1, 2));"));
     assert!(c.contains("(void)(ailang_rt_res_html(1));"));
 }
 

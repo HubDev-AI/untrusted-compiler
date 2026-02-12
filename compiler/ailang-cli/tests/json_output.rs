@@ -511,6 +511,8 @@ entry = "src/main.ai"
 
 fn encode(schema: Schema<Int>) effects { net } -> Int {
   res.json(schema, 1);
+  res.ok(201, schema, 1);
+  res.okMeta(201, schema, 1, 2);
   res.html(1);
   0
 }
@@ -535,6 +537,8 @@ fn main() -> Int {
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_req_json(schema)"));
     assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
+    assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));
+    assert!(generated_c.contains("ailang_rt_res_ok_meta(201, schema, 1, 2)"));
     assert!(generated_c.contains("ailang_rt_res_html(1)"));
 
     let binary_path = project_dir.join("build").join("reqresdemo");
