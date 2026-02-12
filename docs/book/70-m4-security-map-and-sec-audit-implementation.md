@@ -809,6 +809,47 @@ Before this slice, canonicalization for member calls depended on value aliases l
 - capability namespace seeding removes a practical blind spot while preserving deterministic, local analysis.
 - next step is extending this approach beyond built-in capability names to richer user-defined callable object field shapes.
 
+### Slice Explanation: Forwarding-Chain Context in Sink Diagnostics
+
+#### 1) What it is
+This slice enriches sink-flow origin notes for call expressions with a compact callable-forwarding chain when helper forwarding is involved.
+
+#### 2) Why it exists
+Canonicalized origin notes already reported the final source call (for example `req.query(...)`), but they did not show the helper path that carried the value to the sink. That reduced debuggability when many wrapper helpers were present.
+
+#### 3) How it works internally
+- semantic origin-note rendering now computes a deterministic callable summary chain by following callable-forward summaries from the callsite callee to the canonical endpoint.
+- when the chain has multiple steps, the diagnostic note includes both:
+  - canonical source call,
+  - forwarding chain text (for example `getRaw -> req.query`).
+- single-step/direct calls keep the existing concise origin note.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - call expression callee,
+  - active alias map,
+  - callable-forward summary map.
+- Output:
+  - sink diagnostic origin note with optional forwarding-chain suffix.
+- Constraints:
+  - chain generation is bounded and cycle-safe (seen-set guarded),
+  - output remains deterministic for identical source input.
+
+#### 5) Failure modes and diagnostics
+- no new diagnostic codes were added.
+- if summary chaining is unavailable, diagnostics fall back to the existing call-origin note shape.
+
+#### 6) Example usage
+- source:
+  - `fn getRaw() -> Untrusted<String> { req.query("q") }`
+  - `db.exec(cap, getRaw())`
+- diagnostic note:
+  - `origin: value comes from call req.query(...) via forwarding chain getRaw -> req.query`
+
+#### 7) Tradeoffs and next steps
+- this improves explainability while keeping diagnostics single-line and compact.
+- next step is exposing richer multi-step provenance (for example trace arrays) in editor tooling surfaces (hover/code actions/LSP diagnostics data).
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -834,5 +875,5 @@ Before this slice, canonicalization for member calls depended on value aliases l
 1. Extend callable/member canonicalization beyond built-in capability namespace seeding into richer user-defined callable object field shapes.
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
-4. Surface provenance trace chains from audit/security-map metadata into compiler diagnostics and tooling outputs.
+4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
 5. Expand `sec.audit` policy rollups with trend/aging signals and policy-tunable severity weighting.

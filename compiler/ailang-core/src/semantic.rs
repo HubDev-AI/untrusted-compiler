@@ -2541,8 +2541,19 @@ fn flow_origin_note(
         }
         ExprKind::Call { callee, .. } => {
             if let Some(name) = resolve_callable_name(callee, callable_aliases) {
-                let resolved = resolve_summary_name(name, callable_summaries);
-                format!("origin: value comes from call `{resolved}(...)`")
+                let chain = callable_summary_chain(name, callable_summaries);
+                let resolved = chain
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                if chain.len() > 1 {
+                    format!(
+                        "origin: value comes from call `{resolved}(...)` via forwarding chain `{}`",
+                        chain.join(" -> ")
+                    )
+                } else {
+                    format!("origin: value comes from call `{resolved}(...)`")
+                }
             } else if let Some(name) = callable_name(callee) {
                 format!("origin: value comes from call `{name}(...)`")
             } else {
@@ -2560,6 +2571,21 @@ fn flow_origin_note(
         }
         _ => format!("origin: expression has type `{}`", ty.describe()),
     }
+}
+
+fn callable_summary_chain(name: String, summaries: &HashMap<String, String>) -> Vec<String> {
+    let mut chain = vec![name.clone()];
+    let mut current = name;
+    let mut seen = HashSet::new();
+    seen.insert(current.clone());
+    while let Some(next) = summaries.get(current.as_str()) {
+        if !seen.insert(next.clone()) {
+            break;
+        }
+        chain.push(next.clone());
+        current = next.clone();
+    }
+    chain
 }
 
 #[derive(Debug, Clone)]

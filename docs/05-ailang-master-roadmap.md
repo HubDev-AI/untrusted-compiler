@@ -39,7 +39,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - direct member calls like `repo.exec(...)` resolve to canonical sink symbols (`db.exec`) without requiring `let repo = db`.
     - helper-forwarded callable members like `getExec(repo)` also resolve to canonical symbols for semantic checks and `security_map`.
   - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values across log, JSON, SQL, URL/net, filesystem, and header/cookie sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`, `E1005`).
-  - Sink-flow origin notes in diagnostics are now callable-summary aware for call expressions, so helper-forwarded sources report canonical origin calls (for example `req.query(...)`).
+  - Sink-flow origin notes in diagnostics are now callable-summary aware for call expressions and include compact forwarding-chain context for helper-forwarded sources (for example `getRaw -> req.query`).
   - Request boundary trust-gate semantics are now enforced:
     - `req.body` is typed as `Untrusted<Bytes>`.
     - `req.query`, `req.pathParam`, and `req.header` are typed as `Untrusted<String>`.
