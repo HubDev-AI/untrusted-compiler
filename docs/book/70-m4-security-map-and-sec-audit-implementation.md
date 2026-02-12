@@ -1037,7 +1037,7 @@ Structured tags and spans are most useful when directly consumable by tools. Thi
 
 #### 3) How it works internally
 - CLI `EmitTarget` now includes `DiagnosticsJson`.
-- on check success with diagnostics-json mode, CLI emits `[]`.
+- on check success with diagnostics-json mode, CLI emits `[]` with no extra stdout lines.
 - on validation/analysis failure, CLI prints serialized diagnostics (`severity`, `code`, `message`, `span`, `notes`, `tags`) and returns non-zero status.
 - existing default behavior remains unchanged for plain/color output modes.
 
@@ -1103,6 +1103,43 @@ Baseline comparison is most useful when teams can capture and store reports in C
 - this provides deterministic artifact persistence but not managed time-series history.
 - next step is an optional rolling history mode (for example timestamped report snapshots plus window summaries).
 
+### Slice Explanation: Strict JSON-Only Stdout Contracts for CLI Modes
+
+#### 1) What it is
+This slice hardens machine-readable CLI outputs so JSON modes are strictly JSON on stdout.
+
+#### 2) Why it exists
+Tooling and editor integrations require parseable stdout payloads without human text prefixes/suffixes.
+
+#### 3) How it works internally
+- `check --emit diagnostics-json` now suppresses success banner lines and emits only JSON (`[]` or diagnostics array) on stdout.
+- `sec audit --format json` now emits only the serialized `AuditReport` on stdout.
+- human-oriented context lines (for example `security map: ...`) are redirected to stderr in JSON mode.
+- text modes keep existing human-readable output behavior.
+- integration tests in the CLI crate assert JSON parsing directly from stdout for both command families.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - `ailang check --emit diagnostics-json`
+  - `ailang sec audit --format json`
+- Output:
+  - stdout is always valid JSON payload for the selected command in JSON mode.
+  - stderr may contain auxiliary human hints.
+- Constraints:
+  - contract applies only to explicit JSON modes, not text/default modes.
+
+#### 5) Failure modes and diagnostics
+- failing checks still return non-zero exit codes, but diagnostics remain machine-readable JSON on stdout.
+- failing audit baseline/report path operations still report CLI errors on stderr with non-zero exit.
+
+#### 6) Example usage
+- `ailang check --path examples/hello --emit diagnostics-json | jq .`
+- `ailang sec audit --path examples/hello --format json | jq '.summary'`
+
+#### 7) Tradeoffs and next steps
+- this keeps compatibility for human workflows while making JSON modes deterministic for automation.
+- next step is wiring the same contract into future LSP transport/output utilities and CI adapters.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -1119,6 +1156,7 @@ Baseline comparison is most useful when teams can capture and store reports in C
 - `compiler/ailang-core/tests/security_map.rs`
 - `compiler/ailang-core/tests/sec_audit.rs`
 - `compiler/ailang-core/tests/diagnostic_tags.rs`
+- `compiler/ailang-cli/tests/json_output.rs`
 - extended `compiler/ailang-core/tests/policy.rs` for csrf/auth/cors validations
 
 ## Current limitations

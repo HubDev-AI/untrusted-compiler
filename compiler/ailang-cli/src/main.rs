@@ -150,13 +150,18 @@ fn cmd_sec_audit(
                     baseline_report.as_ref(),
                 );
                 match format {
-                    AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
+                    AuditOutputFormat::Text => {
+                        println!("{}", render_security_audit_text(&report));
+                        println!("security map: {}", security_map_path.display());
+                    }
                     AuditOutputFormat::Json => {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&report)
                                 .expect("security audit report should serialize")
                         );
+                        // Keep stdout machine-parseable JSON for tooling integrations.
+                        eprintln!("security map: {}", security_map_path.display());
                     }
                 }
 
@@ -165,8 +170,6 @@ fn cmd_sec_audit(
                         return Err(code);
                     }
                 }
-
-                println!("security map: {}", security_map_path.display());
 
                 if let Some(threshold) = fail_on {
                     let Some(threshold) = AuditSeverity::parse_threshold(threshold) else {
@@ -279,14 +282,17 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
 }
 
 fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
+    let diagnostics_json_mode = matches!(emit, Some(EmitTarget::DiagnosticsJson));
     match ailang_core::validate_project(path) {
         Ok(manifest) => match analyze_entry(path, &manifest) {
             Ok(program) => {
-                println!(
-                    "check succeeded (M3 effects): package={}, entry={}",
-                    manifest.package.name,
-                    manifest.entry_file()
-                );
+                if !diagnostics_json_mode {
+                    println!(
+                        "check succeeded (M3 effects): package={}, entry={}",
+                        manifest.package.name,
+                        manifest.entry_file()
+                    );
+                }
                 match emit {
                     Some(EmitTarget::Ast) => println!("{}", program.to_pretty_json()),
                     Some(EmitTarget::DiagnosticsJson) => println!("[]"),
@@ -295,7 +301,7 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
                 Ok(())
             }
             Err(diagnostics) => {
-                if matches!(emit, Some(EmitTarget::DiagnosticsJson)) {
+                if diagnostics_json_mode {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&diagnostics)
@@ -308,7 +314,7 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
             }
         },
         Err(diagnostics) => {
-            if matches!(emit, Some(EmitTarget::DiagnosticsJson)) {
+            if diagnostics_json_mode {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(&diagnostics)

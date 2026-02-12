@@ -42,6 +42,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `sec.audit` now supports explicit report persistence (`--write-report <path>`) to support baseline capture and opt-in trend history workflows.
   - Diagnostics now carry structured tag metadata (`security`, `taint`, `secret`, `policy`, `effects`, `capability`, `schema`, `sink`) for editor/LSP-oriented consumers while preserving current text rendering.
   - CLI now supports machine-readable diagnostics output via `ailang check --emit diagnostics-json`, exposing spans/codes/notes/tags as JSON for tooling integration.
+  - Machine-readable CLI output contracts are now strict:
+    - `ailang check --emit diagnostics-json` prints JSON-only payloads on stdout in both success and failure paths.
+    - `ailang sec audit --format json` prints JSON-only report payload on stdout; human hint lines (for example `security map: ...`) are emitted to stderr.
+  - CLI integration tests now verify parseable JSON stdout contracts for `check --emit diagnostics-json` and `sec audit --format json`.
   - New diagnostic-tag tests assert tags for representative sink, capability, policy, and schema violations.
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Callable/member resolution now seeds namespace aliases from capability-typed parameters/bindings (`DbCap`, `TxCap`, `NetCap`, `InternalNetCap`, `FsCap`, `SecretsCap`):
@@ -347,6 +351,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Define and enforce schema-gated input trust boundaries (`req.json(schema)` canonical path).
 - Lock diagnostics taxonomy and standard error model contracts.
 - Define standard success envelope and structured log event contracts.
+- Keep machine-readable CLI output modes JSON-only on stdout (`check --emit diagnostics-json`, `sec audit --format json`) for deterministic tooling/editor integration.
 - Define capture/replay format contracts and replay-policy integration points.
 - Define typed CORS config rules and credentials-origin safety checks.
 - Add policy schema support for `security_headers`, `csrf`, and `auth` keys with deterministic validation rules.
