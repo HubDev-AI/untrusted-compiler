@@ -182,6 +182,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - semantic and security-map tests now cover alias-invoked intrinsic calls
   - member alias paths are now canonicalized as well (for example `let repo = db; repo.exec(...)` -> `db.exec(...)`)
   - interprocedural callable-forwarding summaries now canonicalize helper-function aliases (for example `let exec = getExec(); exec(...)` when `getExec` forwards `db.exec`)
+- sink-flow diagnostics now use callable-aware origin notes for call expressions, so security errors report canonical forwarded origins (for example `req.query(...)` through helper calls)
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -602,6 +603,43 @@ Patterns like `let exec = getExec(); exec(...)` previously lost canonical sink i
 #### 7) Tradeoffs and next steps
 - forwarding summaries are intentionally lightweight and avoid full higher-order callable typing.
 - next step is extending this to richer callable-value shapes (for example capability-object function fields).
+
+### Slice Explanation: Callable-Aware Origin Notes in Sink Diagnostics
+
+#### 1) What it is
+This slice upgrades sink-flow diagnostic origin notes to resolve alias and callable-forwarding summaries for call expressions.
+
+#### 2) Why it exists
+Security diagnostics already included origin notes, but helper-forwarded calls could report intermediate helper names instead of canonical trust-boundary origins.
+
+#### 3) How it works internally
+- sink-flow enforcement now passes active callable alias state into origin-note formatting.
+- origin-note rendering resolves:
+  - local/member aliases,
+  - callable-forward summary chains.
+- call-expression notes now prefer canonical resolved names (for example `req.query(...)`).
+
+#### 4) Inputs/outputs and constraints
+- Input: sink argument expression + inferred type + callable alias/summary context.
+- Output: diagnostic note line: `origin: value comes from call ...`.
+- Constraints:
+  - this slice targets call-expression origin notes,
+  - identifier/member-only notes remain type-based and scope-based.
+
+#### 5) Failure modes and diagnostics
+- no new diagnostic codes were added.
+- unresolved call targets fall back to existing generic call-expression origin notes.
+
+#### 6) Example usage
+- source:
+  - `fn getRaw() -> Untrusted<String> { req.query("q") }`
+  - `db.exec(cap, getRaw())`
+- diagnostic note now points to canonical call origin:
+  - `origin: value comes from call req.query(...)`.
+
+#### 7) Tradeoffs and next steps
+- this improves call-origin clarity but does not yet inject full provenance trace chains into compiler diagnostics.
+- next step is exposing trace-chain context in editor tooling and diagnostic enrichments.
 
 ### Slice Explanation: Iterative Interprocedural Origin Summaries
 

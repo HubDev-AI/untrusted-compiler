@@ -986,7 +986,7 @@ impl Analyzer {
             .iter()
             .map(|arg| self.analyze_expr(arg, env, used_effects, callable_aliases))
             .collect::<Vec<_>>();
-        self.enforce_sink_flow_restrictions(name.as_str(), args, &arg_types);
+        self.enforce_sink_flow_restrictions(name.as_str(), args, &arg_types, callable_aliases);
 
         if let Some(signature) = self.catalog.functions.get(name.as_str()).cloned() {
             for effect in &signature.declared_effects {
@@ -1261,6 +1261,7 @@ impl Analyzer {
         callee_name: &str,
         args: &[Expr],
         arg_types: &[Type],
+        callable_aliases: &HashMap<String, String>,
     ) {
         let start_index = sink_user_arg_start_index(callee_name, args.len());
         for (index, (arg, arg_type)) in args.iter().zip(arg_types).enumerate() {
@@ -1282,7 +1283,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("use `redact(secret)` or remove the secret from log payload"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1298,7 +1304,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("validate/sanitize input before constructing log payload"),
                     );
                 }
@@ -1324,7 +1335,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("return a redacted or derived non-secret value"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1340,7 +1356,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("decode/validate input with schema before encoding"),
                     );
                 }
@@ -1361,7 +1382,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("use non-secret identifiers/values when building SqlQuery"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1377,7 +1403,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("validate input and construct typed `SqlQuery`"),
                     );
                 }
@@ -1400,7 +1431,7 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(arg, arg_type, callable_aliases, &self.callable_forward_summaries))
                         .with_note("derive a non-secret `PublicUrl`/`InternalUrl` through URL validation gates"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1416,7 +1447,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("validate input via `url.public(...)` / `url.internal(...)`"),
                     );
                 }
@@ -1437,7 +1473,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("use non-secret `PathSafe` values for filesystem operations"),
                     );
                 } else if arg_type.contains_untrusted() {
@@ -1455,7 +1496,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note("validate input via `path.under(...)` before filesystem access"),
                     );
                 }
@@ -1476,7 +1522,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note(
                             "use redacted/derived values and validated header or cookie builders",
                         ),
@@ -1496,7 +1547,12 @@ impl Analyzer {
                             index + 1,
                             arg_type.describe()
                         ))
-                        .with_note(flow_origin_note(arg, arg_type))
+                        .with_note(flow_origin_note(
+                            arg,
+                            arg_type,
+                            callable_aliases,
+                            &self.callable_forward_summaries,
+                        ))
                         .with_note(
                             "validate via `validate.headerValue(...)` or typed cookie builders",
                         ),
@@ -2410,7 +2466,12 @@ fn is_path_under_gate(name: &str) -> bool {
     )
 }
 
-fn flow_origin_note(expr: &Expr, ty: &Type) -> String {
+fn flow_origin_note(
+    expr: &Expr,
+    ty: &Type,
+    callable_aliases: &HashMap<String, String>,
+    callable_summaries: &HashMap<String, String>,
+) -> String {
     match &expr.kind {
         ExprKind::Identifier(name) => {
             format!(
@@ -2419,7 +2480,10 @@ fn flow_origin_note(expr: &Expr, ty: &Type) -> String {
             )
         }
         ExprKind::Call { callee, .. } => {
-            if let Some(name) = callable_name(callee) {
+            if let Some(name) = resolve_callable_name(callee, callable_aliases) {
+                let resolved = resolve_summary_name(name, callable_summaries);
+                format!("origin: value comes from call `{resolved}(...)`")
+            } else if let Some(name) = callable_name(callee) {
                 format!("origin: value comes from call `{name}(...)`")
             } else {
                 format!(

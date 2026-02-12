@@ -1,0 +1,8 @@
+fn getRaw() effects { net } -> Untrusted<String> {
+  req.query("q")
+}
+
+fn bad(cap: DbCap) effects { db.write, net } -> Int {
+  db.exec(cap, getRaw());
+  1
+}

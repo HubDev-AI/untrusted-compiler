@@ -36,6 +36,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `sec.audit` includes deterministic allowlist hygiene findings (high-risk bypasses, expiry/soon-expiry, and exception-count posture signal).
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Semantic flow checks now reject `Secret<_>`/`Untrusted<_>` values across log, JSON, SQL, URL/net, filesystem, and header/cookie sinks with explicit diagnostics (`E1002`, `E1003`, `E1004`, `E1005`).
+  - Sink-flow origin notes in diagnostics are now callable-summary aware for call expressions, so helper-forwarded sources report canonical origin calls (for example `req.query(...)`).
   - Request boundary trust-gate semantics are now enforced:
     - `req.body` is typed as `Untrusted<Bytes>`.
     - `req.query`, `req.pathParam`, and `req.header` are typed as `Untrusted<String>`.
@@ -626,7 +627,7 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Extend callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
-2. Extend provenance traces from audit/tooling outputs into compiler diagnostics and explainability surfaces.
+2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
 3. Expand deterministic `sec.audit` non-call evidence from exception-count snapshots to expiring/soon-expiring exception rollups.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
