@@ -31,6 +31,11 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
   err.withLimit(baseErr, 1, 2, 3);
   err.withDependency(baseErr, 1, 2, 3);
   err.withCause(baseErr, internal);
+  let event = log.event(1);
+  let attr = log.attrRedacted(1);
+  let withAttr = log.withAttr(event, 1, attr);
+  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
+  log.withError(withHttp, baseErr);
   res.json(schema, 1);
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);

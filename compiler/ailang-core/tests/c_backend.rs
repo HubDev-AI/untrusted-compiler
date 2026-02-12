@@ -79,6 +79,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_log_i64();"));
     assert!(header.contains("int64_t ailang_rt_log_bool();"));
     assert!(header.contains("int64_t ailang_rt_log_redacted();"));
+    assert!(header.contains("int64_t ailang_rt_log_attr_redacted();"));
+    assert!(header.contains("int64_t ailang_rt_log_with_attr();"));
+    assert!(header.contains("int64_t ailang_rt_log_with_http();"));
+    assert!(header.contains("int64_t ailang_rt_log_with_error();"));
     assert!(header.contains("int64_t ailang_rt_req_json();"));
     assert!(header.contains("int64_t ailang_rt_json_decode();"));
     assert!(header.contains("int64_t ailang_rt_json_encode();"));
@@ -156,6 +160,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_log_i64()"));
     assert!(source.contains("int64_t ailang_rt_log_bool()"));
     assert!(source.contains("int64_t ailang_rt_log_redacted()"));
+    assert!(source.contains("int64_t ailang_rt_log_attr_redacted()"));
+    assert!(source.contains("int64_t ailang_rt_log_with_attr()"));
+    assert!(source.contains("int64_t ailang_rt_log_with_http()"));
+    assert!(source.contains("int64_t ailang_rt_log_with_error()"));
     assert!(source.contains("int64_t ailang_rt_req_json()"));
     assert!(source.contains("int64_t ailang_rt_json_decode()"));
     assert!(source.contains("int64_t ailang_rt_json_encode()"));
@@ -264,6 +272,10 @@ fn main() -> Int {
   let num = log.i64(1);
   let flag = log.bool(1);
   let secret = log.redacted(1);
+  let attrSecret = log.attrRedacted(1);
+  let withAttr = log.withAttr(event, 1, attrSecret);
+  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
+  let withError = log.withError(withHttp, 1);
   event;
   field;
   obj;
@@ -271,6 +283,10 @@ fn main() -> Int {
   num;
   flag;
   secret;
+  attrSecret;
+  withAttr;
+  withHttp;
+  withError;
   0
 }
 "#;
@@ -286,6 +302,10 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_log_i64(1);"));
     assert!(c.contains("ailang_rt_log_bool(1);"));
     assert!(c.contains("ailang_rt_log_redacted(1);"));
+    assert!(c.contains("ailang_rt_log_attr_redacted(1);"));
+    assert!(c.contains("ailang_rt_log_with_attr(event, 1, attrSecret);"));
+    assert!(c.contains("ailang_rt_log_with_http(withAttr, 1, 2, 200, 42);"));
+    assert!(c.contains("ailang_rt_log_with_error(withHttp, 1);"));
 }
 
 #[test]

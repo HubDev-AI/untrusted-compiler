@@ -43,6 +43,22 @@ int64_t ailang_rt_log_redacted() {
   return 0;
 }
 
+int64_t ailang_rt_log_attr_redacted() {
+  return 0;
+}
+
+int64_t ailang_rt_log_with_attr() {
+  return 0;
+}
+
+int64_t ailang_rt_log_with_http() {
+  return 0;
+}
+
+int64_t ailang_rt_log_with_error() {
+  return 0;
+}
+
 int64_t ailang_rt_req_json() {
   return 0;
 }

@@ -512,6 +512,10 @@ entry = "src/main.ai"
   let num = log.i64(1);
   let flag = log.bool(1);
   let secret = log.redacted(1);
+  let attrSecret = log.attrRedacted(1);
+  let withAttr = log.withAttr(event, 1, attrSecret);
+  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
+  let withError = log.withError(withHttp, 1);
   event;
   field;
   obj;
@@ -519,6 +523,10 @@ entry = "src/main.ai"
   num;
   flag;
   secret;
+  attrSecret;
+  withAttr;
+  withHttp;
+  withError;
   0
 }
 "#,
@@ -543,6 +551,10 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_log_i64(1)"));
     assert!(generated_c.contains("ailang_rt_log_bool(1)"));
     assert!(generated_c.contains("ailang_rt_log_redacted(1)"));
+    assert!(generated_c.contains("ailang_rt_log_attr_redacted(1)"));
+    assert!(generated_c.contains("ailang_rt_log_with_attr(event, 1, attrSecret)"));
+    assert!(generated_c.contains("ailang_rt_log_with_http(withAttr, 1, 2, 200, 42)"));
+    assert!(generated_c.contains("ailang_rt_log_with_error(withHttp, 1)"));
 
     let binary_path = project_dir.join("build").join("logbuildersdemo");
     assert!(binary_path.exists(), "compiled binary should exist");

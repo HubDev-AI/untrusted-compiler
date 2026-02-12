@@ -190,6 +190,8 @@ impl Catalog {
             "HeaderName",
             "HeaderValue",
             "Cookie",
+            "LogAttr",
+            "LogEvent",
             "LogValue",
             "Budget",
             "StdError",
@@ -2257,6 +2259,26 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             effect: None,
             required_capability: None,
             return_ty: IntrinsicReturnTy::Named("LogValue"),
+        }),
+        "log_attr_redacted" | "log.attrRedacted" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("LogAttr"),
+        }),
+        "log_with_attr" | "log.withAttr" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("LogEvent"),
+        }),
+        "log_with_http" | "log.withHttp" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("LogEvent"),
+        }),
+        "log_with_error" | "log.withError" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("LogEvent"),
         }),
         "http_router" | "http.router" => Some(IntrinsicSpec {
             effect: None,

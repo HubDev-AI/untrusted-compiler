@@ -201,6 +201,20 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("log_bool(", "__AILANG_INTRINSIC_LOG_BOOL__(");
     lowered = lowered.replace("log.redacted(", "__AILANG_INTRINSIC_LOG_REDACTED__(");
     lowered = lowered.replace("log_redacted(", "__AILANG_INTRINSIC_LOG_REDACTED__(");
+    lowered = lowered.replace(
+        "log.attrRedacted(",
+        "__AILANG_INTRINSIC_LOG_ATTR_REDACTED__(",
+    );
+    lowered = lowered.replace(
+        "log_attr_redacted(",
+        "__AILANG_INTRINSIC_LOG_ATTR_REDACTED__(",
+    );
+    lowered = lowered.replace("log.withAttr(", "__AILANG_INTRINSIC_LOG_WITH_ATTR__(");
+    lowered = lowered.replace("log_with_attr(", "__AILANG_INTRINSIC_LOG_WITH_ATTR__(");
+    lowered = lowered.replace("log.withHttp(", "__AILANG_INTRINSIC_LOG_WITH_HTTP__(");
+    lowered = lowered.replace("log_with_http(", "__AILANG_INTRINSIC_LOG_WITH_HTTP__(");
+    lowered = lowered.replace("log.withError(", "__AILANG_INTRINSIC_LOG_WITH_ERROR__(");
+    lowered = lowered.replace("log_with_error(", "__AILANG_INTRINSIC_LOG_WITH_ERROR__(");
     lowered = lowered.replace("req.json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("json.decode(", "__AILANG_INTRINSIC_JSON_DECODE__(");
@@ -373,6 +387,22 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_LOG_REDACTED__(",
         "ailang_rt_log_redacted(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_LOG_ATTR_REDACTED__(",
+        "ailang_rt_log_attr_redacted(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_LOG_WITH_ATTR__(",
+        "ailang_rt_log_with_attr(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_LOG_WITH_HTTP__(",
+        "ailang_rt_log_with_http(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_LOG_WITH_ERROR__(",
+        "ailang_rt_log_with_error(",
     );
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
     lowered = lowered.replace("__AILANG_INTRINSIC_JSON_DECODE__(", "ailang_rt_json_decode(");
