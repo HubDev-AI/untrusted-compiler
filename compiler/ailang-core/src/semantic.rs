@@ -387,6 +387,9 @@ impl Analyzer {
                             "effect forbidden by policy",
                             effect.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("policy")
+                        .with_tag("effects")
                         .with_note(format!(
                             "effect `{effect_name}` is forbidden by the active policy"
                         )),
@@ -615,6 +618,7 @@ impl Analyzer {
                         "effect used but not declared",
                         function.body.span.clone(),
                     )
+                    .with_tag("effects")
                     .with_note(format!(
                         "function `{}` uses `{effect}` but does not declare it in `effects {{ ... }}`",
                         function.name
@@ -633,6 +637,9 @@ impl Analyzer {
                         "effect forbidden by policy",
                         function.body.span.clone(),
                     )
+                    .with_tag("security")
+                    .with_tag("policy")
+                    .with_tag("effects")
                     .with_note(format!(
                         "function `{}` uses forbidden effect `{effect}` under active policy",
                         function.name
@@ -1073,6 +1080,8 @@ impl Analyzer {
                                 "operation requires capability",
                                 span.clone(),
                             )
+                            .with_tag("security")
+                            .with_tag("capability")
                             .with_note(format!(
                                 "`{name}` requires argument {} capability `{required_capability}`",
                                 capability_index + 1
@@ -1086,6 +1095,8 @@ impl Analyzer {
                                 "capability type mismatch",
                                 args[capability_index].span.clone(),
                             )
+                            .with_tag("security")
+                            .with_tag("capability")
                             .with_note(format!(
                                 "`{name}` expects capability `{required_capability}` at argument {}, got `{}`",
                                 capability_index + 1,
@@ -1306,6 +1317,9 @@ impl Analyzer {
                             "secret value cannot be logged",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1328,6 +1342,9 @@ impl Analyzer {
                             "untrusted value cannot flow into log sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` requires trusted log values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1360,6 +1377,9 @@ impl Analyzer {
                             "secret value cannot be JSON-encoded",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1382,6 +1402,9 @@ impl Analyzer {
                             "untrusted value cannot flow into JSON response sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` requires trusted values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1409,6 +1432,9 @@ impl Analyzer {
                             "secret value cannot flow into SQL sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1431,6 +1457,9 @@ impl Analyzer {
                             "untrusted value cannot flow into SQL sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` requires trusted SQL inputs"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1458,6 +1487,9 @@ impl Analyzer {
                             "secret value cannot flow into URL sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!(
                             "sink `{callee_name}` rejects `Secret<_>` values"
                         ))
@@ -1482,6 +1514,9 @@ impl Analyzer {
                             "untrusted value cannot flow into URL sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` requires typed safe URLs"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1509,6 +1544,9 @@ impl Analyzer {
                             "secret value cannot flow into filesystem sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1531,6 +1569,9 @@ impl Analyzer {
                             "untrusted value cannot flow into filesystem sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!(
                             "sink `{callee_name}` requires trusted `PathSafe` values"
                         ))
@@ -1560,6 +1601,9 @@ impl Analyzer {
                             "secret value cannot flow into header/cookie sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("secret")
+                        .with_tag("sink")
                         .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
@@ -1584,6 +1628,9 @@ impl Analyzer {
                             "untrusted value cannot flow into header/cookie sink",
                             arg.span.clone(),
                         )
+                        .with_tag("security")
+                        .with_tag("taint")
+                        .with_tag("sink")
                         .with_note(format!(
                             "sink `{callee_name}` requires validated header/cookie values"
                         ))
@@ -1706,6 +1753,8 @@ impl Analyzer {
                     "json response encoding requires explicit schema argument",
                     span,
                 )
+                .with_tag("security")
+                .with_tag("schema")
                 .with_note(expected_note)
                 .with_note(
                     "set `json.require_schema_for_encode = false` in policy to disable strict mode",
@@ -1721,6 +1770,8 @@ impl Analyzer {
                     "json response encoding has invalid argument count",
                     span,
                 )
+                .with_tag("security")
+                .with_tag("schema")
                 .with_note(expected_note),
             );
             return;
@@ -1733,6 +1784,8 @@ impl Analyzer {
                     "json response status must be numeric",
                     args[0].span.clone(),
                 )
+                .with_tag("security")
+                .with_tag("schema")
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note("use an `Int`/`Int64` status code in `res.json(status, schema, value)`"),
             );
@@ -1753,6 +1806,8 @@ impl Analyzer {
                     "json response schema argument is invalid",
                     args[schema_index].span.clone(),
                 )
+                .with_tag("security")
+                .with_tag("schema")
                 .with_note(format!("found `{}`", schema_ty.describe()))
                 .with_note("schema argument should be a schema symbol/descriptor, not numeric/boolean/untrusted/secret data"),
             );
@@ -1767,6 +1822,8 @@ impl Analyzer {
                         "json response value does not match schema type",
                         args[value_index].span.clone(),
                     )
+                    .with_tag("security")
+                    .with_tag("schema")
                     .with_note(format!(
                         "schema expects `{}`, got `{}`",
                         expected_value_ty.describe(),
@@ -2639,7 +2696,10 @@ fn infer_call_origin_message(
 ) -> Option<String> {
     if let Some(name) = resolve_callable_name(callee, callable_aliases) {
         let chain = callable_summary_chain(name, callable_summaries);
-        let resolved = chain.last().cloned().unwrap_or_else(|| "<unknown>".to_string());
+        let resolved = chain
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "<unknown>".to_string());
         if chain.len() > 1 {
             Some(format!(
                 "value comes from call `{resolved}(...)` via forwarding chain `{}`",

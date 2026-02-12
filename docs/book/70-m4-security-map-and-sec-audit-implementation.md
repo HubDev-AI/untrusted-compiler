@@ -986,6 +986,47 @@ Single-report posture is useful, but teams also need quick answers to "did risk 
 - this enables deterministic two-point comparison but does not yet persist/aggregate multi-run history.
 - next step is opt-in history storage and windowed trend aggregation (for example 7-day/30-day delta summaries).
 
+### Slice Explanation: Structured Diagnostic Tags for Security Tooling
+
+#### 1) What it is
+This slice adds structured tag metadata on compiler diagnostics and applies it to core M4 security/effect/policy errors.
+
+#### 2) Why it exists
+Roadmapped editor/LSP support needs machine-consumable diagnostics (not only text). Stable tags let clients group/filter diagnostics and drive targeted quick-fix UX without parsing note strings.
+
+#### 3) How it works internally
+- `Diagnostic` now includes `tags: Vec<String>` plus deduplicating builder method `with_tag(...)`.
+- semantic analyzer now tags representative diagnostics:
+  - taint-to-sink (`E1002`) -> `security`, `taint`, `sink`
+  - secret-to-sink (`E1003/E1004/E1005`) -> `security`, `secret`, `sink`
+  - capability issues (`E2003/E2004`) -> `security`, `capability`
+  - forbidden effects (`E2002`) -> `security`, `policy`, `effects`
+  - undeclared effects (`E4002`) -> `effects`
+  - strict JSON schema errors (`E4004`) -> `security`, `schema`
+- `@allow` annotation diagnostics in `security_map` now carry `security` + `policy` tags (`A7001/A7002`).
+- plain/color rendering remains unchanged (tags are metadata for structured consumers).
+
+#### 4) Inputs/outputs and constraints
+- Input: existing diagnostic construction paths in semantic/policy parsing flows.
+- Output: same diagnostics plus stable tag vectors.
+- Constraints:
+  - tag assignment remains deterministic,
+  - duplicate tag insertion is prevented by `with_tag`.
+
+#### 5) Failure modes and diagnostics
+- no diagnostic codes or message text changed for existing failures.
+- if tag coverage is missing for future diagnostics, behavior remains backward-compatible (empty tag list).
+
+#### 6) Example usage
+- an `E1002` SQL-taint diagnostic now includes tags:
+  - `["security", "taint", "sink"]`
+- a policy-expired allow diagnostic `A7002` includes:
+  - `["security", "policy"]`
+
+#### 7) Tradeoffs and next steps
+- this provides a minimal structured layer without changing user-facing output shape.
+- next step is exposing these tags through the future LSP diagnostic payload and code-action routing.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -1001,6 +1042,7 @@ Single-report posture is useful, but teams also need quick answers to "did risk 
 ## Tests added
 - `compiler/ailang-core/tests/security_map.rs`
 - `compiler/ailang-core/tests/sec_audit.rs`
+- `compiler/ailang-core/tests/diagnostic_tags.rs`
 - extended `compiler/ailang-core/tests/policy.rs` for csrf/auth/cors validations
 
 ## Current limitations
@@ -1012,4 +1054,4 @@ Single-report posture is useful, but teams also need quick answers to "did risk 
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
-5. Add opt-in persisted trend history and windowed multi-run trend aggregation for `sec.audit`.
+5. Expose structured diagnostic tags + provenance hints through future LSP outputs and code-action dispatch.

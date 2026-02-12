@@ -133,8 +133,11 @@ fn cmd_sec_audit(
                 } else {
                     None
                 };
-                let report =
-                    run_security_audit_with_baseline(&policy, &security_map, baseline_report.as_ref());
+                let report = run_security_audit_with_baseline(
+                    &policy,
+                    &security_map,
+                    baseline_report.as_ref(),
+                );
                 match format {
                     AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
                     AuditOutputFormat::Json => {

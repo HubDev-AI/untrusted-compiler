@@ -211,6 +211,8 @@ pub fn parse_allow_annotations(
                     "unterminated @allow annotation",
                     span_from_offset(file_path, source, start),
                 )
+                .with_tag("security")
+                .with_tag("policy")
                 .with_note("expected `)` to close @allow annotation"),
             );
             break;
@@ -1862,6 +1864,8 @@ fn parse_allow_payload(
         let Some(eq_index) = find_assignment_equals(trimmed) else {
             diagnostics.push(
                 Diagnostic::error("A7001", "invalid @allow assignment", span.clone())
+                    .with_tag("security")
+                    .with_tag("policy")
                     .with_note(format!("expected `key = value`, got `{trimmed}`")),
             );
             continue;
@@ -1875,6 +1879,8 @@ fn parse_allow_payload(
                 Ok(list) => bypass = list,
                 Err(message) => diagnostics.push(
                     Diagnostic::error("A7001", "invalid @allow bypass list", span.clone())
+                        .with_tag("security")
+                        .with_tag("policy")
                         .with_note(message),
                 ),
             },
@@ -1884,11 +1890,15 @@ fn parse_allow_payload(
                 }
                 Err(message) => diagnostics.push(
                     Diagnostic::error("A7001", "invalid @allow string value", span.clone())
+                        .with_tag("security")
+                        .with_tag("policy")
                         .with_note(format!("{message}; key `{key}`")),
                 ),
             },
             unknown => diagnostics.push(
                 Diagnostic::error("A7001", "unknown @allow field", span.clone())
+                    .with_tag("security")
+                    .with_tag("policy")
                     .with_note(format!("unsupported key `{unknown}` in @allow annotation")),
             ),
         }
@@ -1899,6 +1909,8 @@ fn parse_allow_payload(
             if bypass.is_empty() {
                 diagnostics.push(
                     Diagnostic::error("A7001", "missing required @allow field", span.clone())
+                        .with_tag("security")
+                        .with_tag("policy")
                         .with_note("`bypass` must include at least one tag id"),
                 );
             }
@@ -1908,6 +1920,8 @@ fn parse_allow_payload(
         if !values.contains_key(required) {
             diagnostics.push(
                 Diagnostic::error("A7001", "missing required @allow field", span.clone())
+                    .with_tag("security")
+                    .with_tag("policy")
                     .with_note(format!("`{required}` is required in @allow annotation")),
             );
         }
@@ -1918,13 +1932,19 @@ fn parse_allow_payload(
         if !is_iso_date(expiry) {
             diagnostics.push(
                 Diagnostic::error("A7001", "invalid @allow expiry format", span.clone())
+                    .with_tag("security")
+                    .with_tag("policy")
                     .with_note("expires must be formatted as YYYY-MM-DD"),
             );
         } else if expiry.as_str() < today.as_str() {
             diagnostics.push(
-                Diagnostic::error("A7002", "expired @allow annotation", span.clone()).with_note(
-                    format!("expires `{}` is in the past (today is {})", expiry, today),
-                ),
+                Diagnostic::error("A7002", "expired @allow annotation", span.clone())
+                    .with_tag("security")
+                    .with_tag("policy")
+                    .with_note(format!(
+                        "expires `{}` is in the past (today is {})",
+                        expiry, today
+                    )),
             );
         }
     }

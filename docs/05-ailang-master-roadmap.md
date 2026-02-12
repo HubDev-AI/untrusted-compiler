@@ -39,6 +39,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - risk and finding-count deltas,
     - per-severity deltas,
     - added/resolved finding ID sets.
+  - Diagnostics now carry structured tag metadata (`security`, `taint`, `secret`, `policy`, `effects`, `capability`, `schema`, `sink`) for editor/LSP-oriented consumers while preserving current text rendering.
+  - New diagnostic-tag tests assert tags for representative sink, capability, policy, and schema violations.
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Callable/member resolution now seeds namespace aliases from capability-typed parameters/bindings (`DbCap`, `TxCap`, `NetCap`, `InternalNetCap`, `FsCap`, `SecretsCap`):
     - direct member calls like `repo.exec(...)` resolve to canonical sink symbols (`db.exec`) without requiring `let repo = db`.

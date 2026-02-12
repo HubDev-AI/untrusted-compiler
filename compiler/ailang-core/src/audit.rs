@@ -901,8 +901,18 @@ fn compute_trend(current: &AuditReport, baseline: &AuditReport) -> AuditTrend {
     let severity_keys = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
     let mut severity_deltas = HashMap::new();
     for key in severity_keys {
-        let current_count = current.summary.finding_counts.get(key).copied().unwrap_or(0);
-        let baseline_count = baseline.summary.finding_counts.get(key).copied().unwrap_or(0);
+        let current_count = current
+            .summary
+            .finding_counts
+            .get(key)
+            .copied()
+            .unwrap_or(0);
+        let baseline_count = baseline
+            .summary
+            .finding_counts
+            .get(key)
+            .copied()
+            .unwrap_or(0);
         severity_deltas.insert(key.to_string(), current_count - baseline_count);
     }
 
@@ -1014,7 +1024,10 @@ pub fn render_security_audit_text(report: &AuditReport) -> String {
             trend.severity_deltas
         ));
         if !trend.added_finding_ids.is_empty() {
-            lines.push(format!("Trend added: {}", trend.added_finding_ids.join(", ")));
+            lines.push(format!(
+                "Trend added: {}",
+                trend.added_finding_ids.join(", ")
+            ));
         }
         if !trend.resolved_finding_ids.is_empty() {
             lines.push(format!(

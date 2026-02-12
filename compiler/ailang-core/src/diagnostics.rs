@@ -47,6 +47,7 @@ pub struct Diagnostic {
     pub message: String,
     pub span: Span,
     pub notes: Vec<String>,
+    pub tags: Vec<String>,
 }
 
 impl Diagnostic {
@@ -57,11 +58,20 @@ impl Diagnostic {
             message: message.into(),
             span,
             notes: Vec::new(),
+            tags: Vec::new(),
         }
     }
 
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
         self.notes.push(note.into());
+        self
+    }
+
+    pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
+        let tag = tag.into();
+        if !self.tags.iter().any(|current| current == &tag) {
+            self.tags.push(tag);
+        }
         self
     }
 

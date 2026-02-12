@@ -1,8 +1,8 @@
 use ailang_core::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations, parse_source,
     policy::parse_policy_str, render_security_audit_text, run_security_audit,
-    run_security_audit_with_baseline,
-    security_map::SourceLocation, should_fail, AuditSeverity, Policy, SecurityAllow,
+    run_security_audit_with_baseline, security_map::SourceLocation, should_fail, AuditSeverity,
+    Policy, SecurityAllow,
 };
 use std::path::Path;
 
@@ -603,12 +603,10 @@ fn boot() -> Int {
     assert_eq!(trend.baseline_risk_score, 0);
     assert!(trend.risk_score_delta > 0);
     assert!(trend.finding_count_delta > 0);
-    assert!(
-        trend
-            .added_finding_ids
-            .iter()
-            .any(|id| id == "CORS_ANY_ORIGIN")
-    );
+    assert!(trend
+        .added_finding_ids
+        .iter()
+        .any(|id| id == "CORS_ANY_ORIGIN"));
     assert_eq!(trend.resolved_finding_ids.len(), 0);
     assert!(trend
         .severity_deltas
