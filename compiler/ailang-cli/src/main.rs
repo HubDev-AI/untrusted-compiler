@@ -6,6 +6,7 @@ use ailang_core::{
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 #[command(name = "ailang", version, about = "AILang compiler CLI (M1 parser)")]
@@ -58,6 +59,8 @@ enum SecCommands {
         #[arg(long)]
         baseline: Option<PathBuf>,
         #[arg(long)]
+        history_dir: Option<PathBuf>,
+        #[arg(long)]
         write_report: Option<PathBuf>,
         #[arg(long)]
         fail_on: Option<String>,
@@ -100,12 +103,14 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             path,
             format,
             baseline,
+            history_dir,
             write_report,
             fail_on,
         } => cmd_sec_audit(
             &path,
             format,
             baseline.as_deref(),
+            history_dir.as_deref(),
             write_report.as_deref(),
             fail_on.as_deref(),
         ),
@@ -116,6 +121,7 @@ fn cmd_sec_audit(
     path: &Path,
     format: AuditOutputFormat,
     baseline_path: Option<&Path>,
+    history_dir_path: Option<&Path>,
     write_report_path: Option<&Path>,
     fail_on: Option<&str>,
 ) -> Result<(), i32> {
@@ -139,8 +145,19 @@ fn cmd_sec_audit(
                     }
                 };
 
+                let mut baseline_source = None;
                 let baseline_report = if let Some(baseline_path) = baseline_path {
+                    baseline_source = Some(baseline_path.to_path_buf());
                     Some(load_audit_baseline(baseline_path)?)
+                } else if let Some(history_dir_path) = history_dir_path {
+                    if let Some((report, source_path)) =
+                        load_latest_history_baseline(history_dir_path)?
+                    {
+                        baseline_source = Some(source_path);
+                        Some(report)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };
@@ -150,18 +167,13 @@ fn cmd_sec_audit(
                     baseline_report.as_ref(),
                 );
                 match format {
-                    AuditOutputFormat::Text => {
-                        println!("{}", render_security_audit_text(&report));
-                        println!("security map: {}", security_map_path.display());
-                    }
+                    AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
                     AuditOutputFormat::Json => {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&report)
                                 .expect("security audit report should serialize")
                         );
-                        // Keep stdout machine-parseable JSON for tooling integrations.
-                        eprintln!("security map: {}", security_map_path.display());
                     }
                 }
 
@@ -170,6 +182,29 @@ fn cmd_sec_audit(
                         return Err(code);
                     }
                 }
+
+                let history_report_path = if let Some(history_dir_path) = history_dir_path {
+                    Some(write_history_report(history_dir_path, &report)?)
+                } else {
+                    None
+                };
+
+                if let Some(baseline_source) = baseline_source {
+                    print_aux_line(
+                        format,
+                        &format!("baseline report: {}", baseline_source.display()),
+                    );
+                }
+                if let Some(history_report_path) = history_report_path {
+                    print_aux_line(
+                        format,
+                        &format!("history report: {}", history_report_path.display()),
+                    );
+                }
+                print_aux_line(
+                    format,
+                    &format!("security map: {}", security_map_path.display()),
+                );
 
                 if let Some(threshold) = fail_on {
                     let Some(threshold) = AuditSeverity::parse_threshold(threshold) else {
@@ -203,6 +238,14 @@ fn cmd_sec_audit(
     }
 }
 
+fn print_aux_line(format: AuditOutputFormat, line: &str) {
+    if matches!(format, AuditOutputFormat::Json) {
+        eprintln!("{line}");
+    } else {
+        println!("{line}");
+    }
+}
+
 fn load_audit_baseline(path: &Path) -> Result<AuditReport, i32> {
     let raw = match fs::read_to_string(path) {
         Ok(content) => content,
@@ -222,6 +265,44 @@ fn load_audit_baseline(path: &Path) -> Result<AuditReport, i32> {
             Err(2)
         }
     }
+}
+
+fn load_latest_history_baseline(history_dir: &Path) -> Result<Option<(AuditReport, PathBuf)>, i32> {
+    if !history_dir.exists() {
+        return Ok(None);
+    }
+
+    let entries = match fs::read_dir(history_dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!(
+                "could not read history directory `{}`: {err}",
+                history_dir.display()
+            );
+            return Err(2);
+        }
+    };
+
+    let mut candidates = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        })
+        .collect::<Vec<_>>();
+
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+
+    candidates.sort();
+    let latest = candidates
+        .pop()
+        .expect("history candidate list should not be empty");
+    let report = load_audit_baseline(&latest)?;
+    Ok(Some((report, latest)))
 }
 
 fn write_audit_report(path: &Path, report: &AuditReport) -> Result<(), i32> {
@@ -248,6 +329,25 @@ fn write_audit_report(path: &Path, report: &AuditReport) -> Result<(), i32> {
         return Err(2);
     }
     Ok(())
+}
+
+fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<PathBuf, i32> {
+    if let Err(err) = fs::create_dir_all(history_dir) {
+        eprintln!(
+            "could not create history directory `{}`: {err}",
+            history_dir.display()
+        );
+        return Err(2);
+    }
+
+    let now_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    let file_name = format!("audit-{}-{now_nanos}.json", report.build.time_ms);
+    let output_path = history_dir.join(file_name);
+    write_audit_report(&output_path, report)?;
+    Ok(output_path)
 }
 
 fn cmd_build(path: &Path) -> Result<(), i32> {

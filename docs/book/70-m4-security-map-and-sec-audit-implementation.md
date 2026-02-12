@@ -1103,6 +1103,51 @@ Baseline comparison is most useful when teams can capture and store reports in C
 - this provides deterministic artifact persistence but not managed time-series history.
 - next step is an optional rolling history mode (for example timestamped report snapshots plus window summaries).
 
+### Slice Explanation: Audit History Directory (`--history-dir`) with Auto-Baseline
+
+#### 1) What it is
+This slice adds `ailang sec audit --history-dir <path>` for opt-in report history capture and automatic baseline loading from prior history entries.
+
+#### 2) Why it exists
+Single-file baseline comparisons are useful but manual. Teams need a low-friction way to persist each run and get deterministic trend deltas across iterative runs.
+
+#### 3) How it works internally
+- CLI `sec audit` now accepts optional `--history-dir`.
+- when `--baseline` is not provided and `--history-dir` is set:
+  - CLI loads the latest `.json` report in that directory as baseline (if present),
+  - audit engine computes trend deltas against that loaded baseline.
+- after each successful audit run with `--history-dir`, CLI writes the current report to a timestamped history file:
+  - `audit-<timeMs>-<nanos>.json`.
+- auxiliary artifact hints are emitted:
+  - text mode: stdout,
+  - json mode: stderr (stdout remains JSON-only).
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - `sec audit --history-dir <dir>` (optionally with `--baseline` and/or `--write-report`).
+- Output:
+  - persisted timestamped history report under the target directory,
+  - optional `trend` section when a prior baseline is available.
+- Constraints:
+  - explicit `--baseline` takes precedence over auto-loaded history baseline,
+  - history baseline selection is lexicographic over `.json` filenames.
+
+#### 5) Failure modes and diagnostics
+- unreadable history directory or malformed latest JSON baseline returns CLI error (`Err(2)`).
+- unwritable history directory/path returns CLI error (`Err(2)`).
+- when no prior history exists, run succeeds without trend output.
+
+#### 6) Example usage
+- first run (no trend yet):
+  - `ailang sec audit --path examples/hello --format json --history-dir build/audit-history`
+- second run (auto-baseline from first report):
+  - `ailang sec audit --path examples/hello --format json --history-dir build/audit-history`
+  - output includes `trend` with deterministic deltas.
+
+#### 7) Tradeoffs and next steps
+- history selection is currently single-baseline (latest only), not windowed aggregation.
+- next step is optional rolling summaries (for example 7-day/30-day trend windows) built on top of history artifacts.
+
 ### Slice Explanation: Strict JSON-Only Stdout Contracts for CLI Modes
 
 #### 1) What it is

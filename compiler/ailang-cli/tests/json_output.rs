@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,6 +29,28 @@ fn unique_suffix() -> String {
         .expect("system time should be after unix epoch")
         .as_nanos();
     format!("{nanos}")
+}
+
+fn temp_dir(prefix: &str) -> PathBuf {
+    let path = std::env::temp_dir().join(format!("{prefix}-{}", unique_suffix()));
+    fs::create_dir_all(&path).expect("temp directory should be created");
+    path
+}
+
+fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
+    let mut files = fs::read_dir(path)
+        .expect("directory should be readable")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|entry| {
+            entry
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files
 }
 
 #[test]
@@ -114,4 +137,72 @@ fn sec_audit_json_keeps_stdout_parseable_json() {
         stderr.contains("security map:"),
         "security map location should be emitted via stderr"
     );
+}
+
+#[test]
+fn sec_audit_history_dir_writes_reports_and_autoloads_baseline() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let history_dir = temp_dir("ailang-audit-history");
+    let history = history_dir
+        .to_str()
+        .expect("history path should be valid utf-8");
+
+    let first = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+    ]);
+    assert!(first.status.success(), "first history run should succeed");
+    let first_stdout = String::from_utf8(first.stdout).expect("stdout should be utf-8");
+    let first_report: Value =
+        serde_json::from_str(&first_stdout).expect("stdout should be parseable json");
+    assert!(
+        first_report.get("trend").is_none(),
+        "first history run should not emit trend without prior baseline"
+    );
+    assert_eq!(list_json_files(&history_dir).len(), 1);
+
+    let second = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+    ]);
+    assert!(second.status.success(), "second history run should succeed");
+    let second_stdout = String::from_utf8(second.stdout).expect("stdout should be utf-8");
+    let second_report: Value =
+        serde_json::from_str(&second_stdout).expect("stdout should be parseable json");
+    assert!(
+        second_report.get("trend").is_some(),
+        "second history run should emit trend from latest history baseline"
+    );
+    assert_eq!(list_json_files(&history_dir).len(), 2);
+
+    let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
+    assert!(
+        second_stderr.contains("baseline report:"),
+        "history run should report baseline source"
+    );
+    assert!(
+        second_stderr.contains("history report:"),
+        "history run should report written history path"
+    );
+    assert!(
+        second_stderr.contains("security map:"),
+        "history run should still emit security map path on stderr in JSON mode"
+    );
+
+    fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
 }

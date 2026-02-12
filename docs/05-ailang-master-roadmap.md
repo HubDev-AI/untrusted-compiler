@@ -40,6 +40,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - per-severity deltas,
     - added/resolved finding ID sets.
   - `sec.audit` now supports explicit report persistence (`--write-report <path>`) to support baseline capture and opt-in trend history workflows.
+  - `sec.audit` now supports opt-in history capture (`--history-dir <path>`):
+    - writes timestamped JSON reports per run,
+    - auto-loads the latest history report as baseline when `--baseline` is not provided,
+    - preserves JSON-only stdout contract in JSON mode while emitting history/baseline artifact hints to stderr.
   - Diagnostics now carry structured tag metadata (`security`, `taint`, `secret`, `policy`, `effects`, `capability`, `schema`, `sink`) for editor/LSP-oriented consumers while preserving current text rendering.
   - CLI now supports machine-readable diagnostics output via `ailang check --emit diagnostics-json`, exposing spans/codes/notes/tags as JSON for tooling integration.
   - Machine-readable CLI output contracts are now strict:
