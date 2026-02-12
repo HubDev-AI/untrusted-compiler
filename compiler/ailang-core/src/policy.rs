@@ -89,6 +89,8 @@ pub struct JsonPolicyConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
+    pub allowed_domains: Vec<String>,
+    pub blocked_domains: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -210,6 +212,8 @@ impl Default for Policy {
             },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
+                allowed_domains: Vec::new(),
+                blocked_domains: Vec::new(),
             },
             net_internal: NetInternalPolicyConfig {
                 enabled: false,
@@ -842,6 +846,12 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         if let Some(public) = net.public {
             if let Some(allow_redirects) = public.allow_redirects {
                 policy.net_public.allow_redirects = allow_redirects;
+            }
+            if let Some(allowed_domains) = public.allowed_domains {
+                policy.net_public.allowed_domains = allowed_domains;
+            }
+            if let Some(blocked_domains) = public.blocked_domains {
+                policy.net_public.blocked_domains = blocked_domains;
             }
             if let Some(allowed_schemes) = public.allowed_schemes {
                 if allowed_schemes.is_empty()

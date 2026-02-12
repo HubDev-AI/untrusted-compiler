@@ -73,6 +73,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - source tags now include dotted/underscore variants of `req.body`, `req.query`, `req.header`, and `req.pathParam`.
     - symbol registry coverage and tests were extended to keep `sec.audit` marker detection deterministic.
   - `[logging]` and `[sql]` policy sections are now ingested into the typed policy model.
+  - `[net.public]` domain policy lists are now ingested into the typed policy model:
+    - `allowed_domains`
+    - `blocked_domains`
   - `sec.audit` now emits deterministic logging/SQL posture findings:
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
@@ -148,6 +151,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
     - `DNS_RESOLUTION_DISABLED`
+    - `PUBLIC_EGRESS_NO_DOMAIN_POLICY` (when public-net sink calls exist and both domain lists are empty)
     - `CAPTURE_REDACTION_INCOMPLETE`
     - `CAPTURE_ALL_IN_PROD`
     - `REPLAY_EFFECTS_ALLOW`
@@ -155,6 +159,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - allowlist bypass families via bypass-tag call sampling (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`)
     - non-call exception posture snapshot evidence for `ALLOW_COUNT_HIGH` (`sampleExceptions`)
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
+  - sec_audit tests now also assert suppression of `PUBLIC_EGRESS_NO_DOMAIN_POLICY` when `net.public.allowed_domains` is configured.
   - `sec.audit` text rendering now includes sample-call previews with provenance trace snippets when available.
   - `sec.audit` now emits deterministic exception-expiry rollup findings (`ALLOW_EXPIRY_WINDOW_ROLLUP`) with sampled exception evidence.
   - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).

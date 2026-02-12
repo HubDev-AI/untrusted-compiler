@@ -80,6 +80,26 @@ max_redirects = 1
 }
 
 #[test]
+fn policy_parses_public_egress_domain_lists() {
+    let source = r#"
+[net.public]
+allowed_domains = ["api.example.com"]
+blocked_domains = ["169.254.169.254"]
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect("public egress domain lists should parse");
+    assert_eq!(
+        policy.net_public.allowed_domains,
+        vec!["api.example.com".to_string()]
+    );
+    assert_eq!(
+        policy.net_public.blocked_domains,
+        vec!["169.254.169.254".to_string()]
+    );
+}
+
+#[test]
 fn policy_rejects_csrf_none_without_secure_cookie() {
     let source = r#"
 [csrf]

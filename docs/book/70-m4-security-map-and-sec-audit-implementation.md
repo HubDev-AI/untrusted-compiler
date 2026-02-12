@@ -157,6 +157,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
+    - `PUBLIC_EGRESS_NO_DOMAIN_POLICY`
     - `CAPTURE_REDACTION_INCOMPLETE`
     - `CAPTURE_ALL_IN_PROD`
     - `REPLAY_EFFECTS_ALLOW`
@@ -1304,6 +1305,53 @@ The security baseline requires DNS/final-IP validation for outbound public reque
 #### 7) Tradeoffs and next steps
 - this flags DNS-resolution posture but does not yet differentiate environment-specific allowlist exceptions.
 - next step is adding policy-governed exception metadata for controlled prod waivers.
+
+### Slice Explanation: Public Egress Domain Policy Finding (`PUBLIC_EGRESS_NO_DOMAIN_POLICY`)
+
+#### 1) What it is
+This slice adds a deterministic SSRF posture finding when outbound public network calls are used but no domain allowlist/blocklist policy is configured.
+
+#### 2) Why it exists
+The security baseline treats outbound egress posture as first-class. Without explicit domain controls, public egress remains overly broad even when URL typing and redirect checks are present.
+
+#### 3) How it works internally
+- policy model now persists `[net.public]` domain lists:
+  - `allowed_domains`
+  - `blocked_domains`
+- `sec.audit` now emits `PUBLIC_EGRESS_NO_DOMAIN_POLICY` when:
+  - at least one `sink.net.public_request` callsite exists in `security_map`,
+  - `policy.net_public.allowed_domains` is empty, and
+  - `policy.net_public.blocked_domains` is empty.
+- evidence payload includes:
+  - `allowedDomains`, `blockedDomains`, `env`,
+  - bounded `sampleCalls` from `sink.net.public_request`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective net-public policy domain lists,
+  - `security_map` public-net sink callsites.
+- Output:
+  - `PUBLIC_EGRESS_NO_DOMAIN_POLICY` finding with severity `MEDIUM`.
+- Constraints:
+  - finding is usage-gated; it does not emit when no public-net sink callsites are present.
+
+#### 5) Failure modes and diagnostics
+- no compiler parse/type diagnostics are introduced by this slice.
+- if public egress is used and domain policy is omitted, audit emits posture finding with deterministic evidence.
+- if domain policy is configured (allowlist or blocklist), this finding is suppressed.
+
+#### 6) Example usage
+- policy:
+  - `[net.public] allowed_domains = []`
+  - `[net.public] blocked_domains = []`
+- code:
+  - `httpClient.get(net, "https://example.com")`
+- audit:
+  - includes `PUBLIC_EGRESS_NO_DOMAIN_POLICY` with `httpClient.get(...)` sample callsites.
+
+#### 7) Tradeoffs and next steps
+- v0 rule checks only list presence, not domain quality/coverage.
+- next step is optional policy quality checks (for example minimum allowlist specificity and explicit deny rules for high-risk domains).
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

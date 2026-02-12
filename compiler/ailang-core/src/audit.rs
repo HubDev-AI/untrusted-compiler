@@ -536,6 +536,24 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if has_call_tag(security_map, "sink.net.public_request")
+        && policy.net_public.allowed_domains.is_empty()
+        && policy.net_public.blocked_domains.is_empty()
+    {
+        findings.push(finding(
+            "PUBLIC_EGRESS_NO_DOMAIN_POLICY",
+            AuditSeverity::MEDIUM,
+            "ssrf",
+            json!({
+                "allowedDomains": policy.net_public.allowed_domains,
+                "blockedDomains": policy.net_public.blocked_domains,
+                "env": policy.env,
+                "sampleCalls": call_samples_for_tag(security_map, "sink.net.public_request", 5),
+            }),
+            "Define public egress domain allowlists or blocklists to reduce SSRF exposure.",
+        ));
+    }
+
     if policy.fs.enabled && policy.fs.allowed_base_paths.is_empty() {
         findings.push(finding(
             "FS_ENABLED_NO_BASE_ALLOWLIST",

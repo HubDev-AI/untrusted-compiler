@@ -346,6 +346,24 @@ effects = "allow"
             .is_some_and(|callee| callee == "httpClient.get")
     }));
 
+    let egress = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "PUBLIC_EGRESS_NO_DOMAIN_POLICY")
+        .expect("public egress domain finding should be present");
+    assert_eq!(egress.severity, AuditSeverity::MEDIUM);
+    let egress_samples = egress
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("public egress domain finding should include sampleCalls");
+    assert!(egress_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "httpClient.get")
+    }));
+
     let replay = report
         .findings
         .iter()
@@ -396,6 +414,40 @@ effects = "allow"
             .and_then(|value| value.as_str())
             .is_some_and(|callee| callee == "req.header")
     }));
+}
+
+#[test]
+fn sec_audit_skips_public_egress_domain_finding_when_policy_is_configured() {
+    let source = r#"
+fn safe(net: NetCap) effects { net } -> Int {
+  httpClient.get(net, "https://example.com");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "prod"
+
+[net.public]
+allow_redirects = false
+allowed_domains = ["api.example.com"]
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for public egress domain policy test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|finding| finding.id != "PUBLIC_EGRESS_NO_DOMAIN_POLICY"),
+        "PUBLIC_EGRESS_NO_DOMAIN_POLICY should not be emitted when domain policy is configured"
+    );
 }
 
 #[test]
