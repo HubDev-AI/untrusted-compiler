@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  res.addCookie(1);
+  0
+}

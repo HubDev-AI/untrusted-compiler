@@ -1761,6 +1761,7 @@ impl Analyzer {
 
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2304,6 +2305,84 @@ impl Analyzer {
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note("use `sanitize.html(untrusted)` or another HtmlSafe-producing gate"),
             );
+        }
+    }
+
+    fn enforce_header_cookie_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if is_set_header_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "res.setHeader expects `(name, value)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note("use `res.setHeader(headers.name(...), headers.value(...))`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("HeaderName") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "res.setHeader name must be `HeaderName`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("construct name with `headers.name(...)`"),
+                );
+            }
+
+            if !arg_types[1].is_named("HeaderValue") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "res.setHeader value must be `HeaderValue`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("construct value with `headers.value(...)`"),
+                );
+            }
+        }
+
+        if is_add_cookie_call(callee_name) {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "res.addCookie expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_tag("sink")
+                        .with_note("use `res.addCookie(cookieValue)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("Cookie") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "res.addCookie argument must be `Cookie`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("construct cookies with `cookie.build(...)`"),
+                );
+            }
         }
     }
 
@@ -3347,6 +3426,14 @@ fn is_res_text_call(name: &str) -> bool {
 
 fn is_res_html_call(name: &str) -> bool {
     matches!(name, "res_html" | "res.html")
+}
+
+fn is_set_header_call(name: &str) -> bool {
+    matches!(name, "set_header" | "res.setHeader")
+}
+
+fn is_add_cookie_call(name: &str) -> bool {
+    matches!(name, "set_cookie" | "res.addCookie")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

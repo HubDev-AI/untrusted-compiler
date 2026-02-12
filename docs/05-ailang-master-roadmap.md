@@ -260,6 +260,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - argument must be `HtmlSafe`,
     - violations emit `E4001` with `security` + `sink` diagnostic tags.
   - req/res `c-bin` integration coverage now uses an explicit HTML gate flow (`req.query` -> `sanitize.html` -> `res.html`) to validate the hardened sink contract end-to-end.
+  - Header/cookie sink signatures are now typed and enforced:
+    - `res.setHeader(name, value)` requires `HeaderName` + `HeaderValue`,
+    - `res.addCookie(cookie)` requires `Cookie`,
+    - violations emit tagged `E4001` sink diagnostics.
+  - Header/cookie `c-bin` integration coverage now uses typed constructor flow (`headers.name`/`headers.value`/`cookie.build`) before sink calls.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 

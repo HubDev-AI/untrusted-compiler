@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  res.setHeader(1, 2);
+  0
+}

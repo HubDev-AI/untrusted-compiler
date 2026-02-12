@@ -88,5 +88,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `120-m7-req-json-schema-argument-contract-hardening.md`
 - `121-m7-req-res-call-shape-signature-hardening.md`
 - `122-m7-res-html-signature-hardening.md`
+- `123-m7-header-cookie-signature-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

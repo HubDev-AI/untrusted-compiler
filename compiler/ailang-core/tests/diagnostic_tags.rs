@@ -123,6 +123,22 @@ fn bad() effects { net } -> Int {
 }
 
 #[test]
+fn set_header_sink_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad() effects { net } -> Int {
+  res.setHeader(1, 2);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn allow_annotation_diagnostic_has_security_policy_tags() {
     let source = r#"
 @allow(

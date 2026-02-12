@@ -5,6 +5,7 @@
 |------|--------|-----------------|--------------------|
 | 2026-02-12 | self | Started session actions before confirming `.claude/napkin.md` existed and reading it. | Always check/create and read `.claude/napkin.md` first in-session. |
 | 2026-02-12 | self | Reintroduced a moved-`Span` compile error while wiring a new semantic helper call (`enforce_res_html_signature`). | Default to passing `span.clone()` into helper calls inside semantic enforcement unless the span is consumed as final use. |
+| 2026-02-12 | self | Asserted wrong runtime symbol names in a CLI integration test (`ailang_rt_header_*` instead of emitted `ailang_rt_headers_*`). | Verify intrinsic runtime symbol spelling from `c_backend.rs` rewrite table or existing integration assertions before adding new expectations. |
 | 2026-02-12 | self | Assumed CLI/test hangs were caused by recent code changes; issue reproduced even on reverted state and simple local binaries. | Treat executable runtime as environment-level blocker first, but re-validate before locking the assumption. |
 | 2026-02-12 | self | Treated runtime hang as persistent for the full session. | Re-run full runtime verification after environment hiccups; blockers can be transient. |
 | 2026-02-12 | self | Deferred baseline verification too early due blocker assumption. | Keep full baseline verification (`cargo test`, `check`, `emit ast`, `build`) in the same slice once execution recovers. |
@@ -117,3 +118,4 @@
 - Hardened `req.json` gate checks beyond missing-arg validation: schema argument now rejects numeric/bool/untrusted/secret shapes and emits tagged schema/security diagnostics.
 - Added strict call-shape checks for `req.json` arity and `res.text(status, body)` typing, and updated CLI req/res integration fixtures to use string text bodies.
 - Added `res.html` sink signature hardening (`HtmlSafe`-only + exact arity) with tagged diagnostics, semantic fixture coverage, and updated req/res `c-bin` integration fixture to use `sanitize.html(...)` gate flow.
+- Added typed header/cookie sink signature hardening (`res.setHeader` with `HeaderName`/`HeaderValue`, `res.addCookie` with `Cookie`) with tagged diagnostics and updated header/cookie `c-bin` integration fixture to use `headers.name/value` constructors.
