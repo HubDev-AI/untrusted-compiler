@@ -1770,6 +1770,7 @@ impl Analyzer {
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args);
+        self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
@@ -2719,6 +2720,29 @@ impl Analyzer {
             .with_tag("security")
             .with_tag("secret")
             .with_note("use `secrets.redact(secretValue)`"),
+        );
+    }
+
+    fn enforce_secret_reveal_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        if !is_secret_reveal_call(callee_name) {
+            return;
+        }
+
+        if matches!(args.len(), 2 | 3) {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                "E4001",
+                "secret reveal call has invalid argument shape",
+                span,
+            )
+            .with_tag("security")
+            .with_tag("secret")
+            .with_note(
+                "use `secrets.reveal(secretsCap, secret)` or `secrets.reveal(ctx, secretsCap, secret)`",
+            ),
         );
     }
 
@@ -3912,6 +3936,10 @@ fn is_secret_get_call(name: &str) -> bool {
 
 fn is_secret_redact_call(name: &str) -> bool {
     matches!(name, "secret_redact" | "secrets.redact")
+}
+
+fn is_secret_reveal_call(name: &str) -> bool {
+    matches!(name, "secret_reveal" | "secrets.reveal")
 }
 
 fn is_auth_require_call(name: &str) -> bool {

@@ -305,6 +305,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Secret redact call-shape contract is now hardened:
     - `secrets.redact` requires exactly one argument,
     - malformed shapes emit tagged `E4001` secret diagnostics.
+  - Secret reveal call-shape contract is now hardened:
+    - `secrets.reveal` requires `(secretsCap, secret)` or `(ctx, secretsCap, secret)`,
+    - malformed shapes emit tagged `E4001` secret diagnostics.
   - Auth helper call-shape contracts are now hardened:
     - `auth.require` requires exactly one `Ctx` argument,
     - `auth.requireRole` requires exactly two arguments: `(Ctx, String)`,
@@ -685,6 +688,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: FS Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Source Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Redact Call-Shape Hardening".
+- Chapter: "M7 Slice: Secret Reveal Call-Shape Hardening".
 - Chapter: "M7 Slice: Auth Helper Call-Shape Hardening".
 
 ## M8 - Security-by-Construction Enforcement

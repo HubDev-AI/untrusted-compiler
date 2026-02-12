@@ -20,7 +20,7 @@ fn boot() -> Int {
   res.json("UserSchema", 1);
   db.exec(DbCap());
   db.exec(Ctx(), DbCap(), raw);
-  secrets.reveal(SecretsCap());
+  secrets.reveal(SecretsCap(), 1);
   1
 }
 "#;
@@ -189,7 +189,7 @@ fn security_map_still_supports_underscore_intrinsic_names() {
     let source = r#"
 fn boot() -> Int {
   db_write(DbCap());
-  secret_reveal(SecretsCap());
+  secret_reveal(SecretsCap(), 1);
   1
 }
 "#;

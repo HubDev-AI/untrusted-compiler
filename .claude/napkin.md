@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-12 | self | Added a semantic fixture for `secrets.reveal` shape hardening but forgot policy-forbidden `E2002` diagnostics also fire by default. | For `secrets.reveal` semantic fixtures, either include policy diagnostics in golden output or add a valid `@allow(...)` annotation when isolating shape-only behavior. |
 | 2026-02-12 | self | Started session actions before confirming `.claude/napkin.md` existed and reading it. | Always check/create and read `.claude/napkin.md` first in-session. |
 | 2026-02-12 | self | Reintroduced a moved-`Span` compile error while wiring a new semantic helper call (`enforce_res_html_signature`). | Default to passing `span.clone()` into helper calls inside semantic enforcement unless the span is consumed as final use. |
 | 2026-02-12 | self | Asserted wrong runtime symbol names in a CLI integration test (`ailang_rt_header_*` instead of emitted `ailang_rt_headers_*`). | Verify intrinsic runtime symbol spelling from `c_backend.rs` rewrite table or existing integration assertions before adding new expectations. |
@@ -130,3 +131,4 @@
 - Added `secrets.get` arity hardening so secret-name arguments are required in compact and context-first forms, with secret-tagged diagnostics.
 - Added `secrets.redact` arity hardening so exactly one secret argument is required, with secret-tagged diagnostics.
 - Added auth-helper call-shape hardening: `auth.require` now requires one `Ctx` argument and `auth.requireRole` now requires `(Ctx, String)`, with `E4001` security-tagged diagnostics and aligned c-bin integration fixtures.
+- Added `secrets.reveal` call-shape hardening so only `(secretsCap, secret)` and `(ctx, secretsCap, secret)` are accepted, with secret-tagged diagnostics and aligned security_map/sec_audit fixtures.

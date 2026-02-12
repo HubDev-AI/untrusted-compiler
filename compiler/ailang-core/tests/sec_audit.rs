@@ -299,7 +299,7 @@ fn boot() -> Int {
 fn sec_audit_flags_critical_internal_net_and_secret_reveal_usage() {
     let source = r#"
 fn risky() -> Int {
-  secret_reveal(SecretsCap());
+  secret_reveal(SecretsCap(), 1);
   1
 }
 "#;
@@ -722,7 +722,7 @@ fn sec_audit_flags_secret_reveal_allowlisted_bypass() {
   expires = "2099-06-01",
 )
 fn boot() -> Int {
-  secret_reveal(SecretsCap());
+  secret_reveal(SecretsCap(), 1);
   1
 }
 "#;

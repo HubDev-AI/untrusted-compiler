@@ -297,6 +297,22 @@ fn bad() -> Int {
 }
 
 #[test]
+fn secret_reveal_shape_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(sec: SecretsCap) effects { secrets.reveal } -> Int {
+  secrets.reveal(sec);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn auth_helper_shape_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() -> Int {
