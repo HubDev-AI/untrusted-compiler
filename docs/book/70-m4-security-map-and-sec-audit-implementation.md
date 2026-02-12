@@ -169,6 +169,12 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - `security_map` SQL query extraction now supports both `db.exec(cap, query)` and `db.exec(ctx, cap, query)` patterns
   - `security_map` argument-role metadata now emits context-aware roles (`context`, `capability`, `query`, etc.) for extended call forms
   - semantic and security-map fixtures now cover valid and invalid context-first capability paths
+- Added typed stdlib symbol resolution for local alias/value-call paths:
+  - semantic analyzer now resolves callable aliases (for example `let exec = db.exec; exec(...)`) to canonical stdlib symbols
+  - capability/effect/sink checks run against resolved symbols so alias calls preserve security enforcement
+  - semantic member-expression handling now avoids false `unknown identifier` diagnostics for intrinsic symbol references in alias bindings
+  - `security_map` now resolves alias-invoked callsites to canonical callees and preserves tags/arg-roles/origin-edges
+  - semantic and security-map tests now cover alias-invoked intrinsic calls
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -327,6 +333,45 @@ The security stdlib contract models handlers around `Ctx` plus capabilities. Pre
 - current mapping is intrinsic-name based and arity-driven.
 - next step is to lift this into richer typed stdlib symbol metadata so alias/value-call paths can share the same enforcement.
 
+### Slice Explanation: Typed Symbol Resolution for Alias/Value Calls
+
+#### 1) What it is
+This slice adds local callable alias resolution so stdlib intrinsic semantics apply even when calls go through bound values.
+
+#### 2) Why it exists
+Without alias resolution, code like `let exec = db.exec; exec(...)` bypasses canonical callee matching, weakening capability/effect/sink checks and audit metadata.
+
+#### 3) How it works internally
+- semantic scope now tracks `callable_aliases` alongside type bindings.
+- when a `let` binds a callable intrinsic/function symbol, an alias entry is recorded.
+- call analysis resolves callee name through alias chains before:
+  - intrinsic capability/effect enforcement,
+  - sink-flow restriction checks.
+- `security_map` mirrors this with alias-aware call collection and origin inference.
+
+#### 4) Inputs/outputs and constraints
+- Input: local `let` bindings that reference callable symbols.
+- Output: canonical callee resolution for analysis and emitted metadata.
+- Constraints:
+  - alias resolution is currently local-scope only,
+  - resolution is limited to symbols known as intrinsic/function call targets.
+
+#### 5) Failure modes and diagnostics
+- capability mismatches still emit `E2004`, now anchored to resolved canonical intrinsic signatures.
+- unresolved alias chains fall back to existing unknown-call diagnostics behavior.
+
+#### 6) Example usage
+- source:
+  - `let exec = db.exec;`
+  - `exec(dbCap, "SELECT ...");`
+- result:
+  - semantic checks treat call as `db.exec(...)`,
+  - `security_map` records callee `db.exec` with sink/capability tags.
+
+#### 7) Tradeoffs and next steps
+- current alias support is lexical and local, without cross-function symbol-table propagation.
+- next step is to extend typed symbol metadata to deeper value-call patterns (for example capability-object function fields).
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -349,7 +394,7 @@ The security stdlib contract models handlers around `Ctx` plus capabilities. Pre
 - finding set is intentionally baseline-focused and will expand in M4/M8.
 
 ## Next implementation steps
-1. Expand sink tagging and capability enforcement beyond intrinsic call names into typed stdlib symbol metadata.
+1. Expand typed stdlib symbol metadata from local alias calls into richer value-call patterns (for example capability-object function fields).
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Extend source-origin tracing beyond local bindings into interprocedural call chains.

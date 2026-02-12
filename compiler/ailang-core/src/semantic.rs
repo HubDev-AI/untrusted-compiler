@@ -474,11 +474,13 @@ impl Analyzer {
             }
 
             let mut used_effects = HashSet::new();
+            let mut callable_aliases = HashMap::new();
             let body_type = self.analyze_block(
                 &function.body,
                 &mut env,
                 &signature.return_type,
                 &mut used_effects,
+                &mut callable_aliases,
             );
 
             if !signature.return_type.compatible_with(&body_type) {
@@ -540,15 +542,23 @@ impl Analyzer {
         env: &mut HashMap<String, Type>,
         expected_return: &Type,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
         let mut scoped = env.clone();
+        let mut scoped_aliases = callable_aliases.clone();
 
         for stmt in &block.statements {
-            self.analyze_statement(stmt, &mut scoped, expected_return, used_effects);
+            self.analyze_statement(
+                stmt,
+                &mut scoped,
+                expected_return,
+                used_effects,
+                &mut scoped_aliases,
+            );
         }
 
         if let Some(tail) = &block.tail {
-            self.analyze_expr(tail, &mut scoped, used_effects)
+            self.analyze_expr(tail, &mut scoped, used_effects, &mut scoped_aliases)
         } else {
             Type::Unit
         }
@@ -560,12 +570,13 @@ impl Analyzer {
         env: &mut HashMap<String, Type>,
         expected_return: &Type,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) {
         match &stmt.kind {
             StmtKind::Let {
                 name, ty, value, ..
             } => {
-                let value_type = self.analyze_expr(value, env, used_effects);
+                let value_type = self.analyze_expr(value, env, used_effects, callable_aliases);
                 let bound_type = if let Some(annotation) = ty {
                     let annotation_type =
                         self.resolve_type_expr(annotation, annotation.span.clone());
@@ -589,10 +600,15 @@ impl Analyzer {
                 };
 
                 env.insert(name.clone(), bound_type);
+                if let Some(alias) = self.infer_callable_alias(value, callable_aliases) {
+                    callable_aliases.insert(name.clone(), alias);
+                } else {
+                    callable_aliases.remove(name);
+                }
             }
             StmtKind::Return { value } => {
                 let return_type = if let Some(value) = value {
-                    self.analyze_expr(value, env, used_effects)
+                    self.analyze_expr(value, env, used_effects, callable_aliases)
                 } else {
                     Type::Unit
                 };
@@ -609,7 +625,7 @@ impl Analyzer {
                 }
             }
             StmtKind::Expr { expr } => {
-                self.analyze_expr(expr, env, used_effects);
+                self.analyze_expr(expr, env, used_effects, callable_aliases);
             }
         }
     }
@@ -619,6 +635,7 @@ impl Analyzer {
         expr: &Expr,
         env: &mut HashMap<String, Type>,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
         match &expr.kind {
             ExprKind::Identifier(name) => env.get(name).cloned().unwrap_or_else(|| {
@@ -638,7 +655,7 @@ impl Analyzer {
             ExprKind::String(_) => Type::named("String"),
             ExprKind::Bool(_) => Type::named("Bool"),
             ExprKind::Unary { op, expr: inner } => {
-                let inner_type = self.analyze_expr(inner, env, used_effects);
+                let inner_type = self.analyze_expr(inner, env, used_effects, callable_aliases);
                 match op {
                     UnaryOp::Neg => {
                         if !inner_type.is_numeric() {
@@ -673,8 +690,8 @@ impl Analyzer {
                 }
             }
             ExprKind::Binary { op, left, right } => {
-                let left_type = self.analyze_expr(left, env, used_effects);
-                let right_type = self.analyze_expr(right, env, used_effects);
+                let left_type = self.analyze_expr(left, env, used_effects, callable_aliases);
+                let right_type = self.analyze_expr(right, env, used_effects, callable_aliases);
 
                 match op {
                     BinaryOp::Add
@@ -756,18 +773,31 @@ impl Analyzer {
                 }
             }
             ExprKind::Member { object, .. } => {
-                let _ = self.analyze_expr(object, env, used_effects);
+                if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+                    if intrinsic_spec_for(name.as_str()).is_some()
+                        || self.catalog.functions.contains_key(name.as_str())
+                    {
+                        return Type::Unknown;
+                    }
+                }
+                let _ = self.analyze_expr(object, env, used_effects, callable_aliases);
                 Type::Unknown
             }
-            ExprKind::Call { callee, args } => {
-                self.analyze_call(expr.span.clone(), callee, args, env, used_effects)
-            }
+            ExprKind::Call { callee, args } => self.analyze_call(
+                expr.span.clone(),
+                callee,
+                args,
+                env,
+                used_effects,
+                callable_aliases,
+            ),
             ExprKind::If {
                 condition,
                 then_branch,
                 else_branch,
             } => {
-                let condition_type = self.analyze_expr(condition, env, used_effects);
+                let condition_type =
+                    self.analyze_expr(condition, env, used_effects, callable_aliases);
                 if !condition_type.is_bool() {
                     self.diagnostics.push(
                         Diagnostic::error(
@@ -779,9 +809,16 @@ impl Analyzer {
                     );
                 }
 
-                let then_type = self.analyze_block(then_branch, env, &Type::Unknown, used_effects);
+                let then_type = self.analyze_block(
+                    then_branch,
+                    env,
+                    &Type::Unknown,
+                    used_effects,
+                    callable_aliases,
+                );
                 if let Some(else_expr) = else_branch {
-                    let else_type = self.analyze_expr(else_expr, env, used_effects);
+                    let else_type =
+                        self.analyze_expr(else_expr, env, used_effects, callable_aliases);
                     if !then_type.compatible_with(&else_type) {
                         self.diagnostics.push(
                             Diagnostic::error(
@@ -802,10 +839,20 @@ impl Analyzer {
                 }
             }
             ExprKind::Match { scrutinee, arms } => {
-                let scrutinee_type = self.analyze_expr(scrutinee, env, used_effects);
-                self.analyze_match(expr.span.clone(), &scrutinee_type, arms, env, used_effects)
+                let scrutinee_type =
+                    self.analyze_expr(scrutinee, env, used_effects, callable_aliases);
+                self.analyze_match(
+                    expr.span.clone(),
+                    &scrutinee_type,
+                    arms,
+                    env,
+                    used_effects,
+                    callable_aliases,
+                )
             }
-            ExprKind::Block(block) => self.analyze_block(block, env, &Type::Unknown, used_effects),
+            ExprKind::Block(block) => {
+                self.analyze_block(block, env, &Type::Unknown, used_effects, callable_aliases)
+            }
         }
     }
 
@@ -816,8 +863,9 @@ impl Analyzer {
         args: &[Expr],
         env: &mut HashMap<String, Type>,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
-        let Some(name) = callable_name(callee) else {
+        let Some(name) = resolve_callable_name(callee, callable_aliases) else {
             self.diagnostics.push(
                 Diagnostic::error(
                     "T3104",
@@ -827,14 +875,14 @@ impl Analyzer {
                 .with_note("only named functions/constructors are callable in v0.1-lite"),
             );
             for arg in args {
-                self.analyze_expr(arg, env, used_effects);
+                self.analyze_expr(arg, env, used_effects, callable_aliases);
             }
             return Type::Unknown;
         };
 
         let arg_types = args
             .iter()
-            .map(|arg| self.analyze_expr(arg, env, used_effects))
+            .map(|arg| self.analyze_expr(arg, env, used_effects, callable_aliases))
             .collect::<Vec<_>>();
         self.enforce_sink_flow_restrictions(name.as_str(), args, &arg_types);
 
@@ -922,9 +970,14 @@ impl Analyzer {
             return intrinsic.return_ty.to_type();
         }
 
-        if let Some(constructor) =
-            self.resolve_builtin_constructor(name.as_str(), span.clone(), args, env, used_effects)
-        {
+        if let Some(constructor) = self.resolve_builtin_constructor(
+            name.as_str(),
+            span.clone(),
+            args,
+            env,
+            used_effects,
+            callable_aliases,
+        ) {
             return constructor;
         }
 
@@ -991,6 +1044,21 @@ impl Analyzer {
         Type::Unknown
     }
 
+    fn infer_callable_alias(
+        &self,
+        expr: &Expr,
+        callable_aliases: &HashMap<String, String>,
+    ) -> Option<String> {
+        let name = resolve_callable_name(expr, callable_aliases)?;
+        if intrinsic_spec_for(name.as_str()).is_some()
+            || self.catalog.functions.contains_key(name.as_str())
+        {
+            Some(name)
+        } else {
+            None
+        }
+    }
+
     fn analyze_match(
         &mut self,
         span: Span,
@@ -998,6 +1066,7 @@ impl Analyzer {
         arms: &[MatchArm],
         env: &mut HashMap<String, Type>,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
         let mut seen_bool_true = false;
         let mut seen_bool_false = false;
@@ -1019,7 +1088,8 @@ impl Analyzer {
                 PatternCoverage::Other => {}
             }
 
-            let value_type = self.analyze_expr(&arm.value, &mut arm_env, used_effects);
+            let value_type =
+                self.analyze_expr(&arm.value, &mut arm_env, used_effects, callable_aliases);
             if let Some(existing) = &arm_result {
                 if !existing.compatible_with(&value_type) {
                     self.diagnostics.push(
@@ -1670,6 +1740,7 @@ impl Analyzer {
         args: &[Expr],
         env: &mut HashMap<String, Type>,
         used_effects: &mut HashSet<String>,
+        callable_aliases: &mut HashMap<String, String>,
     ) -> Option<Type> {
         match name {
             "Some" => {
@@ -1680,7 +1751,7 @@ impl Analyzer {
                     );
                     return Some(Type::option(Type::Unknown));
                 }
-                let inner = self.analyze_expr(&args[0], env, used_effects);
+                let inner = self.analyze_expr(&args[0], env, used_effects, callable_aliases);
                 Some(Type::option(inner))
             }
             "None" => {
@@ -1691,7 +1762,7 @@ impl Analyzer {
                     );
                 }
                 for arg in args {
-                    self.analyze_expr(arg, env, used_effects);
+                    self.analyze_expr(arg, env, used_effects, callable_aliases);
                 }
                 Some(Type::option(Type::Unknown))
             }
@@ -1702,11 +1773,11 @@ impl Analyzer {
                             .with_note("`Ok` expects exactly one argument"),
                     );
                     for arg in args {
-                        self.analyze_expr(arg, env, used_effects);
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
                     }
                     return Some(Type::result(Type::Unknown, Type::Unknown));
                 }
-                let ok = self.analyze_expr(&args[0], env, used_effects);
+                let ok = self.analyze_expr(&args[0], env, used_effects, callable_aliases);
                 Some(Type::result(ok, Type::Unknown))
             }
             "Err" => {
@@ -1716,11 +1787,11 @@ impl Analyzer {
                             .with_note("`Err` expects exactly one argument"),
                     );
                     for arg in args {
-                        self.analyze_expr(arg, env, used_effects);
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
                     }
                     return Some(Type::result(Type::Unknown, Type::Unknown));
                 }
-                let err = self.analyze_expr(&args[0], env, used_effects);
+                let err = self.analyze_expr(&args[0], env, used_effects, callable_aliases);
                 Some(Type::result(Type::Unknown, err))
             }
             _ => None,
@@ -1964,6 +2035,25 @@ fn callable_name(expr: &Expr) -> Option<String> {
         }
         _ => None,
     }
+}
+
+fn resolve_callable_name(
+    expr: &Expr,
+    callable_aliases: &HashMap<String, String>,
+) -> Option<String> {
+    let direct = callable_name(expr)?;
+    Some(resolve_alias_name(direct, callable_aliases))
+}
+
+fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, String>) -> String {
+    let mut seen = HashSet::new();
+    while seen.insert(name.clone()) {
+        let Some(next) = callable_aliases.get(name.as_str()) else {
+            break;
+        };
+        name = next.clone();
+    }
+    name
 }
 
 fn is_log_sink(name: &str) -> bool {
