@@ -65,3 +65,4 @@
 - Added clang-gated CLI integration coverage for `time.now` projects to validate semantic effects checks plus intrinsic rewrite/runtime linkage through full `c-bin` builds.
 - Added log intrinsic C-lowering coverage (`log.info/warn/error/emit` -> `ailang_rt_log_any`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added req/res intrinsic C-lowering coverage (`req.json`, `res.json`, `res.html`) with runtime stubs and end-to-end `c-bin` integration tests using valid `Schema<T>` parameters.
+- Added header/cookie intrinsic C-lowering coverage (`res.setHeader`, `res.addCookie`) with runtime stubs and end-to-end `c-bin` integration tests.

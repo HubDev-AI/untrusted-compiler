@@ -11,5 +11,7 @@ void ailang_rt_log_any();
 int64_t ailang_rt_req_json();
 int64_t ailang_rt_res_json();
 int64_t ailang_rt_res_html();
+int64_t ailang_rt_set_header();
+int64_t ailang_rt_set_cookie();
 
 #endif
