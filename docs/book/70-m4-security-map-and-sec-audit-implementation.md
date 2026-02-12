@@ -156,6 +156,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
+    - `CSRF_PROTECTED_METHODS_INCOMPLETE`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
     - `PUBLIC_EGRESS_NO_DOMAIN_POLICY`
     - `CAPTURE_REDACTION_INCOMPLETE`
@@ -1352,6 +1353,52 @@ The security baseline treats outbound egress posture as first-class. Without exp
 #### 7) Tradeoffs and next steps
 - v0 rule checks only list presence, not domain quality/coverage.
 - next step is optional policy quality checks (for example minimum allowlist specificity and explicit deny rules for high-risk domains).
+
+### Slice Explanation: CSRF Protected-Method Coverage Finding (`CSRF_PROTECTED_METHODS_INCOMPLETE`)
+
+#### 1) What it is
+This slice adds a deterministic posture finding when CSRF protection is enabled but does not cover the full default unsafe-method set.
+
+#### 2) Why it exists
+Partial method protection (`POST` only, for example) creates easy bypass paths through other state-mutating methods (`PUT`, `PATCH`, `DELETE`). The audit now calls that out explicitly.
+
+#### 3) How it works internally
+- `sec.audit` computes normalized uppercase method coverage from `policy.csrf.protected_methods`.
+- required baseline set is fixed in v0:
+  - `POST`
+  - `PUT`
+  - `PATCH`
+  - `DELETE`
+- when any required methods are missing and `csrf.enabled=true`, audit emits:
+  - `CSRF_PROTECTED_METHODS_INCOMPLETE` (LOW).
+- evidence includes:
+  - `missingMethods`,
+  - configured `protectedMethods`,
+  - bounded middleware `sampleCalls` from `middleware.csrf`/`middleware.auth`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective CSRF policy (`enabled`, `protected_methods`),
+  - middleware tags from `security_map`.
+- Output:
+  - low-severity posture finding for incomplete protected-method coverage.
+- Constraints:
+  - rule is inactive when `csrf.enabled=false` (that path is already covered by `CSRF_REQUIRED_BUT_DISABLED` when auth mode requires CSRF).
+
+#### 5) Failure modes and diagnostics
+- no parser/typechecker diagnostics were added by this slice.
+- finding quality depends on policy key quality; unknown/invalid method names are treated as non-matching and increase missing coverage.
+
+#### 6) Example usage
+- policy:
+  - `[csrf] enabled = true`
+  - `protected_methods = ["POST"]`
+- audit:
+  - emits `CSRF_PROTECTED_METHODS_INCOMPLETE` with `missingMethods = ["PUT", "PATCH", "DELETE"]`.
+
+#### 7) Tradeoffs and next steps
+- v0 rule uses a fixed baseline method set and does not yet model per-route custom method posture.
+- next step is route-aware CSRF posture checks tied to normalized router method metadata.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

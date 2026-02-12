@@ -430,6 +430,38 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if policy.csrf.enabled {
+        let protected_methods = policy
+            .csrf
+            .protected_methods
+            .iter()
+            .map(|method| method.to_ascii_uppercase())
+            .collect::<BTreeSet<_>>();
+        let missing_methods = ["POST", "PUT", "PATCH", "DELETE"]
+            .into_iter()
+            .filter(|method| !protected_methods.contains(*method))
+            .map(|method| method.to_string())
+            .collect::<Vec<_>>();
+
+        if !missing_methods.is_empty() {
+            findings.push(finding(
+                "CSRF_PROTECTED_METHODS_INCOMPLETE",
+                AuditSeverity::LOW,
+                "csrf",
+                json!({
+                    "missingMethods": missing_methods,
+                    "protectedMethods": policy.csrf.protected_methods,
+                    "sampleCalls": call_samples_for_tags(
+                        security_map,
+                        &["middleware.csrf", "middleware.auth"],
+                        5,
+                    ),
+                }),
+                "Protect POST, PUT, PATCH, and DELETE methods with CSRF checks.",
+            ));
+        }
+    }
+
     if policy.auth.cross_site_frontend
         && matches!(policy.auth.mode.as_str(), "cookie" | "mixed")
         && !policy.cors.allow_credentials

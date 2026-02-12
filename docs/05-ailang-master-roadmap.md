@@ -149,6 +149,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
+    - `CSRF_PROTECTED_METHODS_INCOMPLETE`
     - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
     - `DNS_RESOLUTION_DISABLED`
     - `PUBLIC_EGRESS_NO_DOMAIN_POLICY` (when public-net sink calls exist and both domain lists are empty)

@@ -112,6 +112,59 @@ fn boot() -> Int {
 }
 
 #[test]
+fn sec_audit_flags_incomplete_csrf_protected_methods_with_sample_calls() {
+    let source = r#"
+fn boot() -> Int {
+  withCsrf();
+  withAuth();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "prod"
+
+[csrf]
+enabled = true
+protected_methods = ["POST"]
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for csrf protected-method coverage test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CSRF_PROTECTED_METHODS_INCOMPLETE")
+        .expect("CSRF_PROTECTED_METHODS_INCOMPLETE should be present");
+    assert_eq!(finding.severity, AuditSeverity::LOW);
+    let missing = finding
+        .evidence
+        .get("missingMethods")
+        .and_then(|value| value.as_array())
+        .expect("csrf protected-method finding should include missingMethods");
+    assert!(missing.iter().any(|value| value.as_str() == Some("PUT")));
+    assert!(missing.iter().any(|value| value.as_str() == Some("PATCH")));
+    assert!(missing.iter().any(|value| value.as_str() == Some("DELETE")));
+    let samples = finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("csrf protected-method finding should include sampleCalls");
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "withCsrf" | "csrf.withCsrf"))
+    }));
+}
+
+#[test]
 fn sec_audit_flags_cors_origin_reflection_with_sample_calls() {
     let source = r#"
 fn boot() -> Int {
