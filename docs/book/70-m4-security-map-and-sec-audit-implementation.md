@@ -110,6 +110,56 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - strict-mode rejection for single-argument `res.json(...)` calls
     - valid `res.json(schema, value)` path
   - policy tests now cover toggling `json.require_schema_for_encode`
+- Strengthened strict JSON signature enforcement:
+  - strict mode now validates full `res.json` signatures, not only minimum arity:
+    - `res.json(schema, value)`
+    - `res.json(status, schema, value)` where `status` is numeric
+  - schema argument is now validated as non-numeric/non-boolean and not `Secret<_>`/`Untrusted<_>`
+  - invalid arity, non-numeric status, and invalid schema argument each produce dedicated `E4004` diagnostics
+  - JSON sink flow checks now evaluate only the value argument (last payload arg), avoiding schema/status false positives
+  - semantic fixtures now cover invalid status type, invalid schema type, invalid arity, and valid status+schema+value form
+
+### Slice Explanation: Strict JSON Encode Signature Checks
+
+#### 1) What it is
+This slice adds strict signature validation for `res.json` in semantic analysis when `json.require_schema_for_encode = true`.
+
+#### 2) Why it exists
+Arity-only validation still allowed malformed response calls (wrong status type, schema position misuse). This change makes encode paths explicit and auditable at compile time.
+
+#### 3) How it works internally
+- `enforce_trust_gate_requirements` now delegates JSON encoding checks to `enforce_json_encode_signature`.
+- `enforce_json_encode_signature` enforces accepted signatures and validates:
+  - argument count,
+  - numeric status for 3-arg form,
+  - schema argument safety/type constraints.
+- JSON sink flow checks now inspect only the value argument via `json_sink_value_arg_index`.
+
+#### 4) Inputs/outputs and constraints
+- Input: semantic call expression for `res.json(...)`.
+- Output: either accepted call shape or `E4004` diagnostics.
+- Constraints:
+  - strict mode controlled by `json.require_schema_for_encode`,
+  - accepted signatures are limited to 2-arg and 3-arg forms.
+
+#### 5) Failure modes and diagnostics
+- Missing schema argument: `E4004 json response encoding requires explicit schema argument`.
+- Invalid argument count: `E4004 json response encoding has invalid argument count`.
+- Non-numeric status: `E4004 json response status must be numeric`.
+- Invalid schema argument type/taint: `E4004 json response schema argument is invalid`.
+
+#### 6) Example usage
+- Valid:
+  - `res.json("UserSchema", value)`
+  - `res.json(201, "UserSchema", value)`
+- Invalid:
+  - `res.json(value)` (strict mode)
+  - `res.json("200", "UserSchema", value)`
+  - `res.json(200, 123, value)`
+
+#### 7) Tradeoffs and next steps
+- Current schema argument validation is structural/heuristic, not true schema-type pairing.
+- Next step is full typed schema-value pairing enforcement in semantic rules.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
@@ -136,4 +186,4 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
 2. Add deeper callsite metadata (argument role labels, source-origin edges) for audit explainability.
 3. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
-4. Extend strict schema enforcement from argument-count checks to typed schema-value pairing checks.
+4. Extend strict schema enforcement from signature checks to typed schema-value pairing checks.

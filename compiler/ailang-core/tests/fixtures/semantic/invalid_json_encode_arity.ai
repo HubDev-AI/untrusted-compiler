@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  res.json(200, "UserSchema", 1, 2);
+  1
+}

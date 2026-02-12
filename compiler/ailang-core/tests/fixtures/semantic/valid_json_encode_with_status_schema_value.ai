@@ -1,0 +1,4 @@
+fn ok() effects { net } -> Int {
+  res.json(201, "UserSchema", 1);
+  1
+}

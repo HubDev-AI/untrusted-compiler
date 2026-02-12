@@ -1107,6 +1107,11 @@ impl Analyzer {
             }
 
             if is_json_sink(callee_name) {
+                let value_index = json_sink_value_arg_index(args.len()).unwrap_or(index);
+                if index != value_index {
+                    continue;
+                }
+
                 if arg_type.contains_secret() {
                     self.diagnostics.push(
                         Diagnostic::error(
@@ -1323,18 +1328,8 @@ impl Analyzer {
             );
         }
 
-        if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode && args.len() < 2 {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    "E4004",
-                    "json response encoding requires explicit schema argument",
-                    span.clone(),
-                )
-                .with_note(
-                    "strict mode requires `res.json(schema, value)` (or `res.json(status, schema, value)`)",
-                )
-                .with_note("set `json.require_schema_for_encode = false` in policy to disable strict mode"),
-            );
+        if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
+            self.enforce_json_encode_signature(span.clone(), args, arg_types);
         }
 
         if is_untrusted_string_gate(callee_name) {
@@ -1395,6 +1390,60 @@ impl Analyzer {
                     .with_note(format!("found `{}`", arg_types[1].describe())),
                 );
             }
+        }
+    }
+
+    fn enforce_json_encode_signature(&mut self, span: Span, args: &[Expr], arg_types: &[Type]) {
+        let expected_note = "strict mode requires `res.json(schema, value)` or `res.json(status, schema, value)`";
+        if args.len() < 2 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4004",
+                    "json response encoding requires explicit schema argument",
+                    span,
+                )
+                .with_note(expected_note)
+                .with_note("set `json.require_schema_for_encode = false` in policy to disable strict mode"),
+            );
+            return;
+        }
+
+        if args.len() > 3 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4004",
+                    "json response encoding has invalid argument count",
+                    span,
+                )
+                .with_note(expected_note),
+            );
+            return;
+        }
+
+        if args.len() == 3 && !arg_types[0].is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4004",
+                    "json response status must be numeric",
+                    args[0].span.clone(),
+                )
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use an `Int`/`Int64` status code in `res.json(status, schema, value)`"),
+            );
+        }
+
+        let schema_index = if args.len() == 2 { 0 } else { 1 };
+        let schema_ty = &arg_types[schema_index];
+        if schema_ty.is_numeric() || schema_ty.is_bool() || schema_ty.contains_secret() || schema_ty.contains_untrusted() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4004",
+                    "json response schema argument is invalid",
+                    args[schema_index].span.clone(),
+                )
+                .with_note(format!("found `{}`", schema_ty.describe()))
+                .with_note("schema argument should be a schema symbol/descriptor, not numeric/boolean/untrusted/secret data"),
+            );
         }
     }
 
@@ -1939,6 +1988,15 @@ fn sink_user_arg_start_index(name: &str) -> usize {
 
 fn is_req_json_gate(name: &str) -> bool {
     matches!(name, "req_json" | "req.json")
+}
+
+fn json_sink_value_arg_index(arg_len: usize) -> Option<usize> {
+    match arg_len {
+        0 => None,
+        1 => Some(0),
+        2 => Some(1),
+        _ => Some(arg_len - 1),
+    }
 }
 
 fn is_untrusted_string_gate(name: &str) -> bool {

@@ -77,6 +77,15 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Semantic checks now enforce strict JSON encode schema requirements on `res.json(...)` calls (`E4004` when schema argument is missing).
   - Semantic fixtures now include strict-mode rejection for single-argument JSON responses and a valid schema-argument encoding case.
   - Policy tests now cover toggling strict JSON encode schema mode.
+  - Strict JSON encode checks now validate full call signatures:
+    - `res.json(schema, value)`
+    - `res.json(status, schema, value)` with numeric status.
+  - JSON strict-mode diagnostics now include:
+    - invalid argument count,
+    - non-numeric status,
+    - invalid schema argument type/taint.
+  - JSON sink flow checks now evaluate only the value argument, avoiding false positives on status/schema arguments.
+  - Additional semantic fixtures now cover invalid status type, invalid schema type, invalid arity, and valid status+schema+value encoding.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
