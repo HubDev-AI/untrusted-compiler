@@ -1027,6 +1027,44 @@ Roadmapped editor/LSP support needs machine-consumable diagnostics (not only tex
 - this provides a minimal structured layer without changing user-facing output shape.
 - next step is exposing these tags through the future LSP diagnostic payload and code-action routing.
 
+### Slice Explanation: CLI Diagnostics JSON Emission for Tooling
+
+#### 1) What it is
+This slice adds `ailang check --emit diagnostics-json`, a machine-readable diagnostics output mode for automation/editor bootstrap workflows.
+
+#### 2) Why it exists
+Structured tags and spans are most useful when directly consumable by tools. This mode removes the need to parse ANSI/plain text diagnostics.
+
+#### 3) How it works internally
+- CLI `EmitTarget` now includes `DiagnosticsJson`.
+- on check success with diagnostics-json mode, CLI emits `[]`.
+- on validation/analysis failure, CLI prints serialized diagnostics (`severity`, `code`, `message`, `span`, `notes`, `tags`) and returns non-zero status.
+- existing default behavior remains unchanged for plain/color output modes.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - project path and optional emit mode.
+- Output:
+  - JSON array of diagnostics when `--emit diagnostics-json` is selected.
+- Constraints:
+  - this is currently wired to `check` command only,
+  - output is deterministic and directly based on compiler diagnostic structs.
+
+#### 5) Failure modes and diagnostics
+- invalid project/manifest/source still produce diagnostics; only rendering format changes in diagnostics-json mode.
+- non-zero exit status is preserved for failing checks.
+
+#### 6) Example usage
+- success:
+  - `ailang check --path examples/hello --emit diagnostics-json`
+  - output: `[]`
+- failure:
+  - returns array with diagnostic tags (for example `security`, `capability`) suitable for tool pipelines.
+
+#### 7) Tradeoffs and next steps
+- this is a thin bridge to tooling and does not yet provide an LSP server.
+- next step is exposing the same structured diagnostics through an official language-server process.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -1054,4 +1092,4 @@ Roadmapped editor/LSP support needs machine-consumable diagnostics (not only tex
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
-5. Expose structured diagnostic tags + provenance hints through future LSP outputs and code-action dispatch.
+5. Build an initial compiler-backed language-server surface that streams tagged diagnostics and provenance hints.

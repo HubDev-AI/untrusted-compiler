@@ -40,6 +40,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - per-severity deltas,
     - added/resolved finding ID sets.
   - Diagnostics now carry structured tag metadata (`security`, `taint`, `secret`, `policy`, `effects`, `capability`, `schema`, `sink`) for editor/LSP-oriented consumers while preserving current text rendering.
+  - CLI now supports machine-readable diagnostics output via `ailang check --emit diagnostics-json`, exposing spans/codes/notes/tags as JSON for tooling integration.
   - New diagnostic-tag tests assert tags for representative sink, capability, policy, and schema violations.
   - Parser/semantic/security-map now support dotted stdlib call names (`db.exec`, `req.json`, `cors.withCors`, etc.) in addition to underscore intrinsic aliases.
   - Callable/member resolution now seeds namespace aliases from capability-typed parameters/bindings (`DbCap`, `TxCap`, `NetCap`, `InternalNetCap`, `FsCap`, `SecretsCap`):

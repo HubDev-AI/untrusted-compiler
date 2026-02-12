@@ -71,6 +71,7 @@ enum AuditOutputFormat {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum EmitTarget {
     Ast,
+    DiagnosticsJson,
 }
 
 fn main() {
@@ -244,18 +245,36 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
                     manifest.package.name,
                     manifest.entry_file()
                 );
-                if let Some(EmitTarget::Ast) = emit {
-                    println!("{}", program.to_pretty_json());
+                match emit {
+                    Some(EmitTarget::Ast) => println!("{}", program.to_pretty_json()),
+                    Some(EmitTarget::DiagnosticsJson) => println!("[]"),
+                    None => {}
                 }
                 Ok(())
             }
             Err(diagnostics) => {
-                print_diagnostics(&diagnostics);
+                if matches!(emit, Some(EmitTarget::DiagnosticsJson)) {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&diagnostics)
+                            .expect("diagnostics should serialize")
+                    );
+                } else {
+                    print_diagnostics(&diagnostics);
+                }
                 Err(1)
             }
         },
         Err(diagnostics) => {
-            print_diagnostics(&diagnostics);
+            if matches!(emit, Some(EmitTarget::DiagnosticsJson)) {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&diagnostics)
+                        .expect("diagnostics should serialize")
+                );
+            } else {
+                print_diagnostics(&diagnostics);
+            }
             Err(1)
         }
     }
