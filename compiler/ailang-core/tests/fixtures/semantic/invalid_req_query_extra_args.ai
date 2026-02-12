@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  req.query("q", "extra");
+  0
+}

@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  req.header(1);
+  0
+}

@@ -90,5 +90,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `122-m7-res-html-signature-hardening.md`
 - `123-m7-header-cookie-signature-hardening.md`
 - `124-m7-header-constructor-signature-hardening.md`
+- `125-m7-request-source-signature-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

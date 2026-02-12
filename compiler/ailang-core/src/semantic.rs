@@ -1763,6 +1763,7 @@ impl Analyzer {
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
+        self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2427,6 +2428,57 @@ impl Analyzer {
                 .with_tag("security")
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note(format!("use string input for `{call_name}`")),
+            );
+        }
+    }
+
+    fn enforce_request_source_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !(is_req_query_call(callee_name)
+            || is_req_path_param_call(callee_name)
+            || is_req_header_call(callee_name))
+        {
+            return;
+        }
+
+        let call_name = if is_req_query_call(callee_name) {
+            "req.query"
+        } else if is_req_path_param_call(callee_name) {
+            "req.pathParam"
+        } else {
+            "req.header"
+        };
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    format!("{call_name} expects exactly one argument"),
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("use `{call_name}(\"name\")`")),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    format!("{call_name} argument must be `String`"),
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note(format!("use string key input for `{call_name}`")),
             );
         }
     }
@@ -3487,6 +3539,18 @@ fn is_headers_name_call(name: &str) -> bool {
 
 fn is_headers_value_call(name: &str) -> bool {
     matches!(name, "headers_value" | "headers.value")
+}
+
+fn is_req_query_call(name: &str) -> bool {
+    matches!(name, "req_query" | "req.query")
+}
+
+fn is_req_path_param_call(name: &str) -> bool {
+    matches!(name, "req_path_param" | "req.pathParam")
+}
+
+fn is_req_header_call(name: &str) -> bool {
+    matches!(name, "req_header" | "req.header")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

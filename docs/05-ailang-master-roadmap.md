@@ -269,6 +269,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `headers.name(value)` and `headers.value(value)` require exactly one `String` argument,
     - malformed arity/type calls emit `E4001` with security-tagged diagnostics.
   - Gate and header/cookie `c-bin` integration fixtures now exercise string-based header constructor inputs for parity with the tightened contracts.
+  - Request source helpers are now signature-checked:
+    - `req.query`, `req.pathParam`, and `req.header` require exactly one `String` key argument,
+    - malformed arity/type calls emit `E4001` with `security` + `schema` tags.
+  - req/res and cors-origin `c-bin` integration fixtures now use string-key request-source calls, matching the hardened trust-boundary contract.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 

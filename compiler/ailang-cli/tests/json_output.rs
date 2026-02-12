@@ -589,9 +589,9 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn decode(schema: Schema<Int>) effects { net } -> Int {
   req.body(1, 2);
-  req.query(1, 2);
-  req.pathParam(1, 2);
-  req.header(1, 2);
+  req.query("q");
+  req.pathParam("id");
+  req.header("authorization");
   req.json(schema);
   0
 }
@@ -600,7 +600,7 @@ fn encode(schema: Schema<Int>) effects { net } -> Int {
   res.json(schema, 1);
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
-  let raw = req.query(1, 2);
+  let raw = req.query("html");
   let safe = sanitize.html(raw);
   res.html(safe);
   res.text(200, "ok");
@@ -626,13 +626,14 @@ fn main() -> Int {
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_req_body(1, 2)"));
-    assert!(generated_c.contains("ailang_rt_req_query(1, 2)"));
-    assert!(generated_c.contains("ailang_rt_req_path_param(1, 2)"));
-    assert!(generated_c.contains("ailang_rt_req_header(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_query(\"q\")"));
+    assert!(generated_c.contains("ailang_rt_req_path_param(\"id\")"));
+    assert!(generated_c.contains("ailang_rt_req_header(\"authorization\")"));
     assert!(generated_c.contains("ailang_rt_req_json(schema)"));
     assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok_meta(201, schema, 1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_query(\"html\")"));
     assert!(generated_c.contains("ailang_rt_sanitize_html(raw)"));
     assert!(generated_c.contains("ailang_rt_res_html(safe)"));
     assert!(generated_c.contains("ailang_rt_res_text(200, \"ok\")"));
@@ -1324,7 +1325,7 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn main() effects { net } -> Int {
-  let origin = req.header(1, 2);
+  let origin = req.header("origin");
   cors.origin(origin);
   0
 }
@@ -1343,7 +1344,7 @@ entry = "src/main.ai"
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_req_header(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_header(\"origin\")"));
     assert!(generated_c.contains("ailang_rt_cors_origin(origin)"));
 
     let binary_path = project_dir.join("build").join("corsorigindemo");
