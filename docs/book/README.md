@@ -99,5 +99,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `131-m7-fs-sink-call-shape-hardening.md`
 - `132-m7-secret-source-call-shape-hardening.md`
 - `133-m7-secret-redact-call-shape-hardening.md`
+- `134-m7-auth-helper-call-shape-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

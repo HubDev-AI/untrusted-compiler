@@ -297,6 +297,21 @@ fn bad() -> Int {
 }
 
 #[test]
+fn auth_helper_shape_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  auth.require(1);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn allow_annotation_diagnostic_has_security_policy_tags() {
     let source = r#"
 @allow(

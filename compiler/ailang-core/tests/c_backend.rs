@@ -590,9 +590,13 @@ fn main() effects { net } -> Int {
 #[test]
 fn c_backend_rewrites_auth_requirement_intrinsics_to_runtime_symbols() {
     let source = r#"
+fn enforceAuth(ctx: Ctx) -> Int {
+  auth.require(ctx);
+  auth.requireRole(ctx, "admin");
+  0
+}
+
 fn main() -> Int {
-  auth.require(1);
-  auth.requireRole(1, 2);
   0
 }
 "#;
@@ -601,8 +605,8 @@ fn main() -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("(void)(ailang_rt_auth_require(1));"));
-    assert!(c.contains("(void)(ailang_rt_auth_require_role(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_auth_require(ctx));"));
+    assert!(c.contains("(void)(ailang_rt_auth_require_role(ctx, \"admin\"));"));
 }
 
 #[test]

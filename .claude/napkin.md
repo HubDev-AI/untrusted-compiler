@@ -129,3 +129,4 @@
 - Added FS sink arity hardening for `fs.read` / `fs.write` so path/payload arguments are required in compact and context-first forms, with sink-tagged diagnostics.
 - Added `secrets.get` arity hardening so secret-name arguments are required in compact and context-first forms, with secret-tagged diagnostics.
 - Added `secrets.redact` arity hardening so exactly one secret argument is required, with secret-tagged diagnostics.
+- Added auth-helper call-shape hardening: `auth.require` now requires one `Ctx` argument and `auth.requireRole` now requires `(Ctx, String)`, with `E4001` security-tagged diagnostics and aligned c-bin integration fixtures.

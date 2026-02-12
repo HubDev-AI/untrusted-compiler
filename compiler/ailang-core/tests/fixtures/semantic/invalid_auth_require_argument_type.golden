@@ -1,0 +1,4 @@
+error[E4001]: auth.require argument must be `Ctx`
+  --> invalid_auth_require_argument_type.ai:2:16
+  note: found `Int`
+  note: pass request context as argument

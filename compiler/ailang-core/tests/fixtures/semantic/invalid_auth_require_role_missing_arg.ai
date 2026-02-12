@@ -1,0 +1,4 @@
+fn bad(ctx: Ctx) -> Int {
+  auth.requireRole(ctx);
+  0
+}

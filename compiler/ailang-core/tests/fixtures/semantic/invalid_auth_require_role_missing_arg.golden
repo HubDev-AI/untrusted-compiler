@@ -1,0 +1,3 @@
+error[E4001]: auth.requireRole expects `(ctx, role)` arguments
+  --> invalid_auth_require_role_missing_arg.ai:2:3
+  note: use `auth.requireRole(ctx, "role")`

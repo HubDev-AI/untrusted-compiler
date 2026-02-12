@@ -1770,6 +1770,7 @@ impl Analyzer {
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args);
+        self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2719,6 +2720,84 @@ impl Analyzer {
             .with_tag("secret")
             .with_note("use `secrets.redact(secretValue)`"),
         );
+    }
+
+    fn enforce_auth_helper_call_shapes(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if is_auth_require_call(callee_name) {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "auth.require expects exactly one argument",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `auth.require(ctx)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("Ctx") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "auth.require argument must be `Ctx`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass request context as argument"),
+                );
+            }
+            return;
+        }
+
+        if is_auth_require_role_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "auth.requireRole expects `(ctx, role)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `auth.requireRole(ctx, \"role\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("Ctx") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "auth.requireRole first argument must be `Ctx`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass request context as first argument"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "auth.requireRole second argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass role name as string"),
+                );
+            }
+        }
     }
 
     fn bind_pattern(
@@ -3833,6 +3912,14 @@ fn is_secret_get_call(name: &str) -> bool {
 
 fn is_secret_redact_call(name: &str) -> bool {
     matches!(name, "secret_redact" | "secrets.redact")
+}
+
+fn is_auth_require_call(name: &str) -> bool {
+    matches!(name, "auth_require" | "auth.require")
+}
+
+fn is_auth_require_role_call(name: &str) -> bool {
+    matches!(name, "auth_require_role" | "auth.requireRole")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
