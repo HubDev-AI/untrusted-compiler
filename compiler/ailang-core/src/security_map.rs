@@ -346,6 +346,11 @@ fn infer_expr_origin(
 ) -> Option<TrackedOrigin> {
     match &expr.kind {
         ExprKind::Identifier(name) => origins.get(name).cloned(),
+        ExprKind::Binary { left, right, .. } => {
+            let left_origin = infer_expr_origin(left, origins);
+            let right_origin = infer_expr_origin(right, origins);
+            merge_origins(left_origin, right_origin)
+        }
         ExprKind::Call { callee, args } => {
             let name = callable_name(callee)?;
             let mut tags = call_tags_for(name.as_str()).unwrap_or_default();
@@ -371,8 +376,68 @@ fn infer_expr_origin(
             origin.origin = format!("{}.{}", origin.origin, field);
             Some(origin)
         }
+        ExprKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            let then_origin = infer_block_origin(then_branch, origins);
+            let else_origin = else_branch
+                .as_ref()
+                .and_then(|expr| infer_expr_origin(expr, origins));
+            merge_origins(then_origin, else_origin)
+        }
+        ExprKind::Match { arms, .. } => {
+            let mut merged: Option<TrackedOrigin> = None;
+            for arm in arms {
+                let arm_origin = infer_expr_origin(&arm.value, origins);
+                merged = merge_origins(merged, arm_origin);
+                if merged.is_none() {
+                    return None;
+                }
+            }
+            merged
+        }
+        ExprKind::Block(block) => infer_block_origin(block, origins),
         ExprKind::Unary { expr: inner, .. } => infer_expr_origin(inner, origins),
         _ => None,
+    }
+}
+
+fn infer_block_origin(
+    block: &Block,
+    origins: &HashMap<String, TrackedOrigin>,
+) -> Option<TrackedOrigin> {
+    let mut scoped = origins.clone();
+    for stmt in &block.statements {
+        if let StmtKind::Let { name, value, .. } = &stmt.kind {
+            if let Some(origin) = infer_expr_origin(value, &scoped) {
+                scoped.insert(name.clone(), origin);
+            } else {
+                scoped.remove(name);
+            }
+        }
+    }
+    block
+        .tail
+        .as_ref()
+        .and_then(|tail| infer_expr_origin(tail, &scoped))
+}
+
+fn merge_origins(
+    left: Option<TrackedOrigin>,
+    right: Option<TrackedOrigin>,
+) -> Option<TrackedOrigin> {
+    match (left, right) {
+        (Some(origin), None) | (None, Some(origin)) => Some(origin),
+        (Some(left_origin), Some(right_origin)) => {
+            if left_origin.origin == right_origin.origin {
+                Some(left_origin)
+            } else {
+                None
+            }
+        }
+        (None, None) => None,
     }
 }
 

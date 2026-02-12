@@ -133,8 +133,14 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - Added source-origin edge metadata for call arguments:
   - `security_map.calls[]` now optionally includes `origin_edges`
   - each edge captures `arg_index`, canonical origin label (for example `call:req.query`), and source/gate tag context
-  - origin tracking currently follows local `let` bindings and propagates through member/unary wrappers
-  - tests now assert sink-argument origin tracing for `db.exec(DbCap(), raw)` where `raw` originates from `req.query`
+  - origin tracking currently follows local `let` bindings and propagates through:
+    - member/unary wrappers
+    - binary wrappers with single-origin or same-origin operands
+    - `if`/`match` expressions when branch origins are consistent
+    - block-tail expressions with local shadow bindings
+  - tests now assert sink-argument origin tracing for:
+    - direct `db.exec(DbCap(), raw)` flow from `req.query`
+    - composite expression flows (`binary`, `if`, `match`, `block`)
 - Added richer deterministic callsite evidence in `sec.audit` findings:
   - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
   - each sample includes callee, location, argument roles, and available origin-edge metadata
@@ -200,7 +206,7 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 - `infer_expr_origin` resolves origins from:
   - tracked identifiers,
   - source/gate-tagged calls (for example `req.query`, `validate.*`, `sanitize.*`),
-  - simple wrappers (`member`, `unary`) that preserve origin context.
+  - wrapper/control-flow forms (`member`, `unary`, `binary`, `if`, `match`, block tails) when origin can be resolved deterministically.
 
 #### 4) Inputs/outputs and constraints
 - Input: function body expressions and local `let` bindings.
@@ -222,7 +228,7 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 
 #### 7) Tradeoffs and next steps
 - Current origin inference is intentionally conservative and local-scope only.
-- Next step is to extend origin tracing across function boundaries and richer expression forms.
+- Next step is to extend origin tracing across function boundaries (interprocedural flow).
 
 ### Slice Explanation: `sec.audit` Callsite Evidence
 

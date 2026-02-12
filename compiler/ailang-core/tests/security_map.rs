@@ -190,6 +190,40 @@ fn boot() -> Int {
 }
 
 #[test]
+fn security_map_tracks_origin_edges_through_composite_expressions() {
+    let source = r#"
+fn boot() -> Int {
+  let raw = req.query("q");
+  let merged = raw + " suffix";
+  db.exec(DbCap(), merged);
+  db.exec(DbCap(), if true { raw } else { raw });
+  db.exec(DbCap(), match true { true => raw, false => raw });
+  db.exec(DbCap(), { let shadow = raw; shadow });
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    let traced = map
+        .calls
+        .iter()
+        .filter(|call| call.callee == "db.exec")
+        .filter(|call| {
+            call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+        })
+        .count();
+
+    assert_eq!(traced, 4);
+}
+
+#[test]
 fn parse_allow_annotations_reads_valid_annotation() {
     let source = r#"
 @allow(
