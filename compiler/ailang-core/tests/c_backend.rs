@@ -98,6 +98,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_http_route_get();"));
     assert!(header.contains("int64_t ailang_rt_http_route_post();"));
     assert!(header.contains("int64_t ailang_rt_http_serve();"));
+    assert!(header.contains("int64_t ailang_rt_with_cors();"));
+    assert!(header.contains("int64_t ailang_rt_with_security_headers();"));
+    assert!(header.contains("int64_t ailang_rt_with_csrf();"));
+    assert!(header.contains("int64_t ailang_rt_with_auth();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -130,6 +134,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_http_route_get()"));
     assert!(source.contains("int64_t ailang_rt_http_route_post()"));
     assert!(source.contains("int64_t ailang_rt_http_serve()"));
+    assert!(source.contains("int64_t ailang_rt_with_cors()"));
+    assert!(source.contains("int64_t ailang_rt_with_security_headers()"));
+    assert!(source.contains("int64_t ailang_rt_with_csrf()"));
+    assert!(source.contains("int64_t ailang_rt_with_auth()"));
 }
 
 #[test]
@@ -304,4 +312,26 @@ fn main() effects { net } -> Int {
     assert!(c.contains("(void)(ailang_rt_http_route_get(router, 1, handler));"));
     assert!(c.contains("(void)(ailang_rt_http_route_post(router, 1, handler));"));
     assert!(c.contains("(void)(ailang_rt_http_serve(1, router));"));
+}
+
+#[test]
+fn c_backend_rewrites_security_middleware_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  withSecurityHeaders();
+  withCors();
+  withCsrf();
+  withAuth();
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_with_security_headers());"));
+    assert!(c.contains("(void)(ailang_rt_with_cors());"));
+    assert!(c.contains("(void)(ailang_rt_with_csrf());"));
+    assert!(c.contains("(void)(ailang_rt_with_auth());"));
 }

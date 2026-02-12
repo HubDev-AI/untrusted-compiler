@@ -34,5 +34,9 @@ int64_t ailang_rt_http_router();
 int64_t ailang_rt_http_route_get();
 int64_t ailang_rt_http_route_post();
 int64_t ailang_rt_http_serve();
+int64_t ailang_rt_with_cors();
+int64_t ailang_rt_with_security_headers();
+int64_t ailang_rt_with_csrf();
+int64_t ailang_rt_with_auth();
 
 #endif

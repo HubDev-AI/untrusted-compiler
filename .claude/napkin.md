@@ -16,6 +16,7 @@
 | 2026-02-12 | self | Wrote a `res.json(schema, ...)` integration test using numeric schema placeholders, which violates strict schema-argument checks (`E4004`). | For compile-path req/res fixtures, pass real `Schema<T>`-typed symbols (for example function parameters) and keep net effects declared. |
 | 2026-02-12 | self | Forgot that `url.public` / `url.internal` are modeled as `net` effects, so gate-only fixture failed with `E4002`. | When gate fixtures include URL validators, declare `effects { net }` explicitly. |
 | 2026-02-12 | self | Used a function symbol (`handler`) as a value argument in CLI integration fixture; current semantic model does not resolve function names as first-class values there. | In compile-path fixtures, pass literal/place-holder values unless first-class function values are explicitly implemented. |
+| 2026-02-12 | self | Replaced bare middleware names before dotted names in C intrinsic rewriting, producing invalid forms like `sec.ailang_rt_*`. | In string-based intrinsic rewrites, replace dotted forms before bare aliases to avoid partial-prefix corruption. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -74,3 +75,4 @@
 - Added HTTP router intrinsic C-lowering coverage (`http.router/get/post/serve`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added `examples/hello-api` as an M7 bootstrap sample plus clang-gated `c-bin` integration coverage asserting router + req/res lowering in generated C.
 - Added `ailang run` integration coverage for `examples/hello-api` so both build and run flows are pinned for the bootstrap API sample.
+- Added security-middleware intrinsic C-lowering coverage (`withSecurityHeaders`, `withCors`, `withCsrf`, `withAuth`) with runtime stubs and end-to-end `c-bin` integration tests.

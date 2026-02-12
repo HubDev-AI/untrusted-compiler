@@ -12,6 +12,7 @@ Added a new example project:
 - `/Users/vladimirtrifonov/src/ai/AILang/examples/hello-api/build/.gitignore`
 
 It demonstrates:
+- security middleware bootstrap calls (`sec.withSecurityHeaders`, `cors.withCors`, `csrf.withCsrf`, `auth.withAuth`)
 - router bootstrap calls (`http.router/get/post/serve`)
 - request decode call shape (`req.json`)
 - response encode/render call shapes (`res.json`, `res.html`)

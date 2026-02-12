@@ -222,6 +222,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Runtime ABI now includes router bridge stubs for these symbols, with clang-gated `c-bin` integration coverage.
   - Added `examples/hello-api` bootstrap sample and clang-gated `c-bin` integration coverage asserting router + req/res lowering in generated C.
   - Added clang-gated `ailang run` integration coverage for `examples/hello-api`.
+  - Semantic + C runtime bridge now includes security middleware intrinsics (`withSecurityHeaders`, `withCors`, `withCsrf`, `withAuth`) with dotted namespace forms.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -273,6 +274,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/93-m7-http-router-intrinsic-bootstrap.md`
 - `docs/book/94-m7-hello-api-bootstrap-example.md`
 - `docs/book/95-m7-hello-api-run-flow-validation.md`
+- `docs/book/96-m7-security-middleware-intrinsic-bootstrap.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -542,6 +544,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Bootstrap: HTTP Router Intrinsic Runtime Bridge".
 - Chapter: "M7 Slice: hello-api Bootstrap Example".
 - Chapter: "M7 Slice: hello-api run Flow Validation".
+- Chapter: "M7 Slice: Security Middleware Intrinsic Bootstrap".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

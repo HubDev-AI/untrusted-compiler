@@ -118,3 +118,19 @@ int64_t ailang_rt_http_route_post() {
 int64_t ailang_rt_http_serve() {
   return 0;
 }
+
+int64_t ailang_rt_with_cors() {
+  return 0;
+}
+
+int64_t ailang_rt_with_security_headers() {
+  return 0;
+}
+
+int64_t ailang_rt_with_csrf() {
+  return 0;
+}
+
+int64_t ailang_rt_with_auth() {
+  return 0;
+}

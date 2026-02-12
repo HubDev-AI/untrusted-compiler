@@ -253,6 +253,27 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("http_post_route(", "__AILANG_INTRINSIC_HTTP_ROUTE_POST__(");
     lowered = lowered.replace("http.serve(", "__AILANG_INTRINSIC_HTTP_SERVE__(");
     lowered = lowered.replace("http_serve(", "__AILANG_INTRINSIC_HTTP_SERVE__(");
+    lowered = lowered.replace("cors.withCors(", "__AILANG_INTRINSIC_WITH_CORS__(");
+    lowered = lowered.replace("withCors(", "__AILANG_INTRINSIC_WITH_CORS__(");
+    lowered = lowered.replace("cors_with(", "__AILANG_INTRINSIC_WITH_CORS__(");
+    lowered = lowered.replace(
+        "sec.withSecurityHeaders(",
+        "__AILANG_INTRINSIC_WITH_SECURITY_HEADERS__(",
+    );
+    lowered = lowered.replace(
+        "withSecurityHeaders(",
+        "__AILANG_INTRINSIC_WITH_SECURITY_HEADERS__(",
+    );
+    lowered = lowered.replace(
+        "sec_with_security_headers(",
+        "__AILANG_INTRINSIC_WITH_SECURITY_HEADERS__(",
+    );
+    lowered = lowered.replace("csrf.withCsrf(", "__AILANG_INTRINSIC_WITH_CSRF__(");
+    lowered = lowered.replace("withCsrf(", "__AILANG_INTRINSIC_WITH_CSRF__(");
+    lowered = lowered.replace("csrf_with(", "__AILANG_INTRINSIC_WITH_CSRF__(");
+    lowered = lowered.replace("auth.withAuth(", "__AILANG_INTRINSIC_WITH_AUTH__(");
+    lowered = lowered.replace("withAuth(", "__AILANG_INTRINSIC_WITH_AUTH__(");
+    lowered = lowered.replace("auth_with(", "__AILANG_INTRINSIC_WITH_AUTH__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
@@ -314,5 +335,12 @@ fn lower_c_expr(expr: &str) -> String {
         "ailang_rt_http_route_post(",
     );
     lowered = lowered.replace("__AILANG_INTRINSIC_HTTP_SERVE__(", "ailang_rt_http_serve(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_WITH_CORS__(", "ailang_rt_with_cors(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_WITH_SECURITY_HEADERS__(",
+        "ailang_rt_with_security_headers(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_WITH_CSRF__(", "ailang_rt_with_csrf(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_WITH_AUTH__(", "ailang_rt_with_auth(");
     lowered
 }

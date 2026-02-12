@@ -10,6 +10,10 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 }
 
 fn main() effects { net } -> Int {
+  sec.withSecurityHeaders();
+  cors.withCors();
+  csrf.withCsrf();
+  auth.withAuth();
   let router = http.router();
   http.get(router, 1, 1);
   http.post(router, 1, 1);
