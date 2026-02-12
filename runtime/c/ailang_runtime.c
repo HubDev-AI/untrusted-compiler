@@ -175,6 +175,10 @@ int64_t ailang_rt_csrf_from_policy() {
   return 0;
 }
 
+int64_t ailang_rt_csrf_issue_token() {
+  return 0;
+}
+
 int64_t ailang_rt_auth_from_policy() {
   return 0;
 }

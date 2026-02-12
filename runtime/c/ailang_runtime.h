@@ -48,6 +48,7 @@ int64_t ailang_rt_sec_default_headers();
 int64_t ailang_rt_cors_from_policy();
 int64_t ailang_rt_cors_origin();
 int64_t ailang_rt_csrf_from_policy();
+int64_t ailang_rt_csrf_issue_token();
 int64_t ailang_rt_auth_from_policy();
 int64_t ailang_rt_auth_require();
 int64_t ailang_rt_auth_require_role();

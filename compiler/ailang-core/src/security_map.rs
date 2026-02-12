@@ -1039,6 +1039,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
             vec!["middleware.security_headers"]
         }
         "withCsrf" | "csrf_with" | "csrf.withCsrf" => vec!["middleware.csrf"],
+        "csrf_issue_token" | "csrf.issueToken" => vec!["effect.net"],
         "withAuth" | "auth_with" | "auth.withAuth" => vec!["middleware.auth"],
         "cors_origin" | "cors.origin" => vec!["gate.cors.origin"],
         "req_body" | "req.body" => vec!["source.http.body"],
@@ -1302,6 +1303,7 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["value"]
             }
         }
+        "csrf_issue_token" | "csrf.issueToken" => vec!["context"],
         "cors_origin" | "cors.origin" => vec!["origin"],
         "res_html" | "res.html" => vec!["html"],
         "set_header" | "res.setHeader" => vec!["name", "value"],

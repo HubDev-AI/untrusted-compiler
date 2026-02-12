@@ -2302,6 +2302,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "csrf_issue_token" | "csrf.issueToken" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
         "auth_from_policy" | "auth.fromPolicy" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,

@@ -1102,6 +1102,58 @@ entry = "src/main.ai"
 }
 
 #[test]
+fn build_emit_c_bin_handles_csrf_issue_token_intrinsic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin csrf.issueToken integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-csrf-issue-token");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "csrfissuetokendemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn main() effects { net } -> Int {
+  csrf.issueToken(1);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for csrf.issueToken intrinsic project"
+    );
+
+    let generated_c =
+        fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_csrf_issue_token(1)"));
+
+    let binary_path = project_dir.join("build").join("csrfissuetokendemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(run.status.success(), "compiled binary should exit successfully");
+}
+
+#[test]
 fn build_emit_c_bin_accepts_http_surface_types_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http surface type integration test: clang not available");

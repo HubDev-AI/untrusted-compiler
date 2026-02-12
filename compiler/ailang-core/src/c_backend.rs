@@ -298,6 +298,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("cors_from_policy(", "__AILANG_INTRINSIC_CORS_FROM_POLICY__(");
     lowered = lowered.replace("cors.origin(", "__AILANG_INTRINSIC_CORS_ORIGIN__(");
     lowered = lowered.replace("cors_origin(", "__AILANG_INTRINSIC_CORS_ORIGIN__(");
+    lowered = lowered.replace("csrf.issueToken(", "__AILANG_INTRINSIC_CSRF_ISSUE_TOKEN__(");
+    lowered = lowered.replace("csrf_issue_token(", "__AILANG_INTRINSIC_CSRF_ISSUE_TOKEN__(");
     lowered = lowered.replace("csrf.fromPolicy(", "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(");
     lowered = lowered.replace("csrf_from_policy(", "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(");
     lowered = lowered.replace("auth.fromPolicy(", "__AILANG_INTRINSIC_AUTH_FROM_POLICY__(");
@@ -395,6 +397,10 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_CSRF_FROM_POLICY__(",
         "ailang_rt_csrf_from_policy(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_CSRF_ISSUE_TOKEN__(",
+        "ailang_rt_csrf_issue_token(",
     );
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_AUTH_FROM_POLICY__(",

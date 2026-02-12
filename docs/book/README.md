@@ -68,5 +68,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `100-m7-request-source-intrinsic-bootstrap.md`
 - `101-m7-auth-requirement-intrinsic-bootstrap.md`
 - `102-m7-cors-origin-gate-intrinsic-bootstrap.md`
+- `103-m7-csrf-issue-token-intrinsic-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.
