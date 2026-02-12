@@ -1720,6 +1720,28 @@ impl Analyzer {
                 .with_note("this gate converts inbound untrusted payload into trusted typed data"),
             );
         }
+        if is_req_json_gate(callee_name) && !args.is_empty() {
+            let schema_ty = &arg_types[0];
+            if schema_ty.is_numeric()
+                || schema_ty.is_bool()
+                || schema_ty.contains_secret()
+                || schema_ty.contains_untrusted()
+            {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "schema gate argument is invalid",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note(format!("found `{}`", schema_ty.describe()))
+                    .with_note(
+                        "`req.json` expects a schema symbol/descriptor, not numeric/boolean/untrusted/secret data",
+                    ),
+                );
+            }
+        }
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);

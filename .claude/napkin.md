@@ -27,6 +27,7 @@
 | 2026-02-12 | self | Introduced a local variable named `cookie` initialized from `cookie.build(...)`, which triggered alias expansion growth (`cookie.build.build...`) and made semantic analysis appear stuck. | Guard alias-name expansion against recursive suffix growth and cap alias-resolution steps; treat namespace-shadowing call aliases as a hot path for regressions. |
 | 2026-02-12 | self | Used parallel tool calls for multiple Cargo test invocations again, causing lock waits/noisy output. | Run Cargo commands sequentially in this repo; parallelize reads/searches only. |
 | 2026-02-12 | self | Moved `Span` into a helper call, then reused it in the same function and hit borrow-after-move compile failure. | Pass cloned spans (`span.clone()`) when the caller still needs the original for later diagnostics. |
+| 2026-02-12 | self | Inserted a new Rust test into `diagnostic_tags.rs` before closing an existing raw string literal, causing parser errors that looked unrelated (`unknown prefix`, unterminated string). | After editing Rust tests with raw strings, immediately inspect surrounding lines with `nl -ba` to verify string boundaries before running tests. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -111,3 +112,4 @@
 - Added HTTP call-shape checks for router intrinsics (`http.get/post` require `Router`, `http.serve` requires numeric port + `Router`), reducing placeholder-style misuse in API wiring.
 - Added temporary bridge-stage handler compatibility rule: route handlers must be zero-arg until runtime dispatch supports typed handler signatures; keep examples/tests aligned to that contract.
 - Added bridge-stage route-handler return contract (`Int`/`Int64` only) so semantic checks align with current generated C handler expectations.
+- Hardened `req.json` gate checks beyond missing-arg validation: schema argument now rejects numeric/bool/untrusted/secret shapes and emits tagged schema/security diagnostics.
