@@ -239,6 +239,37 @@ fn build_emit_mir_prints_textual_mir() {
 }
 
 #[test]
+fn build_emit_c_prints_generated_c_source() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&["build", "--path", hello, "--emit", "c"]);
+    assert!(output.status.success(), "expected success status");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("build succeeded"),
+        "build output should include success line"
+    );
+    assert!(
+        stdout.contains("#include <stdint.h>"),
+        "C output should include standard integer header"
+    );
+    assert!(
+        stdout.contains("int64_t main(void)"),
+        "C output should include generated main signature"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should stay empty for successful build --emit c"
+    );
+}
+
+#[test]
 fn build_emit_mir_json_writes_only_json_on_stdout() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

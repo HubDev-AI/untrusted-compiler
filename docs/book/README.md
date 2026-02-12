@@ -43,5 +43,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `75-m5-statement-control-flow-continuations.md`
 - `76-m5-nested-cfg-lowering.md`
 - `77-m5-canonical-block-id-normalization.md`
+- `78-m6-c-emitter-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.

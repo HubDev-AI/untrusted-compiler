@@ -1,5 +1,5 @@
 use ailang_core::{
-    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows,
+    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
     render_security_audit_text, run_security_audit_with_baseline, should_fail, write_lockfile_stub,
     write_security_map, AuditReport, AuditSeverity, Diagnostic,
 };
@@ -79,6 +79,7 @@ enum AuditOutputFormat {
 enum BuildEmitTarget {
     Mir,
     MirJson,
+    C,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -404,6 +405,15 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
                         mir.as_ref()
                             .expect("MIR should be lowered when emit target is set")
                             .to_pretty_json()
+                    );
+                }
+                Some(BuildEmitTarget::C) => {
+                    println!(
+                        "{}",
+                        emit_c_program(
+                            mir.as_ref()
+                                .expect("MIR should be lowered when emit target is set"),
+                        )
                     );
                 }
                 None => {}
