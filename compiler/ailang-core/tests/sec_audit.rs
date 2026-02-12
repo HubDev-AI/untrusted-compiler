@@ -200,6 +200,8 @@ fn boot() -> Int {
   withCors();
   withCsrf();
   withAuth();
+  log.info("event");
+  db.exec(DbCap(), "SELECT id FROM users");
   1
 }
 "#;
@@ -225,20 +227,79 @@ require_limit_on_select = "off"
     let map = build_security_map(&program, &policy);
     let report = run_security_audit(&policy, &map);
 
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "LOG_STRUCTURED_ONLY_DISABLED" && finding.severity == AuditSeverity::HIGH
+    let log_structured = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "LOG_STRUCTURED_ONLY_DISABLED")
+        .expect("structured logging finding should be present");
+    assert_eq!(log_structured.severity, AuditSeverity::HIGH);
+    let log_samples = log_structured
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("structured logging finding should include sampleCalls");
+    assert!(log_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "log.info")
     }));
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "LOG_REMOTE_IP_ENABLED" && finding.severity == AuditSeverity::MEDIUM
+
+    let remote_ip = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "LOG_REMOTE_IP_ENABLED")
+        .expect("remote ip finding should be present");
+    assert_eq!(remote_ip.severity, AuditSeverity::MEDIUM);
+    let remote_samples = remote_ip
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("remote ip finding should include sampleCalls");
+    assert!(remote_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "log.info")
     }));
+
     assert!(report.findings.iter().any(|finding| {
         finding.id == "LOG_USER_AGENT_ENABLED" && finding.severity == AuditSeverity::LOW
     }));
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "SQL_RAW_ALLOWED_BY_POLICY" && finding.severity == AuditSeverity::HIGH
+    let sql_raw = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SQL_RAW_ALLOWED_BY_POLICY")
+        .expect("sql raw policy finding should be present");
+    assert_eq!(sql_raw.severity, AuditSeverity::HIGH);
+    let sql_raw_samples = sql_raw
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("sql raw finding should include sampleCalls");
+    assert!(sql_raw_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "db.exec")
     }));
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "SQL_LIMIT_RULE_DISABLED" && finding.severity == AuditSeverity::MEDIUM
+
+    let sql_limit = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SQL_LIMIT_RULE_DISABLED")
+        .expect("sql limit finding should be present");
+    assert_eq!(sql_limit.severity, AuditSeverity::MEDIUM);
+    let sql_limit_samples = sql_limit
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("sql limit finding should include sampleCalls");
+    assert!(sql_limit_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "db.exec")
     }));
 }
 

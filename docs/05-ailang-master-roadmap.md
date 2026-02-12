@@ -106,7 +106,13 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - security_map tests now also assert deterministic origin tracing through composite expression wrappers.
   - `sec.audit` findings now include bounded `sampleCalls` evidence for key finding families.
   - Sample call evidence includes callee, source location, argument roles, and origin edges when present.
-  - Initial callsite evidence coverage is enabled for `SQL_SELECT_WITHOUT_LIMIT` and `SECRETS_REVEAL_USED`.
+  - Callsite evidence coverage currently includes:
+    - `SQL_SELECT_WITHOUT_LIMIT`
+    - `SECRETS_REVEAL_USED`
+    - `LOG_STRUCTURED_ONLY_DISABLED`
+    - `LOG_REMOTE_IP_ENABLED`
+    - `SQL_RAW_ALLOWED_BY_POLICY`
+    - `SQL_LIMIT_RULE_DISABLED`
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
@@ -596,7 +602,7 @@ Day 14:
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
 2. Extend origin-trace coverage from local expression flow into interprocedural paths.
-3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families.
+3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families (network/filesystem/capture-replay posture).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

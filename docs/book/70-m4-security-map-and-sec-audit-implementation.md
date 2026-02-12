@@ -144,9 +144,14 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - Added richer deterministic callsite evidence in `sec.audit` findings:
   - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
   - each sample includes callee, location, argument roles, and available origin-edge metadata
-  - currently enabled for:
+  - enabled finding coverage currently includes:
     - `SQL_SELECT_WITHOUT_LIMIT`
     - `SECRETS_REVEAL_USED`
+    - `LOG_STRUCTURED_ONLY_DISABLED`
+    - `LOG_REMOTE_IP_ENABLED`
+    - `SQL_RAW_ALLOWED_BY_POLICY`
+    - `SQL_LIMIT_RULE_DISABLED`
+  - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
@@ -240,7 +245,7 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 
 #### 3) How it works internally
 - `run_security_audit` now attaches `sampleCalls` for selected findings.
-- `call_samples_for_tag` filters tagged call records and emits a bounded list.
+- `call_samples_for_tag` and `call_samples_for_tags` filter tagged call records and emit bounded deterministic lists.
 - each sample includes:
   - callee,
   - source location,
@@ -265,7 +270,7 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 
 #### 7) Tradeoffs and next steps
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
-- Next step is to expand sample evidence coverage to additional high-signal findings.
+- Next step is to expand sample evidence coverage to additional high-signal findings (for example network/filesystem and capture/replay posture families).
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

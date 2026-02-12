@@ -445,7 +445,10 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "LOG_STRUCTURED_ONLY_DISABLED",
             AuditSeverity::HIGH,
             "logging",
-            json!({"structuredOnly": false}),
+            json!({
+                "structuredOnly": false,
+                "sampleCalls": call_samples_for_tag(security_map, "sink.log.emit", 5),
+            }),
             "Enable structured-only logging to reduce injection and data-leak risk.",
         ));
     }
@@ -455,7 +458,10 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "LOG_REMOTE_IP_ENABLED",
             AuditSeverity::MEDIUM,
             "logging",
-            json!({"includeRemoteIp": true}),
+            json!({
+                "includeRemoteIp": true,
+                "sampleCalls": call_samples_for_tag(security_map, "sink.log.emit", 5),
+            }),
             "Review remote IP logging necessity and privacy impact for this environment.",
         ));
     }
@@ -475,7 +481,14 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "SQL_RAW_ALLOWED_BY_POLICY",
             AuditSeverity::HIGH,
             "sql",
-            json!({"forbidRaw": false}),
+            json!({
+                "forbidRaw": false,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["sink.sql.exec", "sink.sql.query"],
+                    5,
+                ),
+            }),
             "Set sql.forbid_raw=true to keep raw SQL execution disabled by policy.",
         ));
     }
@@ -485,7 +498,14 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "SQL_LIMIT_RULE_DISABLED",
             AuditSeverity::MEDIUM,
             "sql",
-            json!({"requireLimitOnSelect": "off"}),
+            json!({
+                "requireLimitOnSelect": "off",
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["sink.sql.exec", "sink.sql.query"],
+                    5,
+                ),
+            }),
             "Enable SELECT limit policy (`warn` or `enforce`) to reduce unbounded query risk.",
         ));
     }
@@ -773,10 +793,18 @@ fn count_call_tag(security_map: &SecurityMap, tag: &str) -> usize {
 }
 
 fn call_samples_for_tag(security_map: &SecurityMap, tag: &str, limit: usize) -> Vec<Value> {
+    call_samples_for_tags(security_map, &[tag], limit)
+}
+
+fn call_samples_for_tags(security_map: &SecurityMap, tags: &[&str], limit: usize) -> Vec<Value> {
     security_map
         .calls
         .iter()
-        .filter(|call| call.tags.iter().any(|candidate| candidate == tag))
+        .filter(|call| {
+            call.tags
+                .iter()
+                .any(|candidate| tags.iter().any(|tag| candidate == tag))
+        })
         .take(limit)
         .map(|call| {
             let mut sample = serde_json::Map::new();
