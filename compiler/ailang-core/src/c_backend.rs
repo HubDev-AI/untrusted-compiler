@@ -34,6 +34,7 @@ pub fn emit_runtime_header() -> &'static str {
 
 int64_t ailang_rt_identity_i64(int64_t value);
 bool ailang_rt_identity_bool(bool value);
+int64_t ailang_rt_time_now(void);
 
 #endif
 "#
@@ -48,6 +49,10 @@ int64_t ailang_rt_identity_i64(int64_t value) {
 
 bool ailang_rt_identity_bool(bool value) {
   return value;
+}
+
+int64_t ailang_rt_time_now(void) {
+  return 0;
 }
 "#
 }
@@ -71,10 +76,12 @@ fn render_function(out: &mut String, function: &MirFunction) {
         for instruction in &block.instructions {
             match &instruction.kind {
                 MirInstructionKind::Let { name, value } => {
-                    writeln!(out, "  {} = {};", name, value).expect("write to string must succeed");
+                    writeln!(out, "  {} = {};", name, lower_c_expr(value))
+                        .expect("write to string must succeed");
                 }
                 MirInstructionKind::Eval { value } => {
-                    writeln!(out, "  (void)({});", value).expect("write to string must succeed");
+                    writeln!(out, "  (void)({});", lower_c_expr(value))
+                        .expect("write to string must succeed");
                 }
             }
         }
@@ -82,6 +89,7 @@ fn render_function(out: &mut String, function: &MirFunction) {
         match &block.terminator {
             MirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
+                    let value = lower_c_expr(value);
                     if let Some(identity_fn) = runtime_return_identity {
                         writeln!(out, "  return {}({});", identity_fn, value)
                             .expect("write to string must succeed");
@@ -101,6 +109,7 @@ fn render_function(out: &mut String, function: &MirFunction) {
                 else_target,
                 ..
             } => {
+                let condition = lower_c_expr(condition);
                 writeln!(
                     out,
                     "  if ({}) goto bb{}; else goto bb{};",
@@ -111,6 +120,7 @@ fn render_function(out: &mut String, function: &MirFunction) {
             MirTerminator::Switch {
                 scrutinee, targets, ..
             } => {
+                let scrutinee = lower_c_expr(scrutinee);
                 let mut default_target = None;
                 for target in targets {
                     if target.pattern == "_" {
@@ -187,4 +197,12 @@ fn runtime_identity_for_return_type(type_name: Option<&str>) -> Option<&'static 
         Some("Int") | Some("Int64") => Some("ailang_rt_identity_i64"),
         _ => None,
     }
+}
+
+fn lower_c_expr(expr: &str) -> String {
+    let mut lowered = expr.to_string();
+    lowered = lowered.replace("time.now(", "__AILANG_INTRINSIC_TIME_NOW__(");
+    lowered = lowered.replace("time_now(", "__AILANG_INTRINSIC_TIME_NOW__(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
+    lowered
 }

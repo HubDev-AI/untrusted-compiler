@@ -48,5 +48,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `80-m6-run-command-via-c-bin.md`
 - `81-m6-runtime-abi-scaffold-and-link-integration.md`
 - `82-m6-runtime-return-identity-intrinsics.md`
+- `83-m6-runtime-intrinsic-call-rewriting.md`
 
 As milestones progress, chapters will be added and linked from this index.

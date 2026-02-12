@@ -205,6 +205,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `ailang run` now executes binaries produced via the C compile pipeline.
   - C backend compile flow now emits explicit runtime ABI artifacts (`ailang_runtime.h` + `ailang_runtime.c`) and links them with generated C.
   - Generated C return paths now route scalar returns through runtime ABI identity intrinsics (`ailang_rt_identity_i64`, `ailang_rt_identity_bool`).
+  - C emission now rewrites `time.now` intrinsic calls to runtime ABI symbol `ailang_rt_time_now`, with runtime header/source coverage.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
@@ -244,6 +245,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/80-m6-run-command-via-c-bin.md`
 - `docs/book/81-m6-runtime-abi-scaffold-and-link-integration.md`
 - `docs/book/82-m6-runtime-return-identity-intrinsics.md`
+- `docs/book/83-m6-runtime-intrinsic-call-rewriting.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -480,6 +482,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M6 Slice: run Command via C Backend".
 - Chapter: "M6 Slice: Runtime ABI Scaffold and Link Integration".
 - Chapter: "M6 Slice: Runtime Return Identity Intrinsics".
+- Chapter: "M6 Slice: Runtime Intrinsic Call Rewriting".
 
 ## M7 - HTTP/JSON Vertical Slice
 ### Build tasks

@@ -11,6 +11,7 @@
 | 2026-02-12 | self | Ran `cargo test` with multiple bare test-name args, which Cargo treats as unexpected arguments. | Use one test filter, or run explicit targets (`cargo test --test <name>`). |
 | 2026-02-12 | self | Assumed statement-level continuation block numbering would match previous branch-first ordering. | Reserve block IDs intentionally and update MIR tests/goldens to assert the actual deterministic numbering strategy. |
 | 2026-02-12 | self | Generated C `main` with `int64_t` return type, which clang rejects. | Force emitted `main` signature to return `int` even when AILang return type maps to `Int`/`Int64`. |
+| 2026-02-12 | self | Used `status` as a temporary shell variable in `zsh`; it is readonly and broke a manual validation script. | Use a neutral temp variable name like `rc` for shell command exit codes. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -56,3 +57,4 @@
 - Wired `ailang run` to build via `c-bin` and execute the produced binary; added clang-gated integration coverage.
 - Added M6 runtime ABI scaffolding: C backend now includes `ailang_runtime.h`, CLI writes runtime header/source into `build/`, and clang compiles generated + runtime translation units together.
 - Routed scalar C return paths through runtime ABI identity helpers (`ailang_rt_identity_i64` / `ailang_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
+- Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `ailang_rt_time_now` with runtime stub coverage and C emitter tests.

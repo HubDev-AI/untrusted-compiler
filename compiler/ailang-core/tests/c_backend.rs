@@ -70,8 +70,25 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("#ifndef AILANG_RUNTIME_H"));
     assert!(header.contains("int64_t ailang_rt_identity_i64(int64_t value);"));
     assert!(header.contains("bool ailang_rt_identity_bool(bool value);"));
+    assert!(header.contains("int64_t ailang_rt_time_now(void);"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
     assert!(source.contains("bool ailang_rt_identity_bool(bool value)"));
+    assert!(source.contains("int64_t ailang_rt_time_now(void)"));
+}
+
+#[test]
+fn c_backend_rewrites_time_now_intrinsic_to_runtime_symbol() {
+    let source = r#"
+fn current() -> Int64 {
+  time.now()
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("return ailang_rt_identity_i64(ailang_rt_time_now());"));
 }
