@@ -165,6 +165,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - non-call exception posture findings (`ALLOW_COUNT_HIGH`) via bounded `sampleExceptions` snapshots
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
+  - text-format `sec.audit` output now shows bounded sample-call previews and trace snippets for fast triage
 - Added context-first stdlib capability signature support:
   - semantic capability checks now resolve capability argument positions for both compact and context-first forms:
     - compact examples: `db.exec(cap, query)`, `httpClient.get(cap, url)`
@@ -338,6 +339,42 @@ Count-only posture findings are hard to act on. Sample snapshots let reviewers i
 #### 7) Tradeoffs and next steps
 - this adds visibility for high exception volume but not trend/aging aggregates.
 - next step is rollup evidence for expiring/soon-expiring exception posture.
+
+### Slice Explanation: Trace-Aware `sec.audit` Text Previews
+
+#### 1) What it is
+This slice enhances text-mode `sec.audit` rendering to include concise sample-call previews, including provenance trace snippets when present.
+
+#### 2) Why it exists
+JSON output already carried detailed `sampleCalls`, but text output only listed finding IDs and suggestions. Operators needed quick actionable context directly in terminal output.
+
+#### 3) How it works internally
+- renderer now inspects each finding’s `evidence.sampleCalls`.
+- for up to two samples per finding, it prints:
+  - callee + file:line,
+  - optional `trace=` preview derived from first origin-edge trace chain.
+- if more samples exist, renderer prints a bounded `+N more` line.
+
+#### 4) Inputs/outputs and constraints
+- Input: audit finding evidence JSON.
+- Output: richer text report lines under each finding.
+- Constraints:
+  - preview is intentionally bounded and concise,
+  - trace preview is truncated to the first few steps.
+
+#### 5) Failure modes and diagnostics
+- no compile-time diagnostics are introduced.
+- findings without `sampleCalls` remain unchanged in text output.
+
+#### 6) Example usage
+- finding line:
+  - `HIGH SQL_RAW_ALLOWED_BY_POLICY ...`
+- preview line:
+  - `sample: db.exec@main.ai:12 trace=call:req.query -> call:wrap -> ...`
+
+#### 7) Tradeoffs and next steps
+- previews improve triage speed but are not full provenance dumps.
+- next step is attaching selected provenance context directly into compiler diagnostics.
 
 ### Slice Explanation: Allowlist Bypass Sample Evidence
 

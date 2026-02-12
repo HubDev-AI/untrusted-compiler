@@ -1,7 +1,7 @@
 use ailang_core::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations, parse_source,
-    policy::parse_policy_str, run_security_audit, security_map::SourceLocation, should_fail,
-    AuditSeverity, Policy, SecurityAllow,
+    policy::parse_policy_str, render_security_audit_text, run_security_audit,
+    security_map::SourceLocation, should_fail, AuditSeverity, Policy, SecurityAllow,
 };
 use std::path::Path;
 
@@ -774,4 +774,49 @@ forbid_raw = false
             })
     });
     assert!(traced, "expected SQL sample call with origin trace chain");
+}
+
+#[test]
+fn sec_audit_text_renderer_includes_sample_trace_previews() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn wrap() -> String {
+  queryParam()
+}
+
+fn boot() -> Int {
+  let raw = wrap();
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy = parse_policy_str(
+        Path::new("ailang.policy"),
+        r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[sql]
+forbid_raw = false
+"#,
+    )
+    .expect("policy should parse");
+
+    let report = run_security_audit(&policy, &build_security_map(&program, &policy));
+    let text = render_security_audit_text(&report);
+    assert!(
+        text.contains("SQL_RAW_ALLOWED_BY_POLICY"),
+        "expected SQL_RAW_ALLOWED_BY_POLICY in text report"
+    );
+    assert!(text.contains("sample: db.exec@"), "expected sample preview");
+    assert!(
+        text.contains("trace=call:req.query"),
+        "expected origin trace preview in text report"
+    );
 }

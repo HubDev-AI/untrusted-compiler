@@ -861,6 +861,9 @@ pub fn render_security_audit_text(report: &AuditReport) -> String {
                 "  - {:?} {} ({}) -> {}",
                 finding.severity, finding.id, finding.category, finding.suggestion
             ));
+            for sample_line in sample_call_preview_lines(&finding.evidence) {
+                lines.push(format!("    {sample_line}"));
+            }
         }
     }
 
@@ -870,6 +873,64 @@ pub fn render_security_audit_text(report: &AuditReport) -> String {
     ));
 
     lines.join("\n")
+}
+
+fn sample_call_preview_lines(evidence: &Value) -> Vec<String> {
+    let Some(samples) = evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+    else {
+        return Vec::new();
+    };
+
+    let mut lines = Vec::new();
+    for sample in samples.iter().take(2) {
+        let callee = sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .unwrap_or("<unknown>");
+        let location = sample
+            .get("location")
+            .and_then(|value| value.as_object())
+            .map(|location| {
+                let file = location
+                    .get("file")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("<unknown>");
+                let line = location
+                    .get("line")
+                    .and_then(|value| value.as_i64())
+                    .unwrap_or(0);
+                format!("{file}:{line}")
+            })
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        let trace_preview = sample
+            .get("originEdges")
+            .and_then(|value| value.as_array())
+            .and_then(|edges| edges.first())
+            .and_then(|edge| edge.get("trace"))
+            .and_then(|value| value.as_array())
+            .map(|steps| {
+                steps
+                    .iter()
+                    .filter_map(|value| value.as_str())
+                    .take(4)
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            })
+            .filter(|text| !text.is_empty());
+
+        match trace_preview {
+            Some(trace) => lines.push(format!("sample: {callee}@{location} trace={trace}")),
+            None => lines.push(format!("sample: {callee}@{location}")),
+        }
+    }
+
+    if samples.len() > 2 {
+        lines.push(format!("sample: +{} more", samples.len() - 2));
+    }
+    lines
 }
 
 fn required_redactions_present(redact_headers: &[String]) -> bool {
