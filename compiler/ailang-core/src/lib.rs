@@ -15,7 +15,7 @@ pub use audit::{
     render_security_audit_text, run_security_audit, run_security_audit_with_baseline, should_fail,
     AuditReport, AuditSeverity, AuditTrend,
 };
-pub use c_backend::emit_c_program;
+pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use mir::{lower_program_to_mir, MirProgram};

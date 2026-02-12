@@ -300,6 +300,14 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
 
     let binary_path = hello_path.join("build").join("hello");
     assert!(binary_path.exists(), "compiled binary should exist");
+    assert!(
+        hello_path.join("build").join("ailang_runtime.h").exists(),
+        "runtime header should exist"
+    );
+    assert!(
+        hello_path.join("build").join("ailang_runtime.c").exists(),
+        "runtime source should exist"
+    );
 
     let run = Command::new(&binary_path)
         .output()

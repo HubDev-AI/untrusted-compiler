@@ -1,7 +1,8 @@
 use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
-    render_security_audit_text, run_security_audit_with_baseline, should_fail, write_lockfile_stub,
-    write_security_map, AuditReport, AuditSeverity, Diagnostic,
+    emit_runtime_header, emit_runtime_source, render_security_audit_text,
+    run_security_audit_with_baseline, should_fail, write_lockfile_stub, write_security_map,
+    AuditReport, AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
@@ -467,11 +468,32 @@ fn compile_c_binary(
         return Err(2);
     }
 
+    let runtime_header_path = build_dir.join("ailang_runtime.h");
+    if let Err(err) = fs::write(&runtime_header_path, emit_runtime_header()) {
+        eprintln!(
+            "could not write runtime header `{}`: {err}",
+            runtime_header_path.display()
+        );
+        return Err(2);
+    }
+
+    let runtime_source_path = build_dir.join("ailang_runtime.c");
+    if let Err(err) = fs::write(&runtime_source_path, emit_runtime_source()) {
+        eprintln!(
+            "could not write runtime source `{}`: {err}",
+            runtime_source_path.display()
+        );
+        return Err(2);
+    }
+
     let binary_path = build_dir.join(package_name);
     let output = match Command::new("clang")
         .arg(&c_path)
+        .arg(&runtime_source_path)
         .arg("-std=c11")
         .arg("-O2")
+        .arg("-I")
+        .arg(&build_dir)
         .arg("-o")
         .arg(&binary_path)
         .output()

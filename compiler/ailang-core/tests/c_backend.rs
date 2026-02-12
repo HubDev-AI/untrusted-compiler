@@ -1,4 +1,6 @@
-use ailang_core::{emit_c_program, lower_program_to_mir, parse_source};
+use ailang_core::{
+    emit_c_program, emit_runtime_header, emit_runtime_source, lower_program_to_mir, parse_source,
+};
 use std::path::Path;
 
 #[test]
@@ -15,6 +17,7 @@ fn main() -> Int {
 
     assert!(c.contains("#include <stdbool.h>"));
     assert!(c.contains("#include <stdint.h>"));
+    assert!(c.contains("#include \"ailang_runtime.h\""));
     assert!(c.contains("int main(void);"));
     assert!(c.contains("int main(void) {"));
     assert!(c.contains("bb0:"));
@@ -41,4 +44,18 @@ fn flow(x: Int) -> Int {
     assert!(c.contains("if ((x > 0)) goto bb1; else goto bb2;"));
     assert!(c.contains("goto bb3;"));
     assert!(c.contains("return 5;"));
+}
+
+#[test]
+fn c_backend_emits_runtime_header_and_source() {
+    let header = emit_runtime_header();
+    let source = emit_runtime_source();
+
+    assert!(header.contains("#ifndef AILANG_RUNTIME_H"));
+    assert!(header.contains("int64_t ailang_rt_identity_i64(int64_t value);"));
+    assert!(header.contains("bool ailang_rt_identity_bool(bool value);"));
+
+    assert!(source.contains("#include \"ailang_runtime.h\""));
+    assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
+    assert!(source.contains("bool ailang_rt_identity_bool(bool value)"));
 }

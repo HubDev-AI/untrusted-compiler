@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 pub fn emit_c_program(program: &MirProgram) -> String {
     let mut out = String::new();
-    out.push_str("#include <stdbool.h>\n#include <stdint.h>\n\n");
+    out.push_str("#include <stdbool.h>\n#include <stdint.h>\n#include \"ailang_runtime.h\"\n\n");
 
     for function in &program.functions {
         writeln!(&mut out, "{};", c_function_signature(function))
@@ -23,6 +23,33 @@ pub fn emit_c_program(program: &MirProgram) -> String {
     }
 
     out
+}
+
+pub fn emit_runtime_header() -> &'static str {
+    r#"#ifndef AILANG_RUNTIME_H
+#define AILANG_RUNTIME_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+int64_t ailang_rt_identity_i64(int64_t value);
+bool ailang_rt_identity_bool(bool value);
+
+#endif
+"#
+}
+
+pub fn emit_runtime_source() -> &'static str {
+    r#"#include "ailang_runtime.h"
+
+int64_t ailang_rt_identity_i64(int64_t value) {
+  return value;
+}
+
+bool ailang_rt_identity_bool(bool value) {
+  return value;
+}
+"#
 }
 
 fn render_function(out: &mut String, function: &MirFunction) {
