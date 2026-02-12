@@ -167,6 +167,10 @@ int64_t ailang_rt_cors_from_policy() {
   return 0;
 }
 
+int64_t ailang_rt_cors_origin() {
+  return 0;
+}
+
 int64_t ailang_rt_csrf_from_policy() {
   return 0;
 }

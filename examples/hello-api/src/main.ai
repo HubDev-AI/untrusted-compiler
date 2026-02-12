@@ -9,7 +9,8 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
   req.body(1, 2);
   req.query(1, 2);
   req.pathParam(1, 2);
-  req.header(1, 2);
+  let origin = req.header(1, 2);
+  cors.origin(origin);
   req.json(schema);
   res.json(schema, 1);
   res.ok(201, schema, 1);

@@ -552,6 +552,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Success Envelope Intrinsic Bootstrap".
 - Chapter: "M7 Slice: Request Source Intrinsic Bootstrap".
 - Chapter: "M7 Slice: Auth Requirement Intrinsic Bootstrap".
+- Chapter: "M7 Slice: CORS Origin Gate Intrinsic Bootstrap".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

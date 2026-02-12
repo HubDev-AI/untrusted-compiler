@@ -2292,6 +2292,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "cors_origin" | "cors.origin" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Origin"),
+        }),
         "csrf_from_policy" | "csrf.fromPolicy" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
@@ -2788,6 +2793,8 @@ fn is_untrusted_string_gate(name: &str) -> bool {
             | "url.public"
             | "url_internal"
             | "url.internal"
+            | "cors_origin"
+            | "cors.origin"
     ) || name.starts_with("validate.")
         || name.starts_with("validate_")
         || name.starts_with("sanitize.")

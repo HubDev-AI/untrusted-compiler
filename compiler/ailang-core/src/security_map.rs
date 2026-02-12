@@ -1040,6 +1040,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         }
         "withCsrf" | "csrf_with" | "csrf.withCsrf" => vec!["middleware.csrf"],
         "withAuth" | "auth_with" | "auth.withAuth" => vec!["middleware.auth"],
+        "cors_origin" | "cors.origin" => vec!["gate.cors.origin"],
         "req_body" | "req.body" => vec!["source.http.body"],
         "req_query" | "req.query" => vec!["source.http.query"],
         "req_header" | "req.header" => vec!["source.http.header"],
@@ -1301,6 +1302,7 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["value"]
             }
         }
+        "cors_origin" | "cors.origin" => vec!["origin"],
         "res_html" | "res.html" => vec!["html"],
         "set_header" | "res.setHeader" => vec!["name", "value"],
         "set_cookie" | "res.addCookie" => vec!["cookie"],
@@ -1548,6 +1550,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             "validate_header_value",
             &[("gate.header.value", TagKind::Gate)],
         ),
+        symbol("cors_origin", &[("gate.cors.origin", TagKind::Gate)]),
         symbol("validate_email", &[("gate.validate.email", TagKind::Gate)]),
         symbol("validate_uuid", &[("gate.validate.uuid", TagKind::Gate)]),
         symbol("validate_int64", &[("gate.validate.int64", TagKind::Gate)]),
@@ -1646,6 +1649,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             "validate.headerValue",
             &[("gate.header.value", TagKind::Gate)],
         ),
+        symbol("cors.origin", &[("gate.cors.origin", TagKind::Gate)]),
         symbol("validate.email", &[("gate.validate.email", TagKind::Gate)]),
         symbol("validate.uuid", &[("gate.validate.uuid", TagKind::Gate)]),
         symbol("validate.int64", &[("gate.validate.int64", TagKind::Gate)]),
