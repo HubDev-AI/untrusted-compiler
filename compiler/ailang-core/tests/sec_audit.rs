@@ -388,7 +388,10 @@ fn sec_audit_flags_secret_reveal_allowlisted_bypass() {
   ticket = "SEC-200",
   expires = "2099-06-01",
 )
-fn boot() -> Int { 1 }
+fn boot() -> Int {
+  secret_reveal(SecretsCap());
+  1
+}
 "#;
 
     let stripped = ailang_core::strip_allow_annotations(source);
@@ -398,8 +401,63 @@ fn boot() -> Int { 1 }
     let map = build_security_map_with_allows(&program, &policy, allows);
     let report = run_security_audit(&policy, &map);
 
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "SECRETS_REVEAL_ALLOWLISTED" && finding.severity == AuditSeverity::HIGH
+    let finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "SECRETS_REVEAL_ALLOWLISTED")
+        .expect("SECRETS_REVEAL_ALLOWLISTED should be present");
+    assert_eq!(finding.severity, AuditSeverity::HIGH);
+    let samples = finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("allowlisted reveal finding should include sampleCalls");
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "secret_reveal" | "secrets.reveal"))
+    }));
+}
+
+#[test]
+fn sec_audit_includes_sample_calls_for_internal_net_allowlisted_bypass() {
+    let source = r#"
+@allow(
+  policy = "net.internal.enabled",
+  bypass = ["sink.net.internal_request"],
+  reason = "internal inventory call",
+  ticket = "SEC-301",
+  expires = "2099-06-01",
+)
+fn boot() -> Int {
+  httpClient.getInternal(InternalNetCap(), "http://internal.local");
+  1
+}
+"#;
+
+    let stripped = ailang_core::strip_allow_annotations(source);
+    let program = parse_source(Path::new("main.ai"), &stripped).expect("source should parse");
+    let allows = parse_allow_annotations(Path::new("main.ai"), source).expect("allow should parse");
+    let policy = Policy::default();
+    let map = build_security_map_with_allows(&program, &policy, allows);
+    let report = run_security_audit(&policy, &map);
+
+    let finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "INTERNAL_NET_CALL_ALLOWLISTED")
+        .expect("INTERNAL_NET_CALL_ALLOWLISTED should be present");
+    let samples = finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("allowlisted internal-net finding should include sampleCalls");
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "httpClient.getInternal" | "net_internal_call"))
     }));
 }
 

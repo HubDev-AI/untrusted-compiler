@@ -123,6 +123,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `CAPTURE_ALL_IN_PROD`
     - `REPLAY_EFFECTS_ALLOW`
     - CORS/security-headers/auth/CSRF posture families via middleware-tagged samples
+    - allowlist bypass families via bypass-tag call sampling (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`)
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
   - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).
   - `E2003`/`E2004` diagnostics now report the precise capability argument index for these call forms.
@@ -622,7 +623,7 @@ Day 14:
 
 1. Extend typed stdlib symbol metadata from local/member alias paths into deeper interprocedural value-call forwarding.
 2. Extend origin-trace diagnostics from multi-hop tag propagation into richer call-chain provenance details.
-3. Expand deterministic `sec.audit` sample-call evidence coverage to remaining policy/exception hygiene finding families.
+3. Expand deterministic `sec.audit` evidence for non-call policy hygiene families (for example exception-count posture snapshots).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

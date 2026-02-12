@@ -673,6 +673,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             },
             "expires": &allow.expires,
             "bypass": &allow.bypass,
+            "sampleCalls": call_samples_for_bypass_tags(security_map, &allow.bypass, 5),
         });
 
         if allow
@@ -951,6 +952,19 @@ fn call_samples_for_tags(security_map: &SecurityMap, tags: &[&str], limit: usize
             Value::Object(sample)
         })
         .collect()
+}
+
+fn call_samples_for_bypass_tags(
+    security_map: &SecurityMap,
+    bypass_tags: &[String],
+    limit: usize,
+) -> Vec<Value> {
+    let tags = bypass_tags.iter().map(String::as_str).collect::<Vec<_>>();
+    if tags.is_empty() {
+        Vec::new()
+    } else {
+        call_samples_for_tags(security_map, &tags, limit)
+    }
 }
 
 fn finding(

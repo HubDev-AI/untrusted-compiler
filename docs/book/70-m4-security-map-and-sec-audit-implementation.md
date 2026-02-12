@@ -161,6 +161,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `CAPTURE_ALL_IN_PROD`
     - `REPLAY_EFFECTS_ALLOW`
     - CORS/security-headers/auth/CSRF posture findings via middleware-tagged sample callsites
+    - allowlisted bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`) via bypass-tag sampling
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
 - Added context-first stdlib capability signature support:
@@ -293,10 +294,44 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
   - `{ callee: "db.exec", location: { file, line, column }, argRoles: [...] }`
 - `SECRETS_REVEAL_USED` evidence now includes reveal callsite samples for triage.
 - `CORS_ANY_ORIGIN` evidence now includes router middleware callsites (for example `withCors`).
+- allowlisted bypass findings now include sampled matching callsites when bypass tags map to observed calls.
 
 #### 7) Tradeoffs and next steps
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
 - Next step is to expand evidence coverage for remaining policy/exception hygiene findings with similarly deterministic samples.
+
+### Slice Explanation: Allowlist Bypass Sample Evidence
+
+#### 1) What it is
+This slice adds deterministic `sampleCalls` evidence to allowlist bypass findings by mapping `@allow(... bypass=[...])` tags to observed security-map callsites.
+
+#### 2) Why it exists
+Allowlist findings previously reported only annotation metadata. Reviewers still needed separate traces to see what sensitive calls were actually exercised.
+
+#### 3) How it works internally
+- for each `SecurityAllow`, audit evidence now includes:
+  - policy key/ticket/location/expiry metadata,
+  - bounded sampled callsites matching bypass tags.
+- tag matching reuses `call_samples_for_tags`, so behavior stays deterministic and bounded.
+
+#### 4) Inputs/outputs and constraints
+- Input: `security_map.allows[]`, each allow’s `bypass` tags, and `security_map.calls[]`.
+- Output: finding evidence for allowlist families includes `sampleCalls`.
+- Constraints:
+  - if bypass tags have no matching callsite tags, `sampleCalls` is empty.
+  - coverage is limited to call-tag-based bypass families.
+
+#### 5) Failure modes and diagnostics
+- no compile-time diagnostics are introduced.
+- stale or overbroad bypass tags can produce low-signal samples; this is surfaced as evidence quality, not a compiler error.
+
+#### 6) Example usage
+- `SECRETS_REVEAL_ALLOWLISTED` now includes reveal callsite samples when `effect.secrets.reveal` is observed.
+- `INTERNAL_NET_CALL_ALLOWLISTED` now includes internal-net request callsite samples when `sink.net.internal_request` is observed.
+
+#### 7) Tradeoffs and next steps
+- evidence currently focuses on call-tag matches and does not include richer exception aggregation views.
+- next step is adding deterministic evidence snapshots for non-call posture exceptions (for example high exception-count families).
 
 ### Slice Explanation: Middleware-Tagged Posture Evidence in `sec.audit`
 
@@ -515,4 +550,4 @@ Single-pass summaries only captured direct/one-hop forwarding. Multi-hop helper 
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Extend source-origin tracing from converged tag summaries into richer call-chain provenance details.
-5. Expand `sec.audit` sample-call evidence coverage across more finding families.
+5. Expand `sec.audit` evidence coverage for non-call policy hygiene findings and posture snapshots.
