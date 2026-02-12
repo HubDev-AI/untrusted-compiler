@@ -250,6 +250,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `examples/hello-api` create-user route is now aligned to this bridge contract (`createUser()`), with schema-gate and response schema names resolved in-handler.
   - Route handler compatibility now also requires numeric return types (`Int`/`Int64`) for the current runtime bridge, with compile-time diagnostics for non-numeric handler returns.
   - `req.json(...)` schema gate now rejects invalid schema argument shapes (numeric/boolean/untrusted/secret) instead of only checking missing arguments, with security/schema tagged diagnostics.
+  - `req.json(...)` now also enforces exact call arity (`req.json(schema)` only).
+  - `res.text(...)` now enforces bridge signature shape:
+    - exactly two arguments,
+    - numeric status code,
+    - string response body.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -613,6 +618,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Route Handler Compatibility (Zero-Arg Bridge Contract)".
 - Chapter: "M7 Slice: Route Handler Return-Type Bridge Contract".
 - Chapter: "M7 Slice: req.json Schema-Argument Contract Hardening".
+- Chapter: "M7 Slice: req/res Call-Shape Signature Hardening".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

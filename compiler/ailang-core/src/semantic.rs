@@ -1709,39 +1709,57 @@ impl Analyzer {
             arg_types,
         );
 
-        if is_req_json_gate(callee_name) && args.is_empty() {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    "E4001",
-                    "schema gate requires schema argument",
-                    span.clone(),
-                )
-                .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
-                .with_note("this gate converts inbound untrusted payload into trusted typed data"),
-            );
-        }
-        if is_req_json_gate(callee_name) && !args.is_empty() {
-            let schema_ty = &arg_types[0];
-            if schema_ty.is_numeric()
-                || schema_ty.is_bool()
-                || schema_ty.contains_secret()
-                || schema_ty.contains_untrusted()
-            {
+        if is_req_json_gate(callee_name) {
+            if args.is_empty() {
                 self.diagnostics.push(
                     Diagnostic::error(
                         "E4001",
-                        "schema gate argument is invalid",
-                        args[0].span.clone(),
+                        "schema gate requires schema argument",
+                        span.clone(),
                     )
-                    .with_tag("security")
-                    .with_tag("schema")
-                    .with_note(format!("found `{}`", schema_ty.describe()))
+                    .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
                     .with_note(
-                        "`req.json` expects a schema symbol/descriptor, not numeric/boolean/untrusted/secret data",
+                        "this gate converts inbound untrusted payload into trusted typed data",
                     ),
                 );
+            } else {
+                if args.len() != 1 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "schema gate expects exactly one schema argument",
+                            span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note("`req.json` call shape is `req.json(schema)`"),
+                    );
+                }
+
+                let schema_ty = &arg_types[0];
+                if schema_ty.is_numeric()
+                    || schema_ty.is_bool()
+                    || schema_ty.contains_secret()
+                    || schema_ty.contains_untrusted()
+                {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "schema gate argument is invalid",
+                            args[0].span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(format!("found `{}`", schema_ty.describe()))
+                        .with_note(
+                            "`req.json` expects a schema symbol/descriptor, not numeric/boolean/untrusted/secret data",
+                        ),
+                    );
+                }
             }
         }
+
+        self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2209,6 +2227,46 @@ impl Analyzer {
                     .with_note("adjust response value type or use a matching schema"),
                 );
             }
+        }
+    }
+
+    fn enforce_res_text_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_res_text_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 2 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "res.text expects `(status, body)` arguments", span)
+                    .with_note("use `res.text(200, \"ok\")`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "res.text status must be numeric", args[0].span.clone())
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use `Int`/`Int64` status code values"),
+            );
+        }
+
+        if !arg_types[1].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "res.text body must be `String`",
+                    args[1].span.clone(),
+                )
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("use string body values like `\"ok\"`"),
+            );
         }
     }
 
@@ -3244,6 +3302,10 @@ fn is_http_route_registration(name: &str) -> bool {
 
 fn is_http_serve_call(name: &str) -> bool {
     matches!(name, "http_serve" | "http.serve")
+}
+
+fn is_res_text_call(name: &str) -> bool {
+    matches!(name, "res_text" | "res.text")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

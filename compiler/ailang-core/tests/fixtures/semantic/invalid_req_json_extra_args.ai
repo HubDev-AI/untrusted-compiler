@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  req.json("UserSchema", 1);
+  0
+}
