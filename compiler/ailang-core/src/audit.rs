@@ -522,6 +522,20 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if policy.env == "prod" && !policy.net_ssrf.resolve_dns {
+        findings.push(finding(
+            "DNS_RESOLUTION_DISABLED",
+            AuditSeverity::HIGH,
+            "ssrf",
+            json!({
+                "resolveDns": false,
+                "env": "prod",
+                "sampleCalls": call_samples_for_tag(security_map, "sink.net.public_request", 5),
+            }),
+            "Enable DNS resolution and final-IP validation for public URL requests.",
+        ));
+    }
+
     if policy.fs.enabled && policy.fs.allowed_base_paths.is_empty() {
         findings.push(finding(
             "FS_ENABLED_NO_BASE_ALLOWLIST",

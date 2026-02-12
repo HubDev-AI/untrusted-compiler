@@ -29,3 +29,4 @@
 ## Session Notes (2026-02-12)
 - Repo currently has no `.trellis/` directory even though AGENTS references Trellis docs.
 - Implemented and validated `sec audit --history-dir` with JSON-mode stdout contract preserved.
+- Added `DNS_RESOLUTION_DISABLED` sec.audit posture rule with sample-call evidence (prod + `net.ssrf.resolve_dns=false`).

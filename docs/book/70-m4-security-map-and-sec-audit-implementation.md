@@ -1264,6 +1264,47 @@ Origin reflection is a high-risk CORS pattern. The policy model already had `for
 - current finding is posture-level and does not yet distinguish narrow allowlisted reflection strategies.
 - next step is finer-grained middleware evidence (for example exact matching strategy tags) for richer risk scoring.
 
+### Slice Explanation: DNS Resolution Posture Finding (`DNS_RESOLUTION_DISABLED`)
+
+#### 1) What it is
+This slice adds a deterministic SSRF posture finding when DNS resolution checks are disabled in production policy.
+
+#### 2) Why it exists
+The security baseline requires DNS/final-IP validation for outbound public requests. Without an explicit audit signal, teams can disable `net.ssrf.resolve_dns` and miss a meaningful regression in SSRF defenses.
+
+#### 3) How it works internally
+- `sec.audit` now emits `DNS_RESOLUTION_DISABLED` when:
+  - `policy.env == "prod"` and
+  - `policy.net_ssrf.resolve_dns == false`.
+- evidence payload includes:
+  - `resolveDns`, `env`,
+  - bounded `sampleCalls` from `sink.net.public_request` callsites.
+- existing sample-call extraction is reused, preserving deterministic ordering and bounds.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective policy (`env`, `net.ssrf.resolve_dns`),
+  - `security_map` public-net sink callsite tags.
+- Output:
+  - `DNS_RESOLUTION_DISABLED` finding with severity `HIGH` and callsite evidence.
+- Constraints:
+  - finding is production-focused (dev/staging are not flagged by this rule).
+
+#### 5) Failure modes and diagnostics
+- if no public-net callsites are present, finding still emits with empty sample set.
+- no compiler parse/type diagnostics changed; this is an audit-layer posture signal.
+
+#### 6) Example usage
+- policy:
+  - `[policy] env = "prod"`
+  - `[net.ssrf] resolve_dns = false`
+- audit:
+  - includes `DNS_RESOLUTION_DISABLED` with `httpClient.get(...)` sample callsites when present.
+
+#### 7) Tradeoffs and next steps
+- this flags DNS-resolution posture but does not yet differentiate environment-specific allowlist exceptions.
+- next step is adding policy-governed exception metadata for controlled prod waivers.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.

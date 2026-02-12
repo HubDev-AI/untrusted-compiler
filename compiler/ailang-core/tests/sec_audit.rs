@@ -297,6 +297,7 @@ allow_redirects = true
 
 [net.ssrf]
 revalidate_redirects = false
+resolve_dns = false
 
 [capture]
 mode = "all"
@@ -322,6 +323,23 @@ effects = "allow"
         .and_then(|value| value.as_array())
         .expect("redirect finding should include sampleCalls");
     assert!(redirect_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "httpClient.get")
+    }));
+
+    let dns = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "DNS_RESOLUTION_DISABLED")
+        .expect("dns resolution finding should be present");
+    let dns_samples = dns
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("dns resolution finding should include sampleCalls");
+    assert!(dns_samples.iter().any(|sample| {
         sample
             .get("callee")
             .and_then(|value| value.as_str())
