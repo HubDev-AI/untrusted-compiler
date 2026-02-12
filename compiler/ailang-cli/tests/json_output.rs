@@ -319,6 +319,67 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
 }
 
 #[test]
+fn build_emit_c_bin_handles_calls_and_control_flow_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin control-flow integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-flow");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "flowdemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn choose(flag: Bool) -> Int {
+  if flag {
+    0
+  } else {
+    1
+  }
+}
+
+fn main() -> Int {
+  choose(true)
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for control-flow + call project"
+    );
+
+    let generated_c =
+        fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("int64_t choose(bool flag);"));
+    assert!(generated_c.contains("if (flag) goto"));
+    assert!(generated_c.contains("return ailang_rt_identity_i64(choose(true));"));
+
+    let binary_path = project_dir.join("build").join("flowdemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(run.status.success(), "compiled binary should exit successfully");
+}
+
+#[test]
 fn run_command_executes_compiled_binary_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping run integration test: clang not available");

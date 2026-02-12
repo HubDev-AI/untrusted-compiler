@@ -58,3 +58,4 @@
 - Added M6 runtime ABI scaffolding: C backend now includes `ailang_runtime.h`, CLI writes runtime header/source into `build/`, and clang compiles generated + runtime translation units together.
 - Routed scalar C return paths through runtime ABI identity helpers (`ailang_rt_identity_i64` / `ailang_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
 - Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `ailang_rt_time_now` with runtime stub coverage and C emitter tests.
+- Added non-trivial `c-bin` integration coverage using a temp project fixture with helper-function call + `if/else` control flow.
