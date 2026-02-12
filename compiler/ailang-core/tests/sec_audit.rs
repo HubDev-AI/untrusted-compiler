@@ -95,6 +95,72 @@ effects = "allow"
 }
 
 #[test]
+fn sec_audit_includes_sample_calls_for_internal_net_and_fs_findings() {
+    let source = r#"
+fn risky() -> Int {
+  httpClient.getInternal(InternalNetCap(), "http://internal.local");
+  fs.write(FsCap(), "/tmp/a", "payload");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "dev"
+
+[net.internal]
+enabled = true
+allowed_cidrs = []
+allowed_domains = []
+
+[fs]
+enabled = true
+allowed_base_paths = []
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for internal net/fs sample evidence test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let internal = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "INTERNAL_NET_ENABLED_NO_ALLOWLIST")
+        .expect("internal net finding should be present");
+    let internal_samples = internal
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("internal net finding should include sampleCalls");
+    assert!(internal_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "httpClient.getInternal")
+    }));
+
+    let fs = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "FS_ENABLED_NO_BASE_ALLOWLIST")
+        .expect("filesystem finding should be present");
+    let fs_samples = fs
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("filesystem finding should include sampleCalls");
+    assert!(fs_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "fs.write")
+    }));
+}
+
+#[test]
 fn sec_audit_reports_allow_annotations_as_exceptions() {
     let source = r#"
 @allow(

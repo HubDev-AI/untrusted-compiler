@@ -151,6 +151,8 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `LOG_REMOTE_IP_ENABLED`
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
+    - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
+    - `FS_ENABLED_NO_BASE_ALLOWLIST`
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
 - Added context-first stdlib capability signature support:
@@ -278,7 +280,7 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 
 #### 7) Tradeoffs and next steps
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
-- Next step is to expand sample evidence coverage to additional high-signal findings (for example network/filesystem and capture/replay posture families).
+- Next step is to expand sample evidence coverage to additional high-signal findings (for example capture/replay and broader middleware posture families).
 
 ### Slice Explanation: Context-First Stdlib Capability Signatures
 

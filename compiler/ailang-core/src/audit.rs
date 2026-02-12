@@ -384,7 +384,12 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "INTERNAL_NET_ENABLED_NO_ALLOWLIST",
             AuditSeverity::CRITICAL,
             "ssrf",
-            json!({"internalNetEnabled": true, "allowedCidrs": [], "allowedDomains": []}),
+            json!({
+                "internalNetEnabled": true,
+                "allowedCidrs": [],
+                "allowedDomains": [],
+                "sampleCalls": call_samples_for_tag(security_map, "sink.net.internal_request", 5),
+            }),
             "Disable internal net or define explicit CIDR/domain allowlists.",
         ));
     }
@@ -404,7 +409,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "FS_ENABLED_NO_BASE_ALLOWLIST",
             AuditSeverity::HIGH,
             "fs",
-            json!({"fsEnabled": true, "allowedBasePaths": []}),
+            json!({
+                "fsEnabled": true,
+                "allowedBasePaths": [],
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["sink.fs.read", "sink.fs.write"],
+                    5,
+                ),
+            }),
             "Restrict filesystem access to explicit allowed base paths.",
         ));
     }
