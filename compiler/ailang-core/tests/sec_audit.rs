@@ -494,8 +494,27 @@ fn sec_audit_flags_allow_hygiene_findings() {
         .findings
         .iter()
         .any(|finding| finding.id == "ALLOW_EXPIRED" && finding.severity == AuditSeverity::HIGH));
-    assert!(report.findings.iter().any(|finding| {
-        finding.id == "ALLOW_COUNT_HIGH" && finding.severity == AuditSeverity::LOW
+    let allow_count = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "ALLOW_COUNT_HIGH")
+        .expect("ALLOW_COUNT_HIGH should be present");
+    assert_eq!(allow_count.severity, AuditSeverity::LOW);
+    let samples = allow_count
+        .evidence
+        .get("sampleExceptions")
+        .and_then(|value| value.as_array())
+        .expect("ALLOW_COUNT_HIGH should include sampleExceptions");
+    assert!(!samples.is_empty(), "expected non-empty exception samples");
+    assert!(
+        samples.len() <= 5,
+        "sampleExceptions should be bounded to at most 5 entries"
+    );
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("ticket")
+            .and_then(|value| value.as_str())
+            .is_some_and(|ticket| ticket == "SEC-000")
     }));
 }
 

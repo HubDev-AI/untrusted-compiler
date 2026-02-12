@@ -733,6 +733,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             json!({
                 "count": security_map.allows.len(),
                 "threshold": ALLOW_COUNT_HIGH_THRESHOLD,
+                "sampleExceptions": exception_samples(&security_map.allows, 5),
             }),
             "Reduce active @allow exceptions to keep security posture maintainable.",
         ));
@@ -968,6 +969,26 @@ fn call_samples_for_bypass_tags(
     } else {
         call_samples_for_tags(security_map, &tags, limit)
     }
+}
+
+fn exception_samples(allows: &[SecurityAllow], limit: usize) -> Vec<Value> {
+    allows
+        .iter()
+        .take(limit)
+        .map(|allow| {
+            json!({
+                "policyKey": allow.policy,
+                "ticket": allow.ticket,
+                "expires": allow.expires,
+                "bypass": allow.bypass,
+                "location": {
+                    "file": allow.loc.file,
+                    "line": allow.loc.line,
+                    "column": allow.loc.column,
+                },
+            })
+        })
+        .collect()
 }
 
 fn finding(

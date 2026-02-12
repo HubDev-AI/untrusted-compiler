@@ -162,6 +162,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `REPLAY_EFFECTS_ALLOW`
     - CORS/security-headers/auth/CSRF posture findings via middleware-tagged sample callsites
     - allowlisted bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`) via bypass-tag sampling
+    - non-call exception posture findings (`ALLOW_COUNT_HIGH`) via bounded `sampleExceptions` snapshots
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
 - Added context-first stdlib capability signature support:
@@ -299,6 +300,43 @@ Count-only findings hide which callsites triggered risk. Sample call evidence ma
 #### 7) Tradeoffs and next steps
 - Current sampling is per-tag and static; it does not yet group by module or severity hot spots.
 - Next step is to expand evidence coverage for remaining policy/exception hygiene findings with similarly deterministic samples.
+
+### Slice Explanation: Exception Snapshot Evidence for `ALLOW_COUNT_HIGH`
+
+#### 1) What it is
+This slice adds bounded `sampleExceptions` evidence to the `ALLOW_COUNT_HIGH` finding so exception posture alerts include concrete representative `@allow` entries.
+
+#### 2) Why it exists
+Count-only posture findings are hard to act on. Sample snapshots let reviewers immediately see policy keys, tickets, bypass tags, and locations behind high exception volume.
+
+#### 3) How it works internally
+- audit now builds deterministic exception samples from `security_map.allows`.
+- each sample includes:
+  - policy key,
+  - ticket,
+  - expiry,
+  - bypass tags,
+  - source location.
+- sample list is bounded (top 5 in parse order).
+
+#### 4) Inputs/outputs and constraints
+- Input: `security_map.allows`.
+- Output: `ALLOW_COUNT_HIGH.evidence.sampleExceptions`.
+- Constraints:
+  - samples are representative, not exhaustive,
+  - ordering is deterministic by existing allow ordering.
+
+#### 5) Failure modes and diagnostics
+- no compile-time diagnostics are introduced.
+- if allows exist but malformed metadata is already filtered by prior parsing/validation stages.
+
+#### 6) Example usage
+- when allow count exceeds threshold, finding evidence now includes entries like:
+  - `{ policyKey, ticket, expires, bypass, location }`.
+
+#### 7) Tradeoffs and next steps
+- this adds visibility for high exception volume but not trend/aging aggregates.
+- next step is rollup evidence for expiring/soon-expiring exception posture.
 
 ### Slice Explanation: Allowlist Bypass Sample Evidence
 
@@ -589,4 +627,4 @@ Tag-only origin summaries answered "what source family reached the sink" but not
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface provenance trace chains from audit/security-map metadata into compiler diagnostics and tooling outputs.
-5. Expand `sec.audit` evidence coverage for non-call policy hygiene findings and posture snapshots.
+5. Expand `sec.audit` non-call policy evidence from exception-count snapshots to expiry-window rollups.
