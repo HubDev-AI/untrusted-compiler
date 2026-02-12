@@ -779,12 +779,15 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn ioOps(
   db: DbCap,
+  tx: TxCap,
   fs: FsCap,
   net: NetCap,
   query: SqlQuery,
   path: PathSafe,
   url: PublicUrl
-) effects { db.write, db.read, fs.read, fs.write, net } -> Int {
+) effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
+  db.tx(db);
+  db.execTx(tx, query);
   db.exec(db, query);
   db.queryOne(db, query, 1);
   fs.read(fs, path);
@@ -811,6 +814,8 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_db_tx(db)"));
+    assert!(generated_c.contains("ailang_rt_db_exec_tx(tx, query)"));
     assert!(generated_c.contains("ailang_rt_db_exec(db, query)"));
     assert!(generated_c.contains("ailang_rt_db_query_one(db, query, 1)"));
     assert!(generated_c.contains("ailang_rt_fs_read(fs, path)"));

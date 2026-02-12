@@ -1067,6 +1067,10 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "url_internal" | "url.internal" => vec!["gate.url.internal", "effect.net"],
         "db_read" | "db.queryOne" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
         "db_write" | "db.exec" => vec!["sink.sql.exec", "effect.db.write", "capability.db"],
+        "db_tx" | "db.tx" => vec!["effect.db.tx", "capability.db"],
+        "db_exec_tx" | "db.execTx" => {
+            vec!["sink.sql.exec", "effect.db.write", "capability.tx"]
+        }
         "res_html" | "res.html" => vec!["sink.http.html"],
         "set_header" | "res.setHeader" => vec!["sink.http.header_set"],
         "set_cookie" | "res.addCookie" => vec!["sink.http.cookie_set"],
@@ -1104,7 +1108,10 @@ fn dynamic_call_tags(name: &str, args: &[Expr]) -> Vec<&'static str> {
 }
 
 fn sql_call_has_select_without_limit(name: &str, args: &[Expr]) -> bool {
-    if !matches!(name, "db_write" | "db.exec" | "db_read" | "db.queryOne") {
+    if !matches!(
+        name,
+        "db_write" | "db.exec" | "db_read" | "db.queryOne" | "db_exec_tx" | "db.execTx"
+    ) {
         return false;
     }
 
@@ -1118,6 +1125,13 @@ fn sql_call_has_select_without_limit(name: &str, args: &[Expr]) -> bool {
 fn sql_query_arg_text<'a>(name: &str, args: &'a [Expr]) -> Option<&'a str> {
     let query_arg = match name {
         "db_write" | "db.exec" => {
+            if args.len() >= 3 {
+                args.get(2)?
+            } else {
+                args.get(1)?
+            }
+        }
+        "db_exec_tx" | "db.execTx" => {
             if args.len() >= 3 {
                 args.get(2)?
             } else {
@@ -1284,6 +1298,20 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
                 vec!["context", "capability", "query", "row_schema"]
             } else {
                 vec!["capability", "query", "row_schema"]
+            }
+        }
+        "db_tx" | "db.tx" => {
+            if arg_count >= 2 {
+                vec!["context", "capability"]
+            } else {
+                vec!["capability"]
+            }
+        }
+        "db_exec_tx" | "db.execTx" => {
+            if arg_count >= 3 {
+                vec!["context", "capability", "query"]
+            } else {
+                vec!["capability", "query"]
             }
         }
         "res_json" | "res.json" => {
@@ -1512,6 +1540,21 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
             ],
         ),
         symbol(
+            "db_tx",
+            &[
+                ("effect.db.tx", TagKind::Effect),
+                ("capability.db", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "db_exec_tx",
+            &[
+                ("sink.sql.exec", TagKind::Sink),
+                ("effect.db.write", TagKind::Effect),
+                ("capability.tx", TagKind::Capability),
+            ],
+        ),
+        symbol(
             "net_call",
             &[
                 ("sink.net.public_request", TagKind::Sink),
@@ -1626,6 +1669,21 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
                 ("sink.sql.query", TagKind::Sink),
                 ("effect.db.read", TagKind::Effect),
                 ("capability.db", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "db.tx",
+            &[
+                ("effect.db.tx", TagKind::Effect),
+                ("capability.db", TagKind::Capability),
+            ],
+        ),
+        symbol(
+            "db.execTx",
+            &[
+                ("sink.sql.exec", TagKind::Sink),
+                ("effect.db.write", TagKind::Effect),
+                ("capability.tx", TagKind::Capability),
             ],
         ),
         symbol(

@@ -97,3 +97,4 @@
 - Added std-error helper bridge for `err.*` constructors/enrichers across semantic intrinsics, C lowering, runtime ABI stubs, and clang-gated `c-bin` integration tests.
 - Added `res.text` plain-text response bridge across semantic intrinsics, C lowering, runtime ABI stubs, and req/res integration coverage.
 - Added structured log-event helper bridge for `log.attrRedacted`, `log.withAttr`, `log.withHttp`, and `log.withError` plus `LogAttr`/`LogEvent` primitive catalog support.
+- Added DB transaction helper bridge for `db.tx`/`db.execTx`, including `db.tx` effect registration, capability enforcement, SQL sink coverage, and security-map tag/role extensions.

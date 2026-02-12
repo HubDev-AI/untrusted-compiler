@@ -119,6 +119,14 @@ int64_t ailang_rt_db_exec() {
   return 0;
 }
 
+int64_t ailang_rt_db_tx() {
+  return 0;
+}
+
+int64_t ailang_rt_db_exec_tx() {
+  return 0;
+}
+
 int64_t ailang_rt_db_query_one() {
   return 0;
 }

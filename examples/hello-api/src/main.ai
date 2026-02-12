@@ -42,6 +42,12 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
   0
 }
 
+fn txDemo(db: DbCap, tx: TxCap, query: SqlQuery) effects { db.tx, db.write } -> Int {
+  db.tx(db);
+  db.execTx(tx, query);
+  0
+}
+
 fn main() effects { net } -> Int {
   sec.defaultHeaders();
   let csp = sec.csp();

@@ -76,5 +76,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `108-m7-error-builder-intrinsic-bridge.md`
 - `109-m7-res-text-intrinsic-bridge.md`
 - `110-m7-log-event-helper-intrinsic-bridge.md`
+- `111-m7-db-transaction-intrinsic-bridge.md`
 
 As milestones progress, chapters will be added and linked from this index.

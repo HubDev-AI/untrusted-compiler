@@ -98,6 +98,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_set_header();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
     assert!(header.contains("int64_t ailang_rt_db_exec();"));
+    assert!(header.contains("int64_t ailang_rt_db_tx();"));
+    assert!(header.contains("int64_t ailang_rt_db_exec_tx();"));
     assert!(header.contains("int64_t ailang_rt_db_query_one();"));
     assert!(header.contains("int64_t ailang_rt_fs_read();"));
     assert!(header.contains("int64_t ailang_rt_fs_write();"));
@@ -179,6 +181,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_set_header()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
     assert!(source.contains("int64_t ailang_rt_db_exec()"));
+    assert!(source.contains("int64_t ailang_rt_db_tx()"));
+    assert!(source.contains("int64_t ailang_rt_db_exec_tx()"));
     assert!(source.contains("int64_t ailang_rt_db_query_one()"));
     assert!(source.contains("int64_t ailang_rt_fs_read()"));
     assert!(source.contains("int64_t ailang_rt_fs_write()"));
@@ -382,7 +386,9 @@ fn main() effects { net } -> Int {
 #[test]
 fn c_backend_rewrites_db_fs_and_net_intrinsics_to_runtime_symbols() {
     let source = r#"
-fn main() effects { db.write, db.read, fs.read, fs.write, net } -> Int {
+fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
+  db.tx(1);
+  db.execTx(1, 2);
   db.exec(1, 2);
   db.queryOne(1, 2, 3);
   fs.read(1, 2);
@@ -397,6 +403,8 @@ fn main() effects { db.write, db.read, fs.read, fs.write, net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
+    assert!(c.contains("(void)(ailang_rt_db_tx(1));"));
+    assert!(c.contains("(void)(ailang_rt_db_exec_tx(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_db_exec(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_db_query_one(1, 2, 3));"));
     assert!(c.contains("(void)(ailang_rt_fs_read(1, 2));"));

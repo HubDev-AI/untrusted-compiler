@@ -243,6 +243,7 @@ impl Catalog {
                 "secrets.reveal",
                 "db.read",
                 "db.write",
+                "db.tx",
                 "fs.read",
                 "fs.write",
                 "shell",
@@ -2528,6 +2529,16 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: Some("DbCap"),
             return_ty: IntrinsicReturnTy::Unit,
         }),
+        "db_tx" | "db.tx" => Some(IntrinsicSpec {
+            effect: Some("db.tx"),
+            required_capability: Some("DbCap"),
+            return_ty: IntrinsicReturnTy::Named("TxCap"),
+        }),
+        "db_exec_tx" | "db.execTx" => Some(IntrinsicSpec {
+            effect: Some("db.write"),
+            required_capability: Some("TxCap"),
+            return_ty: IntrinsicReturnTy::Unit,
+        }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: Some("fs.read"),
             required_capability: Some("FsCap"),
@@ -2764,7 +2775,10 @@ fn is_json_sink(name: &str) -> bool {
 }
 
 fn is_sql_sink(name: &str) -> bool {
-    matches!(name, "db_write" | "db.exec" | "db_read" | "db.queryOne")
+    matches!(
+        name,
+        "db_write" | "db.exec" | "db_read" | "db.queryOne" | "db_exec_tx" | "db.execTx"
+    )
 }
 
 fn is_url_sink(name: &str) -> bool {
@@ -2796,6 +2810,13 @@ fn sink_user_arg_start_index(name: &str, arg_len: usize) -> usize {
         }
         "db_read" | "db.queryOne" => {
             if arg_len >= 4 {
+                2
+            } else {
+                1
+            }
+        }
+        "db_exec_tx" | "db.execTx" => {
+            if arg_len >= 3 {
                 2
             } else {
                 1
@@ -2844,6 +2865,20 @@ fn capability_arg_index(name: &str, arg_len: usize) -> usize {
         }
         "db_read" | "db.queryOne" => {
             if arg_len >= 4 {
+                1
+            } else {
+                0
+            }
+        }
+        "db_tx" | "db.tx" => {
+            if arg_len >= 2 {
+                1
+            } else {
+                0
+            }
+        }
+        "db_exec_tx" | "db.execTx" => {
+            if arg_len >= 3 {
                 1
             } else {
                 0
