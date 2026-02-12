@@ -65,5 +65,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `97-m7-http-surface-type-bootstrap.md`
 - `98-m7-policy-config-intrinsic-bootstrap.md`
 - `99-m7-success-envelope-intrinsic-bootstrap.md`
+- `100-m7-request-source-intrinsic-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.

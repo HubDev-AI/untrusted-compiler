@@ -73,6 +73,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_time_now(void);"));
     assert!(header.contains("void ailang_rt_log_any();"));
     assert!(header.contains("int64_t ailang_rt_req_json();"));
+    assert!(header.contains("int64_t ailang_rt_req_body();"));
+    assert!(header.contains("int64_t ailang_rt_req_query();"));
+    assert!(header.contains("int64_t ailang_rt_req_path_param();"));
+    assert!(header.contains("int64_t ailang_rt_req_header();"));
     assert!(header.contains("int64_t ailang_rt_res_json();"));
     assert!(header.contains("int64_t ailang_rt_res_ok();"));
     assert!(header.contains("int64_t ailang_rt_res_ok_meta();"));
@@ -115,6 +119,10 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_time_now(void)"));
     assert!(source.contains("void ailang_rt_log_any()"));
     assert!(source.contains("int64_t ailang_rt_req_json()"));
+    assert!(source.contains("int64_t ailang_rt_req_body()"));
+    assert!(source.contains("int64_t ailang_rt_req_query()"));
+    assert!(source.contains("int64_t ailang_rt_req_path_param()"));
+    assert!(source.contains("int64_t ailang_rt_req_header()"));
     assert!(source.contains("int64_t ailang_rt_res_json()"));
     assert!(source.contains("int64_t ailang_rt_res_ok()"));
     assert!(source.contains("int64_t ailang_rt_res_ok_meta()"));
@@ -188,6 +196,10 @@ fn c_backend_rewrites_req_and_res_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { net } -> Int {
   let schema = 1;
+  req.body(1, 2);
+  req.query(1, 2);
+  req.pathParam(1, 2);
+  req.header(1, 2);
   req.json(schema);
   res.json(schema, 1);
   res.ok(201, schema, 1);
@@ -201,6 +213,10 @@ fn main() effects { net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
+    assert!(c.contains("(void)(ailang_rt_req_body(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_req_query(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_req_path_param(1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_req_header(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_req_json(schema));"));
     assert!(c.contains("(void)(ailang_rt_res_json(schema, 1));"));
     assert!(c.contains("(void)(ailang_rt_res_ok(201, schema, 1));"));

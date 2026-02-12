@@ -82,3 +82,4 @@
 - Added policy-config intrinsic C-lowering coverage (`sec.defaultHeaders`, `cors.fromPolicy`, `csrf.fromPolicy`, `auth.fromPolicy`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Removed absolute local machine paths from M7 `hello-api` book chapters to keep docs repository-safe.
 - Added success-envelope intrinsic bridge (`res.ok`, `res.okMeta`) across semantic checks, C lowering, runtime stubs, security-map tagging, and req/res `c-bin` integration coverage.
+- Added request-source intrinsic bridge (`req.body`, `req.query`, `req.pathParam`, `req.header`) across C lowering/runtime ABI/tests and exercised them in `examples/hello-api`.

@@ -550,6 +550,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: HTTP Surface Type Bootstrap".
 - Chapter: "M7 Slice: Policy-Config Intrinsic Bootstrap".
 - Chapter: "M7 Slice: Success Envelope Intrinsic Bootstrap".
+- Chapter: "M7 Slice: Request Source Intrinsic Bootstrap".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

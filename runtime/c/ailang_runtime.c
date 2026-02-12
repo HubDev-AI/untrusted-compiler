@@ -19,6 +19,22 @@ int64_t ailang_rt_req_json() {
   return 0;
 }
 
+int64_t ailang_rt_req_body() {
+  return 0;
+}
+
+int64_t ailang_rt_req_query() {
+  return 0;
+}
+
+int64_t ailang_rt_req_path_param() {
+  return 0;
+}
+
+int64_t ailang_rt_req_header() {
+  return 0;
+}
+
 int64_t ailang_rt_res_json() {
   return 0;
 }

@@ -505,6 +505,10 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn decode(schema: Schema<Int>) effects { net } -> Int {
+  req.body(1, 2);
+  req.query(1, 2);
+  req.pathParam(1, 2);
+  req.header(1, 2);
   req.json(schema);
   0
 }
@@ -535,6 +539,10 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_req_body(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_query(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_path_param(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_req_header(1, 2)"));
     assert!(generated_c.contains("ailang_rt_req_json(schema)"));
     assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));

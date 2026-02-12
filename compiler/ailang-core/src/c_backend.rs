@@ -189,6 +189,14 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("log_emit(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("req.json(", "__AILANG_INTRINSIC_REQ_JSON__(");
     lowered = lowered.replace("req_json(", "__AILANG_INTRINSIC_REQ_JSON__(");
+    lowered = lowered.replace("req.body(", "__AILANG_INTRINSIC_REQ_BODY__(");
+    lowered = lowered.replace("req_body(", "__AILANG_INTRINSIC_REQ_BODY__(");
+    lowered = lowered.replace("req.query(", "__AILANG_INTRINSIC_REQ_QUERY__(");
+    lowered = lowered.replace("req_query(", "__AILANG_INTRINSIC_REQ_QUERY__(");
+    lowered = lowered.replace("req.pathParam(", "__AILANG_INTRINSIC_REQ_PATH_PARAM__(");
+    lowered = lowered.replace("req_path_param(", "__AILANG_INTRINSIC_REQ_PATH_PARAM__(");
+    lowered = lowered.replace("req.header(", "__AILANG_INTRINSIC_REQ_HEADER__(");
+    lowered = lowered.replace("req_header(", "__AILANG_INTRINSIC_REQ_HEADER__(");
     lowered = lowered.replace("res.json(", "__AILANG_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res_json(", "__AILANG_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res.okMeta(", "__AILANG_INTRINSIC_RES_OK_META__(");
@@ -295,6 +303,13 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_REQ_JSON__(", "ailang_rt_req_json(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_REQ_BODY__(", "ailang_rt_req_body(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_REQ_QUERY__(", "ailang_rt_req_query(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_REQ_PATH_PARAM__(",
+        "ailang_rt_req_path_param(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_REQ_HEADER__(", "ailang_rt_req_header(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_JSON__(", "ailang_rt_res_json(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK__(", "ailang_rt_res_ok(");
     lowered = lowered.replace("__AILANG_INTRINSIC_RES_OK_META__(", "ailang_rt_res_ok_meta(");
