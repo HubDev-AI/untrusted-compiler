@@ -115,6 +115,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
     - `FS_ENABLED_NO_BASE_ALLOWLIST`
+    - `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`
+    - `CAPTURE_REDACTION_INCOMPLETE`
+    - `CAPTURE_ALL_IN_PROD`
+    - `REPLAY_EFFECTS_ALLOW`
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
   - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).
   - `E2003`/`E2004` diagnostics now report the precise capability argument index for these call forms.
@@ -609,7 +613,7 @@ Day 14:
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib symbol metadata (including alias/value-call paths).
 2. Extend origin-trace coverage from local expression flow into interprocedural paths.
-3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families (capture/replay and broader middleware posture).
+3. Expand deterministic `sec.audit` sample-call evidence coverage across additional finding families (CORS/security-headers and auth/CSRF posture).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

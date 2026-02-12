@@ -161,6 +161,110 @@ allowed_base_paths = []
 }
 
 #[test]
+fn sec_audit_includes_sample_calls_for_redirect_capture_and_replay_findings() {
+    let source = r#"
+fn risky(net: NetCap) effects { net } -> Int {
+  req.header("authorization");
+  httpClient.get(net, "https://example.com");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let policy_source = r#"
+[policy]
+mode = "warn"
+env = "prod"
+
+[net.public]
+allow_redirects = true
+
+[net.ssrf]
+revalidate_redirects = false
+
+[capture]
+mode = "all"
+redact_headers = ["authorization"]
+
+[replay]
+effects = "allow"
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), policy_source)
+        .expect("policy should parse for redirect/capture/replay sample evidence test");
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let redirects = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION")
+        .expect("redirect finding should be present");
+    let redirect_samples = redirects
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("redirect finding should include sampleCalls");
+    assert!(redirect_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "httpClient.get")
+    }));
+
+    let replay = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "REPLAY_EFFECTS_ALLOW")
+        .expect("replay finding should be present");
+    let replay_samples = replay
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("replay finding should include sampleCalls");
+    assert!(replay_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "httpClient.get")
+    }));
+
+    let capture_redaction = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CAPTURE_REDACTION_INCOMPLETE")
+        .expect("capture redaction finding should be present");
+    let capture_redaction_samples = capture_redaction
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("capture redaction finding should include sampleCalls");
+    assert!(capture_redaction_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "req.header")
+    }));
+
+    let capture_all = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CAPTURE_ALL_IN_PROD")
+        .expect("capture-all finding should be present");
+    let capture_all_samples = capture_all
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("capture-all finding should include sampleCalls");
+    assert!(capture_all_samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| callee == "req.header")
+    }));
+}
+
+#[test]
 fn sec_audit_reports_allow_annotations_as_exceptions() {
     let source = r#"
 @allow(

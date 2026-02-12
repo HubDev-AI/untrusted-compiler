@@ -399,7 +399,11 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION",
             AuditSeverity::HIGH,
             "ssrf",
-            json!({"allowRedirects": true, "revalidateRedirects": false}),
+            json!({
+                "allowRedirects": true,
+                "revalidateRedirects": false,
+                "sampleCalls": call_samples_for_tag(security_map, "sink.net.public_request", 5),
+            }),
             "Disable redirects or revalidate every redirect hop against SSRF checks.",
         ));
     }
@@ -428,7 +432,14 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CAPTURE_REDACTION_INCOMPLETE",
             AuditSeverity::HIGH,
             "capture",
-            json!({"redactHeaders": policy.capture.redact_headers}),
+            json!({
+                "redactHeaders": policy.capture.redact_headers,
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["source.http.header", "source.http.body"],
+                    5,
+                ),
+            }),
             "Capture redaction must include authorization, cookie, and set-cookie headers.",
         ));
     }
@@ -438,7 +449,15 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "CAPTURE_ALL_IN_PROD",
             AuditSeverity::HIGH,
             "capture",
-            json!({"mode": "all", "env": "prod"}),
+            json!({
+                "mode": "all",
+                "env": "prod",
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &["source.http.body", "source.http.query", "source.http.header", "source.http.path"],
+                    5,
+                ),
+            }),
             "Use errors or sample capture mode in production.",
         ));
     }
@@ -448,7 +467,22 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
             "REPLAY_EFFECTS_ALLOW",
             AuditSeverity::MEDIUM,
             "replay",
-            json!({"effects": "allow"}),
+            json!({
+                "effects": "allow",
+                "sampleCalls": call_samples_for_tags(
+                    security_map,
+                    &[
+                        "effect.net",
+                        "effect.db.read",
+                        "effect.db.write",
+                        "effect.fs.read",
+                        "effect.fs.write",
+                        "effect.secrets.read",
+                        "effect.secrets.reveal",
+                    ],
+                    5,
+                ),
+            }),
             "Prefer replay effects=deny or mock outside isolated staging workflows.",
         ));
     }
