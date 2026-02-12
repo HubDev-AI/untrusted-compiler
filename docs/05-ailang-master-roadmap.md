@@ -39,6 +39,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - risk and finding-count deltas,
     - per-severity deltas,
     - added/resolved finding ID sets.
+  - `sec.audit` now supports explicit report persistence (`--write-report <path>`) to support baseline capture and opt-in trend history workflows.
   - Diagnostics now carry structured tag metadata (`security`, `taint`, `secret`, `policy`, `effects`, `capability`, `schema`, `sink`) for editor/LSP-oriented consumers while preserving current text rendering.
   - CLI now supports machine-readable diagnostics output via `ailang check --emit diagnostics-json`, exposing spans/codes/notes/tags as JSON for tooling integration.
   - New diagnostic-tag tests assert tags for representative sink, capability, policy, and schema violations.

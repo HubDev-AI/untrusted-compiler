@@ -1065,6 +1065,44 @@ Structured tags and spans are most useful when directly consumable by tools. Thi
 - this is a thin bridge to tooling and does not yet provide an LSP server.
 - next step is exposing the same structured diagnostics through an official language-server process.
 
+### Slice Explanation: Persisted Audit Report Output (`--write-report`)
+
+#### 1) What it is
+This slice adds `ailang sec audit --write-report <path>` so audit reports can be persisted as JSON artifacts for later baseline/trend comparison.
+
+#### 2) Why it exists
+Baseline comparison is most useful when teams can capture and store reports in CI artifacts or repository-local build outputs without manual redirection pipelines.
+
+#### 3) How it works internally
+- `sec audit` accepts optional `--write-report`.
+- after report generation, CLI serializes the exact `AuditReport` JSON and writes it to the requested path.
+- parent directories are created automatically when needed.
+- write/serialization failures return explicit non-zero exit (`Err(2)`).
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - current audit run result,
+  - output path from `--write-report`.
+- Output:
+  - persisted JSON report identical to the in-memory audit structure.
+- Constraints:
+  - report writing is opt-in only,
+  - no implicit rotation/history policy is applied yet.
+
+#### 5) Failure modes and diagnostics
+- invalid/unwritable path results in CLI error and non-zero exit.
+- report emission to stdout still follows selected `--format` and is unaffected.
+
+#### 6) Example usage
+- capture baseline:
+  - `ailang sec audit --path . --format json --write-report build/audit-baseline.json`
+- compare against baseline later:
+  - `ailang sec audit --path . --baseline build/audit-baseline.json --write-report build/audit-current.json`
+
+#### 7) Tradeoffs and next steps
+- this provides deterministic artifact persistence but not managed time-series history.
+- next step is an optional rolling history mode (for example timestamped report snapshots plus window summaries).
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -1092,4 +1130,4 @@ Structured tags and spans are most useful when directly consumable by tools. Thi
 2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
 3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
 4. Surface richer provenance trace chains from audit/security-map metadata into editor tooling outputs (hover/code actions/LSP) beyond compact compiler notes.
-5. Build an initial compiler-backed language-server surface that streams tagged diagnostics and provenance hints.
+5. Add opt-in rolling audit-history capture (timestamped reports) and windowed trend summarization on top of persisted report artifacts.

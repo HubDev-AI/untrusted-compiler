@@ -58,6 +58,8 @@ enum SecCommands {
         #[arg(long)]
         baseline: Option<PathBuf>,
         #[arg(long)]
+        write_report: Option<PathBuf>,
+        #[arg(long)]
         fail_on: Option<String>,
     },
 }
@@ -98,8 +100,15 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             path,
             format,
             baseline,
+            write_report,
             fail_on,
-        } => cmd_sec_audit(&path, format, baseline.as_deref(), fail_on.as_deref()),
+        } => cmd_sec_audit(
+            &path,
+            format,
+            baseline.as_deref(),
+            write_report.as_deref(),
+            fail_on.as_deref(),
+        ),
     }
 }
 
@@ -107,6 +116,7 @@ fn cmd_sec_audit(
     path: &Path,
     format: AuditOutputFormat,
     baseline_path: Option<&Path>,
+    write_report_path: Option<&Path>,
     fail_on: Option<&str>,
 ) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
@@ -147,6 +157,12 @@ fn cmd_sec_audit(
                             serde_json::to_string_pretty(&report)
                                 .expect("security audit report should serialize")
                         );
+                    }
+                }
+
+                if let Some(write_report_path) = write_report_path {
+                    if let Err(code) = write_audit_report(write_report_path, &report) {
+                        return Err(code);
                     }
                 }
 
@@ -203,6 +219,32 @@ fn load_audit_baseline(path: &Path) -> Result<AuditReport, i32> {
             Err(2)
         }
     }
+}
+
+fn write_audit_report(path: &Path, report: &AuditReport) -> Result<(), i32> {
+    if let Some(parent) = path.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            eprintln!(
+                "could not create report directory `{}`: {err}",
+                parent.display()
+            );
+            return Err(2);
+        }
+    }
+
+    let serialized = match serde_json::to_string_pretty(report) {
+        Ok(json) => json,
+        Err(err) => {
+            eprintln!("could not serialize audit report: {err}");
+            return Err(2);
+        }
+    };
+
+    if let Err(err) = fs::write(path, serialized) {
+        eprintln!("could not write audit report `{}`: {err}", path.display());
+        return Err(2);
+    }
+    Ok(())
 }
 
 fn cmd_build(path: &Path) -> Result<(), i32> {
