@@ -179,6 +179,15 @@ fn lower_c_expr(expr: &str) -> String {
     let mut lowered = expr.to_string();
     lowered = lowered.replace("time.now(", "__AILANG_INTRINSIC_TIME_NOW__(");
     lowered = lowered.replace("time_now(", "__AILANG_INTRINSIC_TIME_NOW__(");
+    lowered = lowered.replace("log.info(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log.warn(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log.error(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log.emit(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log_info(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log_warn(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log_error(", "__AILANG_INTRINSIC_LOG_ANY__(");
+    lowered = lowered.replace("log_emit(", "__AILANG_INTRINSIC_LOG_ANY__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
+    lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered
 }

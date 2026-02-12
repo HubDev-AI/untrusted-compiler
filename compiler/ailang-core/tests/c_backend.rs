@@ -71,11 +71,13 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_identity_i64(int64_t value);"));
     assert!(header.contains("bool ailang_rt_identity_bool(bool value);"));
     assert!(header.contains("int64_t ailang_rt_time_now(void);"));
+    assert!(header.contains("void ailang_rt_log_any();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
     assert!(source.contains("bool ailang_rt_identity_bool(bool value)"));
     assert!(source.contains("int64_t ailang_rt_time_now(void)"));
+    assert!(source.contains("void ailang_rt_log_any()"));
 }
 
 #[test]
@@ -91,4 +93,20 @@ fn current() -> Int64 {
     let c = emit_c_program(&mir);
 
     assert!(c.contains("return ailang_rt_identity_i64(ailang_rt_time_now());"));
+}
+
+#[test]
+fn c_backend_rewrites_log_intrinsics_to_runtime_symbol() {
+    let source = r#"
+fn main() effects { log } -> Int {
+  log.info(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_log_any(1));"));
 }

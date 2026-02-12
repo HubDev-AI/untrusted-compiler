@@ -209,6 +209,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - CLI integration now includes a non-trivial `c-bin` fixture covering function calls + `if/else` control flow end-to-end.
   - Runtime ABI C assets are now externalized under `runtime/c/` and emitted via `include_str!` from canonical runtime files.
   - CLI integration now includes end-to-end `time.now` intrinsic coverage through `c-bin` builds and runnable binaries.
+  - C emission now lowers `log.info/warn/error/emit` intrinsic calls to runtime symbol `ailang_rt_log_any`, with runtime stub and `c-bin` integration coverage.
   - Core and CLI tests cover the C emit path (`c_backend` + CLI build output checks).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
@@ -252,6 +253,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/84-m6-non-trivial-c-bin-control-flow-validation.md`
 - `docs/book/85-m6-runtime-c-assets-externalized.md`
 - `docs/book/86-m6-time-now-end-to-end-c-bin-validation.md`
+- `docs/book/87-m6-log-intrinsic-runtime-lowering.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -492,6 +494,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M6 Slice: Non-Trivial c-bin Control-Flow Validation".
 - Chapter: "M6 Slice: Runtime C Assets Externalized".
 - Chapter: "M6 Slice: time.now End-to-End c-bin Validation".
+- Chapter: "M6 Slice: Log Intrinsic Runtime Lowering".
 
 ## M7 - HTTP/JSON Vertical Slice
 ### Build tasks

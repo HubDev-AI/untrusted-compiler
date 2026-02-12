@@ -11,3 +11,6 @@ bool ailang_rt_identity_bool(bool value) {
 int64_t ailang_rt_time_now(void) {
   return 0;
 }
+
+void ailang_rt_log_any() {
+}

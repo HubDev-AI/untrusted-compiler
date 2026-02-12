@@ -12,6 +12,7 @@
 | 2026-02-12 | self | Assumed statement-level continuation block numbering would match previous branch-first ordering. | Reserve block IDs intentionally and update MIR tests/goldens to assert the actual deterministic numbering strategy. |
 | 2026-02-12 | self | Generated C `main` with `int64_t` return type, which clang rejects. | Force emitted `main` signature to return `int` even when AILang return type maps to `Int`/`Int64`. |
 | 2026-02-12 | self | Used `status` as a temporary shell variable in `zsh`; it is readonly and broke a manual validation script. | Use a neutral temp variable name like `rc` for shell command exit codes. |
+| 2026-02-12 | self | Added `ailang_rt_log_any` with mismatched header/source signatures (`();` vs `(void)`), causing runtime-content assertion drift. | Keep runtime ABI declarations/definitions identical and validate both via unit tests immediately after edits. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -61,3 +62,4 @@
 - Added non-trivial `c-bin` integration coverage using a temp project fixture with helper-function call + `if/else` control flow.
 - Moved runtime ABI C sources from Rust string literals into `runtime/c/` files and switched emitter helpers to `include_str!` those canonical runtime assets.
 - Added clang-gated CLI integration coverage for `time.now` projects to validate semantic effects checks plus intrinsic rewrite/runtime linkage through full `c-bin` builds.
+- Added log intrinsic C-lowering coverage (`log.info/warn/error/emit` -> `ailang_rt_log_any`) with runtime stubs and end-to-end `c-bin` integration tests.
