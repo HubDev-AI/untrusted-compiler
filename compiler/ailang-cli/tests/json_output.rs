@@ -206,3 +206,34 @@ fn sec_audit_history_dir_writes_reports_and_autoloads_baseline() {
 
     fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
 }
+
+#[test]
+fn build_emit_mir_prints_textual_mir() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&["build", "--path", hello, "--emit", "mir"]);
+    assert!(output.status.success(), "expected success status");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("build succeeded"),
+        "build output should include success line"
+    );
+    assert!(
+        stdout.contains("fn main() -> Int"),
+        "MIR output should include function signature"
+    );
+    assert!(
+        stdout.contains("bb0:"),
+        "MIR output should include basic block"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should stay empty for successful build --emit mir"
+    );
+}

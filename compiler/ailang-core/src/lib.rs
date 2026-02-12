@@ -3,6 +3,7 @@ pub mod audit;
 pub mod diagnostics;
 pub mod lexer;
 pub mod manifest;
+pub mod mir;
 pub mod parser;
 pub mod policy;
 pub mod security_map;
@@ -15,6 +16,7 @@ pub use audit::{
 };
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
+pub use mir::{lower_program_to_mir, MirProgram};
 pub use parser::parse_source;
 pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
 pub use security_map::{

@@ -20,6 +20,8 @@ enum Commands {
     Build {
         #[arg(long, default_value = ".")]
         path: PathBuf,
+        #[arg(long, value_enum)]
+        emit: Option<BuildEmitTarget>,
     },
     Run {
         #[arg(long, default_value = ".")]
@@ -74,6 +76,11 @@ enum AuditOutputFormat {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum BuildEmitTarget {
+    Mir,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum EmitTarget {
     Ast,
     DiagnosticsJson,
@@ -83,7 +90,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Build { path } => cmd_build(&path),
+        Commands::Build { path, emit } => cmd_build(&path, emit),
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run { path } => cmd_run(&path),
         Commands::Test { path } => cmd_test(&path),
@@ -350,13 +357,16 @@ fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<Path
     Ok(output_path)
 }
 
-fn cmd_build(path: &Path) -> Result<(), i32> {
+fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
     match ailang_core::validate_project(path) {
         Ok(manifest) => {
-            if let Err(diagnostics) = analyze_entry(path, &manifest) {
-                print_diagnostics(&diagnostics);
-                return Err(1);
-            }
+            let program = match analyze_entry(path, &manifest) {
+                Ok(program) => program,
+                Err(diagnostics) => {
+                    print_diagnostics(&diagnostics);
+                    return Err(1);
+                }
+            };
 
             if let Err(diag) = write_lockfile_stub(path, &manifest) {
                 print_diagnostics(&[diag]);
@@ -372,6 +382,11 @@ fn cmd_build(path: &Path) -> Result<(), i32> {
                 "wrote lockfile stub: {}",
                 path.join("ailang.lock").display()
             );
+
+            if matches!(emit, Some(BuildEmitTarget::Mir)) {
+                let mir = ailang_core::lower_program_to_mir(&program);
+                println!("{}", mir.render_text());
+            }
             Ok(())
         }
         Err(diagnostics) => {

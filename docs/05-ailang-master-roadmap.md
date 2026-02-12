@@ -187,6 +187,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
   - compiler-emitted security metadata tags for robust audit tooling.
+- M5 bootstrap has started:
+  - backend-neutral MIR module is now implemented in `ailang-core` (`MirProgram`, `MirFunction`, `MirBlock`).
+  - AST function bodies now lower into deterministic single-block MIR (`bb0`) with explicit `return` terminators.
+  - `ailang build --emit mir` now prints textual MIR for inspection.
+  - MIR unit tests and CLI integration tests cover lowering and emit-path behavior.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -215,6 +220,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/69-auth-middleware-api-v0.md`
 - `docs/book/71-benchmarking-and-comparison-spec.md`
 - `docs/book/72-ailang-editor-tooling-and-zed-lsp-spec.md`
+- `docs/book/73-m5-mir-bootstrap-and-introspection.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
