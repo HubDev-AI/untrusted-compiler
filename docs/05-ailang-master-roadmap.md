@@ -231,6 +231,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Semantic + C runtime bridge now includes query-construction helper `sql.q` with runtime stubs and security-map gate tagging (`gate.sql.parameterize`).
   - Semantic + C runtime bridge now includes `cookie.build` typed-cookie helper with runtime stubs and `security_map` gate tagging (`gate.cookie.build`).
   - Alias resolution now includes recursion guards for namespace-shadowing call aliases, preventing runaway expansion patterns like `cookie.build.build...` during semantic/security analysis.
+  - Semantic analysis now accepts declared function symbols as value expressions for handler-style routing/wiring (for example `http.get(router, "/health", health)`).
+  - `examples/hello-api` now uses explicit `/health` and `/users` route paths with function-symbol handlers (`health`, `createUser`) and policy-driven middleware wiring chain (`security headers -> CORS -> CSRF -> auth`).
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -587,6 +589,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: DB Transaction Intrinsic Bridge".
 - Chapter: "M7 Slice: SQL Query Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: Cookie Builder Intrinsic Bridge".
+- Chapter: "M7 Slice: Function Symbol Handler Wiring for hello-api".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

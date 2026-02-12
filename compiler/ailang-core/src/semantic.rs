@@ -787,13 +787,20 @@ impl Analyzer {
         callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
         match &expr.kind {
-            ExprKind::Identifier(name) => env.get(name).cloned().unwrap_or_else(|| {
-                self.diagnostics.push(
-                    Diagnostic::error("N3003", "unknown identifier", expr.span.clone())
-                        .with_note(format!("`{name}` is not defined in this scope")),
-                );
-                Type::Unknown
-            }),
+            ExprKind::Identifier(name) => {
+                if let Some(ty) = env.get(name) {
+                    ty.clone()
+                } else if self.catalog.functions.contains_key(name.as_str()) {
+                    // Function symbols are valid first-class values for handler-style wiring.
+                    Type::Unknown
+                } else {
+                    self.diagnostics.push(
+                        Diagnostic::error("N3003", "unknown identifier", expr.span.clone())
+                            .with_note(format!("`{name}` is not defined in this scope")),
+                    );
+                    Type::Unknown
+                }
+            }
             ExprKind::Number(text) => {
                 if text.contains('.') {
                     Type::named("Float64")

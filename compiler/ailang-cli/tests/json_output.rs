@@ -1536,9 +1536,11 @@ fn build_emit_c_bin_compiles_hello_api_example_when_clang_available() {
     let generated_c = fs::read_to_string(hello_api_path.join("build").join("generated.c"))
         .expect("generated C should exist for hello-api");
     assert!(generated_c.contains("ailang_rt_http_router()"));
+    assert!(generated_c.contains("ailang_rt_http_route_get(router, \"/health\", health)"));
+    assert!(generated_c.contains("ailang_rt_http_route_post(router, \"/users\", createUser)"));
     assert!(generated_c.contains("ailang_rt_req_json(schema)"));
-    assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
-    assert!(generated_c.contains("ailang_rt_res_text(200, 1)"));
+    assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));
+    assert!(generated_c.contains("ailang_rt_res_text(200, \"ok\")"));
 
     let binary_path = hello_api_path.join("build").join("hello-api");
     assert!(binary_path.exists(), "hello-api binary should exist");

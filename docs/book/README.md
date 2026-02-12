@@ -79,5 +79,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `111-m7-db-transaction-intrinsic-bridge.md`
 - `112-m7-sql-query-builder-intrinsic-bridge.md`
 - `113-m7-cookie-builder-intrinsic-bridge.md`
+- `114-m7-function-symbol-handler-wiring-for-hello-api.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1,69 +1,28 @@
 fn health() effects { net } -> Int {
-  res.text(200, 1);
+  res.text(200, "ok");
   0
 }
 
 fn createUser(schema: Schema<Int>) effects { net } -> Int {
-  auth.require(1);
-  auth.requireRole(1, 2);
-  csrf.issueToken(1);
-  let base = path.base(1);
-  headers.name(1);
-  headers.value(1);
-  secrets.redact(1);
-  req.body(1, 2);
-  req.query(1, 2);
-  req.pathParam(1, 2);
-  let origin = req.header(1, 2);
-  cors.origin(origin);
-  path.under(base, origin);
   req.json(schema);
-  json.decode(1, schema, 1);
-  json.encode(schema, 1);
-  let baseErr = err.validation(1, 2);
-  err.auth(1, 2, 401);
-  err.notFound(1, 2);
-  err.conflict(1, 2);
-  err.rateLimit(1, 2, 1);
-  let internal = err.internal(1);
-  err.withPath(baseErr, 1);
-  err.withDetail(baseErr, 1, 2);
-  err.withLimit(baseErr, 1, 2, 3);
-  err.withDependency(baseErr, 1, 2, 3);
-  err.withCause(baseErr, internal);
-  let event = log.event(1);
-  let attr = log.attrRedacted(1);
-  let withAttr = log.withAttr(event, 1, attr);
-  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
-  log.withError(withHttp, baseErr);
-  res.json(schema, 1);
   res.ok(201, schema, 1);
-  res.okMeta(201, schema, 1, 2);
-  0
-}
-
-fn txDemo(db: DbCap, tx: TxCap, query: SqlQuery) effects { db.tx, db.write } -> Int {
-  let built = sql.q(1, 2);
-  db.tx(db);
-  db.execTx(tx, built);
-  query;
   0
 }
 
 fn main() effects { net } -> Int {
-  sec.defaultHeaders();
-  let csp = sec.csp();
-  sec.cspAdd(csp, 1, 2);
-  cors.fromPolicy();
-  csrf.fromPolicy();
-  auth.fromPolicy();
-  sec.withSecurityHeaders();
-  cors.withCors();
-  csrf.withCsrf();
-  auth.withAuth();
-  let router = http.router();
-  http.get(router, 1, 1);
-  http.post(router, 1, 1);
-  http.serve(1, router);
+  let securityHeaders = sec.defaultHeaders();
+  let corsCfg = cors.fromPolicy();
+  let csrfCfg = csrf.fromPolicy();
+  let authCfg = auth.fromPolicy();
+
+  let base = http.router();
+  let withHeaders = sec.withSecurityHeaders(base, securityHeaders);
+  let withCors = cors.withCors(withHeaders, corsCfg);
+  let withCsrf = csrf.withCsrf(withCors, csrfCfg);
+  let router = auth.withAuth(withCsrf, authCfg);
+
+  http.get(router, "/health", health);
+  http.post(router, "/users", createUser);
+  http.serve(8080, router);
   0
 }

@@ -102,3 +102,4 @@
 - Added DB transaction helper bridge for `db.tx`/`db.execTx`, including `db.tx` effect registration, capability enforcement, SQL sink coverage, and security-map tag/role extensions.
 - Added SQL query-construction helper bridge for `sql.q`, including semantic namespace support, runtime lowering, and `security_map` `gate.sql.parameterize` tagging.
 - Added cookie-builder helper bridge for `cookie.build`, including runtime lowering and `security_map` `gate.cookie.build` tagging, and hardened alias resolution against runaway suffix expansion.
+- Route handler wiring needed function-symbol identifiers to be accepted as value expressions; semantic fallback to cataloged function names unblocks `http.get(..., health)` style samples without weakening unknown-name diagnostics for non-functions.

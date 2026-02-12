@@ -1,0 +1,16 @@
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn createUser(schema: Schema<Int>) effects { net } -> Int {
+  req.json(schema);
+  res.ok(201, schema, 1);
+  0
+}
+
+fn wire(router: Router, schema: Schema<Int>) -> Int {
+  http.get(router, "/health", health);
+  http.post(router, "/users", createUser);
+  0
+}
