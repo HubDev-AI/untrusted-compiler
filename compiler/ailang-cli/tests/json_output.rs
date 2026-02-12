@@ -720,8 +720,9 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn configure() effects { net } -> Int {
+  let cookie = cookie.build(1, 2);
   res.setHeader(1, 2);
-  res.addCookie(1);
+  res.addCookie(cookie);
   0
 }
 
@@ -743,8 +744,9 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_cookie_build(1, 2)"));
     assert!(generated_c.contains("ailang_rt_set_header(1, 2)"));
-    assert!(generated_c.contains("ailang_rt_set_cookie(1)"));
+    assert!(generated_c.contains("ailang_rt_set_cookie(cookie)"));
 
     let binary_path = project_dir.join("build").join("headercookiedemo");
     assert!(binary_path.exists(), "compiled binary should exist");

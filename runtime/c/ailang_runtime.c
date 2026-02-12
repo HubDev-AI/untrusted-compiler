@@ -111,6 +111,10 @@ int64_t ailang_rt_set_header() {
   return 0;
 }
 
+int64_t ailang_rt_cookie_build() {
+  return 0;
+}
+
 int64_t ailang_rt_set_cookie() {
   return 0;
 }

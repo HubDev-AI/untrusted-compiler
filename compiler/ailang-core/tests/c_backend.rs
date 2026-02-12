@@ -96,6 +96,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_res_html();"));
     assert!(header.contains("int64_t ailang_rt_res_text();"));
     assert!(header.contains("int64_t ailang_rt_set_header();"));
+    assert!(header.contains("int64_t ailang_rt_cookie_build();"));
     assert!(header.contains("int64_t ailang_rt_set_cookie();"));
     assert!(header.contains("int64_t ailang_rt_sql_q();"));
     assert!(header.contains("int64_t ailang_rt_db_exec();"));
@@ -180,6 +181,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_res_html()"));
     assert!(source.contains("int64_t ailang_rt_res_text()"));
     assert!(source.contains("int64_t ailang_rt_set_header()"));
+    assert!(source.contains("int64_t ailang_rt_cookie_build()"));
     assert!(source.contains("int64_t ailang_rt_set_cookie()"));
     assert!(source.contains("int64_t ailang_rt_sql_q()"));
     assert!(source.contains("int64_t ailang_rt_db_exec()"));
@@ -371,8 +373,9 @@ fn main() -> Int {
 fn c_backend_rewrites_header_and_cookie_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { net } -> Int {
+  let cookie = cookie.build(1, 2);
   res.setHeader(1, 2);
-  res.addCookie(1);
+  res.addCookie(cookie);
   0
 }
 "#;
@@ -381,8 +384,9 @@ fn main() effects { net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
+    assert!(c.contains("ailang_rt_cookie_build(1, 2);"));
     assert!(c.contains("(void)(ailang_rt_set_header(1, 2));"));
-    assert!(c.contains("(void)(ailang_rt_set_cookie(1));"));
+    assert!(c.contains("(void)(ailang_rt_set_cookie(cookie));"));
 }
 
 #[test]

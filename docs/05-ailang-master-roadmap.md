@@ -229,6 +229,8 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Semantic + C runtime bridge now includes structured log-event helper intrinsics (`log.attrRedacted`, `log.withAttr`, `log.withHttp`, `log.withError`) with runtime stubs and log-builder integration coverage.
   - Semantic + C runtime bridge now includes transaction helpers (`db.tx`, `db.execTx`) with capability/effect enforcement, runtime stubs, and db/fs/net integration coverage.
   - Semantic + C runtime bridge now includes query-construction helper `sql.q` with runtime stubs and security-map gate tagging (`gate.sql.parameterize`).
+  - Semantic + C runtime bridge now includes `cookie.build` typed-cookie helper with runtime stubs and `security_map` gate tagging (`gate.cookie.build`).
+  - Alias resolution now includes recursion guards for namespace-shadowing call aliases, preventing runaway expansion patterns like `cookie.build.build...` during semantic/security analysis.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -297,6 +299,7 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/110-m7-log-event-helper-intrinsic-bridge.md`
 - `docs/book/111-m7-db-transaction-intrinsic-bridge.md`
 - `docs/book/112-m7-sql-query-builder-intrinsic-bridge.md`
+- `docs/book/113-m7-cookie-builder-intrinsic-bridge.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -583,6 +586,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Log Event Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: DB Transaction Intrinsic Bridge".
 - Chapter: "M7 Slice: SQL Query Builder Intrinsic Bridge".
+- Chapter: "M7 Slice: Cookie Builder Intrinsic Bridge".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

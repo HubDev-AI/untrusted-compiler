@@ -2616,6 +2616,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Named("HeaderValue"),
         }),
+        "cookie_build" | "cookie.build" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Cookie"),
+        }),
         _ => None,
     }
 }
@@ -2643,7 +2648,13 @@ fn resolve_callable_name(
 
 fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, String>) -> String {
     let mut seen = HashSet::new();
+    let mut steps = 0usize;
     while seen.insert(name.clone()) {
+        steps += 1;
+        if steps > 64 {
+            break;
+        }
+
         if let Some(next) = callable_aliases.get(name.as_str()) {
             name = next.clone();
             continue;
@@ -2656,7 +2667,11 @@ fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, Strin
         if resolved_head == head {
             break;
         }
-        name = format!("{resolved_head}.{tail}");
+        let candidate = format!("{resolved_head}.{tail}");
+        if candidate == name || candidate.starts_with(&format!("{name}.")) {
+            break;
+        }
+        name = candidate;
     }
     name
 }
@@ -2751,6 +2766,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
             | "log"
             | "path"
             | "headers"
+            | "cookie"
             | "req"
             | "res"
             | "sanitize"
