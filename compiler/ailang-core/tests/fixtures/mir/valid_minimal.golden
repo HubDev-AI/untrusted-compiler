@@ -1,0 +1,4 @@
+OK
+fn main() -> Int
+  bb0:
+    return 0

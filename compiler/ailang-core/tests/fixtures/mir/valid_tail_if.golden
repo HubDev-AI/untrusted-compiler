@@ -1,0 +1,8 @@
+OK
+fn classify(x: Int) -> Int
+  bb0:
+    branch (x > 0) ? bb1 : bb2
+  bb1:
+    return 1
+  bb2:
+    return 0

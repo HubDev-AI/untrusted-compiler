@@ -18,6 +18,7 @@ This chapter documents the first M5 slice that introduces a backend-neutral MIR 
   - `ailang build --emit mir`
 - Added tests:
   - core MIR lowering tests in `compiler/ailang-core/tests/mir.rs`
+  - fixture-based MIR golden tests in `compiler/ailang-core/tests/golden_mir.rs`
   - CLI emit test in `compiler/ailang-cli/tests/json_output.rs`
 
 ## What it is
@@ -76,6 +77,7 @@ fn main() -> Int
 ## Tests added
 - `mir_lowering_builds_single_block_for_simple_function`
 - `mir_lowering_honors_explicit_return_terminator`
+- `mir_fixtures_match_golden_output` (fixture + golden snapshots)
 - `build_emit_mir_prints_textual_mir`
 
 ## Tradeoffs

@@ -39,3 +39,4 @@
 - `REPLAY_EFFECTS_ALLOW` severity now maps by environment (`HIGH` in prod, `MEDIUM` otherwise).
 - Started M5 bootstrap: added MIR module + lowering + `build --emit mir` CLI path with tests.
 - Extended M5 MIR lowering with tail-`if` branch blocks and explicit `branch` terminators.
+- Added fixture-based MIR golden tests to lock textual MIR output behavior.
