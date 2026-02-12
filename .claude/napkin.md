@@ -83,3 +83,4 @@
 - Removed absolute local machine paths from M7 `hello-api` book chapters to keep docs repository-safe.
 - Added success-envelope intrinsic bridge (`res.ok`, `res.okMeta`) across semantic checks, C lowering, runtime stubs, security-map tagging, and req/res `c-bin` integration coverage.
 - Added request-source intrinsic bridge (`req.body`, `req.query`, `req.pathParam`, `req.header`) across C lowering/runtime ABI/tests and exercised them in `examples/hello-api`.
+- Added auth helper intrinsic bridge (`auth.require`, `auth.requireRole`) across semantic registry, C lowering, runtime ABI, and `c-bin` integration coverage.

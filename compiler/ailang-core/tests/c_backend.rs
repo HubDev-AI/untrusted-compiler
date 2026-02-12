@@ -112,6 +112,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_cors_from_policy();"));
     assert!(header.contains("int64_t ailang_rt_csrf_from_policy();"));
     assert!(header.contains("int64_t ailang_rt_auth_from_policy();"));
+    assert!(header.contains("int64_t ailang_rt_auth_require();"));
+    assert!(header.contains("int64_t ailang_rt_auth_require_role();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -158,6 +160,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_cors_from_policy()"));
     assert!(source.contains("int64_t ailang_rt_csrf_from_policy()"));
     assert!(source.contains("int64_t ailang_rt_auth_from_policy()"));
+    assert!(source.contains("int64_t ailang_rt_auth_require()"));
+    assert!(source.contains("int64_t ailang_rt_auth_require_role()"));
 }
 
 #[test]
@@ -388,4 +392,22 @@ fn main() -> Int {
     assert!(c.contains("(void)(ailang_rt_cors_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_csrf_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_auth_from_policy());"));
+}
+
+#[test]
+fn c_backend_rewrites_auth_requirement_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  auth.require(1);
+  auth.requireRole(1, 2);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("(void)(ailang_rt_auth_require(1));"));
+    assert!(c.contains("(void)(ailang_rt_auth_require_role(1, 2));"));
 }

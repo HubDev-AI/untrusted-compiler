@@ -4,6 +4,8 @@ fn health() effects { net } -> Int {
 }
 
 fn createUser(schema: Schema<Int>) effects { net } -> Int {
+  auth.require(1);
+  auth.requireRole(1, 2);
   req.body(1, 2);
   req.query(1, 2);
   req.pathParam(1, 2);

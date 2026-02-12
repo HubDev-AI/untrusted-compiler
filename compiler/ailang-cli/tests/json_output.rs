@@ -994,6 +994,60 @@ entry = "src/main.ai"
 }
 
 #[test]
+fn build_emit_c_bin_handles_auth_requirement_intrinsics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin auth requirement integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-auth-require");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "authrequiredemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn main() -> Int {
+  auth.require(1);
+  auth.requireRole(1, 2);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for auth requirement intrinsic project"
+    );
+
+    let generated_c =
+        fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_auth_require(1)"));
+    assert!(generated_c.contains("ailang_rt_auth_require_role(1, 2)"));
+
+    let binary_path = project_dir.join("build").join("authrequiredemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(run.status.success(), "compiled binary should exit successfully");
+}
+
+#[test]
 fn build_emit_c_bin_accepts_http_surface_types_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http surface type integration test: clang not available");

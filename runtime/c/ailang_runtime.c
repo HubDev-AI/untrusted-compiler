@@ -174,3 +174,11 @@ int64_t ailang_rt_csrf_from_policy() {
 int64_t ailang_rt_auth_from_policy() {
   return 0;
 }
+
+int64_t ailang_rt_auth_require() {
+  return 0;
+}
+
+int64_t ailang_rt_auth_require_role() {
+  return 0;
+}

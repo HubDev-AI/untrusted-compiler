@@ -2302,6 +2302,16 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "auth_require" | "auth.require" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
+        "auth_require_role" | "auth.requireRole" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Unknown,
+        }),
         "req_body" | "req.body" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
