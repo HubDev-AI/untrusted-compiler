@@ -95,6 +95,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
   - JSON role labels adapt to the detected call signature form.
   - security_map tests now assert argument-role metadata presence for representative sink calls.
+  - `security_map` call records now include optional `origin_edges` metadata for argument-level provenance.
+  - Origin edges capture argument index, canonical origin labels, and source/gate tag context.
+  - Local `let`-bound origin propagation is tracked for call/member/unary expression shapes.
+  - security_map tests now assert sink-argument origin tracing for `req.query -> db.exec` flow.
 - Security posture specs were expanded with:
   - typed security middleware baseline (`CORS + security headers + CSRF + auth`),
   - deterministic `sec.audit` contract,
@@ -582,7 +586,7 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Extend capability/sink enforcement from intrinsic calls to typed stdlib API symbols.
-2. Add first-class trust-gate flow checks (`req.json(schema)`) and origin-trace sink diagnostics.
+2. Extend origin-trace coverage from local bindings to richer expression shapes and interprocedural paths.
 3. Expand deterministic `sec.audit` findings for SQL/logging/privacy posture and richer callsite evidence.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.

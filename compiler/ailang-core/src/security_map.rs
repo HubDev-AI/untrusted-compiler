@@ -57,6 +57,16 @@ pub struct SecurityCall {
     pub tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arg_roles: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin_edges: Option<Vec<SecurityOriginEdge>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SecurityOriginEdge {
+    pub arg_index: usize,
+    pub origin: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -88,6 +98,12 @@ pub struct SecurityMap {
 
 const ALLOW_REQUIRED_FIELDS: [&str; 5] = ["policy", "bypass", "reason", "ticket", "expires"];
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrackedOrigin {
+    origin: String,
+    tags: Vec<String>,
+}
+
 pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
     let mut calls = Vec::new();
     let mut middleware = Vec::new();
@@ -97,7 +113,14 @@ pub fn build_security_map(program: &Program, policy: &Policy) -> SecurityMap {
             continue;
         };
 
-        collect_block(&function.body, &mut calls, &mut middleware, policy);
+        let mut origins = HashMap::new();
+        collect_block(
+            &function.body,
+            &mut calls,
+            &mut middleware,
+            policy,
+            &mut origins,
+        );
     }
 
     SecurityMap {
@@ -195,21 +218,32 @@ fn collect_block(
     calls: &mut Vec<SecurityCall>,
     middleware: &mut Vec<SecurityMiddleware>,
     policy: &Policy,
+    origins: &mut HashMap<String, TrackedOrigin>,
 ) {
+    let mut scoped = origins.clone();
+
     for stmt in &block.statements {
         match &stmt.kind {
-            StmtKind::Let { value, .. } => collect_expr(value, calls, middleware, policy),
-            StmtKind::Return { value } => {
-                if let Some(expr) = value {
-                    collect_expr(expr, calls, middleware, policy);
+            StmtKind::Let { name, value, .. } => {
+                let inferred = infer_expr_origin(value, &scoped);
+                collect_expr(value, calls, middleware, policy, &mut scoped);
+                if let Some(origin) = inferred {
+                    scoped.insert(name.clone(), origin);
+                } else {
+                    scoped.remove(name);
                 }
             }
-            StmtKind::Expr { expr } => collect_expr(expr, calls, middleware, policy),
+            StmtKind::Return { value } => {
+                if let Some(expr) = value {
+                    collect_expr(expr, calls, middleware, policy, &mut scoped);
+                }
+            }
+            StmtKind::Expr { expr } => collect_expr(expr, calls, middleware, policy, &mut scoped),
         }
     }
 
     if let Some(tail) = &block.tail {
-        collect_expr(tail, calls, middleware, policy);
+        collect_expr(tail, calls, middleware, policy, &mut scoped);
     }
 }
 
@@ -218,6 +252,7 @@ fn collect_expr(
     calls: &mut Vec<SecurityCall>,
     middleware: &mut Vec<SecurityMiddleware>,
     policy: &Policy,
+    origins: &mut HashMap<String, TrackedOrigin>,
 ) {
     match &expr.kind {
         ExprKind::Call { callee, args } => {
@@ -232,6 +267,7 @@ fn collect_expr(
                         callee: name.clone(),
                         tags: tags.into_iter().map(str::to_string).collect(),
                         arg_roles: call_arg_roles(name.as_str(), args.len()),
+                        origin_edges: call_origin_edges(args, origins),
                     });
                 }
 
@@ -240,37 +276,103 @@ fn collect_expr(
                 }
             }
 
-            collect_expr(callee, calls, middleware, policy);
+            collect_expr(callee, calls, middleware, policy, origins);
             for arg in args {
-                collect_expr(arg, calls, middleware, policy);
+                collect_expr(arg, calls, middleware, policy, origins);
             }
         }
-        ExprKind::Unary { expr: inner, .. } => collect_expr(inner, calls, middleware, policy),
-        ExprKind::Binary { left, right, .. } => {
-            collect_expr(left, calls, middleware, policy);
-            collect_expr(right, calls, middleware, policy);
+        ExprKind::Unary { expr: inner, .. } => {
+            collect_expr(inner, calls, middleware, policy, origins)
         }
-        ExprKind::Member { object, .. } => collect_expr(object, calls, middleware, policy),
+        ExprKind::Binary { left, right, .. } => {
+            collect_expr(left, calls, middleware, policy, origins);
+            collect_expr(right, calls, middleware, policy, origins);
+        }
+        ExprKind::Member { object, .. } => collect_expr(object, calls, middleware, policy, origins),
         ExprKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            collect_expr(condition, calls, middleware, policy);
-            collect_block(then_branch, calls, middleware, policy);
+            collect_expr(condition, calls, middleware, policy, origins);
+            let mut then_scope = origins.clone();
+            collect_block(then_branch, calls, middleware, policy, &mut then_scope);
             if let Some(else_expr) = else_branch {
-                collect_expr(else_expr, calls, middleware, policy);
+                let mut else_scope = origins.clone();
+                collect_expr(else_expr, calls, middleware, policy, &mut else_scope);
             }
         }
         ExprKind::Match { scrutinee, arms } => {
-            collect_expr(scrutinee, calls, middleware, policy);
+            collect_expr(scrutinee, calls, middleware, policy, origins);
             for arm in arms {
-                collect_expr(&arm.value, calls, middleware, policy);
+                let mut arm_scope = origins.clone();
+                collect_expr(&arm.value, calls, middleware, policy, &mut arm_scope);
             }
         }
-        ExprKind::Block(block) => collect_block(block, calls, middleware, policy),
+        ExprKind::Block(block) => {
+            let mut block_scope = origins.clone();
+            collect_block(block, calls, middleware, policy, &mut block_scope)
+        }
         ExprKind::Identifier(_) | ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => {
         }
+    }
+}
+
+fn call_origin_edges(
+    args: &[Expr],
+    origins: &HashMap<String, TrackedOrigin>,
+) -> Option<Vec<SecurityOriginEdge>> {
+    let mut edges = Vec::new();
+    for (index, arg) in args.iter().enumerate() {
+        if let Some(origin) = infer_expr_origin(arg, origins) {
+            edges.push(SecurityOriginEdge {
+                arg_index: index,
+                origin: origin.origin,
+                tags: origin.tags,
+            });
+        }
+    }
+
+    if edges.is_empty() {
+        None
+    } else {
+        Some(edges)
+    }
+}
+
+fn infer_expr_origin(
+    expr: &Expr,
+    origins: &HashMap<String, TrackedOrigin>,
+) -> Option<TrackedOrigin> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => origins.get(name).cloned(),
+        ExprKind::Call { callee, args } => {
+            let name = callable_name(callee)?;
+            let mut tags = call_tags_for(name.as_str()).unwrap_or_default();
+            tags.extend(dynamic_call_tags(name.as_str(), args));
+            dedupe_tags(&mut tags);
+
+            let origin_tags = tags
+                .into_iter()
+                .filter(|tag| tag.starts_with("source.") || tag.starts_with("gate."))
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            if origin_tags.is_empty() {
+                None
+            } else {
+                Some(TrackedOrigin {
+                    origin: format!("call:{name}"),
+                    tags: origin_tags,
+                })
+            }
+        }
+        ExprKind::Member { object, field } => {
+            let mut origin = infer_expr_origin(object, origins)?;
+            origin.origin = format!("{}.{}", origin.origin, field);
+            Some(origin)
+        }
+        ExprKind::Unary { expr: inner, .. } => infer_expr_origin(inner, origins),
+        _ => None,
     }
 }
 
@@ -367,9 +469,7 @@ fn extract_sql_text(expr: &Expr) -> Option<&str> {
 
 fn contains_sql_keyword(sql: &str, keyword: &str) -> bool {
     let keyword_lower = keyword.to_ascii_lowercase();
-    sql_tokens(sql)
-        .iter()
-        .any(|token| token == &keyword_lower)
+    sql_tokens(sql).iter().any(|token| token == &keyword_lower)
 }
 
 fn sql_tokens(sql: &str) -> Vec<String> {
@@ -787,10 +887,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         ),
         symbol("sanitize.html", &[("gate.sanitize.html", TagKind::Gate)]),
         symbol("path.under", &[("gate.path.under", TagKind::Gate)]),
-        symbol(
-            "validate.pathUnder",
-            &[("gate.path.under", TagKind::Gate)],
-        ),
+        symbol("validate.pathUnder", &[("gate.path.under", TagKind::Gate)]),
         symbol(
             "url.public",
             &[

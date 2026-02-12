@@ -50,11 +50,7 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn error(
-        code: impl Into<String>,
-        message: impl Into<String>,
-        span: Span,
-    ) -> Self {
+    pub fn error(code: impl Into<String>, message: impl Into<String>, span: Span) -> Self {
         Self {
             severity: Severity::Error,
             code: code.into(),

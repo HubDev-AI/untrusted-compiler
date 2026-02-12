@@ -270,8 +270,10 @@ require_limit_on_select = "enforce"
 "#,
     )
     .expect("enforce policy should parse");
-    let enforce_report =
-        run_security_audit(&enforce_policy, &build_security_map(&program, &enforce_policy));
+    let enforce_report = run_security_audit(
+        &enforce_policy,
+        &build_security_map(&program, &enforce_policy),
+    );
     assert!(enforce_report.findings.iter().any(|finding| {
         finding.id == "SQL_SELECT_WITHOUT_LIMIT" && finding.severity == AuditSeverity::HIGH
     }));

@@ -130,6 +130,11 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - role labels are emitted for core sensitive APIs (for example capability/query/url/schema/value/path)
   - JSON roles adapt to signature form (`schema,value` vs `status,schema,value`)
   - tests now assert role metadata for representative callsites (`res.json`, `db.exec`)
+- Added source-origin edge metadata for call arguments:
+  - `security_map.calls[]` now optionally includes `origin_edges`
+  - each edge captures `arg_index`, canonical origin label (for example `call:req.query`), and source/gate tag context
+  - origin tracking currently follows local `let` bindings and propagates through member/unary wrappers
+  - tests now assert sink-argument origin tracing for `db.exec(DbCap(), raw)` where `raw` originates from `req.query`
 
 ### Slice Explanation: Strict JSON Encode Signature Checks
 
@@ -174,6 +179,44 @@ Arity-only validation still allowed malformed response calls (wrong status type,
 - Typed schema pairing now works for `Schema<T>` arguments, but untyped schema descriptors (for example string placeholders) still rely on structural checks.
 - Next step is to move from descriptor-style schema arguments to richer typed schema symbols across stdlib APIs.
 
+### Slice Explanation: `security_map` Source-Origin Edge Metadata
+
+#### 1) What it is
+This slice adds argument-level origin traces to `security_map` call records via `origin_edges`.
+
+#### 2) Why it exists
+Call-level tags alone do not show which argument carried untrusted or gate-derived data into a sink. Origin edges provide deterministic evidence for audit findings and future diagnostics.
+
+#### 3) How it works internally
+- `collect_block` now tracks local binding origins in a scoped map.
+- `collect_expr` emits `origin_edges` for call arguments by inspecting inferred origins.
+- `infer_expr_origin` resolves origins from:
+  - tracked identifiers,
+  - source/gate-tagged calls (for example `req.query`, `validate.*`, `sanitize.*`),
+  - simple wrappers (`member`, `unary`) that preserve origin context.
+
+#### 4) Inputs/outputs and constraints
+- Input: function body expressions and local `let` bindings.
+- Output: optional `origin_edges` array on each `security_map.calls[]` entry.
+- Constraints:
+  - flow tracking is local and structural (no interprocedural dataflow yet),
+  - only source/gate-tagged origins are attached.
+
+#### 5) Failure modes and diagnostics
+- This metadata path does not emit compile errors directly.
+- If no origin can be inferred for an argument, no edge is emitted for that argument.
+
+#### 6) Example usage
+- Source:
+  - `let raw = req.query("q");`
+  - `db.exec(DbCap(), raw);`
+- Emitted edge (conceptual):
+  - `{ arg_index: 1, origin: "call:req.query", tags: ["source.http.query"] }`
+
+#### 7) Tradeoffs and next steps
+- Current origin inference is intentionally conservative and local-scope only.
+- Next step is to extend origin tracing across function boundaries and richer expression forms.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
@@ -197,6 +240,6 @@ Arity-only validation still allowed malformed response calls (wrong status type,
 
 ## Next implementation steps
 1. Expand sink tagging beyond intrinsic call names into typed stdlib API symbols.
-2. Add source-origin edge metadata in `security_map` call records (not just call-level tags).
-3. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
-4. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
+2. Add richer SQL hygiene parsing (full query normalization/AST) for robust handling beyond keyword heuristics.
+3. Extend typed schema enforcement beyond `res.json` into broader encode/decode stdlib paths.
+4. Extend source-origin tracing beyond local bindings into interprocedural call chains.

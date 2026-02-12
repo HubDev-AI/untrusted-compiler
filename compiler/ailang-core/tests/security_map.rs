@@ -61,10 +61,10 @@ fn boot() -> Int {
         .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
     assert!(map.calls.iter().any(|call| {
         call.callee == "res.json"
-            && call.arg_roles.as_ref().is_some_and(|roles| roles == &vec![
-                "schema".to_string(),
-                "value".to_string()
-            ])
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["schema".to_string(), "value".to_string()])
     }));
     assert!(map.calls.iter().any(|call| {
         call.callee == "db.exec"
@@ -130,7 +130,11 @@ fn bad() -> Int {
     let flagged = map
         .calls
         .iter()
-        .filter(|call| call.tags.iter().any(|tag| tag == "sql.select_without_limit"))
+        .filter(|call| {
+            call.tags
+                .iter()
+                .any(|tag| tag == "sql.select_without_limit")
+        })
         .count();
 
     assert_eq!(flagged, 5);
@@ -153,6 +157,35 @@ fn boot() -> Int {
     ));
     assert!(map.calls.iter().any(|call| {
         call.callee == "secret_reveal" && call.tags.iter().any(|tag| tag == "effect.secrets.reveal")
+    }));
+}
+
+#[test]
+fn security_map_tracks_origin_edges_for_sink_arguments() {
+    let source = r#"
+fn boot() -> Int {
+  let raw = req.query("q");
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
     }));
 }
 

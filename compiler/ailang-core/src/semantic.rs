@@ -1157,9 +1157,7 @@ impl Analyzer {
                             "secret value cannot flow into SQL sink",
                             arg.span.clone(),
                         )
-                        .with_note(format!(
-                            "sink `{callee_name}` rejects `Secret<_>` values"
-                        ))
+                        .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
                             index + 1,
@@ -1175,9 +1173,7 @@ impl Analyzer {
                             "untrusted value cannot flow into SQL sink",
                             arg.span.clone(),
                         )
-                        .with_note(format!(
-                            "sink `{callee_name}` requires trusted SQL inputs"
-                        ))
+                        .with_note(format!("sink `{callee_name}` requires trusted SQL inputs"))
                         .with_note(format!(
                             "argument {} has type `{}`",
                             index + 1,
@@ -1216,9 +1212,7 @@ impl Analyzer {
                             "untrusted value cannot flow into URL sink",
                             arg.span.clone(),
                         )
-                        .with_note(format!(
-                            "sink `{callee_name}` requires typed safe URLs"
-                        ))
+                        .with_note(format!("sink `{callee_name}` requires typed safe URLs"))
                         .with_note(format!(
                             "argument {} has type `{}`",
                             index + 1,
@@ -1239,9 +1233,7 @@ impl Analyzer {
                             "secret value cannot flow into filesystem sink",
                             arg.span.clone(),
                         )
-                        .with_note(format!(
-                            "sink `{callee_name}` rejects `Secret<_>` values"
-                        ))
+                        .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
                             index + 1,
@@ -1280,16 +1272,16 @@ impl Analyzer {
                             "secret value cannot flow into header/cookie sink",
                             arg.span.clone(),
                         )
-                        .with_note(format!(
-                            "sink `{callee_name}` rejects `Secret<_>` values"
-                        ))
+                        .with_note(format!("sink `{callee_name}` rejects `Secret<_>` values"))
                         .with_note(format!(
                             "argument {} has type `{}`",
                             index + 1,
                             arg_type.describe()
                         ))
                         .with_note(flow_origin_note(arg, arg_type))
-                        .with_note("use redacted/derived values and validated header or cookie builders"),
+                        .with_note(
+                            "use redacted/derived values and validated header or cookie builders",
+                        ),
                     );
                 } else if arg_type.contains_untrusted() {
                     self.diagnostics.push(
@@ -1307,7 +1299,9 @@ impl Analyzer {
                             arg_type.describe()
                         ))
                         .with_note(flow_origin_note(arg, arg_type))
-                        .with_note("validate via `validate.headerValue(...)` or typed cookie builders"),
+                        .with_note(
+                            "validate via `validate.headerValue(...)` or typed cookie builders",
+                        ),
                     );
                 }
             }
@@ -1323,9 +1317,13 @@ impl Analyzer {
     ) {
         if is_req_json_gate(callee_name) && args.is_empty() {
             self.diagnostics.push(
-                Diagnostic::error("E4001", "schema gate requires schema argument", span.clone())
-                    .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
-                    .with_note("this gate converts inbound untrusted payload into trusted typed data"),
+                Diagnostic::error(
+                    "E4001",
+                    "schema gate requires schema argument",
+                    span.clone(),
+                )
+                .with_note("`req.json` must be called as `req.json(schema)` in v0.1")
+                .with_note("this gate converts inbound untrusted payload into trusted typed data"),
             );
         }
 
@@ -1372,9 +1370,13 @@ impl Analyzer {
 
             if !arg_types[0].is_named("PathSafe") {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "path gate expects `PathSafe` base", args[0].span.clone())
-                        .with_note(format!("`{callee_name}` first argument must be `PathSafe`"))
-                        .with_note(format!("found `{}`", arg_types[0].describe())),
+                    Diagnostic::error(
+                        "E4001",
+                        "path gate expects `PathSafe` base",
+                        args[0].span.clone(),
+                    )
+                    .with_note(format!("`{callee_name}` first argument must be `PathSafe`"))
+                    .with_note(format!("found `{}`", arg_types[0].describe())),
                 );
             }
 
@@ -1395,7 +1397,8 @@ impl Analyzer {
     }
 
     fn enforce_json_encode_signature(&mut self, span: Span, args: &[Expr], arg_types: &[Type]) {
-        let expected_note = "strict mode requires `res.json(schema, value)` or `res.json(status, schema, value)`";
+        let expected_note =
+            "strict mode requires `res.json(schema, value)` or `res.json(status, schema, value)`";
         if args.len() < 2 {
             self.diagnostics.push(
                 Diagnostic::error(
@@ -1404,7 +1407,9 @@ impl Analyzer {
                     span,
                 )
                 .with_note(expected_note)
-                .with_note("set `json.require_schema_for_encode = false` in policy to disable strict mode"),
+                .with_note(
+                    "set `json.require_schema_for_encode = false` in policy to disable strict mode",
+                ),
             );
             return;
         }
@@ -1434,9 +1439,14 @@ impl Analyzer {
         }
 
         let schema_index = if args.len() == 2 { 0 } else { 1 };
-        let value_index = json_sink_value_arg_index(args.len()).unwrap_or(args.len().saturating_sub(1));
+        let value_index =
+            json_sink_value_arg_index(args.len()).unwrap_or(args.len().saturating_sub(1));
         let schema_ty = &arg_types[schema_index];
-        if schema_ty.is_numeric() || schema_ty.is_bool() || schema_ty.contains_secret() || schema_ty.contains_untrusted() {
+        if schema_ty.is_numeric()
+            || schema_ty.is_bool()
+            || schema_ty.contains_secret()
+            || schema_ty.contains_untrusted()
+        {
             self.diagnostics.push(
                 Diagnostic::error(
                     "E4004",
