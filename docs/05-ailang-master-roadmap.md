@@ -167,6 +167,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - non-call exception posture snapshot evidence for `ALLOW_COUNT_HIGH` (`sampleExceptions`)
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
   - sec_audit tests now also assert suppression of `PUBLIC_EGRESS_NO_DOMAIN_POLICY` when `net.public.allowed_domains` is configured.
+  - `REPLAY_EFFECTS_ALLOW` severity is now environment-aware:
+    - `HIGH` in `prod`
+    - `MEDIUM` in non-production environments
   - `sec.audit` text rendering now includes sample-call previews with provenance trace snippets when available.
   - `sec.audit` now emits deterministic exception-expiry rollup findings (`ALLOW_EXPIRY_WINDOW_ROLLUP`) with sampled exception evidence.
   - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).

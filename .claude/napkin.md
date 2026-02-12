@@ -36,3 +36,4 @@
 - Added `SYMLINK_POLICY_WEAK` sec.audit posture rule plus typed policy parsing/validation for `fs.forbid_symlinks`.
 - Added `REFERRER_POLICY_WEAK` sec.audit posture rule for weak security-header referrer-policy values.
 - Added `XFO_DISABLED` and `NOSNIFF_DISABLED` sec.audit posture findings for baseline security-header hardening gaps.
+- `REPLAY_EFFECTS_ALLOW` severity now maps by environment (`HIGH` in prod, `MEDIUM` otherwise).

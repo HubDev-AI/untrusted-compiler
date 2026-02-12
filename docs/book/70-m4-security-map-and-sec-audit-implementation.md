@@ -1533,6 +1533,46 @@ These headers are small but high-frequency hardening controls. Weak settings sho
 - v0 currently uses strict baseline expectations and does not model route-specific framing exceptions.
 - next step is policy-scoped route/module exceptions with explicit `@allow` governance for narrowly scoped embedding cases.
 
+### Slice Explanation: Environment-Aware Replay Severity (`REPLAY_EFFECTS_ALLOW`)
+
+#### 1) What it is
+This slice makes replay posture severity deterministic by environment when `replay.effects = "allow"` is configured.
+
+#### 2) Why it exists
+Allowing real side effects during replay is materially riskier in production than in local/dev workflows. Severity now reflects that risk difference directly in `sec.audit`.
+
+#### 3) How it works internally
+- `sec.audit` still emits `REPLAY_EFFECTS_ALLOW` when replay mode is `allow`.
+- severity mapping now uses policy environment:
+  - `HIGH` when `policy.env == "prod"`
+  - `MEDIUM` otherwise
+- evidence now includes `env` alongside existing sample-call context.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - `policy.replay.effects`,
+  - `policy.env`,
+  - replay-related callsite tags.
+- Output:
+  - deterministic `REPLAY_EFFECTS_ALLOW` finding with environment-mapped severity.
+- Constraints:
+  - finding remains posture-driven and does not depend on runtime replay invocation.
+
+#### 5) Failure modes and diagnostics
+- this is an audit-only severity mapping change; no parser/typechecker diagnostics were modified.
+- if no replay-relevant sample callsites exist, finding still emits with bounded/empty sample set.
+
+#### 6) Example usage
+- policy:
+  - `[policy] env = "prod"`
+  - `[replay] effects = "allow"`
+- audit:
+  - emits `REPLAY_EFFECTS_ALLOW` with `HIGH` severity.
+
+#### 7) Tradeoffs and next steps
+- current environment split is coarse (`prod` vs non-prod).
+- next step is policy-level environment tiers (`dev/staging/prod`) for finer-grained replay posture mapping.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.

@@ -711,12 +711,18 @@ pub fn run_security_audit_with_baseline(
     }
 
     if policy.replay.effects == "allow" {
+        let replay_allow_severity = if policy.env == "prod" {
+            AuditSeverity::HIGH
+        } else {
+            AuditSeverity::MEDIUM
+        };
         findings.push(finding(
             "REPLAY_EFFECTS_ALLOW",
-            AuditSeverity::MEDIUM,
+            replay_allow_severity,
             "replay",
             json!({
                 "effects": "allow",
+                "env": policy.env,
                 "sampleCalls": call_samples_for_tags(
                     security_map,
                     &[

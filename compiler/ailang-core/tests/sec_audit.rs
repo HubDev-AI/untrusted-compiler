@@ -355,6 +355,12 @@ effects = "allow"
             .and_then(|value| value.as_str())
             .is_some_and(|callee| callee == "secret_reveal")
     }));
+    let replay = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "REPLAY_EFFECTS_ALLOW")
+        .expect("replay finding should be present");
+    assert_eq!(replay.severity, AuditSeverity::MEDIUM);
     assert!(should_fail(&report, AuditSeverity::HIGH));
 }
 
@@ -588,6 +594,7 @@ effects = "allow"
         .iter()
         .find(|finding| finding.id == "REPLAY_EFFECTS_ALLOW")
         .expect("replay finding should be present");
+    assert_eq!(replay.severity, AuditSeverity::HIGH);
     let replay_samples = replay
         .evidence
         .get("sampleCalls")
