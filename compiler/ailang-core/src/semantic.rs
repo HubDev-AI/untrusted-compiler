@@ -1767,6 +1767,7 @@ impl Analyzer {
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
+        self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2644,6 +2645,35 @@ impl Analyzer {
             .with_tag("security")
             .with_tag("sink")
             .with_note(note),
+        );
+    }
+
+    fn enforce_fs_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        let (is_target, valid_shape, note) = if is_fs_read_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 2 | 3),
+                "use `fs.read(fsCap, path)` or `fs.read(ctx, fsCap, path)`",
+            )
+        } else if is_fs_write_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 3 | 4),
+                "use `fs.write(fsCap, path, value)` or `fs.write(ctx, fsCap, path, value)`",
+            )
+        } else {
+            (false, true, "")
+        };
+
+        if !is_target || valid_shape {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("E4001", "fs sink call has invalid argument shape", span)
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(note),
         );
     }
 
@@ -3743,6 +3773,14 @@ fn is_net_public_call(name: &str) -> bool {
 
 fn is_net_internal_call(name: &str) -> bool {
     matches!(name, "net_internal_call" | "httpClient.getInternal")
+}
+
+fn is_fs_read_call(name: &str) -> bool {
+    matches!(name, "fs_read" | "fs.read")
+}
+
+fn is_fs_write_call(name: &str) -> bool {
+    matches!(name, "fs_write" | "fs.write")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

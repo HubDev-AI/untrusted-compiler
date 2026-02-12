@@ -2,6 +2,6 @@ fn ok(db: DbCap, net: NetCap, sec: SecretsCap, fs: FsCap) effects { db.read, net
   db_read(db, "SELECT id FROM users LIMIT 1", "Row");
   net_call(net, "https://example.com");
   secret_read(sec);
-  fs_write(fs);
+  fs_write(fs, "/tmp/a", "payload");
   1
 }

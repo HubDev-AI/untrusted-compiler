@@ -126,3 +126,4 @@
 - Tightened trust-gate arity contracts: single-input gates now require exactly one argument and `path.under` requires exactly two, with schema/security-tagged diagnostics and fixture coverage.
 - Added DB sink arity hardening for `db.exec` / `db.execTx` / `db.queryOne` to require explicit query-bearing call shapes before typed-query enforcement, with sink-tagged diagnostics.
 - Added net sink arity hardening for `httpClient.get` / `httpClient.getInternal` so URL arguments are required in compact and context-first forms, with sink-tagged diagnostics.
+- Added FS sink arity hardening for `fs.read` / `fs.write` so path/payload arguments are required in compact and context-first forms, with sink-tagged diagnostics.

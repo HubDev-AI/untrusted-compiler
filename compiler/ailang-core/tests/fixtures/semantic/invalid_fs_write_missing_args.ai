@@ -1,0 +1,4 @@
+fn bad(fs: FsCap) effects { fs.write } -> Int {
+  fs.write(fs);
+  0
+}
