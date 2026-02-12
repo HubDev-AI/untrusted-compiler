@@ -1766,6 +1766,7 @@ impl Analyzer {
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
+        self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2605,6 +2606,39 @@ impl Analyzer {
             Diagnostic::error(
                 "E4001",
                 "db sink call has invalid argument shape",
+                span,
+            )
+            .with_tag("security")
+            .with_tag("sink")
+            .with_note(note),
+        );
+    }
+
+    fn enforce_net_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+        let (is_target, valid_shape, note) = if is_net_public_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 2 | 3),
+                "use `httpClient.get(netCap, url)` or `httpClient.get(ctx, netCap, url)`",
+            )
+        } else if is_net_internal_call(callee_name) {
+            (
+                true,
+                matches!(args.len(), 2 | 3),
+                "use `httpClient.getInternal(internalNetCap, url)` or `httpClient.getInternal(ctx, internalNetCap, url)`",
+            )
+        } else {
+            (false, true, "")
+        };
+
+        if !is_target || valid_shape {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                "E4001",
+                "net sink call has invalid argument shape",
                 span,
             )
             .with_tag("security")
@@ -3701,6 +3735,14 @@ fn is_db_exec_tx_call(name: &str) -> bool {
 
 fn is_db_query_one_call(name: &str) -> bool {
     matches!(name, "db_read" | "db.queryOne")
+}
+
+fn is_net_public_call(name: &str) -> bool {
+    matches!(name, "net_call" | "httpClient.get")
+}
+
+fn is_net_internal_call(name: &str) -> bool {
+    matches!(name, "net_internal_call" | "httpClient.getInternal")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

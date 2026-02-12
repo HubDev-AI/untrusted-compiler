@@ -291,6 +291,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `db.execTx` requires `(tx, query)` or `(ctx, tx, query)`,
     - `db.queryOne` requires `(capability, query, rowSchema)` or `(ctx, capability, query, rowSchema)`,
     - malformed shapes emit tagged `E4001` sink diagnostics.
+  - Net sink call-shape contracts are now hardened:
+    - `httpClient.get` requires `(netCap, url)` or `(ctx, netCap, url)`,
+    - `httpClient.getInternal` requires `(internalNetCap, url)` or `(ctx, internalNetCap, url)`,
+    - malformed shapes emit tagged `E4001` sink diagnostics.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -663,6 +667,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: req.body Signature Hardening".
 - Chapter: "M7 Slice: Trust-Gate Arity Hardening".
 - Chapter: "M7 Slice: DB Sink Call-Shape Hardening".
+- Chapter: "M7 Slice: Net Sink Call-Shape Hardening".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
