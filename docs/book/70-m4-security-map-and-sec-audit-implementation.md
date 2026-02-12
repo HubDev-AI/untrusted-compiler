@@ -152,6 +152,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - `SECRETS_REVEAL_USED`
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
+    - `REFERRER_POLICY_WEAK`
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`
@@ -1444,6 +1445,50 @@ This slice adds typed-policy support for filesystem symlink posture and a determ
 #### 7) Tradeoffs and next steps
 - v0 checks policy posture, not runtime symlink resolution behavior.
 - next step is runtime-level fs path canonicalization tests that tie directly to this policy signal.
+
+### Slice Explanation: Weak Referrer Policy Finding (`REFERRER_POLICY_WEAK`)
+
+#### 1) What it is
+This slice adds a low-severity security-headers posture finding when an explicitly weak referrer policy is configured.
+
+#### 2) Why it exists
+Referrer policy is part of baseline response-hardening posture. Weak values can leak more request-origin information than needed.
+
+#### 3) How it works internally
+- `sec.audit` now evaluates `policy.security_headers.referrer_policy` when security headers are enabled.
+- weak policy set in v0:
+  - `no-referrer-when-downgrade`
+  - `unsafe-url`
+  - `origin`
+  - `origin-when-cross-origin`
+- if matched, audit emits:
+  - `REFERRER_POLICY_WEAK` (LOW).
+- evidence includes:
+  - effective `referrerPolicy`,
+  - bounded middleware `sampleCalls` from `middleware.security_headers`.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - effective referrer policy value,
+  - security-headers middleware call tags.
+- Output:
+  - low-severity posture finding with deterministic evidence.
+- Constraints:
+  - rule only applies when security headers middleware posture is enabled.
+
+#### 5) Failure modes and diagnostics
+- this is an audit-only posture signal; no parser/typechecker diagnostics are changed.
+- unknown policies are not automatically classified as weak in v0 unless they match the explicit weak set.
+
+#### 6) Example usage
+- policy:
+  - `[security_headers] referrer_policy = "unsafe-url"`
+- audit:
+  - emits `REFERRER_POLICY_WEAK` with security-headers middleware sample calls.
+
+#### 7) Tradeoffs and next steps
+- v0 uses a fixed weak-policy set and does not yet differentiate environment-specific acceptable values.
+- next step is environment-aware posture mapping for referrer policy strictness.
 
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.

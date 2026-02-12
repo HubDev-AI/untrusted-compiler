@@ -147,6 +147,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SECRETS_REVEAL_USED`
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
+    - `REFERRER_POLICY_WEAK`
     - `SQL_RAW_ALLOWED_BY_POLICY`
     - `SQL_LIMIT_RULE_DISABLED`
     - `INTERNAL_NET_ENABLED_NO_ALLOWLIST`

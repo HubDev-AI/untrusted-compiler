@@ -412,6 +412,25 @@ pub fn run_security_audit_with_baseline(
         ));
     }
 
+    if posture.security_headers.enabled
+        && is_weak_referrer_policy(&policy.security_headers.referrer_policy)
+    {
+        findings.push(finding(
+            "REFERRER_POLICY_WEAK",
+            AuditSeverity::LOW,
+            "headers",
+            json!({
+                "referrerPolicy": policy.security_headers.referrer_policy,
+                "sampleCalls": call_samples_for_tag(
+                    security_map,
+                    "middleware.security_headers",
+                    5,
+                ),
+            }),
+            "Use a stricter referrer policy such as strict-origin-when-cross-origin or no-referrer.",
+        ));
+    }
+
     if matches!(policy.auth.mode.as_str(), "cookie" | "mixed") && !policy.csrf.enabled {
         findings.push(finding(
             "CSRF_REQUIRED_BUT_DISABLED",
@@ -1227,6 +1246,13 @@ fn middleware_has_reflect_origin(security_map: &SecurityMap) -> bool {
                 .get("reflectOrigin")
                 .is_some_and(|value| matches!(value, TagAttr::Bool(true)))
     })
+}
+
+fn is_weak_referrer_policy(value: &str) -> bool {
+    matches!(
+        value.to_ascii_lowercase().as_str(),
+        "no-referrer-when-downgrade" | "unsafe-url" | "origin" | "origin-when-cross-origin"
+    )
 }
 
 fn has_call_tag(security_map: &SecurityMap, tag: &str) -> bool {

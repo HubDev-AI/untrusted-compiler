@@ -201,6 +201,43 @@ fn boot() -> Int {
 }
 
 #[test]
+fn sec_audit_flags_weak_referrer_policy_with_sample_calls() {
+    let source = r#"
+fn boot() -> Int {
+  withSecurityHeaders();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mut policy = Policy::default();
+    policy.security_headers.referrer_policy = "unsafe-url".to_string();
+
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "REFERRER_POLICY_WEAK")
+        .expect("REFERRER_POLICY_WEAK should be present");
+    assert_eq!(finding.severity, AuditSeverity::LOW);
+    let samples = finding
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("REFERRER_POLICY_WEAK should include sampleCalls");
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| {
+                matches!(callee, "withSecurityHeaders" | "sec.withSecurityHeaders")
+            })
+    }));
+}
+
+#[test]
 fn sec_audit_flags_critical_internal_net_and_secret_reveal_usage() {
     let source = r#"
 fn risky() -> Int {

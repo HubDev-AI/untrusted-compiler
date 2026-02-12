@@ -34,3 +34,4 @@
 - Added `PUBLIC_EGRESS_NO_DOMAIN_POLICY` sec.audit posture rule (usage-gated on public-net sink calls) plus policy ingestion for `net.public.allowed_domains`/`blocked_domains`.
 - Added `CSRF_PROTECTED_METHODS_INCOMPLETE` sec.audit posture rule with deterministic missing-method evidence and middleware sample-call context.
 - Added `SYMLINK_POLICY_WEAK` sec.audit posture rule plus typed policy parsing/validation for `fs.forbid_symlinks`.
+- Added `REFERRER_POLICY_WEAK` sec.audit posture rule for weak security-header referrer-policy values.
