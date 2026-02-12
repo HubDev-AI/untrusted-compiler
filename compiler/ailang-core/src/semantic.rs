@@ -1760,6 +1760,7 @@ impl Analyzer {
         }
 
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -2266,6 +2267,42 @@ impl Analyzer {
                 )
                 .with_note(format!("found `{}`", arg_types[1].describe()))
                 .with_note("use string body values like `\"ok\"`"),
+            );
+        }
+    }
+
+    fn enforce_res_html_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_res_html_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "res.html expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note("use `res.html(htmlSafeValue)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("HtmlSafe") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "res.html argument must be `HtmlSafe`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use `sanitize.html(untrusted)` or another HtmlSafe-producing gate"),
             );
         }
     }
@@ -3306,6 +3343,10 @@ fn is_http_serve_call(name: &str) -> bool {
 
 fn is_res_text_call(name: &str) -> bool {
     matches!(name, "res_text" | "res.text")
+}
+
+fn is_res_html_call(name: &str) -> bool {
+    matches!(name, "res_html" | "res.html")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

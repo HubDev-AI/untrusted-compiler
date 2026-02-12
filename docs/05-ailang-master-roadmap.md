@@ -255,6 +255,11 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - exactly two arguments,
     - numeric status code,
     - string response body.
+  - `res.html(...)` now enforces bridge signature shape:
+    - exactly one argument,
+    - argument must be `HtmlSafe`,
+    - violations emit `E4001` with `security` + `sink` diagnostic tags.
+  - req/res `c-bin` integration coverage now uses an explicit HTML gate flow (`req.query` -> `sanitize.html` -> `res.html`) to validate the hardened sink contract end-to-end.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 

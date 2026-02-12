@@ -1,0 +1,4 @@
+fn bad() effects { net } -> Int {
+  res.html(1);
+  0
+}

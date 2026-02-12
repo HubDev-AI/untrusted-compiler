@@ -600,7 +600,9 @@ fn encode(schema: Schema<Int>) effects { net } -> Int {
   res.json(schema, 1);
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
-  res.html(1);
+  let raw = req.query(1, 2);
+  let safe = sanitize.html(raw);
+  res.html(safe);
   res.text(200, "ok");
   0
 }
@@ -631,7 +633,8 @@ fn main() -> Int {
     assert!(generated_c.contains("ailang_rt_res_json(schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok(201, schema, 1)"));
     assert!(generated_c.contains("ailang_rt_res_ok_meta(201, schema, 1, 2)"));
-    assert!(generated_c.contains("ailang_rt_res_html(1)"));
+    assert!(generated_c.contains("ailang_rt_sanitize_html(raw)"));
+    assert!(generated_c.contains("ailang_rt_res_html(safe)"));
     assert!(generated_c.contains("ailang_rt_res_text(200, \"ok\")"));
 
     let binary_path = project_dir.join("build").join("reqresdemo");
