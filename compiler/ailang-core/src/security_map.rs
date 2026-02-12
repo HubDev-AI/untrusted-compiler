@@ -1368,6 +1368,10 @@ fn middleware_for(name: &str, span: &Span, policy: &Policy) -> Option<SecurityMi
                 TagAttr::Bool(policy.cors.has_wildcard_origin()),
             );
             attrs.insert(
+                "reflectOrigin".to_string(),
+                TagAttr::Bool(policy.cors.reflect_origin),
+            );
+            attrs.insert(
                 "originsCount".to_string(),
                 TagAttr::Int(policy.cors.allowed_origins.len() as i64),
             );

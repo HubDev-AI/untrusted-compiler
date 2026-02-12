@@ -40,6 +40,33 @@ allow_credentials = true
 }
 
 #[test]
+fn policy_rejects_forbidden_cors_origin_reflection() {
+    let source = r#"
+[cors]
+reflect_origin = true
+forbid_reflect_origin = true
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect_err("forbidden CORS reflection must be rejected");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_allows_cors_origin_reflection_when_not_forbidden() {
+    let source = r#"
+[cors]
+reflect_origin = true
+forbid_reflect_origin = false
+"#;
+
+    let policy = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect("CORS reflection should parse when forbid_reflect_origin is false");
+    assert!(policy.cors.reflect_origin);
+    assert!(!policy.cors.forbid_reflect_origin);
+}
+
+#[test]
 fn policy_rejects_invalid_redirect_settings() {
     let source = r#"
 [net.public]

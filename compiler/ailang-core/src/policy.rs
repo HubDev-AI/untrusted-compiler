@@ -19,6 +19,7 @@ pub struct CorsPolicyConfig {
     pub enabled: bool,
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
+    pub reflect_origin: bool,
     pub forbid_any_origin: bool,
     pub forbid_reflect_origin: bool,
     pub require_vary_origin: bool,
@@ -152,6 +153,7 @@ impl Default for Policy {
                 enabled: true,
                 allowed_origins: vec!["https://app.example.com".to_string()],
                 allow_credentials: true,
+                reflect_origin: false,
                 forbid_any_origin: true,
                 forbid_reflect_origin: true,
                 require_vary_origin: true,
@@ -537,6 +539,8 @@ struct CorsSection {
     #[serde(default)]
     allow_credentials: Option<bool>,
     #[serde(default)]
+    reflect_origin: Option<bool>,
+    #[serde(default)]
     max_age_seconds: Option<i64>,
     #[serde(default)]
     forbid_any_origin: Option<bool>,
@@ -770,6 +774,9 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         if let Some(value) = section.allow_credentials {
             policy.cors.allow_credentials = value;
         }
+        if let Some(value) = section.reflect_origin {
+            policy.cors.reflect_origin = value;
+        }
         if let Some(value) = section.forbid_any_origin {
             policy.cors_forbid_any_origin = value;
             policy.cors.forbid_any_origin = value;
@@ -814,6 +821,19 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     Span::point(policy_path.to_path_buf(), 1, 1),
                 )
                 .with_note("replace `*` with explicit origins or disable `cors.forbid_any_origin`"),
+            );
+        }
+
+        if policy.cors_forbid_reflect_origin && policy.cors.reflect_origin {
+            diagnostics.push(
+                Diagnostic::error(
+                    "P6003",
+                    "invalid CORS policy: origin reflection is forbidden",
+                    Span::point(policy_path.to_path_buf(), 1, 1),
+                )
+                .with_note(
+                    "set `cors.reflect_origin=false` or disable `cors.forbid_reflect_origin`",
+                ),
             );
         }
     }

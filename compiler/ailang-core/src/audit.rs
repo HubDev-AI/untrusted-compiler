@@ -92,6 +92,8 @@ pub struct AuditCorsPosture {
     #[serde(rename = "allowCredentials")]
     pub allow_credentials: bool,
     pub wildcard: bool,
+    #[serde(rename = "reflectOrigin")]
+    pub reflect_origin: bool,
     pub origins: Vec<String>,
     #[serde(rename = "allowRedirects")]
     pub allow_redirects: bool,
@@ -248,6 +250,7 @@ pub fn run_security_audit_with_baseline(
             enabled: policy.cors.enabled,
             allow_credentials: policy.cors.allow_credentials,
             wildcard: policy.cors.has_wildcard_origin(),
+            reflect_origin: policy.cors.reflect_origin,
             origins: policy.cors.allowed_origins.clone(),
             allow_redirects: policy.net_public.allow_redirects,
         },
@@ -317,6 +320,20 @@ pub fn run_security_audit_with_baseline(
                 "sampleCalls": call_samples_for_tag(security_map, "middleware.cors", 5),
             }),
             "Prefer explicit origin allowlist even when credentials are disabled.",
+        ));
+    }
+
+    if posture.cors.enabled && middleware_has_reflect_origin(security_map) {
+        findings.push(finding(
+            "CORS_REFLECT_ORIGIN_ENABLED",
+            AuditSeverity::HIGH,
+            "cors",
+            json!({
+                "reflectOrigin": true,
+                "forbidReflectOrigin": policy.cors.forbid_reflect_origin,
+                "sampleCalls": call_samples_for_tag(security_map, "middleware.cors", 5),
+            }),
+            "Disable origin reflection and use explicit CORS origin allowlists.",
         ));
     }
 
@@ -1117,6 +1134,16 @@ fn middleware_has_vary_origin(security_map: &SecurityMap) -> bool {
             && entry
                 .attrs
                 .get("requireVaryOrigin")
+                .is_some_and(|value| matches!(value, TagAttr::Bool(true)))
+    })
+}
+
+fn middleware_has_reflect_origin(security_map: &SecurityMap) -> bool {
+    security_map.middleware.iter().any(|entry| {
+        entry.tags.iter().any(|tag| tag == "middleware.cors")
+            && entry
+                .attrs
+                .get("reflectOrigin")
                 .is_some_and(|value| matches!(value, TagAttr::Bool(true)))
     })
 }

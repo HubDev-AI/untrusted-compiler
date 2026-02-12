@@ -112,6 +112,42 @@ fn boot() -> Int {
 }
 
 #[test]
+fn sec_audit_flags_cors_origin_reflection_with_sample_calls() {
+    let source = r#"
+fn boot() -> Int {
+  withCors();
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mut policy = Policy::default();
+    policy.cors.reflect_origin = true;
+    policy.cors.forbid_reflect_origin = false;
+
+    let map = build_security_map(&program, &policy);
+    let report = run_security_audit(&policy, &map);
+
+    let reflect = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "CORS_REFLECT_ORIGIN_ENABLED")
+        .expect("CORS_REFLECT_ORIGIN_ENABLED finding should be present");
+    assert_eq!(reflect.severity, AuditSeverity::HIGH);
+    let samples = reflect
+        .evidence
+        .get("sampleCalls")
+        .and_then(|value| value.as_array())
+        .expect("reflect-origin finding should include sampleCalls");
+    assert!(samples.iter().any(|sample| {
+        sample
+            .get("callee")
+            .and_then(|value| value.as_str())
+            .is_some_and(|callee| matches!(callee, "withCors" | "cors.withCors"))
+    }));
+}
+
+#[test]
 fn sec_audit_flags_critical_internal_net_and_secret_reveal_usage() {
     let source = r#"
 fn risky() -> Int {

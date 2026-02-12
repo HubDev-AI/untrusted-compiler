@@ -77,6 +77,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `SQL_LIMIT_RULE_DISABLED`
   - logging posture evidence is now uniformly callsite-backed:
     - `LOG_USER_AGENT_ENABLED` now includes bounded deterministic `sampleCalls` evidence, aligned with other logging findings.
+  - CORS reflection posture is now explicit and auditable:
+    - policy parser supports `cors.reflect_origin` and rejects forbidden reflection (`P6003`) when `cors.forbid_reflect_origin=true`.
+    - `security_map` middleware attrs now include `reflectOrigin` for `middleware.cors`.
+    - `sec.audit` now emits `CORS_REFLECT_ORIGIN_ENABLED` with deterministic `sampleCalls` evidence when origin reflection is enabled.
   - policy parser now validates `sql.require_limit_on_select` values (`off|warn|enforce`) with dedicated diagnostics.
   - `security_map` now adds callsite SQL hygiene tags (`sql.select_without_limit`) for SQL sink calls with unbounded `SELECT` literals.
   - `sec.audit` now emits `SQL_SELECT_WITHOUT_LIMIT` with policy-mapped severity:

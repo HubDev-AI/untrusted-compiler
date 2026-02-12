@@ -1175,6 +1175,50 @@ This slice extends `LOG_USER_AGENT_ENABLED` findings to include deterministic `s
 - this improves evidence parity for logging posture but does not yet add module-level grouping for logging hotspots.
 - next step is optional grouping/aggregation of sample evidence by module/service area.
 
+### Slice Explanation: CORS Origin Reflection Policy + Audit Finding
+
+#### 1) What it is
+This slice adds explicit CORS origin-reflection posture support to policy parsing, security metadata, and audit findings.
+
+#### 2) Why it exists
+Origin reflection is a high-risk CORS pattern. The policy model already had `forbid_reflect_origin`, but there was no explicit runtime posture flag or dedicated audit signal when reflection was enabled.
+
+#### 3) How it works internally
+- policy parser now accepts:
+  - `cors.reflect_origin = <bool>`.
+- policy validation now rejects forbidden reflection combinations:
+  - `cors.reflect_origin=true` with `cors.forbid_reflect_origin=true` -> `P6003`.
+- `security_map` middleware tagging now emits:
+  - `reflectOrigin` attribute for `middleware.cors`.
+- `sec.audit` adds deterministic finding:
+  - `CORS_REFLECT_ORIGIN_ENABLED` (HIGH) with `sampleCalls` evidence from `middleware.cors` callsites.
+
+#### 4) Inputs/outputs and constraints
+- Input:
+  - policy CORS reflection keys,
+  - router middleware callsites (`withCors` / `cors.withCors`).
+- Output:
+  - validated policy state,
+  - middleware attribute evidence in `security_map`,
+  - audit finding with bounded callsite samples.
+- Constraints:
+  - finding requires reflection posture enabled in middleware attrs,
+  - policy validation blocks explicitly forbidden reflection configs at parse/build time.
+
+#### 5) Failure modes and diagnostics
+- invalid policy combination emits `P6003` with guidance to disable reflection or relax `forbid_reflect_origin`.
+- when reflection is enabled but not forbidden, audit emits `CORS_REFLECT_ORIGIN_ENABLED` for posture visibility.
+
+#### 6) Example usage
+- policy:
+  - `[cors] reflect_origin = true; forbid_reflect_origin = false`
+- audit:
+  - includes `CORS_REFLECT_ORIGIN_ENABLED` with `sampleCalls` pointing to CORS middleware callsites.
+
+#### 7) Tradeoffs and next steps
+- current finding is posture-level and does not yet distinguish narrow allowlisted reflection strategies.
+- next step is finer-grained middleware evidence (for example exact matching strategy tags) for richer risk scoring.
+
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.

@@ -112,6 +112,13 @@ fn boot() -> Int {
         .middleware
         .iter()
         .any(|entry| entry.tags.iter().any(|tag| tag == "middleware.cors")));
+    assert!(map.middleware.iter().any(|entry| {
+        entry.tags.iter().any(|tag| tag == "middleware.cors")
+            && matches!(
+                entry.attrs.get("reflectOrigin"),
+                Some(ailang_core::security_map::TagAttr::Bool(false))
+            )
+    }));
     assert!(map.middleware.iter().any(|entry| entry
         .tags
         .iter()
