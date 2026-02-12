@@ -1701,6 +1701,12 @@ impl Analyzer {
             arg_types,
             callable_aliases,
         );
+        self.enforce_router_security_bootstrap_requirements(
+            callee_name,
+            span.clone(),
+            args,
+            arg_types,
+        );
 
         if is_req_json_gate(callee_name) && args.is_empty() {
             self.diagnostics.push(
@@ -1851,6 +1857,85 @@ impl Analyzer {
                     "function `{handler_name}` should declare `effects {{ net }}` to be used as an HTTP handler"
                 )),
             );
+        }
+    }
+
+    fn enforce_router_security_bootstrap_requirements(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        let (expected_arity, expected_types, usage_note) = match callee_name {
+            "sec.withSecurityHeaders" => (
+                2usize,
+                vec!["Router", "SecurityHeadersConfig"],
+                "use `sec.withSecurityHeaders(router, securityHeadersCfg)`",
+            ),
+            "cors.withCors" => (
+                2usize,
+                vec!["Router", "CorsConfig"],
+                "use `cors.withCors(router, corsCfg)`",
+            ),
+            "csrf.withCsrf" => (
+                2usize,
+                vec!["Router", "CsrfConfig"],
+                "use `csrf.withCsrf(router, csrfCfg)`",
+            ),
+            "auth.withAuth" => (
+                2usize,
+                vec!["Router", "AuthConfig"],
+                "use `auth.withAuth(router, authCfg)`",
+            ),
+            "sec.defaultHeaders" | "cors.fromPolicy" | "csrf.fromPolicy" | "auth.fromPolicy" => {
+                if !args.is_empty() {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "policy/bootstrap constructor takes no arguments",
+                            span,
+                        )
+                        .with_note(format!("`{callee_name}` should be called without arguments")),
+                    );
+                }
+                return;
+            }
+            _ => return,
+        };
+
+        if args.len() != expected_arity {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "security middleware bootstrap call has invalid argument count",
+                    span,
+                )
+                .with_note(format!(
+                    "`{callee_name}` expects {expected_arity} arguments, got {}",
+                    args.len()
+                ))
+                .with_note(usage_note),
+            );
+            return;
+        }
+
+        for (index, expected_name) in expected_types.iter().enumerate() {
+            if !arg_types[index].is_named(expected_name) {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "security middleware bootstrap argument has invalid type",
+                        args[index].span.clone(),
+                    )
+                    .with_note(format!(
+                        "`{callee_name}` argument {} expects `{expected_name}`, got `{}`",
+                        index + 1,
+                        arg_types[index].describe()
+                    ))
+                    .with_note(usage_note),
+                );
+            }
         }
     }
 
@@ -2377,7 +2462,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "http_router" | "http.router" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("Router"),
         }),
         "http_get_route" | "http.get" => Some(IntrinsicSpec {
             effect: None,
@@ -2397,29 +2482,29 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "withCors" | "cors_with" | "cors.withCors" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("Router"),
         }),
         "withSecurityHeaders" | "sec_with_security_headers" | "sec.withSecurityHeaders" => {
             Some(IntrinsicSpec {
                 effect: None,
                 required_capability: None,
-                return_ty: IntrinsicReturnTy::Unknown,
+                return_ty: IntrinsicReturnTy::Named("Router"),
             })
         }
         "withCsrf" | "csrf_with" | "csrf.withCsrf" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("Router"),
         }),
         "withAuth" | "auth_with" | "auth.withAuth" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("Router"),
         }),
         "sec_default_headers" | "sec.defaultHeaders" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("SecurityHeadersConfig"),
         }),
         "sec_csp" | "sec.csp" => Some(IntrinsicSpec {
             effect: None,
@@ -2434,7 +2519,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "cors_from_policy" | "cors.fromPolicy" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("CorsConfig"),
         }),
         "cors_origin" | "cors.origin" => Some(IntrinsicSpec {
             effect: None,
@@ -2444,7 +2529,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "csrf_from_policy" | "csrf.fromPolicy" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("CsrfConfig"),
         }),
         "csrf_issue_token" | "csrf.issueToken" => Some(IntrinsicSpec {
             effect: Some("net"),
@@ -2454,7 +2539,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         "auth_from_policy" | "auth.fromPolicy" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
-            return_ty: IntrinsicReturnTy::Unknown,
+            return_ty: IntrinsicReturnTy::Named("AuthConfig"),
         }),
         "auth_require" | "auth.require" => Some(IntrinsicSpec {
             effect: None,

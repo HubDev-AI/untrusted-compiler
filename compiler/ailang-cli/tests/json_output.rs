@@ -1065,10 +1065,15 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn main() -> Int {
-  sec.withSecurityHeaders();
-  cors.withCors();
-  csrf.withCsrf();
-  auth.withAuth();
+  let headers = sec.defaultHeaders();
+  let corsCfg = cors.fromPolicy();
+  let csrfCfg = csrf.fromPolicy();
+  let authCfg = auth.fromPolicy();
+  let router = http.router();
+  let withHeaders = sec.withSecurityHeaders(router, headers);
+  let withCors = cors.withCors(withHeaders, corsCfg);
+  let withCsrf = csrf.withCsrf(withCors, csrfCfg);
+  auth.withAuth(withCsrf, authCfg);
   0
 }
 "#,
@@ -1086,10 +1091,11 @@ entry = "src/main.ai"
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_with_security_headers()"));
-    assert!(generated_c.contains("ailang_rt_with_cors()"));
-    assert!(generated_c.contains("ailang_rt_with_csrf()"));
-    assert!(generated_c.contains("ailang_rt_with_auth()"));
+    assert!(generated_c.contains("ailang_rt_http_router()"));
+    assert!(generated_c.contains("ailang_rt_with_security_headers(router, headers)"));
+    assert!(generated_c.contains("ailang_rt_with_cors(withHeaders, corsCfg)"));
+    assert!(generated_c.contains("ailang_rt_with_csrf(withCors, csrfCfg)"));
+    assert!(generated_c.contains("ailang_rt_with_auth(withCsrf, authCfg)"));
 
     let binary_path = project_dir.join("build").join("securitymiddlewaredemo");
     assert!(binary_path.exists(), "compiled binary should exist");

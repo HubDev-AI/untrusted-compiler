@@ -1,0 +1,6 @@
+fn main() -> Int {
+  let router = http.router();
+  let wrong = auth.fromPolicy();
+  cors.withCors(router, wrong);
+  0
+}

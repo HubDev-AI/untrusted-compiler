@@ -237,6 +237,12 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - path argument must be `String`,
     - handler argument must resolve to a declared function symbol,
     - handler must declare `effects { net }`.
+  - Canonical router security bootstrap calls now have typed semantic contracts:
+    - `sec.defaultHeaders()` -> `SecurityHeadersConfig`
+    - `cors.fromPolicy()` -> `CorsConfig`
+    - `csrf.fromPolicy()` -> `CsrfConfig`
+    - `auth.fromPolicy()` -> `AuthConfig`
+    - `sec.withSecurityHeaders(router, cfg)` / `cors.withCors(router, cfg)` / `csrf.withCsrf(router, cfg)` / `auth.withAuth(router, cfg)` require typed `(Router, Config)` arguments and return `Router`.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -595,6 +601,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Cookie Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: Function Symbol Handler Wiring for hello-api".
 - Chapter: "M7 Slice: Route Registration Contract Checks".
+- Chapter: "M7 Slice: Typed Router Security Bootstrap Contracts".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks
