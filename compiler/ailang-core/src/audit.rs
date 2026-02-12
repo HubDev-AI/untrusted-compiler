@@ -260,6 +260,8 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
     let mut findings = Vec::new();
     let today = current_utc_iso_date();
     let today_days = days_from_iso_date(&today).unwrap_or(0);
+    let mut expired_allows = Vec::new();
+    let mut expiring_soon_allows = Vec::new();
 
     if posture.cors.allow_credentials && posture.cors.wildcard {
         findings.push(finding(
@@ -706,6 +708,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
 
         if let Some(expiry_days) = days_from_iso_date(&allow.expires) {
             if expiry_days < today_days {
+                expired_allows.push(allow.clone());
                 findings.push(finding(
                     "ALLOW_EXPIRED",
                     AuditSeverity::HIGH,
@@ -714,6 +717,7 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
                     "Remove or renew expired @allow exceptions immediately.",
                 ));
             } else if (expiry_days - today_days) <= ALLOW_EXPIRING_SOON_DAYS {
+                expiring_soon_allows.push(allow.clone());
                 findings.push(finding(
                     "ALLOW_EXPIRING_SOON",
                     AuditSeverity::MEDIUM,
@@ -723,6 +727,27 @@ pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditR
                 ));
             }
         }
+    }
+
+    if !expired_allows.is_empty() || !expiring_soon_allows.is_empty() {
+        let mut window = expired_allows.clone();
+        window.extend(expiring_soon_allows.clone());
+        findings.push(finding(
+            "ALLOW_EXPIRY_WINDOW_ROLLUP",
+            if expired_allows.is_empty() {
+                AuditSeverity::MEDIUM
+            } else {
+                AuditSeverity::HIGH
+            },
+            "policy",
+            json!({
+                "expiredCount": expired_allows.len(),
+                "expiringSoonCount": expiring_soon_allows.len(),
+                "windowDays": ALLOW_EXPIRING_SOON_DAYS,
+                "sampleExceptions": exception_samples(&window, 5),
+            }),
+            "Reduce expiring/expired @allow exceptions and keep exception windows short and explicit.",
+        ));
     }
 
     if security_map.allows.len() > ALLOW_COUNT_HIGH_THRESHOLD {

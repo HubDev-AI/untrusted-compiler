@@ -129,6 +129,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - non-call exception posture snapshot evidence for `ALLOW_COUNT_HIGH` (`sampleExceptions`)
   - sec_audit tests now assert deterministic sample-call evidence presence for these findings.
   - `sec.audit` text rendering now includes sample-call previews with provenance trace snippets when available.
+  - `sec.audit` now emits deterministic exception-expiry rollup findings (`ALLOW_EXPIRY_WINDOW_ROLLUP`) with sampled exception evidence.
   - Capability enforcement now supports both compact and context-first stdlib signatures for core sensitive families (db/net/fs/secrets).
   - `E2003`/`E2004` diagnostics now report the precise capability argument index for these call forms.
   - Sink-flow argument indexing now adapts to call shape so context/capability arguments are excluded from payload checks.
@@ -628,7 +629,7 @@ Day 14:
 
 1. Extend callable-forwarding symbol metadata from helper-function summaries into richer callable-value shapes (for example capability-object function fields).
 2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
-3. Expand deterministic `sec.audit` non-call evidence from exception-count snapshots to expiring/soon-expiring exception rollups.
+3. Expand deterministic `sec.audit` non-call policy rollups with aging/trend signals and severity tuning inputs.
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

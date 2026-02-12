@@ -163,6 +163,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - CORS/security-headers/auth/CSRF posture findings via middleware-tagged sample callsites
     - allowlisted bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`) via bypass-tag sampling
     - non-call exception posture findings (`ALLOW_COUNT_HIGH`) via bounded `sampleExceptions` snapshots
+    - non-call expiry-window posture rollups (`ALLOW_EXPIRY_WINDOW_ROLLUP`) with sampled exceptions
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
   - text-format `sec.audit` output now shows bounded sample-call previews and trace snippets for fast triage
@@ -376,6 +377,46 @@ JSON output already carried detailed `sampleCalls`, but text output only listed 
 #### 7) Tradeoffs and next steps
 - previews improve triage speed but are not full provenance dumps.
 - next step is attaching selected provenance context directly into compiler diagnostics.
+
+### Slice Explanation: Exception Expiry-Window Rollup Findings
+
+#### 1) What it is
+This slice adds an aggregate policy finding (`ALLOW_EXPIRY_WINDOW_ROLLUP`) that summarizes expired and soon-expiring `@allow` exceptions.
+
+#### 2) Why it exists
+Per-annotation findings (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`) are precise but noisy at scale. A rollup gives a deterministic posture signal for CI gating and triage.
+
+#### 3) How it works internally
+- audit now collects:
+  - expired exceptions,
+  - soon-expiring exceptions (within configured window).
+- after per-annotation checks, audit emits one rollup finding containing:
+  - `expiredCount`,
+  - `expiringSoonCount`,
+  - `windowDays`,
+  - bounded `sampleExceptions`.
+- severity is `HIGH` when any expired exception exists, else `MEDIUM`.
+
+#### 4) Inputs/outputs and constraints
+- Input: parsed allow annotations + current date.
+- Output: `ALLOW_EXPIRY_WINDOW_ROLLUP` finding evidence.
+- Constraints:
+  - rollup is deterministic and bounded,
+  - it complements (does not replace) per-exception findings.
+
+#### 5) Failure modes and diagnostics
+- no compile-time diagnostics are introduced.
+- malformed dates are already handled by prior validation; invalid entries are excluded from window math.
+
+#### 6) Example usage
+- if one exception is expired and two are expiring soon, rollup evidence includes:
+  - `expiredCount=1`,
+  - `expiringSoonCount=2`,
+  - representative sampled entries for triage.
+
+#### 7) Tradeoffs and next steps
+- rollups improve posture visibility but do not yet include temporal trend analysis across builds.
+- next step is adding trend/aging signals and policy-tunable severity weighting.
 
 ### Slice Explanation: Allowlist Bypass Sample Evidence
 

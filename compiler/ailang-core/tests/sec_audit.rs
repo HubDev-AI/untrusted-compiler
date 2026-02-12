@@ -494,6 +494,27 @@ fn sec_audit_flags_allow_hygiene_findings() {
         .findings
         .iter()
         .any(|finding| finding.id == "ALLOW_EXPIRED" && finding.severity == AuditSeverity::HIGH));
+    let expiry_rollup = report
+        .findings
+        .iter()
+        .find(|finding| finding.id == "ALLOW_EXPIRY_WINDOW_ROLLUP")
+        .expect("ALLOW_EXPIRY_WINDOW_ROLLUP should be present");
+    assert_eq!(expiry_rollup.severity, AuditSeverity::HIGH);
+    assert_eq!(
+        expiry_rollup
+            .evidence
+            .get("expiredCount")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert!(
+        expiry_rollup
+            .evidence
+            .get("sampleExceptions")
+            .and_then(|value| value.as_array())
+            .is_some_and(|samples| !samples.is_empty()),
+        "rollup should include sampled exceptions"
+    );
     let allow_count = report
         .findings
         .iter()
