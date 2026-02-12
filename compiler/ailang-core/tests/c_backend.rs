@@ -131,6 +131,17 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_auth_from_policy();"));
     assert!(header.contains("int64_t ailang_rt_auth_require();"));
     assert!(header.contains("int64_t ailang_rt_auth_require_role();"));
+    assert!(header.contains("int64_t ailang_rt_err_validation();"));
+    assert!(header.contains("int64_t ailang_rt_err_auth();"));
+    assert!(header.contains("int64_t ailang_rt_err_not_found();"));
+    assert!(header.contains("int64_t ailang_rt_err_conflict();"));
+    assert!(header.contains("int64_t ailang_rt_err_rate_limit();"));
+    assert!(header.contains("int64_t ailang_rt_err_internal();"));
+    assert!(header.contains("int64_t ailang_rt_err_with_path();"));
+    assert!(header.contains("int64_t ailang_rt_err_with_detail();"));
+    assert!(header.contains("int64_t ailang_rt_err_with_limit();"));
+    assert!(header.contains("int64_t ailang_rt_err_with_dependency();"));
+    assert!(header.contains("int64_t ailang_rt_err_with_cause();"));
 
     assert!(source.contains("#include \"ailang_runtime.h\""));
     assert!(source.contains("int64_t ailang_rt_identity_i64(int64_t value)"));
@@ -196,6 +207,17 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_auth_from_policy()"));
     assert!(source.contains("int64_t ailang_rt_auth_require()"));
     assert!(source.contains("int64_t ailang_rt_auth_require_role()"));
+    assert!(source.contains("int64_t ailang_rt_err_validation()"));
+    assert!(source.contains("int64_t ailang_rt_err_auth()"));
+    assert!(source.contains("int64_t ailang_rt_err_not_found()"));
+    assert!(source.contains("int64_t ailang_rt_err_conflict()"));
+    assert!(source.contains("int64_t ailang_rt_err_rate_limit()"));
+    assert!(source.contains("int64_t ailang_rt_err_internal()"));
+    assert!(source.contains("int64_t ailang_rt_err_with_path()"));
+    assert!(source.contains("int64_t ailang_rt_err_with_detail()"));
+    assert!(source.contains("int64_t ailang_rt_err_with_limit()"));
+    assert!(source.contains("int64_t ailang_rt_err_with_dependency()"));
+    assert!(source.contains("int64_t ailang_rt_err_with_cause()"));
 }
 
 #[test]
@@ -541,4 +563,49 @@ fn main() -> Int {
 
     assert!(c.contains("(void)(ailang_rt_auth_require(1));"));
     assert!(c.contains("(void)(ailang_rt_auth_require_role(1, 2));"));
+}
+
+#[test]
+fn c_backend_rewrites_error_builder_intrinsics_to_runtime_symbols() {
+    let source = r#"
+fn main() -> Int {
+  let base = err.validation(1, 2);
+  let auth = err.auth(1, 2, 401);
+  let notFound = err.notFound(1, 2);
+  let conflict = err.conflict(1, 2);
+  let limited = err.rateLimit(1, 2, 3);
+  let internal = err.internal(1);
+  let withPath = err.withPath(base, 1);
+  let withDetail = err.withDetail(base, 1, 2);
+  let withLimit = err.withLimit(base, 1, 2, 3);
+  let withDependency = err.withDependency(base, 1, 2, 3);
+  let withCause = err.withCause(base, internal);
+  auth;
+  notFound;
+  conflict;
+  limited;
+  withPath;
+  withDetail;
+  withLimit;
+  withDependency;
+  withCause;
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("ailang_rt_err_validation(1, 2);"));
+    assert!(c.contains("ailang_rt_err_auth(1, 2, 401);"));
+    assert!(c.contains("ailang_rt_err_not_found(1, 2);"));
+    assert!(c.contains("ailang_rt_err_conflict(1, 2);"));
+    assert!(c.contains("ailang_rt_err_rate_limit(1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_internal(1);"));
+    assert!(c.contains("ailang_rt_err_with_path(base, 1);"));
+    assert!(c.contains("ailang_rt_err_with_detail(base, 1, 2);"));
+    assert!(c.contains("ailang_rt_err_with_limit(base, 1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_with_cause(base, internal);"));
 }

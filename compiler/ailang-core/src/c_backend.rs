@@ -338,6 +338,28 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("auth_require_role(", "__AILANG_INTRINSIC_AUTH_REQUIRE_ROLE__(");
     lowered = lowered.replace("auth.require(", "__AILANG_INTRINSIC_AUTH_REQUIRE__(");
     lowered = lowered.replace("auth_require(", "__AILANG_INTRINSIC_AUTH_REQUIRE__(");
+    lowered = lowered.replace("err.withDependency(", "__AILANG_INTRINSIC_ERR_WITH_DEPENDENCY__(");
+    lowered = lowered.replace("err_with_dependency(", "__AILANG_INTRINSIC_ERR_WITH_DEPENDENCY__(");
+    lowered = lowered.replace("err.withDetail(", "__AILANG_INTRINSIC_ERR_WITH_DETAIL__(");
+    lowered = lowered.replace("err_with_detail(", "__AILANG_INTRINSIC_ERR_WITH_DETAIL__(");
+    lowered = lowered.replace("err.withCause(", "__AILANG_INTRINSIC_ERR_WITH_CAUSE__(");
+    lowered = lowered.replace("err_with_cause(", "__AILANG_INTRINSIC_ERR_WITH_CAUSE__(");
+    lowered = lowered.replace("err.withLimit(", "__AILANG_INTRINSIC_ERR_WITH_LIMIT__(");
+    lowered = lowered.replace("err_with_limit(", "__AILANG_INTRINSIC_ERR_WITH_LIMIT__(");
+    lowered = lowered.replace("err.withPath(", "__AILANG_INTRINSIC_ERR_WITH_PATH__(");
+    lowered = lowered.replace("err_with_path(", "__AILANG_INTRINSIC_ERR_WITH_PATH__(");
+    lowered = lowered.replace("err.validation(", "__AILANG_INTRINSIC_ERR_VALIDATION__(");
+    lowered = lowered.replace("err_validation(", "__AILANG_INTRINSIC_ERR_VALIDATION__(");
+    lowered = lowered.replace("err.notFound(", "__AILANG_INTRINSIC_ERR_NOT_FOUND__(");
+    lowered = lowered.replace("err_not_found(", "__AILANG_INTRINSIC_ERR_NOT_FOUND__(");
+    lowered = lowered.replace("err.rateLimit(", "__AILANG_INTRINSIC_ERR_RATE_LIMIT__(");
+    lowered = lowered.replace("err_rate_limit(", "__AILANG_INTRINSIC_ERR_RATE_LIMIT__(");
+    lowered = lowered.replace("err.conflict(", "__AILANG_INTRINSIC_ERR_CONFLICT__(");
+    lowered = lowered.replace("err_conflict(", "__AILANG_INTRINSIC_ERR_CONFLICT__(");
+    lowered = lowered.replace("err.internal(", "__AILANG_INTRINSIC_ERR_INTERNAL__(");
+    lowered = lowered.replace("err_internal(", "__AILANG_INTRINSIC_ERR_INTERNAL__(");
+    lowered = lowered.replace("err.auth(", "__AILANG_INTRINSIC_ERR_AUTH__(");
+    lowered = lowered.replace("err_auth(", "__AILANG_INTRINSIC_ERR_AUTH__(");
     lowered = lowered.replace("__AILANG_INTRINSIC_TIME_NOW__(", "ailang_rt_time_now(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_ANY__(", "ailang_rt_log_any(");
     lowered = lowered.replace("__AILANG_INTRINSIC_LOG_EVENT__(", "ailang_rt_log_event(");
@@ -467,6 +489,47 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_AUTH_REQUIRE_ROLE__(",
         "ailang_rt_auth_require_role(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_VALIDATION__(",
+        "ailang_rt_err_validation(",
+    );
+    lowered = lowered.replace("__AILANG_INTRINSIC_ERR_AUTH__(", "ailang_rt_err_auth(");
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_NOT_FOUND__(",
+        "ailang_rt_err_not_found(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_CONFLICT__(",
+        "ailang_rt_err_conflict(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_RATE_LIMIT__(",
+        "ailang_rt_err_rate_limit(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_INTERNAL__(",
+        "ailang_rt_err_internal(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_WITH_PATH__(",
+        "ailang_rt_err_with_path(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_WITH_DETAIL__(",
+        "ailang_rt_err_with_detail(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_WITH_LIMIT__(",
+        "ailang_rt_err_with_limit(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_WITH_DEPENDENCY__(",
+        "ailang_rt_err_with_dependency(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_ERR_WITH_CAUSE__(",
+        "ailang_rt_err_with_cause(",
     );
     lowered
 }

@@ -2350,6 +2350,61 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "err_validation" | "err.validation" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_auth" | "err.auth" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_not_found" | "err.notFound" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_conflict" | "err.conflict" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_rate_limit" | "err.rateLimit" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_internal" | "err.internal" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_with_path" | "err.withPath" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_with_detail" | "err.withDetail" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_with_limit" | "err.withLimit" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_with_dependency" | "err.withDependency" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
+        "err_with_cause" | "err.withCause" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("StdError"),
+        }),
         "req_body" | "req.body" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,

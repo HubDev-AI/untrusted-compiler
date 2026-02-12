@@ -20,6 +20,9 @@
 | 2026-02-12 | self | Used `register` as a fixture function name; it maps directly to C and collides with the C keyword `register`. | Avoid C reserved keywords in AILang integration fixtures until backend identifier mangling is implemented. |
 | 2026-02-12 | self | Added an extra schema-note text to existing `E4004` diagnostics and broke semantic golden fixtures. | Preserve established diagnostic wording unless intentionally updating goldens as part of the slice. |
 | 2026-02-12 | self | Asserted an exact emitted C local declaration shape (`int64_t csp = ...`) for a non-primitive typed binding, causing brittle test failure. | Assert intrinsic call lowering substrings rather than exact local declaration spelling unless declaration shape is the behavior under test. |
+| 2026-02-12 | self | Ran two Cargo test commands in parallel again, hitting package-cache lock waits and noisy failures. | Run Cargo commands sequentially in this repo to avoid lock contention. |
+| 2026-02-12 | self | Used `-p ailang-cli` in tests; actual package name is `ailang`. | Use `-p ailang` for CLI crate-specific test runs. |
+| 2026-02-12 | self | Inserted a new Rust test block before closing an existing raw string literal, breaking test-file parsing. | After adding tests, inspect surrounding lines with `nl -ba` to confirm raw-string boundaries are intact. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -91,3 +94,4 @@
 - Added structured log builder bridge (`log.event/field/obj/str/i64/bool/redacted`) so spec logging constructors compile through semantic + runtime bridge.
 - Added helper bridge for `path.base`, `headers.name/value`, and `secrets.redact`, including runtime ABI stubs and `security_map` gate tags.
 - Added JSON helper bridge for `json.decode` / `json.encode` plus `Json` primitive type support and `security_map` gate/sink tagging.
+- Added std-error helper bridge for `err.*` constructors/enrichers across semantic intrinsics, C lowering, runtime ABI stubs, and clang-gated `c-bin` integration tests.

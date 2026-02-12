@@ -1185,6 +1185,78 @@ entry = "src/main.ai"
 }
 
 #[test]
+fn build_emit_c_bin_handles_error_builder_intrinsics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin error builder integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("ailang-c-bin-error-builders");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "errorbuildersdemo"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ai"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        r#"fn main() -> Int {
+  let base = err.validation(1, 2);
+  err.auth(1, 2, 401);
+  err.notFound(1, 2);
+  err.conflict(1, 2);
+  err.rateLimit(1, 2, 3);
+  let internal = err.internal(1);
+  err.withPath(base, 1);
+  err.withDetail(base, 1, 2);
+  err.withLimit(base, 1, 2, 3);
+  err.withDependency(base, 1, 2, 3);
+  err.withCause(base, internal);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for error builder intrinsic project"
+    );
+
+    let generated_c =
+        fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
+    assert!(generated_c.contains("ailang_rt_err_validation(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_err_auth(1, 2, 401)"));
+    assert!(generated_c.contains("ailang_rt_err_not_found(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_err_conflict(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_err_rate_limit(1, 2, 3)"));
+    assert!(generated_c.contains("ailang_rt_err_internal(1)"));
+    assert!(generated_c.contains("ailang_rt_err_with_path(base, 1)"));
+    assert!(generated_c.contains("ailang_rt_err_with_detail(base, 1, 2)"));
+    assert!(generated_c.contains("ailang_rt_err_with_limit(base, 1, 2, 3)"));
+    assert!(generated_c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3)"));
+    assert!(generated_c.contains("ailang_rt_err_with_cause(base, internal)"));
+
+    let binary_path = project_dir.join("build").join("errorbuildersdemo");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(run.status.success(), "compiled binary should exit successfully");
+}
+
+#[test]
 fn build_emit_c_bin_handles_cors_origin_intrinsic_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin cors.origin integration test: clang not available");

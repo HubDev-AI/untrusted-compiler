@@ -67,5 +67,16 @@ int64_t ailang_rt_csrf_issue_token();
 int64_t ailang_rt_auth_from_policy();
 int64_t ailang_rt_auth_require();
 int64_t ailang_rt_auth_require_role();
+int64_t ailang_rt_err_validation();
+int64_t ailang_rt_err_auth();
+int64_t ailang_rt_err_not_found();
+int64_t ailang_rt_err_conflict();
+int64_t ailang_rt_err_rate_limit();
+int64_t ailang_rt_err_internal();
+int64_t ailang_rt_err_with_path();
+int64_t ailang_rt_err_with_detail();
+int64_t ailang_rt_err_with_limit();
+int64_t ailang_rt_err_with_dependency();
+int64_t ailang_rt_err_with_cause();
 
 #endif

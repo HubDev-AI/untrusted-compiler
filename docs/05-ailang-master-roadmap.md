@@ -224,6 +224,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Added clang-gated `ailang run` integration coverage for `examples/hello-api`.
   - Semantic + C runtime bridge now includes security middleware intrinsics (`withSecurityHeaders`, `withCors`, `withCsrf`, `withAuth`) with dotted namespace forms.
   - Semantic primitive type catalog now includes core HTTP surface names (`Router`, `Request`, `Response`, `HttpError`, `Handler`) for API-shaped signatures.
+  - Semantic + C runtime bridge now includes standard error-model helper intrinsics (`err.validation`, `err.auth`, `err.notFound`, `err.conflict`, `err.rateLimit`, `err.internal`, `err.withPath`, `err.withDetail`, `err.withLimit`, `err.withDependency`, `err.withCause`) with runtime stubs and clang-gated `c-bin` coverage.
 - Post-stability benchmark and cross-language comparison spec is now defined as a roadmap milestone input.
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 
@@ -277,6 +278,17 @@ These constraints come from current AILang docs and the new files:
 - `docs/book/95-m7-hello-api-run-flow-validation.md`
 - `docs/book/96-m7-security-middleware-intrinsic-bootstrap.md`
 - `docs/book/97-m7-http-surface-type-bootstrap.md`
+- `docs/book/98-m7-policy-config-intrinsic-bootstrap.md`
+- `docs/book/99-m7-success-envelope-intrinsic-bootstrap.md`
+- `docs/book/100-m7-request-source-intrinsic-bootstrap.md`
+- `docs/book/101-m7-auth-requirement-intrinsic-bootstrap.md`
+- `docs/book/102-m7-cors-origin-gate-intrinsic-bootstrap.md`
+- `docs/book/103-m7-csrf-issue-token-intrinsic-bootstrap.md`
+- `docs/book/104-m7-csp-builder-and-security-config-surface-bootstrap.md`
+- `docs/book/105-m7-log-builder-intrinsic-bootstrap.md`
+- `docs/book/106-m7-path-header-redact-helper-bridge.md`
+- `docs/book/107-m7-json-helper-intrinsic-bridge.md`
+- `docs/book/108-m7-error-builder-intrinsic-bridge.md`
 
 ### 0.1 v0.1-lite philosophy
 - Prioritize TypeScript-like ergonomics over systems-language complexity.
@@ -558,6 +570,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Log Builder Intrinsic Bootstrap".
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".
+- Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
 
 ## M8 - Security-by-Construction Enforcement
 ### Build tasks

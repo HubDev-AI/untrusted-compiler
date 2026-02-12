@@ -250,3 +250,47 @@ int64_t ailang_rt_auth_require() {
 int64_t ailang_rt_auth_require_role() {
   return 0;
 }
+
+int64_t ailang_rt_err_validation() {
+  return 0;
+}
+
+int64_t ailang_rt_err_auth() {
+  return 0;
+}
+
+int64_t ailang_rt_err_not_found() {
+  return 0;
+}
+
+int64_t ailang_rt_err_conflict() {
+  return 0;
+}
+
+int64_t ailang_rt_err_rate_limit() {
+  return 0;
+}
+
+int64_t ailang_rt_err_internal() {
+  return 0;
+}
+
+int64_t ailang_rt_err_with_path() {
+  return 0;
+}
+
+int64_t ailang_rt_err_with_detail() {
+  return 0;
+}
+
+int64_t ailang_rt_err_with_limit() {
+  return 0;
+}
+
+int64_t ailang_rt_err_with_dependency() {
+  return 0;
+}
+
+int64_t ailang_rt_err_with_cause() {
+  return 0;
+}
