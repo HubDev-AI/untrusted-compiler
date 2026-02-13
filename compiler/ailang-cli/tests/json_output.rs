@@ -506,11 +506,11 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn main() -> Int {
   let event = log.event("user.created");
-  let field = log.field(1, 2);
-  let obj = log.obj(1);
-  let text = log.str(1);
   let num = log.i64(1);
-  let flag = log.bool(1);
+  let field = log.field("count", num);
+  let obj = log.obj(field);
+  let text = log.str("ok");
+  let flag = log.bool(true);
   let secret = log.redacted("secret");
   let attrSecret = log.attrRedacted("token");
   let withAttr = log.withAttr(event, "token", attrSecret);
@@ -547,11 +547,11 @@ entry = "src/main.ai"
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_log_event(\"user.created\")"));
-    assert!(generated_c.contains("ailang_rt_log_field(1, 2)"));
-    assert!(generated_c.contains("ailang_rt_log_obj(1)"));
-    assert!(generated_c.contains("ailang_rt_log_str(1)"));
+    assert!(generated_c.contains("ailang_rt_log_field(\"count\", num)"));
+    assert!(generated_c.contains("ailang_rt_log_obj(field)"));
+    assert!(generated_c.contains("ailang_rt_log_str(\"ok\")"));
     assert!(generated_c.contains("ailang_rt_log_i64(1)"));
-    assert!(generated_c.contains("ailang_rt_log_bool(1)"));
+    assert!(generated_c.contains("ailang_rt_log_bool(true)"));
     assert!(generated_c.contains("ailang_rt_log_redacted(\"secret\")"));
     assert!(generated_c.contains("ailang_rt_log_attr_redacted(\"token\")"));
     assert!(generated_c.contains("ailang_rt_log_with_attr(event, \"token\", attrSecret)"));

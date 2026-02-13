@@ -135,6 +135,12 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Log value-builder label signatures are now hardened:
     - `log.event(name)` requires `String` event names.
     - `log.redacted(label)` requires `String` redaction labels.
+  - Additional log value-builder signatures are now hardened:
+    - `log.str(value)` requires `String`.
+    - `log.i64(value)` requires numeric payloads.
+    - `log.bool(value)` requires `Bool`.
+    - `log.field(key, value)` requires string keys and `LogValue` payloads.
+    - `log.obj(fields)` now enforces single-argument arity.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
   - `security_map` call records now include optional `arg_roles` metadata for explainability.
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
@@ -782,6 +788,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Log Event Helper Signature Hardening".
 - Chapter: "M7 Slice: Log Sink Payload Signature Hardening".
 - Chapter: "M7 Slice: Log Value Builder Label Signature Hardening".
+- Chapter: "M7 Slice: Log Value Builder Payload Signature Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

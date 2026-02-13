@@ -1,0 +1,4 @@
+error[E4001]: log.bool argument must be `Bool`
+  --> invalid_log_bool_argument_type.ai:2:12
+  note: found `Int`
+  note: pass boolean values to `log.bool`

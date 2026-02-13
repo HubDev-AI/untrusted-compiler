@@ -61,4 +61,4 @@ fn main() -> Int {
 
 - Tradeoff: bridge fixtures/examples using numeric labels now fail and must use strings.
 - Next:
-  - tighten `log.field` and `log.obj` payload-shape checks once `LogValue` collection typing is introduced.
+  - payload signature hardening for `log.str`/`log.i64`/`log.bool`/`log.field`/`log.obj` is implemented in `182-m7-log-value-builder-payload-signature-hardening.md`.

@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  log.i64(true);
+  0
+}

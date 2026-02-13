@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  log.str(1);
+  0
+}

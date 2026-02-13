@@ -97,6 +97,78 @@ fn bad() -> Int {
 }
 
 #[test]
+fn log_str_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.str(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.str argument must be `String`")
+        .expect("expected log.str argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_i64_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.i64(true);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.i64 argument must be numeric")
+        .expect("expected log.i64 argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_bool_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.bool(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.bool argument must be `Bool`")
+        .expect("expected log.bool argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_field_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.field(1, log.i64(1));
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.field key argument must be `String`")
+        .expect("expected log.field key diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn capability_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad() effects { db.write } -> Int {

@@ -4523,6 +4523,116 @@ impl Analyzer {
                     .with_note("pass a redaction label string"),
                 );
             }
+            return;
+        }
+
+        if matches!(callee_name, "log_str" | "log.str") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.str expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.str(\"value\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.str argument must be `String`", args[0].span.clone())
+                        .with_tag("security")
+                        .with_note(format!("found `{}`", arg_types[0].describe()))
+                        .with_note("pass safe string payloads to `log.str`"),
+                );
+            }
+            return;
+        }
+
+        if matches!(callee_name, "log_i64" | "log.i64") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.i64 expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.i64(123)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.i64 argument must be numeric", args[0].span.clone())
+                        .with_tag("security")
+                        .with_note(format!("found `{}`", arg_types[0].describe()))
+                        .with_note("pass `Int`/`Int64` values to `log.i64`"),
+                );
+            }
+            return;
+        }
+
+        if matches!(callee_name, "log_bool" | "log.bool") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.bool expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.bool(true)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_bool() {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.bool argument must be `Bool`", args[0].span.clone())
+                        .with_tag("security")
+                        .with_note(format!("found `{}`", arg_types[0].describe()))
+                        .with_note("pass boolean values to `log.bool`"),
+                );
+            }
+            return;
+        }
+
+        if matches!(callee_name, "log_field" | "log.field") {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.field expects `(key, value)` arguments", span)
+                        .with_tag("security")
+                        .with_note("use `log.field(\"key\", value)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.field key argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass stable field-name strings"),
+                );
+            }
+
+            if !arg_types[1].is_named("LogValue") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.field value argument must be `LogValue`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("construct values via `log.str/i64/bool/redacted/...`"),
+                );
+            }
+            return;
+        }
+
+        if matches!(callee_name, "log_obj" | "log.obj") && args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "log.obj expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_note("use `log.obj(fields)`"),
+            );
         }
     }
 

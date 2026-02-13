@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  log.field(1, log.i64(1));
+  0
+}
