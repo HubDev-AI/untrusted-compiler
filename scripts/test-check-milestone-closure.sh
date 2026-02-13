@@ -215,6 +215,15 @@ if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >
   exit 1
 fi
 
+if pending_json="$("$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json --fail-on-pending 2>/dev/null)"; then
+  echo "expected pending failure exit code for json closure output without trend entry" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$pending_json" | jq -e '.overall == "PENDING" and .pendingCount > 0' >/dev/null; then
+  echo "expected pending json closure summary for failing fixture" >&2
+  exit 1
+fi
+
 cat > "$tmp/docs/book/322-m13-first-trend-run-results-note.md" <<'MD'
 # Trend note
 

@@ -45,6 +45,9 @@ A JSON mode provides stable fields for downstream tooling while preserving exist
   - `pendingCount=0`
   - required gate IDs present (`M9-H`, `M13-D`)
   - no absolute temp-path leakage.
+- The same fixture also validates failing JSON strict mode:
+  - command exits non-zero with `--fail-on-pending`,
+  - JSON still renders with `overall=PENDING` and `pendingCount>0`.
 
 ## Validation
 
