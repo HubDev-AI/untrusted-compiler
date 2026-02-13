@@ -505,7 +505,7 @@ Roadmap impact:
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
-- `sec4 explain` now has exact-code mappings for key diagnostics (`E2003`, `E4004`, `E5001`, `E6001`) with direct chapter pointers.
+- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) with direct chapter pointers.
 - Benchmark artifact schema/version contract is now centralized:
   - `benchmark-suite/spec/artifact-contract-v0.1.md` defines canonical artifact filenames + key sets,
   - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
@@ -1295,11 +1295,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
-2. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
-3. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
-4. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
-5. Add a lightweight contract validator command in `benchmark-suite/scripts/` so schema checks can be run independently of naming-lock.
+1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
+2. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
+3. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
+4. Add a lightweight contract validator command in `benchmark-suite/scripts/` so schema checks can be run independently of naming-lock.
+5. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
 
 ---
 

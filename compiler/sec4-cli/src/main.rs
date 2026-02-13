@@ -248,11 +248,51 @@ fn explain_topic(
     ];
 
     match code {
+        "E1002" => {
+            return (
+                "Untrusted Input Reached Typed Sink",
+                "An Untrusted<T> value reached a sink that requires a trusted/safe typed input.",
+                &TRUST_FIXES,
+                "docs/book/56-security-diagnostics-taxonomy.md",
+            );
+        }
+        "E1003" => {
+            return (
+                "Secret Value Passed to Logging",
+                "A Secret<T> value was routed into logging output without approved redaction/reveal flow.",
+                &TRUST_FIXES,
+                "docs/book/56-security-diagnostics-taxonomy.md",
+            );
+        }
+        "E2001" => {
+            return (
+                "Missing Effect Declaration",
+                "Function body uses one or more effects that are not declared in its signature.",
+                &EFFECT_FIXES,
+                "docs/book/55-v0-typing-effects-security-rules.md",
+            );
+        }
+        "E2002" => {
+            return (
+                "Effect Forbidden by Policy",
+                "An effect usage is blocked by policy unless explicitly allowlisted with required metadata.",
+                &POLICY_FIXES,
+                "docs/book/60-v0-policy-keys-spec.md",
+            );
+        }
         "E2003" => {
             return (
                 "Missing Required Capability",
                 "A sensitive API call was made without the required capability token in scope.",
                 &EFFECT_FIXES,
+                "docs/book/54-v0-stdlib-security-surface.md",
+            );
+        }
+        "E4001" => {
+            return (
+                "Invalid Typed API Call Contract",
+                "A typed security/schema API call has invalid arity or argument typing for its required contract.",
+                &SCHEMA_FIXES,
                 "docs/book/54-v0-stdlib-security-surface.md",
             );
         }
