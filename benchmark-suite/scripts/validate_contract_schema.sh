@@ -116,9 +116,34 @@ validate_compare_matrix_rows() {
   fi
 }
 
+validate_compare_report_rows() {
+  local sample_path="$1"
+  local label="$2"
+
+  if ! jq -e '
+    def row_ok:
+      (type == "object")
+      and (.impl | type == "string")
+      and (.targetRps | type == "number")
+      and (.requestsPerSec | type == "number")
+      and (.p99 | type == "string")
+      and (.loadGenerator | type == "string")
+      and (.constantRate | type == "boolean");
+
+    (.endpoint | type == "string")
+    and (.compared | type == "array" and length > 0)
+    and (all(.compared[]; row_ok))
+    and (.leader | row_ok)
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    return 1
+  fi
+}
+
 report_schema="${schema_dir}/report.schema.json"
 summary_schema="${schema_dir}/summary.schema.json"
 step_summary_schema="${schema_dir}/step-summary.schema.json"
+compare_report_schema="${schema_dir}/compare-report.schema.json"
 compare_matrix_schema="${schema_dir}/compare-matrix.schema.json"
 analysis_schema="${schema_dir}/analysis.schema.json"
 step_matrix_schema="${schema_dir}/step-matrix.schema.json"
@@ -145,6 +170,13 @@ for endpoint in ping decode; do
 done
 
 if ! validate_json_required_keys "${samples_dir}/sample-step-summary-decode.json" "${step_summary_schema}" "step-summary sample"; then
+  failed=1
+fi
+
+if ! validate_json_required_keys "${samples_dir}/sample-compare-report-ping.json" "${compare_report_schema}" "compare-report sample"; then
+  failed=1
+fi
+if ! validate_compare_report_rows "${samples_dir}/sample-compare-report-ping.json" "compare-report sample"; then
   failed=1
 fi
 

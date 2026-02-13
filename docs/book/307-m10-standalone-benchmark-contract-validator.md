@@ -20,6 +20,7 @@ Schema checks were previously coupled to naming-lock. This slice makes benchmark
 - report samples (`sample-<impl>-report.json`)
 - summary samples (`sample-summary-*.json`)
 - step summary/matrix samples
+- single-endpoint compare report sample
 - compare matrix sample
 - analysis sample
 - artifact manifest sample
@@ -30,13 +31,15 @@ Validation behavior:
 3. artifact-manifest item required keys,
 4. report sample `impl` value alignment with filename,
 5. compare-matrix row-shape checks for `compared[]` + `leader` (`loadGenerator`, `constantRate`, and core row fields).
+6. compare-report row-shape checks for `compared[]` + `leader` (`loadGenerator`, `constantRate`, and core row fields).
 
 ## Tests and CI wiring
 
 - `test_validate_contract_schema.sh`:
   - verifies validator passes on current fixtures,
   - mutates a summary sample to remove a required key and verifies validator fails,
-  - mutates compare-matrix leader row to remove `constantRate` and verifies validator fails.
+  - mutates compare-matrix leader row to remove `constantRate` and verifies validator fails,
+  - mutates compare-report leader row to remove `loadGenerator` and verifies validator fails.
 - `benchmark-smoke.yml` now runs:
   - `benchmark-suite/scripts/test_validate_contract_schema.sh`
   - then existing benchmark smoke tests.

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/compare-report.schema.json",
+  "title": "BenchmarkCompareReport",
+  "type": "object",
+  "required": ["version", "endpoint", "compared", "leader"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "endpoint": { "type": "string" },
+    "compared": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/compareRow"
+      }
+    },
+    "leader": {
+      "$ref": "#/$defs/compareRow"
+    }
+  },
+  "$defs": {
+    "compareRow": {
+      "type": "object",
+      "required": [
+        "impl",
+        "targetRps",
+        "requestsPerSec",
+        "p99",
+        "loadGenerator",
+        "constantRate"
+      ],
+      "properties": {
+        "impl": { "type": "string" },
+        "targetRps": { "type": "number" },
+        "requestsPerSec": { "type": "number" },
+        "p99": { "type": "string" },
+        "loadGenerator": { "type": "string" },
+        "constantRate": { "type": "boolean" }
+      }
+    }
+  }
+}

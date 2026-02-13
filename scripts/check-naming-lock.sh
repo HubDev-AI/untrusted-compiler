@@ -132,6 +132,30 @@ validate_compare_matrix_rows() {
   fi
 }
 
+validate_compare_report_rows() {
+  local sample_path="$1"
+  local label="$2"
+
+  if ! jq -e '
+    def row_ok:
+      (type == "object")
+      and (.impl | type == "string")
+      and (.targetRps | type == "number")
+      and (.requestsPerSec | type == "number")
+      and (.p99 | type == "string")
+      and (.loadGenerator | type == "string")
+      and (.constantRate | type == "boolean");
+
+    (.endpoint | type == "string")
+    and (.compared | type == "array" and length > 0)
+    and (all(.compared[]; row_ok))
+    and (.leader | row_ok)
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    return 1
+  fi
+}
+
 check_benchmark_impl_contract() {
   local failed=0
   local impl_root="benchmark-suite/services"
@@ -178,6 +202,7 @@ check_benchmark_artifact_contract() {
   local report_schema="${schema_root}/report.schema.json"
   local summary_schema="${schema_root}/summary.schema.json"
   local step_summary_schema="${schema_root}/step-summary.schema.json"
+  local compare_report_schema="${schema_root}/compare-report.schema.json"
   local step_matrix_schema="${schema_root}/step-matrix.schema.json"
   local compare_matrix_schema="${schema_root}/compare-matrix.schema.json"
   local analysis_schema="${schema_root}/analysis.schema.json"
@@ -256,6 +281,18 @@ check_benchmark_artifact_contract() {
     failed=1
   fi
 
+  local compare_report_sample="benchmark-suite/scripts/testdata/sample-compare-report-ping.json"
+  if [[ ! -f "${compare_report_sample}" ]]; then
+    echo "error: missing benchmark compare-report sample: ${compare_report_sample}" >&2
+    failed=1
+  elif ! validate_json_required_keys "${compare_report_sample}" "${compare_report_schema}" "benchmark compare-report sample"; then
+    echo "error: benchmark compare-report sample schema mismatch: ${compare_report_sample}" >&2
+    failed=1
+  elif ! validate_compare_report_rows "${compare_report_sample}" "benchmark compare-report sample"; then
+    echo "error: benchmark compare-report sample row-shape mismatch: ${compare_report_sample}" >&2
+    failed=1
+  fi
+
   local step_matrix_sample="benchmark-suite/scripts/testdata/sample-step-matrix.json"
   if [[ ! -f "${step_matrix_sample}" ]]; then
     echo "error: missing benchmark step-matrix sample: ${step_matrix_sample}" >&2
@@ -322,6 +359,7 @@ check_benchmark_contract_spec() {
     "spec/schemas/report.schema.json"
     "spec/schemas/summary.schema.json"
     "spec/schemas/step-summary.schema.json"
+    "spec/schemas/compare-report.schema.json"
     "spec/schemas/compare-matrix.schema.json"
     "spec/schemas/analysis.schema.json"
     "spec/schemas/step-matrix.schema.json"

@@ -20,6 +20,7 @@ The contract markdown captured artifact names/keys, but validation logic lived a
    - report
    - summary
    - step-summary
+   - compare-report
    - compare-matrix
    - analysis
    - step-matrix

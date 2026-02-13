@@ -1,0 +1,30 @@
+{
+  "version": "0.1",
+  "endpoint": "ping",
+  "compared": [
+    {
+      "impl": "sec4",
+      "targetRps": 10000,
+      "requestsPerSec": 9801.5,
+      "p99": "4.30ms",
+      "loadGenerator": "wrk2",
+      "constantRate": true
+    },
+    {
+      "impl": "go",
+      "targetRps": 10000,
+      "requestsPerSec": 9700.1,
+      "p99": "4.80ms",
+      "loadGenerator": "wrk2",
+      "constantRate": true
+    }
+  ],
+  "leader": {
+    "impl": "sec4",
+    "targetRps": 10000,
+    "requestsPerSec": 9801.5,
+    "p99": "4.30ms",
+    "loadGenerator": "wrk2",
+    "constantRate": true
+  }
+}

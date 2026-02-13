@@ -560,6 +560,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
 - Benchmark artifact contract now includes machine-validated schema assets:
   - canonical schema files live under `benchmark-suite/spec/schemas/`,
+  - single-endpoint compare artifact contract now has dedicated schema/sample coverage (`compare-report.schema.json` + `sample-compare-report-ping.json`),
   - naming-lock validation now checks benchmark sample artifacts against schema-required keys and version constants,
   - compare-matrix sample validation now enforces row-level keys (`loadGenerator`, `constantRate`) for both `compared[]` and `leader`.
 - Benchmark schema validation is now runnable as a standalone command:

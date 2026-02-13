@@ -43,4 +43,22 @@ if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp2/samples" --schem
   exit 1
 fi
 
+tmp3="$(mktemp -d)"
+cleanup3() {
+  rm -rf "$tmp3"
+}
+trap 'cleanup; cleanup2; cleanup3' EXIT
+
+mkdir -p "$tmp3/samples" "$tmp3/schemas"
+cp "$root_dir"/testdata/sample-*.json "$tmp3/samples/"
+cp "$root_dir"/../spec/schemas/*.schema.json "$tmp3/schemas/"
+
+jq 'del(.leader.loadGenerator)' "$tmp3/samples/sample-compare-report-ping.json" > "$tmp3/samples/sample-compare-report-ping.json.tmp"
+mv "$tmp3/samples/sample-compare-report-ping.json.tmp" "$tmp3/samples/sample-compare-report-ping.json"
+
+if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp3/samples" --schema-dir "$tmp3/schemas" >/dev/null 2>&1; then
+  echo "expected schema validator to fail after removing compare-report row quality key" >&2
+  exit 1
+fi
+
 echo "validate_contract_schema test passed"

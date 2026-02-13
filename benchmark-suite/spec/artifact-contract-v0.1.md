@@ -6,6 +6,7 @@ Machine-validated schema assets:
 - `benchmark-suite/spec/schemas/report.schema.json`
 - `benchmark-suite/spec/schemas/summary.schema.json`
 - `benchmark-suite/spec/schemas/step-summary.schema.json`
+- `benchmark-suite/spec/schemas/compare-report.schema.json`
 - `benchmark-suite/spec/schemas/compare-matrix.schema.json`
 - `benchmark-suite/spec/schemas/analysis.schema.json`
 - `benchmark-suite/spec/schemas/step-matrix.schema.json`
@@ -20,6 +21,7 @@ Canonical filenames:
 
 - Per-implementation summary files: `<impl>-<endpoint>.json`
 - Per-implementation report bundle: `<impl>-report.json`
+- Single-endpoint comparison bundle: `compare-<endpoint>.json`
 - Matrix comparison bundle: `compare-matrix.json`
 - Matrix analysis bundle: `analysis.json`
 - Step-load matrix bundle: `step-matrix.json`
@@ -57,6 +59,22 @@ Top-level keys:
 - `targetRps`
 - `requestsPerSec`
 - `latency`
+
+### `compare-<endpoint>.json`
+
+Top-level keys:
+- `version`
+- `endpoint`
+- `compared`
+- `leader`
+
+Each `compared[]` / `leader` row:
+- `impl`
+- `targetRps`
+- `requestsPerSec`
+- `p99`
+- `loadGenerator`
+- `constantRate`
 
 ### `compare-matrix.json`
 
