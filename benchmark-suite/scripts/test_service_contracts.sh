@@ -22,6 +22,10 @@ while [ "$#" -gt 0 ]; do
       impls_csv="$2"
       shift 2
       ;;
+    --impls=*)
+      impls_csv="${1#--impls=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
