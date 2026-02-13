@@ -26,9 +26,9 @@ Each mapping includes deterministic topic, summary, likely actions, and a direct
 ## Tests
 
 Added CLI integration coverage:
-- `explain_low_frequency_audit_findings_in_json_mode_have_exact_mappings`
+- `explain_all_current_audit_finding_ids_in_json_mode_have_exact_mappings`
 
-The test verifies each newly mapped finding ID:
+The test verifies each currently emitted `sec4 audit` finding ID:
 - succeeds in `--format json`,
 - does not return `"Unknown Diagnostic Family"`,
 - does not use generic roadmap docs fallback path.
