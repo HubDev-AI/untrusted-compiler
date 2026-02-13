@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
@@ -19,6 +19,7 @@ help:
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users-get Run users read benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get)"
+	@echo "  bench-step-profile Run step-load profile for one endpoint (ENDPOINT=...)"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -63,6 +64,9 @@ bench-users-get:
 bench-profile:
 	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
 
+bench-step-profile:
+	scripts/run_step_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
+
 bench-matrix:
 	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
@@ -96,6 +100,7 @@ test-scripts:
 	scripts/test_analyze_matrix.sh
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh
+	scripts/test_run_step_profile.sh
 	scripts/test_preflight.sh
 	scripts/test_test_service_contracts.sh
 

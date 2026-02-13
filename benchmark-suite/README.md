@@ -34,6 +34,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-get`
+   - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=ailang ENDPOINT=decode`
 5. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
 6. Bundle summaries + env into one report:
@@ -69,6 +70,7 @@ Measure end-to-end service behavior across identical implementations:
 - For quick local loops, override profile runtime via env vars:
   - `BENCH_THREADS`, `BENCH_CONNECTIONS`, `BENCH_DURATION`
   - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST|BENCH_TARGET_USERS_GET`
+  - step-load controls: `BENCH_STEP_RATES` (comma-separated), `BENCH_STEP_DURATION`
 - Override orchestrator bind port with `BENCH_PORT` (default `18085`) if needed.
 - Override individual smoke-script ports with `BENCH_SMOKE_PORT` when running service smoke checks directly.
 - Orchestrator now runs `scripts/preflight.sh` automatically:

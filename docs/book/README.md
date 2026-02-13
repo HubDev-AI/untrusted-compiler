@@ -206,5 +206,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `239-m10-impl-selector-flag-parity-in-contract-smoke-runner.md`
 - `240-m10-implementation-scoped-matrix-comparison.md`
 - `241-m10-markdown-report-implementation-scope-header.md`
+- `242-m10-step-load-profile-runner.md`
 
 As milestones progress, chapters will be added and linked from this index.
