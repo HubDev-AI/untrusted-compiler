@@ -83,6 +83,21 @@ status_for() {
   fi
 }
 
+render_evidence() {
+  local value="$1"
+  case "${value}" in
+    "${repo_root}")
+      echo "."
+      ;;
+    "${repo_root}"/*)
+      echo "${value#${repo_root}/}"
+      ;;
+    *)
+      echo "${value}"
+      ;;
+  esac
+}
+
 bool_has_release_gate=0
 bool_has_release_gate_ci=0
 bool_has_release_verifier_chain=0
@@ -215,16 +230,18 @@ emit_check() {
   local label="$2"
   local pass="$3"
   local evidence="$4"
+  local rendered_evidence
   local status
+  rendered_evidence="$(render_evidence "${evidence}")"
   status="$(status_for "${pass}")"
   if [ "${pass}" -eq 0 ]; then
     pending_count=$((pending_count + 1))
   fi
-  printf '%-6s %-8s %-64s %s\n' "${code}" "${status}" "${label}" "${evidence}"
+  printf '%-6s %-8s %-64s %s\n' "${code}" "${status}" "${label}" "${rendered_evidence}"
 }
 
 echo "Milestone Closure Audit"
-echo "repo: ${repo_root}"
+echo "repo: $(render_evidence "${repo_root}")"
 echo
 printf '%-6s %-8s %-64s %s\n' "Gate" "Status" "Check" "Evidence"
 printf '%-6s %-8s %-64s %s\n' "-----" "--------" "----------------------------------------------------------------" "--------"

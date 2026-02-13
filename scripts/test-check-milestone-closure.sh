@@ -130,7 +130,11 @@ cat > "$tmp/docs/book/322-m13-first-trend-run-results-note.md" <<'MD'
 ## Trend Entry (2026-02-13)
 MD
 
-"$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null
+audit_output="$("$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending)"
+if printf '%s\n' "$audit_output" | rg -q -- "$tmp"; then
+  echo "expected repo-relative evidence paths in closure audit output" >&2
+  exit 1
+fi
 
 cat > "$tmp/docs/book/322-m13-first-trend-run-results-note.md" <<'MD'
 # Trend note

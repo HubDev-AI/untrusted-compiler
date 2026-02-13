@@ -80,6 +80,7 @@ scripts/test-check-milestone-closure.sh
   - repository files and optional matrix/trend-note paths.
 - Output:
   - structured PASS/PENDING table and overall status.
+  - evidence paths are rendered repository-relative when possible.
 - Constraints:
   - this checker validates closure evidence shape/guardrails; it does not replace full benchmark analysis.
 
