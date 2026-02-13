@@ -332,6 +332,25 @@ fn bad(net: NetCap, url: PublicUrl) effects { net } -> Int {
 }
 
 #[test]
+fn net_sink_url_type_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad(net: NetCap) effects { net } -> Int {
+  httpClient.get(net, 1);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "net sink URL argument must be `PublicUrl`")
+        .expect("expected net sink URL type diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn fs_sink_shape_diagnostic_has_security_sink_tags() {
     let source = r#"
 fn bad(fs: FsCap) effects { fs.write } -> Int {

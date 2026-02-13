@@ -310,6 +310,10 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Net sink context-first typing is now hardened:
     - for context-first net sink forms, argument 1 must be `Ctx`,
     - type violations emit tagged `E4001` sink diagnostics.
+  - Net sink URL typing is now hardened:
+    - `httpClient.get` requires `PublicUrl` payloads,
+    - `httpClient.getInternal` requires `InternalUrl` payloads,
+    - non-typed URL payloads emit tagged `E4001` sink diagnostics.
   - FS sink call-shape contracts are now hardened:
     - `fs.read` requires `(fsCap, path)` or `(ctx, fsCap, path)`,
     - `fs.write` requires `(fsCap, path, value)` or `(ctx, fsCap, path, value)`,
@@ -720,6 +724,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: db.tx Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Net Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: Net Sink Context-Argument Type Hardening".
+- Chapter: "M7 Slice: Net Sink URL-Argument Type Hardening".
 - Chapter: "M7 Slice: FS Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: FS Sink Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Source Call-Shape Hardening".

@@ -1,6 +1,6 @@
-fn ok(db: DbCap, net: NetCap, sec: SecretsCap, fs: FsCap, query: SqlQuery) effects { db.read, net, secrets.read, fs.write } -> Int {
+fn ok(db: DbCap, net: NetCap, sec: SecretsCap, fs: FsCap, query: SqlQuery, url: PublicUrl) effects { db.read, net, secrets.read, fs.write } -> Int {
   db_read(db, query, "Row");
-  net_call(net, "https://example.com");
+  net_call(net, url);
   secret_read(sec, "TOKEN");
   fs_write(fs, "/tmp/a", "payload");
   1

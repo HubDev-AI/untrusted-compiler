@@ -1,0 +1,4 @@
+error[E4001]: net sink URL argument must be `InternalUrl`
+  --> invalid_net_internal_url_argument_type.ai:2:31
+  note: found `Int`
+  note: use typed `InternalUrl` values when calling `httpClient.getInternal`

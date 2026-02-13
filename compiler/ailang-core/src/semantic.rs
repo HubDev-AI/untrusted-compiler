@@ -2825,6 +2825,31 @@ impl Analyzer {
                 )),
             );
         }
+
+        let url_index = if args.len() == 3 { 2 } else { 1 };
+        let expected_type = if is_net_public_call(callee_name) {
+            "PublicUrl"
+        } else {
+            "InternalUrl"
+        };
+        if arg_types[url_index].contains_untrusted() || arg_types[url_index].contains_secret() {
+            return;
+        }
+        if !arg_types[url_index].is_named(expected_type) {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    format!("net sink URL argument must be `{expected_type}`"),
+                    args[url_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(format!("found `{}`", arg_types[url_index].describe()))
+                .with_note(format!(
+                    "use typed `{expected_type}` values when calling `{callee_name}`"
+                )),
+            );
+        }
     }
 
     fn enforce_fs_sink_call_shapes(

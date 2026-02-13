@@ -144,3 +144,4 @@
 - Added secret-reveal payload typing hardening so `secrets.reveal` value argument must be `Secret<_>`, with secret-tagged diagnostics and dedicated semantic fixture coverage.
 - Added secret-source name typing hardening so `secrets.get` name argument must be `String`, with secret-tagged diagnostics and dedicated semantic fixture coverage.
 - Added DB sink query typing hardening so `db.exec`, `db.execTx`, and `db.queryOne` require `SqlQuery` payloads in compact/context-first forms, with sink-tagged diagnostics and fixture alignment across alias/capability tests.
+- Added net sink URL typing hardening so `httpClient.get` requires `PublicUrl` and `httpClient.getInternal` requires `InternalUrl`, with sink-tagged diagnostics and typed-URL fixture alignment.
