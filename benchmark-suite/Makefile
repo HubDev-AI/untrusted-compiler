@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
@@ -25,6 +25,8 @@ help:
 	@echo "  bench-step-profile Run step-load profile for one endpoint (ENDPOINT=...)"
 	@echo "  analyze-step-profile Analyze one step-profile summary artifact"
 	@echo "  compare-step-matrix Build cross-impl step analysis matrix"
+	@echo "  bench-step-matrix Run cross-impl step-load orchestrator"
+	@echo "  bench-step-matrix-dry Print step-load orchestrator command plan"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -78,6 +80,12 @@ analyze-step-profile:
 compare-step-matrix:
 	scripts/compare_step_matrix.sh results/summaries $(STEP_MATRIX) "$(IMPLS)" "$(ENDPOINTS)"
 
+bench-step-matrix:
+	scripts/run_step_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+
+bench-step-matrix-dry:
+	scripts/run_step_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+
 bench-matrix:
 	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
@@ -114,6 +122,7 @@ test-scripts:
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh
 	scripts/test_run_step_profile.sh
+	scripts/test_run_step_matrix.sh
 	scripts/test_preflight.sh
 	scripts/test_test_service_contracts.sh
 
