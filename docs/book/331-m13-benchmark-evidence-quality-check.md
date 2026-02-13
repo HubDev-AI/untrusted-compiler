@@ -9,6 +9,7 @@ Added:
 - `scripts/test-check-benchmark-evidence-quality.sh`
 - `.github/workflows/benchmark-smoke.yml`
 - `.github/workflows/benchmark-trend.yml` quality-gate step (`--fail-on-warning`)
+- `.github/workflows/benchmark-cross-impl-evidence.yml` quality-gate step (`--fail-on-warning`)
 
 ## Why it exists
 
@@ -57,6 +58,6 @@ scripts/check-benchmark-evidence-quality.sh --fail-on-warning
 ## Tradeoffs and next steps
 
 - Tradeoff:
-  - advisory mode remains useful for local fallback workflows, but scheduled trend CI now runs strict mode and fails on WARN quality posture.
+  - advisory mode remains useful for local fallback workflows, but scheduled trend CI and cross-impl evidence CI now run strict mode and fail on WARN quality posture.
 - Next:
-  - evaluate promoting strict quality mode into additional release/promotion workflows once cross-impl live evidence is consistently constant-rate.
+  - evaluate promoting strict quality mode into alpha release promotion workflows once closure-refresh artifact ingestion is fully automated in CI.

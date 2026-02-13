@@ -18,6 +18,8 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
 - Manual dispatch workflow that runs:
   - implementations: `sec4,node,go,rust`
   - endpoints: `ping,decode`
+- Enforces strict evidence quality before artifact upload:
+  - `scripts/check-benchmark-evidence-quality.sh --fail-on-warning`
 - Uploads artifact: `benchmark-cross-impl-evidence`
 
 2. Evidence importer command:
@@ -67,4 +69,3 @@ benchmark-suite/scripts/update_cross_impl_matrix_from_ci.sh \
 
 This slice enables, but does not by itself satisfy, `M10-A`.
 `M10-A` becomes `PASS` only after a live artifact-backed matrix is imported and committed.
-

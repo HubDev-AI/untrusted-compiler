@@ -42,6 +42,12 @@ jobs:
             --impls sec4,node,go,rust \
             --endpoints ping,decode
 
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json \
+            --fail-on-warning
+
       - name: Upload cross-impl benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
