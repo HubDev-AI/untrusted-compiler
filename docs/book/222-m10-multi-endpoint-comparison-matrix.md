@@ -7,6 +7,7 @@ This chapter documents M10 matrix reporting across all benchmarked endpoints in 
 Added:
 - `benchmark-suite/scripts/compare_matrix.sh`
 - `benchmark-suite/scripts/test_compare_matrix.sh`
+- `benchmark-suite/scripts/test_compare_matrix_contract.sh`
 - Make target:
   - `make -C benchmark-suite compare-matrix`
 
