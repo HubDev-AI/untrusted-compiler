@@ -69,6 +69,28 @@ Capture artifacts from `build/release-alpha-gate/` and attach/upload as promotio
 4. `scripts/verify-release-publish-manifest.sh`
 5. artifact upload
 
+## External publish handoff contract
+
+For downstream publish systems, handoff is complete only when all of the following are present in `build/release-alpha-gate/`:
+- `publish-manifest.json`
+- `checksums.txt`
+- `summary.txt`
+- policy profile copy (`*.sec4.policy`)
+- runtime ABI files (`sec4_runtime.h`, `sec4_runtime.c`)
+- per-sample artifacts referenced by manifest (`*-build_metadata.json`, `*-sbom.json`, `*-audit.json`, `*-security_map.json`)
+
+Downstream consumers should bind strictly to manifest fields:
+- `identity.policyProfileSha256`
+- `identity.policyIdentityHash`
+- `identity.compilerIdentityHash`
+- `identity.runtimeIdentityHash`
+- `artifacts.samples[].{name,buildMetadata,sbom,audit,securityMap}`
+
+Recommended handoff gate:
+1. run `scripts/verify-release-publish-manifest.sh`,
+2. archive/upload the entire `build/release-alpha-gate/` directory as immutable release evidence,
+3. use manifest fields (not ad-hoc filename discovery) in external publish automation.
+
 This CI path is the canonical non-local promotion gate.
 
 ## Promotion pass criteria

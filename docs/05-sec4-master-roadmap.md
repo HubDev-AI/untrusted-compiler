@@ -545,6 +545,9 @@ Roadmap impact:
 - M13-S2 candidate scope is now locked:
   - trend-run result codification and threshold tuning workflow documentation,
   - release publish handoff contract notes for external tooling integration.
+- M13 publish handoff contract notes are now documented:
+  - `docs/book/313-m13-release-promotion-playbook.md` now defines required handoff files/fields for downstream tooling,
+  - `docs/book/320-m13-release-publish-handoff-notes.md` captures the explicit external publish contract checklist.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1295,6 +1298,12 @@ M13-S1 go/no-go note:
 - Decode threshold tuning rubric is documented and linked from benchmark trend docs.
 - Release publish handoff notes chapter defines required inputs/outputs and operator checklist.
 
+### M13-S2 tracking (live status)
+- [x] Candidate scope locked and documented.
+- [x] Release publish handoff contract notes documented.
+- [ ] First trend-run results note captured with observations and follow-up actions.
+- [ ] Decode threshold tuning rubric documented with deterministic decision rules.
+
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
 - Scheduled benchmark signals are available and trend-comparable over time.
@@ -1307,6 +1316,7 @@ M13-S1 go/no-go note:
 - Chapter: "Scheduled Benchmark Trend Workflow".
 - Chapter: "M13 Slice: Benchmark Regression Threshold Guard".
 - Chapter: "M13-S2 Candidate Scope and Delivery Contract".
+- Chapter: "M13 Slice: Release Publish Handoff Notes".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1400,7 +1410,6 @@ Day 14:
 
 1. Review and tune decode endpoint thresholds after first scheduled trend runs.
 2. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
-3. Add release publish pipeline handoff notes for external tooling integration.
 
 ---
 
