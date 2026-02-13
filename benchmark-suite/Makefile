@@ -132,6 +132,7 @@ test-scripts:
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh
 	scripts/test_compare_reports.sh
+	scripts/test_compare_reports_contract.sh
 	scripts/test_compare_matrix.sh
 	scripts/test_compare_step_matrix.sh
 	scripts/test_analyze_step_profile.sh

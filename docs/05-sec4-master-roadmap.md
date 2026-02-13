@@ -567,6 +567,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - `benchmark-suite/scripts/validate_contract_schema.sh` validates schema assets against benchmark sample artifacts,
   - standalone validator now checks compare-matrix row shape (`loadGenerator` + `constantRate`) for `compared[]` and `leader`,
   - trend compare-matrix fixtures are now schema-validated with full `compared[]` + `leader` row-shape checks,
+  - benchmark smoke now includes `test_compare_reports_contract.sh` to enforce runtime `compare_reports.sh` output shape against compare-report contract expectations,
   - `.github/workflows/benchmark-smoke.yml` now runs `test_validate_contract_schema.sh` before other smoke scripts.
 - Benchmark CI coverage now includes deterministic dry-run orchestrator checks:
   - `.github/workflows/benchmark-smoke.yml` now runs `test_run_comparison_matrix.sh`, `test_run_step_matrix.sh`, and `test_run_full_benchmark_suite.sh`,

@@ -7,6 +7,7 @@ This chapter documents M10 comparison reporting support over per-implementation 
 Added:
 - `benchmark-suite/scripts/compare_reports.sh`
 - `benchmark-suite/scripts/test_compare_reports.sh`
+- `benchmark-suite/scripts/test_compare_reports_contract.sh`
 - test fixtures for sample impl report bundles
 - Make target:
   - `make -C benchmark-suite compare`
