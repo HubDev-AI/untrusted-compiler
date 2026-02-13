@@ -47,4 +47,4 @@ fn bad(a: Secret<String>, b: Secret<String>) -> Bool {
 
 - Tradeoff: secret comparisons now require explicit helper usage once constant-time compare APIs are available.
 - Next:
-  - add a typed constant-time compare helper surface (for example `crypto.ctEq`) and corresponding semantic contracts.
+  - `crypto.ctEq` helper bridge and typed semantic contracts are documented in `189-m7-crypto-cteq-intrinsic-bridge.md`.

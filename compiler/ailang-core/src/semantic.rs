@@ -1828,6 +1828,7 @@ impl Analyzer {
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_crypto_ct_eq_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_log_value_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_log_sink_signatures(callee_name, span.clone(), args, arg_types);
@@ -3685,6 +3686,77 @@ impl Analyzer {
         }
     }
 
+    fn enforce_crypto_ct_eq_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_crypto_ct_eq_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 2 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "crypto.ctEq expects exactly two arguments", span)
+                    .with_tag("security")
+                    .with_tag("secret")
+                    .with_note("use `crypto.ctEq(secretA, secretB)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].contains_secret() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "crypto.ctEq first argument must be `Secret<_>`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("pass secret values only"),
+            );
+        }
+
+        if !arg_types[1].contains_secret() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "crypto.ctEq second argument must be `Secret<_>`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("pass secret values only"),
+            );
+            return;
+        }
+
+        if arg_types[0].contains_secret()
+            && arg_types[1].contains_secret()
+            && !arg_types[0].compatible_with(&arg_types[1])
+        {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "crypto.ctEq arguments must have compatible secret types",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!(
+                    "left=`{}`, right=`{}`",
+                    arg_types[0].describe(),
+                    arg_types[1].describe()
+                )),
+            );
+        }
+    }
+
     fn enforce_auth_helper_call_shapes(
         &mut self,
         callee_name: &str,
@@ -5355,6 +5427,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: Some("SecretsCap"),
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "crypto_ct_eq" | "crypto.ctEq" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Bool"),
+        }),
         "db_read" | "db.queryOne" => Some(IntrinsicSpec {
             effect: Some("db.read"),
             required_capability: Some("DbCap"),
@@ -5890,6 +5967,10 @@ fn is_secret_redact_call(name: &str) -> bool {
 
 fn is_secret_reveal_call(name: &str) -> bool {
     matches!(name, "secret_reveal" | "secrets.reveal")
+}
+
+fn is_crypto_ct_eq_call(name: &str) -> bool {
+    matches!(name, "crypto_ct_eq" | "crypto.ctEq")
 }
 
 fn is_auth_require_call(name: &str) -> bool {

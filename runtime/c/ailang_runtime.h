@@ -46,6 +46,7 @@ int64_t ailang_rt_http_get_internal();
 int64_t ailang_rt_secret_get();
 int64_t ailang_rt_secret_redact();
 int64_t ailang_rt_secret_reveal();
+bool ailang_rt_crypto_ct_eq();
 int64_t ailang_rt_validate_header_value();
 int64_t ailang_rt_validate_email();
 int64_t ailang_rt_validate_uuid();

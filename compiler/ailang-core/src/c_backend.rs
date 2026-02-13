@@ -275,6 +275,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("secret_redact(", "__AILANG_INTRINSIC_SECRET_REDACT__(");
     lowered = lowered.replace("secrets.reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
     lowered = lowered.replace("secret_reveal(", "__AILANG_INTRINSIC_SECRET_REVEAL__(");
+    lowered = lowered.replace("crypto.ctEq(", "__AILANG_INTRINSIC_CRYPTO_CT_EQ__(");
+    lowered = lowered.replace("crypto_ct_eq(", "__AILANG_INTRINSIC_CRYPTO_CT_EQ__(");
     lowered = lowered.replace(
         "validate.headerValue(",
         "__AILANG_INTRINSIC_VALIDATE_HEADER_VALUE__(",
@@ -453,6 +455,10 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_SECRET_REVEAL__(",
         "ailang_rt_secret_reveal(",
+    );
+    lowered = lowered.replace(
+        "__AILANG_INTRINSIC_CRYPTO_CT_EQ__(",
+        "ailang_rt_crypto_ct_eq(",
     );
     lowered = lowered.replace(
         "__AILANG_INTRINSIC_VALIDATE_HEADER_VALUE__(",

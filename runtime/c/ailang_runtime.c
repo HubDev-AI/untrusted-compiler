@@ -167,6 +167,10 @@ int64_t ailang_rt_secret_reveal() {
   return 0;
 }
 
+bool ailang_rt_crypto_ct_eq() {
+  return false;
+}
+
 int64_t ailang_rt_validate_header_value() {
   return 0;
 }

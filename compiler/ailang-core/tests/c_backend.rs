@@ -110,6 +110,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t ailang_rt_secret_get();"));
     assert!(header.contains("int64_t ailang_rt_secret_redact();"));
     assert!(header.contains("int64_t ailang_rt_secret_reveal();"));
+    assert!(header.contains("bool ailang_rt_crypto_ct_eq();"));
     assert!(header.contains("int64_t ailang_rt_validate_header_value();"));
     assert!(header.contains("int64_t ailang_rt_validate_email();"));
     assert!(header.contains("int64_t ailang_rt_validate_uuid();"));
@@ -195,6 +196,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t ailang_rt_secret_get()"));
     assert!(source.contains("int64_t ailang_rt_secret_redact()"));
     assert!(source.contains("int64_t ailang_rt_secret_reveal()"));
+    assert!(source.contains("bool ailang_rt_crypto_ct_eq()"));
     assert!(source.contains("int64_t ailang_rt_validate_header_value()"));
     assert!(source.contains("int64_t ailang_rt_validate_email()"));
     assert!(source.contains("int64_t ailang_rt_validate_uuid()"));
@@ -446,6 +448,21 @@ fn main() effects { secrets.read, secrets.reveal } -> Int {
     assert!(c.contains("(void)(ailang_rt_secret_get(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_secret_redact(2));"));
     assert!(c.contains("(void)(ailang_rt_secret_reveal(1, 2));"));
+}
+
+#[test]
+fn c_backend_rewrites_crypto_ct_eq_intrinsic_to_runtime_symbol() {
+    let source = r#"
+fn compare(a: Secret<String>, b: Secret<String>) -> Bool {
+  crypto.ctEq(a, b)
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let mir = lower_program_to_mir(&program);
+    let c = emit_c_program(&mir);
+
+    assert!(c.contains("return ailang_rt_identity_bool(ailang_rt_crypto_ct_eq(a, b));"));
 }
 
 #[test]

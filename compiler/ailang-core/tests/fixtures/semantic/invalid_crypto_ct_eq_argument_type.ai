@@ -1,0 +1,3 @@
+fn bad(a: String, b: String) -> Bool {
+  crypto.ctEq(a, b)
+}

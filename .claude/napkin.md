@@ -39,6 +39,7 @@
 | 2026-02-13 | self | Inserted a call to a new semantic helper before actually defining that helper, causing a temporary unresolved method regression. | When introducing new enforcement helpers, either add the helper first or keep checks inside the existing function until extraction is complete. |
 | 2026-02-13 | self | Log sink signature hardening initially risked duplicating existing secret/taint sink diagnostics. | For signature hardening on sensitive sinks, suppress type-mismatch diagnostics when payload is `Secret<_>`/`Untrusted<_>` so `E1003/E1002` remain primary. |
 | 2026-02-13 | self | Tightening log-builder argument typing changed generated C literals and broke exact-string assertions in both core and CLI integration tests. | When hardening intrinsic signatures, immediately align C emission assertions to the new literal forms (`\"...\"` strings vs numeric placeholders). |
+| 2026-02-13 | self | Inserted a new Rust test block before closing an existing raw string in `c_backend.rs`, causing parser errors (`unknown prefix`, unexpected delimiter). | After adding tests with embedded source strings, inspect the surrounding raw-string boundaries with `nl -ba` before running the suite. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
