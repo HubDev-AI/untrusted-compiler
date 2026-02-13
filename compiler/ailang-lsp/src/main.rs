@@ -1,7 +1,7 @@
 use ailang_core::ast::{Block, Expr, ExprKind, ItemKind, Program, Stmt, StmtKind, TypeExpr, TypeExprKind};
 use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity, Span};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -87,7 +87,10 @@ fn handle_message<W: Write>(
                             "definitionProvider": true,
                             "hoverProvider": true,
                             "referencesProvider": true,
-                            "implementationProvider": true
+                            "implementationProvider": true,
+                            "completionProvider": {
+                                "resolveProvider": false
+                            }
                         },
                         "serverInfo": {
                             "name": "ailang-language-server",
@@ -213,6 +216,23 @@ fn handle_message<W: Write>(
                         id,
                         INVALID_REQUEST,
                         "invalid implementation request payload".to_string(),
+                    )?;
+                }
+            }
+        }
+        Some("textDocument/completion") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character)) = parse_text_document_position(message) {
+                    match completion_at_position(state, &uri, line, character) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid completion request payload".to_string(),
                     )?;
                 }
             }
@@ -397,6 +417,45 @@ fn implementation_at_position(
     } else {
         Ok(Value::Array(vec![definition]))
     }
+}
+
+fn completion_at_position(
+    state: &ServerState,
+    uri: &str,
+    _line: usize,
+    _character: usize,
+) -> io::Result<Value> {
+    let (path, source) = load_document_source(state, uri)?;
+    let mut items = completion_keyword_items();
+    let mut seen_labels = items
+        .iter()
+        .filter_map(|item| item.get("label").and_then(Value::as_str))
+        .map(|label| label.to_string())
+        .collect::<HashSet<_>>();
+
+    if let Ok(program) = parse_source(&path, &source) {
+        for symbol in collect_function_symbols(&program) {
+            if seen_labels.insert(symbol.name.clone()) {
+                items.push(json!({
+                    "label": symbol.name,
+                    "kind": 3,
+                    "detail": symbol.signature,
+                }));
+            }
+        }
+    }
+
+    Ok(Value::Array(items))
+}
+
+fn completion_keyword_items() -> Vec<Value> {
+    vec![
+        json!({"label": "fn", "kind": 14}),
+        json!({"label": "let", "kind": 14}),
+        json!({"label": "return", "kind": 14}),
+        json!({"label": "if", "kind": 14}),
+        json!({"label": "match", "kind": 14}),
+    ]
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -999,6 +1058,16 @@ mod tests {
             Some(true),
             "initialize response should advertise implementation provider"
         );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("completionProvider"))
+                .and_then(|completion| completion.get("resolveProvider"))
+                .and_then(Value::as_bool),
+            Some(false),
+            "initialize response should advertise completion provider",
+        );
         assert_eq!(messages[1].get("id"), Some(&json!(2)));
     }
 
@@ -1505,6 +1574,70 @@ mod tests {
                 .and_then(Value::as_u64),
             Some(0),
             "implementation should resolve to helper declaration line",
+        );
+    }
+
+    #[test]
+    fn completion_returns_keywords_and_function_symbols() {
+        let uri = "file:///tmp/lsp_completion.ai";
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let completion_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(8)))
+            .expect("completion response should exist");
+        let items = completion_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("completion result should be an array");
+        let labels = items
+            .iter()
+            .filter_map(|item| item.get("label").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert!(
+            labels.contains(&"helper"),
+            "completion should include function symbols from the document",
+        );
+        assert!(
+            labels.contains(&"let"),
+            "completion should include keyword items",
         );
     }
 
