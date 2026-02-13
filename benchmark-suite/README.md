@@ -34,9 +34,11 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite summarize IMPL=ailang`
 5. Bundle summaries + env into one report:
    - `make -C benchmark-suite report IMPL=ailang`
-6. Validate benchmark helper scripts:
+6. Build endpoint comparison from report bundles:
+   - `make -C benchmark-suite compare`
+7. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-7. Stop DB:
+8. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes

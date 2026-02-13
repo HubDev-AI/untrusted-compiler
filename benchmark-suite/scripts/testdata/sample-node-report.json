@@ -1,0 +1,15 @@
+{
+  "version": "0.1",
+  "impl": "node",
+  "env": null,
+  "summaries": [
+    {
+      "impl": "node",
+      "endpoint": "ping",
+      "targetRps": 10000,
+      "requestsPerSec": 9100.7,
+      "latency": {"p50":"1.80ms","p95":"3.50ms","p99":"6.10ms","max":"15.20ms"}
+    }
+  ],
+  "secAudit": null
+}

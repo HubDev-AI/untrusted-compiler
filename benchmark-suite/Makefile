@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize report test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize report compare test-scripts
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
@@ -16,6 +16,7 @@ help:
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post)"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
+	@echo "  compare      Build endpoint comparison from report files"
 	@echo "  test-scripts Run benchmark helper script tests"
 
 db-up:
@@ -48,7 +49,11 @@ summarize:
 report:
 	scripts/build_report.sh $(IMPL) results results/summaries/$(IMPL)-report.json
 
+compare:
+	scripts/compare_reports.sh results/summaries ping results/summaries/compare-ping.json
+
 test-scripts:
 	scripts/test_wrk2_summary.sh
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh
+	scripts/test_compare_reports.sh
