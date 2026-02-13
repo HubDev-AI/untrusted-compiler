@@ -271,5 +271,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `304-m9-release-gate-identity-hash-consistency-checks.md`
 - `305-m10-machine-validated-benchmark-schema-assets.md`
 - `306-m9-sec4-explain-high-frequency-exact-mappings.md`
+- `307-m10-standalone-benchmark-contract-validator.md`
 
 As milestones progress, chapters will be added and linked from this index.

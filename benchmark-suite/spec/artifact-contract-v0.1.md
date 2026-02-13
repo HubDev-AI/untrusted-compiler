@@ -11,6 +11,9 @@ Machine-validated schema assets:
 - `benchmark-suite/spec/schemas/step-matrix.schema.json`
 - `benchmark-suite/spec/schemas/artifact-manifest.schema.json`
 
+Validation command:
+- `benchmark-suite/scripts/validate_contract_schema.sh`
+
 ## Artifact naming
 
 Canonical filenames:

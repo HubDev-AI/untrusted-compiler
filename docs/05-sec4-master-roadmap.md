@@ -512,6 +512,9 @@ Roadmap impact:
 - Benchmark artifact contract now includes machine-validated schema assets:
   - canonical schema files live under `benchmark-suite/spec/schemas/`,
   - naming-lock validation now checks benchmark sample artifacts against schema-required keys and version constants.
+- Benchmark schema validation is now runnable as a standalone command:
+  - `benchmark-suite/scripts/validate_contract_schema.sh` validates schema assets against benchmark sample artifacts,
+  - `.github/workflows/benchmark-smoke.yml` now runs `test_validate_contract_schema.sh` before other smoke scripts.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1298,8 +1301,8 @@ Day 14:
 1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
 2. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
 3. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
-4. Add a lightweight contract validator command in `benchmark-suite/scripts/` so schema checks can be run independently of naming-lock.
-5. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
+4. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
+5. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
 
 ---
 

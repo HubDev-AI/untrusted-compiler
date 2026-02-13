@@ -23,6 +23,7 @@ jobs:
 
       - name: Run benchmark script smoke tests
         run: |
+          benchmark-suite/scripts/test_validate_contract_schema.sh
           benchmark-suite/scripts/test_preflight.sh
           benchmark-suite/scripts/test_compare_matrix.sh
           benchmark-suite/scripts/test_publish_report.sh
