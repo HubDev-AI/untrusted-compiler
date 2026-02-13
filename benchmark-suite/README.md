@@ -44,4 +44,4 @@ Measure end-to-end service behavior across identical implementations:
 - All services must implement identical endpoint behavior defined in `spec/endpoints.md`.
 - Use constant-rate load for primary comparisons.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
-- `services/node` now includes a runnable baseline contract service; other language directories are scaffold placeholders.
+- `services/node` and `services/go` now include runnable baseline contract services; other language directories are scaffold placeholders.
