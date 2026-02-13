@@ -26,11 +26,11 @@ jobs:
           make -C /tmp/wrk2
           sudo install -m 0755 /tmp/wrk2/wrk /usr/local/bin/wrk2
 
-      - name: Run scoped live benchmark (node+ping)
+      - name: Run scoped live benchmark (node+ping+decode)
         run: |
-          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
 
-      - name: Check regression thresholds
+      - name: Check regression thresholds (ping)
         run: |
           benchmark-suite/scripts/check_regression_thresholds.sh \
             benchmark-suite/results/summaries/compare-matrix.json \
@@ -39,10 +39,19 @@ jobs:
             --min-target-coverage 85 \
             --baseline benchmark-suite/baselines/node-ping-trend-baseline.json
 
+      - name: Check regression thresholds (decode)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint decode \
+            --max-p99-ms 80 \
+            --min-target-coverage 60 \
+            --baseline benchmark-suite/baselines/node-decode-trend-baseline.json
+
       - name: Upload benchmark trend artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-trend-node-ping
+          name: benchmark-trend-node-ping-decode
           path: benchmark-suite/results
           retention-days: 30

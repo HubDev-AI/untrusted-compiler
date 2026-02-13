@@ -534,6 +534,9 @@ Roadmap impact:
   - `benchmark-suite/baselines/node-ping-trend-baseline.json` defines baseline comparison guard values,
   - scheduled trend workflow now runs baseline-aware threshold checks,
   - trend artifact uploads are retained for 30 days in CI (`retention-days: 30`).
+- Scoped live benchmark trend workflow now covers two endpoints:
+  - `benchmark-trend.yml` runs `node` live checks for `ping,decode`,
+  - per-endpoint threshold checks now apply with endpoint-specific baseline policies.
 - M13 promotion workflow documentation now includes a dedicated operator runbook:
   - `docs/book/313-m13-release-promotion-playbook.md` defines release gate, verifier, naming-lock, and evidence capture steps.
 
@@ -1265,8 +1268,12 @@ Implementation order is intentionally linear to reduce thrash:
 - [x] Promotion playbook chapter added (`docs/book/313-m13-release-promotion-playbook.md`).
 - [x] Scheduled scoped live benchmark workflow added (`.github/workflows/benchmark-trend.yml`).
 - [x] First regression threshold guard implemented (`benchmark-suite/scripts/check_regression_thresholds.sh`).
-- [ ] Trend retention/baseline comparison policy documented and enforced.
-- [ ] Scoped live benchmark workflow expanded to one additional endpoint after stability review.
+- [x] Scoped live benchmark workflow expanded to additional endpoint (`decode`) after initial stability window.
+- [x] Trend retention/baseline comparison policy documented and enforced.
+
+M13-S1 go/no-go note:
+- Status: `GO` for ongoing scheduled execution and trend collection.
+- Conditions to revisit: recurring threshold failures in two consecutive scheduled runs, or release promotion verifier drift in alpha workflow.
 
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
@@ -1370,11 +1377,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
-2. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
-3. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
-4. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
-5. Add publish-manifest consumption checks in downstream release publishing tooling.
+1. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
+2. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
+3. Add publish-manifest consumption checks in downstream release publishing tooling.
+4. Review and tune decode endpoint thresholds after first scheduled trend runs.
+5. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
 
 ---
 

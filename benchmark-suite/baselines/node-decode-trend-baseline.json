@@ -1,0 +1,8 @@
+{
+  "version": "0.1",
+  "endpoint": "decode",
+  "baselineP99Ms": 60.0,
+  "baselineCoveragePct": 70.0,
+  "maxP99RegressionPct": 25,
+  "maxCoverageDropPct": 10
+}

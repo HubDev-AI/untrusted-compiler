@@ -9,6 +9,7 @@ Updated:
 - `benchmark-suite/scripts/check_regression_thresholds.sh`
 - `benchmark-suite/scripts/test_check_regression_thresholds.sh`
 - `benchmark-suite/baselines/node-ping-trend-baseline.json`
+- `benchmark-suite/baselines/node-decode-trend-baseline.json`
 - `.github/workflows/benchmark-smoke.yml`
 - `docs/05-sec4-master-roadmap.md`
 
@@ -27,7 +28,7 @@ Dry-run benchmark CI catches orchestration drift, but M13 requires lightweight l
 Workflow behavior:
 1. installs Node + `wrk2`,
 2. runs `run_full_benchmark_suite.sh --impls node --endpoints ping`,
-3. runs baseline-aware threshold checks,
+3. runs baseline-aware threshold checks for `ping` and `decode`,
 4. uploads resulting benchmark artifacts with retention policy (30 days).
 
 ### 2) Regression threshold guard
@@ -55,7 +56,7 @@ This keeps threshold-check logic verified in normal PR/push CI.
 - Output:
   - pass/fail regression gate signal.
 - Constraint:
-  - current workflow scope is intentionally narrow (`node + ping`) for cost/runtime control.
+  - current workflow scope is intentionally narrow (`node + ping + decode`) for cost/runtime control.
 
 ## Example usage
 
@@ -66,6 +67,13 @@ benchmark-suite/scripts/check_regression_thresholds.sh \
   --max-p99-ms 30 \
   --min-target-coverage 85 \
   --baseline benchmark-suite/baselines/node-ping-trend-baseline.json
+
+benchmark-suite/scripts/check_regression_thresholds.sh \
+  benchmark-suite/results/summaries/compare-matrix.json \
+  --endpoint decode \
+  --max-p99-ms 80 \
+  --min-target-coverage 60 \
+  --baseline benchmark-suite/baselines/node-decode-trend-baseline.json
 ```
 
 ## Tradeoffs and next steps
