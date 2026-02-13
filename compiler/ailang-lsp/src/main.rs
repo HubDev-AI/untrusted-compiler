@@ -15,10 +15,12 @@ const INVALID_REQUEST: i64 = -32600;
 struct ServerState {
     documents: HashMap<String, String>,
     parsed_programs: HashMap<String, Program>,
+    open_document_symbols: HashMap<String, Vec<FunctionSymbol>>,
 }
 
 #[derive(Clone)]
 struct FunctionSymbol {
+    id: String,
     name: String,
     span: Span,
     signature: String,
@@ -173,6 +175,7 @@ fn handle_message<W: Write>(
             if let Some(uri) = parse_did_close(message) {
                 state.documents.remove(&uri);
                 state.parsed_programs.remove(&uri);
+                state.open_document_symbols.remove(&uri);
                 publish_diagnostics(writer, &uri, Vec::new())?;
             } else if let Some(id) = id {
                 send_error_response(
@@ -560,7 +563,17 @@ fn completion_at_position(
         .map(|label| label.to_string())
         .collect::<HashSet<_>>();
 
-    if let Some(program) = load_cached_program(state, uri, &path, &source, Some(&deadline)) {
+    if let Some(symbols) = state.open_document_symbols.get(uri) {
+        for symbol in symbols {
+            if seen_labels.insert(symbol.name.clone()) {
+                items.push(json!({
+                    "label": symbol.name,
+                    "kind": 3,
+                    "detail": symbol.signature,
+                }));
+            }
+        }
+    } else if let Some(program) = load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         for symbol in collect_function_symbols(&program, Some(&deadline)) {
             if seen_labels.insert(symbol.name.clone()) {
                 items.push(json!({
@@ -997,14 +1010,18 @@ fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, 
 fn refresh_program_cache(state: &mut ServerState, uri: &str, text: &str) {
     let Some(path) = uri_to_path(uri) else {
         state.parsed_programs.remove(uri);
+        state.open_document_symbols.remove(uri);
         return;
     };
     match parse_source(&path, text) {
         Ok(program) => {
+            let symbols = collect_function_symbols(&program, None);
             state.parsed_programs.insert(uri.to_string(), program);
+            state.open_document_symbols.insert(uri.to_string(), symbols);
         }
         Err(_) => {
             state.parsed_programs.remove(uri);
+            state.open_document_symbols.remove(uri);
         }
     }
 }
@@ -1135,15 +1152,21 @@ fn find_symbol_declaration_in_workspace(
         if deadline.is_expired() {
             break;
         }
-        let Some(doc_path) = uri_to_path(&doc_uri) else {
-            continue;
+        let symbols = if let Some(cached_symbols) = state.open_document_symbols.get(&doc_uri) {
+            cached_symbols.clone()
+        } else {
+            let Some(doc_path) = uri_to_path(&doc_uri) else {
+                continue;
+            };
+            let Some(doc_program) =
+                load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(deadline))
+            else {
+                continue;
+            };
+            collect_function_symbols(&doc_program, Some(deadline))
         };
-        let Some(doc_program) =
-            load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(deadline))
-        else {
-            continue;
-        };
-        if let Some(symbol) = collect_function_symbols(&doc_program, Some(deadline))
+
+        if let Some(symbol) = symbols
             .into_iter()
             .find(|symbol| symbol.name == target_name)
         {
@@ -1152,8 +1175,11 @@ fn find_symbol_declaration_in_workspace(
                 symbol,
                 source: doc_source,
             };
-            if matched.is_some() {
-                return None;
+            if let Some(existing) = &matched {
+                if existing.symbol.id != candidate.symbol.id {
+                    return None;
+                }
+                continue;
             }
             matched = Some(candidate);
         }
@@ -1195,6 +1221,7 @@ fn collect_function_symbols(program: &Program, deadline: Option<&RequestDeadline
                 }
 
                 Some(FunctionSymbol {
+                    id: function_symbol_id(&item.span, &function.name),
                     name: function.name.clone(),
                     span: item.span.clone(),
                     signature,
@@ -1206,6 +1233,16 @@ fn collect_function_symbols(program: &Program, deadline: Option<&RequestDeadline
         }
     }
     symbols
+}
+
+fn function_symbol_id(span: &Span, name: &str) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        span.file.display(),
+        span.start_line,
+        span.start_col,
+        name
+    )
 }
 
 fn format_type(ty: &TypeExpr) -> String {
@@ -2005,11 +2042,42 @@ mod tests {
             state.parsed_programs.contains_key(uri),
             "valid source should populate parsed program cache",
         );
+        assert!(
+            state.open_document_symbols.contains_key(uri),
+            "valid source should populate open-document symbol cache",
+        );
 
         refresh_program_cache(&mut state, uri, invalid_source);
         assert!(
             !state.parsed_programs.contains_key(uri),
             "invalid source should evict parsed program cache entry",
+        );
+        assert!(
+            !state.open_document_symbols.contains_key(uri),
+            "invalid source should evict open-document symbol cache entry",
+        );
+    }
+
+    #[test]
+    fn collect_function_symbols_emits_stable_ids() {
+        let path = PathBuf::from("/tmp/lsp_symbol_ids.ai");
+        let source = "fn alpha() -> Int {\n  1\n}\n";
+        let program_one = parse_source(&path, source).expect("source should parse");
+        let program_two = parse_source(&path, source).expect("source should parse");
+
+        let symbols_one = collect_function_symbols(&program_one, None);
+        let symbols_two = collect_function_symbols(&program_two, None);
+        let id_one = symbols_one
+            .first()
+            .map(|symbol| symbol.id.clone())
+            .expect("expected first symbol");
+        let id_two = symbols_two
+            .first()
+            .map(|symbol| symbol.id.clone())
+            .expect("expected first symbol");
+        assert_eq!(
+            id_one, id_two,
+            "symbol ids should be deterministic for equivalent source snapshots",
         );
     }
 
