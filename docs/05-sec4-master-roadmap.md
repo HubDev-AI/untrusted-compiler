@@ -527,6 +527,8 @@ Roadmap impact:
   - `.github/workflows/benchmark-trend.yml` schedules scoped live benchmark execution (`node + ping`) and supports manual dispatch,
   - `benchmark-suite/scripts/check_regression_thresholds.sh` enforces first threshold guard (`p99` and target coverage) on `compare-matrix.json`,
   - benchmark smoke CI now includes `test_check_regression_thresholds.sh`.
+- M13 promotion workflow documentation now includes a dedicated operator runbook:
+  - `docs/book/313-m13-release-promotion-playbook.md` defines release gate, verifier, naming-lock, and evidence capture steps.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1354,11 +1356,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
-2. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
-3. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
-4. Add release artifact promotion checks into a publish-ready checklist chapter with clear operator runbook steps.
-5. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
+1. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
+2. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
+3. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
+4. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
+5. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
 
 ---
 
