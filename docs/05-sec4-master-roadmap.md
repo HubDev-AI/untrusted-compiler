@@ -621,6 +621,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - `scripts/check-milestone-closure.sh` now enforces per-endpoint M10 impl coverage (not union-only),
   - closure now validates compare-matrix row-contract alignment (`endpoint` + leader membership and endpoint consistency),
   - closure now verifies scheduled trend workflow keeps strict quality + regression guard steps.
+  - benchmark smoke CI now executes strict closure audit against repository evidence (`scripts/check-milestone-closure.sh --fail-on-pending`) and includes a workflow contract test to prevent gate-step drift.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
   - malformed endpoint contract checks (`missing compared rows`, `leader endpoint mismatch`, `leader missing in compared`) now hard-fail with exit code `2`,
@@ -1412,6 +1413,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Trend Artifact Fetch Helper".
 - Chapter: "M13 Slice: Trend Note Update Command".
 - Chapter: "M13 Slice: Closure Audit Gate Expansion".
+- Chapter: "M13 Slice: Benchmark Smoke Closure Audit Gate".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

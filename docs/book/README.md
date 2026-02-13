@@ -297,5 +297,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `330-m13-closure-evidence-refresh-command.md`
 - `331-m13-benchmark-evidence-quality-check.md`
 - `332-m13-closure-audit-gate-expansion.md`
+- `333-m13-benchmark-smoke-closure-audit-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.
