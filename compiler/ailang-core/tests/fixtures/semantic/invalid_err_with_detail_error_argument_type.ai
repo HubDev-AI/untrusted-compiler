@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  err.withDetail(1, "token", 2);
+  0
+}

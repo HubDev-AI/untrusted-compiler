@@ -52,9 +52,8 @@ Examples:
 ## Example usage
 
 ```ailang
-fn attach(base: Int, value: Int) -> Int {
-  err.withDetail(base, "field", value);
-  0
+fn attach(base: StdError, value: Int) -> StdError {
+  err.withDetail(base, "field", value)
 }
 ```
 
@@ -62,4 +61,4 @@ fn attach(base: Int, value: Int) -> Int {
 
 - Tradeoff: permissive placeholder detail keys/values used in early bridge fixtures now fail semantic checks.
 - Next:
-  - extend typed validation across remaining `err.*` helpers (for example `withPath`, `withLimit`, `withDependency`) for full standard-error contract coverage.
+  - strict `err.withDetail` error-argument typing is covered in a follow-up slice (`170-m7-err-with-detail-error-argument-hardening.md`).

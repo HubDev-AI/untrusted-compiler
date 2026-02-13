@@ -712,7 +712,8 @@ fn bad() -> Int {
 fn err_with_detail_secret_value_diagnostic_has_security_secret_tags() {
     let source = r#"
 fn bad(secret: Secret<String>) -> Int {
-  err.withDetail(1, "token", secret);
+  let base = err.validation("VAL.BAD", "bad");
+  err.withDetail(base, "token", secret);
   1
 }
 "#;
@@ -725,6 +726,24 @@ fn bad(secret: Secret<String>) -> Int {
         .expect("expected err.withDetail secret-value diagnostic");
     assert!(diag.tags.iter().any(|tag| tag == "security"));
     assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
+fn err_with_detail_error_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  err.withDetail(1, "token", 2);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withDetail error argument must be `StdError`")
+        .expect("expected err.withDetail error argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
 }
 
 #[test]
