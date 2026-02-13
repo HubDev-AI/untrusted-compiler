@@ -560,9 +560,11 @@ Historical implementation bullets below are retained as build history; strict ga
   - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
 - Benchmark artifact contract now includes machine-validated schema assets:
   - canonical schema files live under `benchmark-suite/spec/schemas/`,
-  - naming-lock validation now checks benchmark sample artifacts against schema-required keys and version constants.
+  - naming-lock validation now checks benchmark sample artifacts against schema-required keys and version constants,
+  - compare-matrix sample validation now enforces row-level keys (`loadGenerator`, `constantRate`) for both `compared[]` and `leader`.
 - Benchmark schema validation is now runnable as a standalone command:
   - `benchmark-suite/scripts/validate_contract_schema.sh` validates schema assets against benchmark sample artifacts,
+  - standalone validator now checks compare-matrix row shape (`loadGenerator` + `constantRate`) for `compared[]` and `leader`,
   - `.github/workflows/benchmark-smoke.yml` now runs `test_validate_contract_schema.sh` before other smoke scripts.
 - Benchmark CI coverage now includes deterministic dry-run orchestrator checks:
   - `.github/workflows/benchmark-smoke.yml` now runs `test_run_comparison_matrix.sh`, `test_run_step_matrix.sh`, and `test_run_full_benchmark_suite.sh`,

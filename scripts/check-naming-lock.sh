@@ -104,6 +104,34 @@ validate_json_required_keys() {
   return "${failed}"
 }
 
+validate_compare_matrix_rows() {
+  local sample_path="$1"
+  local label="$2"
+
+  if ! jq -e '
+    def row_ok:
+      (type == "object")
+      and (.impl | type == "string")
+      and (.endpoint | type == "string")
+      and (.targetRps | type == "number")
+      and (.requestsPerSec | type == "number")
+      and (.p99 | type == "string")
+      and (.loadGenerator | type == "string")
+      and (.constantRate | type == "boolean");
+
+    (.endpoints | type == "array" and length > 0)
+    and all(.endpoints[];
+      (.endpoint | type == "string")
+      and (.compared | type == "array" and length > 0)
+      and (all(.compared[]; row_ok))
+      and (.leader | row_ok)
+    )
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    return 1
+  fi
+}
+
 check_benchmark_impl_contract() {
   local failed=0
   local impl_root="benchmark-suite/services"
@@ -244,6 +272,9 @@ check_benchmark_artifact_contract() {
   elif ! validate_json_required_keys "${compare_matrix_sample}" "${compare_matrix_schema}" "benchmark compare-matrix sample"; then
     echo "error: benchmark compare-matrix sample schema mismatch: ${compare_matrix_sample}" >&2
     failed=1
+  elif ! validate_compare_matrix_rows "${compare_matrix_sample}" "benchmark compare-matrix sample"; then
+    echo "error: benchmark compare-matrix sample row-shape mismatch: ${compare_matrix_sample}" >&2
+    failed=1
   fi
 
   local analysis_sample="benchmark-suite/scripts/testdata/sample-analysis.json"
@@ -280,6 +311,8 @@ check_benchmark_contract_spec() {
     "Benchmark Artifact Contract v0.1"
     "<impl>-report.json"
     "compare-matrix.json"
+    "loadGenerator"
+    "constantRate"
     "analysis.json"
     "step-matrix.json"
     "artifact-manifest.json"

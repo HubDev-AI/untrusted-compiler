@@ -6,6 +6,47 @@
   "required": ["version", "endpoints"],
   "properties": {
     "version": { "const": "0.1" },
-    "endpoints": { "type": "array" }
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["endpoint", "compared", "leader"],
+        "properties": {
+          "endpoint": { "type": "string" },
+          "compared": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/compareRow"
+            }
+          },
+          "leader": {
+            "$ref": "#/$defs/compareRow"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "compareRow": {
+      "type": "object",
+      "required": [
+        "impl",
+        "endpoint",
+        "targetRps",
+        "requestsPerSec",
+        "p99",
+        "loadGenerator",
+        "constantRate"
+      ],
+      "properties": {
+        "impl": { "type": "string" },
+        "endpoint": { "type": "string" },
+        "targetRps": { "type": "number" },
+        "requestsPerSec": { "type": "number" },
+        "p99": { "type": "string" },
+        "loadGenerator": { "type": "string" },
+        "constantRate": { "type": "boolean" }
+      }
+    }
   }
 }

@@ -28,13 +28,15 @@ Validation behavior:
 1. required top-level keys,
 2. schema version const checks where defined,
 3. artifact-manifest item required keys,
-4. report sample `impl` value alignment with filename.
+4. report sample `impl` value alignment with filename,
+5. compare-matrix row-shape checks for `compared[]` + `leader` (`loadGenerator`, `constantRate`, and core row fields).
 
 ## Tests and CI wiring
 
 - `test_validate_contract_schema.sh`:
   - verifies validator passes on current fixtures,
-  - mutates a sample to remove a required key and verifies validator fails.
+  - mutates a summary sample to remove a required key and verifies validator fails,
+  - mutates compare-matrix leader row to remove `constantRate` and verifies validator fails.
 - `benchmark-smoke.yml` now runs:
   - `benchmark-suite/scripts/test_validate_contract_schema.sh`
   - then existing benchmark smoke tests.

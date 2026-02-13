@@ -88,6 +88,34 @@ validate_json_required_keys() {
   return "${failed}"
 }
 
+validate_compare_matrix_rows() {
+  local sample_path="$1"
+  local label="$2"
+
+  if ! jq -e '
+    def row_ok:
+      (type == "object")
+      and (.impl | type == "string")
+      and (.endpoint | type == "string")
+      and (.targetRps | type == "number")
+      and (.requestsPerSec | type == "number")
+      and (.p99 | type == "string")
+      and (.loadGenerator | type == "string")
+      and (.constantRate | type == "boolean");
+
+    (.endpoints | type == "array" and length > 0)
+    and all(.endpoints[];
+      (.endpoint | type == "string")
+      and (.compared | type == "array" and length > 0)
+      and (all(.compared[]; row_ok))
+      and (.leader | row_ok)
+    )
+  ' "${sample_path}" >/dev/null; then
+    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    return 1
+  fi
+}
+
 report_schema="${schema_dir}/report.schema.json"
 summary_schema="${schema_dir}/summary.schema.json"
 step_summary_schema="${schema_dir}/step-summary.schema.json"
@@ -121,6 +149,9 @@ if ! validate_json_required_keys "${samples_dir}/sample-step-summary-decode.json
 fi
 
 if ! validate_json_required_keys "${samples_dir}/sample-compare-matrix.json" "${compare_matrix_schema}" "compare-matrix sample"; then
+  failed=1
+fi
+if ! validate_compare_matrix_rows "${samples_dir}/sample-compare-matrix.json" "compare-matrix sample"; then
   failed=1
 fi
 

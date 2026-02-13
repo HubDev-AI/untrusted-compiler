@@ -69,6 +69,15 @@ Each endpoint entry:
 - `compared`
 - `leader`
 
+Each `compared[]` / `leader` row:
+- `impl`
+- `endpoint`
+- `targetRps`
+- `requestsPerSec`
+- `p99`
+- `loadGenerator`
+- `constantRate`
+
 ### `analysis.json`
 
 Top-level keys:
