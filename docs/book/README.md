@@ -189,5 +189,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `222-m10-multi-endpoint-comparison-matrix.md`
 - `223-m10-markdown-benchmark-report-generation.md`
 - `224-m10-cross-impl-benchmark-orchestrator.md`
+- `225-m10-matrix-tail-latency-analysis.md`
 
 As milestones progress, chapters will be added and linked from this index.

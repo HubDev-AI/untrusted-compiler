@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix publish-report test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
@@ -20,6 +20,7 @@ help:
 	@echo "  report       Bundle summaries + env into one report JSON"
 	@echo "  compare      Build endpoint comparison from report files"
 	@echo "  compare-matrix Build comparison matrix across all endpoints"
+	@echo "  analyze-matrix Analyze tail-latency/target-coverage signals from matrix"
 	@echo "  publish-report Build markdown benchmark report from matrix + sec.audit"
 	@echo "  test-scripts Run benchmark helper script tests"
 
@@ -65,6 +66,9 @@ compare:
 compare-matrix:
 	scripts/compare_matrix.sh results/summaries results/summaries/compare-matrix.json
 
+analyze-matrix:
+	scripts/analyze_matrix.sh results/summaries/compare-matrix.json results/summaries/analysis.json
+
 publish-report:
 	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json
 
@@ -74,5 +78,6 @@ test-scripts:
 	scripts/test_build_report.sh
 	scripts/test_compare_reports.sh
 	scripts/test_compare_matrix.sh
+	scripts/test_analyze_matrix.sh
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh
