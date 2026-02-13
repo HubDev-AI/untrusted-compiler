@@ -291,6 +291,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `db.execTx` requires `(tx, query)` or `(ctx, tx, query)`,
     - `db.queryOne` requires `(capability, query, rowSchema)` or `(ctx, capability, query, rowSchema)`,
     - malformed shapes emit tagged `E4001` sink diagnostics.
+  - `db.tx` call-shape contract is now hardened:
+    - `db.tx` requires `(dbCap)` or `(ctx, dbCap)`,
+    - malformed shapes emit tagged `E4001` capability diagnostics.
   - Net sink call-shape contracts are now hardened:
     - `httpClient.get` requires `(netCap, url)` or `(ctx, netCap, url)`,
     - `httpClient.getInternal` requires `(internalNetCap, url)` or `(ctx, internalNetCap, url)`,
@@ -684,6 +687,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: req.body Signature Hardening".
 - Chapter: "M7 Slice: Trust-Gate Arity Hardening".
 - Chapter: "M7 Slice: DB Sink Call-Shape Hardening".
+- Chapter: "M7 Slice: db.tx Call-Shape Hardening".
 - Chapter: "M7 Slice: Net Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: FS Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Source Call-Shape Hardening".

@@ -1,0 +1,4 @@
+fn bad(db: DbCap) effects { db.tx } -> Int {
+  db.tx(1, db, 2);
+  0
+}

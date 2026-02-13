@@ -1,0 +1,3 @@
+error[E4001]: db.tx call has invalid argument shape
+  --> invalid_db_tx_argument_shape.ai:2:3
+  note: use `db.tx(dbCap)` or `db.tx(ctx, dbCap)`
