@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/artifact-manifest.schema.json",
+  "title": "BenchmarkArtifactManifest",
+  "type": "object",
+  "required": ["version", "generatedAt", "artifacts"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "generatedAt": { "type": "string" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "sizeBytes"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "sizeBytes": { "type": "number" }
+        }
+      }
+    }
+  }
+}

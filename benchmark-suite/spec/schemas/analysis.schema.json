@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/analysis.schema.json",
+  "title": "BenchmarkAnalysis",
+  "type": "object",
+  "required": ["version", "endpoints", "summary"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "endpoints": { "type": "array" },
+    "summary": { "type": "object" }
+  }
+}

@@ -2,6 +2,15 @@
 
 This document is the canonical schema/naming contract for benchmark output artifacts.
 
+Machine-validated schema assets:
+- `benchmark-suite/spec/schemas/report.schema.json`
+- `benchmark-suite/spec/schemas/summary.schema.json`
+- `benchmark-suite/spec/schemas/step-summary.schema.json`
+- `benchmark-suite/spec/schemas/compare-matrix.schema.json`
+- `benchmark-suite/spec/schemas/analysis.schema.json`
+- `benchmark-suite/spec/schemas/step-matrix.schema.json`
+- `benchmark-suite/spec/schemas/artifact-manifest.schema.json`
+
 ## Artifact naming
 
 Canonical filenames:

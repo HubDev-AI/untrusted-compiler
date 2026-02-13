@@ -1,0 +1,11 @@
+{
+  "version": "0.1",
+  "generatedAt": "2026-02-13T00:00:00Z",
+  "artifacts": [
+    {
+      "path": "summaries/sec4-report.json",
+      "sha256": "f00d",
+      "sizeBytes": 1234
+    }
+  ]
+}

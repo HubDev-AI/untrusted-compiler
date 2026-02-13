@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/summary.schema.json",
+  "title": "BenchmarkSummary",
+  "type": "object",
+  "required": ["impl", "endpoint", "targetRps", "requestsPerSec", "latency"],
+  "properties": {
+    "impl": { "type": "string" },
+    "endpoint": { "type": "string" },
+    "targetRps": { "type": "number" },
+    "requestsPerSec": { "type": "number" },
+    "latency": { "type": "object" }
+  }
+}

@@ -58,6 +58,52 @@ require_contract_token() {
   fi
 }
 
+validate_json_required_keys() {
+  local sample_path="$1"
+  local schema_path="$2"
+  local label="$3"
+  local failed=0
+
+  if [[ ! -f "${schema_path}" ]]; then
+    echo "error: missing schema asset: ${schema_path}" >&2
+    return 1
+  fi
+
+  local key
+  while IFS= read -r key; do
+    [[ -z "${key}" ]] && continue
+    if ! jq -e --arg k "${key}" 'has($k)' "${sample_path}" >/dev/null; then
+      echo "error: ${label} missing required key '${key}': ${sample_path}" >&2
+      failed=1
+    fi
+  done < <(jq -r '.required[]?' "${schema_path}")
+
+  local expected_version
+  expected_version="$(jq -r '.properties.version.const // empty' "${schema_path}")"
+  if [[ -n "${expected_version}" ]]; then
+    if ! jq -e --arg v "${expected_version}" '.version == $v' "${sample_path}" >/dev/null; then
+      echo "error: ${label} version mismatch (expected ${expected_version}): ${sample_path}" >&2
+      failed=1
+    fi
+  fi
+
+  if jq -e '.properties.artifacts.items.required? != null' "${schema_path}" >/dev/null; then
+    local item_key
+    while IFS= read -r item_key; do
+      [[ -z "${item_key}" ]] && continue
+      if ! jq -e --arg k "${item_key}" '
+        (.artifacts | type == "array")
+        and (all(.artifacts[]; has($k)))
+      ' "${sample_path}" >/dev/null; then
+        echo "error: ${label} artifact item missing key '${item_key}': ${sample_path}" >&2
+        failed=1
+      fi
+    done < <(jq -r '.properties.artifacts.items.required[]?' "${schema_path}")
+  fi
+
+  return "${failed}"
+}
+
 check_benchmark_impl_contract() {
   local failed=0
   local impl_root="benchmark-suite/services"
@@ -100,6 +146,14 @@ check_benchmark_impl_contract() {
 
 check_benchmark_artifact_contract() {
   local failed=0
+  local schema_root="benchmark-suite/spec/schemas"
+  local report_schema="${schema_root}/report.schema.json"
+  local summary_schema="${schema_root}/summary.schema.json"
+  local step_summary_schema="${schema_root}/step-summary.schema.json"
+  local step_matrix_schema="${schema_root}/step-matrix.schema.json"
+  local compare_matrix_schema="${schema_root}/compare-matrix.schema.json"
+  local analysis_schema="${schema_root}/analysis.schema.json"
+  local artifact_manifest_schema="${schema_root}/artifact-manifest.schema.json"
 
   local benchmark_script_patterns=(
     "\\$\\{impl\\}-report\\.json"
@@ -140,12 +194,11 @@ check_benchmark_artifact_contract() {
     expected_impl="${expected_impl%-report.json}"
     if ! jq -e --arg impl "${expected_impl}" '
       (.impl == $impl)
-      and has("version")
-      and has("env")
-      and has("summaries")
-      and has("secAudit")
     ' "${path}" >/dev/null; then
       echo "error: benchmark report sample schema mismatch: ${path}" >&2
+      failed=1
+    fi
+    if ! validate_json_required_keys "${path}" "${report_schema}" "benchmark report sample"; then
       failed=1
     fi
   done
@@ -160,13 +213,7 @@ check_benchmark_artifact_contract() {
       failed=1
       continue
     fi
-    if ! jq -e '
-      has("impl")
-      and has("endpoint")
-      and has("targetRps")
-      and has("requestsPerSec")
-      and has("latency")
-    ' "${sample}" >/dev/null; then
+    if ! validate_json_required_keys "${sample}" "${summary_schema}" "benchmark summary sample"; then
       echo "error: benchmark summary sample schema mismatch: ${sample}" >&2
       failed=1
     fi
@@ -176,14 +223,7 @@ check_benchmark_artifact_contract() {
   if [[ ! -f "${step_summary_sample}" ]]; then
     echo "error: missing benchmark step-summary sample: ${step_summary_sample}" >&2
     failed=1
-  elif ! jq -e '
-    has("version")
-    and has("impl")
-    and has("endpoint")
-    and has("stepRates")
-    and has("stepDuration")
-    and has("steps")
-  ' "${step_summary_sample}" >/dev/null; then
+  elif ! validate_json_required_keys "${step_summary_sample}" "${step_summary_schema}" "benchmark step-summary sample"; then
     echo "error: benchmark step-summary sample schema mismatch: ${step_summary_sample}" >&2
     failed=1
   fi
@@ -192,12 +232,35 @@ check_benchmark_artifact_contract() {
   if [[ ! -f "${step_matrix_sample}" ]]; then
     echo "error: missing benchmark step-matrix sample: ${step_matrix_sample}" >&2
     failed=1
-  elif ! jq -e '
-    has("version")
-    and has("endpoints")
-    and has("summary")
-  ' "${step_matrix_sample}" >/dev/null; then
+  elif ! validate_json_required_keys "${step_matrix_sample}" "${step_matrix_schema}" "benchmark step-matrix sample"; then
     echo "error: benchmark step-matrix sample schema mismatch: ${step_matrix_sample}" >&2
+    failed=1
+  fi
+
+  local compare_matrix_sample="benchmark-suite/scripts/testdata/sample-compare-matrix.json"
+  if [[ ! -f "${compare_matrix_sample}" ]]; then
+    echo "error: missing benchmark compare-matrix sample: ${compare_matrix_sample}" >&2
+    failed=1
+  elif ! validate_json_required_keys "${compare_matrix_sample}" "${compare_matrix_schema}" "benchmark compare-matrix sample"; then
+    echo "error: benchmark compare-matrix sample schema mismatch: ${compare_matrix_sample}" >&2
+    failed=1
+  fi
+
+  local analysis_sample="benchmark-suite/scripts/testdata/sample-analysis.json"
+  if [[ ! -f "${analysis_sample}" ]]; then
+    echo "error: missing benchmark analysis sample: ${analysis_sample}" >&2
+    failed=1
+  elif ! validate_json_required_keys "${analysis_sample}" "${analysis_schema}" "benchmark analysis sample"; then
+    echo "error: benchmark analysis sample schema mismatch: ${analysis_sample}" >&2
+    failed=1
+  fi
+
+  local manifest_sample="benchmark-suite/scripts/testdata/sample-artifact-manifest.json"
+  if [[ ! -f "${manifest_sample}" ]]; then
+    echo "error: missing benchmark artifact-manifest sample: ${manifest_sample}" >&2
+    failed=1
+  elif ! validate_json_required_keys "${manifest_sample}" "${artifact_manifest_schema}" "benchmark artifact-manifest sample"; then
+    echo "error: benchmark artifact-manifest sample schema mismatch: ${manifest_sample}" >&2
     failed=1
   fi
 
@@ -223,6 +286,13 @@ check_benchmark_contract_spec() {
     "<impl>-service.log"
     "\"version\": \"0.1\""
     "selectedEndpoints"
+    "spec/schemas/report.schema.json"
+    "spec/schemas/summary.schema.json"
+    "spec/schemas/step-summary.schema.json"
+    "spec/schemas/compare-matrix.schema.json"
+    "spec/schemas/analysis.schema.json"
+    "spec/schemas/step-matrix.schema.json"
+    "spec/schemas/artifact-manifest.schema.json"
   )
 
   local token

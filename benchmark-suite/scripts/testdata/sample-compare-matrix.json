@@ -1,0 +1,31 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "ping",
+      "compared": [
+        {
+          "impl": "sec4",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9801.5,
+          "p99": "4.30ms"
+        },
+        {
+          "impl": "go",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9700.1,
+          "p99": "4.80ms"
+        }
+      ],
+      "leader": {
+        "impl": "sec4",
+        "endpoint": "ping",
+        "targetRps": 10000,
+        "requestsPerSec": 9801.5,
+        "p99": "4.30ms"
+      }
+    }
+  ]
+}

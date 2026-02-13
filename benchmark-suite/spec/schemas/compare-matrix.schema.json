@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/compare-matrix.schema.json",
+  "title": "BenchmarkCompareMatrix",
+  "type": "object",
+  "required": ["version", "endpoints"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "endpoints": { "type": "array" }
+  }
+}

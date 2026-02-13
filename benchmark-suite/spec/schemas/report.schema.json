@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/report.schema.json",
+  "title": "BenchmarkReport",
+  "type": "object",
+  "required": ["version", "impl", "env", "summaries", "secAudit", "selectedEndpoints"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "impl": { "type": "string" },
+    "env": { "type": ["object", "null"] },
+    "summaries": { "type": "array" },
+    "secAudit": { "type": ["object", "null"] },
+    "selectedEndpoints": { "type": ["array", "null"] }
+  }
+}

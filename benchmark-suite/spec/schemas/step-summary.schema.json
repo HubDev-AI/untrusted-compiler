@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-suite/spec/schemas/step-summary.schema.json",
+  "title": "BenchmarkStepSummary",
+  "type": "object",
+  "required": ["version", "impl", "endpoint", "stepRates", "stepDuration", "steps"],
+  "properties": {
+    "version": { "const": "0.1" },
+    "impl": { "type": "string" },
+    "endpoint": { "type": "string" },
+    "stepRates": { "type": "array" },
+    "stepDuration": { "type": "string" },
+    "steps": { "type": "array" }
+  }
+}

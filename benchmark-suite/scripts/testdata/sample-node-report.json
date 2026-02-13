@@ -8,22 +8,38 @@
       "endpoint": "ping",
       "targetRps": 10000,
       "requestsPerSec": 9100.7,
-      "latency": {"p50":"1.80ms","p95":"3.50ms","p99":"6.10ms","max":"15.20ms"}
+      "latency": {
+        "p50": "1.80ms",
+        "p95": "3.50ms",
+        "p99": "6.10ms",
+        "max": "15.20ms"
+      }
     },
     {
       "impl": "node",
       "endpoint": "decode",
       "targetRps": 2000,
       "requestsPerSec": 1614.8,
-      "latency": {"p50":"4.20ms","p95":"9.50ms","p99":"16.80ms","max":"34.50ms"}
+      "latency": {
+        "p50": "4.20ms",
+        "p95": "9.50ms",
+        "p99": "16.80ms",
+        "max": "34.50ms"
+      }
     },
     {
       "impl": "node",
       "endpoint": "users-post",
       "targetRps": 500,
       "requestsPerSec": 431.3,
-      "latency": {"p50":"7.40ms","p95":"14.80ms","p99":"23.50ms","max":"44.20ms"}
+      "latency": {
+        "p50": "7.40ms",
+        "p95": "14.80ms",
+        "p99": "23.50ms",
+        "max": "44.20ms"
+      }
     }
   ],
-  "secAudit": null
+  "secAudit": null,
+  "selectedEndpoints": null
 }

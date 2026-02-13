@@ -509,6 +509,9 @@ Roadmap impact:
 - Benchmark artifact schema/version contract is now centralized:
   - `benchmark-suite/spec/artifact-contract-v0.1.md` defines canonical artifact filenames + key sets,
   - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
+- Benchmark artifact contract now includes machine-validated schema assets:
+  - canonical schema files live under `benchmark-suite/spec/schemas/`,
+  - naming-lock validation now checks benchmark sample artifacts against schema-required keys and version constants.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1292,11 +1295,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Evolve benchmark artifact contract from markdown spec to machine-validated schema assets while keeping `artifact-contract-v0.1.md` as canonical human-readable reference.
-2. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
-3. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
-4. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
-5. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
+1. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
+2. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
+3. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
+4. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
+5. Add a lightweight contract validator command in `benchmark-suite/scripts/` so schema checks can be run independently of naming-lock.
 
 ---
 

@@ -269,5 +269,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `302-m9-release-gate-policy-and-naming-stamps.md`
 - `303-m9-release-gate-compiler-runtime-hash-stamps.md`
 - `304-m9-release-gate-identity-hash-consistency-checks.md`
+- `305-m10-machine-validated-benchmark-schema-assets.md`
 
 As milestones progress, chapters will be added and linked from this index.

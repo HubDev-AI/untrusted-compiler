@@ -8,22 +8,38 @@
       "endpoint": "ping",
       "targetRps": 10000,
       "requestsPerSec": 9725.4,
-      "latency": {"p50":"1.10ms","p95":"2.50ms","p99":"3.90ms","max":"9.10ms"}
+      "latency": {
+        "p50": "1.10ms",
+        "p95": "2.50ms",
+        "p99": "3.90ms",
+        "max": "9.10ms"
+      }
     },
     {
       "impl": "rust",
       "endpoint": "decode",
       "targetRps": 2000,
       "requestsPerSec": 1905.9,
-      "latency": {"p50":"3.00ms","p95":"6.80ms","p99":"11.90ms","max":"24.30ms"}
+      "latency": {
+        "p50": "3.00ms",
+        "p95": "6.80ms",
+        "p99": "11.90ms",
+        "max": "24.30ms"
+      }
     },
     {
       "impl": "rust",
       "endpoint": "users-post",
       "targetRps": 500,
       "requestsPerSec": 448.2,
-      "latency": {"p50":"6.90ms","p95":"13.50ms","p99":"21.80ms","max":"41.00ms"}
+      "latency": {
+        "p50": "6.90ms",
+        "p95": "13.50ms",
+        "p99": "21.80ms",
+        "max": "41.00ms"
+      }
     }
   ],
-  "secAudit": null
+  "secAudit": null,
+  "selectedEndpoints": null
 }

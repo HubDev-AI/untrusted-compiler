@@ -1,0 +1,30 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "ping",
+      "leader": {
+        "impl": "sec4",
+        "endpoint": "ping"
+      },
+      "metrics": {
+        "comparedCount": 2,
+        "p99MinMs": 4.3,
+        "p99MaxMs": 4.8,
+        "p99SpreadX": 1.12,
+        "leaderTargetCoveragePct": 98.02
+      },
+      "findings": []
+    }
+  ],
+  "summary": {
+    "endpointCount": 1,
+    "findingCounts": {
+      "LOW": 0,
+      "MEDIUM": 0,
+      "HIGH": 0,
+      "CRITICAL": 0
+    },
+    "highestSeverity": "LOW"
+  }
+}
