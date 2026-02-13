@@ -581,6 +581,7 @@ Historical implementation bullets below are retained as build history; strict ga
 - `sec4 gate` CLI behavior is now directly regression-tested:
   - default threshold path (`risk>=HIGH`) fails on HIGH findings,
   - JSON mode with custom threshold (`risk>=CRITICAL`) remains parseable and preserves expected finding output.
+  - CLI command-surface contract checker now has fixture-based guard coverage (`scripts/test-sec4-cli-command-contract-guard.sh`) and naming-lock CI enforcement.
 - `sec4 explain` now supports machine-readable output mode:
   - `sec4 explain <CODE> --format json` emits structured payload (`code`, `topic`, `summary`, `likelyActions`, `relatedCommands`, `docsPath`).
 - `sec4 explain` audit-finding coverage parity is now CI-enforced:

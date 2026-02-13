@@ -4,6 +4,27 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cli_path="${root_dir}/compiler/sec4-cli/src/main.rs"
 
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --cli)
+      if [ "$#" -lt 2 ]; then
+        echo "missing value for --cli" >&2
+        exit 2
+      fi
+      cli_path="$2"
+      shift 2
+      ;;
+    --cli=*)
+      cli_path="${1#--cli=}"
+      shift
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
 if [[ ! -f "${cli_path}" ]]; then
   echo "missing sec4 CLI source: ${cli_path}" >&2
   exit 1

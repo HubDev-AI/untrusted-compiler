@@ -6,6 +6,7 @@ This slice adds a static command-surface contract test for the locked `sec4` CLI
 
 Updated:
 - `scripts/test-sec4-cli-command-contract.sh`
+- `scripts/test-sec4-cli-command-contract-guard.sh`
 - `.github/workflows/naming-lock.yml`
 
 ## Why it exists
@@ -30,6 +31,7 @@ This slice enforces the executable source contract directly in CI.
 2. Wired into naming-lock CI
 - `naming-lock.yml` now runs:
   - `scripts/test-sec4-cli-command-contract.sh`
+  - `scripts/test-sec4-cli-command-contract-guard.sh`
 
 ## Validation
 

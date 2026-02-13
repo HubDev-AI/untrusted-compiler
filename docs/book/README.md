@@ -319,5 +319,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `352-m13-closure-audit-json-output-contract.md`
 - `353-m10-cross-impl-guard-regression-and-ci-gate.md`
 - `354-m13-trend-guard-regression-and-ci-gate.md`
+- `355-m12-cli-command-contract-guard-regression-test.md`
 
 As milestones progress, chapters will be added and linked from this index.

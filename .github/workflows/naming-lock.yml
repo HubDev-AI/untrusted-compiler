@@ -43,6 +43,9 @@ jobs:
       - name: Validate sec4 CLI command contract
         run: scripts/test-sec4-cli-command-contract.sh
 
+      - name: Validate sec4 CLI command contract guard behavior
+        run: scripts/test-sec4-cli-command-contract-guard.sh
+
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
 
