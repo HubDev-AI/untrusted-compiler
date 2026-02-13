@@ -1007,8 +1007,10 @@ Implementation order is intentionally linear to reduce thrash:
   - baseline quick-fix code actions keyed by security/effects diagnostic codes.
   - `zed-extension` scaffold (language config + LSP wiring contract).
   - `tree-sitter-ailang` scaffold with baseline highlight queries.
+  - diagnostics budget/cap guardrails with `I9001` overflow signaling.
 - Remaining:
-  - incremental analysis and explicit request budget enforcement.
+  - true incremental analysis (per-file cache + dependency invalidation).
+  - preemptive request deadline enforcement (beyond post-analysis overflow signaling).
   - multi-file references/rename determinism.
   - richer code-action edits (auto-fix text rewrites).
   - production grammar coverage and pinned published grammar revision.
@@ -1034,6 +1036,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Code-Action Quickfix Baseline".
 - Chapter: "M11 Slice: Zed Extension Scaffold".
 - Chapter: "M11 Slice: Tree-Sitter Grammar Scaffold".
+- Chapter: "M11 Slice: Diagnostics Analysis Budget Guardrails".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

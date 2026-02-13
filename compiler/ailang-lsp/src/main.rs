@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
+use std::time::Instant;
 use url::Url;
 
 const METHOD_NOT_FOUND: i64 = -32601;
@@ -1009,6 +1010,21 @@ fn publish_analysis<W: Write>(writer: &mut W, uri: &str, text: &str) -> io::Resu
 }
 
 fn diagnostics_for_document(uri: &str, text: &str) -> Vec<Value> {
+    diagnostics_for_document_with_limits(
+        uri,
+        text,
+        analysis_budget_ms(),
+        max_diagnostics_per_document(),
+    )
+}
+
+fn diagnostics_for_document_with_limits(
+    uri: &str,
+    text: &str,
+    analysis_budget_ms: u128,
+    max_diagnostics_per_document: usize,
+) -> Vec<Value> {
+    let started_at = Instant::now();
     let Some(path) = uri_to_path(uri) else {
         return vec![json!({
             "range": {
@@ -1030,11 +1046,45 @@ fn diagnostics_for_document(uri: &str, text: &str) -> Vec<Value> {
         Err(diags) => diags,
     };
 
-    diagnostics
+    let mut diagnostics = diagnostics
         .into_iter()
         .filter(|diag| diag.span.file == path)
         .map(core_diagnostic_to_lsp)
-        .collect()
+        .collect::<Vec<_>>();
+    if diagnostics.len() > max_diagnostics_per_document {
+        diagnostics.truncate(max_diagnostics_per_document);
+    }
+    if started_at.elapsed().as_millis() >= analysis_budget_ms {
+        diagnostics.push(json!({
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 1}
+            },
+            "severity": 3,
+            "code": "I9001",
+            "source": "ailang-lsp",
+            "message": format!(
+                "analysis budget exceeded ({}ms); results may be incomplete",
+                analysis_budget_ms
+            )
+        }));
+    }
+    diagnostics
+}
+
+fn analysis_budget_ms() -> u128 {
+    std::env::var("AILANG_LSP_ANALYSIS_BUDGET_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u128>().ok())
+        .unwrap_or(200)
+}
+
+fn max_diagnostics_per_document() -> usize {
+    std::env::var("AILANG_LSP_MAX_DIAGNOSTICS")
+        .ok()
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .map(|value| value.max(1))
+        .unwrap_or(200)
 }
 
 fn uri_to_path(uri: &str) -> Option<PathBuf> {
@@ -1212,7 +1262,7 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_message, run_stdio};
+    use super::{diagnostics_for_document_with_limits, read_message, run_stdio};
     use serde_json::{json, Value};
     use std::io::{BufReader, Cursor};
 
@@ -1375,6 +1425,22 @@ mod tests {
             .map(|diags| diags.len())
             .unwrap_or(0);
         assert!(diagnostic_count > 0, "expected parser diagnostics for invalid source");
+    }
+
+    #[test]
+    fn diagnostics_budget_exceeded_adds_info_diagnostic() {
+        let uri = "file:///tmp/lsp_budget.ai";
+        let source = "fn main() -> Int {\n  0\n}\n";
+        let diagnostics = diagnostics_for_document_with_limits(uri, source, 0, 200);
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag.get("code")
+                    .and_then(Value::as_str)
+                    .map(|code| code == "I9001")
+                    .unwrap_or(false)
+            }),
+            "budget overflow should append I9001 diagnostic",
+        );
     }
 
     #[test]

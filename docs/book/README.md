@@ -224,5 +224,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `257-m11-code-action-quickfix-baseline.md`
 - `258-m11-zed-extension-scaffold.md`
 - `259-m11-tree-sitter-grammar-scaffold.md`
+- `260-m11-diagnostics-analysis-budget-guardrails.md`
 
 As milestones progress, chapters will be added and linked from this index.
