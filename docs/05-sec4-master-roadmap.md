@@ -476,6 +476,8 @@ Roadmap impact:
 - Editor tooling and Zed integration architecture is now defined (compiler-backed LSP + extension + tree-sitter).
 - M9 release hardening now includes an executable alpha gate script:
   - `scripts/release-alpha-gate.sh` runs tests, locked builds, deterministic SBOM/metadata checks, policy-audited sample gates, and artifact capture in one command.
+- M9 release hardening gate is now CI-wired:
+  - `.github/workflows/alpha-release-gate.yml` executes the same gate on manual dispatch and alpha-tag pushes, and uploads captured artifacts.
 
 ## 0. Product Direction (Locked Constraints)
 

@@ -71,6 +71,11 @@ Canonical automation:
 
 This script executes the checklist end-to-end against sample projects using the secure policy profile, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 
+CI wiring:
+- `.github/workflows/alpha-release-gate.yml`
+
+The workflow runs the same release gate on manual dispatch and alpha tag pushes, then uploads captured artifacts from `build/release-alpha-gate/`.
+
 ## Upgrade notes
 
 From earlier milestone snapshots to current alpha:

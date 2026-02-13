@@ -1,0 +1,27 @@
+name: Alpha Release Gate
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v0.1.0-alpha*'
+
+jobs:
+  alpha-release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run alpha release gate
+        run: scripts/release-alpha-gate.sh
+
+      - name: Upload release-gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-release-gate-artifacts
+          path: build/release-alpha-gate
