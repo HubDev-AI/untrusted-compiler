@@ -238,5 +238,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `271-m11-code-action-effect-declaration-edit.md`
 - `272-m11-unopened-scan-toggle.md`
 - `273-m11-effect-quickfix-append-and-deduplicate.md`
+- `274-m11-multiline-effect-quickfix-support.md`
 
 As milestones progress, chapters will be added and linked from this index.

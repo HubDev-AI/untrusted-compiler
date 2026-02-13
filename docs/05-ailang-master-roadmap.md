@@ -1021,7 +1021,7 @@ Implementation order is intentionally linear to reduce thrash:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
   - indexed symbol graph with stable symbol-ID-based precision across definition/references/rename.
-  - AST-aware multi-line code-action rewrites and duplicate-effect guardrails.
+  - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
   - production grammar coverage and pinned published grammar revision.
 
 ### Exit criteria
@@ -1059,6 +1059,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Code-Action Effect-Declaration Edit".
 - Chapter: "M11 Slice: Unopened-Scan Toggle".
 - Chapter: "M11 Slice: Effect Quickfix Append and De-duplicate".
+- Chapter: "M11 Slice: Multiline Effect Quickfix Support".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
