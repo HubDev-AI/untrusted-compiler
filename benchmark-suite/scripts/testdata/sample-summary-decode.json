@@ -1,0 +1,12 @@
+{
+  "impl": "ailang",
+  "endpoint": "decode",
+  "targetRps": 2000,
+  "requestsPerSec": 1989.11,
+  "latency": {
+    "p50": "3.00ms",
+    "p95": "6.40ms",
+    "p99": "9.20ms",
+    "max": "20.00ms"
+  }
+}

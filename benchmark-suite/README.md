@@ -32,9 +32,11 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
 4. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
-5. Validate benchmark helper scripts:
+5. Bundle summaries + env into one report:
+   - `make -C benchmark-suite report IMPL=ailang`
+6. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-6. Stop DB:
+7. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes

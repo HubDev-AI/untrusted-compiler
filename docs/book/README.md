@@ -181,5 +181,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `214-m10-benchmark-harness-scaffold.md`
 - `215-m10-wrk2-summary-pipeline.md`
 - `216-m10-benchmark-profile-runner.md`
+- `217-m10-benchmark-report-bundling.md`
 
 As milestones progress, chapters will be added and linked from this index.

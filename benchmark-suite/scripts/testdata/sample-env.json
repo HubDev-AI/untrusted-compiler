@@ -1,0 +1,9 @@
+{
+  "cpu": "test-cpu",
+  "ramBytes": "123",
+  "os": "test-os",
+  "clang": "test-clang",
+  "rust": "test-rust",
+  "go": "test-go",
+  "node": "test-node"
+}

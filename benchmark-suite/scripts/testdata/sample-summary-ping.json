@@ -1,0 +1,12 @@
+{
+  "impl": "ailang",
+  "endpoint": "ping",
+  "targetRps": 10000,
+  "requestsPerSec": 9988.42,
+  "latency": {
+    "p50": "1.00ms",
+    "p95": "2.20ms",
+    "p99": "3.10ms",
+    "max": "9.10ms"
+  }
+}
