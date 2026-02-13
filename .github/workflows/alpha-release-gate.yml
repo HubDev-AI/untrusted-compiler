@@ -19,6 +19,9 @@ jobs:
       - name: Run alpha release gate
         run: scripts/release-alpha-gate.sh
 
+      - name: Verify release promotion inputs
+        run: scripts/verify-release-promotion-inputs.sh
+
       - name: Upload release-gate artifacts
         if: always()
         uses: actions/upload-artifact@v4

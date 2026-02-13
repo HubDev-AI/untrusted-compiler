@@ -497,6 +497,9 @@ Roadmap impact:
   - verifies `build_metadata.json` (`policyHash`, `compilerHash`, `runtimeHash`) matches `sec4 audit` JSON fields per sample,
   - verifies identity hashes are consistent across all gated release samples,
   - stamps verified identity hashes into release `checksums.txt` and `summary.txt`.
+- Release-publish integration checks now verify gate artifact consistency before promotion:
+  - new script `scripts/verify-release-promotion-inputs.sh` validates checksum/summary identity stamps against copied artifacts (`policy`, runtime files, per-sample metadata/sbom/audit),
+  - `.github/workflows/alpha-release-gate.yml` now runs promotion-input verification after `release-alpha-gate.sh`.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
@@ -1302,10 +1305,10 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
-2. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
-3. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
-4. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
-5. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
+2. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
+3. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
+4. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
+5. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
 
 ---
 

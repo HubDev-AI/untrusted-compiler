@@ -69,6 +69,7 @@ Required before tagging an alpha candidate:
 
 Canonical automation:
 - `scripts/release-alpha-gate.sh`
+- `scripts/verify-release-promotion-inputs.sh`
 
 This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, verifies metadata identity-hash consistency with `sec4 audit` output (`policyHash`, `compilerHash`, `runtimeHash`), gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 
@@ -86,6 +87,7 @@ CI wiring:
 - `.github/workflows/naming-lock.yml`
 
 The workflow runs the same release gate on manual dispatch and alpha tag pushes, then uploads captured artifacts from `build/release-alpha-gate/`.
+It now also runs promotion-input verification (`verify-release-promotion-inputs.sh`) to enforce checksum/identity consistency before artifact upload.
 The naming-lock workflow runs `scripts/check-naming-lock.sh` on pull requests and pushes to `main`.
 
 ## Upgrade notes

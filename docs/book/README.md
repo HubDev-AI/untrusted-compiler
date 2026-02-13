@@ -273,5 +273,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `306-m9-sec4-explain-high-frequency-exact-mappings.md`
 - `307-m10-standalone-benchmark-contract-validator.md`
 - `308-m10-benchmark-ci-dry-run-orchestrator-gates.md`
+- `309-m9-release-promotion-input-verifier-and-ci-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.
