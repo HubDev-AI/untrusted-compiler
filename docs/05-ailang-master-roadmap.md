@@ -326,6 +326,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Secret reveal call-shape contract is now hardened:
     - `secrets.reveal` requires `(secretsCap, secret)` or `(ctx, secretsCap, secret)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
+  - Secret reveal context-first typing is now hardened:
+    - for `secrets.reveal(ctx, secretsCap, secret)`, argument 1 must be `Ctx`,
+    - type violations emit tagged `E4001` secret diagnostics.
   - Auth helper call-shape contracts are now hardened:
     - `auth.require` requires exactly one `Ctx` argument,
     - `auth.requireRole` requires exactly two arguments: `(Ctx, String)`,
@@ -713,6 +716,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Secret Source Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Redact Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Reveal Call-Shape Hardening".
+- Chapter: "M7 Slice: Secret Reveal Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Auth Helper Call-Shape Hardening".
 
 ## M8 - Security-by-Construction Enforcement

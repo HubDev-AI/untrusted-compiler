@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-12 | self | Estimated forbidden-effect diagnostic columns manually in a new semantic golden and missed by 2 chars after signature edits. | After adding security fixtures with policy diagnostics, run the golden test once and copy exact spans from failure output before proceeding. |
 | 2026-02-12 | self | Added a semantic fixture for `secrets.reveal` shape hardening but forgot policy-forbidden `E2002` diagnostics also fire by default. | For `secrets.reveal` semantic fixtures, either include policy diagnostics in golden output or add a valid `@allow(...)` annotation when isolating shape-only behavior. |
 | 2026-02-12 | self | Started session actions before confirming `.claude/napkin.md` existed and reading it. | Always check/create and read `.claude/napkin.md` first in-session. |
 | 2026-02-12 | self | Reintroduced a moved-`Span` compile error while wiring a new semantic helper call (`enforce_res_html_signature`). | Default to passing `span.clone()` into helper calls inside semantic enforcement unless the span is consumed as final use. |
@@ -138,3 +139,4 @@
 - Added net sink context-first type hardening for `httpClient.get` and `httpClient.getInternal`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
 - Added FS sink context-first type hardening for `fs.read` and `fs.write`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
 - Added secret-source context-first type hardening for `secrets.get`, so slot-1 context must be `Ctx` in context-first form, with secret-tagged diagnostics and dedicated semantic fixture coverage.
+- Added secret-reveal context-first type hardening for `secrets.reveal`, so slot-1 context must be `Ctx` in context-first form, with secret-tagged diagnostics and dedicated semantic fixture coverage.
