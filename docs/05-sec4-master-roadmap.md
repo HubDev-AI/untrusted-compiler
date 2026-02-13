@@ -1274,11 +1274,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend callable/member canonicalization beyond capability namespace seeding into user-defined capability-object function fields and other non-stdlib callable-value shapes.
-2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
-3. Fold history-window metrics into core audit artifacts (core model + canonical report embedding are in place; next is deciding long-term persistence/compat strategy for multi-run aggregates).
-4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
-5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
+1. Lock benchmark artifact schema/version contracts in one canonical spec and align all M10 scripts/tests to that explicit schema file.
+2. Extend `sec4 explain` coverage to include richer code-family mappings and direct fix-linking to canonical book chapters.
+3. Add CI-level benchmark smoke gate for selected M10 scripts (`preflight`, `compare_matrix`, `publish_report`) to catch contract drift early.
+4. Add release-profile validation that stamps and verifies naming-lock + policy profile IDs directly inside release summary artifacts.
+5. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
 
 ---
 
