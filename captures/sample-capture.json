@@ -1,0 +1,50 @@
+{
+  "version": "0.1",
+  "captureId": "cap_01HZYABCDEF",
+  "traceId": "01HZYTRACEABC",
+  "timeMs": 1760000000000,
+  "policyHash": "pol_9f4c3e1a",
+  "compilerHash": "cpl_0d2a7c11",
+  "runtimeHash": "rt_7b18e9aa",
+  "request": {
+    "method": "POST",
+    "scheme": "https",
+    "host": "api.example.com",
+    "path": "/users",
+    "query": "",
+    "route": "/users",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "encoding": "base64",
+      "bytes": "e30=",
+      "truncated": false
+    }
+  },
+  "env": {
+    "timezone": "UTC",
+    "locale": "en-US"
+  },
+  "determinism": {
+    "seed": 123456789,
+    "time": {
+      "mode": "frozen",
+      "nowMs": 1760000000000
+    },
+    "uuid": {
+      "mode": "seeded"
+    },
+    "budget": {
+      "maxBodyBytes": 1048576,
+      "maxJsonBytes": 1048576,
+      "maxJsonDepth": 32,
+      "deadlineMs": 1760000001000
+    }
+  },
+  "redaction": {
+    "headers": ["authorization", "cookie"],
+    "jsonPaths": ["$.password"],
+    "notes": "default policy"
+  }
+}

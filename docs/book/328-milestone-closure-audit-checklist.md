@@ -97,6 +97,10 @@ Implementation progress and milestone closure are not the same. This checklist p
 - naming-lock CI keeps sec4 explain audit-coverage contract test:
   - `scripts/test-check-sec4-explain-audit-coverage.sh`
 
+5. M14 replay-capture contract bootstrap
+- naming-lock CI keeps replay-capture contract test:
+  - `scripts/test-replay-capture-contract.sh`
+
 ## Example usage
 
 ```bash
@@ -114,6 +118,7 @@ scripts/test-check-milestone-closure.sh
 - M12 sec4 CLI command CI contract+guard enforcement: PASS
 - M13 live trend-note evidence, trend-workflow guards, and artifact-upload contract: PASS
 - M13 sec4 explain audit-coverage contract test enforcement in naming-lock CI: PASS
+- M14 replay-capture contract test enforcement in naming-lock CI: PASS
 
 ## Inputs, outputs, and constraints
 

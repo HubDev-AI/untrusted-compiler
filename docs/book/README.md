@@ -324,5 +324,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `357-m13-benchmark-smoke-cross-impl-trend-guard-contract.md`
 - `358-m11-zed-grammar-pin-ci-closure-gate.md`
 - `359-m13-sec4-explain-coverage-closure-gate.md`
+- `360-m14-replay-capture-contract-test-harness.md`
 
 As milestones progress, chapters will be added and linked from this index.

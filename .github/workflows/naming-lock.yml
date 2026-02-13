@@ -19,6 +19,9 @@ jobs:
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
 
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

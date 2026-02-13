@@ -82,6 +82,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -224,7 +226,8 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M9-A","M9-B","M9-C","M9-D","M9-E","M9-F","M9-G","M9-H",
     "M10-A","M10-B","M10-C","M10-D",
     "M11-A","M12-A",
-    "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F"
+    "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
+    "M14-A"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -256,6 +259,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-E") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-F") != null' >/dev/null; then
   echo "expected json closure output to include M13-F gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-A") != null' >/dev/null; then
+  echo "expected json closure output to include M14-A gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -544,6 +551,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate release-contract-smoke workflow contract
@@ -658,6 +667,11 @@ jobs:
         run: scripts/test-zed-grammar-pin-guard.sh
 YAML
 
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses replay-capture contract test" >&2
+  exit 1
+fi
+
 cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
 name: Naming Lock
 on:
@@ -673,6 +687,51 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Validate alpha release workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
+      - name: Validate release-contract-smoke workflow contract
+        run: scripts/test-release-contract-smoke-workflow-contract.sh
+      - name: Validate release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+      - name: Validate benchmark trend workflow contract
+        run: scripts/test-benchmark-trend-workflow-contract.sh
+      - name: Validate benchmark trend workflow guard behavior
+        run: scripts/test-benchmark-trend-workflow-contract-guard.sh
+      - name: Validate sec4 CLI command contract
+        run: scripts/test-sec4-cli-command-contract.sh
+      - name: Validate sec4 CLI command contract guard behavior
+        run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate zed grammar pin contract
+        run: scripts/test-zed-grammar-pin.sh
+      - name: Validate zed grammar pin guard behavior
+        run: scripts/test-zed-grammar-pin-guard.sh
+YAML
+
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate sec4 explain audit coverage
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -717,6 +776,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -761,6 +822,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -801,6 +864,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -845,6 +910,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
+      - name: Validate replay capture contract
+        run: scripts/test-replay-capture-contract.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
