@@ -23,6 +23,12 @@ if ! grep -q 'check-benchmark-evidence-quality.sh --matrix <resolved-matrix-path
   exit 1
 fi
 
+dry_allow_out="$("$root_dir/update_cross_impl_matrix_from_ci.sh" --dry-run --matrix "$matrix_ok" --quality-allow-warning --target "$target")"
+if grep -q 'check-benchmark-evidence-quality.sh --matrix .* --fail-on-warning' <<<"$dry_allow_out"; then
+  echo "dry-run should omit strict quality flag when quality-allow-warning is set" >&2
+  exit 1
+fi
+
 "$root_dir/update_cross_impl_matrix_from_ci.sh" --matrix "$matrix_ok" --target "$target" >/dev/null
 if [ ! -f "$target" ]; then
   echo "target matrix not written" >&2

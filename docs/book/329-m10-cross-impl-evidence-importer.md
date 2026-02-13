@@ -39,6 +39,7 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
 - `benchmark-suite/scripts/test_update_cross_impl_matrix_from_ci.sh`
 - Validates:
   - dry-run command composition
+  - strict-vs-allow quality mode command composition
   - successful import from a valid matrix fixture
   - rejection of matrix inputs that do not include required impl coverage
   - strict-quality rejection for non-constant-rate leader matrices, with explicit opt-out behavior
