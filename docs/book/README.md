@@ -263,5 +263,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `296-m12-naming-lock-ci-workflow.md`
 - `297-m12-benchmark-impl-id-naming-guard.md`
 - `298-m12-benchmark-artifact-naming-and-schema-guard.md`
+- `299-m10-benchmark-smoke-ci-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.

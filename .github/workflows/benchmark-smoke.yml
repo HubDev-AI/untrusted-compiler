@@ -1,0 +1,28 @@
+name: Benchmark Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  benchmark-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run benchmark script smoke tests
+        run: |
+          benchmark-suite/scripts/test_preflight.sh
+          benchmark-suite/scripts/test_compare_matrix.sh
+          benchmark-suite/scripts/test_publish_report.sh

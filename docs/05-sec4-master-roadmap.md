@@ -491,6 +491,8 @@ Roadmap impact:
   - alpha release gate now runs naming-lock validation before artifact checks,
   - `.github/workflows/naming-lock.yml` runs the naming-lock check on `main` pushes and pull requests,
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
+- Benchmark script smoke CI is now in place:
+  - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
 
 ## 0. Product Direction (Locked Constraints)
 
