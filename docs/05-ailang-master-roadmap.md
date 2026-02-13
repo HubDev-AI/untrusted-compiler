@@ -1011,7 +1011,7 @@ Implementation order is intentionally linear to reduce thrash:
   - references/rename now aggregate deterministically across currently open workspace documents.
   - open-document parse cache integrated into major LSP request paths.
   - request-deadline guardrails applied to multi-document references/rename scans.
-  - code actions now support concrete redact/validate auto-edits for core secret/untrusted diagnostics.
+  - code actions now support concrete redact/validate/effect-declaration auto-edits for core security/effects diagnostics.
   - references/rename now include unopened workspace `.ai` files discovered from project root.
   - tree-sitter query surface now includes highlights + outline + indent + textobjects baseline.
   - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
@@ -1020,7 +1020,7 @@ Implementation order is intentionally linear to reduce thrash:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
   - indexed symbol graph with stable symbol-ID-based precision across definition/references/rename.
-  - broader code-action auto-fix coverage (`E2001` and AST-aware multi-line rewrites).
+  - AST-aware multi-line code-action rewrites and duplicate-effect guardrails.
   - production grammar coverage and pinned published grammar revision.
 
 ### Exit criteria
@@ -1055,6 +1055,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Workspace-Aware Definition and Hover".
 - Chapter: "M11 Slice: Ambiguous Declaration Safety Guard".
 - Chapter: "M11 Slice: Language Server Operations Guide".
+- Chapter: "M11 Slice: Code-Action Effect-Declaration Edit".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

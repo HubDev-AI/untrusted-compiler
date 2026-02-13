@@ -780,10 +780,16 @@ fn code_actions_from_diagnostics(
                 });
                 (Some("Wrap with redact(...)"), redact_edit)
             }
-            "E2001" => (
-                Some("Declare missing effect in function signature"),
-                None,
-            ),
+            "E2001" => {
+                let effect_edit = source
+                    .as_ref()
+                    .and_then(|text| build_missing_effect_edit(uri, text, diagnostic));
+                if effect_edit.is_some() {
+                    (Some("Add missing effect declaration"), effect_edit)
+                } else {
+                    (Some("Declare missing effect in function signature"), None)
+                }
+            }
             _ => (None, None),
         };
 
@@ -839,6 +845,87 @@ fn extract_range_text(source: &str, range: &Value) -> Option<String> {
         return None;
     }
     Some(selected)
+}
+
+fn build_missing_effect_edit(uri: &str, source: &str, diagnostic: &Value) -> Option<Value> {
+    let effect = extract_effect_name_from_diagnostic(diagnostic)?;
+    let start_line = diagnostic
+        .get("range")
+        .and_then(|range| range.get("start"))
+        .and_then(|start| start.get("line"))
+        .and_then(Value::as_u64)? as usize;
+
+    let lines = source.lines().collect::<Vec<_>>();
+    if lines.is_empty() {
+        return None;
+    }
+    let search_end = start_line.min(lines.len().saturating_sub(1));
+    let mut signature_line_idx = None;
+    for idx in (0..=search_end).rev() {
+        if lines[idx].contains("fn ") {
+            signature_line_idx = Some(idx);
+            break;
+        }
+    }
+    let line_idx = signature_line_idx?;
+    let signature_line = lines[line_idx];
+    if signature_line.contains("effects {") {
+        return None;
+    }
+    let insert_char = signature_line
+        .find("->")
+        .or_else(|| signature_line.find("{"))?;
+
+    Some(json!({
+        "changes": {
+            uri: [
+                {
+                    "range": {
+                        "start": {"line": line_idx, "character": insert_char},
+                        "end": {"line": line_idx, "character": insert_char}
+                    },
+                    "newText": format!(" effects {{ {effect} }}")
+                }
+            ]
+        }
+    }))
+}
+
+fn extract_effect_name_from_diagnostic(diagnostic: &Value) -> Option<String> {
+    if let Some(message) = diagnostic.get("message").and_then(Value::as_str) {
+        if let Some(token) = extract_backtick_token(message) {
+            return Some(token);
+        }
+    }
+
+    let notes = diagnostic
+        .get("data")
+        .and_then(|data| data.get("notes"))
+        .and_then(Value::as_array)?;
+    for note in notes {
+        if let Some(text) = note.as_str() {
+            if let Some(token) = extract_backtick_token(text) {
+                return Some(token);
+            }
+        }
+    }
+    None
+}
+
+fn extract_backtick_token(text: &str) -> Option<String> {
+    let mut parts = text.split('`');
+    let _ = parts.next()?;
+    let token = parts.next()?.trim();
+    if token.is_empty() {
+        return None;
+    }
+    if token
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '.')
+    {
+        return Some(token.to_string());
+    }
+    None
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -3292,6 +3379,95 @@ mod tests {
                 .and_then(Value::as_str),
             Some("redact(token)"),
             "redact quickfix should wrap selected diagnostic range text",
+        );
+    }
+
+    #[test]
+    fn code_action_can_emit_missing_effect_declaration_edit() {
+        let uri = "file:///tmp/lsp_code_action_effect.ai";
+        let source = "fn handler() -> Int {\n  call()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 1, "character": 2},
+                    "end": {"line": 1, "character": 6}
+                },
+                "context": {
+                    "diagnostics": [
+                        {
+                            "code": "E2001",
+                            "message": "Function uses effect `net` but does not declare it.",
+                            "range": {
+                                "start": {"line": 1, "character": 2},
+                                "end": {"line": 1, "character": 6}
+                            }
+                        }
+                    ]
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let code_action_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(22)))
+            .expect("codeAction response should exist");
+        let actions = code_action_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("codeAction result should be an array");
+        let effect_action = actions
+            .iter()
+            .find(|action| {
+                action
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(|title| title.contains("effect"))
+                    .unwrap_or(false)
+            })
+            .expect("expected missing-effect quickfix action");
+        assert_eq!(
+            effect_action
+                .get("edit")
+                .and_then(|edit| edit.get("changes"))
+                .and_then(|changes| changes.get(uri))
+                .and_then(Value::as_array)
+                .and_then(|edits| edits.first())
+                .and_then(|edit| edit.get("newText"))
+                .and_then(Value::as_str),
+            Some(" effects { net }"),
+            "effect quickfix should insert missing effect declaration",
         );
     }
 
