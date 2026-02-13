@@ -24,6 +24,7 @@ Without CI/closure wiring, `extension.toml` grammar pin drift could bypass miles
 1. Extended grammar-pin checker for fixture-driven tests
 - `check-zed-grammar-pin.sh` now supports:
   - `--extension <path>`
+- revision validation now requires a full 40-character commit SHA.
 
 2. Added contract and guard regression tests
 - New `test-zed-grammar-pin.sh`:

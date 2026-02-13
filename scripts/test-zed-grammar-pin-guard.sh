@@ -46,6 +46,22 @@ schema_version = 1
 
 [grammars.untrusted]
 repository = "https://github.com/HubDev-AI/untrusted-compiler"
+rev = "e5ab04b"
+TOML
+
+if "${contract_script}" --extension "${extension_toml}" >/dev/null 2>&1; then
+  echo "expected grammar pin contract failure for short SHA revision" >&2
+  exit 1
+fi
+
+cat > "${extension_toml}" <<'TOML'
+id = "untrusted"
+name = "Untrusted<T>"
+version = "0.1.0"
+schema_version = 1
+
+[grammars.untrusted]
+repository = "https://github.com/HubDev-AI/untrusted-compiler"
 rev = "not-a-sha"
 TOML
 

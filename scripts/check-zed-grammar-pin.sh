@@ -43,8 +43,8 @@ if [[ "${GRAMMAR_REV}" == "${PLACEHOLDER}" ]]; then
   exit 1
 fi
 
-if [[ ! "${GRAMMAR_REV}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
-  echo "error: zed grammar revision is not a commit-like SHA: ${GRAMMAR_REV}" >&2
+if [[ ! "${GRAMMAR_REV}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "error: zed grammar revision is not a full 40-char SHA: ${GRAMMAR_REV}" >&2
   exit 1
 fi
 
