@@ -86,7 +86,8 @@ fn handle_message<W: Write>(
                             },
                             "definitionProvider": true,
                             "hoverProvider": true,
-                            "referencesProvider": true
+                            "referencesProvider": true,
+                            "implementationProvider": true
                         },
                         "serverInfo": {
                             "name": "ailang-language-server",
@@ -195,6 +196,23 @@ fn handle_message<W: Write>(
                         id,
                         INVALID_REQUEST,
                         "invalid references request payload".to_string(),
+                    )?;
+                }
+            }
+        }
+        Some("textDocument/implementation") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character)) = parse_text_document_position(message) {
+                    match implementation_at_position(state, &uri, line, character) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid implementation request payload".to_string(),
                     )?;
                 }
             }
@@ -365,6 +383,20 @@ fn references_at_position(
         locations.insert(0, location_from_span(uri, &symbol.span));
     }
     Ok(Value::Array(locations))
+}
+
+fn implementation_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+) -> io::Result<Value> {
+    let definition = definition_at_position(state, uri, line, character)?;
+    if definition.is_null() {
+        Ok(Value::Array(Vec::new()))
+    } else {
+        Ok(Value::Array(vec![definition]))
+    }
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -958,6 +990,15 @@ mod tests {
             Some(true),
             "initialize response should advertise references provider"
         );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("implementationProvider"))
+                .and_then(Value::as_bool),
+            Some(true),
+            "initialize response should advertise implementation provider"
+        );
         assert_eq!(messages[1].get("id"), Some(&json!(2)));
     }
 
@@ -1402,6 +1443,68 @@ mod tests {
             declaration_line,
             Some(0),
             "first reference should be helper declaration",
+        );
+    }
+
+    #[test]
+    fn implementation_returns_declaration_location_for_call_identifier() {
+        let uri = "file:///tmp/lsp_implementation.ai";
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "textDocument/implementation",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let implementation_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(6)))
+            .expect("implementation response should exist");
+        let locations = implementation_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("implementation result should be an array");
+        assert_eq!(locations.len(), 1, "implementation should resolve to one declaration location");
+        assert_eq!(
+            locations[0]
+                .get("range")
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("line"))
+                .and_then(Value::as_u64),
+            Some(0),
+            "implementation should resolve to helper declaration line",
         );
     }
 
