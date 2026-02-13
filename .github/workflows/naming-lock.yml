@@ -1,0 +1,17 @@
+name: Naming Lock
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate naming lock
+        run: scripts/check-naming-lock.sh

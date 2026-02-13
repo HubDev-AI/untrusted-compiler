@@ -481,7 +481,8 @@ Roadmap impact:
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
-  - alpha release gate now runs naming-lock validation before artifact checks.
+  - alpha release gate now runs naming-lock validation before artifact checks,
+  - `.github/workflows/naming-lock.yml` runs the naming-lock check on `main` pushes and pull requests.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1159,6 +1160,7 @@ Implementation order is intentionally linear to reduce thrash:
     - absence of legacy language/extension tokens and old editor/server names,
     - presence of locked contract tokens (`Untrusted<T>`, `.ut`, `ut/std|ut/http|ut/sec`, canonical command names).
   - release hardening gate (`scripts/release-alpha-gate.sh`) now executes naming-lock validation as part of alpha readiness.
+  - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
 - Remaining:
   - expand naming-lock checks to benchmark raw-artifact naming conventions after final M10 artifact schema freeze.
 

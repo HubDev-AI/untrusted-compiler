@@ -74,8 +74,10 @@ This script executes the checklist end-to-end against sample projects using the 
 
 CI wiring:
 - `.github/workflows/alpha-release-gate.yml`
+- `.github/workflows/naming-lock.yml`
 
 The workflow runs the same release gate on manual dispatch and alpha tag pushes, then uploads captured artifacts from `build/release-alpha-gate/`.
+The naming-lock workflow runs `scripts/check-naming-lock.sh` on pull requests and pushes to `main`.
 
 ## Upgrade notes
 
