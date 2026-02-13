@@ -3129,6 +3129,23 @@ impl Analyzer {
                     "use `db.queryOne(capability, query, rowSchema)` with a schema descriptor",
                 ),
             );
+            return;
+        }
+
+        if schema_value_type(row_schema_type).is_none() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "db.queryOne row schema argument must be `Schema<_>`",
+                    args[row_schema_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", row_schema_type.describe()))
+                .with_note(
+                    "use `db.queryOne(capability, query, rowSchema)` with a typed schema descriptor",
+                ),
+            );
         }
     }
 

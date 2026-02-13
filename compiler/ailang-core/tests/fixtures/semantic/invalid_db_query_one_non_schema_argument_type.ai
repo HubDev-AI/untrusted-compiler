@@ -1,0 +1,4 @@
+fn bad(db: DbCap, query: SqlQuery) effects { db.read } -> Int {
+  db.queryOne(db, query, "Row");
+  0
+}

@@ -49,7 +49,7 @@ Example:
 ## Example usage
 
 ```ailang
-fn load(db: DbCap, query: SqlQuery, rowSchema: String) effects { db.read } -> Int {
+fn load(db: DbCap, query: SqlQuery, rowSchema: Schema<Int>) effects { db.read } -> Int {
   db.queryOne(db, query, rowSchema);
   0
 }
@@ -59,4 +59,5 @@ fn load(db: DbCap, query: SqlQuery, rowSchema: String) effects { db.read } -> In
 
 - Tradeoff: invalid primitive placeholders that previously passed semantic checks now fail early.
 - Next:
+  - enforce explicit `Schema<_>` descriptors for row-schema slots (`174-m7-db-query-one-row-schema-descriptor-hardening.md`).
   - evolve row-schema slot typing from descriptor-shape validation toward explicit `RowSchema<T>` contracts when that type surface is finalized.

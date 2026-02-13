@@ -1,4 +1,4 @@
-fn bad(net: NetCap, query: SqlQuery) effects { db.read } -> Int {
-  db.queryOne(net, query, "Row");
+fn bad(net: NetCap, query: SqlQuery, row: Schema<Int>) effects { db.read } -> Int {
+  db.queryOne(net, query, row);
   1
 }
