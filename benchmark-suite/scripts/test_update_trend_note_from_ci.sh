@@ -29,6 +29,10 @@ if ! grep -q 'import_trend_note_entry.sh --chapter' <<<"$dry_out"; then
   echo "dry-run missing import command" >&2
   exit 1
 fi
+if ! grep -q 'import_trend_note_entry.sh --chapter .* --replace-existing --entry' <<<"$dry_out"; then
+  echo "dry-run missing replace-existing import mode" >&2
+  exit 1
+fi
 
 "$root_dir/update_trend_note_from_ci.sh" --entry "$entry" --chapter "$chapter" >/dev/null
 

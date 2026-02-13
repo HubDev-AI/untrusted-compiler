@@ -599,6 +599,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - benchmark smoke CI validates dry-run fetch command generation via `test_fetch_trend_artifact.sh`.
 - M13 trend-note one-command updater is now implemented:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` chains fetch + import flows,
+  - same-heading entries are now refreshed in place via importer replace mode (`--replace-existing`) to support same-day reruns,
   - benchmark smoke CI validates update command composition and local-entry import via `test_update_trend_note_from_ci.sh`.
 - M10+M13 closure refresh now has a single operator command:
   - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + strict closure check (`--fail-on-pending`) in one flow,

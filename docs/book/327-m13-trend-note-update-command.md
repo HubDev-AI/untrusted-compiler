@@ -20,7 +20,7 @@ Fetch and import helpers existed separately, but operators still had to manually
 `update_trend_note_from_ci.sh`:
 1. fetches latest successful trend artifact package (unless `--entry` is provided),
 2. locates `trend-note-entry.md`,
-3. imports it into chapter `322` via idempotent importer.
+3. imports it into chapter `322` via `--replace-existing` mode, so same-day reruns refresh existing entry content.
 
 `--dry-run` prints the composed command sequence.
 
@@ -39,7 +39,7 @@ Benchmark smoke CI now runs this test.
   - repo slug/output directory (for fetch path) or explicit `--entry`,
   - chapter path (defaults to chapter `322`).
 - Output:
-  - updated chapter with imported trend entry.
+  - updated chapter with imported or refreshed trend entry.
 - Constraints:
   - live fetch mode still requires valid `gh` auth and network.
 

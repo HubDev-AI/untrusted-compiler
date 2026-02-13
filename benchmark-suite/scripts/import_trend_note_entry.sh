@@ -3,9 +3,10 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 --entry <trend-note-entry.md> [--chapter <docs/book/322-...md>]
+usage: $0 --entry <trend-note-entry.md> [--chapter <docs/book/322-...md>] [--replace-existing]
 
-Imports a rendered trend-note entry into the first trend-note chapter, deduplicated by entry heading.
+Imports a rendered trend-note entry into the first trend-note chapter.
+Default behavior deduplicates by entry heading; --replace-existing rewrites same-heading block in place.
 USAGE
 }
 
@@ -14,6 +15,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 
 entry_path=""
 chapter_path="${repo_root}/docs/book/322-m13-first-trend-run-results-note.md"
+replace_existing="false"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -39,6 +41,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --chapter=*)
       chapter_path="${1#--chapter=}"
+      shift
+      ;;
+    --replace-existing)
+      replace_existing="true"
       shift
       ;;
     -h|--help)
@@ -75,8 +81,39 @@ if [ -z "${entry_heading}" ]; then
   exit 2
 fi
 
-if grep -Fq "${entry_heading}" "${chapter_path}"; then
+if grep -Fq "${entry_heading}" "${chapter_path}" && [ "${replace_existing}" != "true" ]; then
   echo "already imported: ${entry_heading}"
+  exit 0
+fi
+
+if grep -Fq "${entry_heading}" "${chapter_path}" && [ "${replace_existing}" = "true" ]; then
+  tmp_rewrite="$(mktemp)"
+  awk -v heading="${entry_heading}" -v entry_file="${entry_path}" '
+    function print_entry() {
+      while ((getline line < entry_file) > 0) {
+        print line
+      }
+      close(entry_file)
+    }
+    {
+      if ($0 == heading && replaced == 0) {
+        print_entry()
+        replaced = 1
+        skip_old = 1
+        next
+      }
+      if (skip_old == 1) {
+        if ($0 ~ /^## Trend Entry \(/) {
+          skip_old = 0
+          print $0
+        }
+        next
+      }
+      print
+    }
+  ' "${chapter_path}" > "${tmp_rewrite}"
+  mv "${tmp_rewrite}" "${chapter_path}"
+  echo "replaced ${entry_heading} in ${chapter_path}"
   exit 0
 fi
 

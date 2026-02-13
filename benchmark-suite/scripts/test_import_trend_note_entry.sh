@@ -22,6 +22,15 @@ cat > "$entry" <<'EOF'
 | ping | node | 18.20 | 90.00 | pass | pass |
 EOF
 
+entry_updated="${tmp}/entry-updated.md"
+cat > "$entry_updated" <<'EOF'
+## Trend Entry (2026-02-13)
+
+| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
+| --- | --- | ---: | ---: | --- | --- |
+| ping | go | 12.00 | 91.00 | pass | pass |
+EOF
+
 "$root_dir/import_trend_note_entry.sh" --entry "$entry" --chapter "$chapter" >/dev/null
 
 if ! grep -q '^## Trend Entry (2026-02-13)$' "$chapter"; then
@@ -34,6 +43,19 @@ fi
 count="$(grep -c '^## Trend Entry (2026-02-13)$' "$chapter")"
 if [ "$count" -ne 1 ]; then
   echo "entry import should be idempotent" >&2
+  exit 1
+fi
+
+"$root_dir/import_trend_note_entry.sh" --entry "$entry_updated" --chapter "$chapter" --replace-existing >/dev/null
+
+if ! grep -q '| ping | go | 12.00 | 91.00 | pass | pass |' "$chapter"; then
+  echo "replace-existing did not refresh existing trend entry content" >&2
+  exit 1
+fi
+
+count_after_replace="$(grep -c '^## Trend Entry (2026-02-13)$' "$chapter")"
+if [ "$count_after_replace" -ne 1 ]; then
+  echo "replace-existing should keep a single heading instance" >&2
   exit 1
 fi
 

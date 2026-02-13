@@ -85,7 +85,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 fetch_cmd=("${script_dir}/fetch_trend_artifact.sh" "--repo" "${repo_slug}" "--out-dir" "${out_dir}")
-import_cmd=("${script_dir}/import_trend_note_entry.sh" "--chapter" "${chapter_path}")
+import_cmd=("${script_dir}/import_trend_note_entry.sh" "--chapter" "${chapter_path}" "--replace-existing")
 
 if [ "${dry_run}" = "true" ]; then
   if [ -n "${entry_path}" ]; then
