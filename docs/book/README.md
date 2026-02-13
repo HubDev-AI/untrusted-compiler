@@ -141,5 +141,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `173-m7-sql-q-params-value-safety-hardening.md`
 - `174-m7-db-query-one-row-schema-descriptor-hardening.md`
 - `176-m7-req-json-schema-descriptor-narrowing.md`
+- `177-m7-json-response-schema-descriptor-narrowing.md`
 
 As milestones progress, chapters will be added and linked from this index.

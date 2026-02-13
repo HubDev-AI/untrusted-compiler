@@ -122,6 +122,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `res.json` now enforces typed schema-value pairing when schema argument is `Schema<T>`:
     - compatible payload types pass,
     - mismatches emit `E4004` with expected/actual type notes.
+  - JSON response schema descriptors are now narrowed to bridge-name `String` values or typed `Schema<_>` descriptors.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
   - `security_map` call records now include optional `arg_roles` metadata for explainability.
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
@@ -764,6 +765,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: CSP Builder and Security Config Surface Bootstrap".
 - Chapter: "M7 Slice: CSP Builder Signature Hardening".
 - Chapter: "M7 Slice: Log Builder Intrinsic Bootstrap".
+- Chapter: "M7 Slice: JSON Response Schema-Descriptor Narrowing".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

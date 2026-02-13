@@ -91,6 +91,25 @@ fn bad() effects { net } -> Int {
 }
 
 #[test]
+fn json_response_non_schema_descriptor_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(path: PathSafe) effects { net } -> Int {
+  res.json(path, 1);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json response schema argument must be `String` or `Schema<_>`")
+        .expect("expected json response non-schema descriptor diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn req_json_schema_gate_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

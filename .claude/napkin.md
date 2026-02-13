@@ -175,3 +175,4 @@
 - Added `sql.q` params value-safety hardening so param payloads cannot be `Secret<_>` or `Untrusted<_>`, with tagged diagnostics and dedicated semantic/tag fixtures.
 - Added `db.queryOne` row-schema descriptor hardening so row schema arguments must be `Schema<_>`; updated capability fixtures/integration samples away from string row names and added schema-tagged diagnostics.
 - Narrowed `req.json` schema descriptor acceptance to `String` (bridge mode) or typed `Schema<_>` only, rejecting unrelated placeholder types with schema-tagged diagnostics.
+- Narrowed JSON response sink schema descriptors (`res.json`/`res.ok`/`res.okMeta`) to `String` or `Schema<_>`, rejecting unrelated placeholders with `E4004` schema diagnostics.
