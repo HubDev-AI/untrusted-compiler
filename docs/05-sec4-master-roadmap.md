@@ -515,6 +515,9 @@ Roadmap impact:
 - Benchmark schema validation is now runnable as a standalone command:
   - `benchmark-suite/scripts/validate_contract_schema.sh` validates schema assets against benchmark sample artifacts,
   - `.github/workflows/benchmark-smoke.yml` now runs `test_validate_contract_schema.sh` before other smoke scripts.
+- Benchmark CI coverage now includes deterministic dry-run orchestrator checks:
+  - `.github/workflows/benchmark-smoke.yml` now runs `test_run_comparison_matrix.sh`, `test_run_step_matrix.sh`, and `test_run_full_benchmark_suite.sh`,
+  - orchestrator dry-run contracts are now validated in CI without requiring live benchmark services.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1300,9 +1303,9 @@ Day 14:
 
 1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
 2. Add release-publish integration checks that consume/stamp the verified identity hashes from `release-alpha-gate` artifacts during promotion workflows.
-3. Expand benchmark CI beyond smoke scripts into a deterministic scoped dry-run/full-suite contract check.
-4. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
-5. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
+3. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
+4. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
+5. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
 
 ---
 

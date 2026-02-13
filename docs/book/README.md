@@ -272,5 +272,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `305-m10-machine-validated-benchmark-schema-assets.md`
 - `306-m9-sec4-explain-high-frequency-exact-mappings.md`
 - `307-m10-standalone-benchmark-contract-validator.md`
+- `308-m10-benchmark-ci-dry-run-orchestrator-gates.md`
 
 As milestones progress, chapters will be added and linked from this index.
