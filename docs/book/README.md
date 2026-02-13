@@ -301,5 +301,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `334-m9-release-gate-milestone-closure-enforcement.md`
 - `335-m9-alpha-release-workflow-contract-test.md`
 - `336-m13-roadmap-closure-gate-alignment-test.md`
+- `337-m9-publish-manifest-checks-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -24,11 +24,23 @@ if ! jq -e '
   .version == "0.1"
   and .tool == "sec4"
   and (.identity | has("policyIdentityHash") and has("compilerIdentityHash") and has("runtimeIdentityHash"))
+  and (.checks.namingLock == "PASS")
+  and (.checks.milestoneClosure == "PASS")
   and (.artifacts.samples | length > 0)
 ' "${MANIFEST_PATH}" >/dev/null; then
   echo "publish manifest missing required fields" >&2
   exit 1
 fi
+
+cp "${ARTIFACTS_DIR}/summary.txt" "${ARTIFACTS_DIR}/summary.txt.bak"
+grep -v '^milestone closure: ' "${ARTIFACTS_DIR}/summary.txt.bak" > "${ARTIFACTS_DIR}/summary.txt"
+
+if "${ROOT_DIR}/scripts/generate-release-publish-manifest.sh" --artifacts-dir "${ARTIFACTS_DIR}" --out "${MANIFEST_PATH}" >/dev/null 2>&1; then
+  echo "expected manifest generation to fail when milestone closure summary entry is missing" >&2
+  exit 1
+fi
+
+mv "${ARTIFACTS_DIR}/summary.txt.bak" "${ARTIFACTS_DIR}/summary.txt"
 
 grep -v '^policy_identity_hash ' "${ARTIFACTS_DIR}/checksums.txt" > "${ARTIFACTS_DIR}/checksums.txt.tmp"
 mv "${ARTIFACTS_DIR}/checksums.txt.tmp" "${ARTIFACTS_DIR}/checksums.txt"

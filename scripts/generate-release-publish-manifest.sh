@@ -68,6 +68,18 @@ read_checksum_value() {
   echo "${value}"
 }
 
+read_summary_value() {
+  local summary_path="$1"
+  local key="$2"
+  local value
+  value="$(awk -F ': ' -v k="${key}" '$1 == k { print $2 }' "${summary_path}" | tail -n 1)"
+  if [[ -z "${value}" ]]; then
+    echo "error: missing summary entry '${key}' in ${summary_path}" >&2
+    exit 1
+  fi
+  echo "${value}"
+}
+
 CHECKSUMS_PATH="${ARTIFACTS_DIR}/checksums.txt"
 SUMMARY_PATH="${ARTIFACTS_DIR}/summary.txt"
 RUNTIME_HEADER_PATH="${ARTIFACTS_DIR}/sec4_runtime.h"
@@ -88,6 +100,8 @@ policy_profile_sha256="$(read_checksum_value "${CHECKSUMS_PATH}" "policy_profile
 policy_identity_hash="$(read_checksum_value "${CHECKSUMS_PATH}" "policy_identity_hash")"
 compiler_identity_hash="$(read_checksum_value "${CHECKSUMS_PATH}" "compiler_identity_hash")"
 runtime_identity_hash="$(read_checksum_value "${CHECKSUMS_PATH}" "runtime_identity_hash")"
+summary_naming_lock="$(read_summary_value "${SUMMARY_PATH}" "naming lock")"
+summary_milestone_closure="$(read_summary_value "${SUMMARY_PATH}" "milestone closure")"
 
 sample_names=()
 while IFS= read -r sample_name; do
@@ -145,6 +159,8 @@ jq -n \
   --arg policyIdentityHash "${policy_identity_hash}" \
   --arg compilerIdentityHash "${compiler_identity_hash}" \
   --arg runtimeIdentityHash "${runtime_identity_hash}" \
+  --arg checkNamingLock "${summary_naming_lock}" \
+  --arg checkMilestoneClosure "${summary_milestone_closure}" \
   --argjson samples "${samples_json}" \
   '{
     version: $version,
@@ -155,6 +171,10 @@ jq -n \
       policyIdentityHash: $policyIdentityHash,
       compilerIdentityHash: $compilerIdentityHash,
       runtimeIdentityHash: $runtimeIdentityHash
+    },
+    checks: {
+      namingLock: $checkNamingLock,
+      milestoneClosure: $checkMilestoneClosure
     },
     artifacts: {
       checksums: $checksums,

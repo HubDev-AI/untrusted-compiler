@@ -24,4 +24,14 @@ if "${ROOT_DIR}/scripts/verify-release-publish-manifest.sh" --manifest "${MANIFE
   exit 1
 fi
 
+"${ROOT_DIR}/scripts/generate-release-publish-manifest.sh" --artifacts-dir "${ARTIFACTS_DIR}" --out "${MANIFEST_PATH}" >/dev/null
+
+jq '.checks.milestoneClosure = "WARN"' "${MANIFEST_PATH}" > "${MANIFEST_PATH}.tmp"
+mv "${MANIFEST_PATH}.tmp" "${MANIFEST_PATH}"
+
+if "${ROOT_DIR}/scripts/verify-release-publish-manifest.sh" --manifest "${MANIFEST_PATH}" --artifacts-dir "${ARTIFACTS_DIR}" >/dev/null 2>&1; then
+  echo "expected publish manifest verification to fail for tampered milestone closure check" >&2
+  exit 1
+fi
+
 echo "verify-release-publish-manifest test passed"

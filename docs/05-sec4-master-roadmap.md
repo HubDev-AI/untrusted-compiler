@@ -539,6 +539,10 @@ Historical implementation bullets below are retained as build history; strict ga
 - Release automation now verifies downstream publish-manifest consumption:
   - `scripts/verify-release-publish-manifest.sh` validates manifest identity/artifact bindings against release checksums,
   - `.github/workflows/alpha-release-gate.yml` now verifies publish manifest before artifact upload.
+- Release publish-manifest contract now carries readiness checks:
+  - `generate-release-publish-manifest.sh` now exports `checks.namingLock` and `checks.milestoneClosure` from release summary into `publish-manifest.json`,
+  - `verify-release-publish-manifest.sh` now requires those checks to match summary and remain `PASS`,
+  - release publish-manifest tests now include missing-summary-entry and tampered-check negative coverage.
 - Alpha release workflow wiring now has a CI contract test:
   - `scripts/test-alpha-release-workflow-contract.sh` validates required release/promotion/publish steps and artifact upload bindings in `.github/workflows/alpha-release-gate.yml`,
   - `.github/workflows/naming-lock.yml` now runs this contract test on PRs and `main` pushes.

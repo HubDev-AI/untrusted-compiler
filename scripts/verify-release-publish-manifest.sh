@@ -78,6 +78,18 @@ read_checksum_value() {
   echo "${value}"
 }
 
+read_summary_value() {
+  local summary_path="$1"
+  local key="$2"
+  local value
+  value="$(awk -F ': ' -v k="${key}" '$1 == k { print $2 }' "${summary_path}" | tail -n 1)"
+  if [[ -z "${value}" ]]; then
+    echo "error: missing summary entry '${key}' in ${summary_path}" >&2
+    exit 1
+  fi
+  echo "${value}"
+}
+
 read_sample_checksum() {
   local checksums_path="$1"
   local sample="$2"
@@ -120,11 +132,15 @@ manifest_policy_profile_sha="$(read_manifest_field '.identity.policyProfileSha25
 manifest_policy_identity="$(read_manifest_field '.identity.policyIdentityHash')"
 manifest_compiler_identity="$(read_manifest_field '.identity.compilerIdentityHash')"
 manifest_runtime_identity="$(read_manifest_field '.identity.runtimeIdentityHash')"
+manifest_check_naming_lock="$(read_manifest_field '.checks.namingLock')"
+manifest_check_milestone_closure="$(read_manifest_field '.checks.milestoneClosure')"
 
 checksum_policy_profile_sha="$(read_checksum_value "${checksums_path}" "policy_profile_sha256")"
 checksum_policy_identity="$(read_checksum_value "${checksums_path}" "policy_identity_hash")"
 checksum_compiler_identity="$(read_checksum_value "${checksums_path}" "compiler_identity_hash")"
 checksum_runtime_identity="$(read_checksum_value "${checksums_path}" "runtime_identity_hash")"
+summary_naming_lock="$(read_summary_value "${summary_path}" "naming lock")"
+summary_milestone_closure="$(read_summary_value "${summary_path}" "milestone closure")"
 
 if [[ "${manifest_policy_profile_sha}" != "${checksum_policy_profile_sha}" ]]; then
   echo "error: manifest/checksums mismatch for policyProfileSha256" >&2
@@ -140,6 +156,22 @@ if [[ "${manifest_compiler_identity}" != "${checksum_compiler_identity}" ]]; the
 fi
 if [[ "${manifest_runtime_identity}" != "${checksum_runtime_identity}" ]]; then
   echo "error: manifest/checksums mismatch for runtimeIdentityHash" >&2
+  exit 1
+fi
+if [[ "${manifest_check_naming_lock}" != "${summary_naming_lock}" ]]; then
+  echo "error: manifest/summary mismatch for checks.namingLock" >&2
+  exit 1
+fi
+if [[ "${manifest_check_milestone_closure}" != "${summary_milestone_closure}" ]]; then
+  echo "error: manifest/summary mismatch for checks.milestoneClosure" >&2
+  exit 1
+fi
+if [[ "${manifest_check_naming_lock}" != "PASS" ]]; then
+  echo "error: manifest checks.namingLock must be PASS" >&2
+  exit 1
+fi
+if [[ "${manifest_check_milestone_closure}" != "PASS" ]]; then
+  echo "error: manifest checks.milestoneClosure must be PASS" >&2
   exit 1
 fi
 
