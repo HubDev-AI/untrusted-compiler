@@ -1216,6 +1216,50 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M12 Naming Alignment and Ecosystem Lock".
 - Update impacted chapters to keep command/file/module names consistent with locked naming contract.
 
+## M13 - Operational Confidence and Promotion Workflow
+### Trigger condition
+- Start after M9/M10/M11/M12 stabilization slices are green in CI and release-gate artifacts are deterministic.
+
+### Scope decision (locked for M13)
+- Primary scope: performance consistency hardening + promotion workflow enforceability.
+- Included tracks:
+  - release promotion playbook and verification flow,
+  - scheduled lightweight live benchmark execution on scoped impl/endpoint set,
+  - explain-map coverage expansion for remaining high-signal policy/audit finding IDs.
+- Deferred out of M13:
+  - deep replay IO stubbing architecture expansion (candidate for M14),
+  - large editor UX feature expansions beyond current quick-fix coverage.
+
+### Build tasks
+- Formalize promotion workflow contract:
+  - define required release artifacts/identity stamps,
+  - bind `release-alpha-gate` + `verify-release-promotion-inputs` to promote-ready checklist.
+- Add scheduled benchmark workflow:
+  - run scoped live benchmark set on schedule (small impl/endpoint matrix),
+  - publish artifacts and markdown summary for trend tracking.
+- Add benchmark regression guardrails:
+  - establish baseline thresholds for key endpoints (`p99`, achieved ratio),
+  - emit deterministic pass/fail signals for threshold breaches.
+- Extend `sec4 explain` policy/audit finding coverage:
+  - map additional finding IDs used by `sec4 audit` severity output.
+
+### First M13 slice (M13-S1) acceptance criteria
+- A documented promotion playbook exists and references concrete scripts/workflows.
+- Scheduled benchmark workflow exists and runs scoped live checks with artifact upload.
+- At least one deterministic regression threshold check is implemented for scheduled benchmark output.
+
+### Exit criteria
+- Promotion flow is documented and executable without manual interpretation gaps.
+- Scheduled benchmark signals are available and trend-comparable over time.
+- Regression threshold checks can fail workflow runs deterministically.
+- Explain mappings cover priority policy/audit finding IDs used in current posture reports.
+
+### Docs/book outputs
+- Chapter: "M13 Operational Confidence Scope and Plan".
+- Chapter: "Release Promotion Playbook".
+- Chapter: "Scheduled Benchmark Trend Workflow".
+- Chapter: "M13 Slice: Benchmark Regression Threshold Guard".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -1306,11 +1350,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
-2. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
-3. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
-4. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
-5. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
+1. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
+2. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
+3. Implement first M13 regression threshold guard for scheduled benchmark outputs.
+4. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
+5. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
 
 ---
 
