@@ -104,5 +104,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `136-m7-db-tx-call-shape-hardening.md`
 - `137-m7-db-tx-context-argument-type-hardening.md`
 - `138-m7-db-sink-context-argument-type-hardening.md`
+- `139-m7-net-sink-context-argument-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

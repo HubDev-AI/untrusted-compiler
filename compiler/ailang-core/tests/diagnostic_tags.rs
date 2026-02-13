@@ -297,6 +297,22 @@ fn bad(net: NetCap) effects { net } -> Int {
 }
 
 #[test]
+fn net_sink_context_type_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad(net: NetCap, url: PublicUrl) effects { net } -> Int {
+  httpClient.get(1, net, url);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn fs_sink_shape_diagnostic_has_security_sink_tags() {
     let source = r#"
 fn bad(fs: FsCap) effects { fs.write } -> Int {

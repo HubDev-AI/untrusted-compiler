@@ -1,0 +1,4 @@
+fn bad(net: InternalNetCap, url: InternalUrl) effects { net } -> Int {
+  httpClient.getInternal(1, net, url);
+  0
+}

@@ -1767,7 +1767,7 @@ impl Analyzer {
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
-        self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
+        self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args);
@@ -2716,7 +2716,13 @@ impl Analyzer {
         }
     }
 
-    fn enforce_net_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_net_sink_call_shapes(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         let (is_target, valid_shape, note) = if is_net_public_call(callee_name) {
             (
                 true,
@@ -2733,20 +2739,44 @@ impl Analyzer {
             (false, true, "")
         };
 
-        if !is_target || valid_shape {
+        if !is_target {
             return;
         }
 
-        self.diagnostics.push(
-            Diagnostic::error(
-                "E4001",
-                "net sink call has invalid argument shape",
-                span,
-            )
-            .with_tag("security")
-            .with_tag("sink")
-            .with_note(note),
-        );
+        if !valid_shape {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "net sink call has invalid argument shape",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(note),
+            );
+            return;
+        }
+
+        if args.len() == 3 && !arg_types[0].is_named("Ctx") {
+            let usage = if is_net_public_call(callee_name) {
+                "httpClient.get(ctx, netCap, url)"
+            } else {
+                "httpClient.getInternal(ctx, internalNetCap, url)"
+            };
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "net sink context argument must be `Ctx`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note(format!(
+                    "use `{usage}` for context-first `{callee_name}` calls"
+                )),
+            );
+        }
     }
 
     fn enforce_fs_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {

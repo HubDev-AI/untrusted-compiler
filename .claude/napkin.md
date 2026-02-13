@@ -135,3 +135,4 @@
 - Added `db.tx` call-shape hardening so only `(dbCap)` and `(ctx, dbCap)` forms are accepted, with capability-tagged diagnostics and matching semantic/tag fixture coverage.
 - Added `db.tx` context-first type hardening: two-argument form now requires `Ctx` in argument 1, with capability-tagged diagnostics and dedicated semantic/tag fixture coverage.
 - Added DB sink context-first type hardening for `db.exec`, `db.execTx`, and `db.queryOne`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
+- Added net sink context-first type hardening for `httpClient.get` and `httpClient.getInternal`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.

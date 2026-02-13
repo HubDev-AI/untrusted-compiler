@@ -1,0 +1,4 @@
+fn bad(net: NetCap, url: PublicUrl) effects { net } -> Int {
+  httpClient.get(1, net, url);
+  0
+}
