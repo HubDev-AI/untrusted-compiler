@@ -1058,6 +1058,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Language Server Operations Guide".
 - Chapter: "M11 Slice: Code-Action Effect-Declaration Edit".
 - Chapter: "M11 Slice: Unopened-Scan Toggle".
+- Chapter: "M11 Slice: Effect Quickfix Append and De-duplicate".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
