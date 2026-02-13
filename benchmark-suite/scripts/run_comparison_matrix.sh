@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls node,go,rust] [--sec-audit path]
+usage: $0 [--dry-run] [--impls node,go,rust,c] [--sec-audit path]
 
 Runs benchmark profiles for each implementation, builds per-impl reports,
 then emits compare-matrix and markdown report artifacts.
@@ -69,7 +69,7 @@ fi
 
 is_supported_impl() {
   case "$1" in
-    node|go|rust)
+    node|go|rust|c)
       return 0
       ;;
     *)
@@ -112,6 +112,13 @@ start_service() {
       (
         cd "$service_dir"
         PORT=8080 cargo run --quiet
+      ) &
+      ;;
+    c)
+      (
+        cd "$service_dir"
+        cc -O2 -std=c11 server.c -o c-bench-server
+        PORT=8080 ./c-bench-server
       ) &
       ;;
   esac

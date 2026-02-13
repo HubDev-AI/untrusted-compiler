@@ -39,6 +39,12 @@ if ! grep -q 'publish_report.sh' <<<"$out"; then
   exit 1
 fi
 
+c_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls c)"
+if ! grep -q '=== impl=c ===' <<<"$c_out"; then
+  echo "missing c implementation header" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_comparison_matrix.sh" --dry-run --impls unknown >/dev/null 2>&1; then
   echo "expected unsupported implementation to fail" >&2
   exit 1
