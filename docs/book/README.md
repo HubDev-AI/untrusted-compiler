@@ -328,5 +328,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `361-m14-replay-capture-compatibility-contract-gate.md`
 - `362-m14-replay-cli-compatibility-command.md`
 - `363-m14-sec4-replay-cli-command-contract-hardening.md`
+- `364-m14-replay-stub-registry-contract-bootstrap.md`
 
 As milestones progress, chapters will be added and linked from this index.

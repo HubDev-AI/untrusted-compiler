@@ -1,0 +1,37 @@
+{
+  "version": "0.1",
+  "stubs": {
+    "net": [
+      {
+        "request": {
+          "method": "GET",
+          "url": "https://example.com/health",
+          "bodySha256": "empty"
+        },
+        "response": {
+          "status": 200,
+          "bodyBase64": "eyJvayI6dHJ1ZX0=",
+          "truncated": false
+        }
+      },
+      {
+        "request": {
+          "method": "POST",
+          "url": "https://example.com/users",
+          "bodySha256": "f9b0078b5df596d2ea19010c001bbd009e651de2beed737d75782c9b10fdbf7c"
+        },
+        "response": {
+          "status": 201,
+          "bodySha256": "8f434346648f6b96df89dda901c5176b10a6d83961fba9f6297e98495dca0c91",
+          "truncated": false
+        }
+      }
+    ],
+    "db": [],
+    "fs": []
+  },
+  "redaction": {
+    "headers": ["authorization", "cookie", "set-cookie"],
+    "jsonPaths": ["$.password", "$.token"]
+  }
+}
