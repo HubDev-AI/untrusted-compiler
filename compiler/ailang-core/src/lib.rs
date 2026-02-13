@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod audit;
+pub mod build_metadata;
 pub mod c_backend;
 pub mod diagnostics;
 pub mod lexer;
@@ -15,6 +16,9 @@ pub use audit::{
     render_security_audit_text, run_security_audit, run_security_audit_with_baseline,
     should_fail, summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity,
     AuditTrend,
+};
+pub use build_metadata::{
+    compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
 };
 pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
 pub use diagnostics::{Diagnostic, Severity, Span};
@@ -49,6 +53,14 @@ pub fn write_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(
 
 pub fn validate_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(), Diagnostic> {
     manifest::validate_lockfile_stub(project_root, manifest)
+}
+
+pub fn write_build_metadata(
+    project_root: &Path,
+    manifest: &Manifest,
+    policy: &Policy,
+) -> Result<PathBuf, Diagnostic> {
+    build_metadata::write_build_metadata(project_root, manifest, policy)
 }
 
 pub fn parse_entry_ast(

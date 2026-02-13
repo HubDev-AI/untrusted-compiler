@@ -171,5 +171,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `204-m11-language-server-stdio-bootstrap.md`
 - `205-m9-diagnostic-source-snippets-and-tag-context.md`
 - `206-m9-locked-build-and-deterministic-lockfile-validation.md`
+- `207-m9-reproducible-build-metadata-emission.md`
 
 As milestones progress, chapters will be added and linked from this index.

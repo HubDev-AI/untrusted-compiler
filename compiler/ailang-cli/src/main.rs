@@ -2,7 +2,8 @@ use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
     emit_runtime_header, emit_runtime_source, render_security_audit_text, summarize_history_window,
     run_security_audit_with_baseline, should_fail, validate_lockfile_stub, write_lockfile_stub,
-    write_security_map, AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
+    write_build_metadata, write_security_map, AuditHistoryWindowSummary, AuditReport,
+    AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
@@ -545,6 +546,21 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result
                 return Err(1);
             }
 
+            let policy = match ailang_core::policy::load_policy(path) {
+                Ok(policy) => policy,
+                Err(diagnostics) => {
+                    print_diagnostics(&diagnostics);
+                    return Err(1);
+                }
+            };
+            let build_metadata_path = match write_build_metadata(path, &manifest, &policy) {
+                Ok(path) => path,
+                Err(diag) => {
+                    print_diagnostics(&[diag]);
+                    return Err(1);
+                }
+            };
+
             let mir = emit.map(|_| ailang_core::lower_program_to_mir(&program));
             let c_source = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
                 Some(emit_c_program(
@@ -566,6 +582,7 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result
                 } else {
                     println!("wrote lockfile stub: {}", path.join("ailang.lock").display());
                 }
+                println!("wrote build metadata: {}", build_metadata_path.display());
             }
 
             match emit {

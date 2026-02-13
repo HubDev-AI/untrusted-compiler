@@ -1,3 +1,4 @@
+use crate::build_metadata::{compiler_hash, runtime_hash};
 use crate::policy::Policy;
 use crate::security_map::{SecurityAllow, SecurityMap, TagAttr};
 use serde::{Deserialize, Serialize};
@@ -1064,8 +1065,8 @@ pub fn run_security_audit_with_baseline(
             env: policy.env.clone(),
         },
         build: AuditBuildSummary {
-            compiler_hash: format!("cpl_{}", env!("CARGO_PKG_VERSION").replace('.', "_")),
-            runtime_hash: "rt_v0_stub".to_string(),
+            compiler_hash: compiler_hash(),
+            runtime_hash: runtime_hash(),
             time_ms: now_ms(),
         },
         posture,
