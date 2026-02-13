@@ -998,6 +998,21 @@ Implementation order is intentionally linear to reduce thrash:
   - grammar registration via `tree-sitter-ailang`
 - Add tree-sitter grammar and baseline queries (`highlights`, optional `outline`/`indent`).
 
+### Progress so far
+- Completed:
+  - `ailang-language-server` stdio bootstrap.
+  - compiler-backed diagnostics (`didOpen`/`didChange`/`didClose`).
+  - LSP features: definition, hover, references, implementation, completion.
+  - rename workflow: `prepareRename` + `rename` (document-local).
+  - baseline quick-fix code actions keyed by security/effects diagnostic codes.
+  - `zed-extension` scaffold (language config + LSP wiring contract).
+  - `tree-sitter-ailang` scaffold with baseline highlight queries.
+- Remaining:
+  - incremental analysis and explicit request budget enforcement.
+  - multi-file references/rename determinism.
+  - richer code-action edits (auto-fix text rewrites).
+  - production grammar coverage and pinned published grammar revision.
+
 ### Exit criteria
 - Zed can open `.ai` files with working diagnostics, go-to-definition, hover, and completion.
 - Rename and references behave deterministically on multi-file test fixtures.
@@ -1010,6 +1025,15 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "LSP Protocol Mapping and Compiler Service API".
 - Chapter: "Zed Extension and Tree-sitter Integration Guide".
 - Chapter: "M11 Slice: Language Server Stdio Bootstrap".
+- Chapter: "M11 Slice: Compiler-Backed LSP Diagnostics".
+- Chapter: "M11 Slice: Definition and Hover Navigation".
+- Chapter: "M11 Slice: References Provider".
+- Chapter: "M11 Slice: Implementation Provider".
+- Chapter: "M11 Slice: Completion Provider".
+- Chapter: "M11 Slice: Prepare-Rename and Rename".
+- Chapter: "M11 Slice: Code-Action Quickfix Baseline".
+- Chapter: "M11 Slice: Zed Extension Scaffold".
+- Chapter: "M11 Slice: Tree-Sitter Grammar Scaffold".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
