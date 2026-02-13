@@ -27,6 +27,7 @@ jobs:
           benchmark-suite/scripts/test_preflight.sh
           benchmark-suite/scripts/test_compare_matrix.sh
           benchmark-suite/scripts/test_publish_report.sh
+          benchmark-suite/scripts/test_check_regression_thresholds.sh
           benchmark-suite/scripts/test_run_comparison_matrix.sh
           benchmark-suite/scripts/test_run_step_matrix.sh
           benchmark-suite/scripts/test_run_full_benchmark_suite.sh

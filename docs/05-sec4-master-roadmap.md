@@ -523,6 +523,10 @@ Roadmap impact:
 - Benchmark CI coverage now includes deterministic dry-run orchestrator checks:
   - `.github/workflows/benchmark-smoke.yml` now runs `test_run_comparison_matrix.sh`, `test_run_step_matrix.sh`, and `test_run_full_benchmark_suite.sh`,
   - orchestrator dry-run contracts are now validated in CI without requiring live benchmark services.
+- M13-S1 benchmark trend checks have started:
+  - `.github/workflows/benchmark-trend.yml` schedules scoped live benchmark execution (`node + ping`) and supports manual dispatch,
+  - `benchmark-suite/scripts/check_regression_thresholds.sh` enforces first threshold guard (`p99` and target coverage) on `compare-matrix.json`,
+  - benchmark smoke CI now includes `test_check_regression_thresholds.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1351,10 +1355,10 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
-2. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
-3. Implement first M13 regression threshold guard for scheduled benchmark outputs.
-4. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
-5. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
+2. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
+3. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
+4. Add release artifact promotion checks into a publish-ready checklist chapter with clear operator runbook steps.
+5. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
 
 ---
 
