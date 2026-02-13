@@ -1,0 +1,4 @@
+fn bad(param: Untrusted<String>) -> Int {
+  sql.q("SELECT 1", param);
+  0
+}

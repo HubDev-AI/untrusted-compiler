@@ -172,3 +172,4 @@
 - Added `err.withDetail` base-error argument hardening so the first argument must be `StdError`, while preserving key/value secret/taint checks and adding dedicated semantic/tag fixtures.
 - Added `json.encode` schema-descriptor hardening so schema arguments must be explicit `Schema<_>` types (not generic placeholders like `String`), with schema-tagged diagnostics and dedicated fixture/tag coverage.
 - Added `json.decode` schema-descriptor hardening so decode schema arguments must be explicit `Schema<_>` values (not placeholders like `String`), with schema-tagged diagnostics and dedicated fixture/tag coverage.
+- Added `sql.q` params value-safety hardening so param payloads cannot be `Secret<_>` or `Untrusted<_>`, with tagged diagnostics and dedicated semantic/tag fixtures.

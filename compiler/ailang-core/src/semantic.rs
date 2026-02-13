@@ -2922,6 +2922,30 @@ impl Analyzer {
                 .with_note("use SQL template strings such as `\"SELECT ...\"`"),
             );
         }
+
+        if arg_types[1].contains_secret() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sql.q params argument cannot be `Secret<_>`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note("reveal/redact secrets before building SQL parameters"),
+            );
+        } else if arg_types[1].contains_untrusted() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sql.q params argument cannot be `Untrusted<_>`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("taint")
+                .with_note("validate untrusted values before building SQL parameters"),
+            );
+        }
     }
 
     fn enforce_db_query_call_shapes(

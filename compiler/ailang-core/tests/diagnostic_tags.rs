@@ -458,6 +458,44 @@ fn bad(db: DbCap) effects { db.write } -> Int {
 }
 
 #[test]
+fn sql_q_params_secret_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(secret: Secret<String>) -> Int {
+  sql.q("SELECT 1", secret);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "sql.q params argument cannot be `Secret<_>`")
+        .expect("expected sql.q secret params diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
+fn sql_q_params_untrusted_diagnostic_has_security_taint_tags() {
+    let source = r#"
+fn bad(param: Untrusted<String>) -> Int {
+  sql.q("SELECT 1", param);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "sql.q params argument cannot be `Untrusted<_>`")
+        .expect("expected sql.q untrusted params diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "taint"));
+}
+
+#[test]
 fn db_tx_shape_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad(db: DbCap) effects { db.tx } -> Int {

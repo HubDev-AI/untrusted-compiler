@@ -1,0 +1,3 @@
+error[E4001]: sql.q params argument cannot be `Untrusted<_>`
+  --> invalid_sql_q_params_untrusted.ai:2:21
+  note: validate untrusted values before building SQL parameters

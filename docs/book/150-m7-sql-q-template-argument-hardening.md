@@ -57,4 +57,5 @@ fn buildQuery() -> SqlQuery {
 
 - Tradeoff: placeholder-style `sql.q(1, 2)` examples no longer pass semantic checks.
 - Next:
+  - reject `Secret<_>`/`Untrusted<_>` SQL param payloads (`173-m7-sql-q-params-value-safety-hardening.md`).
   - tighten second-argument typing toward a dedicated parameter-list/`DbParam` surface once that type model is finalized.
