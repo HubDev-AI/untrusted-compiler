@@ -522,6 +522,32 @@ fn boot(repo: DbCap) -> Int {
 }
 
 #[test]
+fn security_map_resolves_forwarded_crypto_namespace_callable() {
+    let source = r#"
+fn cryptoNs() {
+  crypto
+}
+
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
+  let c = cryptoNs();
+  c.ctEq(a, b);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "crypto.ctEq"
+            && call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["left_secret".to_string(), "right_secret".to_string()])
+    }));
+}
+
+#[test]
 fn parse_allow_annotations_reads_valid_annotation() {
     let source = r#"
 @allow(

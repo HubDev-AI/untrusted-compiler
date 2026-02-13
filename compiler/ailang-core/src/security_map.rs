@@ -1930,6 +1930,7 @@ fn is_tagged_call_namespace(name: &str) -> bool {
         name,
         "auth"
             | "cors"
+            | "crypto"
             | "csrf"
             | "db"
             | "fs"

@@ -182,3 +182,4 @@
 - Narrowed `req.json` schema descriptor acceptance to `String` (bridge mode) or typed `Schema<_>` only, rejecting unrelated placeholder types with schema-tagged diagnostics.
 - Narrowed JSON response sink schema descriptors (`res.json`/`res.ok`/`res.okMeta`) to `String` or `Schema<_>`, rejecting unrelated placeholders with `E4004` schema diagnostics.
 - Added `security_map` coverage for `crypto.ctEq`/`crypto_ct_eq` (gate tag + arg roles + symbol registry), and validated via dedicated `security_map` tests.
+- New intrinsic namespaces also need registration in `is_tagged_call_namespace`; otherwise forwarded namespace aliases lose call tagging in `security_map`.
