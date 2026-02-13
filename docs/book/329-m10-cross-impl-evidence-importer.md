@@ -29,6 +29,9 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
   - direct mode: `--matrix <path>` for local/offline import
 - Enforces matrix coverage for required impl IDs:
   - `sec4`, `go`, `node`, `rust`
+- Enforces benchmark evidence quality before import:
+  - strict by default: `check-benchmark-evidence-quality.sh --fail-on-warning`
+  - optional local override: `--quality-allow-warning`
 - Writes canonical target:
   - `benchmark-suite/results/summaries/compare-matrix.json`
 
@@ -38,6 +41,7 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
   - dry-run command composition
   - successful import from a valid matrix fixture
   - rejection of matrix inputs that do not include required impl coverage
+  - strict-quality rejection for non-constant-rate leader matrices, with explicit opt-out behavior
 
 4. Smoke CI integration:
 - `.github/workflows/benchmark-smoke.yml` now runs:

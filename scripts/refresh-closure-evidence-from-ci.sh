@@ -118,6 +118,9 @@ if [ -n "${matrix_source}" ]; then
 else
   m10_cmd+=(--out-dir "${m10_out_dir}")
 fi
+if [ "${quality_fail_on_warning}" = "false" ]; then
+  m10_cmd+=(--quality-allow-warning)
+fi
 
 m13_cmd=(
   "${repo_root}/benchmark-suite/scripts/update_trend_note_from_ci.sh"

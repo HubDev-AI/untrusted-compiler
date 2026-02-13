@@ -3,9 +3,9 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--repo owner/repo] [--workflow benchmark-cross-impl-evidence.yml] [--artifact-name benchmark-cross-impl-evidence] [--out-dir <path>] [--matrix <path>] [--target <path>] [--dry-run]
+usage: $0 [--repo owner/repo] [--workflow benchmark-cross-impl-evidence.yml] [--artifact-name benchmark-cross-impl-evidence] [--out-dir <path>] [--matrix <path>] [--target <path>] [--quality-fail-on-warning] [--quality-allow-warning] [--dry-run]
 
-Fetches latest cross-impl benchmark artifact (unless --matrix is provided), validates compare-matrix coverage, and writes target matrix path.
+Fetches latest cross-impl benchmark artifact (unless --matrix is provided), validates compare-matrix coverage + quality posture, and writes target matrix path.
 USAGE
 }
 
@@ -18,6 +18,7 @@ artifact_name="benchmark-cross-impl-evidence"
 out_dir="${repo_root}/benchmark-suite/results/cross-impl-download"
 matrix_path=""
 target_path="${repo_root}/benchmark-suite/results/summaries/compare-matrix.json"
+quality_fail_on_warning="true"
 dry_run="false"
 
 while [ "$#" -gt 0 ]; do
@@ -70,6 +71,14 @@ while [ "$#" -gt 0 ]; do
       target_path="${1#--target=}"
       shift
       ;;
+    --quality-fail-on-warning)
+      quality_fail_on_warning="true"
+      shift
+      ;;
+    --quality-allow-warning)
+      quality_fail_on_warning="false"
+      shift
+      ;;
     --dry-run)
       dry_run="true"
       shift
@@ -96,6 +105,11 @@ if [ "${dry_run}" = "true" ]; then
     echo "run: find ${out_dir} -type f -name compare-matrix.json"
   fi
   echo "run: validate matrix includes impls sec4,go,node,rust"
+  quality_cmd=("${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${matrix_path:-<resolved-matrix-path>}")
+  if [ "${quality_fail_on_warning}" = "true" ]; then
+    quality_cmd+=(--fail-on-warning)
+  fi
+  echo "run: ${quality_cmd[*]}"
   echo "run: copy matrix to ${target_path}"
   exit 0
 fi
@@ -144,6 +158,12 @@ if ! jq -e '
   echo "matrix does not include required impl set (sec4/go/node/rust): ${matrix_path}" >&2
   exit 1
 fi
+
+quality_cmd=("${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${matrix_path}")
+if [ "${quality_fail_on_warning}" = "true" ]; then
+  quality_cmd+=(--fail-on-warning)
+fi
+"${quality_cmd[@]}"
 
 mkdir -p "$(dirname "${target_path}")"
 cp "${matrix_path}" "${target_path}"

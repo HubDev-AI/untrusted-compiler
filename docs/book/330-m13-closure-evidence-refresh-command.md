@@ -33,6 +33,7 @@ Before this slice, each gate had its own updater command. Operators had to run t
   - `--entry <path>` for M13 trend-entry source
 - Strict evidence-quality mode is default:
   - internally runs `check-benchmark-evidence-quality.sh --fail-on-warning`
+  - propagates strict/default quality mode into M10 importer (`update_cross_impl_matrix_from_ci.sh`)
   - use `--quality-allow-warning` only for local fallback/debug scenarios
 - `--dry-run` for command-plan preview.
 
