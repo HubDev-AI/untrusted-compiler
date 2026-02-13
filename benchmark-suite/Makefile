@@ -2,6 +2,7 @@
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
+ENDPOINTS ?= ping,decode,users-post,users-get
 BASE_URL ?= http://127.0.0.1:8080
 ENDPOINT ?= ping
 
@@ -18,7 +19,7 @@ help:
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users-get Run users read benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get)"
-	@echo "  bench-matrix Run cross-impl benchmark orchestrator (ailang,node,go,rust by default)"
+	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
@@ -63,10 +64,10 @@ bench-profile:
 	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
 
 bench-matrix:
-	scripts/run_comparison_matrix.sh --impls "$(IMPLS)"
+	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
 bench-matrix-dry:
-	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)"
+	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json

@@ -49,6 +49,16 @@ if ! grep -q 'publish_report.sh' <<<"$out"; then
   exit 1
 fi
 
+ping_only_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls=node --endpoints=ping)"
+if ! grep -q 'run_profile.sh --dry-run node ping' <<<"$ping_only_out"; then
+  echo "missing ping command in endpoint-filtered dry-run" >&2
+  exit 1
+fi
+if grep -q 'run_profile.sh --dry-run node decode' <<<"$ping_only_out"; then
+  echo "unexpected decode command in endpoint-filtered dry-run" >&2
+  exit 1
+fi
+
 c_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls c)"
 if ! grep -q '=== impl=c ===' <<<"$c_out"; then
   echo "missing c implementation header" >&2

@@ -50,6 +50,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-matrix-dry`
    - `make -C benchmark-suite bench-matrix`
    - default run includes `ailang,node,go,rust`; override with `IMPLS=ailang,node,go,rust,c`
+   - override endpoint set with `ENDPOINTS=ping,decode` for focused runs
 12. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
 13. Validate cross-impl service contract parity:

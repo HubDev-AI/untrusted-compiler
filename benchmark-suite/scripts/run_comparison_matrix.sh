@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls ailang,node,go,rust,c] [--sec-audit path]
+usage: $0 [--dry-run] [--impls ailang,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
 
 Runs benchmark profiles for each implementation, builds per-impl reports,
 then emits compare-matrix and markdown report artifacts.
@@ -12,6 +12,7 @@ USAGE
 
 dry_run="false"
 impls_csv="ailang,node,go,rust"
+endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
 
 while [ "$#" -gt 0 ]; do
@@ -30,6 +31,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --impls=*)
       impls_csv="${1#--impls=}"
+      shift
+      ;;
+    --endpoints)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      endpoints_csv="$2"
+      shift 2
+      ;;
+    --endpoints=*)
+      endpoints_csv="${1#--endpoints=}"
       shift
       ;;
     --sec-audit)
@@ -77,9 +90,26 @@ if [ "${#impls[@]}" -eq 0 ]; then
   exit 2
 fi
 
+IFS=',' read -r -a endpoints <<< "$endpoints_csv"
+if [ "${#endpoints[@]}" -eq 0 ]; then
+  echo "no endpoints provided" >&2
+  exit 2
+fi
+
 is_supported_impl() {
   case "$1" in
     ailang|node|go|rust|c)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_supported_endpoint() {
+  case "$1" in
+    ping|decode|users-post|users-get)
       return 0
       ;;
     *)
@@ -93,6 +123,15 @@ for raw_impl in "${impls[@]}"; do
   [ -z "$normalized" ] && continue
   if ! is_supported_impl "$normalized"; then
     echo "unsupported implementation for orchestrator: ${normalized}" >&2
+    exit 2
+  fi
+done
+
+for raw_endpoint in "${endpoints[@]}"; do
+  normalized="${raw_endpoint// /}"
+  [ -z "$normalized" ] && continue
+  if ! is_supported_endpoint "$normalized"; then
+    echo "unsupported endpoint for orchestrator: ${normalized}" >&2
     exit 2
   fi
 done
@@ -176,10 +215,11 @@ for impl in "${impls[@]}"; do
 
   if [ "$dry_run" = "true" ]; then
     echo "start: ${impl} service on :${bench_port}"
-    echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ping ${base_url}"
-    echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} decode ${base_url}"
-    echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} users-post ${base_url}"
-    echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} users-get ${base_url}"
+    for raw_endpoint in "${endpoints[@]}"; do
+      endpoint="${raw_endpoint// /}"
+      [ -z "$endpoint" ] && continue
+      echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ${endpoint} ${base_url}"
+    done
     if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
       echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json ${sec_audit_path}"
     else
@@ -214,10 +254,11 @@ for impl in "${impls[@]}"; do
     exit 1
   fi
 
-  "${root_dir}/scripts/run_profile.sh" "$impl" ping "$base_url"
-  "${root_dir}/scripts/run_profile.sh" "$impl" decode "$base_url"
-  "${root_dir}/scripts/run_profile.sh" "$impl" users-post "$base_url"
-  "${root_dir}/scripts/run_profile.sh" "$impl" users-get "$base_url"
+  for raw_endpoint in "${endpoints[@]}"; do
+    endpoint="${raw_endpoint// /}"
+    [ -z "$endpoint" ] && continue
+    "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
+  done
   if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
     "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path"
   else
