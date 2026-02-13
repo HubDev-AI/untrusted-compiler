@@ -192,3 +192,4 @@
 - Window trend summaries are significantly more useful when anchored with oldest/latest policy hash + timestamp; include range metadata in exported payloads.
 - For dual text/json CLI outputs, always add routing tests per mode so auxiliary lines never contaminate JSON stdout contracts.
 - If CLI logic starts modeling audit semantics (not just I/O), move that model into `ailang-core` early to avoid parallel behavior drift.
+- For trend features, attach computed window summaries to the primary report object before any stdout/file emission to avoid split-brain artifacts.

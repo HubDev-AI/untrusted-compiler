@@ -911,6 +911,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M8 Slice: sec.audit History-Window Range Metadata".
 - Chapter: "M8 Slice: sec.audit History-Window Output-Mode Validation".
 - Chapter: "M8 Slice: Core History-Window Summary Model".
+- Chapter: "M8 Slice: sec.audit historyWindow Report Embedding".
 
 ## M9 - Release Hardening
 ### Build tasks
@@ -1098,7 +1099,7 @@ Day 14:
 
 1. Extend callable/member canonicalization beyond capability namespace seeding into user-defined capability-object function fields and other non-stdlib callable-value shapes.
 2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
-3. Fold history-window metrics into core audit artifacts (core summary model + CLI adoption are in place; next is embedding in canonical report schema when format window allows).
+3. Fold history-window metrics into core audit artifacts (core model + canonical report embedding are in place; next is deciding long-term persistence/compat strategy for multi-run aggregates).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

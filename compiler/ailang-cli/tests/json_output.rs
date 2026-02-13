@@ -259,6 +259,23 @@ fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
         second_report.get("summary").is_some(),
         "audit report should still be emitted on stdout"
     );
+    let history_window = second_report
+        .get("historyWindow")
+        .expect("history-window run should include historyWindow in report");
+    assert_eq!(
+        history_window
+            .get("window")
+            .and_then(Value::as_i64)
+            .expect("historyWindow.window should be present"),
+        2
+    );
+    assert_eq!(
+        history_window
+            .get("reports")
+            .and_then(Value::as_i64)
+            .expect("historyWindow.reports should be present"),
+        2
+    );
 
     let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
     assert!(

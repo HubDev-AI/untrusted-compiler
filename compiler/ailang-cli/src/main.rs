@@ -196,11 +196,15 @@ fn cmd_sec_audit(
                 } else {
                     None
                 };
-                let report = run_security_audit_with_baseline(
+                let mut report = run_security_audit_with_baseline(
                     &policy,
                     &security_map,
                     baseline_report.as_ref(),
                 );
+                if let (Some(history_dir_path), Some(window)) = (history_dir_path, history_window) {
+                    report.history_window =
+                        compute_history_window_summary(history_dir_path, window, &report)?;
+                }
                 match format {
                     AuditOutputFormat::Text => println!("{}", render_security_audit_text(&report)),
                     AuditOutputFormat::Json => {
@@ -223,13 +227,6 @@ fn cmd_sec_audit(
                 } else {
                     None
                 };
-                let history_window_summary = if let (Some(history_dir_path), Some(window)) =
-                    (history_dir_path, history_window)
-                {
-                    compute_history_window_summary(history_dir_path, window)?
-                } else {
-                    None
-                };
 
                 if let Some(baseline_source) = baseline_source {
                     print_aux_line(
@@ -247,11 +244,11 @@ fn cmd_sec_audit(
                     format,
                     &format!("security map: {}", security_map_path.display()),
                 );
-                if let Some(summary) = history_window_summary.as_ref() {
+                if let Some(summary) = report.history_window.as_ref() {
                     print_history_window_summary(format, summary);
                 }
                 if let Some(write_history_summary_path) = write_history_summary_path {
-                    let Some(summary) = history_window_summary.as_ref() else {
+                    let Some(summary) = report.history_window.as_ref() else {
                         eprintln!("history-window summary not available to write");
                         return Err(2);
                     };
@@ -393,8 +390,12 @@ fn load_recent_history_reports(
         return Ok(Vec::new());
     }
 
+    if window == 0 {
+        return Ok(Vec::new());
+    }
+
     candidates.sort();
-    let keep = window.max(1);
+    let keep = window;
     let start = candidates.len().saturating_sub(keep);
     let mut reports = Vec::new();
     for path in candidates.into_iter().skip(start) {
@@ -407,9 +408,11 @@ fn load_recent_history_reports(
 fn compute_history_window_summary(
     history_dir: &Path,
     window: usize,
+    current_report: &AuditReport,
 ) -> Result<Option<AuditHistoryWindowSummary>, i32> {
-    let reports = load_recent_history_reports(history_dir, window)?;
-    Ok(summarize_history_window(&reports, window.max(1)))
+    let mut reports = load_recent_history_reports(history_dir, window.saturating_sub(1))?;
+    reports.push(current_report.clone());
+    Ok(summarize_history_window(&reports, window))
 }
 
 fn print_history_window_summary(format: AuditOutputFormat, summary: &AuditHistoryWindowSummary) {

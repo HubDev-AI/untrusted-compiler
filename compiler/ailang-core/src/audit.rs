@@ -216,6 +216,8 @@ pub struct AuditReport {
     pub summary: AuditSummary,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trend: Option<AuditTrend>,
+    #[serde(rename = "historyWindow", skip_serializing_if = "Option::is_none")]
+    pub history_window: Option<AuditHistoryWindowSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1076,6 +1078,7 @@ pub fn run_security_audit_with_baseline(
             finding_counts,
         },
         trend: None,
+        history_window: None,
     };
 
     report.trend = baseline.map(|baseline_report| compute_trend(&report, baseline_report));
@@ -1302,6 +1305,21 @@ pub fn render_security_audit_text(report: &AuditReport) -> String {
                 trend.resolved_finding_ids.join(", ")
             ));
         }
+    }
+
+    if let Some(history_window) = &report.history_window {
+        lines.push(format!(
+            "HistoryWindow: reports={}/{}, oldestRisk={}, latestRisk={}, minRisk={}, maxRisk={}, riskDelta={}, avgRisk={:.2}, highestSeen={}",
+            history_window.reports,
+            history_window.window,
+            history_window.oldest_risk_score,
+            history_window.latest_risk_score,
+            history_window.min_risk_score,
+            history_window.max_risk_score,
+            history_window.risk_score_delta,
+            history_window.average_risk_score,
+            history_window.highest_severity_seen,
+        ));
     }
 
     lines.join("\n")
