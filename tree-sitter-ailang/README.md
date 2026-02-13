@@ -8,6 +8,9 @@ Included:
   - blocks/statements
   - identifiers, numbers, strings, comments
 - `queries/highlights.scm` with basic highlighting captures
+- `queries/indents.scm` with baseline block indentation hints
+- `queries/outline.scm` with function outline capture
+- `queries/textobjects.scm` with basic function textobjects
 - `package.json` with `generate`/`test` scripts
 
 ## Notes
