@@ -14,6 +14,7 @@ Measure end-to-end service behavior across identical implementations:
 ## Layout
 
 - `spec/`: endpoint contract, payloads, and DB schema
+  - includes canonical output artifact contract: `spec/artifact-contract-v0.1.md`
 - `services/`: per-language service implementations (to be added)
 - `load/wrk2/`: load scripts
 - `results/`: raw outputs, summaries, plots

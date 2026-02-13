@@ -265,5 +265,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `298-m12-benchmark-artifact-naming-and-schema-guard.md`
 - `299-m10-benchmark-smoke-ci-gate.md`
 - `300-m9-sec4-explain-exact-code-mappings.md`
+- `301-m10-benchmark-artifact-contract-spec.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -494,6 +494,9 @@ Roadmap impact:
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
 - `sec4 explain` now has exact-code mappings for key diagnostics (`E2003`, `E4004`, `E5001`, `E6001`) with direct chapter pointers.
+- Benchmark artifact schema/version contract is now centralized:
+  - `benchmark-suite/spec/artifact-contract-v0.1.md` defines canonical artifact filenames + key sets,
+  - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1277,7 +1280,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Lock benchmark artifact schema/version contracts in one canonical spec and align all M10 scripts/tests to that explicit schema file.
+1. Evolve benchmark artifact contract from markdown spec to machine-validated schema assets while keeping `artifact-contract-v0.1.md` as canonical human-readable reference.
 2. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
 3. Add CI-level benchmark smoke gate for selected M10 scripts (`preflight`, `compare_matrix`, `publish_report`) to catch contract drift early.
 4. Add release-profile validation that stamps and verifies naming-lock + policy profile IDs directly inside release summary artifacts.

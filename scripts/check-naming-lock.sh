@@ -204,6 +204,38 @@ check_benchmark_artifact_contract() {
   return "${failed}"
 }
 
+check_benchmark_contract_spec() {
+  local failed=0
+  local contract="benchmark-suite/spec/artifact-contract-v0.1.md"
+
+  if [[ ! -f "${contract}" ]]; then
+    echo "error: missing benchmark artifact contract spec: ${contract}" >&2
+    return 1
+  fi
+
+  local required_tokens=(
+    "Benchmark Artifact Contract v0.1"
+    "<impl>-report.json"
+    "compare-matrix.json"
+    "analysis.json"
+    "step-matrix.json"
+    "artifact-manifest.json"
+    "<impl>-service.log"
+    "\"version\": \"0.1\""
+    "selectedEndpoints"
+  )
+
+  local token
+  for token in "${required_tokens[@]}"; do
+    if ! rg -Fq -- "${token}" "${contract}"; then
+      echo "error: benchmark artifact contract spec missing token: ${token}" >&2
+      failed=1
+    fi
+  done
+
+  return "${failed}"
+}
+
 check_legacy_patterns
 require_contract_token "Untrusted<T>" "Untrusted<T>"
 require_contract_token "sec4 audit" "sec4 audit"
@@ -216,5 +248,6 @@ require_contract_token "ut/sec" "ut/sec"
 require_contract_token "path_suffixes\\s*=\\s*\\[\\s*\"ut\"\\s*\\]" "zed path_suffixes=[\"ut\"]"
 check_benchmark_impl_contract
 check_benchmark_artifact_contract
+check_benchmark_contract_spec
 
 echo "ok: naming lock check passed"
