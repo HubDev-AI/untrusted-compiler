@@ -145,6 +145,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `headers.value` now rejects CR/LF literal payloads at compile time to reduce response-splitting risk in constant header values.
   - `headers.name` now rejects invalid literal token characters (for example whitespace/colon) at compile time.
   - `cookie.build` now rejects CR/LF literal sequences in constant cookie values at compile time.
+  - `cookie.build` now also rejects invalid literal cookie-name token characters at compile time.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
   - `security_map` call records now include optional `arg_roles` metadata for explainability.
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
@@ -797,6 +798,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Header Value CRLF Literal Hardening".
 - Chapter: "M7 Slice: Header Name Literal Token Hardening".
 - Chapter: "M7 Slice: Cookie Value CRLF Literal Hardening".
+- Chapter: "M7 Slice: Cookie Name Literal Token Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

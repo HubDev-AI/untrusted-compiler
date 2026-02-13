@@ -151,5 +151,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `184-m7-header-value-crlf-literal-hardening.md`
 - `185-m7-header-name-literal-token-hardening.md`
 - `186-m7-cookie-value-crlf-literal-hardening.md`
+- `187-m7-cookie-name-literal-token-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

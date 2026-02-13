@@ -635,6 +635,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn cookie_build_name_literal_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad() -> Int {
+  cookie.build("sess ion;", "ok");
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "cookie.build name literal contains invalid characters")
+        .expect("expected cookie.build name literal diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn cookie_build_value_crlf_diagnostic_has_security_sink_tags() {
     let source = r#"
 fn bad() -> Int {

@@ -2874,6 +2874,25 @@ impl Analyzer {
             );
         }
 
+        if let ExprKind::String(name) = &args[0].kind {
+            let valid = !name.is_empty()
+                && name
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
+            if !valid {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "cookie.build name literal contains invalid characters",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note("cookie names should contain ASCII alphanumerics, '-' or '_' only"),
+                );
+            }
+        }
+
         if let ExprKind::String(value) = &args[1].kind {
             let contains_crlf = value.contains('\r')
                 || value.contains('\n')
