@@ -635,6 +635,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn cookie_build_value_crlf_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad() -> Int {
+  cookie.build("session", "\\n");
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "cookie.build value literal cannot contain CR/LF")
+        .expect("expected cookie.build CRLF diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn req_query_signature_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

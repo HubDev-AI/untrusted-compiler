@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  cookie.build("session", "\\n");
+  0
+}

@@ -2873,6 +2873,25 @@ impl Analyzer {
                 .with_note("use string cookie values"),
             );
         }
+
+        if let ExprKind::String(value) = &args[1].kind {
+            let contains_crlf = value.contains('\r')
+                || value.contains('\n')
+                || value.contains("\\r")
+                || value.contains("\\n");
+            if contains_crlf {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "cookie.build value literal cannot contain CR/LF",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note("cookie values must not include response-splitting sequences"),
+                );
+            }
+        }
     }
 
     fn enforce_request_source_signatures(
