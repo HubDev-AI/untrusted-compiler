@@ -1,0 +1,45 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "ping",
+      "compared": [
+        {
+          "impl": "sec4",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9800.0,
+          "p99": "4.20ms"
+        },
+        {
+          "impl": "go",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9700.0,
+          "p99": "4.80ms"
+        },
+        {
+          "impl": "node",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9000.0,
+          "p99": "7.50ms"
+        },
+        {
+          "impl": "rust",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9750.0,
+          "p99": "4.60ms"
+        }
+      ],
+      "leader": {
+        "impl": "sec4",
+        "endpoint": "ping",
+        "targetRps": 10000,
+        "requestsPerSec": 9800.0,
+        "p99": "4.20ms"
+      }
+    }
+  ]
+}

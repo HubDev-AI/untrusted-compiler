@@ -537,6 +537,10 @@ Historical implementation bullets below are retained as build history; strict ga
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
+- M10 cross-impl evidence import path is now wired for closure readiness:
+  - `.github/workflows/benchmark-cross-impl-evidence.yml` can be manually dispatched to run `sec4/node/go/rust` `ping+decode` and publish artifact `benchmark-cross-impl-evidence`.
+  - `benchmark-suite/scripts/update_cross_impl_matrix_from_ci.sh` imports the latest successful artifact (or explicit matrix path), validates required impl coverage (`sec4/go/node/rust`), and updates `benchmark-suite/results/summaries/compare-matrix.json`.
+  - benchmark smoke CI now validates the importer command contract via `benchmark-suite/scripts/test_update_cross_impl_matrix_from_ci.sh`.
 - `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy/audit finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`, `ALLOW_COUNT_HIGH`, `ALLOW_EXPIRY_WINDOW_ROLLUP`, `CORS_CREDENTIALS_WITH_WILDCARD`, `CORS_ANY_ORIGIN`, `CORS_REFLECT_ORIGIN_ENABLED`, `CORS_VARY_ORIGIN_MISSING`, `CSP_DISABLED`, `CSP_REPORT_ONLY`, `HSTS_DISABLED_IN_PROD`, `REFERRER_POLICY_WEAK`, `NOSNIFF_DISABLED`, `XFO_DISABLED`, `CSRF_REQUIRED_BUT_DISABLED`, `CSRF_PROTECTED_METHODS_INCOMPLETE`, `COOKIE_CROSS_SITE_WITHOUT_CORS_CREDS`, `COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN`, `COOKIE_SAMESITE_NONE_WITHOUT_SECURE`, `INTERNAL_NET_ENABLED_NO_ALLOWLIST`, `INTERNAL_NET_CALL_ALLOWLISTED`, `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`, `DNS_RESOLUTION_DISABLED`, `PUBLIC_EGRESS_NO_DOMAIN_POLICY`, `FS_ENABLED_NO_BASE_ALLOWLIST`, `SYMLINK_POLICY_WEAK`, `CAPTURE_REDACTION_INCOMPLETE`, `CAPTURE_ALL_IN_PROD`, `REPLAY_EFFECTS_ALLOW`, `LOG_STRUCTURED_ONLY_DISABLED`, `LOG_REMOTE_IP_ENABLED`, `LOG_USER_AGENT_ENABLED`, `SQL_RAW_ALLOWED_BY_POLICY`, `SQL_LIMIT_RULE_DISABLED`, `SQL_SELECT_WITHOUT_LIMIT`, `SECRETS_REVEAL_USED`, `SECRETS_REVEAL_ALLOWLISTED`) with direct chapter pointers.
 - `sec4 explain` now supports machine-readable output mode:
   - `sec4 explain <CODE> --format json` emits structured payload (`code`, `topic`, `summary`, `likelyActions`, `relatedCommands`, `docsPath`).
@@ -1122,6 +1126,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Benchmark Harness and Reproducibility Guide".
 - Chapter: "First Public Performance and Security Report".
 - Chapter: "M10 Slice: Benchmark Preflight and Early-Fail Checks".
+- Chapter: "M10 Slice: Cross-Impl Evidence Importer (CI -> compare-matrix)".
 
 ## M11 - Editor Tooling and Zed Integration
 ### Trigger condition

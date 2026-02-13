@@ -32,6 +32,7 @@ jobs:
           benchmark-suite/scripts/test_import_trend_note_entry.sh
           benchmark-suite/scripts/test_fetch_trend_artifact.sh
           benchmark-suite/scripts/test_update_trend_note_from_ci.sh
+          benchmark-suite/scripts/test_update_cross_impl_matrix_from_ci.sh
           scripts/test-check-milestone-closure.sh
           benchmark-suite/scripts/test_run_comparison_matrix.sh
           benchmark-suite/scripts/test_run_step_matrix.sh

@@ -8,27 +8,27 @@
 | 2026-02-12 | self | Added a semantic fixture for `secrets.reveal` shape hardening but forgot policy-forbidden `E2002` diagnostics also fire by default. | For `secrets.reveal` semantic fixtures, either include policy diagnostics in golden output or add a valid `@allow(...)` annotation when isolating shape-only behavior. |
 | 2026-02-12 | self | Started session actions before confirming `.claude/napkin.md` existed and reading it. | Always check/create and read `.claude/napkin.md` first in-session. |
 | 2026-02-12 | self | Reintroduced a moved-`Span` compile error while wiring a new semantic helper call (`enforce_res_html_signature`). | Default to passing `span.clone()` into helper calls inside semantic enforcement unless the span is consumed as final use. |
-| 2026-02-12 | self | Asserted wrong runtime symbol names in a CLI integration test (`ailang_rt_header_*` instead of emitted `ailang_rt_headers_*`). | Verify intrinsic runtime symbol spelling from `c_backend.rs` rewrite table or existing integration assertions before adding new expectations. |
+| 2026-02-12 | self | Asserted wrong runtime symbol names in a CLI integration test (`sec4_rt_header_*` instead of emitted `sec4_rt_headers_*`). | Verify intrinsic runtime symbol spelling from `c_backend.rs` rewrite table or existing integration assertions before adding new expectations. |
 | 2026-02-12 | self | Assumed CLI/test hangs were caused by recent code changes; issue reproduced even on reverted state and simple local binaries. | Treat executable runtime as environment-level blocker first, but re-validate before locking the assumption. |
 | 2026-02-12 | self | Treated runtime hang as persistent for the full session. | Re-run full runtime verification after environment hiccups; blockers can be transient. |
 | 2026-02-12 | self | Deferred baseline verification too early due blocker assumption. | Keep full baseline verification (`cargo test`, `check`, `emit ast`, `build`) in the same slice once execution recovers. |
 | 2026-02-12 | self | Inserted a new Rust test block inside an existing raw string, which produced cascading parser errors. | After patching large test files, immediately inspect the surrounding lines with `nl -ba` before running broad test suites. |
 | 2026-02-12 | self | Ran `cargo test` with multiple bare test-name args, which Cargo treats as unexpected arguments. | Use one test filter, or run explicit targets (`cargo test --test <name>`). |
 | 2026-02-12 | self | Assumed statement-level continuation block numbering would match previous branch-first ordering. | Reserve block IDs intentionally and update MIR tests/goldens to assert the actual deterministic numbering strategy. |
-| 2026-02-12 | self | Generated C `main` with `int64_t` return type, which clang rejects. | Force emitted `main` signature to return `int` even when AILang return type maps to `Int`/`Int64`. |
+| 2026-02-12 | self | Generated C `main` with `int64_t` return type, which clang rejects. | Force emitted `main` signature to return `int` even when Untrusted<T> return type maps to `Int`/`Int64`. |
 | 2026-02-12 | self | Used `status` as a temporary shell variable in `zsh`; it is readonly and broke a manual validation script. | Use a neutral temp variable name like `rc` for shell command exit codes. |
-| 2026-02-12 | self | Added `ailang_rt_log_any` with mismatched header/source signatures (`();` vs `(void)`), causing runtime-content assertion drift. | Keep runtime ABI declarations/definitions identical and validate both via unit tests immediately after edits. |
+| 2026-02-12 | self | Added `sec4_rt_log_any` with mismatched header/source signatures (`();` vs `(void)`), causing runtime-content assertion drift. | Keep runtime ABI declarations/definitions identical and validate both via unit tests immediately after edits. |
 | 2026-02-12 | self | Wrote a `res.json(schema, ...)` integration test using numeric schema placeholders, which violates strict schema-argument checks (`E4004`). | For compile-path req/res fixtures, pass real `Schema<T>`-typed symbols (for example function parameters) and keep net effects declared. |
 | 2026-02-12 | self | Forgot that `url.public` / `url.internal` are modeled as `net` effects, so gate-only fixture failed with `E4002`. | When gate fixtures include URL validators, declare `effects { net }` explicitly. |
 | 2026-02-12 | self | Used a function symbol (`handler`) as a value argument in CLI integration fixture; current semantic model does not resolve function names as first-class values there. | In compile-path fixtures, pass literal/place-holder values unless first-class function values are explicitly implemented. |
-| 2026-02-12 | self | Replaced bare middleware names before dotted names in C intrinsic rewriting, producing invalid forms like `sec.ailang_rt_*`. | In string-based intrinsic rewrites, replace dotted forms before bare aliases to avoid partial-prefix corruption. |
-| 2026-02-12 | self | Used `register` as a fixture function name; it maps directly to C and collides with the C keyword `register`. | Avoid C reserved keywords in AILang integration fixtures until backend identifier mangling is implemented. |
+| 2026-02-12 | self | Replaced bare middleware names before dotted names in C intrinsic rewriting, producing invalid forms like `sec.sec4_rt_*`. | In string-based intrinsic rewrites, replace dotted forms before bare aliases to avoid partial-prefix corruption. |
+| 2026-02-12 | self | Used `register` as a fixture function name; it maps directly to C and collides with the C keyword `register`. | Avoid C reserved keywords in Untrusted<T> integration fixtures until backend identifier mangling is implemented. |
 | 2026-02-12 | self | Added an extra schema-note text to existing `E4004` diagnostics and broke semantic golden fixtures. | Preserve established diagnostic wording unless intentionally updating goldens as part of the slice. |
 | 2026-02-12 | self | Asserted an exact emitted C local declaration shape (`int64_t csp = ...`) for a non-primitive typed binding, causing brittle test failure. | Assert intrinsic call lowering substrings rather than exact local declaration spelling unless declaration shape is the behavior under test. |
 | 2026-02-12 | self | Ran two Cargo test commands in parallel again, hitting package-cache lock waits and noisy failures. | Run Cargo commands sequentially in this repo to avoid lock contention. |
-| 2026-02-12 | self | Used `-p ailang-cli` in tests; actual package name is `ailang`. | Use `-p ailang` for CLI crate-specific test runs. |
+| 2026-02-12 | self | Used `-p sec4-cli` in tests; actual package name is `sec4`. | Use `-p sec4` for CLI crate-specific test runs. |
 | 2026-02-12 | self | Inserted a new Rust test block before closing an existing raw string literal, breaking test-file parsing. | After adding tests, inspect surrounding lines with `nl -ba` to confirm raw-string boundaries are intact. |
-| 2026-02-12 | self | Repeated a brittle C-backend assertion using an exact local declaration shape for `sql.q` lowering. | Assert runtime-call substrings (`ailang_rt_*`) instead of exact declaration text unless declaration shape is explicitly under test. |
+| 2026-02-12 | self | Repeated a brittle C-backend assertion using an exact local declaration shape for `sql.q` lowering. | Assert runtime-call substrings (`sec4_rt_*`) instead of exact declaration text unless declaration shape is explicitly under test. |
 | 2026-02-12 | self | Introduced a local variable named `cookie` initialized from `cookie.build(...)`, which triggered alias expansion growth (`cookie.build.build...`) and made semantic analysis appear stuck. | Guard alias-name expansion against recursive suffix growth and cap alias-resolution steps; treat namespace-shadowing call aliases as a hot path for regressions. |
 | 2026-02-12 | self | Used parallel tool calls for multiple Cargo test invocations again, causing lock waits/noisy output. | Run Cargo commands sequentially in this repo; parallelize reads/searches only. |
 | 2026-02-12 | self | Moved `Span` into a helper call, then reused it in the same function and hit borrow-after-move compile failure. | Pass cloned spans (`span.clone()`) when the caller still needs the original for later diagnostics. |
@@ -50,6 +50,35 @@
 | 2026-02-13 | self | Log sink signature hardening initially risked duplicating existing secret/taint sink diagnostics. | For signature hardening on sensitive sinks, suppress type-mismatch diagnostics when payload is `Secret<_>`/`Untrusted<_>` so `E1003/E1002` remain primary. |
 | 2026-02-13 | self | Tightening log-builder argument typing changed generated C literals and broke exact-string assertions in both core and CLI integration tests. | When hardening intrinsic signatures, immediately align C emission assertions to the new literal forms (`\"...\"` strings vs numeric placeholders). |
 | 2026-02-13 | self | Inserted a new Rust test block before closing an existing raw string in `c_backend.rs`, causing parser errors (`unknown prefix`, unexpected delimiter). | After adding tests with embedded source strings, inspect the surrounding raw-string boundaries with `nl -ba` before running the suite. |
+| 2026-02-13 | self | Added a new docs/book chapter file but initially missed linking it in `docs/book/README.md`. | For every new chapter, update the book index in the same slice before running final validation. |
+| 2026-02-13 | self | Added a matrix test assertion expecting a Rust leader without including a Rust report fixture file. | Keep test fixtures synchronized with expected leaderboard assertions; add all comparator reports before asserting per-endpoint winners. |
+| 2026-02-13 | self | Wrote a complex jq string interpolation with escaped quotes inside a single-quoted script block and produced a jq parse error. | For non-trivial jq conditionals, compute a temporary object/value first and concatenate plain strings instead of deeply nested escaped interpolation. |
+| 2026-02-13 | self | Added orchestrator impl validation only inside runtime start path, so `--dry-run` accepted unsupported impl values. | Validate implementation lists before mode branching so dry-run and real execution enforce the same contract. |
+| 2026-02-13 | self | Wrote files and directories in one parallel tool call; file writes raced directory creation and failed with \"no such file or directory\". | For file creation workflows, create directories first, then run dependent writes sequentially. |
+| 2026-02-13 | self | Assumed `sec4 build` supported `--no-security-map` and `--no-build-metadata`; command failed with unexpected-argument errors. | Confirm CLI flags from `--help` (or existing tests) before scripting non-default build options. |
+| 2026-02-13 | self | Captured `sec4 build --emit c` stdout directly and compiled it, but output included a leading status line that broke C compilation. | Filter emitted C output to start at the first `#include` line (or use a machine-output mode) before compiling. |
+| 2026-02-13 | self | Captured service PID via `pid=\"$(start_service ...)\"` while background service inherited stdout; command substitution blocked until the service exited, making orchestrator look stuck. | Do not use command substitution for long-lived service startup; set PID via global/local variables and redirect service stdout/stderr to log files. |
+| 2026-02-13 | self | Smoke readiness checks could pass/behave inconsistently due fixed shared ports and stale `/tmp/*` ping files. | Use dedicated default ports per smoke script, reset temp files, and require exact ping body (`ok`) plus process-alive checks before proceeding. |
+| 2026-02-13 | self | Tried `run_comparison_matrix.sh --impls=...` while parser only accepted space-separated `--impls ...`, and missing `wrk2` then looked like startup stalling in matrix runs. | Support both `--impls ...` and `--impls=...` forms and run explicit preflight checks before orchestrator execution to fail early with dependency diagnostics. |
+| 2026-02-13 | self | Benchmark Lua payload scripts relied on cwd-relative `spec/payloads/...`, which is fragile when orchestration scripts run from different working directories. | Pass payload/user-id context via env (`BENCH_PAYLOAD_FILE`, `BENCH_USER_ID`) from profile runner and keep Lua scripts deterministic across invocation contexts. |
+| 2026-02-13 | self | Reached for the web tool twice while doing local file edits, which is unnecessary and noisy. | For local repo implementation work, stay on shell/apply_patch and reserve web tooling only for external verification. |
+| 2026-02-13 | self | Matrix report bundling originally globbed all `impl-*.json`, so endpoint-filtered runs could include stale summaries from earlier runs. | Thread selected endpoint set into report bundling and require endpoint-scoped summary files for deterministic filtered runs. |
+| 2026-02-13 | self | Endpoint-filtered reports looked structurally identical to full-suite reports, making downstream interpretation ambiguous. | Include explicit `selectedEndpoints` metadata in report bundles whenever endpoint scope is provided. |
+| 2026-02-13 | self | Published markdown reports did not surface matrix endpoint scope, so partial runs could be misread as full-suite reports. | Render endpoint count/list in publish header from compare-matrix metadata to make run scope explicit. |
+| 2026-02-13 | self | CLI scripts in benchmark-suite drifted on option parsing (`--impls` accepted equals-form in some scripts but not all). | Keep parser style parity (`--flag value` and `--flag=value`) across sibling scripts to reduce operator mistakes. |
+| 2026-02-13 | self | Matrix comparison still scanned all report files, so stale non-selected implementations could leak into filtered-run analysis. | Scope compare-matrix input by selected implementations and fail if expected report files are missing. |
+| 2026-02-13 | self | Report header clarity improved for endpoints, but implementation scope remained implicit for filtered IMPL runs. | Include explicit implementation count/list in publish header derived from matrix rows. |
+| 2026-02-13 | self | Single fixed-target benchmark profiles are insufficient for identifying saturation knees and tail-latency inflection points. | Provide a step-load runner with endpoint-specific default rate ladders and aggregated per-step summary artifacts. |
+| 2026-02-13 | self | Step-load outputs are hard to interpret manually when multiple rate points are captured. | Add deterministic step-analysis tooling that computes achieved-ratio trends and first knee-point below threshold. |
+| 2026-02-13 | self | Step-analysis artifacts were per-impl and not directly comparable across implementations/endpoints. | Add a step-analysis matrix aggregator with scoped input support and deterministic endpoint-level leader ranking. |
+| 2026-02-13 | self | Step-load artifacts existed but were not surfaced in final markdown reporting, reducing visibility of saturation behavior. | Let `publish_report.sh` accept optional `step_matrix.json` and render a dedicated step-load signals section. |
+| 2026-02-13 | self | Step-load workflows still required manual multi-command orchestration and were error-prone across impl/endpoint scopes. | Add a dedicated step matrix orchestrator with dry-run, scoped execution, readiness checks, and deterministic artifact generation. |
+| 2026-02-13 | self | Fixed-target and step-load orchestration became separate flows, making final combined report generation easy to forget. | Add a top-level full-suite runner that executes both phases and republishes one combined markdown report with step signals. |
+| 2026-02-13 | self | Multi-artifact benchmark outputs lacked a deterministic manifest, making archival/verification harder. | Emit an artifact manifest with per-file sha256 and sizes at the end of full-suite execution. |
+| 2026-02-13 | self | Even with full-suite output, missing per-impl/endpoint artifacts can go unnoticed until later analysis fails. | Add a dedicated bundle verifier that validates required artifact presence and JSON sanity for selected IMPLS/ENDPOINTS. |
+| 2026-02-13 | self | Structural bundle verification can pass even when artifact contents drift from manifest. | Verify required artifact hashes against `artifact-manifest.json` by default, with explicit opt-out flag only when needed. |
+| 2026-02-13 | self | LSP bootstrap negotiated initialize/shutdown but did not consume document events, so editors could not surface real diagnostics. | Wire `didOpen`/`didChange`/`didClose` to `sec4-core` parse+semantic analysis and publish/clear diagnostics through LSP notifications. |
+| 2026-02-13 | self | New LSP references tests used a fixture shape (`let` call sites) that didn’t resolve to identifier hits as expected in current parser behavior, yielding empty references arrays. | Prefer minimal parser-proven call-site fixtures (`helper()` as expression statements/tails) when pinning navigation semantics. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -59,7 +88,7 @@
 
 ## Patterns That Work
 - Small vertical M4 slices with matching docs chapter updates reduce churn and keep progress reviewable.
-- Deterministic `sec.audit` findings with sample evidence improve traceability for policy/security posture.
+- Deterministic `sec4 audit` findings with sample evidence improve traceability for policy/security posture.
 - After transient execution issues, retrying full verification in the same session often recovers and avoids false blockers.
 
 ## Patterns That Don't Work
@@ -67,17 +96,17 @@
 
 ## Domain Notes
 - Current focus is M4 security foundation hardening before MIR/backend milestones.
-- `sec.audit` and `security_map` are central artifacts for deterministic security posture and later editor tooling.
+- `sec4 audit` and `security_map` are central artifacts for deterministic security posture and later editor tooling.
 
 ## Session Notes (2026-02-12)
 - Repo currently has no `.trellis/` directory even though AGENTS references Trellis docs.
 - Implemented and validated `sec audit --history-dir` with JSON-mode stdout contract preserved.
-- Added `DNS_RESOLUTION_DISABLED` sec.audit posture rule with sample-call evidence (prod + `net.ssrf.resolve_dns=false`).
-- Added `PUBLIC_EGRESS_NO_DOMAIN_POLICY` sec.audit posture rule (usage-gated on public-net sink calls) plus policy ingestion for `net.public.allowed_domains`/`blocked_domains`.
-- Added `CSRF_PROTECTED_METHODS_INCOMPLETE` sec.audit posture rule with deterministic missing-method evidence and middleware sample-call context.
-- Added `SYMLINK_POLICY_WEAK` sec.audit posture rule plus typed policy parsing/validation for `fs.forbid_symlinks`.
-- Added `REFERRER_POLICY_WEAK` sec.audit posture rule for weak security-header referrer-policy values.
-- Added `XFO_DISABLED` and `NOSNIFF_DISABLED` sec.audit posture findings for baseline security-header hardening gaps.
+- Added `DNS_RESOLUTION_DISABLED` sec4 audit posture rule with sample-call evidence (prod + `net.ssrf.resolve_dns=false`).
+- Added `PUBLIC_EGRESS_NO_DOMAIN_POLICY` sec4 audit posture rule (usage-gated on public-net sink calls) plus policy ingestion for `net.public.allowed_domains`/`blocked_domains`.
+- Added `CSRF_PROTECTED_METHODS_INCOMPLETE` sec4 audit posture rule with deterministic missing-method evidence and middleware sample-call context.
+- Added `SYMLINK_POLICY_WEAK` sec4 audit posture rule plus typed policy parsing/validation for `fs.forbid_symlinks`.
+- Added `REFERRER_POLICY_WEAK` sec4 audit posture rule for weak security-header referrer-policy values.
+- Added `XFO_DISABLED` and `NOSNIFF_DISABLED` sec4 audit posture findings for baseline security-header hardening gaps.
 - `REPLAY_EFFECTS_ALLOW` severity now maps by environment (`HIGH` in prod, `MEDIUM` otherwise).
 - Started M5 bootstrap: added MIR module + lowering + `build --emit mir` CLI path with tests.
 - Extended M5 MIR lowering with tail-`if` branch blocks and explicit `branch` terminators.
@@ -92,14 +121,14 @@
 - Extended M6 with `build --emit c-bin`: writes generated C and compiles a runnable binary via `clang`.
 - Added `examples/hello/build/.gitignore` to keep generated C/binary artifacts out of git status while retaining `security_map.json`.
 - Updated `examples/hello/build/.gitignore` to ignore all generated build artifacts (including security_map) for a clean working tree.
-- Wired `ailang run` to build via `c-bin` and execute the produced binary; added clang-gated integration coverage.
-- Added M6 runtime ABI scaffolding: C backend now includes `ailang_runtime.h`, CLI writes runtime header/source into `build/`, and clang compiles generated + runtime translation units together.
-- Routed scalar C return paths through runtime ABI identity helpers (`ailang_rt_identity_i64` / `ailang_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
-- Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `ailang_rt_time_now` with runtime stub coverage and C emitter tests.
+- Wired `sec4 run` to build via `c-bin` and execute the produced binary; added clang-gated integration coverage.
+- Added M6 runtime ABI scaffolding: C backend now includes `sec4_runtime.h`, CLI writes runtime header/source into `build/`, and clang compiles generated + runtime translation units together.
+- Routed scalar C return paths through runtime ABI identity helpers (`sec4_rt_identity_i64` / `sec4_rt_identity_bool`) so runtime linkage is exercised by emitted function bodies.
+- Added intrinsic call rewriting in C emission for `time.now`/`time_now` -> `sec4_rt_time_now` with runtime stub coverage and C emitter tests.
 - Added non-trivial `c-bin` integration coverage using a temp project fixture with helper-function call + `if/else` control flow.
 - Moved runtime ABI C sources from Rust string literals into `runtime/c/` files and switched emitter helpers to `include_str!` those canonical runtime assets.
 - Added clang-gated CLI integration coverage for `time.now` projects to validate semantic effects checks plus intrinsic rewrite/runtime linkage through full `c-bin` builds.
-- Added log intrinsic C-lowering coverage (`log.info/warn/error/emit` -> `ailang_rt_log_any`) with runtime stubs and end-to-end `c-bin` integration tests.
+- Added log intrinsic C-lowering coverage (`log.info/warn/error/emit` -> `sec4_rt_log_any`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added req/res intrinsic C-lowering coverage (`req.json`, `res.json`, `res.html`) with runtime stubs and end-to-end `c-bin` integration tests using valid `Schema<T>` parameters.
 - Added header/cookie intrinsic C-lowering coverage (`res.setHeader`, `res.addCookie`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added db/fs/net intrinsic C-lowering coverage (`db.*`, `fs.*`, `httpClient.get*`) with runtime stubs and end-to-end `c-bin` integration tests using capability-typed parameters.
@@ -107,7 +136,7 @@
 - Added validator/sanitizer/url/path gate intrinsic C-lowering coverage (`validate.*`, `sanitize.html`, `url.*`, `path.under`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added HTTP router intrinsic C-lowering coverage (`http.router/get/post/serve`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added `examples/hello-api` as an M7 bootstrap sample plus clang-gated `c-bin` integration coverage asserting router + req/res lowering in generated C.
-- Added `ailang run` integration coverage for `examples/hello-api` so both build and run flows are pinned for the bootstrap API sample.
+- Added `sec4 run` integration coverage for `examples/hello-api` so both build and run flows are pinned for the bootstrap API sample.
 - Added security-middleware intrinsic C-lowering coverage (`withSecurityHeaders`, `withCors`, `withCsrf`, `withAuth`) with runtime stubs and end-to-end `c-bin` integration tests.
 - Added HTTP surface primitive type support (`Router`, `Request`, `Response`, `HttpError`, `Handler`) so API-shaped signatures pass semantic type resolution in compile-path fixtures.
 - Added policy-config intrinsic C-lowering coverage (`sec.defaultHeaders`, `cors.fromPolicy`, `csrf.fromPolicy`, `auth.fromPolicy`) with runtime stubs and end-to-end `c-bin` integration tests.
@@ -201,7 +230,29 @@
 - Avoid silent coercion for CLI security/reporting flags; reject invalid bounds explicitly and pin with integration tests.
 - Window trend summaries are significantly more useful when anchored with oldest/latest policy hash + timestamp; include range metadata in exported payloads.
 - For dual text/json CLI outputs, always add routing tests per mode so auxiliary lines never contaminate JSON stdout contracts.
-- If CLI logic starts modeling audit semantics (not just I/O), move that model into `ailang-core` early to avoid parallel behavior drift.
+- If CLI logic starts modeling audit semantics (not just I/O), move that model into `sec4-core` early to avoid parallel behavior drift.
 - For trend features, attach computed window summaries to the primary report object before any stdout/file emission to avoid split-brain artifacts.
 - When adding optional report sections, add renderer coverage immediately so text-mode contracts don’t regress unnoticed.
 - For LSP bootstraps, start with strict stdio framing + initialize/shutdown/exit correctness and avoid advertising unsupported capabilities.
+- E2001 quick-fix should not emit a guidance-only action when the effect already exists; omit the action entirely in source-backed codeAction flows to avoid misleading edits.
+- Quick-fix signature scanning anchored only on the `fn` line misses multiline signatures; scan a bounded signature window up to `{` and resolve insertion anchors (`effects`, `->`, `{`) across lines.
+- Loop-level request deadline guards are not enough for LSP responsiveness on large ASTs; propagate deadline checks through recursive identifier/symbol walkers to short-circuit semantic work.
+- Tree-sitter scaffolds need early support for effects/member-call syntax; otherwise editor highlighting/navigation drifts from real language usage even when LSP is improving.
+- Deadline checks should be applied before uncached parse fallbacks, otherwise expired requests still burn parser CPU despite downstream traversal guards.
+- Treat open-document symbol data as a first-class cache alongside parsed programs; this avoids repeat symbol extraction and creates a stable base for symbol-ID-driven navigation.
+- Incremental editor caches need reverse import edges; when a dependency changes, evict dependents proactively or completion/navigation will read stale symbol data.
+- Function rename/reference matching should collect callsite callees rather than every same-name identifier; otherwise argument/variable identifiers create false-positive edits.
+- Diagnostics pipelines should enforce budget checks at stage boundaries (pre-parse and pre-analyze); otherwise zero-budget requests still perform expensive parse/semantic work.
+- Add explicit release gates for placeholder metadata (like Zed grammar rev); otherwise scaffolding values leak into production configs unnoticed.
+- Dependency invalidation code needs direct edge-extraction and edge-replacement tests; otherwise reverse-map regressions hide behind broader LSP integration tests.
+- Emit stable symbol IDs in navigation payloads early; it creates a migration path from name-based matching to true symbol-ID binding without breaking existing editor behavior.
+- Constrain text-based quickfix anchors with parser-derived signature windows; this avoids accidental matches from body comments/strings that contain keyword-like text.
+- Metadata contracts (like symbolId on reference locations) need explicit tests for each response mode (`includeDeclaration` true/false), not just one happy-path assertion.
+- Cursor-target resolution for LSP should share the same scope rules as reference collection; otherwise shadowed locals still trigger wrong definition/rename operations.
+- 2026-02-13 | self | Ran workspace-wide `cargo fmt` during a focused slice and unintentionally modified unrelated files. | Keep formatting scoped (or restore immediately) and commit only slice-owned files.
+- 2026-02-13 | self | First interrupt wiring in semantic analysis used an unnecessary leaked handle to satisfy lifetimes. | Model interrupt signals with explicit borrowed lifetimes on `Analyzer<'a>` and avoid allocation/leak workarounds.
+- 2026-02-13 | self | Parser/semantic interrupt hooks alone left lexing as a blind spot for deadline cancellation. | Propagate `InterruptSignal` into lexer loops and add a dedicated lex-stage interruption test so `I9001` can originate before parse traversal.
+- 2026-02-13 | self | Initial naming-lock guard flagged its own roadmap/chapter examples because they contained literal banned tokens. | Describe banned patterns generically in docs (no literal tokens) so automated legacy scans stay signal-only.
+- 2026-02-13 | self | Used a sed regex with `\s` while extracting benchmark impl IDs in bash guard script; BSD/GNU sed treated it literally and produced bad values. | Use POSIX-safe parsing for shell checks (`awk -F\"` or `[[:space:]]`), then validate with an immediate script run.
+- 2026-02-13 | self | Release gate stamped compiler/runtime SHA256 values but did not verify semantic identity hashes against build metadata/audit outputs. | In release hardening slices, explicitly cross-check `build_metadata` identity fields with `sec4 audit` report fields and stamp verified identities in gate artifacts.
+- 2026-02-13 | self | Naming-lock impl-ID extraction uses quote-splitting and misread compact inline JSON objects (`"leader": { "impl": ... }`) as value `impl`. | Keep benchmark fixture JSON formatted one field per line (or harden parser later) so guard scripts read actual impl IDs.

@@ -1,0 +1,51 @@
+name: Benchmark Cross-Impl Evidence
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cross-impl-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install wrk2 + build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang libssl-dev zlib1g-dev
+          git clone --depth 1 https://github.com/giltene/wrk2.git /tmp/wrk2
+          make -C /tmp/wrk2
+          sudo install -m 0755 /tmp/wrk2/wrk /usr/local/bin/wrk2
+
+      - name: Install node benchmark service dependencies
+        run: |
+          npm ci --prefix benchmark-suite/services/node
+
+      - name: Run cross-impl benchmark matrix (ping+decode)
+        run: |
+          benchmark-suite/scripts/run_comparison_matrix.sh \
+            --impls sec4,node,go,rust \
+            --endpoints ping,decode
+
+      - name: Upload cross-impl benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-cross-impl-evidence
+          path: benchmark-suite/results
+          retention-days: 30
