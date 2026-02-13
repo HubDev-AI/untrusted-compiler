@@ -527,6 +527,10 @@ Roadmap impact:
   - `.github/workflows/benchmark-trend.yml` schedules scoped live benchmark execution (`node + ping`) and supports manual dispatch,
   - `benchmark-suite/scripts/check_regression_thresholds.sh` enforces first threshold guard (`p99` and target coverage) on `compare-matrix.json`,
   - benchmark smoke CI now includes `test_check_regression_thresholds.sh`.
+- M13 trend retention/baseline policy is now codified:
+  - `benchmark-suite/baselines/node-ping-trend-baseline.json` defines baseline comparison guard values,
+  - scheduled trend workflow now runs baseline-aware threshold checks,
+  - trend artifact uploads are retained for 30 days in CI (`retention-days: 30`).
 - M13 promotion workflow documentation now includes a dedicated operator runbook:
   - `docs/book/313-m13-release-promotion-playbook.md` defines release gate, verifier, naming-lock, and evidence capture steps.
 
@@ -1363,11 +1367,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
-2. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
-3. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
-4. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
-5. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
+1. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
+2. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
+3. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
+4. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
+5. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
 
 ---
 

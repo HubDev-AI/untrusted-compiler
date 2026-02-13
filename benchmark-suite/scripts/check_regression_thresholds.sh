@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 <compare_matrix.json> [--endpoint ping] [--max-p99-ms 25] [--min-target-coverage 90]
+usage: $0 <compare_matrix.json> [--endpoint ping] [--max-p99-ms 25] [--min-target-coverage 90] [--baseline path]
 
 Checks benchmark leader metrics for an endpoint and fails if thresholds are exceeded.
 USAGE
@@ -20,6 +20,7 @@ shift
 endpoint="ping"
 max_p99_ms="25"
 min_target_coverage="90"
+baseline_path=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -59,6 +60,18 @@ while [ "$#" -gt 0 ]; do
       min_target_coverage="${1#--min-target-coverage=}"
       shift
       ;;
+    --baseline)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      baseline_path="$2"
+      shift 2
+      ;;
+    --baseline=*)
+      baseline_path="${1#--baseline=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -73,6 +86,10 @@ done
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
+  exit 2
+fi
+if [ -n "$baseline_path" ] && [ ! -f "$baseline_path" ]; then
+  echo "baseline file not found: ${baseline_path}" >&2
   exit 2
 fi
 
@@ -108,8 +125,46 @@ if ! awk -v actual="$coverage_pct" -v min="$min_target_coverage" 'BEGIN { exit !
   exit 1
 fi
 
+baseline_note=""
+if [ -n "$baseline_path" ]; then
+  baseline_endpoint="$(jq -r '.endpoint // empty' "$baseline_path")"
+  if [ -z "$baseline_endpoint" ]; then
+    echo "baseline file missing endpoint field: ${baseline_path}" >&2
+    exit 2
+  fi
+  if [ "$baseline_endpoint" != "$endpoint" ]; then
+    echo "baseline endpoint mismatch: expected=${endpoint} baseline=${baseline_endpoint}" >&2
+    exit 2
+  fi
+
+  baseline_p99_ms="$(jq -r '.baselineP99Ms // empty' "$baseline_path")"
+  baseline_coverage_pct="$(jq -r '.baselineCoveragePct // empty' "$baseline_path")"
+  max_p99_regression_pct="$(jq -r '.maxP99RegressionPct // 20' "$baseline_path")"
+  max_coverage_drop_pct="$(jq -r '.maxCoverageDropPct // 5' "$baseline_path")"
+
+  if [ -z "$baseline_p99_ms" ] || [ -z "$baseline_coverage_pct" ]; then
+    echo "baseline file missing required baseline metrics: ${baseline_path}" >&2
+    exit 2
+  fi
+
+  baseline_p99_limit="$(awk -v base="$baseline_p99_ms" -v pct="$max_p99_regression_pct" 'BEGIN { printf "%.6f", base * (1 + pct / 100.0) }')"
+  baseline_coverage_limit="$(awk -v base="$baseline_coverage_pct" -v pct="$max_coverage_drop_pct" 'BEGIN { printf "%.6f", base - pct }')"
+
+  if ! awk -v actual="$p99_ms" -v limit="$baseline_p99_limit" 'BEGIN { exit !(actual+0 <= limit+0) }'; then
+    echo "baseline regression failure: endpoint=${endpoint} leader p99=${p99_ms}ms exceeds baseline limit=${baseline_p99_limit}ms" >&2
+    exit 1
+  fi
+
+  if ! awk -v actual="$coverage_pct" -v limit="$baseline_coverage_limit" 'BEGIN { exit !(actual+0 >= limit+0) }'; then
+    echo "baseline regression failure: endpoint=${endpoint} leader coverage=${coverage_pct}% below baseline limit=${baseline_coverage_limit}%" >&2
+    exit 1
+  fi
+
+  baseline_note=" baseline=${baseline_path}"
+fi
+
 leader_impl="$(jq -r '.impl // "unknown"' <<<"$leader_json")"
 leader_rps="$(jq -r '.requestsPerSec // 0' <<<"$leader_json")"
 leader_target="$(jq -r '.targetRps // 0' <<<"$leader_json")"
 
-echo "thresholds passed: endpoint=${endpoint} leader=${leader_impl} p99=${p99_ms}ms coverage=${coverage_pct}% (${leader_rps}/${leader_target})"
+echo "thresholds passed: endpoint=${endpoint} leader=${leader_impl} p99=${p99_ms}ms coverage=${coverage_pct}% (${leader_rps}/${leader_target})${baseline_note}"

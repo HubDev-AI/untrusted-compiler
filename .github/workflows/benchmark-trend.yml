@@ -36,7 +36,8 @@ jobs:
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping \
             --max-p99-ms 30 \
-            --min-target-coverage 85
+            --min-target-coverage 85 \
+            --baseline benchmark-suite/baselines/node-ping-trend-baseline.json
 
       - name: Upload benchmark trend artifacts
         if: always()
@@ -44,3 +45,4 @@ jobs:
         with:
           name: benchmark-trend-node-ping
           path: benchmark-suite/results
+          retention-days: 30

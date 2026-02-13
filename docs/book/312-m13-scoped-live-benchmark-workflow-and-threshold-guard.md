@@ -8,6 +8,7 @@ Updated:
 - `.github/workflows/benchmark-trend.yml`
 - `benchmark-suite/scripts/check_regression_thresholds.sh`
 - `benchmark-suite/scripts/test_check_regression_thresholds.sh`
+- `benchmark-suite/baselines/node-ping-trend-baseline.json`
 - `.github/workflows/benchmark-smoke.yml`
 - `docs/05-sec4-master-roadmap.md`
 
@@ -26,13 +27,15 @@ Dry-run benchmark CI catches orchestration drift, but M13 requires lightweight l
 Workflow behavior:
 1. installs Node + `wrk2`,
 2. runs `run_full_benchmark_suite.sh --impls node --endpoints ping`,
-3. uploads resulting benchmark artifacts.
+3. runs baseline-aware threshold checks,
+4. uploads resulting benchmark artifacts with retention policy (30 days).
 
 ### 2) Regression threshold guard
 
 `check_regression_thresholds.sh` evaluates leader metrics from `compare-matrix.json` for a target endpoint:
 - `p99` must be <= configured max,
 - target coverage (`requestsPerSec / targetRps`) must be >= configured minimum.
+- optional baseline policy file enforces relative regression limits against baseline metrics.
 
 If either threshold is violated, command fails with a deterministic message.
 
@@ -47,6 +50,7 @@ This keeps threshold-check logic verified in normal PR/push CI.
 
 - Inputs:
   - `benchmark-suite/results/summaries/compare-matrix.json`
+  - `benchmark-suite/baselines/node-ping-trend-baseline.json` (scheduled workflow baseline policy)
   - endpoint + threshold parameters.
 - Output:
   - pass/fail regression gate signal.
@@ -60,7 +64,8 @@ benchmark-suite/scripts/check_regression_thresholds.sh \
   benchmark-suite/results/summaries/compare-matrix.json \
   --endpoint ping \
   --max-p99-ms 30 \
-  --min-target-coverage 85
+  --min-target-coverage 85 \
+  --baseline benchmark-suite/baselines/node-ping-trend-baseline.json
 ```
 
 ## Tradeoffs and next steps
@@ -68,4 +73,4 @@ benchmark-suite/scripts/check_regression_thresholds.sh \
 - Tradeoff:
   - one impl/endpoint scope is low cost but limited signal.
 - Next:
-  - add retention/baseline policy for trend artifacts and expand scope incrementally when stable.
+  - expand scope incrementally (additional endpoint/impl) once trend stability is confirmed.

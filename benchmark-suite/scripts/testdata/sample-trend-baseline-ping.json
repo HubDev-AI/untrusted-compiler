@@ -1,0 +1,8 @@
+{
+  "version": "0.1",
+  "endpoint": "ping",
+  "baselineP99Ms": 4.3,
+  "baselineCoveragePct": 98.0,
+  "maxP99RegressionPct": 20,
+  "maxCoverageDropPct": 5
+}
