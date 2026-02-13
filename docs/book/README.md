@@ -239,5 +239,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `272-m11-unopened-scan-toggle.md`
 - `273-m11-effect-quickfix-append-and-deduplicate.md`
 - `274-m11-multiline-effect-quickfix-support.md`
+- `275-m11-deadline-aware-semantic-walk-cancellation.md`
 
 As milestones progress, chapters will be added and linked from this index.

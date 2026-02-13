@@ -437,7 +437,8 @@ fn definition_at_position(
         None => return Ok(Value::Null),
     };
 
-    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character, Some(&deadline))
+    else {
         return Ok(Value::Null);
     };
     let Some(symbol_match) =
@@ -462,7 +463,8 @@ fn hover_at_position(
         None => return Ok(Value::Null),
     };
 
-    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character, Some(&deadline))
+    else {
         return Ok(Value::Null);
     };
     let Some(symbol_match) =
@@ -494,7 +496,8 @@ fn references_at_position(
         None => return Ok(Value::Array(Vec::new())),
     };
 
-    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character, Some(&deadline))
+    else {
         return Ok(Value::Array(Vec::new()));
     };
 
@@ -513,7 +516,7 @@ fn references_at_position(
             continue;
         };
         locations.extend(
-            collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name)
+            collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name, Some(&deadline))
                 .into_iter()
                 .map(|found| location_from_span(&doc_uri, &found.span)),
         );
@@ -546,6 +549,7 @@ fn completion_at_position(
     _line: usize,
     _character: usize,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
     let mut items = completion_keyword_items();
     let mut seen_labels = items
@@ -555,7 +559,7 @@ fn completion_at_position(
         .collect::<HashSet<_>>();
 
     if let Some(program) = load_cached_program(state, uri, &path, &source) {
-        for symbol in collect_function_symbols(&program) {
+        for symbol in collect_function_symbols(&program, Some(&deadline)) {
             if seen_labels.insert(symbol.name.clone()) {
                 items.push(json!({
                     "label": symbol.name,
@@ -592,7 +596,8 @@ fn prepare_rename_at_position(
         None => return Ok(Value::Null),
     };
 
-    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character, Some(&deadline))
+    else {
         return Ok(Value::Null);
     };
     if find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline).is_none() {
@@ -632,7 +637,8 @@ fn rename_at_position(
         }
     };
 
-    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character, Some(&deadline))
+    else {
         return Ok(json!({
             "changes": {
                 uri: []
@@ -662,7 +668,8 @@ fn rename_at_position(
             continue;
         };
 
-        let edits = collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name)
+        let edits =
+            collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name, Some(&deadline))
             .into_iter()
             .map(|found| {
                 json!({
@@ -1126,7 +1133,7 @@ fn find_symbol_declaration_in_workspace(
         let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
             continue;
         };
-        if let Some(symbol) = collect_function_symbols(&doc_program)
+        if let Some(symbol) = collect_function_symbols(&doc_program, Some(deadline))
             .into_iter()
             .find(|symbol| symbol.name == target_name)
         {
@@ -1144,11 +1151,17 @@ fn find_symbol_declaration_in_workspace(
     matched
 }
 
-fn collect_function_symbols(program: &Program) -> Vec<FunctionSymbol> {
-    program
-        .items
-        .iter()
-        .filter_map(|item| match &item.kind {
+fn deadline_exceeded(deadline: Option<&RequestDeadline>) -> bool {
+    deadline.is_some_and(RequestDeadline::is_expired)
+}
+
+fn collect_function_symbols(program: &Program, deadline: Option<&RequestDeadline>) -> Vec<FunctionSymbol> {
+    let mut symbols = Vec::new();
+    for item in &program.items {
+        if deadline_exceeded(deadline) {
+            break;
+        }
+        if let Some(symbol) = match &item.kind {
             ItemKind::Function(function) => {
                 let params = function
                     .params
@@ -1178,8 +1191,11 @@ fn collect_function_symbols(program: &Program) -> Vec<FunctionSymbol> {
                 })
             }
             _ => None,
-        })
-        .collect()
+        } {
+            symbols.push(symbol);
+        }
+    }
+    symbols
 }
 
 fn format_type(ty: &TypeExpr) -> String {
@@ -1203,10 +1219,19 @@ fn find_identifier_at_position(
     file: &PathBuf,
     line: usize,
     character: usize,
+    deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
+    if deadline_exceeded(deadline) {
+        return None;
+    }
     for item in &program.items {
+        if deadline_exceeded(deadline) {
+            return None;
+        }
         if let ItemKind::Function(function) = &item.kind {
-            if let Some(hit) = find_identifier_in_block(&function.body, file, line, character) {
+            if let Some(hit) =
+                find_identifier_in_block(&function.body, file, line, character, deadline)
+            {
                 return Some(hit);
             }
         }
@@ -1219,9 +1244,16 @@ fn find_identifier_in_block(
     file: &PathBuf,
     line: usize,
     character: usize,
+    deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
+    if deadline_exceeded(deadline) {
+        return None;
+    }
     for statement in &block.statements {
-        if let Some(hit) = find_identifier_in_statement(statement, file, line, character) {
+        if deadline_exceeded(deadline) {
+            return None;
+        }
+        if let Some(hit) = find_identifier_in_statement(statement, file, line, character, deadline) {
             return Some(hit);
         }
     }
@@ -1229,7 +1261,7 @@ fn find_identifier_in_block(
     block
         .tail
         .as_ref()
-        .and_then(|tail| find_identifier_in_expr(tail, file, line, character))
+        .and_then(|tail| find_identifier_in_expr(tail, file, line, character, deadline))
 }
 
 fn find_identifier_in_statement(
@@ -1237,13 +1269,17 @@ fn find_identifier_in_statement(
     file: &PathBuf,
     line: usize,
     character: usize,
+    deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
+    if deadline_exceeded(deadline) {
+        return None;
+    }
     match &statement.kind {
-        StmtKind::Let { value, .. } => find_identifier_in_expr(value, file, line, character),
+        StmtKind::Let { value, .. } => find_identifier_in_expr(value, file, line, character, deadline),
         StmtKind::Return { value } => value
             .as_ref()
-            .and_then(|expr| find_identifier_in_expr(expr, file, line, character)),
-        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character),
+            .and_then(|expr| find_identifier_in_expr(expr, file, line, character, deadline)),
+        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character, deadline),
     }
 }
 
@@ -1252,7 +1288,11 @@ fn find_identifier_in_expr(
     file: &PathBuf,
     line: usize,
     character: usize,
+    deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
+    if deadline_exceeded(deadline) {
+        return None;
+    }
     match &expr.kind {
         ExprKind::Identifier(name) => {
             if span_contains(&expr.span, file, line, character) {
@@ -1264,32 +1304,37 @@ fn find_identifier_in_expr(
                 None
             }
         }
-        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character),
-        ExprKind::Binary { left, right, .. } => find_identifier_in_expr(left, file, line, character)
-            .or_else(|| find_identifier_in_expr(right, file, line, character)),
-        ExprKind::Member { object, .. } => find_identifier_in_expr(object, file, line, character),
-        ExprKind::Call { callee, args } => find_identifier_in_expr(callee, file, line, character)
+        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character, deadline),
+        ExprKind::Binary { left, right, .. } => {
+            find_identifier_in_expr(left, file, line, character, deadline)
+                .or_else(|| find_identifier_in_expr(right, file, line, character, deadline))
+        }
+        ExprKind::Member { object, .. } => {
+            find_identifier_in_expr(object, file, line, character, deadline)
+        }
+        ExprKind::Call { callee, args } => find_identifier_in_expr(callee, file, line, character, deadline)
             .or_else(|| {
                 args.iter()
-                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character))
+                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character, deadline))
             }),
         ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => find_identifier_in_expr(condition, file, line, character)
-            .or_else(|| find_identifier_in_block(then_branch, file, line, character))
+        } => find_identifier_in_expr(condition, file, line, character, deadline)
+            .or_else(|| find_identifier_in_block(then_branch, file, line, character, deadline))
             .or_else(|| {
                 else_branch
                     .as_ref()
-                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character))
+                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character, deadline))
             }),
-        ExprKind::Match { scrutinee, arms } => find_identifier_in_expr(scrutinee, file, line, character)
-            .or_else(|| {
+        ExprKind::Match { scrutinee, arms } => {
+            find_identifier_in_expr(scrutinee, file, line, character, deadline).or_else(|| {
                 arms.iter()
-                    .find_map(|arm| find_identifier_in_expr(&arm.value, file, line, character))
-            }),
-        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character),
+                    .find_map(|arm| find_identifier_in_expr(&arm.value, file, line, character, deadline))
+            })
+        }
+        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character, deadline),
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => None,
     }
 }
@@ -1298,11 +1343,18 @@ fn collect_identifier_hits_by_name(
     program: &Program,
     file: &PathBuf,
     target_name: &str,
+    deadline: Option<&RequestDeadline>,
 ) -> Vec<IdentifierHit> {
     let mut hits = Vec::new();
+    if deadline_exceeded(deadline) {
+        return hits;
+    }
     for item in &program.items {
+        if deadline_exceeded(deadline) {
+            break;
+        }
         if let ItemKind::Function(function) = &item.kind {
-            collect_identifier_hits_in_block(&function.body, file, target_name, &mut hits);
+            collect_identifier_hits_in_block(&function.body, file, target_name, &mut hits, deadline);
         }
     }
     hits
@@ -1313,12 +1365,19 @@ fn collect_identifier_hits_in_block(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    deadline: Option<&RequestDeadline>,
 ) {
+    if deadline_exceeded(deadline) {
+        return;
+    }
     for statement in &block.statements {
-        collect_identifier_hits_in_statement(statement, file, target_name, hits);
+        if deadline_exceeded(deadline) {
+            return;
+        }
+        collect_identifier_hits_in_statement(statement, file, target_name, hits, deadline);
     }
     if let Some(tail) = &block.tail {
-        collect_identifier_hits_in_expr(tail, file, target_name, hits);
+        collect_identifier_hits_in_expr(tail, file, target_name, hits, deadline);
     }
 }
 
@@ -1327,15 +1386,23 @@ fn collect_identifier_hits_in_statement(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    deadline: Option<&RequestDeadline>,
 ) {
+    if deadline_exceeded(deadline) {
+        return;
+    }
     match &statement.kind {
-        StmtKind::Let { value, .. } => collect_identifier_hits_in_expr(value, file, target_name, hits),
+        StmtKind::Let { value, .. } => {
+            collect_identifier_hits_in_expr(value, file, target_name, hits, deadline)
+        }
         StmtKind::Return { value } => {
             if let Some(expr) = value {
-                collect_identifier_hits_in_expr(expr, file, target_name, hits);
+                collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline);
             }
         }
-        StmtKind::Expr { expr } => collect_identifier_hits_in_expr(expr, file, target_name, hits),
+        StmtKind::Expr { expr } => {
+            collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline)
+        }
     }
 }
 
@@ -1344,7 +1411,11 @@ fn collect_identifier_hits_in_expr(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    deadline: Option<&RequestDeadline>,
 ) {
+    if deadline_exceeded(deadline) {
+        return;
+    }
     match &expr.kind {
         ExprKind::Identifier(name) => {
             if name == target_name && &expr.span.file == file {
@@ -1354,18 +1425,20 @@ fn collect_identifier_hits_in_expr(
                 });
             }
         }
-        ExprKind::Unary { expr, .. } => collect_identifier_hits_in_expr(expr, file, target_name, hits),
+        ExprKind::Unary { expr, .. } => {
+            collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline)
+        }
         ExprKind::Binary { left, right, .. } => {
-            collect_identifier_hits_in_expr(left, file, target_name, hits);
-            collect_identifier_hits_in_expr(right, file, target_name, hits);
+            collect_identifier_hits_in_expr(left, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(right, file, target_name, hits, deadline);
         }
         ExprKind::Member { object, .. } => {
-            collect_identifier_hits_in_expr(object, file, target_name, hits);
+            collect_identifier_hits_in_expr(object, file, target_name, hits, deadline);
         }
         ExprKind::Call { callee, args } => {
-            collect_identifier_hits_in_expr(callee, file, target_name, hits);
+            collect_identifier_hits_in_expr(callee, file, target_name, hits, deadline);
             for arg in args {
-                collect_identifier_hits_in_expr(arg, file, target_name, hits);
+                collect_identifier_hits_in_expr(arg, file, target_name, hits, deadline);
             }
         }
         ExprKind::If {
@@ -1373,19 +1446,21 @@ fn collect_identifier_hits_in_expr(
             then_branch,
             else_branch,
         } => {
-            collect_identifier_hits_in_expr(condition, file, target_name, hits);
-            collect_identifier_hits_in_block(then_branch, file, target_name, hits);
+            collect_identifier_hits_in_expr(condition, file, target_name, hits, deadline);
+            collect_identifier_hits_in_block(then_branch, file, target_name, hits, deadline);
             if let Some(expr) = else_branch {
-                collect_identifier_hits_in_expr(expr, file, target_name, hits);
+                collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline);
             }
         }
         ExprKind::Match { scrutinee, arms } => {
-            collect_identifier_hits_in_expr(scrutinee, file, target_name, hits);
+            collect_identifier_hits_in_expr(scrutinee, file, target_name, hits, deadline);
             for arm in arms {
-                collect_identifier_hits_in_expr(&arm.value, file, target_name, hits);
+                collect_identifier_hits_in_expr(&arm.value, file, target_name, hits, deadline);
             }
         }
-        ExprKind::Block(block) => collect_identifier_hits_in_block(block, file, target_name, hits),
+        ExprKind::Block(block) => {
+            collect_identifier_hits_in_block(block, file, target_name, hits, deadline)
+        }
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => {}
     }
 }
@@ -1708,10 +1783,11 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        diagnostics_for_document_with_limits, parse_env_bool, read_message, refresh_program_cache,
-        run_stdio,
+        collect_function_symbols, collect_identifier_hits_by_name, diagnostics_for_document_with_limits,
+        find_identifier_at_position, parse_env_bool, read_message, refresh_program_cache, run_stdio,
         RequestDeadline, ServerState,
     };
+    use ailang_core::parse_source;
     use serde_json::{json, Value};
     use std::fs;
     use std::io::{BufReader, Cursor};
@@ -1943,6 +2019,32 @@ mod tests {
         assert!(parse_env_bool("true"));
         assert!(parse_env_bool("1"));
         assert!(parse_env_bool("yes"));
+    }
+
+    #[test]
+    fn deadline_aware_semantic_walks_can_short_circuit() {
+        let path = PathBuf::from("/tmp/lsp_deadline_semantic_walk.ai");
+        let source = "fn alpha() -> Int {\n  beta()\n}\n\nfn beta() -> Int {\n  1\n}\n";
+        let program = parse_source(&path, source).expect("source should parse");
+        let deadline = RequestDeadline::new(0);
+
+        let symbols = collect_function_symbols(&program, Some(&deadline));
+        assert!(
+            symbols.is_empty(),
+            "symbol collection should short-circuit immediately for expired deadlines"
+        );
+
+        let identifier = find_identifier_at_position(&program, &path, 1, 2, Some(&deadline));
+        assert!(
+            identifier.is_none(),
+            "identifier lookup should short-circuit immediately for expired deadlines"
+        );
+
+        let hits = collect_identifier_hits_by_name(&program, &path, "beta", Some(&deadline));
+        assert!(
+            hits.is_empty(),
+            "identifier hit collection should short-circuit immediately for expired deadlines"
+        );
     }
 
     #[test]

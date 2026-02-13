@@ -1017,9 +1017,10 @@ Implementation order is intentionally linear to reduce thrash:
   - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
   - ambiguity-safe guardrails prevent definition/rename guesses when duplicate declarations exist.
   - unopened-file scan can now be toggled for performance-sensitive editor sessions.
+  - request deadlines now propagate into semantic traversal (symbol/identifier walks) for preemptive short-circuiting in heavy LSP requests.
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
-  - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
+  - parser/analyzer-internal interrupt support for fully preemptive cancellation (semantic traversal cancellation is now covered).
   - indexed symbol graph with stable symbol-ID-based precision across definition/references/rename.
   - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
   - production grammar coverage and pinned published grammar revision.
@@ -1060,6 +1061,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Unopened-Scan Toggle".
 - Chapter: "M11 Slice: Effect Quickfix Append and De-duplicate".
 - Chapter: "M11 Slice: Multiline Effect Quickfix Support".
+- Chapter: "M11 Slice: Deadline-Aware Semantic Walk Cancellation".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
