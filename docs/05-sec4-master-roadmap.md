@@ -53,7 +53,10 @@ Current strict closure result:
 
 | Gate | Status | Meaning | Evidence |
 | --- | --- | --- | --- |
-| `M9-A/B/C/D` | PASS | Release gate + CI + promotion verifier chain exist, with strict closure enforcement wired in | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
+| `M9-A` | PASS | Release gate script exists | `scripts/release-alpha-gate.sh` |
+| `M9-B` | PASS | Release gate workflow exists | `.github/workflows/alpha-release-gate.yml` |
+| `M9-C` | PASS | Promotion verifier/manifest chain exists | `scripts/verify-release-promotion-inputs.sh`, publish-manifest scripts |
+| `M9-D` | PASS | Release gate enforces strict milestone closure | `scripts/release-alpha-gate.sh` |
 | `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` for each endpoint | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
@@ -631,6 +634,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies scheduled trend workflow keeps strict quality + regression guard steps,
   - closure now verifies scheduled trend workflow artifact upload contract (`benchmark-trend-*` + `benchmark-suite/results`).
   - benchmark smoke CI now executes strict closure audit against repository evidence (`scripts/check-milestone-closure.sh --fail-on-pending`) and includes a workflow contract test to prevent gate-step drift.
+  - roadmap closure table gate IDs are now CI-aligned to executable closure gates via `scripts/test-roadmap-closure-gate-alignment.sh` (run in `naming-lock.yml`).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
   - malformed endpoint contract checks (`missing compared rows`, `leader endpoint mismatch`, `leader missing in compared`) now hard-fail with exit code `2`,

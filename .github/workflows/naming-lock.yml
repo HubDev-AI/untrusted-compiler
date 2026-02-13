@@ -21,3 +21,6 @@ jobs:
 
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
+
+      - name: Validate roadmap closure gate alignment
+        run: scripts/test-roadmap-closure-gate-alignment.sh
