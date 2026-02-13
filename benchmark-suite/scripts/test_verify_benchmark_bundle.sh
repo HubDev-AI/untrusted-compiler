@@ -7,10 +7,6 @@ trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/results/summaries"
 
-cat > "$tmp/results/artifact-manifest.json" <<'JSON'
-{"version":"0.1","artifacts":[]}
-JSON
-
 cat > "$tmp/results/benchmark-report.md" <<'MD'
 # Benchmark Comparative Report (v0.1)
 MD
@@ -43,11 +39,22 @@ cat > "$tmp/results/summaries/node-ping-step-analysis.json" <<'JSON'
 {"version":"0.1","impl":"node","endpoint":"ping","stepCount":1,"summary":{"achievedRatioMin":1,"achievedRatioMax":1,"p99MinMs":1,"p99MaxMs":1,"kneeDetected":false,"kneeAtTargetRps":0,"kneeObservedRps":0}}
 JSON
 
+"$root_dir/scripts/build_artifact_manifest.sh" "$tmp/results" "$tmp/results/artifact-manifest.json" >/dev/null
+
 "$root_dir/scripts/verify_benchmark_bundle.sh" "$tmp/results" "node" "ping" >/dev/null
 
-rm -f "$tmp/results/summaries/node-ping-step-analysis.json"
+# mutate an artifact (keep valid JSON) to force hash mismatch only
+cat > "$tmp/results/summaries/node-ping-step-analysis.json" <<'JSON'
+{"version":"0.1","impl":"node","endpoint":"ping","stepCount":1,"summary":{"achievedRatioMin":0.5,"achievedRatioMax":1,"p99MinMs":1,"p99MaxMs":1,"kneeDetected":false,"kneeAtTargetRps":0,"kneeObservedRps":0}}
+JSON
 if "$root_dir/scripts/verify_benchmark_bundle.sh" "$tmp/results" "node" "ping" >/dev/null 2>&1; then
-  echo "expected missing artifact to fail verification" >&2
+  echo "expected hash mismatch to fail verification" >&2
+  exit 1
+fi
+
+# skip-hash-check should still pass structural checks with mutated file present
+if ! "$root_dir/scripts/verify_benchmark_bundle.sh" --skip-hash-check "$tmp/results" "node" "ping" >/dev/null 2>&1; then
+  echo "expected skip-hash-check to pass with structural artifacts present" >&2
   exit 1
 fi
 

@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  echo "usage: $0 [--skip-hash-check] <results_dir> [impls_csv] [endpoints_csv]" >&2
+}
+
+skip_hash_check="false"
+if [ "${1:-}" = "--skip-hash-check" ]; then
+  skip_hash_check="true"
+  shift
+fi
+
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
-  echo "usage: $0 <results_dir> [impls_csv] [endpoints_csv]" >&2
+  usage
   exit 2
 fi
 
@@ -42,6 +52,27 @@ require_json() {
   fi
 }
 
+verify_manifest_hash() {
+  local file="$1"
+  local rel="${file#$results_dir/}"
+
+  if [ "$skip_hash_check" = "true" ]; then
+    return 0
+  fi
+
+  expected_hash="$(jq -r --arg path "$rel" '.artifacts[]? | select(.path == $path) | .sha256' "$manifest_path" | head -n1)"
+  if [ -z "$expected_hash" ] || [ "$expected_hash" = "null" ]; then
+    echo "manifest missing artifact hash entry: ${rel}" >&2
+    exit 1
+  fi
+
+  actual_hash="$(shasum -a 256 "$file" | awk '{print $1}')"
+  if [ "$expected_hash" != "$actual_hash" ]; then
+    echo "artifact hash mismatch for ${rel}" >&2
+    exit 1
+  fi
+}
+
 require_file "$manifest_path"
 require_file "$report_path"
 require_file "$matrix_path"
@@ -53,6 +84,16 @@ require_json "$matrix_path"
 require_json "$analysis_path"
 require_json "$step_matrix_path"
 
+if [ "$skip_hash_check" != "true" ] && ! command -v shasum >/dev/null 2>&1; then
+  echo "shasum is required for manifest hash verification" >&2
+  exit 127
+fi
+
+verify_manifest_hash "$report_path"
+verify_manifest_hash "$matrix_path"
+verify_manifest_hash "$analysis_path"
+verify_manifest_hash "$step_matrix_path"
+
 IFS=',' read -r -a impls <<< "$impls_csv"
 IFS=',' read -r -a endpoints <<< "$endpoints_csv"
 
@@ -62,6 +103,7 @@ for raw_impl in "${impls[@]}"; do
 
   require_file "${summaries_dir}/${impl}-report.json"
   require_json "${summaries_dir}/${impl}-report.json"
+  verify_manifest_hash "${summaries_dir}/${impl}-report.json"
 
   for raw_endpoint in "${endpoints[@]}"; do
     endpoint="${raw_endpoint// /}"
@@ -69,12 +111,15 @@ for raw_impl in "${impls[@]}"; do
 
     require_file "${summaries_dir}/${impl}-${endpoint}.json"
     require_json "${summaries_dir}/${impl}-${endpoint}.json"
+    verify_manifest_hash "${summaries_dir}/${impl}-${endpoint}.json"
 
     require_file "${summaries_dir}/${impl}-${endpoint}-step.json"
     require_json "${summaries_dir}/${impl}-${endpoint}-step.json"
+    verify_manifest_hash "${summaries_dir}/${impl}-${endpoint}-step.json"
 
     require_file "${summaries_dir}/${impl}-${endpoint}-step-analysis.json"
     require_json "${summaries_dir}/${impl}-${endpoint}-step-analysis.json"
+    verify_manifest_hash "${summaries_dir}/${impl}-${endpoint}-step-analysis.json"
   done
 done
 
