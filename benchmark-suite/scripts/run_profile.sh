@@ -32,18 +32,28 @@ target=""
 raw="${raw_dir}/${impl}-${endpoint}.txt"
 summary="${sum_dir}/${impl}-${endpoint}.json"
 
+threads="${BENCH_THREADS:-$threads}"
+conns="${BENCH_CONNECTIONS:-$conns}"
+duration="${BENCH_DURATION:-$duration}"
+
 declare -a cmd
 case "$endpoint" in
   ping)
     target=10000
+    target="${BENCH_TARGET_PING:-$target}"
+    target="${BENCH_TARGET:-$target}"
     cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" "${base_url}/ping")
     ;;
   decode)
     target=2000
+    target="${BENCH_TARGET_DECODE:-$target}"
+    target="${BENCH_TARGET:-$target}"
     cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/post_decode.lua" "$base_url")
     ;;
   users-post)
     target=500
+    target="${BENCH_TARGET_USERS_POST:-$target}"
+    target="${BENCH_TARGET:-$target}"
     cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/post_users.lua" "$base_url")
     ;;
   *)

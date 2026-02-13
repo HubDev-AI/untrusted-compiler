@@ -59,3 +59,6 @@ Measure end-to-end service behavior across identical implementations:
 - Use constant-rate load for primary comparisons.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
 - `services/ailang`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
+- For quick local loops, override profile runtime via env vars:
+  - `BENCH_THREADS`, `BENCH_CONNECTIONS`, `BENCH_DURATION`
+  - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST`
