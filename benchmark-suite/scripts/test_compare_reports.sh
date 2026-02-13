@@ -29,7 +29,60 @@ if ! grep -q '"leader": {' "$out"; then
   exit 1
 fi
 if ! grep -q '"impl": "go"' <(jq '.leader' "$out"); then
-  echo "expected go leader by requests/sec" >&2
+  echo "expected go leader for constant-rate sample reports" >&2
+  exit 1
+fi
+if ! jq -e '.leader.constantRate == true and .leader.loadGenerator == "wrk2"' "$out" >/dev/null; then
+  echo "expected default quality metadata on leader row" >&2
+  exit 1
+fi
+
+quality_dir="$tmp/quality"
+mkdir -p "$quality_dir"
+
+cat > "$quality_dir/steady-report.json" <<'EOF'
+{
+  "version": "0.1",
+  "impl": "steady",
+  "summaries": [
+    {
+      "endpoint": "ping",
+      "targetRps": 10000,
+      "requestsPerSec": 50000,
+      "constantRate": true,
+      "loadGenerator": "wrk2",
+      "latency": {"p99": "10.00ms"}
+    }
+  ]
+}
+EOF
+
+cat > "$quality_dir/burst-report.json" <<'EOF'
+{
+  "version": "0.1",
+  "impl": "burst",
+  "summaries": [
+    {
+      "endpoint": "ping",
+      "targetRps": 10000,
+      "requestsPerSec": 90000,
+      "constantRate": false,
+      "loadGenerator": "wrk",
+      "latency": {"p99": "2.00ms"}
+    }
+  ]
+}
+EOF
+
+quality_out="$tmp/compare-quality.json"
+"$root_dir/scripts/compare_reports.sh" "$quality_dir" ping "$quality_out" >/dev/null
+
+if ! jq -e '.leader.impl == "steady"' "$quality_out" >/dev/null; then
+  echo "compare-reports should prefer constant-rate leader over higher non-constant throughput" >&2
+  exit 1
+fi
+if ! jq -e '.compared | length == 2 and .[0].constantRate == true and .[1].constantRate == false' "$quality_out" >/dev/null; then
+  echo "compare-reports quality ordering mismatch for constant-rate prioritization" >&2
   exit 1
 fi
 

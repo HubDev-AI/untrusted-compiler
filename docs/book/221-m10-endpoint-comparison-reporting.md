@@ -26,6 +26,8 @@ M10 requires cross-language comparison outputs, not just isolated per-impl runs.
    - `targetRps`
    - `requestsPerSec`
    - `p99`
+   - `loadGenerator` (defaults to `wrk2` if missing)
+   - `constantRate` (defaults to `true` if missing)
 4. Sorts rows with constant-rate quality priority:
    - `constantRate=true` rows first,
    - then `requestsPerSec` descending.

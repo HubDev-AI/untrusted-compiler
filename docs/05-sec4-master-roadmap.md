@@ -543,6 +543,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - benchmark Makefile profile targets (`bench-ping`, `bench-decode`, `bench-users`, `bench-users-get`) now route through `run_profile.sh` so fallback behavior is consistent.
   - summary parser now supports both `wrk2` (`50.000%`) and `wrk` (`50%`) percentile formats,
   - compare/trend artifacts now carry `loadGenerator` + `constantRate` metadata and mark coverage/guards as `n/a` for non-constant runs,
+  - endpoint compare reports now emit `loadGenerator` + `constantRate` metadata with defaults for legacy report bundles,
   - compare-matrix leader ordering now prefers `constantRate=true` runs over higher-throughput non-constant fallback runs.
 - M10 cross-impl evidence import path is now wired for closure readiness:
   - `.github/workflows/benchmark-cross-impl-evidence.yml` can be manually dispatched to run `sec4/node/go/rust` `ping+decode`, enforce strict evidence quality, and publish artifact `benchmark-cross-impl-evidence`.

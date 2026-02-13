@@ -31,13 +31,17 @@ for report in "${report_files[@]}"; do
   reqps="$(jq -r '.requestsPerSec // 0' <<<"$summary")"
   p99="$(jq -r '.latency.p99 // ""' <<<"$summary")"
   target_rps="$(jq -r '.targetRps // 0' <<<"$summary")"
+  load_generator="$(jq -r '.loadGenerator // "wrk2"' <<<"$summary")"
+  constant_rate="$(jq -r 'if has("constantRate") then .constantRate else true end' <<<"$summary")"
 
   row="$(jq -n \
     --arg impl "$impl" \
     --arg p99 "$p99" \
+    --arg load_generator "$load_generator" \
+    --argjson constant_rate "$constant_rate" \
     --argjson reqps "$reqps" \
     --argjson target "$target_rps" \
-    '{impl:$impl,targetRps:$target,requestsPerSec:$reqps,p99:$p99}')"
+    '{impl:$impl,targetRps:$target,requestsPerSec:$reqps,p99:$p99,loadGenerator:$load_generator,constantRate:$constant_rate}')"
   rows="$(jq -c --argjson row "$row" '. + [$row]' <<<"$rows")"
 done
 
@@ -46,7 +50,7 @@ if [ "$(jq 'length' <<<"$rows")" -eq 0 ]; then
   exit 2
 fi
 
-rows_sorted="$(jq -c 'sort_by(.requestsPerSec) | reverse' <<<"$rows")"
+rows_sorted="$(jq -c 'sort_by([(if (.constantRate == true) then 0 else 1 end), -(.requestsPerSec // 0)])' <<<"$rows")"
 leader="$(jq -c '.[0]' <<<"$rows_sorted")"
 
 mkdir -p "$(dirname "$out")"
