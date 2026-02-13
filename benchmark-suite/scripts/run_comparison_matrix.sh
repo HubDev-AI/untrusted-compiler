@@ -49,10 +49,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
-base_url="http://127.0.0.1:8080"
+bench_port="${BENCH_PORT:-18085}"
+base_url="http://127.0.0.1:${bench_port}"
 results_dir="${root_dir}/results"
 summaries_dir="${results_dir}/summaries"
-mkdir -p "$summaries_dir"
+raw_dir="${results_dir}/raw"
+mkdir -p "$summaries_dir" "$raw_dir"
 
 if [ -z "$sec_audit_path" ]; then
   candidate="${root_dir}/../baselines/sec-audit/default-secure-prod.hello.json"
@@ -90,6 +92,7 @@ done
 start_service() {
   local impl="$1"
   local service_dir="${root_dir}/services/${impl}"
+  local log_file="${raw_dir}/${impl}-service.log"
   if [ ! -d "$service_dir" ]; then
     echo "service directory not found for impl=${impl}: ${service_dir}" >&2
     return 2
@@ -100,43 +103,49 @@ start_service() {
       (
         cd "$service_dir"
         ./build.sh >/dev/null
-        PORT=8080 ./ailang-bench-server
-      ) &
+        PORT="$bench_port" ./ailang-bench-server
+      ) >"$log_file" 2>&1 &
       ;;
     node)
       (
         cd "$service_dir"
-        PORT=8080 npm run start
-      ) &
+        PORT="$bench_port" npm run start
+      ) >"$log_file" 2>&1 &
       ;;
     go)
       (
         cd "$service_dir"
-        PORT=8080 go run .
-      ) &
+        PORT="$bench_port" go run .
+      ) >"$log_file" 2>&1 &
       ;;
     rust)
       (
         cd "$service_dir"
-        PORT=8080 cargo run --quiet
-      ) &
+        PORT="$bench_port" cargo run --quiet
+      ) >"$log_file" 2>&1 &
       ;;
     c)
       (
         cd "$service_dir"
         cc -O2 -std=c11 server.c -o c-bench-server
-        PORT=8080 ./c-bench-server
-      ) &
+        PORT="$bench_port" ./c-bench-server
+      ) >"$log_file" 2>&1 &
       ;;
   esac
 
-  echo $!
+  service_pid="$!"
+  service_log_file="$log_file"
 }
 
 wait_for_ready() {
+  local pid="$1"
   local tries=120
   while [ "$tries" -gt 0 ]; do
-    if curl -fsS "${base_url}/ping" >/dev/null 2>&1; then
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return 2
+    fi
+    ping_body="$(curl -fsS "${base_url}/ping" 2>/dev/null || true)"
+    if [ "$ping_body" = "ok" ]; then
       return 0
     fi
     tries=$((tries - 1))
@@ -152,7 +161,7 @@ for impl in "${impls[@]}"; do
   echo "=== impl=${impl} ==="
 
   if [ "$dry_run" = "true" ]; then
-    echo "start: ${impl} service on :8080"
+    echo "start: ${impl} service on :${bench_port}"
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ping ${base_url}"
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} decode ${base_url}"
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} users-post ${base_url}"
@@ -164,7 +173,11 @@ for impl in "${impls[@]}"; do
     continue
   fi
 
-  pid="$(start_service "$impl")"
+  service_pid=""
+  service_log_file=""
+  start_service "$impl"
+  pid="$service_pid"
+  log_file="$service_log_file"
   cleanup_impl() {
     if kill -0 "$pid" >/dev/null 2>&1; then
       kill "$pid" >/dev/null 2>&1 || true
@@ -173,8 +186,13 @@ for impl in "${impls[@]}"; do
   }
   trap cleanup_impl EXIT
 
-  if ! wait_for_ready; then
-    echo "service failed readiness check for impl=${impl}" >&2
+  if ! wait_for_ready "$pid"; then
+    echo "service failed readiness check for impl=${impl} on port ${bench_port}" >&2
+    if [ -n "$log_file" ] && [ -f "$log_file" ]; then
+      echo "--- ${impl} service log tail ---" >&2
+      tail -n 40 "$log_file" >&2 || true
+      echo "--- end log tail ---" >&2
+    fi
     cleanup_impl
     trap - EXIT
     exit 1

@@ -4,6 +4,7 @@ set -euo pipefail
 service_dir="$(cd "$(dirname "$0")" && pwd)"
 root_dir="$(cd "$service_dir/../.." && pwd)"
 payload="$root_dir/spec/payloads/user_4kb.json"
+port="${BENCH_SMOKE_PORT:-18084}"
 
 if [ ! -f "$payload" ]; then
   echo "payload fixture missing: $payload" >&2
@@ -13,7 +14,7 @@ fi
 "$service_dir/build.sh"
 
 log_file="$service_dir/.smoke.log"
-PORT=8080 "$service_dir/ailang-bench-server" >"$log_file" 2>&1 &
+PORT="$port" "$service_dir/ailang-bench-server" >"$log_file" 2>&1 &
 pid=$!
 cleanup() {
   if kill -0 "$pid" >/dev/null 2>&1; then
@@ -23,14 +24,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+ping_tmp="/tmp/ailang-smoke-ping.txt"
+: >"$ping_tmp"
+ready="false"
 for _ in $(seq 1 180); do
-  if curl -fsS "http://127.0.0.1:8080/ping" >/tmp/ailang-smoke-ping.txt 2>/dev/null; then
+  if curl -fsS "http://127.0.0.1:${port}/ping" >"$ping_tmp" 2>/dev/null; then
+    if [ "$(cat "$ping_tmp" 2>/dev/null || true)" = "ok" ]; then
+      ready="true"
+      break
+    fi
+  fi
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
     break
   fi
   sleep 0.1
 done
 
-if [ "$(cat /tmp/ailang-smoke-ping.txt 2>/dev/null || true)" != "ok" ]; then
+if [ "$ready" != "true" ]; then
   echo "ailang smoke ping failed" >&2
   exit 1
 fi
@@ -38,7 +48,7 @@ fi
 decode_status="$(curl -sS -o /tmp/ailang-smoke-decode.json -w '%{http_code}' \
   -H 'content-type: application/json' \
   --data-binary "@$payload" \
-  http://127.0.0.1:8080/decode)"
+  http://127.0.0.1:${port}/decode)"
 if [ "$decode_status" != "200" ]; then
   echo "ailang smoke /decode expected 200, got $decode_status" >&2
   exit 1
@@ -53,14 +63,14 @@ user_id="$(jq -r '.id' "$payload")"
 users_post_status="$(curl -sS -o /tmp/ailang-smoke-users-post.json -w '%{http_code}' \
   -H 'content-type: application/json' \
   --data-binary "@$payload" \
-  http://127.0.0.1:8080/users)"
+  http://127.0.0.1:${port}/users)"
 if [ "$users_post_status" != "201" ]; then
   echo "ailang smoke /users POST expected 201, got $users_post_status" >&2
   exit 1
 fi
 
 users_get_status="$(curl -sS -o /tmp/ailang-smoke-users-get.json -w '%{http_code}' \
-  "http://127.0.0.1:8080/users/$user_id")"
+  "http://127.0.0.1:${port}/users/$user_id")"
 if [ "$users_get_status" != "200" ]; then
   echo "ailang smoke /users/:id expected 200, got $users_get_status" >&2
   exit 1

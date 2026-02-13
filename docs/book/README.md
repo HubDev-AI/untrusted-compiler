@@ -196,5 +196,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `229-m10-cross-impl-contract-parity-smoke.md`
 - `230-m10-benchmark-profile-env-overrides.md`
 - `231-m10-ailang-report-secaudit-embedding.md`
+- `232-m10-orchestrator-readiness-and-tooling-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

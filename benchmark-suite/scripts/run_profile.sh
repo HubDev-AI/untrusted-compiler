@@ -72,5 +72,10 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
+if ! command -v wrk2 >/dev/null 2>&1; then
+  echo "wrk2 is required but was not found in PATH" >&2
+  exit 127
+fi
+
 "${cmd[@]}" | tee "$raw"
 "${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary"
