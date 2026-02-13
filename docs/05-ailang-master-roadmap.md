@@ -907,6 +907,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M8 Slice: sec.audit History-Window Trend Summary".
 - Chapter: "M8 Slice: sec.audit History-Window Severity Rollups".
 - Chapter: "M8 Slice: sec.audit History-Summary Export".
+- Chapter: "M8 Slice: sec.audit History-Window Bounds Validation".
 
 ## M9 - Release Hardening
 ### Build tasks

@@ -313,6 +313,41 @@ fn sec_audit_history_window_requires_history_dir() {
 }
 
 #[test]
+fn sec_audit_history_window_zero_is_rejected() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let history_dir = temp_dir("ailang-audit-history-zero-window");
+    let history = history_dir
+        .to_str()
+        .expect("history path should be valid utf-8");
+
+    let output = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--history-dir",
+        history,
+        "--history-window",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "history-window=0 should fail with explicit usage error"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("--history-window must be >= 1"),
+        "expected explicit error for zero history-window"
+    );
+
+    fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
+}
+
+#[test]
 fn sec_audit_write_history_summary_requires_history_window() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

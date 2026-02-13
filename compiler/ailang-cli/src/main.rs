@@ -151,6 +151,10 @@ fn cmd_sec_audit(
         eprintln!("--history-window requires --history-dir");
         return Err(2);
     }
+    if history_window.is_some_and(|window| window == 0) {
+        eprintln!("--history-window must be >= 1");
+        return Err(2);
+    }
     if write_history_summary_path.is_some() && history_window.is_none() {
         eprintln!("--write-history-summary requires --history-window");
         return Err(2);
