@@ -905,6 +905,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Typed Sinks and Safe Boundaries".
 - Chapter: "Policy and Lint Rules".
 - Chapter: "M8 Slice: sec.audit History-Window Trend Summary".
+- Chapter: "M8 Slice: sec.audit History-Window Severity Rollups".
 
 ## M9 - Release Hardening
 ### Build tasks
@@ -1092,7 +1093,7 @@ Day 14:
 
 1. Extend callable/member canonicalization beyond capability namespace seeding into user-defined capability-object function fields and other non-stdlib callable-value shapes.
 2. Extend provenance traces from compiler/audit outputs into editor-facing explainability surfaces (LSP/hover/code-action context).
-3. Expand trend mode beyond baseline deltas (history-window summary is in place) to persisted multi-run history metrics and time-window severity rollups.
+3. Expand trend mode into core persisted multi-run metrics (history-window summaries and severity rollups are in place at CLI output level).
 4. Prepare M10 benchmark harness scaffold once M9 stability gate is reached.
 5. Prepare M11 editor tooling scaffold once semantic outputs are stabilized for LSP use.
 

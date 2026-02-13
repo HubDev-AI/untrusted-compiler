@@ -346,6 +346,10 @@ struct HistoryWindowSummary {
     min_risk_score: i64,
     max_risk_score: i64,
     risk_score_delta: i64,
+    average_risk_score: f64,
+    highest_severity_seen: String,
+    severity_rollup: std::collections::HashMap<String, i64>,
+    severity_latest_delta: std::collections::HashMap<String, i64>,
 }
 
 fn load_recent_history_reports(
@@ -410,6 +414,7 @@ fn compute_history_window_summary(
     let latest = *risk_scores
         .last()
         .expect("history summary risk-score list should be non-empty");
+    let average = risk_scores.iter().sum::<i64>() as f64 / risk_scores.len() as f64;
     let min = *risk_scores
         .iter()
         .min()
@@ -418,6 +423,44 @@ fn compute_history_window_summary(
         .iter()
         .max()
         .expect("history summary max should exist");
+    let severity_keys = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+    let mut severity_rollup = std::collections::HashMap::new();
+    let mut highest_seen = "LOW".to_string();
+    for key in severity_keys {
+        let total = reports
+            .iter()
+            .map(|(report, _)| report.summary.finding_counts.get(key).copied().unwrap_or(0))
+            .sum::<i64>();
+        severity_rollup.insert(key.to_string(), total);
+        if total > 0 {
+            highest_seen = key.to_string();
+        }
+    }
+
+    let oldest_report = reports
+        .first()
+        .expect("history summary should contain at least one report");
+    let latest_report = reports
+        .last()
+        .expect("history summary should contain at least one report");
+    let mut severity_latest_delta = std::collections::HashMap::new();
+    for key in severity_keys {
+        let oldest_count = oldest_report
+            .0
+            .summary
+            .finding_counts
+            .get(key)
+            .copied()
+            .unwrap_or(0);
+        let latest_count = latest_report
+            .0
+            .summary
+            .finding_counts
+            .get(key)
+            .copied()
+            .unwrap_or(0);
+        severity_latest_delta.insert(key.to_string(), latest_count - oldest_count);
+    }
 
     Ok(Some(HistoryWindowSummary {
         window: window.max(1),
@@ -427,6 +470,10 @@ fn compute_history_window_summary(
         min_risk_score: min,
         max_risk_score: max,
         risk_score_delta: latest - oldest,
+        average_risk_score: average,
+        highest_severity_seen: highest_seen,
+        severity_rollup,
+        severity_latest_delta,
     }))
 }
 
@@ -436,7 +483,7 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
             print_aux_line(
                 format,
                 &format!(
-                    "history window summary: reports={}/{}, oldestRisk={}, latestRisk={}, minRisk={}, maxRisk={}, riskDelta={}",
+                    "history window summary: reports={}/{}, oldestRisk={}, latestRisk={}, minRisk={}, maxRisk={}, riskDelta={}, avgRisk={:.2}, highestSeen={}",
                     summary.reports,
                     summary.window,
                     summary.oldest_risk_score,
@@ -444,6 +491,8 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
                     summary.min_risk_score,
                     summary.max_risk_score,
                     summary.risk_score_delta,
+                    summary.average_risk_score,
+                    summary.highest_severity_seen,
                 ),
             );
         }
@@ -456,6 +505,10 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
                 "minRiskScore": summary.min_risk_score,
                 "maxRiskScore": summary.max_risk_score,
                 "riskScoreDelta": summary.risk_score_delta,
+                "averageRiskScore": summary.average_risk_score,
+                "highestSeveritySeen": summary.highest_severity_seen,
+                "severityRollup": summary.severity_rollup,
+                "severityLatestDelta": summary.severity_latest_delta,
             });
             print_aux_line(
                 format,

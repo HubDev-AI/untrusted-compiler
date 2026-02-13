@@ -273,6 +273,14 @@ fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
         second_stderr.contains("\"reports\":2"),
         "history-window summary should include number of sampled reports"
     );
+    assert!(
+        second_stderr.contains("\"severityRollup\""),
+        "history-window summary should include severity rollups"
+    );
+    assert!(
+        second_stderr.contains("\"severityLatestDelta\""),
+        "history-window summary should include latest-vs-oldest severity deltas"
+    );
 
     fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
 }
