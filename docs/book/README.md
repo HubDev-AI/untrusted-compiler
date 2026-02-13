@@ -124,5 +124,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `156-m7-err-internal-message-argument-hardening.md`
 - `157-m7-err-validation-constructor-argument-hardening.md`
 - `158-m7-err-auth-constructor-argument-hardening.md`
+- `159-m7-err-not-found-constructor-argument-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

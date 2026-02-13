@@ -3404,6 +3404,48 @@ impl Analyzer {
             return;
         }
 
+        if is_err_not_found_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.notFound expects `(code, message)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.notFound(\"CODE\", \"message\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.notFound code argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use stable not-found error code strings"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.notFound message argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use safe not-found message strings"),
+                );
+            }
+            return;
+        }
+
         if is_err_internal_call(callee_name) {
             if args.len() != 1 {
                 self.diagnostics.push(
@@ -4793,6 +4835,10 @@ fn is_err_validation_call(name: &str) -> bool {
 
 fn is_err_auth_call(name: &str) -> bool {
     matches!(name, "err_auth" | "err.auth")
+}
+
+fn is_err_not_found_call(name: &str) -> bool {
+    matches!(name, "err_not_found" | "err.notFound")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

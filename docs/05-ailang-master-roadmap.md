@@ -357,6 +357,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `err.auth` constructor typing is now hardened:
     - call shape is enforced as `(code, message, status)`,
     - code/message are string-typed and status is numeric.
+  - `err.notFound` constructor typing is now hardened:
+    - call shape is enforced as `(code, message)`,
+    - code and message arguments must be `String`.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -740,6 +743,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: err.internal Message-Argument Hardening".
 - Chapter: "M7 Slice: err.validation Constructor-Argument Hardening".
 - Chapter: "M7 Slice: err.auth Constructor-Argument Hardening".
+- Chapter: "M7 Slice: err.notFound Constructor-Argument Hardening".
 - Chapter: "M7 Slice: res.text Intrinsic Bridge".
 - Chapter: "M7 Slice: Log Event Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: DB Transaction Intrinsic Bridge".
