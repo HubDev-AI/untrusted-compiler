@@ -3,6 +3,7 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 matrix="${root_dir}/testdata/sample-trend-compare-matrix.json"
+fallback_matrix="${root_dir}/testdata/sample-trend-compare-matrix-wrk.json"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -35,6 +36,18 @@ fi
 
 if ! grep -q 'Overall baseline guard status: fail' "$out"; then
   echo "missing baseline guard summary" >&2
+  exit 1
+fi
+
+fallback_out="${tmp}/trend-note-wrk.md"
+"$root_dir/render_trend_note_entry.sh" \
+  "$fallback_matrix" \
+  --date 2026-02-13 \
+  --baseline-dir "${root_dir}/../baselines" \
+  --out "$fallback_out" >/dev/null
+
+if ! grep -q '| ping | go | 1.75 | n/a | n/a | n/a |' "$fallback_out"; then
+  echo "missing non-constant-rate n/a row" >&2
   exit 1
 fi
 

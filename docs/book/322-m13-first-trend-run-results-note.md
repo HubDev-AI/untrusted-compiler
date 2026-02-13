@@ -11,17 +11,23 @@ This chapter captures the first M13 trend-note entry and the current threshold d
 
 ```bash
 benchmark-suite/scripts/preflight.sh --impls node
+BENCH_DURATION=10s benchmark-suite/scripts/run_comparison_matrix.sh --impls sec4,node,go,rust --endpoints ping,decode
+benchmark-suite/scripts/render_trend_note_entry.sh \
+  benchmark-suite/results/summaries/compare-matrix.json \
+  --date 2026-02-13 \
+  --baseline-dir benchmark-suite/baselines \
+  --out benchmark-suite/results/summaries/trend-note-entry.md
 ```
 
 Observed output:
-- `curl`, `jq`, and `node` present
-- `wrk2` missing
-- preflight failed before live benchmark execution
+- `wrk2` was not available locally; runner used explicit `wrk` fallback mode.
+- Cross-implementation live endpoint metrics were captured for `ping` and `decode`.
+- Trend note entry was rendered from live compare matrix output.
 
 ## Endpoint signal status
 
-- `ping`: no local live signal captured in this run (blocked by missing `wrk2`)
-- `decode`: no local live signal captured in this run (blocked by missing `wrk2`)
+- `ping`: live signal captured (leader: `go`, p99: `1.75ms`)
+- `decode`: live signal captured (leader: `go`, p99: `2.04ms`)
 
 ## Threshold posture decision
 
@@ -29,15 +35,15 @@ Decision for this note:
 - no threshold changes
 
 Rationale:
-- no live endpoint metrics were produced locally,
-- existing decode threshold rubric requires reproducible run evidence before adjusting limits.
+- local run used non-constant fallback mode (`wrk`), so coverage/guard outcomes are marked `n/a`,
+- threshold changes should be based on scheduled constant-rate (`wrk2`) evidence.
 
 ## Follow-up action
 
-When the scheduled workflow (`benchmark-trend.yml`) artifacts are available:
+For next threshold decision:
 1. download latest trend artifact package:
    - `benchmark-suite/scripts/fetch_trend_artifact.sh --repo HubDev-AI/untrusted-compiler`
-2. pull `benchmark-suite/results/summaries/trend-note-entry.md` from downloaded artifacts.
+2. verify run mode is constant-rate (`wrk2`) before applying coverage-based guard logic.
 3. evaluate against current thresholds and baseline limits.
 4. append decision (`keep`, `tighten`, or `relax`) with rubric justification.
 
@@ -70,11 +76,12 @@ benchmark-suite/scripts/update_trend_note_from_ci.sh \
 
 - Source matrix: `benchmark-suite/results/summaries/compare-matrix.json`
 - Endpoints: `ping,decode`
+- Run mode: local fallback (`wrk`), non-constant-rate
 
 | Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
 | --- | --- | ---: | ---: | --- | --- |
-| ping | go | 0.00 | 1524.32 | pass | pass |
-| decode | go | 0.00 | 6243.21 | pass | pass |
+| ping | go | 1.75 | n/a | n/a | n/a |
+| decode | go | 2.04 | n/a | n/a | n/a |
 
-- Overall absolute guard status: pass
-- Overall baseline guard status: pass
+- Overall absolute guard status: n/a
+- Overall baseline guard status: n/a

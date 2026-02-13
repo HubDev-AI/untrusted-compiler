@@ -46,7 +46,8 @@ jq '
             | (if $p99_min > 0 then ($p99_max / $p99_min) else null end) as $p99_spread
             | ($leader.targetRps // 0) as $target_rps
             | ($leader.requestsPerSec // 0) as $leader_rps
-            | (if $target_rps > 0 then (($leader_rps / $target_rps) * 100) else null end) as $coverage
+            | ((if ($leader | has("constantRate")) then $leader.constantRate else true end) == true) as $constant_rate
+            | (if ($constant_rate and $target_rps > 0) then (($leader_rps / $target_rps) * 100) else null end) as $coverage
             | {
                 endpoint: $ep.endpoint,
                 leader: $leader,
@@ -55,6 +56,7 @@ jq '
                   p99MinMs: $p99_min,
                   p99MaxMs: $p99_max,
                   p99SpreadX: $p99_spread,
+                  constantRate: $constant_rate,
                   leaderTargetCoveragePct: $coverage
                 },
                 findings: [

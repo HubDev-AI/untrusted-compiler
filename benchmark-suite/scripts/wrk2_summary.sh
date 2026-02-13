@@ -20,10 +20,17 @@ fi
 mkdir -p "$(dirname "$out")"
 
 requests_sec="$(awk '/^Requests\/sec:/ {print $2; exit}' "$raw")"
-latency_max="$(awk '/^Latency[[:space:]]+/ {print $4; exit}' "$raw")"
-p50="$(awk '/^[[:space:]]*50\.000%/ {print $2; exit}' "$raw")"
-p95="$(awk '/^[[:space:]]*95\.000%/ {print $2; exit}' "$raw")"
-p99="$(awk '/^[[:space:]]*99\.000%/ {print $2; exit}' "$raw")"
+latency_max="$(awk '/^[[:space:]]*Latency[[:space:]]+/ && $1=="Latency" {print $4; exit}' "$raw")"
+p50="$(awk '/^[[:space:]]*50(\.000)?%/ {print $2; exit}' "$raw")"
+p95="$(awk '/^[[:space:]]*95(\.000)?%/ {print $2; exit}' "$raw")"
+p99="$(awk '/^[[:space:]]*99(\.000)?%/ {print $2; exit}' "$raw")"
+
+load_generator="wrk"
+constant_rate="false"
+if grep -q 'Thread calibration:' "$raw"; then
+  load_generator="wrk2"
+  constant_rate="true"
+fi
 
 cat > "$out" <<JSON
 {
@@ -31,6 +38,8 @@ cat > "$out" <<JSON
   "endpoint": "${endpoint}",
   "targetRps": ${target_rps},
   "requestsPerSec": ${requests_sec:-0},
+  "loadGenerator": "${load_generator}",
+  "constantRate": ${constant_rate},
   "latency": {
     "p50": "${p50}",
     "p95": "${p95}",

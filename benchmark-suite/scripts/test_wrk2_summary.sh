@@ -27,5 +27,46 @@ if ! grep -q '"p95": "3.20ms"' "$out"; then
   echo "missing p95 in summary" >&2
   exit 1
 fi
+if ! grep -q '"loadGenerator": "wrk2"' "$out"; then
+  echo "missing wrk2 loadGenerator marker in summary" >&2
+  exit 1
+fi
+if ! grep -q '"constantRate": true' "$out"; then
+  echo "missing constantRate=true in wrk2 summary" >&2
+  exit 1
+fi
+
+fallback_out="${root_dir}/results/summaries/test-summary-wrk.json"
+"${root_dir}/scripts/wrk2_summary.sh" \
+  "${root_dir}/scripts/testdata/wrk_sample.txt" \
+  "go" \
+  "decode" \
+  "2000" \
+  "$fallback_out" >/dev/null
+
+if ! grep -q '"impl": "go"' "$fallback_out"; then
+  echo "missing impl in wrk fallback summary" >&2
+  exit 1
+fi
+if ! grep -q '"requestsPerSec": 124864.23' "$fallback_out"; then
+  echo "missing requestsPerSec in wrk fallback summary" >&2
+  exit 1
+fi
+if ! grep -q '"p50": "343.00us"' "$fallback_out"; then
+  echo "missing p50 in wrk fallback summary" >&2
+  exit 1
+fi
+if ! grep -q '"p99": "2.04ms"' "$fallback_out"; then
+  echo "missing p99 in wrk fallback summary" >&2
+  exit 1
+fi
+if ! grep -q '"loadGenerator": "wrk"' "$fallback_out"; then
+  echo "missing wrk loadGenerator marker in fallback summary" >&2
+  exit 1
+fi
+if ! grep -q '"constantRate": false' "$fallback_out"; then
+  echo "missing constantRate=false in wrk fallback summary" >&2
+  exit 1
+fi
 
 echo "wrk2 summary test passed"

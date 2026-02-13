@@ -9,28 +9,36 @@
           "endpoint": "decode",
           "targetRps": 2000,
           "requestsPerSec": 124864.23,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "2.04ms"
         },
         {
           "impl": "rust",
           "endpoint": "decode",
           "targetRps": 2000,
           "requestsPerSec": 89323.38,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "15.16ms"
         },
         {
           "impl": "node",
           "endpoint": "decode",
           "targetRps": 2000,
           "requestsPerSec": 69374.92,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "1.82ms"
         },
         {
           "impl": "sec4",
           "endpoint": "decode",
           "targetRps": 2000,
           "requestsPerSec": 33135.75,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "123.92ms"
         }
       ],
       "leader": {
@@ -38,7 +46,9 @@
         "endpoint": "decode",
         "targetRps": 2000,
         "requestsPerSec": 124864.23,
-        "p99": ""
+        "loadGenerator": "wrk",
+        "constantRate": false,
+        "p99": "2.04ms"
       }
     },
     {
@@ -49,28 +59,36 @@
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 152431.97,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "1.75ms"
         },
         {
           "impl": "rust",
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 144862.91,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "4.06ms"
         },
         {
           "impl": "node",
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 81435.06,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "29.76ms"
         },
         {
           "impl": "sec4",
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 33295.78,
-          "p99": ""
+          "loadGenerator": "wrk",
+          "constantRate": false,
+          "p99": "93.10ms"
         }
       ],
       "leader": {
@@ -78,7 +96,9 @@
         "endpoint": "ping",
         "targetRps": 10000,
         "requestsPerSec": 152431.97,
-        "p99": ""
+        "loadGenerator": "wrk",
+        "constantRate": false,
+        "p99": "1.75ms"
       }
     }
   ]

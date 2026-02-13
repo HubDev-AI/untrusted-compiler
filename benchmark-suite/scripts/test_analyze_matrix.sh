@@ -30,6 +30,10 @@ if ! jq -e '.summary.highestSeverity == "MEDIUM"' "$analysis" >/dev/null; then
   echo "analysis highest severity mismatch" >&2
   exit 1
 fi
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .metrics.constantRate == true' "$analysis" >/dev/null; then
+  echo "analysis expected constantRate=true for sample matrix" >&2
+  exit 1
+fi
 
 if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .findings[] | select(.id == "P99_SPREAD_MEDIUM")' "$analysis" >/dev/null; then
   echo "expected ping p99 spread finding" >&2

@@ -37,6 +37,10 @@ if ! jq -e '.endpoints[] | select(.endpoint == "users-post") | .leader.impl == "
   echo "compare-matrix expected sec4 to lead users-post" >&2
   exit 1
 fi
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader.constantRate == true' "$out" >/dev/null; then
+  echo "compare-matrix expected default constantRate=true metadata" >&2
+  exit 1
+fi
 
 filtered_out="$tmp/compare-matrix-filtered.json"
 "$root_dir/scripts/compare_matrix.sh" "$tmp" "$filtered_out" "node,go" >/dev/null

@@ -131,12 +131,17 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   fi
   target_rps="$(jq -r '.targetRps // 0' <<<"$leader_json")"
   actual_rps="$(jq -r '.requestsPerSec // 0' <<<"$leader_json")"
+  constant_rate="$(jq -r 'if has("constantRate") then .constantRate else true end' <<<"$leader_json")"
   coverage_pct="$(awk -v target="${target_rps}" -v actual="${actual_rps}" 'BEGIN { if (target + 0 > 0) printf "%.2f", (actual / target) * 100; else printf "0.00" }')"
+  coverage_display="${coverage_pct}"
   p99_fmt="$(awk -v n="${p99_ms}" 'BEGIN { printf "%.2f", n + 0 }')"
 
   threshold_pair="$(default_thresholds "$endpoint")"
   abs_status="n/a"
-  if [ -n "$threshold_pair" ]; then
+  if [ "$constant_rate" != "true" ]; then
+    abs_status="n/a"
+    coverage_display="n/a"
+  elif [ -n "$threshold_pair" ]; then
     read -r max_p99 min_cov <<<"$threshold_pair"
     if awk -v p99="${p99_ms}" -v max="${max_p99}" -v cov="${coverage_pct}" -v min="${min_cov}" 'BEGIN { exit !((p99+0 <= max+0) && (cov+0 >= min+0)) }'; then
       abs_status="pass"
@@ -149,7 +154,10 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
 
   baseline_status="n/a"
   baseline_path="${baseline_dir}/node-${endpoint}-trend-baseline.json"
-  if [ -f "$baseline_path" ]; then
+  if [ "$constant_rate" != "true" ]; then
+    baseline_status="n/a"
+    base_na=$((base_na + 1))
+  elif [ -f "$baseline_path" ]; then
     baseline_p99="$(jq -r '.baselineP99Ms // empty' "$baseline_path")"
     baseline_cov="$(jq -r '.baselineCoveragePct // empty' "$baseline_path")"
     max_p99_regress="$(jq -r '.maxP99RegressionPct // 20' "$baseline_path")"
@@ -172,7 +180,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
     base_na=$((base_na + 1))
   fi
 
-  row_lines+=("| ${endpoint} | ${leader_impl} | ${p99_fmt} | ${coverage_pct} | ${abs_status} | ${baseline_status} |")
+  row_lines+=("| ${endpoint} | ${leader_impl} | ${p99_fmt} | ${coverage_display} | ${abs_status} | ${baseline_status} |")
 done
 
 overall_abs="n/a"
