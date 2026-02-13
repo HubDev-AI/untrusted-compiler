@@ -227,12 +227,24 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M10-D") !
   echo "expected json closure output to include M10-D gate" >&2
   exit 1
 fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M11-A") != null' >/dev/null; then
+  echo "expected json closure output to include M11-A gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M12-A") != null' >/dev/null; then
+  echo "expected json closure output to include M12-A gate" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-D") != null' >/dev/null; then
   echo "expected json closure output to include M13-D gate" >&2
   exit 1
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-E") != null' >/dev/null; then
   echo "expected json closure output to include M13-E gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-F") != null' >/dev/null; then
+  echo "expected json closure output to include M13-F gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
