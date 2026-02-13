@@ -294,5 +294,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `327-m13-trend-note-update-command.md`
 - `328-milestone-closure-audit-checklist.md`
 - `329-m10-cross-impl-evidence-importer.md`
+- `330-m13-closure-evidence-refresh-command.md`
 
 As milestones progress, chapters will be added and linked from this index.
