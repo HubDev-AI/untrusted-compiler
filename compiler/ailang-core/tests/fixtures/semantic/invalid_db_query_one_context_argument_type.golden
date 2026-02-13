@@ -1,0 +1,4 @@
+error[E4001]: db sink context argument must be `Ctx`
+  --> invalid_db_query_one_context_argument_type.ai:2:15
+  note: found `Int`
+  note: use `db.queryOne(ctx, capability, query, rowSchema)` for context-first `db.queryOne` calls

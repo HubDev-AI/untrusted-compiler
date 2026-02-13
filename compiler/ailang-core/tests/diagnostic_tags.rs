@@ -233,6 +233,22 @@ fn bad(cap: DbCap) effects { db.write } -> Int {
 }
 
 #[test]
+fn db_sink_context_type_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad(db: DbCap, query: SqlQuery) effects { db.write } -> Int {
+  db.exec(1, db, query);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn db_tx_shape_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad(db: DbCap) effects { db.tx } -> Int {

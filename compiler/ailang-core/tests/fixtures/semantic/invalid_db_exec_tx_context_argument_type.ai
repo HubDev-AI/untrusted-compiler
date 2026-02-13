@@ -1,0 +1,4 @@
+fn bad(tx: TxCap, query: SqlQuery) effects { db.write } -> Int {
+  db.execTx(1, tx, query);
+  0
+}

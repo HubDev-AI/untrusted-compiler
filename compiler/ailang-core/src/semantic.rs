@@ -1765,7 +1765,7 @@ impl Analyzer {
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
-        self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
+        self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
@@ -2581,7 +2581,13 @@ impl Analyzer {
         }
     }
 
-    fn enforce_db_query_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_db_query_call_shapes(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         let (is_target, valid_shape, note) = if is_db_exec_call(callee_name) {
             (
                 true,
@@ -2605,18 +2611,72 @@ impl Analyzer {
         };
 
         if !is_target || valid_shape {
+        } else {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "db sink call has invalid argument shape",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(note),
+            );
+            return;
+        }
+
+        if is_db_exec_call(callee_name) && args.len() == 3 {
+            self.enforce_db_sink_context_type(
+                callee_name,
+                args,
+                arg_types,
+                "db.exec(ctx, capability, query)",
+            );
+            return;
+        }
+
+        if is_db_exec_tx_call(callee_name) && args.len() == 3 {
+            self.enforce_db_sink_context_type(
+                callee_name,
+                args,
+                arg_types,
+                "db.execTx(ctx, tx, query)",
+            );
+            return;
+        }
+
+        if is_db_query_one_call(callee_name) && args.len() == 4 {
+            self.enforce_db_sink_context_type(
+                callee_name,
+                args,
+                arg_types,
+                "db.queryOne(ctx, capability, query, rowSchema)",
+            );
+        }
+    }
+
+    fn enforce_db_sink_context_type(
+        &mut self,
+        callee_name: &str,
+        args: &[Expr],
+        arg_types: &[Type],
+        usage: &str,
+    ) {
+        let context_type = &arg_types[0];
+        if context_type.is_named("Ctx") {
             return;
         }
 
         self.diagnostics.push(
             Diagnostic::error(
                 "E4001",
-                "db sink call has invalid argument shape",
-                span,
+                "db sink context argument must be `Ctx`",
+                args[0].span.clone(),
             )
             .with_tag("security")
             .with_tag("sink")
-            .with_note(note),
+            .with_note(format!("found `{}`", context_type.describe()))
+            .with_note(format!("use `{usage}` for context-first `{callee_name}` calls")),
         );
     }
 
