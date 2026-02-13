@@ -24,6 +24,11 @@ Implementation progress and milestone closure are not the same. This checklist p
 - release gate workflow exists,
 - promotion verifier + publish manifest verifier chain exists.
 - release gate script includes strict closure enforcement (`check-milestone-closure.sh --fail-on-pending`).
+- release-contract-smoke workflow keeps release verifier/publish contract tests:
+  - `scripts/test-alpha-release-workflow-contract.sh`
+  - `scripts/test-verify-release-promotion-inputs.sh`
+  - `scripts/test-generate-release-publish-manifest.sh`
+  - `scripts/test-verify-release-publish-manifest.sh`
 
 2. M10 live comparison evidence
 - compare matrix includes implementation IDs per endpoint:

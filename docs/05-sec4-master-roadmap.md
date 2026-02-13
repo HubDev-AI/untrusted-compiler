@@ -57,6 +57,7 @@ Current strict closure result:
 | `M9-B` | PASS | Release gate workflow exists | `.github/workflows/alpha-release-gate.yml` |
 | `M9-C` | PASS | Promotion verifier/manifest chain exists | `scripts/verify-release-promotion-inputs.sh`, publish-manifest scripts |
 | `M9-D` | PASS | Release gate enforces strict milestone closure | `scripts/release-alpha-gate.sh` |
+| `M9-E` | PASS | Release-contract-smoke workflow keeps release verifier/publish checks | `.github/workflows/release-contract-smoke.yml` |
 | `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` for each endpoint | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-C` | PASS | Cross-impl evidence workflow keeps scoped run, strict quality gate, and artifact upload contract | `.github/workflows/benchmark-cross-impl-evidence.yml` |

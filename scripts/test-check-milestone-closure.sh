@@ -17,6 +17,26 @@ touch "$tmp/scripts/verify-release-promotion-inputs.sh"
 touch "$tmp/scripts/generate-release-publish-manifest.sh"
 touch "$tmp/scripts/verify-release-publish-manifest.sh"
 touch "$tmp/.github/workflows/alpha-release-gate.yml"
+cat > "$tmp/.github/workflows/release-contract-smoke.yml" <<'YAML'
+name: Release Contract Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  release-contract-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify alpha release gate workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify release promotion input verifier
+        run: scripts/test-verify-release-promotion-inputs.sh
+      - name: Verify release publish manifest generation
+        run: scripts/test-generate-release-publish-manifest.sh
+      - name: Verify release publish manifest verifier
+        run: scripts/test-verify-release-publish-manifest.sh
+YAML
 
 cat > "$tmp/.github/workflows/benchmark-trend.yml" <<'YAML'
 name: Benchmark Trend
@@ -243,6 +263,51 @@ set -euo pipefail
 scripts/check-milestone-closure.sh --fail-on-pending
 SH
 chmod +x "$tmp/scripts/release-alpha-gate.sh"
+
+cat > "$tmp/.github/workflows/release-contract-smoke.yml" <<'YAML'
+name: Release Contract Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  release-contract-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify alpha release gate workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify release promotion input verifier
+        run: scripts/test-verify-release-promotion-inputs.sh
+      - name: Verify release publish manifest generation
+        run: scripts/test-generate-release-publish-manifest.sh
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when release-contract-smoke workflow misses publish verifier coverage" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/release-contract-smoke.yml" <<'YAML'
+name: Release Contract Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  release-contract-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify alpha release gate workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify release promotion input verifier
+        run: scripts/test-verify-release-promotion-inputs.sh
+      - name: Verify release publish manifest generation
+        run: scripts/test-generate-release-publish-manifest.sh
+      - name: Verify release publish manifest verifier
+        run: scripts/test-verify-release-publish-manifest.sh
+YAML
 
 cat > "$tmp/.github/workflows/benchmark-cross-impl-evidence.yml" <<'YAML'
 name: Benchmark Cross-Impl Evidence
