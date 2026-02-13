@@ -69,8 +69,11 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
     )
     .expect("manifest should be written");
     fs::write(project_dir.join("sec4.policy"), policy_source).expect("policy should be written");
-    fs::write(project_dir.join("src/main.ut"), "fn main() -> Int {\n  0\n}\n")
-        .expect("source should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("source should be written");
 }
 
 fn write_capture_file(path: &PathBuf, policy_hash: &str, compiler_hash: &str, runtime_hash: &str) {
@@ -109,6 +112,38 @@ fn write_capture_file(path: &PathBuf, policy_hash: &str, compiler_hash: &str, ru
     let rendered =
         serde_json::to_string_pretty(&payload).expect("capture payload should serialize to json");
     fs::write(path, rendered).expect("capture file should be written");
+}
+
+fn write_stub_registry_file(path: &PathBuf) {
+    let payload = serde_json::json!({
+        "version": "0.1",
+        "stubs": {
+            "net": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": "https://example.com/ping",
+                        "bodySha256": "empty"
+                    },
+                    "response": {
+                        "status": 200,
+                        "bodyBase64": "eyJvayI6dHJ1ZX0=",
+                        "truncated": false
+                    }
+                }
+            ],
+            "db": [],
+            "fs": []
+        },
+        "redaction": {
+            "headers": ["authorization", "cookie"],
+            "jsonPaths": ["$.password"]
+        }
+    });
+
+    let rendered =
+        serde_json::to_string_pretty(&payload).expect("stub payload should serialize to json");
+    fs::write(path, rendered).expect("stub file should be written");
 }
 
 #[test]
@@ -407,7 +442,10 @@ fn replay_check_passes_when_capture_hashes_match() {
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
-    assert!(stderr.trim().is_empty(), "stderr should be empty:\n{stderr}");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should be empty:\n{stderr}"
+    );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
 }
@@ -469,7 +507,10 @@ fn replay_check_allows_policy_mismatch_with_allow_flag() {
         "rt_A",
         "--allow-policy-mismatch",
     ]);
-    assert!(output.status.success(), "replay check should pass with allow flag");
+    assert!(
+        output.status.success(),
+        "replay check should pass with allow flag"
+    );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
@@ -511,6 +552,164 @@ fn replay_check_still_fails_on_compiler_mismatch_with_allow_flag() {
     assert!(
         stderr.contains("compilerHash mismatch"),
         "stderr should include compiler mismatch reason:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_with_stub_registry_passes() {
+    let dir = temp_dir("sec4-replay-stub-pass");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+    write_stub_registry_file(&stubs);
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        output.status.success(),
+        "replay check should pass with valid stub registry"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("replay capture compatibility check passed"),
+        "stdout should confirm replay compatibility pass:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_fails_when_stub_registry_contract_is_invalid() {
+    let dir = temp_dir("sec4-replay-stub-invalid");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+    fs::write(
+        &stubs,
+        r#"{
+          "version":"0.1",
+          "stubs":{"net":[]}
+        }"#,
+    )
+    .expect("invalid stub payload should be written");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail for invalid stub registry"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("stub registry contract invalid"),
+        "stderr should include stub registry contract reason:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_fails_on_duplicate_stub_request_signatures() {
+    let dir = temp_dir("sec4-replay-stub-duplicate");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+    fs::write(
+        &stubs,
+        r#"{
+          "version":"0.1",
+          "stubs":{
+            "net":[
+              {
+                "request":{"method":"GET","url":"https://example.com/ping","bodySha256":"empty"},
+                "response":{"status":200,"bodyBase64":"eyJvayI6dHJ1ZX0=","truncated":false}
+              },
+              {
+                "request":{"method":"GET","url":"https://example.com/ping","bodySha256":"empty"},
+                "response":{"status":200,"bodySha256":"abc","truncated":false}
+              }
+            ]
+          },
+          "redaction":{"headers":[],"jsonPaths":[]}
+        }"#,
+    )
+    .expect("duplicate stub payload should be written");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail on duplicate stub signatures"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("duplicate request signature"),
+        "stderr should include duplicate signature reason:\n{stderr}"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");

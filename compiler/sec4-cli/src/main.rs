@@ -6,6 +6,7 @@ use sec4_core::{
     validate_lockfile_stub, write_build_metadata, write_lockfile_stub, write_sbom,
     write_security_map, AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
 };
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -68,6 +69,8 @@ enum Commands {
     Replay {
         #[arg(long)]
         capture: PathBuf,
+        #[arg(long)]
+        stubs: Option<PathBuf>,
         #[arg(long)]
         policy_hash: String,
         #[arg(long)]
@@ -162,6 +165,7 @@ fn main() {
         ),
         Commands::Replay {
             capture,
+            stubs,
             policy_hash,
             compiler_hash,
             runtime_hash,
@@ -172,6 +176,7 @@ fn main() {
             &compiler_hash,
             &runtime_hash,
             allow_policy_mismatch,
+            stubs.as_deref(),
         ),
         Commands::Explain { code, format } => cmd_explain(&code, format),
     };
@@ -200,6 +205,7 @@ fn cmd_replay_check(
     expected_compiler_hash: &str,
     expected_runtime_hash: &str,
     allow_policy_mismatch: bool,
+    stubs_path: Option<&Path>,
 ) -> Result<(), i32> {
     let capture_bytes = match fs::read(capture_path) {
         Ok(bytes) => bytes,
@@ -230,8 +236,8 @@ fn cmd_replay_check(
 
     let capture_policy_hash =
         json_required_str(&capture_json, "policyHash").expect("policyHash checked by contract");
-    let capture_compiler_hash = json_required_str(&capture_json, "compilerHash")
-        .expect("compilerHash checked by contract");
+    let capture_compiler_hash =
+        json_required_str(&capture_json, "compilerHash").expect("compilerHash checked by contract");
     let capture_runtime_hash =
         json_required_str(&capture_json, "runtimeHash").expect("runtimeHash checked by contract");
 
@@ -258,6 +264,35 @@ fn cmd_replay_check(
             eprintln!(
                 "replay compatibility failed: policyHash mismatch ({capture_policy_hash} != {expected_policy_hash})"
             );
+            return Err(1);
+        }
+    }
+
+    if let Some(stubs_path) = stubs_path {
+        let stubs_bytes = match fs::read(stubs_path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!(
+                    "replay compatibility failed: cannot read stub registry {}: {err}",
+                    stubs_path.display()
+                );
+                return Err(1);
+            }
+        };
+
+        let stubs_json: serde_json::Value = match serde_json::from_slice(&stubs_bytes) {
+            Ok(value) => value,
+            Err(err) => {
+                eprintln!(
+                    "replay compatibility failed: stub registry {} is not valid JSON: {err}",
+                    stubs_path.display()
+                );
+                return Err(1);
+            }
+        };
+
+        if let Err(message) = validate_replay_stub_registry_contract(&stubs_json) {
+            eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
             return Err(1);
         }
     }
@@ -409,8 +444,14 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
         .get("budget")
         .ok_or_else(|| "capture.determinism.budget must be an object".to_string())?;
     for key in ["maxBodyBytes", "maxJsonBytes", "maxJsonDepth", "deadlineMs"] {
-        if budget.get(key).and_then(serde_json::Value::as_i64).is_none() {
-            return Err(format!("capture.determinism.budget.{key} must be an integer"));
+        if budget
+            .get(key)
+            .and_then(serde_json::Value::as_i64)
+            .is_none()
+        {
+            return Err(format!(
+                "capture.determinism.budget.{key} must be an integer"
+            ));
         }
     }
 
@@ -430,6 +471,142 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
         .is_none()
     {
         return Err("capture.redaction.jsonPaths must be an array".to_string());
+    }
+
+    Ok(())
+}
+
+fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(), String> {
+    if stubs.get("version").and_then(serde_json::Value::as_str) != Some("0.1") {
+        return Err("stub registry version must be \"0.1\"".to_string());
+    }
+
+    let stubs_obj = stubs
+        .get("stubs")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "stub registry stubs must be an object".to_string())?;
+
+    let net_entries = stubs_obj
+        .get("net")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "stub registry stubs.net must be an array".to_string())?;
+
+    if let Some(db) = stubs_obj.get("db") {
+        if !db.is_array() {
+            return Err("stub registry stubs.db must be an array when present".to_string());
+        }
+    }
+
+    if let Some(fs) = stubs_obj.get("fs") {
+        if !fs.is_array() {
+            return Err("stub registry stubs.fs must be an array when present".to_string());
+        }
+    }
+
+    let redaction = stubs
+        .get("redaction")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "stub registry redaction must be an object".to_string())?;
+    if redaction
+        .get("headers")
+        .and_then(serde_json::Value::as_array)
+        .is_none()
+    {
+        return Err("stub registry redaction.headers must be an array".to_string());
+    }
+    if redaction
+        .get("jsonPaths")
+        .and_then(serde_json::Value::as_array)
+        .is_none()
+    {
+        return Err("stub registry redaction.jsonPaths must be an array".to_string());
+    }
+
+    let mut signatures = HashSet::new();
+    for (index, entry) in net_entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.net[{index}].request must be an object"))?;
+        let method = request
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.net[{index}].request.method must be a non-empty string"
+                )
+            })?;
+        let url = request
+            .get("url")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].request.url must be a non-empty string")
+            })?;
+        let body_sha = if request.get("bodySha256").is_some() {
+            Some(
+                request
+                    .get("bodySha256")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        format!(
+                            "stub registry stubs.net[{index}].request.bodySha256 must be a non-empty string when present"
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].response must be an object")
+            })?;
+        let status = response
+            .get("status")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].response.status must be an integer")
+            })?;
+        if !(100..=599).contains(&status) {
+            return Err(format!(
+                "stub registry stubs.net[{index}].response.status must be between 100 and 599"
+            ));
+        }
+        if response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .is_none()
+        {
+            return Err(format!(
+                "stub registry stubs.net[{index}].response.truncated must be a boolean"
+            ));
+        }
+
+        let has_body_base64 = response
+            .get("bodyBase64")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.is_empty());
+        let has_body_sha = response
+            .get("bodySha256")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.is_empty());
+        if !has_body_base64 && !has_body_sha {
+            return Err(format!(
+                "stub registry stubs.net[{index}].response must include bodyBase64 or bodySha256"
+            ));
+        }
+
+        let signature = format!("{}|{}|{}", method, url, body_sha.unwrap_or("-"));
+        if !signatures.insert(signature) {
+            return Err(format!(
+                "stub registry stubs.net has duplicate request signature at index {index}"
+            ));
+        }
     }
 
     Ok(())

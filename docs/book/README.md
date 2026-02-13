@@ -329,5 +329,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `362-m14-replay-cli-compatibility-command.md`
 - `363-m14-sec4-replay-cli-command-contract-hardening.md`
 - `364-m14-replay-stub-registry-contract-bootstrap.md`
+- `365-m14-replay-cli-stub-registry-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.
