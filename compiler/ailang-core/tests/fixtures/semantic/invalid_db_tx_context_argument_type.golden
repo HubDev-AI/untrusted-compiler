@@ -1,0 +1,4 @@
+error[E4001]: db.tx context argument must be `Ctx`
+  --> invalid_db_tx_context_argument_type.ai:2:9
+  note: found `Int`
+  note: use `db.tx(ctx, dbCap)` for context-first calls

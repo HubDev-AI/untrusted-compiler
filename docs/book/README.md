@@ -102,5 +102,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `134-m7-auth-helper-call-shape-hardening.md`
 - `135-m7-secret-reveal-call-shape-hardening.md`
 - `136-m7-db-tx-call-shape-hardening.md`
+- `137-m7-db-tx-context-argument-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

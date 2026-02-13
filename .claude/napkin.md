@@ -133,3 +133,4 @@
 - Added auth-helper call-shape hardening: `auth.require` now requires one `Ctx` argument and `auth.requireRole` now requires `(Ctx, String)`, with `E4001` security-tagged diagnostics and aligned c-bin integration fixtures.
 - Added `secrets.reveal` call-shape hardening so only `(secretsCap, secret)` and `(ctx, secretsCap, secret)` are accepted, with secret-tagged diagnostics and aligned security_map/sec_audit fixtures.
 - Added `db.tx` call-shape hardening so only `(dbCap)` and `(ctx, dbCap)` forms are accepted, with capability-tagged diagnostics and matching semantic/tag fixture coverage.
+- Added `db.tx` context-first type hardening: two-argument form now requires `Ctx` in argument 1, with capability-tagged diagnostics and dedicated semantic/tag fixture coverage.

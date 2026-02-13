@@ -1766,7 +1766,7 @@ impl Analyzer {
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args);
-        self.enforce_db_tx_call_shape(callee_name, span.clone(), args);
+        self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
@@ -2620,21 +2620,40 @@ impl Analyzer {
         );
     }
 
-    fn enforce_db_tx_call_shape(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_db_tx_call_shape(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         if !is_db_tx_call(callee_name) {
             return;
         }
 
-        if matches!(args.len(), 1 | 2) {
+        if !matches!(args.len(), 1 | 2) {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "db.tx call has invalid argument shape", span)
+                    .with_tag("security")
+                    .with_tag("capability")
+                    .with_note("use `db.tx(dbCap)` or `db.tx(ctx, dbCap)`"),
+            );
             return;
         }
 
-        self.diagnostics.push(
-            Diagnostic::error("E4001", "db.tx call has invalid argument shape", span)
+        if args.len() == 2 && !arg_types[0].is_named("Ctx") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "db.tx context argument must be `Ctx`",
+                    args[0].span.clone(),
+                )
                 .with_tag("security")
                 .with_tag("capability")
-                .with_note("use `db.tx(dbCap)` or `db.tx(ctx, dbCap)`"),
-        );
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use `db.tx(ctx, dbCap)` for context-first calls"),
+            );
+        }
     }
 
     fn enforce_net_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
