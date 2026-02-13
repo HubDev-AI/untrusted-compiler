@@ -493,6 +493,7 @@ Roadmap impact:
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
+- `sec4 explain` now has exact-code mappings for key diagnostics (`E2003`, `E4004`, `E5001`, `E6001`) with direct chapter pointers.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1277,7 +1278,7 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Lock benchmark artifact schema/version contracts in one canonical spec and align all M10 scripts/tests to that explicit schema file.
-2. Extend `sec4 explain` coverage to include richer code-family mappings and direct fix-linking to canonical book chapters.
+2. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
 3. Add CI-level benchmark smoke gate for selected M10 scripts (`preflight`, `compare_matrix`, `publish_report`) to catch contract drift early.
 4. Add release-profile validation that stamps and verifies naming-lock + policy profile IDs directly inside release summary artifacts.
 5. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.

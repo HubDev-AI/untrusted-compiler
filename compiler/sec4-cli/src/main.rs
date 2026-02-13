@@ -247,6 +247,42 @@ fn explain_topic(
         "search the roadmap/book chapters for the specific code family",
     ];
 
+    match code {
+        "E2003" => {
+            return (
+                "Missing Required Capability",
+                "A sensitive API call was made without the required capability token in scope.",
+                &EFFECT_FIXES,
+                "docs/book/54-v0-stdlib-security-surface.md",
+            );
+        }
+        "E4004" => {
+            return (
+                "Invalid Schema Contract Usage",
+                "A schema-required API was called with missing/invalid schema descriptors or mismatched value shape.",
+                &SCHEMA_FIXES,
+                "docs/book/54-v0-stdlib-security-surface.md",
+            );
+        }
+        "E5001" => {
+            return (
+                "Invalid SQL Template Parameter",
+                "A SQL template parameter is not an allowed trusted parameter shape for typed query construction.",
+                &TEMPLATE_FIXES,
+                "docs/book/55-v0-typing-effects-security-rules.md",
+            );
+        }
+        "E6001" => {
+            return (
+                "Internal Network Policy Block",
+                "Internal network access is forbidden by active policy or missing explicit allowlist governance.",
+                &POLICY_FIXES,
+                "docs/book/64-sec-audit-spec.md",
+            );
+        }
+        _ => {}
+    }
+
     if code == "I9001" {
         return (
             "Analysis Budget/Deadline Interruption",

@@ -181,6 +181,29 @@ fn explain_known_security_code_prints_targeted_guidance() {
 }
 
 #[test]
+fn explain_exact_capability_code_uses_specific_mapping() {
+    let output = run_cli(&["explain", "E2003"]);
+    assert!(
+        output.status.success(),
+        "explain should succeed for exact mapped capability code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("E2003 - Missing Required Capability"),
+        "stdout should include exact mapped topic:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("required capability token in scope"),
+        "stdout should include exact mapped summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docs/book/54-v0-stdlib-security-surface.md"),
+        "stdout should include exact mapped docs pointer:\n{stdout}"
+    );
+}
+
+#[test]
 fn explain_unknown_code_prints_generic_guidance() {
     let output = run_cli(&["explain", "Z9999"]);
     assert!(
