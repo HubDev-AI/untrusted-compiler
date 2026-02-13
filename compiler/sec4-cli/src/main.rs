@@ -607,6 +607,30 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
             ));
         }
     }
+    let redaction_paths = redaction
+        .get("jsonPaths")
+        .and_then(serde_json::Value::as_array)
+        .expect("jsonPaths array shape already validated");
+    let mut normalized_paths = HashSet::new();
+    for (index, path) in redaction_paths.iter().enumerate() {
+        let normalized = path
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry redaction.jsonPaths[{index}] must be a non-empty string value"
+                )
+            })?
+            .to_ascii_lowercase();
+        normalized_paths.insert(normalized);
+    }
+    for required in ["$.password", "$.token", "$.secret", "$.apikey"] {
+        if !normalized_paths.contains(required) {
+            return Err(format!(
+                "stub registry redaction.jsonPaths must include required path '{required}'"
+            ));
+        }
+    }
 
     let mut signatures = HashSet::new();
     for (index, entry) in net_entries.iter().enumerate() {

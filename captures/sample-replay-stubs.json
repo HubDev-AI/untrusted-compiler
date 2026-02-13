@@ -32,6 +32,6 @@
   },
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
-    "jsonPaths": ["$.password", "$.token"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }

@@ -92,6 +92,17 @@ if ! jq -e '
 fi
 
 if ! jq -e '
+  (.redaction.jsonPaths | map(ascii_downcase)) as $paths
+  | ($paths | index("$.password") != null)
+    and ($paths | index("$.token") != null)
+    and ($paths | index("$.secret") != null)
+    and ($paths | index("$.apikey") != null)
+' "${stubs_path}" >/dev/null; then
+  echo "replay stub registry contract failed: redaction.jsonPaths must include $.password,$.token,$.secret,$.apiKey in ${stubs_path}" >&2
+  exit 1
+fi
+
+if ! jq -e '
   .stubs.net as $entries
   | (
       $entries

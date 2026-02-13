@@ -137,7 +137,7 @@ fn write_stub_registry_file(path: &PathBuf) {
         },
         "redaction": {
             "headers": ["authorization", "cookie", "set-cookie"],
-            "jsonPaths": ["$.password"]
+            "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
         }
     });
 
@@ -670,7 +670,7 @@ fn replay_check_fails_when_stub_registry_redaction_headers_are_incomplete() {
               }
             ]
           },
-          "redaction":{"headers":["authorization","cookie"],"jsonPaths":[]}
+          "redaction":{"headers":["authorization","cookie"],"jsonPaths":["$.password","$.token","$.secret","$.apiKey"]}
         }"#,
     )
     .expect("stub payload should be written");
@@ -712,6 +712,65 @@ fn replay_check_fails_when_stub_registry_redaction_headers_are_incomplete() {
 }
 
 #[test]
+fn replay_check_fails_when_stub_registry_redaction_json_paths_are_incomplete() {
+    let dir = temp_dir("sec4-replay-stub-redaction-json-paths");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+    fs::write(
+        &stubs,
+        r#"{
+          "version":"0.1",
+          "stubs":{
+            "net":[
+              {
+                "request":{"method":"GET","url":"https://example.com/ping","bodySha256":"empty"},
+                "response":{"status":200,"bodyBase64":"eyJvayI6dHJ1ZX0=","truncated":false}
+              }
+            ]
+          },
+          "redaction":{"headers":["authorization","cookie","set-cookie"],"jsonPaths":["$.password","$.token"]}
+        }"#,
+    )
+    .expect("stub payload should be written");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail when required redaction json paths are missing"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("must include required path '$.secret'"),
+        "stderr should include missing required redaction json path reason:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn replay_check_fails_on_duplicate_stub_request_signatures() {
     let dir = temp_dir("sec4-replay-stub-duplicate");
     let capture = dir.join("capture.json");
@@ -733,7 +792,7 @@ fn replay_check_fails_on_duplicate_stub_request_signatures() {
               }
             ]
           },
-          "redaction":{"headers":["authorization","cookie","set-cookie"],"jsonPaths":[]}
+          "redaction":{"headers":["authorization","cookie","set-cookie"],"jsonPaths":["$.password","$.token","$.secret","$.apiKey"]}
         }"#,
     )
     .expect("duplicate stub payload should be written");

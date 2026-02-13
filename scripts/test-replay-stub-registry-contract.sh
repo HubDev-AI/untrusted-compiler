@@ -32,7 +32,7 @@ cat > "${stubs_path}" <<'JSON'
   },
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
-    "jsonPaths": ["$.password"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }
 JSON
@@ -45,7 +45,7 @@ cat > "${stubs_path}" <<'JSON'
   "stubs": {},
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
-    "jsonPaths": ["$.password"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }
 JSON
@@ -74,7 +74,7 @@ cat > "${stubs_path}" <<'JSON'
   },
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
-    "jsonPaths": ["$.password"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }
 JSON
@@ -105,13 +105,44 @@ cat > "${stubs_path}" <<'JSON'
   },
   "redaction": {
     "headers": ["authorization", "cookie"],
-    "jsonPaths": ["$.password"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }
 JSON
 
 if "${contract_script}" --stubs "${stubs_path}" >/dev/null 2>&1; then
   echo "expected replay stub contract failure when redaction headers are incomplete" >&2
+  exit 1
+fi
+
+cat > "${stubs_path}" <<'JSON'
+{
+  "version": "0.1",
+  "stubs": {
+    "net": [
+      {
+        "request": {
+          "method": "GET",
+          "url": "https://example.com/users/1",
+          "bodySha256": "abc123"
+        },
+        "response": {
+          "status": 200,
+          "bodyBase64": "eyJvayI6dHJ1ZX0=",
+          "truncated": false
+        }
+      }
+    ]
+  },
+  "redaction": {
+    "headers": ["authorization", "cookie", "set-cookie"],
+    "jsonPaths": ["$.password", "$.token"]
+  }
+}
+JSON
+
+if "${contract_script}" --stubs "${stubs_path}" >/dev/null 2>&1; then
+  echo "expected replay stub contract failure when redaction jsonPaths are incomplete" >&2
   exit 1
 fi
 
@@ -148,7 +179,7 @@ cat > "${stubs_path}" <<'JSON'
   },
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
-    "jsonPaths": ["$.password"]
+    "jsonPaths": ["$.password", "$.token", "$.secret", "$.apiKey"]
   }
 }
 JSON

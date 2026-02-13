@@ -336,5 +336,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `369-m14-replay-output-field-cli-contract-hardening.md`
 - `370-m14-replay-cli-json-contract-closure-gate.md`
 - `371-m14-replay-redaction-header-baseline-enforcement.md`
+- `372-m14-replay-redaction-jsonpath-baseline-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
