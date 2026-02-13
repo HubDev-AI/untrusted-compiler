@@ -154,5 +154,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `187-m7-cookie-name-literal-token-hardening.md`
 - `188-m7-secret-equality-comparison-hardening.md`
 - `189-m7-crypto-cteq-intrinsic-bridge.md`
+- `190-m7-security-map-crypto-cteq-tagging.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1065,6 +1065,7 @@ fn call_tags_for(name: &str) -> Option<Vec<&'static str>> {
         "headers_name" | "headers.name" => vec!["gate.header.name"],
         "headers_value" | "headers.value" => vec!["gate.header.value"],
         "cookie_build" | "cookie.build" => vec!["gate.cookie.build"],
+        "crypto_ct_eq" | "crypto.ctEq" => vec!["gate.crypto.ct_eq"],
         "url_public" | "url.public" => vec!["gate.url.public", "effect.net"],
         "url_internal" | "url.internal" => vec!["gate.url.internal", "effect.net"],
         "db_read" | "db.queryOne" => vec!["sink.sql.query", "effect.db.read", "capability.db"],
@@ -1317,6 +1318,7 @@ fn call_arg_roles(name: &str, arg_count: usize) -> Option<Vec<String>> {
             }
         }
         "sql_q" | "sql.q" => vec!["template", "params"],
+        "crypto_ct_eq" | "crypto.ctEq" => vec!["left_secret", "right_secret"],
         "res_json" | "res.json" => {
             if arg_count == 2 {
                 vec!["schema", "value"]
@@ -1634,6 +1636,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol("headers_name", &[("gate.header.name", TagKind::Gate)]),
         symbol("headers_value", &[("gate.header.value", TagKind::Gate)]),
         symbol("cookie_build", &[("gate.cookie.build", TagKind::Gate)]),
+        symbol("crypto_ct_eq", &[("gate.crypto.ct_eq", TagKind::Gate)]),
         symbol("secret_redact", &[("gate.secret.redact", TagKind::Gate)]),
         symbol(
             "url_public",
@@ -1758,6 +1761,7 @@ fn intrinsic_symbol_registry() -> Vec<SecuritySymbol> {
         symbol("headers.name", &[("gate.header.name", TagKind::Gate)]),
         symbol("headers.value", &[("gate.header.value", TagKind::Gate)]),
         symbol("cookie.build", &[("gate.cookie.build", TagKind::Gate)]),
+        symbol("crypto.ctEq", &[("gate.crypto.ct_eq", TagKind::Gate)]),
         symbol("validate.pathUnder", &[("gate.path.under", TagKind::Gate)]),
         symbol(
             "url.public",

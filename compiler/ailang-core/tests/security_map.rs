@@ -6,7 +6,7 @@ use std::path::Path;
 #[test]
 fn security_map_collects_sensitive_calls_and_middleware() {
     let source = r#"
-fn boot() -> Int {
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
   sec.withSecurityHeaders();
   cors.withCors();
   csrf.withCsrf();
@@ -21,6 +21,7 @@ fn boot() -> Int {
   db.exec(DbCap());
   db.exec(Ctx(), DbCap(), raw);
   secrets.reveal(SecretsCap(), 1);
+  crypto.ctEq(a, b);
   1
 }
 "#;
@@ -60,6 +61,10 @@ fn boot() -> Int {
         .calls
         .iter()
         .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")));
     assert!(map
         .calls
         .iter()
@@ -108,6 +113,13 @@ fn boot() -> Int {
                 })
             })
     }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "crypto.ctEq"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["left_secret".to_string(), "right_secret".to_string()])
+    }));
     assert!(map
         .middleware
         .iter()
@@ -150,6 +162,7 @@ fn boot() -> Int {
     assert!(has_symbol_tag("path.under", "gate.path.under"));
     assert!(has_symbol_tag("url.public", "gate.url.public"));
     assert!(has_symbol_tag("url.internal", "gate.url.internal"));
+    assert!(has_symbol_tag("crypto.ctEq", "gate.crypto.ct_eq"));
 }
 
 #[test]
@@ -187,9 +200,10 @@ fn bad() -> Int {
 #[test]
 fn security_map_still_supports_underscore_intrinsic_names() {
     let source = r#"
-fn boot() -> Int {
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
   db_write(DbCap());
   secret_reveal(SecretsCap(), 1);
+  crypto_ct_eq(a, b);
   1
 }
 "#;
@@ -202,6 +216,9 @@ fn boot() -> Int {
     assert!(map.calls.iter().any(|call| {
         call.callee == "secret_reveal" && call.tags.iter().any(|tag| tag == "effect.secrets.reveal")
     }));
+    assert!(map.calls.iter().any(
+        |call| call.callee == "crypto_ct_eq" && call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")
+    ));
 }
 
 #[test]
