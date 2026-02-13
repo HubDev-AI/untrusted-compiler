@@ -1023,9 +1023,10 @@ Implementation order is intentionally linear to reduce thrash:
   - open-document symbol indexing now caches deterministic function symbol metadata (stable IDs) and reuses it in completion/declaration scans.
   - open-document import graph tracking now invalidates dependent parse/symbol caches on dependency refresh.
   - references/rename hit collection now targets callsite callee identifiers, reducing non-reference name collisions.
+  - diagnostics analysis now short-circuits at budget boundaries (zero-budget early return + skip-analyze when parse consumed budget).
 - Remaining:
   - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
-  - parser/analyzer-internal interrupt support for fully preemptive cancellation (semantic + parse-entry cancellation are now covered).
+  - parser/analyzer-internal interrupt support for fully preemptive cancellation (stage-boundary cancellation is now covered).
   - callsite-level symbol-ID binding for end-to-end precision across definition/references/rename (callsite-focused collection + declaration IDs are now in place).
   - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
   - pin Zed grammar integration to a published immutable `tree-sitter-ailang` revision (coverage is now expanded locally).
@@ -1072,6 +1073,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Open-Document Symbol Index and Stable IDs".
 - Chapter: "M11 Slice: Open-Document Import-Graph Invalidation".
 - Chapter: "M11 Slice: Callsite-Focused Reference Hit Collection".
+- Chapter: "M11 Slice: Analysis-Stage Budget Short-Circuit".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

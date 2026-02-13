@@ -245,5 +245,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `278-m11-open-document-symbol-index-and-stable-ids.md`
 - `279-m11-open-document-import-graph-invalidation.md`
 - `280-m11-callsite-focused-reference-hit-collection.md`
+- `281-m11-analysis-stage-budget-short-circuit.md`
 
 As milestones progress, chapters will be added and linked from this index.

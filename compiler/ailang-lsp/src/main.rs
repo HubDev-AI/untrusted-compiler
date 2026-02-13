@@ -1721,12 +1721,21 @@ fn diagnostics_for_document_with_limits(
             "message": format!("unsupported document URI (expected file://): {uri}")
         })];
     };
+    if analysis_budget_ms == 0 {
+        return vec![analysis_budget_exceeded_diagnostic(analysis_budget_ms)];
+    }
 
     let diagnostics = match parse_source(&path, text) {
-        Ok(program) => match analyze_program(&program) {
-            Ok(()) => Vec::new(),
-            Err(diags) => diags,
-        },
+        Ok(program) => {
+            if started_at.elapsed().as_millis() >= analysis_budget_ms {
+                Vec::new()
+            } else {
+                match analyze_program(&program) {
+                    Ok(()) => Vec::new(),
+                    Err(diags) => diags,
+                }
+            }
+        }
         Err(diags) => diags,
     };
 
@@ -1739,21 +1748,25 @@ fn diagnostics_for_document_with_limits(
         diagnostics.truncate(max_diagnostics_per_document);
     }
     if started_at.elapsed().as_millis() >= analysis_budget_ms {
-        diagnostics.push(json!({
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": 0, "character": 1}
-            },
-            "severity": 3,
-            "code": "I9001",
-            "source": "ailang-lsp",
-            "message": format!(
-                "analysis budget exceeded ({}ms); results may be incomplete",
-                analysis_budget_ms
-            )
-        }));
+        diagnostics.push(analysis_budget_exceeded_diagnostic(analysis_budget_ms));
     }
     diagnostics
+}
+
+fn analysis_budget_exceeded_diagnostic(analysis_budget_ms: u128) -> Value {
+    json!({
+        "range": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 1}
+        },
+        "severity": 3,
+        "code": "I9001",
+        "source": "ailang-lsp",
+        "message": format!(
+            "analysis budget exceeded ({}ms); results may be incomplete",
+            analysis_budget_ms
+        )
+    })
 }
 
 fn analysis_budget_ms() -> u128 {
@@ -2152,6 +2165,26 @@ mod tests {
                     .unwrap_or(false)
             }),
             "budget overflow should append I9001 diagnostic",
+        );
+    }
+
+    #[test]
+    fn diagnostics_zero_budget_short_circuits_before_parse_errors() {
+        let uri = "file:///tmp/lsp_budget_short_circuit.ai";
+        let source = "fn main( -> Int {\n  0\n}\n";
+        let diagnostics = diagnostics_for_document_with_limits(uri, source, 0, 200);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "zero-budget analysis should short-circuit with only the budget diagnostic",
+        );
+        assert_eq!(
+            diagnostics[0]
+                .get("code")
+                .and_then(Value::as_str),
+            Some("I9001"),
+            "zero-budget analysis should return the budget overflow marker",
         );
     }
 
