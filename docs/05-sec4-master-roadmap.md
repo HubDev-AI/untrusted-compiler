@@ -15,6 +15,7 @@ The naming and packaging surface is now locked and must be treated as a compatib
   - `sec4 audit`
   - `sec4 explain`
   - `sec4 gate`
+  - `sec4 replay`
 - GitHub repository: `https://github.com/HubDev-AI/untrusted-compiler`
 - Source file extension: `.ut`
 - Package/module namespace contract:
@@ -41,7 +42,7 @@ Roadmap impact:
 - M11 editor tooling scope has no remaining tasks in this roadmap revision.
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - M13 operational confidence closure gates are green.
-- M14 replay bootstrap is active with initial closure gating (`M14-A`).
+- M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`).
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1346,7 +1347,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Enforce locked external names everywhere:
   - language/docs title: `Untrusted<T>`
   - CLI command/tooling brand: `sec4`
-  - policy workflow commands: `sec4 audit`, `sec4 explain`, `sec4 gate` (under the `sec4Audit` tooling brand)
+  - policy workflow commands: `sec4 audit`, `sec4 explain`, `sec4 gate`, `sec4 replay` (under the `sec4Audit` tooling brand)
   - repository URL: `https://github.com/HubDev-AI/untrusted-compiler`
   - source extension: `.ut`
   - namespace contract: `ut/std`, `ut/http`, `ut/sec`
@@ -1356,11 +1357,11 @@ Implementation order is intentionally linear to reduce thrash:
   - benchmark harness implementation IDs and artifact names
   - editor tooling identifiers (LSP + Zed + tree-sitter scaffolds)
   - runtime ABI docs/examples
-- Remove transitional aliases once migration is complete; canonical command surface is `sec4 audit`, `sec4 explain`, and `sec4 gate`.
+- Remove transitional aliases once migration is complete; canonical command surface is `sec4 audit`, `sec4 explain`, `sec4 gate`, and `sec4 replay`.
 
 ### Progress so far
 - Completed:
-  - canonical command surface now routes through top-level `sec4 audit`, `sec4 explain`, `sec4 gate` only (legacy nested `sec` alias removed).
+  - canonical command surface now routes through top-level `sec4 audit`, `sec4 explain`, `sec4 gate`, and `sec4 replay` only (legacy nested `sec` alias removed).
   - developer workflow skill naming is aligned with locked ecosystem naming:
     - `skills/ailang-dev-workflow/` is now `skills/sec4-dev-workflow/`.
   - automated naming-lock guard (`scripts/check-naming-lock.sh`) validates:
@@ -1370,14 +1371,14 @@ Implementation order is intentionally linear to reduce thrash:
   - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
   - benchmark naming guard now verifies canonical implementation directory IDs and benchmark testdata `impl` values.
   - benchmark naming guard now validates canonical benchmark artifact filename patterns and benchmark testdata schema keys for report/summary/step artifacts.
-  - naming-lock CI now includes a static CLI command-surface contract test (`scripts/test-sec4-cli-command-contract.sh`) to enforce top-level `sec4 audit|gate|explain` wiring and guard against legacy nested `sec` alias reintroduction.
+  - naming-lock CI now includes a static CLI command-surface contract test (`scripts/test-sec4-cli-command-contract.sh`) to enforce top-level `sec4 audit|gate|explain|replay` wiring and guard against legacy nested `sec` alias reintroduction.
 - Remaining:
   - none for current M12 scope.
 
 ### Exit criteria
 - `rg` across tracked source/docs returns no legacy pre-rename tokens outside historical commit logs and third-party artifacts.
 - All docs and examples use `.ut`.
-- CLI supports and documents `sec4 audit`, `sec4 explain`, and `sec4 gate`.
+- CLI supports and documents `sec4 audit`, `sec4 explain`, `sec4 gate`, and `sec4 replay`.
 - Zed + LSP scaffolding references `Untrusted<T>` + `.ut` + current grammar IDs consistently.
 
 ### Docs/book outputs
@@ -1496,6 +1497,7 @@ M13-S1 go/no-go note:
 - Wire replay-capture contract test into naming-lock CI and closure-audit gate checks.
 - Add replay-capture compatibility checker with deterministic hash mismatch handling and policy-mismatch override.
 - Wire replay-capture compatibility test into naming-lock CI and closure-audit gate checks.
+- Extend `sec4` CLI command-surface contract checks so top-level `replay` is locked in CI.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1507,6 +1509,7 @@ M13-S1 go/no-go note:
 - [x] Added replay-capture compatibility regression script (`scripts/test-replay-capture-compat.sh`).
 - [x] Wired naming-lock CI enforcement for replay-capture compatibility test.
 - [x] Added strict closure gate `M14-B` for replay-capture compatibility CI enforcement.
+- [x] Hardened `sec4` CLI command contract/guard scripts to require top-level `replay` command shape.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1514,10 +1517,12 @@ M13-S1 go/no-go note:
 - Replay-capture compatibility checker enforces compiler/runtime hash parity and policy-hash mismatch handling.
 - CI fails if replay-capture compatibility enforcement is removed from naming-lock workflow.
 - Closure audit reports replay-capture gate status alongside existing milestone gates.
+- CLI contract guard fails if top-level `sec4 replay` command wiring is removed.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
 - Chapter: "M14 Slice: Replay Capture Compatibility Contract Gate".
+- Chapter: "M14 Slice: sec4 Replay CLI Command Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

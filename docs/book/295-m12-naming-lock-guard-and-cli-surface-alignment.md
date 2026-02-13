@@ -18,7 +18,7 @@ Updated:
 
 The naming contract is now part of product compatibility:
 - language/docs: `Untrusted<T>`
-- tooling command surface: `sec4 audit`, `sec4 explain`, `sec4 gate`
+- tooling command surface: `sec4 audit`, `sec4 explain`, `sec4 gate`, `sec4 replay`
 - source extension: `.ut`
 - namespace contract: `ut/std`, `ut/http`, `ut/sec`
 

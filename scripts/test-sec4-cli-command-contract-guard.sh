@@ -18,6 +18,9 @@ enum Commands {
     Explain {
         code: String,
     },
+    Replay {
+        capture: String,
+    },
 }
 
 fn gate_default(fail_on: Option<String>) -> Option<String> {
@@ -36,6 +39,9 @@ enum Commands {
     },
     Explain {
         code: String,
+    },
+    Replay {
+        capture: String,
     },
 }
 
@@ -59,6 +65,9 @@ enum Commands {
     Explain {
         code: String,
     },
+    Replay {
+        capture: String,
+    },
     Sec {
         cmd: String,
     },
@@ -72,6 +81,28 @@ RS
 
 if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
   echo "expected command contract failure when legacy sec alias returns" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum Commands {
+    Audit(AuditArgs),
+    Gate {
+        fail_on: Option<String>,
+    },
+    Explain {
+        code: String,
+    },
+}
+
+fn gate_default(fail_on: Option<String>) -> Option<String> {
+    let _x = Some(fail_on.as_deref().unwrap_or("risk>=HIGH"));
+    None
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected command contract failure when replay subcommand is missing" >&2
   exit 1
 fi
 

@@ -25,6 +25,7 @@ This slice enforces the executable source contract directly in CI.
   - top-level `Audit(AuditArgs)` subcommand,
   - top-level `Gate { ... }` subcommand,
   - top-level `Explain { ... }` subcommand,
+  - top-level `Replay { ... }` subcommand,
   - gate default fail threshold wiring: `risk>=HIGH`.
 - Asserts legacy nested `Sec` alias patterns are absent.
 
