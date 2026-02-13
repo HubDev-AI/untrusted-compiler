@@ -66,6 +66,11 @@ Required before tagging an alpha candidate:
 5. `build_metadata.json` and `sbom.json` are captured for release artifacts.
 6. Known-limits and roadmap chapters are reviewed with release notes.
 
+Canonical automation:
+- `scripts/release-alpha-gate.sh`
+
+This script executes the checklist end-to-end against sample projects using the secure policy profile, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
+
 ## Upgrade notes
 
 From earlier milestone snapshots to current alpha:
