@@ -46,6 +46,7 @@ Validation behavior:
   - verifies validator passes on current fixtures,
   - mutates a summary sample to remove a required key and verifies validator fails,
   - mutates compare-matrix leader row to remove `constantRate` and verifies validator fails,
+  - mutates compare-matrix row endpoint to mismatch endpoint group and verifies validator fails,
   - mutates compare-report leader row to remove `loadGenerator` and verifies validator fails,
   - mutates compare-report leader identity to a non-compared row and verifies validator fails.
 - `benchmark-smoke.yml` now runs:

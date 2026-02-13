@@ -79,4 +79,22 @@ if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp4/samples" --schem
   exit 1
 fi
 
+tmp5="$(mktemp -d)"
+cleanup5() {
+  rm -rf "$tmp5"
+}
+trap 'cleanup; cleanup2; cleanup3; cleanup4; cleanup5' EXIT
+
+mkdir -p "$tmp5/samples" "$tmp5/schemas"
+cp "$root_dir"/testdata/sample-*.json "$tmp5/samples/"
+cp "$root_dir"/../spec/schemas/*.schema.json "$tmp5/schemas/"
+
+jq '.endpoints[0].compared[0].endpoint = "decode"' "$tmp5/samples/sample-compare-matrix.json" > "$tmp5/samples/sample-compare-matrix.json.tmp"
+mv "$tmp5/samples/sample-compare-matrix.json.tmp" "$tmp5/samples/sample-compare-matrix.json"
+
+if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp5/samples" --schema-dir "$tmp5/schemas" >/dev/null 2>&1; then
+  echo "expected schema validator to fail when compare-matrix row endpoint mismatches endpoint group" >&2
+  exit 1
+fi
+
 echo "validate_contract_schema test passed"
