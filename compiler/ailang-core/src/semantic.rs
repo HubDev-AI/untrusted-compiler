@@ -3307,6 +3307,48 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
+        if is_err_validation_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.validation expects `(code, message)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.validation(\"CODE\", \"message\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.validation code argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use stable error code strings"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.validation message argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use safe validation message strings"),
+                );
+            }
+            return;
+        }
+
         if is_err_internal_call(callee_name) {
             if args.len() != 1 {
                 self.diagnostics.push(
@@ -4688,6 +4730,10 @@ fn is_err_with_dependency_call(name: &str) -> bool {
 
 fn is_err_internal_call(name: &str) -> bool {
     matches!(name, "err_internal" | "err.internal")
+}
+
+fn is_err_validation_call(name: &str) -> bool {
+    matches!(name, "err_validation" | "err.validation")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

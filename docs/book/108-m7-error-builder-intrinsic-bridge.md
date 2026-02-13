@@ -61,7 +61,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 
 ```ailang
 fn main() -> Int {
-  let base = err.validation(1, 2);
+  let base = err.validation("VALIDATION.BAD_REQUEST", "invalid input");
   let internal = err.internal("internal");
   err.withDetail(base, "field", 2);
   err.withCause(base, internal);

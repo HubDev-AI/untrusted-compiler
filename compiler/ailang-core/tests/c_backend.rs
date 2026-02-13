@@ -613,7 +613,7 @@ fn main() -> Int {
 fn c_backend_rewrites_error_builder_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() -> Int {
-  let base = err.validation(1, 2);
+  let base = err.validation("VALIDATION.BAD_REQUEST", "invalid input");
   let auth = err.auth(1, 2, 401);
   let notFound = err.notFound(1, 2);
   let conflict = err.conflict(1, 2);
@@ -641,7 +641,7 @@ fn main() -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("ailang_rt_err_validation(1, 2);"));
+    assert!(c.contains("ailang_rt_err_validation(\"VALIDATION.BAD_REQUEST\", \"invalid input\");"));
     assert!(c.contains("ailang_rt_err_auth(1, 2, 401);"));
     assert!(c.contains("ailang_rt_err_not_found(1, 2);"));
     assert!(c.contains("ailang_rt_err_conflict(1, 2);"));
