@@ -1,7 +1,7 @@
 use ailang_core::ast::{Block, Expr, ExprKind, ItemKind, Program, Stmt, StmtKind, TypeExpr, TypeExprKind};
 use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity, Span};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -27,6 +27,13 @@ struct FunctionSymbol {
 struct IdentifierHit {
     name: String,
     span: Span,
+}
+
+#[derive(Clone)]
+struct DeclarationMatch {
+    uri: String,
+    symbol: FunctionSymbol,
+    source: String,
 }
 
 fn main() {
@@ -466,17 +473,26 @@ fn references_at_position(
         return Ok(Value::Array(Vec::new()));
     };
 
-    let symbols = collect_function_symbols(&program);
-    let Some(symbol) = symbols.into_iter().find(|symbol| symbol.name == hit.name) else {
-        return Ok(Value::Array(Vec::new()));
-    };
-
-    let mut locations = collect_identifier_hits_by_name(&program, &path, &symbol.name)
-        .into_iter()
-        .map(|found| location_from_span(uri, &found.span))
-        .collect::<Vec<_>>();
+    let target_name = hit.name.clone();
+    let declaration = find_symbol_declaration_in_workspace(state, &target_name, uri, &source);
+    let mut locations = Vec::new();
+    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+        let Some(doc_path) = uri_to_path(&doc_uri) else {
+            continue;
+        };
+        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+            continue;
+        };
+        locations.extend(
+            collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name)
+                .into_iter()
+                .map(|found| location_from_span(&doc_uri, &found.span)),
+        );
+    }
     if include_declaration {
-        locations.insert(0, location_from_span(uri, &symbol.span));
+        if let Some(found) = declaration {
+            locations.insert(0, location_from_span(&found.uri, &found.symbol.span));
+        }
     }
     Ok(Value::Array(locations))
 }
@@ -546,13 +562,16 @@ fn prepare_rename_at_position(
         Err(_) => return Ok(Value::Null),
     };
 
-    let Some((symbol, hit)) = resolve_symbol_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
         return Ok(Value::Null);
     };
+    if find_symbol_declaration_in_workspace(state, &hit.name, uri, &source).is_none() {
+        return Ok(Value::Null);
+    }
 
     Ok(json!({
         "range": range_from_span(&hit.span),
-        "placeholder": symbol.name,
+        "placeholder": hit.name,
     }))
 }
 
@@ -582,52 +601,62 @@ fn rename_at_position(
         }
     };
 
-    let Some((symbol, _hit)) = resolve_symbol_at_position(&program, &path, line, character) else {
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
         return Ok(json!({
             "changes": {
                 uri: []
             }
         }));
     };
+    let target_name = hit.name;
+    let declaration = find_symbol_declaration_in_workspace(state, &target_name, uri, &source);
+    let mut edits_by_uri = BTreeMap::<String, Vec<Value>>::new();
 
-    let mut edits = collect_identifier_hits_by_name(&program, &path, &symbol.name)
-        .into_iter()
-        .map(|found| {
-            json!({
-                "range": range_from_span(&found.span),
-                "newText": new_name,
+    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+        let Some(doc_path) = uri_to_path(&doc_uri) else {
+            continue;
+        };
+        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+            continue;
+        };
+
+        let edits = collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name)
+            .into_iter()
+            .map(|found| {
+                json!({
+                    "range": range_from_span(&found.span),
+                    "newText": new_name,
+                })
             })
-        })
-        .collect::<Vec<_>>();
-
-    if let Some(decl_span) = function_declaration_name_span(&symbol, &source) {
-        edits.insert(
-            0,
-            json!({
-                "range": range_from_span(&decl_span),
-                "newText": new_name,
-            }),
-        );
+            .collect::<Vec<_>>();
+        if !edits.is_empty() {
+            edits_by_uri.insert(doc_uri, edits);
+        }
     }
 
-    Ok(json!({
-        "changes": {
-            uri: edits
+    if let Some(found) = declaration {
+        if let Some(decl_span) = function_declaration_name_span(&found.symbol, &found.source) {
+            edits_by_uri
+                .entry(found.uri)
+                .or_default()
+                .insert(
+                    0,
+                    json!({
+                        "range": range_from_span(&decl_span),
+                        "newText": new_name,
+                    }),
+                );
         }
-    }))
-}
+    }
 
-fn resolve_symbol_at_position(
-    program: &Program,
-    file: &PathBuf,
-    line: usize,
-    character: usize,
-) -> Option<(FunctionSymbol, IdentifierHit)> {
-    let hit = find_identifier_at_position(program, file, line, character)?;
-    let symbol = collect_function_symbols(program)
-        .into_iter()
-        .find(|symbol| symbol.name == hit.name)?;
-    Some((symbol, hit))
+    let mut changes = serde_json::Map::new();
+    for (edit_uri, edits) in edits_by_uri {
+        if !edits.is_empty() {
+            changes.insert(edit_uri, Value::Array(edits));
+        }
+    }
+
+    Ok(json!({ "changes": changes }))
 }
 
 fn function_declaration_name_span(symbol: &FunctionSymbol, source: &str) -> Option<Span> {
@@ -704,6 +733,53 @@ fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, 
 
     let text = fs::read_to_string(&path)?;
     Ok((path, text))
+}
+
+fn workspace_document_entries(
+    state: &ServerState,
+    primary_uri: &str,
+    primary_source: &str,
+) -> Vec<(String, String)> {
+    let mut entries = state
+        .documents
+        .iter()
+        .map(|(uri, source)| (uri.clone(), source.clone()))
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+
+    if !entries.iter().any(|(uri, _)| uri == primary_uri) {
+        entries.push((primary_uri.to_string(), primary_source.to_string()));
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+    }
+
+    entries
+}
+
+fn find_symbol_declaration_in_workspace(
+    state: &ServerState,
+    target_name: &str,
+    primary_uri: &str,
+    primary_source: &str,
+) -> Option<DeclarationMatch> {
+    for (doc_uri, doc_source) in workspace_document_entries(state, primary_uri, primary_source) {
+        let Some(doc_path) = uri_to_path(&doc_uri) else {
+            continue;
+        };
+        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+            continue;
+        };
+        if let Some(symbol) = collect_function_symbols(&doc_program)
+            .into_iter()
+            .find(|symbol| symbol.name == target_name)
+        {
+            return Some(DeclarationMatch {
+                uri: doc_uri,
+                symbol,
+                source: doc_source,
+            });
+        }
+    }
+    None
 }
 
 fn collect_function_symbols(program: &Program) -> Vec<FunctionSymbol> {
@@ -1834,6 +1910,85 @@ mod tests {
     }
 
     #[test]
+    fn references_include_hits_from_multiple_open_documents() {
+        let uri_a = "file:///tmp/lsp_refs_multi_a.ai";
+        let uri_b = "file:///tmp/lsp_refs_multi_b.ai";
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn two() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_a,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_a
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2},
+                "context": {"includeDeclaration": true}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let references_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(12)))
+            .expect("references response should exist");
+        let references = references_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("references result should be an array");
+        let uris = references
+            .iter()
+            .filter_map(|location| location.get("uri").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert!(
+            uris.contains(&uri_a),
+            "references should include locations from first open document",
+        );
+        assert!(
+            uris.contains(&uri_b),
+            "references should include locations from second open document",
+        );
+    }
+
+    #[test]
     fn implementation_returns_declaration_location_for_call_identifier() {
         let uri = "file:///tmp/lsp_implementation.ai";
         let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
@@ -2083,6 +2238,97 @@ mod tests {
         assert!(
             edits.iter().all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
             "all rename edits should apply the requested new name",
+        );
+    }
+
+    #[test]
+    fn rename_returns_workspace_edits_for_multiple_open_documents() {
+        let uri_a = "file:///tmp/lsp_rename_multi_a.ai";
+        let uri_b = "file:///tmp/lsp_rename_multi_b.ai";
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn two() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_a,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_a
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2},
+                "newName": "assist"
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let rename_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(13)))
+            .expect("rename response should exist");
+        let changes = rename_response
+            .get("result")
+            .and_then(|result| result.get("changes"))
+            .expect("rename result should include changes object");
+        let edits_a = changes
+            .get(uri_a)
+            .and_then(Value::as_array)
+            .expect("rename should include edits for first document");
+        let edits_b = changes
+            .get(uri_b)
+            .and_then(Value::as_array)
+            .expect("rename should include edits for second document");
+        assert!(
+            edits_a.len() >= 2,
+            "first document should include declaration and call-site edits",
+        );
+        assert_eq!(
+            edits_b.len(),
+            1,
+            "second document should include one call-site edit",
+        );
+        assert!(
+            edits_a
+                .iter()
+                .chain(edits_b.iter())
+                .all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
+            "all workspace rename edits should apply requested name",
         );
     }
 

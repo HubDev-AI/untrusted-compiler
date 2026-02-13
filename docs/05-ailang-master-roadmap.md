@@ -1008,10 +1008,11 @@ Implementation order is intentionally linear to reduce thrash:
   - `zed-extension` scaffold (language config + LSP wiring contract).
   - `tree-sitter-ailang` scaffold with baseline highlight queries.
   - diagnostics budget/cap guardrails with `I9001` overflow signaling.
+  - references/rename now aggregate deterministically across currently open workspace documents.
 - Remaining:
   - true incremental analysis (per-file cache + dependency invalidation).
   - preemptive request deadline enforcement (beyond post-analysis overflow signaling).
-  - multi-file references/rename determinism.
+  - full-project (unopened-file) references/rename determinism.
   - richer code-action edits (auto-fix text rewrites).
   - production grammar coverage and pinned published grammar revision.
 
@@ -1037,6 +1038,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Zed Extension Scaffold".
 - Chapter: "M11 Slice: Tree-Sitter Grammar Scaffold".
 - Chapter: "M11 Slice: Diagnostics Analysis Budget Guardrails".
+- Chapter: "M11 Slice: Workspace Open-Document References and Rename".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
