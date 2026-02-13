@@ -430,6 +430,7 @@ fn definition_at_position(
     line: usize,
     character: usize,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
     let program = match load_cached_program(state, uri, &path, &source) {
         Some(program) => program,
@@ -439,16 +440,13 @@ fn definition_at_position(
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
         return Ok(Value::Null);
     };
-
-    let symbols = collect_function_symbols(&program);
-    let Some(symbol) = symbols
-        .into_iter()
-        .find(|symbol| symbol.name == hit.name)
+    let Some(symbol_match) =
+        find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline)
     else {
         return Ok(Value::Null);
     };
 
-    Ok(location_from_span(uri, &symbol.span))
+    Ok(location_from_span(&symbol_match.uri, &symbol_match.symbol.span))
 }
 
 fn hover_at_position(
@@ -457,6 +455,7 @@ fn hover_at_position(
     line: usize,
     character: usize,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
     let program = match load_cached_program(state, uri, &path, &source) {
         Some(program) => program,
@@ -466,11 +465,8 @@ fn hover_at_position(
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
         return Ok(Value::Null);
     };
-
-    let symbols = collect_function_symbols(&program);
-    let Some(symbol) = symbols
-        .into_iter()
-        .find(|symbol| symbol.name == hit.name)
+    let Some(symbol_match) =
+        find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline)
     else {
         return Ok(Value::Null);
     };
@@ -478,7 +474,7 @@ fn hover_at_position(
     Ok(json!({
         "contents": {
             "kind": "markdown",
-            "value": format!("```ailang\\n{}\\n```", symbol.signature),
+            "value": format!("```ailang\\n{}\\n```", symbol_match.symbol.signature),
         },
         "range": range_from_span(&hit.span),
     }))
@@ -2031,6 +2027,149 @@ mod tests {
             contents.contains("fn helper() -> Int"),
             "hover should include helper signature"
         );
+    }
+
+    #[test]
+    fn definition_resolves_to_unopened_workspace_file_declaration() {
+        let root = make_temp_workspace("ailang_lsp_definition_unopened");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n";
+        let source_b = "fn main() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_a = Url::from_file_path(&file_a)
+            .expect("file a uri")
+            .to_string();
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 18,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let definition_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(18)))
+            .expect("definition response should exist");
+        assert_eq!(
+            definition_response
+                .get("result")
+                .and_then(|result| result.get("uri"))
+                .and_then(Value::as_str),
+            Some(uri_a.as_str()),
+            "definition should resolve to helper declaration in unopened workspace file",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn hover_resolves_signature_from_unopened_workspace_file_declaration() {
+        let root = make_temp_workspace("ailang_lsp_hover_unopened");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n";
+        let source_b = "fn main() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "textDocument/hover",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let hover_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(19)))
+            .expect("hover response should exist");
+        let contents = hover_response
+            .get("result")
+            .and_then(|result| result.get("contents"))
+            .and_then(|contents| contents.get("value"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        assert!(
+            contents.contains("fn helper() -> Int"),
+            "hover should resolve helper signature from unopened workspace file",
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

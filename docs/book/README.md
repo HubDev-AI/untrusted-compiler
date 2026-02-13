@@ -232,5 +232,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `265-m11-unopened-workspace-file-references-and-rename.md`
 - `266-m11-code-action-validate-edit.md`
 - `267-m11-tree-sitter-outline-indent-textobjects.md`
+- `268-m11-workspace-aware-definition-and-hover.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1014,10 +1014,11 @@ Implementation order is intentionally linear to reduce thrash:
   - code actions now support concrete redact/validate auto-edits for core secret/untrusted diagnostics.
   - references/rename now include unopened workspace `.ai` files discovered from project root.
   - tree-sitter query surface now includes highlights + outline + indent + textobjects baseline.
+  - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
-  - indexed full-project symbol graph with stable symbol-ID-based rename precision.
+  - indexed symbol graph with stable symbol-ID-based precision across definition/references/rename.
   - broader code-action auto-fix coverage (`E2001` and AST-aware multi-line rewrites).
   - production grammar coverage and pinned published grammar revision.
 
@@ -1050,6 +1051,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Unopened Workspace-File References and Rename".
 - Chapter: "M11 Slice: Code-Action Validate Edit".
 - Chapter: "M11 Slice: Tree-Sitter Outline/Indent/Textobjects".
+- Chapter: "M11 Slice: Workspace-Aware Definition and Hover".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
