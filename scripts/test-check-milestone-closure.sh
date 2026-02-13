@@ -84,6 +84,10 @@ jobs:
         run: scripts/test-release-contract-smoke-workflow-contract.sh
       - name: Validate release-contract-smoke workflow guard behavior
         run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
 YAML
 cat > "$tmp/.github/workflows/benchmark-smoke.yml" <<'YAML'
 name: Benchmark Smoke
@@ -195,6 +199,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.overall == "PASS" and .pendingCount =
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M9-H") != null' >/dev/null; then
   echo "expected json closure output to include M9-H gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M10-D") != null' >/dev/null; then
+  echo "expected json closure output to include M10-D gate" >&2
   exit 1
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-D") != null' >/dev/null; then
@@ -483,6 +491,10 @@ jobs:
         run: scripts/test-release-contract-smoke-workflow-contract.sh
       - name: Validate release-contract-smoke workflow guard behavior
         run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
 YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
@@ -511,6 +523,67 @@ jobs:
         run: scripts/test-release-contract-smoke-workflow-contract.sh
       - name: Validate release-contract-smoke workflow guard behavior
         run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+YAML
+
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Validate alpha release workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
+      - name: Validate release-contract-smoke workflow contract
+        run: scripts/test-release-contract-smoke-workflow-contract.sh
+      - name: Validate release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses cross-impl guard test step" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Validate alpha release workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
+      - name: Validate release-contract-smoke workflow contract
+        run: scripts/test-release-contract-smoke-workflow-contract.sh
+      - name: Validate release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
 YAML
 
 cat > "$tmp/.github/workflows/benchmark-smoke.yml" <<'YAML'

@@ -28,6 +28,12 @@ jobs:
       - name: Validate roadmap closure gate alignment
         run: scripts/test-roadmap-closure-gate-alignment.sh
 
+      - name: Validate benchmark cross-impl workflow contract
+        run: scripts/test-benchmark-cross-impl-workflow-contract.sh
+
+      - name: Validate benchmark cross-impl workflow guard behavior
+        run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+
       - name: Validate sec4 CLI command contract
         run: scripts/test-sec4-cli-command-contract.sh
 

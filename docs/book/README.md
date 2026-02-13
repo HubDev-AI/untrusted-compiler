@@ -317,5 +317,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `350-m9-alpha-release-guard-regression-and-ci-gate.md`
 - `351-m13-benchmark-smoke-closure-guard-regression-test.md`
 - `352-m13-closure-audit-json-output-contract.md`
+- `353-m10-cross-impl-guard-regression-and-ci-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.

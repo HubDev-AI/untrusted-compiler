@@ -58,6 +58,9 @@ Implementation progress and milestone closure are not the same. This checklist p
   - scoped run includes `--endpoints ping,decode`,
   - strict quality gate is present (`--fail-on-warning`),
   - artifact upload contract is present (`benchmark-cross-impl-evidence`, `benchmark-suite/results`).
+- naming-lock CI keeps cross-impl workflow contract guard:
+  - `scripts/test-benchmark-cross-impl-workflow-contract.sh`
+  - `scripts/test-benchmark-cross-impl-workflow-contract-guard.sh`
 
 3. M13 live trend evidence
 - trend-note chapter contains at least one:
