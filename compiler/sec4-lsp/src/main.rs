@@ -2,6 +2,8 @@ use sec4_core::ast::{
     Block, Expr, ExprKind, ItemKind, Pattern, PatternKind, Program, Stmt, StmtKind, TypeExpr,
     TypeExprKind,
 };
+use sec4_core::lexer::lex;
+use sec4_core::token::TokenKind;
 use sec4_core::{
     analyze_program_with_interrupt, parse_source, parse_source_with_interrupt,
     Diagnostic as CoreDiagnostic, InterruptSignal as CoreInterruptSignal, Severity as CoreSeverity,
@@ -460,7 +462,7 @@ fn parse_code_action_request(message: &Value) -> Option<(String, Vec<Value>)> {
 }
 
 fn definition_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -494,7 +496,7 @@ fn definition_at_position(
 }
 
 fn hover_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -530,7 +532,7 @@ fn hover_at_position(
 }
 
 fn references_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -601,7 +603,7 @@ fn references_at_position(
 }
 
 fn implementation_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -615,7 +617,7 @@ fn implementation_at_position(
 }
 
 fn completion_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     _line: usize,
     _character: usize,
@@ -665,7 +667,7 @@ fn completion_keyword_items() -> Vec<Value> {
 }
 
 fn prepare_rename_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -696,7 +698,7 @@ fn prepare_rename_at_position(
 }
 
 fn rename_at_position(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     line: usize,
     character: usize,
@@ -1216,7 +1218,58 @@ fn extract_open_document_import_uris(source_uri: &str, text: &str) -> HashSet<St
     };
 
     let mut imports = HashSet::new();
-    for line in text.lines() {
+    for path_literal in extract_relative_import_literals(&source_path, text) {
+        let candidate = normalize_joined_path(base_dir, &path_literal);
+        let Ok(candidate_uri) = Url::from_file_path(candidate) else {
+            continue;
+        };
+        imports.insert(candidate_uri.to_string());
+    }
+    imports
+}
+
+fn extract_relative_import_literals(source_path: &PathBuf, source: &str) -> HashSet<String> {
+    if let Ok(tokens) = lex(source_path, source) {
+        let mut imports = HashSet::new();
+        let mut index = 0usize;
+        while index < tokens.len() {
+            let is_import = matches!(
+                tokens[index].kind,
+                TokenKind::Identifier(ref name) if name == "import"
+            );
+            if !is_import {
+                index += 1;
+                continue;
+            }
+
+            let mut lookahead = index + 1;
+            while lookahead < tokens.len()
+                && matches!(
+                    tokens[lookahead].kind,
+                    TokenKind::Eof | TokenKind::Symbol(_)
+                )
+            {
+                lookahead += 1;
+            }
+
+            if lookahead < tokens.len() {
+                if let TokenKind::String(ref literal) = tokens[lookahead].kind {
+                    if literal.starts_with('.') {
+                        imports.insert(literal.clone());
+                    }
+                }
+            }
+            index = lookahead.saturating_add(1);
+        }
+        return imports;
+    }
+
+    extract_relative_import_literals_from_lines(source)
+}
+
+fn extract_relative_import_literals_from_lines(source: &str) -> HashSet<String> {
+    let mut imports = HashSet::new();
+    for line in source.lines() {
         let trimmed = line.trim_start();
         if !trimmed.starts_with("import ") {
             continue;
@@ -1224,15 +1277,9 @@ fn extract_open_document_import_uris(source_uri: &str, text: &str) -> HashSet<St
         let Some(path_literal) = extract_quoted_path_literal(trimmed) else {
             continue;
         };
-        if !path_literal.starts_with('.') {
-            continue;
+        if path_literal.starts_with('.') {
+            imports.insert(path_literal);
         }
-
-        let candidate = normalize_joined_path(base_dir, &path_literal);
-        let Ok(candidate_uri) = Url::from_file_path(candidate) else {
-            continue;
-        };
-        imports.insert(candidate_uri.to_string());
     }
     imports
 }
@@ -1271,7 +1318,7 @@ fn normalize_joined_path(base_dir: &std::path::Path, relative: &str) -> PathBuf 
 }
 
 fn load_cached_program(
-    state: &ServerState,
+    state: &mut ServerState,
     uri: &str,
     path: &PathBuf,
     source: &str,
@@ -1280,13 +1327,31 @@ fn load_cached_program(
     if let Some(program) = state.parsed_programs.get(uri) {
         return Some(program.clone());
     }
-    let Some(deadline) = deadline else {
-        return parse_source(path, source).ok();
+
+    update_open_document_import_edges(state, uri, source);
+
+    let parsed = if let Some(deadline) = deadline {
+        if deadline.is_expired() {
+            return None;
+        }
+        parse_source_with_interrupt(path, source, deadline).ok()
+    } else {
+        parse_source(path, source).ok()
     };
-    if deadline.is_expired() {
-        return None;
+
+    if let Some(program) = parsed {
+        state
+            .open_document_symbols
+            .insert(uri.to_string(), collect_function_symbols(&program, None));
+        state
+            .parsed_programs
+            .insert(uri.to_string(), program.clone());
+        return Some(program);
     }
-    parse_source_with_interrupt(path, source, deadline).ok()
+
+    state.parsed_programs.remove(uri);
+    state.open_document_symbols.remove(uri);
+    None
 }
 
 fn workspace_document_entries(
@@ -1389,7 +1454,7 @@ fn collect_ai_files(root: &PathBuf, out: &mut Vec<PathBuf>) {
 }
 
 fn document_symbols_for_uri(
-    state: &ServerState,
+    state: &mut ServerState,
     doc_uri: &str,
     doc_source: &str,
     deadline: &RequestDeadline,
@@ -1406,7 +1471,7 @@ fn document_symbols_for_uri(
 }
 
 fn resolve_unique_symbol_id_in_workspace(
-    state: &ServerState,
+    state: &mut ServerState,
     target_name: &str,
     primary_uri: &str,
     primary_source: &str,
@@ -1439,7 +1504,7 @@ fn resolve_unique_symbol_id_in_workspace(
 }
 
 fn resolve_call_target_symbol_id(
-    state: &ServerState,
+    state: &mut ServerState,
     target_name: &str,
     primary_uri: &str,
     primary_source: &str,
@@ -1469,7 +1534,7 @@ fn resolve_call_target_symbol_id(
 }
 
 fn find_symbol_declaration_by_id(
-    state: &ServerState,
+    state: &mut ServerState,
     symbol_id: &str,
     primary_uri: &str,
     primary_source: &str,
@@ -2284,8 +2349,8 @@ mod tests {
         collect_function_symbols, collect_identifier_hits_by_name,
         diagnostics_for_document_with_limits, extract_open_document_import_uris,
         find_identifier_at_position, load_cached_program, parse_env_bool, read_message,
-        refresh_program_cache, run_stdio, update_open_document_import_edges, RequestDeadline,
-        ServerState,
+        refresh_program_cache, run_stdio, update_open_document_import_edges, uri_to_path,
+        RequestDeadline, ServerState,
     };
     use sec4_core::parse_source;
     use serde_json::{json, Value};
@@ -2595,6 +2660,63 @@ mod tests {
     }
 
     #[test]
+    fn refresh_program_cache_invalidates_cached_unopened_dependents() {
+        let root = make_temp_workspace("sec4_lsp_dep_unopened_cache");
+        let dep_file = root.join("dep.ut");
+        let child_file = root.join("child.ut");
+        let policy_file = root.join("sec4.toml");
+        let dep_source = "fn alpha() -> Int {\n  1\n}\n";
+        let child_source = "fn beta() -> Int {\n  alpha()\n}\n";
+        let invalid_dep_source = "fn alpha( -> Int {\n  1\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&dep_file, dep_source).expect("dep source should be written");
+        fs::write(&child_file, child_source).expect("child source should be written");
+
+        let dep_uri = Url::from_file_path(&dep_file).expect("dep uri").to_string();
+        let child_uri = Url::from_file_path(&child_file)
+            .expect("child uri")
+            .to_string();
+
+        let mut state = ServerState::default();
+        refresh_program_cache(&mut state, &dep_uri, dep_source);
+
+        let child_path = uri_to_path(&child_uri).expect("child path");
+        let cached_child =
+            load_cached_program(&mut state, &child_uri, &child_path, child_source, None);
+        assert!(
+            cached_child.is_some(),
+            "unopened dependent should populate parse cache when loaded on demand",
+        );
+        update_open_document_import_edges(&mut state, &child_uri, "import \"./dep.ut\"\n");
+        assert!(
+            state.parsed_programs.contains_key(&child_uri),
+            "cached unopened dependent should be present before invalidation",
+        );
+
+        let dependents = state
+            .reverse_open_document_imports
+            .get(&dep_uri)
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            dependents.contains(&child_uri),
+            "dependency graph should include unopened dependent edge",
+        );
+
+        refresh_program_cache(&mut state, &dep_uri, invalid_dep_source);
+        assert!(
+            !state.parsed_programs.contains_key(&child_uri),
+            "dependency refresh should invalidate unopened dependent parse cache",
+        );
+        assert!(
+            !state.open_document_symbols.contains_key(&child_uri),
+            "dependency refresh should invalidate unopened dependent symbol cache",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn extract_open_document_import_uris_resolves_relative_literals() {
         let source_path = PathBuf::from("/tmp/lsp_imports/src/main.ut");
         let source_uri = Url::from_file_path(&source_path)
@@ -2621,6 +2743,31 @@ mod tests {
         assert!(imports.contains(&dep_uri));
         assert!(imports.contains(&util_uri));
         assert!(imports.contains(&dep2_uri));
+    }
+
+    #[test]
+    fn extract_open_document_import_uris_handles_multiline_tokenized_imports() {
+        let source_path = PathBuf::from("/tmp/lsp_imports_multiline/src/main.ut");
+        let source_uri = Url::from_file_path(&source_path)
+            .expect("source uri")
+            .to_string();
+        let source = "import\n  \"./dep.ut\"\n// import \"./ignored.ut\"\nimport \"../lib/util.ut\"\nlet note = \"import './also_ignored.ut'\";\n";
+
+        let imports = extract_open_document_import_uris(&source_uri, source);
+        let dep_uri = Url::from_file_path("/tmp/lsp_imports_multiline/src/dep.ut")
+            .expect("dep uri")
+            .to_string();
+        let util_uri = Url::from_file_path("/tmp/lsp_imports_multiline/lib/util.ut")
+            .expect("util uri")
+            .to_string();
+
+        assert_eq!(
+            imports.len(),
+            2,
+            "token-aware import extraction should resolve multiline imports and ignore string/comment noise",
+        );
+        assert!(imports.contains(&dep_uri));
+        assert!(imports.contains(&util_uri));
     }
 
     #[test]
@@ -2755,13 +2902,13 @@ mod tests {
 
     #[test]
     fn load_cached_program_skips_parse_when_deadline_is_expired() {
-        let state = ServerState::default();
+        let mut state = ServerState::default();
         let path = PathBuf::from("/tmp/lsp_deadline_parse_skip.ut");
         let source = "fn alpha() -> Int { 1 }\n";
         let deadline = RequestDeadline::new(0);
 
         let program = load_cached_program(
-            &state,
+            &mut state,
             "file:///tmp/lsp_deadline_parse_skip.ut",
             &path,
             source,

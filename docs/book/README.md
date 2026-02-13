@@ -255,5 +255,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `288-m11-core-parser-semantic-interrupt-hooks.md`
 - `289-m11-lexer-interrupt-hooks-and-zed-grammar-pin.md`
 - `290-m11-symbol-id-callsite-binding-for-references-and-rename.md`
+- `291-m11-workspace-dependency-invalidation-for-cached-unopened-files.md`
 
 As milestones progress, chapters will be added and linked from this index.

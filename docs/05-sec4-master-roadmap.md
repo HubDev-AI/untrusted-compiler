@@ -1062,8 +1062,10 @@ Implementation order is intentionally linear to reduce thrash:
   - interrupt-aware core analysis hooks now exist in `sec4-core` parser/semantic pipelines, and LSP diagnostics/requested parses now use those hooks for preemptive in-stage cancellation.
   - lexer-stage interrupt checks now use the same core interrupt signal path, so budget/deadline cancellation can stop tokenization early with `I9001` info diagnostics.
   - Zed grammar integration is now pinned to an immutable `tree-sitter-untrusted` revision SHA in extension metadata.
+  - unopened workspace files loaded during navigation/rename are now cached in parse/symbol stores and register dependency edges for later invalidation.
+  - dependency invalidation now evicts cached unopened dependents (not only open-document dependents) when upstream files refresh/fail parse.
+  - import-edge extraction now uses token-aware scanning (with line-based fallback), so multiline import forms are tracked more reliably while ignoring string/comment noise.
 - Remaining:
-  - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
   - fully AST-aware code-action rewrites for complex signature layouts (signature-window-aware anchoring is now in place).
 
 ### Exit criteria
@@ -1118,6 +1120,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Core Parser/Semantic Interrupt Hooks".
 - Chapter: "M11 Slice: Lexer Interrupt Hooks and Zed Grammar Pin".
 - Chapter: "M11 Slice: Symbol-ID Callsite Binding for References and Rename".
+- Chapter: "M11 Slice: Workspace Dependency Invalidation for Cached Unopened Files".
 
 ## M12 - Naming Alignment and Ecosystem Lock
 ### Trigger condition
