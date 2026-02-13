@@ -3307,6 +3307,35 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
+        if is_err_with_path_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withPath expects `(error, path)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.withPath(errorValue, \"$.field\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withPath path argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use stable path strings such as `\"$.field\"`"),
+                );
+            }
+            return;
+        }
+
         if !is_err_with_detail_call(callee_name) {
             return;
         }
@@ -4502,6 +4531,10 @@ fn is_auth_require_role_call(name: &str) -> bool {
 
 fn is_err_with_detail_call(name: &str) -> bool {
     matches!(name, "err_with_detail" | "err.withDetail")
+}
+
+fn is_err_with_path_call(name: &str) -> bool {
+    matches!(name, "err_with_path" | "err.withPath")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

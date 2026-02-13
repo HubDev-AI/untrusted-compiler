@@ -619,7 +619,7 @@ fn main() -> Int {
   let conflict = err.conflict(1, 2);
   let limited = err.rateLimit(1, 2, 3);
   let internal = err.internal(1);
-  let withPath = err.withPath(base, 1);
+  let withPath = err.withPath(base, "$.field");
   let withDetail = err.withDetail(base, "field", 2);
   let withLimit = err.withLimit(base, 1, 2, 3);
   let withDependency = err.withDependency(base, 1, 2, 3);
@@ -647,7 +647,7 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_err_conflict(1, 2);"));
     assert!(c.contains("ailang_rt_err_rate_limit(1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_internal(1);"));
-    assert!(c.contains("ailang_rt_err_with_path(base, 1);"));
+    assert!(c.contains("ailang_rt_err_with_path(base, \"$.field\");"));
     assert!(c.contains("ailang_rt_err_with_detail(base, \"field\", 2);"));
     assert!(c.contains("ailang_rt_err_with_limit(base, 1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3);"));
