@@ -29,12 +29,18 @@ This slice closes those gaps with deterministic checks.
 - validates leader row membership inside compared rows,
 - validates presence/type shape for core leader quality metadata.
 
-3. New trend-workflow guard gate (`M13-B`)
+3. New cross-impl workflow contract gate (`M10-C`)
+- requires benchmark cross-impl workflow file,
+- requires scoped run contract (`--impls sec4,node,go,rust`, `--endpoints ping,decode`),
+- requires strict quality check invocation with `--fail-on-warning`,
+- requires cross-impl artifact upload contract.
+
+4. New trend-workflow guard gate (`M13-B`)
 - requires scheduled trend workflow file,
 - requires strict quality check invocation with `--fail-on-warning`,
 - requires regression-threshold check step.
 
-4. New trend-artifact upload gate (`M13-C`)
+5. New trend-artifact upload gate (`M13-C`)
 - requires `actions/upload-artifact@v4` in trend workflow,
 - requires `benchmark-trend-*` artifact naming,
 - requires artifact path coverage for `benchmark-suite/results`.

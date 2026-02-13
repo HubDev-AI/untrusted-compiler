@@ -36,6 +36,11 @@ Implementation progress and milestone closure are not the same. This checklist p
   - leader endpoint matches entry endpoint,
   - compared rows keep endpoint alignment,
   - leader row is present in compared rows.
+- cross-impl evidence workflow contract is aligned:
+  - scoped run includes `--impls sec4,node,go,rust`,
+  - scoped run includes `--endpoints ping,decode`,
+  - strict quality gate is present (`--fail-on-warning`),
+  - artifact upload contract is present (`benchmark-cross-impl-evidence`, `benchmark-suite/results`).
 
 3. M13 live trend evidence
 - trend-note chapter contains at least one:

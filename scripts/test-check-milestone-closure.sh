@@ -45,6 +45,31 @@ jobs:
           path: benchmark-suite/results
 YAML
 
+cat > "$tmp/.github/workflows/benchmark-cross-impl-evidence.yml" <<'YAML'
+name: Benchmark Cross-Impl Evidence
+on:
+  workflow_dispatch:
+jobs:
+  cross-impl-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run cross-impl benchmark matrix (ping+decode)
+        run: |
+          benchmark-suite/scripts/run_comparison_matrix.sh \
+            --impls sec4,node,go,rust \
+            --endpoints ping,decode
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json \
+            --fail-on-warning
+      - name: Upload cross-impl benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-cross-impl-evidence
+          path: benchmark-suite/results
+YAML
+
 cat > "$tmp/benchmark-suite/results/summaries/compare-matrix.json" <<'JSON'
 {
   "version": "0.1",
@@ -209,6 +234,42 @@ chmod +x "$tmp/scripts/release-alpha-gate.sh"
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
   echo "expected pending failure when release gate omits strict closure flag" >&2
+  exit 1
+fi
+
+cat > "$tmp/scripts/release-alpha-gate.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+scripts/check-milestone-closure.sh --fail-on-pending
+SH
+chmod +x "$tmp/scripts/release-alpha-gate.sh"
+
+cat > "$tmp/.github/workflows/benchmark-cross-impl-evidence.yml" <<'YAML'
+name: Benchmark Cross-Impl Evidence
+on:
+  workflow_dispatch:
+jobs:
+  cross-impl-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run cross-impl benchmark matrix (ping+decode)
+        run: |
+          benchmark-suite/scripts/run_comparison_matrix.sh \
+            --impls sec4,node,go,rust \
+            --endpoints ping,decode
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json
+      - name: Upload cross-impl benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-cross-impl-evidence
+          path: benchmark-suite/results
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when cross-impl workflow omits strict quality flag" >&2
   exit 1
 fi
 
