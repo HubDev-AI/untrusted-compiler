@@ -26,7 +26,9 @@ Single-endpoint comparison output is useful for quick checks, but M10 requires r
    - `requestsPerSec`
    - `p99`
 3. Groups rows by endpoint.
-4. Sorts each endpoint group by `requestsPerSec` descending.
+4. Sorts each endpoint group using quality-aware ordering:
+   - constant-rate rows first (`constantRate=true`),
+   - then `requestsPerSec` descending.
 5. Emits endpoint entries with:
    - `compared` rows
    - `leader` row
@@ -64,7 +66,7 @@ benchmark-suite/scripts/compare_matrix.sh \
 ## Tradeoffs and next steps
 
 - Tradeoff:
-  - ranking currently uses throughput only (`requestsPerSec`) and includes `p99` as a column, not as a weighted score.
+  - ranking currently weights run quality (`constantRate`) first and throughput second, while `p99` remains a reported (not weighted) column.
 - Next:
   - add optional composite ranking profiles (latency-first vs throughput-first),
   - include error-rate/CPU/RSS once those fields are standardized in report bundles.

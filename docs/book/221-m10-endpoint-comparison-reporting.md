@@ -15,7 +15,7 @@ The script builds an endpoint-level comparison artifact from `*-report.json` fil
 
 ## Why it exists
 
-M10 requires cross-language comparison outputs, not just isolated per-impl runs. This slice produces a deterministic comparison artifact with ranked throughput and p99 columns per endpoint.
+M10 requires cross-language comparison outputs, not just isolated per-impl runs. This slice produces a deterministic comparison artifact with quality-aware ranking and p99 columns per endpoint.
 
 ## How it works internally
 
@@ -26,7 +26,9 @@ M10 requires cross-language comparison outputs, not just isolated per-impl runs.
    - `targetRps`
    - `requestsPerSec`
    - `p99`
-4. Sorts rows by `requestsPerSec` (descending).
+4. Sorts rows with constant-rate quality priority:
+   - `constantRate=true` rows first,
+   - then `requestsPerSec` descending.
 5. Emits:
    - `compared` array,
    - `leader` row.
@@ -65,7 +67,7 @@ benchmark-suite/scripts/compare_reports.sh \
 ## Tradeoffs and next steps
 
 - Tradeoff:
-  - comparison focuses on throughput+p99 summary fields in this slice.
+  - ranking currently prioritizes constant-rate run quality and then throughput, while `p99` remains a reported (not weighted) column.
 - Next:
   - extend comparison schema with error rate, CPU, and RSS once those metrics are captured per report,
   - generate combined multi-endpoint comparative report for publication.

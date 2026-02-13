@@ -67,8 +67,10 @@ jq -n \
           $eps[] as $ep
           | ($rows
               | map(select(.endpoint == $ep))
-              | sort_by(.requestsPerSec)
-              | reverse
+              | sort_by([
+                  (if (.constantRate == true) then 0 else 1 end),
+                  -(.requestsPerSec // 0)
+                ])
             ) as $compared
           | {
               endpoint: $ep,

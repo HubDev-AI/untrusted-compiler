@@ -42,6 +42,52 @@ if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader.constantRate ==
   exit 1
 fi
 
+cat > "$tmp/steady-report.json" <<'EOF'
+{
+  "version": "0.1",
+  "impl": "steady",
+  "summaries": [
+    {
+      "endpoint": "ping",
+      "targetRps": 10000,
+      "requestsPerSec": 50000,
+      "constantRate": true,
+      "loadGenerator": "wrk2",
+      "latency": {"p99": "10.00ms"}
+    }
+  ]
+}
+EOF
+
+cat > "$tmp/burst-report.json" <<'EOF'
+{
+  "version": "0.1",
+  "impl": "burst",
+  "summaries": [
+    {
+      "endpoint": "ping",
+      "targetRps": 10000,
+      "requestsPerSec": 90000,
+      "constantRate": false,
+      "loadGenerator": "wrk",
+      "latency": {"p99": "2.00ms"}
+    }
+  ]
+}
+EOF
+
+quality_out="$tmp/compare-matrix-quality.json"
+"$root_dir/scripts/compare_matrix.sh" "$tmp" "$quality_out" "steady,burst" >/dev/null
+
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader.impl == "steady"' "$quality_out" >/dev/null; then
+  echo "compare-matrix should prefer constant-rate leader over higher non-constant throughput" >&2
+  exit 1
+fi
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .compared[0].constantRate == true and .compared[1].constantRate == false' "$quality_out" >/dev/null; then
+  echo "compare-matrix quality ordering mismatch for constant-rate prioritization" >&2
+  exit 1
+fi
+
 filtered_out="$tmp/compare-matrix-filtered.json"
 "$root_dir/scripts/compare_matrix.sh" "$tmp" "$filtered_out" "node,go" >/dev/null
 

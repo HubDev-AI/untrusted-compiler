@@ -541,7 +541,8 @@ Historical implementation bullets below are retained as build history; strict ga
   - preflight accepts either `wrk2` (preferred) or `wrk` (fallback),
   - profile runner emits explicit warning when using `wrk` fallback and omits constant-rate `-R` flag.
   - summary parser now supports both `wrk2` (`50.000%`) and `wrk` (`50%`) percentile formats,
-  - compare/trend artifacts now carry `loadGenerator` + `constantRate` metadata and mark coverage/guards as `n/a` for non-constant runs.
+  - compare/trend artifacts now carry `loadGenerator` + `constantRate` metadata and mark coverage/guards as `n/a` for non-constant runs,
+  - compare-matrix leader ordering now prefers `constantRate=true` runs over higher-throughput non-constant fallback runs.
 - M10 cross-impl evidence import path is now wired for closure readiness:
   - `.github/workflows/benchmark-cross-impl-evidence.yml` can be manually dispatched to run `sec4/node/go/rust` `ping+decode` and publish artifact `benchmark-cross-impl-evidence`.
   - `benchmark-suite/scripts/update_cross_impl_matrix_from_ci.sh` imports the latest successful artifact (or explicit matrix path), validates required impl coverage (`sec4/go/node/rust`), and updates `benchmark-suite/results/summaries/compare-matrix.json`.
