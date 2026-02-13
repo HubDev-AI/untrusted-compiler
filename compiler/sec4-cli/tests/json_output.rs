@@ -269,6 +269,65 @@ fn explain_unknown_code_prints_generic_guidance() {
 }
 
 #[test]
+fn explain_policy_allow_expired_code_prints_targeted_guidance() {
+    let output = run_cli(&["explain", "ALLOW_EXPIRED"]);
+    assert!(
+        output.status.success(),
+        "explain should succeed for policy finding code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("ALLOW_EXPIRED - Expired Policy Allowlist Exception"),
+        "stdout should include exact mapped policy finding topic:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docs/book/66-deterministic-severity-mapping-for-sec-audit.md"),
+        "stdout should include policy finding docs pointer:\n{stdout}"
+    );
+}
+
+#[test]
+fn explain_json_mode_writes_parseable_payload() {
+    let output = run_cli(&["explain", "E2001", "--format", "json"]);
+    assert!(output.status.success(), "explain json mode should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value =
+        serde_json::from_str(&stdout).expect("explain --format json should output parseable json");
+
+    assert_eq!(
+        parsed
+            .get("code")
+            .and_then(Value::as_str)
+            .expect("code should be present"),
+        "E2001"
+    );
+    assert_eq!(
+        parsed
+            .get("topic")
+            .and_then(Value::as_str)
+            .expect("topic should be present"),
+        "Missing Effect Declaration"
+    );
+    assert!(
+        parsed
+            .get("likelyActions")
+            .and_then(Value::as_array)
+            .map(|values| !values.is_empty())
+            .unwrap_or(false),
+        "likelyActions should be present and non-empty"
+    );
+    assert_eq!(
+        parsed
+            .get("docsPath")
+            .and_then(Value::as_str)
+            .expect("docsPath should be present"),
+        "docs/book/55-v0-typing-effects-security-rules.md"
+    );
+}
+
+#[test]
 fn sec_audit_json_keeps_stdout_parseable_json() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

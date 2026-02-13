@@ -67,6 +67,8 @@ enum Commands {
     },
     Explain {
         code: String,
+        #[arg(long, value_enum, default_value_t = ExplainOutputFormat::Text)]
+        format: ExplainOutputFormat,
     },
 }
 
@@ -110,6 +112,12 @@ enum EmitTarget {
     DiagnosticsJson,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum ExplainOutputFormat {
+    Text,
+    Json,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -140,7 +148,7 @@ fn main() {
             None,
             Some(fail_on.as_deref().unwrap_or("risk>=HIGH")),
         ),
-        Commands::Explain { code } => cmd_explain(&code),
+        Commands::Explain { code, format } => cmd_explain(&code, format),
     };
 
     if let Err(code) = result {
@@ -161,7 +169,7 @@ fn cmd_audit(args: AuditArgs) -> Result<(), i32> {
     )
 }
 
-fn cmd_explain(code: &str) -> Result<(), i32> {
+fn cmd_explain(code: &str, format: ExplainOutputFormat) -> Result<(), i32> {
     let code = code.trim();
     if code.is_empty() {
         eprintln!("explain requires a diagnostic code");
@@ -170,20 +178,44 @@ fn cmd_explain(code: &str) -> Result<(), i32> {
 
     let normalized = code.to_ascii_uppercase();
     let (topic, summary, fixes, docs_path) = explain_topic(&normalized);
+    let related_commands = vec![
+        "sec4 check --emit diagnostics-json".to_string(),
+        "sec4 audit --format text".to_string(),
+        "sec4 gate --fail-on 'risk>=HIGH'".to_string(),
+    ];
 
-    println!("{normalized} - {topic}");
-    println!("{summary}");
-    println!();
-    println!("Likely actions:");
-    for fix in fixes {
-        println!("- {fix}");
+    match format {
+        ExplainOutputFormat::Text => {
+            println!("{normalized} - {topic}");
+            println!("{summary}");
+            println!();
+            println!("Likely actions:");
+            for fix in fixes {
+                println!("- {fix}");
+            }
+            println!();
+            println!("Related commands:");
+            for command in &related_commands {
+                println!("- {command}");
+            }
+            println!("Docs: {docs_path}");
+        }
+        ExplainOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "code": normalized,
+                "topic": topic,
+                "summary": summary,
+                "likelyActions": fixes,
+                "relatedCommands": related_commands,
+                "docsPath": docs_path,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("explain payload should serialize as JSON")
+            );
+        }
     }
-    println!();
-    println!("Related commands:");
-    println!("- sec4 check --emit diagnostics-json");
-    println!("- sec4 audit --format text");
-    println!("- sec4 gate --fail-on 'risk>=HIGH'");
-    println!("Docs: {docs_path}");
 
     Ok(())
 }
@@ -248,6 +280,22 @@ fn explain_topic(
     ];
 
     match code {
+        "ALLOW_EXPIRED" => {
+            return (
+                "Expired Policy Allowlist Exception",
+                "An allowlisted exception has passed its expiry and must be removed, renewed, or replaced.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "ALLOW_EXPIRING_SOON" => {
+            return (
+                "Allowlist Exception Near Expiry",
+                "An allowlisted exception is nearing expiry and requires review to renew or remove.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
         "E1002" => {
             return (
                 "Untrusted Input Reached Typed Sink",

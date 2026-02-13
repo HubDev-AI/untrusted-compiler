@@ -274,5 +274,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `307-m10-standalone-benchmark-contract-validator.md`
 - `308-m10-benchmark-ci-dry-run-orchestrator-gates.md`
 - `309-m9-release-promotion-input-verifier-and-ci-gate.md`
+- `310-m9-sec4-explain-json-mode-and-policy-finding-maps.md`
 
 As milestones progress, chapters will be added and linked from this index.

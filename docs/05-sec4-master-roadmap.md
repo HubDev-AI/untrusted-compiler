@@ -508,7 +508,9 @@ Roadmap impact:
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
-- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) with direct chapter pointers.
+- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy allowlist finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`) with direct chapter pointers.
+- `sec4 explain` now supports machine-readable output mode:
+  - `sec4 explain <CODE> --format json` emits structured payload (`code`, `topic`, `summary`, `likelyActions`, `relatedCommands`, `docsPath`).
 - Benchmark artifact schema/version contract is now centralized:
   - `benchmark-suite/spec/artifact-contract-v0.1.md` defines canonical artifact filenames + key sets,
   - naming-lock validation now asserts this contract spec exists and includes required schema tokens.
@@ -1305,10 +1307,10 @@ Day 14:
 ## 7. Immediate Next Actions (Start Here)
 
 1. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
-2. Extend `sec4 explain` with policy-link context for allowlist-expiry diagnostics and optional JSON output mode for tooling consumption.
-3. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
-4. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
-5. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
+2. Add a release artifact promotion chapter/playbook that binds `release-alpha-gate` outputs to downstream publishing inputs.
+3. Define the first M13 execution slice with concrete acceptance criteria and chapter plan.
+4. Add a scoped scheduled workflow for lightweight live benchmark execution (post-dry-run CI checks).
+5. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
 
 ---
 
