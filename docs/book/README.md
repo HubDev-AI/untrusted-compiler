@@ -108,5 +108,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `140-m7-fs-sink-context-argument-type-hardening.md`
 - `141-m7-secret-source-context-argument-type-hardening.md`
 - `142-m7-secret-reveal-context-argument-type-hardening.md`
+- `143-m7-secret-reveal-value-argument-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

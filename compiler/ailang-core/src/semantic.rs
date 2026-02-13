@@ -2941,6 +2941,23 @@ impl Analyzer {
                 .with_note("use `secrets.reveal(ctx, secretsCap, secret)` for context-first calls"),
             );
         }
+
+        let value_index = if args.len() == 3 { 2 } else { 1 };
+        if !arg_types[value_index].contains_secret() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "secret reveal value argument must be `Secret<_>`",
+                    args[value_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!("found `{}`", arg_types[value_index].describe()))
+                .with_note(
+                    "use `secrets.reveal(secretsCap, secret)` or `secrets.reveal(ctx, secretsCap, secret)`",
+                ),
+            );
+        }
     }
 
     fn enforce_auth_helper_call_shapes(
