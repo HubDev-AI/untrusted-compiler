@@ -200,5 +200,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `233-m10-benchmark-preflight-and-early-fail-checks.md`
 - `234-m10-users-get-profile-and-seeded-read-workload.md`
 - `235-m10-endpoint-filtered-matrix-orchestration.md`
+- `236-m10-endpoint-scoped-report-bundling.md`
 
 As milestones progress, chapters will be added and linked from this index.

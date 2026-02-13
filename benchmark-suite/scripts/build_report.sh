@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
-  echo "usage: $0 <impl> <results_dir> <out_report.json> [sec_audit_json]" >&2
+if [ "$#" -lt 3 ] || [ "$#" -gt 5 ]; then
+  echo "usage: $0 <impl> <results_dir> <out_report.json> [sec_audit_json] [endpoints_csv]" >&2
   exit 2
 fi
 
@@ -10,11 +10,28 @@ impl="$1"
 results_dir="$2"
 out="$3"
 sec_audit_path="${4:-}"
+endpoints_csv="${5:-}"
 
 summaries_dir="${results_dir}/summaries"
 env_path="${results_dir}/env.json"
 
-mapfile -t summary_files < <(find "$summaries_dir" -maxdepth 1 -type f -name "${impl}-*.json" | sort)
+if [ -n "$endpoints_csv" ]; then
+  summary_files=()
+  IFS=',' read -r -a endpoints <<< "$endpoints_csv"
+  for raw_endpoint in "${endpoints[@]}"; do
+    endpoint="${raw_endpoint// /}"
+    [ -z "$endpoint" ] && continue
+    candidate="${summaries_dir}/${impl}-${endpoint}.json"
+    if [ ! -f "$candidate" ]; then
+      echo "missing summary for impl=${impl} endpoint=${endpoint}: ${candidate}" >&2
+      exit 2
+    fi
+    summary_files+=("$candidate")
+  done
+else
+  mapfile -t summary_files < <(find "$summaries_dir" -maxdepth 1 -type f -name "${impl}-*.json" | sort)
+fi
+
 if [ "${#summary_files[@]}" -eq 0 ]; then
   echo "no summary files found for impl=${impl} under ${summaries_dir}" >&2
   exit 2

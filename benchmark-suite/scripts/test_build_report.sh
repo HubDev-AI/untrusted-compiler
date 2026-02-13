@@ -9,6 +9,7 @@ mkdir -p "$tmp/summaries"
 cp "$root_dir/scripts/testdata/sample-summary-ping.json" "$tmp/summaries/ailang-ping.json"
 cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/ailang-decode.json"
 cp "$root_dir/scripts/testdata/sample-env.json" "$tmp/env.json"
+cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/ailang-users-post.json"
 
 out="$tmp/report.json"
 "$root_dir/scripts/build_report.sh" ailang "$tmp" "$out" >/dev/null
@@ -23,6 +24,17 @@ if ! grep -q '"endpoint": "decode"' "$out"; then
 fi
 if ! grep -q '"cpu": "test-cpu"' "$out"; then
   echo "missing env payload in report" >&2
+  exit 1
+fi
+
+filtered_out="$tmp/report-filtered.json"
+"$root_dir/scripts/build_report.sh" ailang "$tmp" "$filtered_out" "" "ping" >/dev/null
+if ! grep -q '"endpoint": "ping"' "$filtered_out"; then
+  echo "missing ping summary in filtered report" >&2
+  exit 1
+fi
+if grep -q '"endpoint": "decode"' "$filtered_out"; then
+  echo "filtered report should not include decode summary" >&2
   exit 1
 fi
 

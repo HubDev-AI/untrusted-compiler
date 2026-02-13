@@ -221,9 +221,9 @@ for impl in "${impls[@]}"; do
       echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ${endpoint} ${base_url}"
     done
     if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
-      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json ${sec_audit_path}"
+      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json ${sec_audit_path} ${endpoints_csv}"
     else
-      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json"
+      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json \"\" ${endpoints_csv}"
     fi
     continue
   fi
@@ -260,9 +260,9 @@ for impl in "${impls[@]}"; do
     "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
   done
   if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
-    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path"
+    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path" "$endpoints_csv"
   else
-    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json"
+    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "" "$endpoints_csv"
   fi
 
   cleanup_impl

@@ -75,3 +75,4 @@ Measure end-to-end service behavior across identical implementations:
   - dry-run mode uses `--dry-run-only`,
   - real runs require `wrk2` and implementation toolchains to be present.
 - `users-get` profile seeds one deterministic user before load and passes `BENCH_USER_ID` into `load/wrk2/get_user.lua`.
+- Matrix runs pass selected endpoint set into report bundling, so filtered runs do not accidentally include stale endpoint summaries from previous runs.
