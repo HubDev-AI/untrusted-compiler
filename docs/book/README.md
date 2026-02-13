@@ -310,5 +310,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `343-m9-release-contract-smoke-closure-gate.md`
 - `344-m9-release-contract-smoke-ci-closure-gate.md`
 - `345-m9-closure-audit-repo-relative-evidence.md`
+- `346-m9-release-contract-workflow-trigger-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.

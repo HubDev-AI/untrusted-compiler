@@ -18,6 +18,7 @@ This slice keeps required test-step wiring explicit and CI-enforced.
 
 1. Added workflow contract test script
 - Validates `.github/workflows/release-contract-smoke.yml` includes:
+  - trigger contract (`pull_request` + `push` on `main`),
   - `scripts/test-alpha-release-workflow-contract.sh`
   - `scripts/test-verify-release-promotion-inputs.sh`
   - `scripts/test-generate-release-publish-manifest.sh`

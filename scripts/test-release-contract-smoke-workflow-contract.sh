@@ -17,6 +17,19 @@ require_token() {
   fi
 }
 
+require_regex() {
+  local pattern="$1"
+  if ! rg -q -- "${pattern}" "${workflow_path}"; then
+    echo "missing workflow contract pattern '${pattern}' in ${workflow_path}" >&2
+    exit 1
+  fi
+}
+
+require_regex '^[[:space:]]*pull_request:[[:space:]]*$'
+require_regex '^[[:space:]]*push:[[:space:]]*$'
+require_regex '^[[:space:]]*branches:[[:space:]]*$'
+require_regex '^[[:space:]]*-[[:space:]]*main[[:space:]]*$'
+
 require_token 'scripts/test-alpha-release-workflow-contract.sh'
 require_token 'scripts/test-verify-release-promotion-inputs.sh'
 require_token 'scripts/test-generate-release-publish-manifest.sh'
