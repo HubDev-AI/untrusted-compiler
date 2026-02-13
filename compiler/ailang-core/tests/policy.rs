@@ -195,3 +195,39 @@ require_schema_for_encode = false
         .expect("json schema encode flag should parse");
     assert!(!policy.json.require_schema_for_encode);
 }
+
+#[test]
+fn policy_profile_default_secure_prod_parses() {
+    let source = include_str!("../../../policies/default-secure-prod.ailang.policy");
+    let policy = parse_policy_str(Path::new("ailang.policy"), source)
+        .expect("default-secure-prod policy should parse");
+
+    assert_eq!(policy.name, "default-secure-prod");
+    assert_eq!(policy.env, "prod");
+    assert_eq!(policy.mode_as_str(), "enforce");
+    assert_eq!(
+        policy.cors.allowed_origins,
+        vec!["https://app.example.com".to_string()]
+    );
+    assert!(policy.cors.allow_credentials);
+    assert!(policy.security_headers.hsts_enabled);
+    assert!(!policy.net_internal.enabled);
+    assert!(!policy.fs.enabled);
+    assert_eq!(policy.replay.effects, "deny");
+}
+
+#[test]
+fn policy_profile_permissive_dev_parses() {
+    let source = include_str!("../../../policies/permissive-dev.ailang.policy");
+    let policy =
+        parse_policy_str(Path::new("ailang.policy"), source).expect("permissive-dev should parse");
+
+    assert_eq!(policy.name, "permissive-dev");
+    assert_eq!(policy.env, "dev");
+    assert_eq!(policy.mode_as_str(), "warn");
+    assert_eq!(policy.cors.allowed_origins, vec!["*".to_string()]);
+    assert!(!policy.cors.allow_credentials);
+    assert!(policy.net_internal.enabled);
+    assert!(policy.fs.enabled);
+    assert_eq!(policy.replay.effects, "allow");
+}

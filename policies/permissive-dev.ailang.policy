@@ -1,0 +1,129 @@
+[policy]
+version = "0.1"
+name = "permissive-dev"
+mode = "warn"
+env = "dev"
+
+[effects]
+forbid = ["shell", "unsafe", "secrets.reveal"]
+require_explicit_on_function_fields = true
+
+[secrets]
+forbid_reveal = true
+allow_redact = true
+forbid_formatting = true
+
+[json]
+max_bytes = 1048576
+max_depth = 64
+require_schema_for_encode = true
+forbid_secret_fields_in_schema = true
+
+[http]
+max_body_bytes = 1048576
+max_concurrency = 1024
+default_timeout_ms = 15000
+
+[budget]
+max_body_bytes = 1048576
+max_json_bytes = 1048576
+max_json_depth = 64
+max_deadline_ms = 600000
+
+[logging]
+structured_only = true
+include_remote_ip = false
+include_user_agent = true
+include_auth_user_id = false
+max_attr_depth = 10
+max_attr_bytes = 16384
+sampling = 1.0
+
+[sql]
+forbid_raw = true
+require_limit_on_select = "off"
+max_returned_rows = 50000
+default_timeout_ms = 10000
+
+[net.public]
+allowed_schemes = ["http", "https"]
+allow_redirects = true
+max_redirects = 5
+allowed_domains = []
+blocked_domains = []
+allowed_ports = [80, 443]
+
+[net.internal]
+enabled = true
+allowed_cidrs = []
+allowed_domains = []
+
+[net.ssrf]
+block_private_ranges = true
+block_loopback = true
+block_link_local = true
+block_metadata_ips = true
+resolve_dns = true
+revalidate_redirects = false
+
+[fs]
+enabled = true
+allowed_base_paths = []
+forbid_absolute_paths = true
+forbid_symlinks = "warn"
+
+[cors]
+enabled = true
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST"]
+allowed_headers = ["content-type"]
+exposed_headers = []
+allow_credentials = false
+max_age_seconds = 0
+forbid_any_origin = false
+forbid_reflect_origin = false
+require_vary_origin = false
+
+[security_headers]
+enabled = true
+strip_server_header = false
+x_content_type_options = true
+x_frame_options = "SAMEORIGIN"
+referrer_policy = "no-referrer"
+
+[security_headers.hsts]
+enabled = false
+max_age_seconds = 0
+include_subdomains = false
+preload = false
+
+[security_headers.csp]
+enabled = true
+report_only = true
+
+[csrf]
+enabled = false
+mode = "off"
+cookie_name = "csrf"
+header_name = "x-csrf-token"
+same_site = "Lax"
+secure_cookie = true
+http_only_cookie = false
+protected_methods = ["POST", "PUT", "PATCH", "DELETE"]
+
+[auth]
+mode = "token"
+cross_site_frontend = false
+
+[capture]
+mode = "all"
+sample_rate = 1.0
+max_body_bytes = 262144
+max_capture_bytes = 1048576
+redact_headers = ["authorization"]
+redact_json_paths = ["$.password"]
+hash_only_non_json_bodies = false
+
+[replay]
+effects = "allow"
+allow_policy_mismatch = true
