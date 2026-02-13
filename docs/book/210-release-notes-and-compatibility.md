@@ -70,7 +70,7 @@ Required before tagging an alpha candidate:
 Canonical automation:
 - `scripts/release-alpha-gate.sh`
 
-This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
+This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, verifies metadata identity-hash consistency with `sec4 audit` output (`policyHash`, `compilerHash`, `runtimeHash`), gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 
 Release gate artifact stamping includes:
 - copied active policy profile file in release artifact directory,
@@ -78,7 +78,8 @@ Release gate artifact stamping includes:
 - explicit `naming lock: PASS` in `summary.txt`,
 - `sec4` binary SHA256 in `checksums.txt` and `summary.txt`,
 - runtime ABI source/header SHA256 in `checksums.txt` and `summary.txt`,
-- copied runtime ABI files (`sec4_runtime.h`, `sec4_runtime.c`) in release artifacts.
+- copied runtime ABI files (`sec4_runtime.h`, `sec4_runtime.c`) in release artifacts,
+- verified identity-hash stamps (`policy identity`, `compiler identity`, `runtime identity`) in `checksums.txt` and `summary.txt`.
 
 CI wiring:
 - `.github/workflows/alpha-release-gate.yml`

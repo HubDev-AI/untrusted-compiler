@@ -63,6 +63,26 @@ hash_file() {
   exit 2
 }
 
+require_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    return
+  fi
+  echo "error: jq is required for release-gate metadata verification" >&2
+  exit 2
+}
+
+read_json_field() {
+  local file_path="$1"
+  local filter="$2"
+  local value
+  value="$(jq -r "${filter} // empty" "${file_path}")"
+  if [[ -z "${value}" ]]; then
+    echo "error: missing JSON field '${filter}' in ${file_path}" >&2
+    exit 1
+  fi
+  echo "${value}"
+}
+
 run() {
   echo "+ $*"
   "$@"
@@ -72,6 +92,11 @@ PROFILE_HASH="$(hash_file "${PROFILE_PATH}")"
 PROFILE_BASENAME="$(basename "${PROFILE_PATH}")"
 RUNTIME_HEADER_PATH="${ROOT_DIR}/runtime/c/sec4_runtime.h"
 RUNTIME_SOURCE_PATH="${ROOT_DIR}/runtime/c/sec4_runtime.c"
+EXPECTED_POLICY_IDENTITY_HASH=""
+EXPECTED_COMPILER_IDENTITY_HASH=""
+EXPECTED_RUNTIME_IDENTITY_HASH=""
+
+require_jq
 
 SEC4_BIN="${ROOT_DIR}/target/debug/sec4"
 if [[ ! -x "${SEC4_BIN}" ]]; then
@@ -154,6 +179,45 @@ for sample in "${SAMPLES[@]}"; do
     exit 1
   fi
 
+  META_POLICY_HASH="$(read_json_field "${META_PATH}" '.policyHash')"
+  META_COMPILER_HASH="$(read_json_field "${META_PATH}" '.compilerHash')"
+  META_RUNTIME_HASH="$(read_json_field "${META_PATH}" '.runtimeHash')"
+  AUDIT_POLICY_HASH="$(read_json_field "${AUDIT_REPORT_PATH}" '.policy.hash')"
+  AUDIT_COMPILER_HASH="$(read_json_field "${AUDIT_REPORT_PATH}" '.build.compilerHash')"
+  AUDIT_RUNTIME_HASH="$(read_json_field "${AUDIT_REPORT_PATH}" '.build.runtimeHash')"
+
+  if [[ "${META_POLICY_HASH}" != "${AUDIT_POLICY_HASH}" ]]; then
+    echo "error: policy hash mismatch between build metadata and audit for sample '${sample}'" >&2
+    exit 1
+  fi
+  if [[ "${META_COMPILER_HASH}" != "${AUDIT_COMPILER_HASH}" ]]; then
+    echo "error: compiler hash mismatch between build metadata and audit for sample '${sample}'" >&2
+    exit 1
+  fi
+  if [[ "${META_RUNTIME_HASH}" != "${AUDIT_RUNTIME_HASH}" ]]; then
+    echo "error: runtime hash mismatch between build metadata and audit for sample '${sample}'" >&2
+    exit 1
+  fi
+
+  if [[ -z "${EXPECTED_POLICY_IDENTITY_HASH}" ]]; then
+    EXPECTED_POLICY_IDENTITY_HASH="${META_POLICY_HASH}"
+    EXPECTED_COMPILER_IDENTITY_HASH="${META_COMPILER_HASH}"
+    EXPECTED_RUNTIME_IDENTITY_HASH="${META_RUNTIME_HASH}"
+  else
+    if [[ "${EXPECTED_POLICY_IDENTITY_HASH}" != "${META_POLICY_HASH}" ]]; then
+      echo "error: policy identity hash differs across release samples" >&2
+      exit 1
+    fi
+    if [[ "${EXPECTED_COMPILER_IDENTITY_HASH}" != "${META_COMPILER_HASH}" ]]; then
+      echo "error: compiler identity hash differs across release samples" >&2
+      exit 1
+    fi
+    if [[ "${EXPECTED_RUNTIME_IDENTITY_HASH}" != "${META_RUNTIME_HASH}" ]]; then
+      echo "error: runtime identity hash differs across release samples" >&2
+      exit 1
+    fi
+  fi
+
   run cp "${META_PATH}" "${OUT_DIR}/${sample}-build_metadata.json"
   run cp "${SBOM_PATH}" "${OUT_DIR}/${sample}-sbom.json"
   run cp "${MAP_PATH}" "${OUT_DIR}/${sample}-security_map.json"
@@ -164,11 +228,23 @@ for sample in "${SAMPLES[@]}"; do
   } >> "${CHECKSUMS_FILE}"
 done
 
+if [[ -z "${EXPECTED_POLICY_IDENTITY_HASH}" || -z "${EXPECTED_COMPILER_IDENTITY_HASH}" || -z "${EXPECTED_RUNTIME_IDENTITY_HASH}" ]]; then
+  echo "error: no release sample identity hashes were captured" >&2
+  exit 1
+fi
+
+echo "policy_identity_hash ${EXPECTED_POLICY_IDENTITY_HASH}" >> "${CHECKSUMS_FILE}"
+echo "compiler_identity_hash ${EXPECTED_COMPILER_IDENTITY_HASH}" >> "${CHECKSUMS_FILE}"
+echo "runtime_identity_hash ${EXPECTED_RUNTIME_IDENTITY_HASH}" >> "${CHECKSUMS_FILE}"
+
 SUMMARY_PATH="${OUT_DIR}/summary.txt"
 {
   echo "sec4 alpha release gate: PASS"
   echo "policy profile: ${PROFILE_PATH}"
   echo "policy profile sha256: ${PROFILE_HASH}"
+  echo "policy identity hash: ${EXPECTED_POLICY_IDENTITY_HASH}"
+  echo "compiler identity hash: ${EXPECTED_COMPILER_IDENTITY_HASH}"
+  echo "runtime identity hash: ${EXPECTED_RUNTIME_IDENTITY_HASH}"
   echo "sec4 binary sha256: ${SEC4_BIN_HASH}"
   echo "runtime header sha256: ${RUNTIME_HEADER_HASH}"
   echo "runtime source sha256: ${RUNTIME_SOURCE_HASH}"

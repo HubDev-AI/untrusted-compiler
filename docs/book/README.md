@@ -268,5 +268,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `301-m10-benchmark-artifact-contract-spec.md`
 - `302-m9-release-gate-policy-and-naming-stamps.md`
 - `303-m9-release-gate-compiler-runtime-hash-stamps.md`
+- `304-m9-release-gate-identity-hash-consistency-checks.md`
 
 As milestones progress, chapters will be added and linked from this index.
