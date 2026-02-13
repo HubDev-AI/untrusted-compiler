@@ -299,5 +299,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `332-m13-closure-audit-gate-expansion.md`
 - `333-m13-benchmark-smoke-closure-audit-gate.md`
 - `334-m9-release-gate-milestone-closure-enforcement.md`
+- `335-m9-alpha-release-workflow-contract-test.md`
 
 As milestones progress, chapters will be added and linked from this index.

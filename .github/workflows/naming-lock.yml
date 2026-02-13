@@ -18,3 +18,6 @@ jobs:
 
       - name: Validate sec4 explain audit coverage
         run: scripts/check-sec4-explain-audit-coverage.sh
+
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh

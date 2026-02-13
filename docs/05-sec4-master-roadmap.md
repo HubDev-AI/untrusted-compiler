@@ -536,6 +536,9 @@ Historical implementation bullets below are retained as build history; strict ga
 - Release automation now verifies downstream publish-manifest consumption:
   - `scripts/verify-release-publish-manifest.sh` validates manifest identity/artifact bindings against release checksums,
   - `.github/workflows/alpha-release-gate.yml` now verifies publish manifest before artifact upload.
+- Alpha release workflow wiring now has a CI contract test:
+  - `scripts/test-alpha-release-workflow-contract.sh` validates required release/promotion/publish steps and artifact upload bindings in `.github/workflows/alpha-release-gate.yml`,
+  - `.github/workflows/naming-lock.yml` now runs this contract test on PRs and `main` pushes.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
