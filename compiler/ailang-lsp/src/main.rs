@@ -1,4 +1,7 @@
-use ailang_core::ast::{Block, Expr, ExprKind, ItemKind, Program, Stmt, StmtKind, TypeExpr, TypeExprKind};
+use ailang_core::ast::{
+    Block, Expr, ExprKind, ItemKind, Pattern, PatternKind, Program, Stmt, StmtKind, TypeExpr,
+    TypeExprKind,
+};
 use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity, Span};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -1443,9 +1446,20 @@ fn find_identifier_at_position(
             return None;
         }
         if let ItemKind::Function(function) = &item.kind {
-            if let Some(hit) =
-                find_identifier_in_block(&function.body, file, line, character, deadline)
-            {
+            let mut scopes = vec![HashSet::new()];
+            if let Some(scope) = scopes.last_mut() {
+                for param in &function.params {
+                    scope.insert(param.name.clone());
+                }
+            }
+            if let Some(hit) = find_identifier_in_block(
+                &function.body,
+                file,
+                line,
+                character,
+                &mut scopes,
+                deadline,
+            ) {
                 return Some(hit);
             }
         }
@@ -1458,24 +1472,36 @@ fn find_identifier_in_block(
     file: &PathBuf,
     line: usize,
     character: usize,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
     if deadline_exceeded(deadline) {
         return None;
     }
+    scopes.push(HashSet::new());
     for statement in &block.statements {
         if deadline_exceeded(deadline) {
+            scopes.pop();
             return None;
         }
-        if let Some(hit) = find_identifier_in_statement(statement, file, line, character, deadline) {
+        if let Some(hit) = find_identifier_in_statement(
+            statement,
+            file,
+            line,
+            character,
+            scopes,
+            deadline,
+        ) {
+            scopes.pop();
             return Some(hit);
         }
     }
-
-    block
+    let result = block
         .tail
         .as_ref()
-        .and_then(|tail| find_identifier_in_expr(tail, file, line, character, deadline))
+        .and_then(|tail| find_identifier_in_expr(tail, file, line, character, scopes, deadline));
+    scopes.pop();
+    result
 }
 
 fn find_identifier_in_statement(
@@ -1483,17 +1509,24 @@ fn find_identifier_in_statement(
     file: &PathBuf,
     line: usize,
     character: usize,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
     if deadline_exceeded(deadline) {
         return None;
     }
     match &statement.kind {
-        StmtKind::Let { value, .. } => find_identifier_in_expr(value, file, line, character, deadline),
+        StmtKind::Let { name, value, .. } => {
+            let hit = find_identifier_in_expr(value, file, line, character, scopes, deadline);
+            if let Some(scope) = scopes.last_mut() {
+                scope.insert(name.clone());
+            }
+            hit
+        }
         StmtKind::Return { value } => value
             .as_ref()
-            .and_then(|expr| find_identifier_in_expr(expr, file, line, character, deadline)),
-        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character, deadline),
+            .and_then(|expr| find_identifier_in_expr(expr, file, line, character, scopes, deadline)),
+        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character, scopes, deadline),
     }
 }
 
@@ -1502,53 +1535,66 @@ fn find_identifier_in_expr(
     file: &PathBuf,
     line: usize,
     character: usize,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) -> Option<IdentifierHit> {
     if deadline_exceeded(deadline) {
         return None;
     }
     match &expr.kind {
-        ExprKind::Identifier(name) => {
-            if span_contains(&expr.span, file, line, character) {
-                Some(IdentifierHit {
-                    name: name.clone(),
-                    span: expr.span.clone(),
-                })
-            } else {
-                None
-            }
-        }
-        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character, deadline),
+        ExprKind::Identifier(_) => None,
+        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character, scopes, deadline),
         ExprKind::Binary { left, right, .. } => {
-            find_identifier_in_expr(left, file, line, character, deadline)
-                .or_else(|| find_identifier_in_expr(right, file, line, character, deadline))
+            find_identifier_in_expr(left, file, line, character, scopes, deadline)
+                .or_else(|| find_identifier_in_expr(right, file, line, character, scopes, deadline))
         }
-        ExprKind::Member { object, .. } => {
-            find_identifier_in_expr(object, file, line, character, deadline)
-        }
-        ExprKind::Call { callee, args } => find_identifier_in_expr(callee, file, line, character, deadline)
-            .or_else(|| {
+        ExprKind::Member { object, .. } => find_identifier_in_expr(object, file, line, character, scopes, deadline),
+        ExprKind::Call { callee, args } => {
+            if let ExprKind::Identifier(name) = &callee.kind {
+                if span_contains(&callee.span, file, line, character)
+                    && !is_name_shadowed_in_scope(scopes, name)
+                {
+                    return Some(IdentifierHit {
+                        name: name.clone(),
+                        span: callee.span.clone(),
+                    });
+                }
+            }
+            find_identifier_in_expr(callee, file, line, character, scopes, deadline).or_else(|| {
                 args.iter()
-                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character, deadline))
-            }),
+                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character, scopes, deadline))
+            })
+        }
         ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => find_identifier_in_expr(condition, file, line, character, deadline)
-            .or_else(|| find_identifier_in_block(then_branch, file, line, character, deadline))
+        } => find_identifier_in_expr(condition, file, line, character, scopes, deadline)
+            .or_else(|| find_identifier_in_block(then_branch, file, line, character, scopes, deadline))
             .or_else(|| {
                 else_branch
                     .as_ref()
-                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character, deadline))
+                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character, scopes, deadline))
             }),
         ExprKind::Match { scrutinee, arms } => {
-            find_identifier_in_expr(scrutinee, file, line, character, deadline).or_else(|| {
-                arms.iter()
-                    .find_map(|arm| find_identifier_in_expr(&arm.value, file, line, character, deadline))
+            find_identifier_in_expr(scrutinee, file, line, character, scopes, deadline).or_else(|| {
+                arms.iter().find_map(|arm| {
+                    scopes.push(HashSet::new());
+                    collect_pattern_bindings_into_scope(&arm.pattern, scopes);
+                    let hit = find_identifier_in_expr(
+                        &arm.value,
+                        file,
+                        line,
+                        character,
+                        scopes,
+                        deadline,
+                    );
+                    scopes.pop();
+                    hit
+                })
             })
         }
-        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character, deadline),
+        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character, scopes, deadline),
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => None,
     }
 }
@@ -1568,7 +1614,20 @@ fn collect_identifier_hits_by_name(
             break;
         }
         if let ItemKind::Function(function) = &item.kind {
-            collect_identifier_hits_in_block(&function.body, file, target_name, &mut hits, deadline);
+            let mut scopes = vec![HashSet::new()];
+            if let Some(scope) = scopes.last_mut() {
+                for param in &function.params {
+                    scope.insert(param.name.clone());
+                }
+            }
+            collect_identifier_hits_in_block(
+                &function.body,
+                file,
+                target_name,
+                &mut hits,
+                &mut scopes,
+                deadline,
+            );
         }
     }
     hits
@@ -1579,20 +1638,31 @@ fn collect_identifier_hits_in_block(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) {
     if deadline_exceeded(deadline) {
         return;
     }
+    scopes.push(HashSet::new());
     for statement in &block.statements {
         if deadline_exceeded(deadline) {
+            scopes.pop();
             return;
         }
-        collect_identifier_hits_in_statement(statement, file, target_name, hits, deadline);
+        collect_identifier_hits_in_statement(
+            statement,
+            file,
+            target_name,
+            hits,
+            scopes,
+            deadline,
+        );
     }
     if let Some(tail) = &block.tail {
-        collect_identifier_hits_in_expr(tail, file, target_name, hits, deadline);
+        collect_identifier_hits_in_expr(tail, file, target_name, hits, scopes, deadline);
     }
+    scopes.pop();
 }
 
 fn collect_identifier_hits_in_statement(
@@ -1600,6 +1670,7 @@ fn collect_identifier_hits_in_statement(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) {
     if deadline_exceeded(deadline) {
@@ -1607,15 +1678,20 @@ fn collect_identifier_hits_in_statement(
     }
     match &statement.kind {
         StmtKind::Let { value, .. } => {
-            collect_identifier_hits_in_expr(value, file, target_name, hits, deadline)
+            collect_identifier_hits_in_expr(value, file, target_name, hits, scopes, deadline);
+            if let StmtKind::Let { name, .. } = &statement.kind {
+                if let Some(scope) = scopes.last_mut() {
+                    scope.insert(name.clone());
+                }
+            }
         }
         StmtKind::Return { value } => {
             if let Some(expr) = value {
-                collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline);
+                collect_identifier_hits_in_expr(expr, file, target_name, hits, scopes, deadline);
             }
         }
         StmtKind::Expr { expr } => {
-            collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline)
+            collect_identifier_hits_in_expr(expr, file, target_name, hits, scopes, deadline)
         }
     }
 }
@@ -1625,6 +1701,7 @@ fn collect_identifier_hits_in_expr(
     file: &PathBuf,
     target_name: &str,
     hits: &mut Vec<IdentifierHit>,
+    scopes: &mut Vec<HashSet<String>>,
     deadline: Option<&RequestDeadline>,
 ) {
     if deadline_exceeded(deadline) {
@@ -1633,27 +1710,30 @@ fn collect_identifier_hits_in_expr(
     match &expr.kind {
         ExprKind::Identifier(_) => {}
         ExprKind::Unary { expr, .. } => {
-            collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline)
+            collect_identifier_hits_in_expr(expr, file, target_name, hits, scopes, deadline)
         }
         ExprKind::Binary { left, right, .. } => {
-            collect_identifier_hits_in_expr(left, file, target_name, hits, deadline);
-            collect_identifier_hits_in_expr(right, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(left, file, target_name, hits, scopes, deadline);
+            collect_identifier_hits_in_expr(right, file, target_name, hits, scopes, deadline);
         }
         ExprKind::Member { object, .. } => {
-            collect_identifier_hits_in_expr(object, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(object, file, target_name, hits, scopes, deadline);
         }
         ExprKind::Call { callee, args } => {
             if let ExprKind::Identifier(name) = &callee.kind {
-                if name == target_name && &callee.span.file == file {
+                if name == target_name
+                    && &callee.span.file == file
+                    && !is_name_shadowed_in_scope(scopes, name)
+                {
                     hits.push(IdentifierHit {
                         name: name.clone(),
                         span: callee.span.clone(),
                     });
                 }
             }
-            collect_identifier_hits_in_expr(callee, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(callee, file, target_name, hits, scopes, deadline);
             for arg in args {
-                collect_identifier_hits_in_expr(arg, file, target_name, hits, deadline);
+                collect_identifier_hits_in_expr(arg, file, target_name, hits, scopes, deadline);
             }
         }
         ExprKind::If {
@@ -1661,22 +1741,70 @@ fn collect_identifier_hits_in_expr(
             then_branch,
             else_branch,
         } => {
-            collect_identifier_hits_in_expr(condition, file, target_name, hits, deadline);
-            collect_identifier_hits_in_block(then_branch, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(condition, file, target_name, hits, scopes, deadline);
+            collect_identifier_hits_in_block(
+                then_branch,
+                file,
+                target_name,
+                hits,
+                scopes,
+                deadline,
+            );
             if let Some(expr) = else_branch {
-                collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline);
+                collect_identifier_hits_in_expr(expr, file, target_name, hits, scopes, deadline);
             }
         }
         ExprKind::Match { scrutinee, arms } => {
-            collect_identifier_hits_in_expr(scrutinee, file, target_name, hits, deadline);
+            collect_identifier_hits_in_expr(scrutinee, file, target_name, hits, scopes, deadline);
             for arm in arms {
-                collect_identifier_hits_in_expr(&arm.value, file, target_name, hits, deadline);
+                scopes.push(HashSet::new());
+                collect_pattern_bindings_into_scope(&arm.pattern, scopes);
+                collect_identifier_hits_in_expr(
+                    &arm.value,
+                    file,
+                    target_name,
+                    hits,
+                    scopes,
+                    deadline,
+                );
+                scopes.pop();
             }
         }
         ExprKind::Block(block) => {
-            collect_identifier_hits_in_block(block, file, target_name, hits, deadline)
+            collect_identifier_hits_in_block(block, file, target_name, hits, scopes, deadline)
         }
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => {}
+    }
+}
+
+fn is_name_shadowed_in_scope(scopes: &[HashSet<String>], name: &str) -> bool {
+    scopes
+        .iter()
+        .rev()
+        .any(|scope| scope.contains(name))
+}
+
+fn collect_pattern_bindings_into_scope(pattern: &Pattern, scopes: &mut [HashSet<String>]) {
+    let Some(scope) = scopes.last_mut() else {
+        return;
+    };
+    collect_pattern_bindings(pattern, scope);
+}
+
+fn collect_pattern_bindings(pattern: &Pattern, scope: &mut HashSet<String>) {
+    match &pattern.kind {
+        PatternKind::Identifier(name) => {
+            scope.insert(name.clone());
+        }
+        PatternKind::Variant { args, .. } => {
+            for arg in args {
+                collect_pattern_bindings(arg, scope);
+            }
+        }
+        PatternKind::Wildcard
+        | PatternKind::Number(_)
+        | PatternKind::String(_)
+        | PatternKind::Bool(_) => {}
     }
 }
 
@@ -2707,6 +2835,59 @@ mod tests {
     }
 
     #[test]
+    fn definition_returns_null_for_shadowed_function_name_call() {
+        let uri = "file:///tmp/lsp_definition_shadowed.ai";
+        let source =
+            "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  let helper = 2;\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 30,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 6, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let definition_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(30)))
+            .expect("definition response should exist");
+        assert!(
+            definition_response.get("result").is_some_and(Value::is_null),
+            "definition should be null for shadowed local call targets",
+        );
+    }
+
+    #[test]
     fn hover_returns_function_signature_for_call_identifier() {
         let uri = "file:///tmp/lsp_hover.ai";
         let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
@@ -3497,6 +3678,59 @@ mod tests {
                 .and_then(Value::as_u64),
             Some(5),
             "prepareRename should point to helper call-site range",
+        );
+    }
+
+    #[test]
+    fn prepare_rename_returns_null_for_shadowed_function_name_call() {
+        let uri = "file:///tmp/lsp_prepare_rename_shadowed.ai";
+        let source =
+            "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  let helper = 2;\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 29,
+            "method": "textDocument/prepareRename",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 6, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let prepare_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(29)))
+            .expect("prepareRename response should exist");
+        assert!(
+            prepare_response.get("result").is_some_and(Value::is_null),
+            "prepareRename should be null for shadowed local call targets",
         );
     }
 

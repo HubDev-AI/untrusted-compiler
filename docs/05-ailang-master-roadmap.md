@@ -1029,10 +1029,11 @@ Implementation order is intentionally linear to reduce thrash:
   - definition/references payloads now propagate stable `symbolId` metadata for resolved symbols.
   - effect quick-fix anchoring now uses parser-derived function signature windows to avoid body-text `fn` false anchors.
   - symbolId metadata coverage now explicitly includes callsite-only reference responses.
+  - call-target resolution is now scope-aware, preventing shadowed local names from being resolved as function symbols in navigation/rename flows.
 - Remaining:
   - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
   - parser/analyzer-internal interrupt support for fully preemptive cancellation (stage-boundary cancellation is now covered).
-  - callsite-level symbol-ID binding for end-to-end precision across definition/references/rename (callsite-focused collection + symbolId metadata are now in place).
+  - end-to-end symbol-ID-based callsite binding across definition/references/rename (callsite-focused collection + symbol metadata + scope-aware target resolution are now in place).
   - fully AST-aware code-action rewrites for complex signature layouts (signature-window-aware anchoring is now in place).
   - pin Zed grammar integration to a published immutable `tree-sitter-ailang` revision (validation gate is now in place).
 
@@ -1084,6 +1085,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Symbol-ID Metadata in Definition and References".
 - Chapter: "M11 Slice: Signature-Window-Aware Effect Quickfix".
 - Chapter: "M11 Slice: SymbolId Metadata Coverage for Callsite References".
+- Chapter: "M11 Slice: Scope-Aware Call-Target Resolution".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

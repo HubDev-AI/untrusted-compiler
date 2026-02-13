@@ -251,5 +251,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `284-m11-symbol-id-metadata-in-definition-and-references.md`
 - `285-m11-signature-window-aware-effect-quickfix.md`
 - `286-m11-symbolid-metadata-coverage-for-callsite-references.md`
+- `287-m11-scope-aware-call-target-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.
