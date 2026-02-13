@@ -1065,8 +1065,9 @@ Implementation order is intentionally linear to reduce thrash:
   - unopened workspace files loaded during navigation/rename are now cached in parse/symbol stores and register dependency edges for later invalidation.
   - dependency invalidation now evicts cached unopened dependents (not only open-document dependents) when upstream files refresh/fail parse.
   - import-edge extraction now uses token-aware scanning (with line-based fallback), so multiline import forms are tracked more reliably while ignoring string/comment noise.
+  - effect-declaration quickfix rewrites now use AST-backed function/effect spans for insertion anchors in multiline effect blocks, keeping edits tied to signature structure instead of line-only heuristics.
 - Remaining:
-  - fully AST-aware code-action rewrites for complex signature layouts (signature-window-aware anchoring is now in place).
+  - none for current M11 scope.
 
 ### Exit criteria
 - Zed can open `.ut` files with working diagnostics, go-to-definition, hover, and completion.
@@ -1121,6 +1122,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Lexer Interrupt Hooks and Zed Grammar Pin".
 - Chapter: "M11 Slice: Symbol-ID Callsite Binding for References and Rename".
 - Chapter: "M11 Slice: Workspace Dependency Invalidation for Cached Unopened Files".
+- Chapter: "M11 Slice: AST-Backed Effect Quickfix Rewrites".
 
 ## M12 - Naming Alignment and Ecosystem Lock
 ### Trigger condition

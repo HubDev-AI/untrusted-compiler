@@ -970,21 +970,47 @@ fn build_missing_effect_edit(uri: &str, source: &str, diagnostic: &Value) -> Opt
         .and_then(|range| range.get("start"))
         .and_then(|start| start.get("line"))
         .and_then(Value::as_u64)? as usize;
+    let signature_context = function_signature_context(uri, source, start_line);
+
+    if let Some(context) = &signature_context {
+        if context.declared_effects.contains(&effect) {
+            return None;
+        }
+        if let Some(last_effect_span) = &context.last_effect_span {
+            let insert_line = last_effect_span.end_line.saturating_sub(1);
+            let insert_character = last_effect_span.end_col;
+            return Some(json!({
+                "changes": {
+                    uri: [
+                        {
+                            "range": {
+                                "start": {"line": insert_line, "character": insert_character},
+                                "end": {"line": insert_line, "character": insert_character}
+                            },
+                            "newText": format!(", {effect}")
+                        }
+                    ]
+                }
+            }));
+        }
+    }
 
     let lines = source.lines().collect::<Vec<_>>();
     if lines.is_empty() {
         return None;
     }
     let search_end = start_line.min(lines.len().saturating_sub(1));
-    let (signature_search_start, signature_search_end) =
-        function_signature_search_window(uri, source, start_line)
-            .map(|(start, end)| {
-                (
-                    start.min(lines.len().saturating_sub(1)),
-                    end.min(lines.len().saturating_sub(1)),
-                )
-            })
-            .unwrap_or((0, search_end));
+    let (signature_search_start, signature_search_end) = signature_context
+        .as_ref()
+        .map(|context| (context.signature_start_line, context.signature_end_line))
+        .or_else(|| function_signature_search_window(uri, source, start_line))
+        .map(|(start, end)| {
+            (
+                start.min(lines.len().saturating_sub(1)),
+                end.min(lines.len().saturating_sub(1)),
+            )
+        })
+        .unwrap_or((0, search_end));
     if signature_search_start > signature_search_end {
         return None;
     }
@@ -1054,6 +1080,46 @@ fn build_missing_effect_edit(uri: &str, source: &str, diagnostic: &Value) -> Opt
             ]
         }
     }))
+}
+
+struct FunctionSignatureContext {
+    signature_start_line: usize,
+    signature_end_line: usize,
+    declared_effects: HashSet<String>,
+    last_effect_span: Option<Span>,
+}
+
+fn function_signature_context(
+    uri: &str,
+    source: &str,
+    diagnostic_line: usize,
+) -> Option<FunctionSignatureContext> {
+    let path = uri_to_path(uri)?;
+    let program = parse_source(&path, source).ok()?;
+    let target_line = diagnostic_line.saturating_add(1);
+
+    for item in &program.items {
+        let ItemKind::Function(function) = &item.kind else {
+            continue;
+        };
+        if target_line < item.span.start_line || target_line > item.span.end_line {
+            continue;
+        }
+
+        let declared_effects = function
+            .effects
+            .iter()
+            .map(|effect| effect.as_name())
+            .collect::<HashSet<_>>();
+        let last_effect_span = function.effects.last().map(|effect| effect.span.clone());
+        return Some(FunctionSignatureContext {
+            signature_start_line: item.span.start_line.saturating_sub(1),
+            signature_end_line: function.body.span.start_line.saturating_sub(1),
+            declared_effects,
+            last_effect_span,
+        });
+    }
+    None
 }
 
 fn function_signature_search_window(
@@ -5200,6 +5266,105 @@ mod tests {
                 .and_then(Value::as_str),
             Some(", net"),
             "effect quickfix should append missing effect in multiline signatures with existing effects",
+        );
+    }
+
+    #[test]
+    fn code_action_can_append_missing_effect_for_multiline_effect_list_block() {
+        let uri = "file:///tmp/lsp_code_action_effect_multiline_list.ut";
+        let source =
+            "fn handler(\n  value: Int\n) effects {\n  log,\n  time.now\n} -> Int {\n  call()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "untrusted",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 126,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 6, "character": 2},
+                    "end": {"line": 6, "character": 6}
+                },
+                "context": {
+                    "diagnostics": [
+                        {
+                            "code": "E2001",
+                            "message": "Function uses effect `net` but does not declare it.",
+                            "range": {
+                                "start": {"line": 6, "character": 2},
+                                "end": {"line": 6, "character": 6}
+                            }
+                        }
+                    ]
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let code_action_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(126)))
+            .expect("codeAction response should exist");
+        let actions = code_action_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("codeAction result should be an array");
+        let effect_action = actions
+            .iter()
+            .find(|action| {
+                action
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(|title| title.contains("effect"))
+                    .unwrap_or(false)
+            })
+            .expect("expected missing-effect quickfix action");
+        let first_edit = effect_action
+            .get("edit")
+            .and_then(|edit| edit.get("changes"))
+            .and_then(|changes| changes.get(uri))
+            .and_then(Value::as_array)
+            .and_then(|edits| edits.first())
+            .expect("expected quickfix edit");
+        assert_eq!(
+            first_edit.get("newText").and_then(Value::as_str),
+            Some(", net"),
+            "effect quickfix should append in-place to the final declared effect",
+        );
+        assert_eq!(
+            first_edit
+                .get("range")
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("line"))
+                .and_then(Value::as_u64),
+            Some(4),
+            "effect quickfix insertion should target the last effect line in multiline effect blocks",
         );
     }
 
