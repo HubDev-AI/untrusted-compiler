@@ -453,7 +453,7 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn main() effects { log } -> Int {
-  log.info(1);
+  log.info(log.event(1));
   0
 }
 "#,
@@ -471,7 +471,7 @@ entry = "src/main.ai"
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_log_any(1)"));
+    assert!(generated_c.contains("ailang_rt_log_any(ailang_rt_log_event(1))"));
 
     let binary_path = project_dir.join("build").join("logdemo");
     assert!(binary_path.exists(), "compiled binary should exist");

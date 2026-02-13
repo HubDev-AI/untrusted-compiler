@@ -43,6 +43,24 @@ fn bad(token: Secret<String>) effects { log } -> Int {
 }
 
 #[test]
+fn log_sink_payload_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() effects { log } -> Int {
+  log.info(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log sink argument must be `LogValue`")
+        .expect("expected log sink payload diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn capability_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad() effects { db.write } -> Int {

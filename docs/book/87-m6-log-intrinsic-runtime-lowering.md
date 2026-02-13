@@ -42,12 +42,13 @@ Without rewriting, dotted logging calls produce invalid C symbol names and fail 
 
 - Unsupported intrinsic spellings still surface as invalid/unknown C calls during compile.
 - ABI signature drift between runtime header/source is caught by existing runtime content tests.
+- Typed log sink payload signature checks are covered in a later M7 slice (`180-m7-log-sink-payload-signature-hardening.md`).
 
 ### Example usage
 
 ```ailang
 fn main() effects { log } -> Int {
-  log.info(1);
+  log.info(log.event(1));
   0
 }
 ```
@@ -55,7 +56,7 @@ fn main() effects { log } -> Int {
 Generated C includes:
 
 ```c
-(void)(ailang_rt_log_any(1));
+(void)(ailang_rt_log_any(ailang_rt_log_event(1)));
 ```
 
 ### Tradeoffs and next steps

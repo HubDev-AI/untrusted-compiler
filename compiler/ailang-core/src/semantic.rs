@@ -1807,6 +1807,7 @@ impl Analyzer {
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_log_sink_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_error_helper_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
@@ -4424,6 +4425,45 @@ impl Analyzer {
                 .with_tag("security")
                 .with_tag("taint")
                 .with_note("validate untrusted values before attaching error details"),
+            );
+        }
+    }
+
+    fn enforce_log_sink_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_log_sink(callee_name) {
+            return;
+        }
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "log sink expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_note("use `log.info(log.event(...))` or another `LogValue` payload"),
+            );
+            return;
+        }
+
+        let payload_ty = &arg_types[0];
+        if payload_ty.contains_secret() || payload_ty.contains_untrusted() {
+            return;
+        }
+
+        if !payload_ty.is_named("LogValue") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "log sink argument must be `LogValue`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", payload_ty.describe()))
+                .with_note("construct payloads via `log.event/field/obj/str/i64/bool/redacted`"),
             );
         }
     }

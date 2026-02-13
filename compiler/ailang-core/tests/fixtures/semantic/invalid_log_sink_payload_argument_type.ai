@@ -1,0 +1,4 @@
+fn bad() effects { log } -> Int {
+  log.info(1);
+  0
+}

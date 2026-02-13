@@ -257,7 +257,7 @@ fn current() -> Int64 {
 fn c_backend_rewrites_log_intrinsics_to_runtime_symbol() {
     let source = r#"
 fn main() effects { log } -> Int {
-  log.info(1);
+  log.info(log.event(1));
   0
 }
 "#;
@@ -266,7 +266,7 @@ fn main() effects { log } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("(void)(ailang_rt_log_any(1));"));
+    assert!(c.contains("(void)(ailang_rt_log_any(ailang_rt_log_event(1)));"));
 }
 
 #[test]
