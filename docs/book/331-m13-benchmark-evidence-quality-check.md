@@ -7,6 +7,7 @@ This chapter documents a quality checker for benchmark evidence artifacts.
 Added:
 - `scripts/check-benchmark-evidence-quality.sh`
 - `scripts/test-check-benchmark-evidence-quality.sh`
+- `scripts/test-benchmark-workflow-quality-gates.sh`
 - `.github/workflows/benchmark-smoke.yml`
 - `.github/workflows/benchmark-trend.yml` quality-gate step (`--fail-on-warning`)
 - `.github/workflows/benchmark-cross-impl-evidence.yml` quality-gate step (`--fail-on-warning`)
@@ -38,6 +39,7 @@ Modes:
 - non-zero exit when `--fail-on-warning` is used with warning matrix.
 
 Benchmark smoke CI now runs this test.
+Benchmark smoke CI also runs `test-benchmark-workflow-quality-gates.sh` to enforce strict-quality gate presence in live benchmark workflows.
 
 ## Inputs, outputs, and constraints
 

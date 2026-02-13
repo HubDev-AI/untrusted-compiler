@@ -609,7 +609,8 @@ Historical implementation bullets below are retained as build history; strict ga
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix leader quality posture (`p99` validity + `constantRate`),
   - supports advisory mode and strict mode (`--fail-on-warning`) for promotion-gate tightening,
   - scheduled benchmark trend workflow now runs strict quality mode before regression-threshold checks,
-  - cross-impl evidence workflow now runs strict quality mode before publishing artifact evidence.
+  - cross-impl evidence workflow now runs strict quality mode before publishing artifact evidence,
+  - benchmark smoke CI now enforces strict-quality workflow-step presence via `scripts/test-benchmark-workflow-quality-gates.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 

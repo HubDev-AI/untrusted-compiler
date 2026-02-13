@@ -35,6 +35,7 @@ jobs:
           benchmark-suite/scripts/test_update_cross_impl_matrix_from_ci.sh
           scripts/test-refresh-closure-evidence-from-ci.sh
           scripts/test-check-benchmark-evidence-quality.sh
+          scripts/test-benchmark-workflow-quality-gates.sh
           scripts/test-check-milestone-closure.sh
           benchmark-suite/scripts/test_run_comparison_matrix.sh
           benchmark-suite/scripts/test_run_step_matrix.sh
