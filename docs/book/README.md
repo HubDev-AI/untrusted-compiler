@@ -120,5 +120,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `152-m7-err-with-detail-value-safety-hardening.md`
 - `153-m7-err-with-path-path-argument-hardening.md`
 - `154-m7-err-with-limit-argument-hardening.md`
+- `155-m7-err-with-dependency-argument-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

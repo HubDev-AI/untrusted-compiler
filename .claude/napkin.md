@@ -154,3 +154,4 @@
 - Added `err.withDetail` value-safety hardening so detail keys must be strings and detail values reject `Secret<_>`/`Untrusted<_>` payloads, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.withPath` path typing hardening so error-path payloads must be strings, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.withLimit` argument hardening so limit names are strings and max/actual values are numeric, with tagged diagnostics and aligned error-builder integration fixtures.
+- Added `err.withDependency` argument hardening so dependency/operation fields are strings and retryable is boolean, with tagged diagnostics and aligned error-builder integration fixtures.

@@ -622,7 +622,7 @@ fn main() -> Int {
   let withPath = err.withPath(base, "$.field");
   let withDetail = err.withDetail(base, "field", 2);
   let withLimit = err.withLimit(base, "limit", 2, 3);
-  let withDependency = err.withDependency(base, 1, 2, 3);
+  let withDependency = err.withDependency(base, "postgres", "query", true);
   let withCause = err.withCause(base, internal);
   auth;
   notFound;
@@ -650,6 +650,6 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_err_with_path(base, \"$.field\");"));
     assert!(c.contains("ailang_rt_err_with_detail(base, \"field\", 2);"));
     assert!(c.contains("ailang_rt_err_with_limit(base, \"limit\", 2, 3);"));
-    assert!(c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_with_dependency(base, \"postgres\", \"query\", true);"));
     assert!(c.contains("ailang_rt_err_with_cause(base, internal);"));
 }
