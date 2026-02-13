@@ -216,5 +216,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `249-m10-benchmark-bundle-verification-gate.md`
 - `250-m10-manifest-hash-verification-in-bundle-gate.md`
 - `251-m11-compiler-backed-lsp-diagnostics.md`
+- `252-m11-definition-and-hover-navigation.md`
 
 As milestones progress, chapters will be added and linked from this index.

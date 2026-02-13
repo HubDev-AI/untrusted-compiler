@@ -1,6 +1,8 @@
-use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity};
+use ailang_core::ast::{Block, Expr, ExprKind, ItemKind, Program, Stmt, StmtKind, TypeExpr, TypeExprKind};
+use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity, Span};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
 use url::Url;
@@ -11,6 +13,19 @@ const INVALID_REQUEST: i64 = -32600;
 #[derive(Default)]
 struct ServerState {
     documents: HashMap<String, String>,
+}
+
+#[derive(Clone)]
+struct FunctionSymbol {
+    name: String,
+    span: Span,
+    signature: String,
+}
+
+#[derive(Clone)]
+struct IdentifierHit {
+    name: String,
+    span: Span,
 }
 
 fn main() {
@@ -68,7 +83,9 @@ fn handle_message<W: Write>(
                             "textDocumentSync": {
                                 "openClose": true,
                                 "change": 1
-                            }
+                            },
+                            "definitionProvider": true,
+                            "hoverProvider": true
                         },
                         "serverInfo": {
                             "name": "ailang-language-server",
@@ -125,6 +142,40 @@ fn handle_message<W: Write>(
                 )?;
             }
         }
+        Some("textDocument/definition") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character)) = parse_text_document_position(message) {
+                    match definition_at_position(state, &uri, line, character) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid definition request payload".to_string(),
+                    )?;
+                }
+            }
+        }
+        Some("textDocument/hover") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character)) = parse_text_document_position(message) {
+                    match hover_at_position(state, &uri, line, character) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid hover request payload".to_string(),
+                    )?;
+                }
+            }
+        }
         Some(other) => {
             if let Some(id) = id {
                 send_error_response(
@@ -176,6 +227,296 @@ fn parse_did_close(message: &Value) -> Option<String> {
         .get("uri")?
         .as_str()
         .map(|uri| uri.to_string())
+}
+
+fn parse_text_document_position(message: &Value) -> Option<(String, usize, usize)> {
+    let params = message.get("params")?;
+    let uri = params
+        .get("textDocument")?
+        .get("uri")?
+        .as_str()?
+        .to_string();
+    let line = params.get("position")?.get("line")?.as_u64()? as usize;
+    let character = params.get("position")?.get("character")?.as_u64()? as usize;
+    Some((uri, line, character))
+}
+
+fn definition_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+) -> io::Result<Value> {
+    let (path, source) = load_document_source(state, uri)?;
+    let program = match parse_source(&path, &source) {
+        Ok(program) => program,
+        Err(_) => return Ok(Value::Null),
+    };
+
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+        return Ok(Value::Null);
+    };
+
+    let symbols = collect_function_symbols(&program);
+    let Some(symbol) = symbols
+        .into_iter()
+        .find(|symbol| symbol.name == hit.name)
+    else {
+        return Ok(Value::Null);
+    };
+
+    Ok(location_from_span(uri, &symbol.span))
+}
+
+fn hover_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+) -> io::Result<Value> {
+    let (path, source) = load_document_source(state, uri)?;
+    let program = match parse_source(&path, &source) {
+        Ok(program) => program,
+        Err(_) => return Ok(Value::Null),
+    };
+
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+        return Ok(Value::Null);
+    };
+
+    let symbols = collect_function_symbols(&program);
+    let Some(symbol) = symbols
+        .into_iter()
+        .find(|symbol| symbol.name == hit.name)
+    else {
+        return Ok(Value::Null);
+    };
+
+    Ok(json!({
+        "contents": {
+            "kind": "markdown",
+            "value": format!("```ailang\\n{}\\n```", symbol.signature),
+        },
+        "range": range_from_span(&hit.span),
+    }))
+}
+
+fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
+    let Some(path) = uri_to_path(uri) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("unsupported document URI (expected file://): {uri}"),
+        ));
+    };
+
+    if let Some(text) = state.documents.get(uri) {
+        return Ok((path, text.clone()));
+    }
+
+    let text = fs::read_to_string(&path)?;
+    Ok((path, text))
+}
+
+fn collect_function_symbols(program: &Program) -> Vec<FunctionSymbol> {
+    program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            ItemKind::Function(function) => {
+                let params = function
+                    .params
+                    .iter()
+                    .map(|param| format!("{}: {}", param.name, format_type(&param.ty)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let mut signature = format!("fn {}({})", function.name, params);
+                if !function.effects.is_empty() {
+                    let effects = function
+                        .effects
+                        .iter()
+                        .map(|effect| effect.as_name())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    signature.push_str(&format!(" effects {{ {} }}", effects));
+                }
+                if let Some(return_type) = &function.return_type {
+                    signature.push_str(&format!(" -> {}", format_type(return_type)));
+                }
+
+                Some(FunctionSymbol {
+                    name: function.name.clone(),
+                    span: item.span.clone(),
+                    signature,
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn format_type(ty: &TypeExpr) -> String {
+    match &ty.kind {
+        TypeExprKind::Named { name, args } => {
+            if args.is_empty() {
+                name.clone()
+            } else {
+                format!(
+                    "{}<{}>",
+                    name,
+                    args.iter().map(format_type).collect::<Vec<_>>().join(", ")
+                )
+            }
+        }
+    }
+}
+
+fn find_identifier_at_position(
+    program: &Program,
+    file: &PathBuf,
+    line: usize,
+    character: usize,
+) -> Option<IdentifierHit> {
+    for item in &program.items {
+        if let ItemKind::Function(function) = &item.kind {
+            if let Some(hit) = find_identifier_in_block(&function.body, file, line, character) {
+                return Some(hit);
+            }
+        }
+    }
+    None
+}
+
+fn find_identifier_in_block(
+    block: &Block,
+    file: &PathBuf,
+    line: usize,
+    character: usize,
+) -> Option<IdentifierHit> {
+    for statement in &block.statements {
+        if let Some(hit) = find_identifier_in_statement(statement, file, line, character) {
+            return Some(hit);
+        }
+    }
+
+    block
+        .tail
+        .as_ref()
+        .and_then(|tail| find_identifier_in_expr(tail, file, line, character))
+}
+
+fn find_identifier_in_statement(
+    statement: &Stmt,
+    file: &PathBuf,
+    line: usize,
+    character: usize,
+) -> Option<IdentifierHit> {
+    match &statement.kind {
+        StmtKind::Let { value, .. } => find_identifier_in_expr(value, file, line, character),
+        StmtKind::Return { value } => value
+            .as_ref()
+            .and_then(|expr| find_identifier_in_expr(expr, file, line, character)),
+        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character),
+    }
+}
+
+fn find_identifier_in_expr(
+    expr: &Expr,
+    file: &PathBuf,
+    line: usize,
+    character: usize,
+) -> Option<IdentifierHit> {
+    match &expr.kind {
+        ExprKind::Identifier(name) => {
+            if span_contains(&expr.span, file, line, character) {
+                Some(IdentifierHit {
+                    name: name.clone(),
+                    span: expr.span.clone(),
+                })
+            } else {
+                None
+            }
+        }
+        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character),
+        ExprKind::Binary { left, right, .. } => find_identifier_in_expr(left, file, line, character)
+            .or_else(|| find_identifier_in_expr(right, file, line, character)),
+        ExprKind::Member { object, .. } => find_identifier_in_expr(object, file, line, character),
+        ExprKind::Call { callee, args } => find_identifier_in_expr(callee, file, line, character)
+            .or_else(|| {
+                args.iter()
+                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character))
+            }),
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => find_identifier_in_expr(condition, file, line, character)
+            .or_else(|| find_identifier_in_block(then_branch, file, line, character))
+            .or_else(|| {
+                else_branch
+                    .as_ref()
+                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character))
+            }),
+        ExprKind::Match { scrutinee, arms } => find_identifier_in_expr(scrutinee, file, line, character)
+            .or_else(|| {
+                arms.iter()
+                    .find_map(|arm| find_identifier_in_expr(&arm.value, file, line, character))
+            }),
+        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character),
+        ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => None,
+    }
+}
+
+fn span_contains(span: &Span, file: &PathBuf, line: usize, character: usize) -> bool {
+    if &span.file != file {
+        return false;
+    }
+
+    let line_1 = line.saturating_add(1);
+    let col_1 = character.saturating_add(1);
+
+    if line_1 < span.start_line || line_1 > span.end_line {
+        return false;
+    }
+    if line_1 == span.start_line && col_1 < span.start_col {
+        return false;
+    }
+    if line_1 == span.end_line && col_1 > span.end_col {
+        return false;
+    }
+    true
+}
+
+fn location_from_span(uri: &str, span: &Span) -> Value {
+    json!({
+        "uri": uri,
+        "range": range_from_span(span),
+    })
+}
+
+fn range_from_span(span: &Span) -> Value {
+    let start_line = span.start_line.saturating_sub(1);
+    let start_col = span.start_col.saturating_sub(1);
+    let mut end_line = span.end_line.saturating_sub(1);
+    let mut end_col = span.end_col.saturating_sub(1);
+    if end_line < start_line {
+        end_line = start_line;
+        end_col = start_col.saturating_add(1);
+    }
+    if end_line == start_line && end_col <= start_col {
+        end_col = start_col.saturating_add(1);
+    }
+
+    json!({
+        "start": {
+            "line": start_line,
+            "character": start_col,
+        },
+        "end": {
+            "line": end_line,
+            "character": end_col,
+        }
+    })
 }
 
 fn publish_analysis<W: Write>(writer: &mut W, uri: &str, text: &str) -> io::Result<()> {
@@ -626,12 +967,137 @@ mod tests {
     }
 
     #[test]
+    fn definition_returns_function_location_for_call_identifier() {
+        let uri = "file:///tmp/lsp_definition.ai";
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let definition_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(2)))
+            .expect("definition response should exist");
+
+        assert_eq!(
+            definition_response
+                .get("result")
+                .and_then(|result| result.get("uri"))
+                .and_then(Value::as_str),
+            Some(uri),
+            "definition URI should point to current document",
+        );
+        assert_eq!(
+            definition_response
+                .get("result")
+                .and_then(|result| result.get("range"))
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("line"))
+                .and_then(Value::as_u64),
+            Some(0),
+            "definition should resolve to helper function declaration start line",
+        );
+    }
+
+    #[test]
+    fn hover_returns_function_signature_for_call_identifier() {
+        let uri = "file:///tmp/lsp_hover.ai";
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "textDocument/hover",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let hover_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(3)))
+            .expect("hover response should exist");
+        let contents = hover_response
+            .get("result")
+            .and_then(|result| result.get("contents"))
+            .and_then(|contents| contents.get("value"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        assert!(
+            contents.contains("fn helper() -> Int"),
+            "hover should include helper signature"
+        );
+    }
+
+    #[test]
     fn run_stdio_returns_method_not_found_for_unknown_requests() {
         let mut input = Vec::new();
         input.extend(encode_message(json!({
             "jsonrpc": "2.0",
             "id": 7,
-            "method": "textDocument/definition",
+            "method": "workspace/unknownMethod",
             "params": {},
         })));
         input.extend(encode_message(json!({
