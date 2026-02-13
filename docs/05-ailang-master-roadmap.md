@@ -1014,6 +1014,7 @@ Implementation order is intentionally linear to reduce thrash:
   - code actions now support concrete redact/validate/effect-declaration auto-edits for core security/effects diagnostics.
   - references/rename now include unopened workspace `.ai` files discovered from project root.
   - tree-sitter query surface now includes highlights + outline + indent + textobjects baseline.
+  - tree-sitter grammar/query coverage expanded for effects clauses, member-call syntax, and richer symbol/type captures.
   - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
   - ambiguity-safe guardrails prevent definition/rename guesses when duplicate declarations exist.
   - unopened-file scan can now be toggled for performance-sensitive editor sessions.
@@ -1023,7 +1024,7 @@ Implementation order is intentionally linear to reduce thrash:
   - parser/analyzer-internal interrupt support for fully preemptive cancellation (semantic traversal cancellation is now covered).
   - indexed symbol graph with stable symbol-ID-based precision across definition/references/rename.
   - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
-  - production grammar coverage and pinned published grammar revision.
+  - pin Zed grammar integration to a published immutable `tree-sitter-ailang` revision (coverage is now expanded locally).
 
 ### Exit criteria
 - Zed can open `.ai` files with working diagnostics, go-to-definition, hover, and completion.
@@ -1062,6 +1063,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Effect Quickfix Append and De-duplicate".
 - Chapter: "M11 Slice: Multiline Effect Quickfix Support".
 - Chapter: "M11 Slice: Deadline-Aware Semantic Walk Cancellation".
+- Chapter: "M11 Slice: Tree-sitter Grammar Coverage Expansion".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

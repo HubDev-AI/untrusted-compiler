@@ -12,17 +12,21 @@ module.exports = grammar({
     function_declaration: ($) =>
       seq(
         "fn",
-        $.identifier,
+        field("name", $.identifier),
         "(",
         optional($.parameter_list),
         ")",
-        optional(seq("->", $.type_identifier)),
-        $.block
+        optional($.effects_clause),
+        optional(seq("->", field("return_type", $.type_identifier))),
+        field("body", $.block)
       ),
 
     parameter_list: ($) => seq($.parameter, repeat(seq(",", $.parameter))),
-    parameter: ($) => seq($.identifier, ":", $.type_identifier),
+    parameter: ($) => seq(field("name", $.identifier), ":", field("type", $.type_identifier)),
     type_identifier: ($) => $.identifier,
+    effects_clause: ($) => seq("effects", "{", optional($.effect_list), "}"),
+    effect_list: ($) => seq($.effect_identifier, repeat(seq(",", $.effect_identifier))),
+    effect_identifier: () => /[A-Za-z_][A-Za-z0-9_.]*/,
 
     block: ($) => seq("{", repeat($.statement), optional($.expression), "}"),
 
@@ -36,6 +40,8 @@ module.exports = grammar({
     expression: ($) =>
       choice(
         $.call_expression,
+        $.member_expression,
+        $.bool_literal,
         $.identifier,
         $.number_literal,
         $.string_literal,
@@ -43,11 +49,29 @@ module.exports = grammar({
       ),
 
     call_expression: ($) =>
-      prec(1, seq($.identifier, "(", optional($.argument_list), ")")),
+      prec(
+        1,
+        seq(
+          field("callee", choice($.identifier, $.member_expression)),
+          "(",
+          optional($.argument_list),
+          ")"
+        )
+      ),
+    member_expression: ($) =>
+      prec.left(
+        2,
+        seq(
+          field("object", choice($.identifier, $.member_expression)),
+          ".",
+          field("property", $.identifier)
+        )
+      ),
 
     argument_list: ($) => seq($.expression, repeat(seq(",", $.expression))),
     parenthesized_expression: ($) => seq("(", $.expression, ")"),
 
+    bool_literal: () => choice("true", "false"),
     number_literal: () => /[0-9]+/,
     string_literal: () => /"[^"\n]*"/,
     identifier: () => /[A-Za-z_][A-Za-z0-9_]*/,
