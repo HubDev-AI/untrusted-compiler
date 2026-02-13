@@ -25,15 +25,23 @@ Implementation progress and milestone closure are not the same. This checklist p
 - promotion verifier + publish manifest verifier chain exists.
 
 2. M10 live comparison evidence
-- compare matrix exists and includes implementation IDs:
+- compare matrix includes implementation IDs per endpoint:
   - `sec4`
   - `go`
   - `node`
   - `rust`
+- compare matrix contract is aligned:
+  - non-empty endpoint and compared rows,
+  - leader endpoint matches entry endpoint,
+  - compared rows keep endpoint alignment,
+  - leader row is present in compared rows.
 
 3. M13 live trend evidence
 - trend-note chapter contains at least one:
   - `## Trend Entry (YYYY-MM-DD)`
+- scheduled trend workflow keeps hard guards:
+  - strict quality check (`check-benchmark-evidence-quality.sh --fail-on-warning`)
+  - regression threshold checks (`check_regression_thresholds.sh`)
 
 ## Example usage
 
@@ -46,8 +54,8 @@ scripts/test-check-milestone-closure.sh
 ## Current result (2026-02-13)
 
 - M9 gate checks: PASS
-- M10 live cross-impl evidence: PASS
-- M13 live trend-note evidence: PASS
+- M10 live cross-impl evidence and row-contract alignment: PASS
+- M13 live trend-note evidence and trend-workflow guards: PASS
 
 ## Inputs, outputs, and constraints
 
@@ -56,7 +64,7 @@ scripts/test-check-milestone-closure.sh
 - Output:
   - structured PASS/PENDING table and overall status.
 - Constraints:
-  - the checker validates artifact presence/content shape, not benchmark quality itself.
+  - this checker validates closure evidence shape/guardrails; it does not replace full benchmark analysis.
 
 ## Tradeoffs and next steps
 

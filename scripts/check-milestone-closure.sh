@@ -87,7 +87,9 @@ bool_has_release_gate=0
 bool_has_release_gate_ci=0
 bool_has_release_verifier_chain=0
 bool_has_cross_impl_matrix=0
+bool_has_cross_impl_matrix_contract=0
 bool_has_live_trend_entry=0
+bool_has_trend_workflow_guards=0
 
 [ -f "${repo_root}/scripts/release-alpha-gate.sh" ] && bool_has_release_gate=1
 [ -f "${repo_root}/.github/workflows/alpha-release-gate.yml" ] && bool_has_release_gate_ci=1
@@ -101,15 +103,45 @@ if [ -f "${matrix_path}" ]; then
     .endpoints as $eps
     | ($eps | type == "array")
     and ($eps | length > 0)
-    and (
-      [ $eps[]?.compared[]?.impl ] | unique | sort
-      | (index("sec4") != null)
-      and (index("go") != null)
-      and (index("node") != null)
-      and (index("rust") != null)
-    )
+    and all($eps[]; [ .compared[]?.impl ] as $impls
+      | ($impls | index("sec4") != null)
+      and ($impls | index("go") != null)
+      and ($impls | index("node") != null)
+      and ($impls | index("rust") != null))
   ' "${matrix_path}" >/dev/null 2>&1; then
     bool_has_cross_impl_matrix=1
+  fi
+
+  if jq -e '
+    .endpoints as $eps
+    | ($eps | type == "array")
+    and ($eps | length > 0)
+    and all($eps[];
+      . as $entry
+      | ($entry.endpoint | type == "string" and length > 0)
+      and ($entry.compared | type == "array" and length > 0)
+      and ($entry.leader | type == "object")
+      and ($entry.leader.endpoint == $entry.endpoint)
+      and ($entry.leader.impl | type == "string" and length > 0)
+      and ($entry.leader.p99 | type == "string" and length > 0)
+      and (if ($entry.leader | has("loadGenerator")) then ($entry.leader.loadGenerator | type == "string" and length > 0) else true end)
+      and (if ($entry.leader | has("constantRate")) then ($entry.leader.constantRate | type == "boolean") else true end)
+      and all($entry.compared[]; .endpoint == $entry.endpoint)
+      and (
+        $entry.leader as $leader
+        | any($entry.compared[];
+          .impl == $leader.impl
+          and .endpoint == $leader.endpoint
+          and .targetRps == $leader.targetRps
+          and .requestsPerSec == $leader.requestsPerSec
+          and .p99 == $leader.p99
+          and ((if has("loadGenerator") then .loadGenerator else "wrk2" end) == (if ($leader | has("loadGenerator")) then $leader.loadGenerator else "wrk2" end))
+          and ((if has("constantRate") then .constantRate else true end) == (if ($leader | has("constantRate")) then $leader.constantRate else true end))
+        )
+      )
+    )
+  ' "${matrix_path}" >/dev/null 2>&1; then
+    bool_has_cross_impl_matrix_contract=1
   fi
 fi
 
@@ -117,6 +149,16 @@ if [ -f "${trend_note_path}" ]; then
   if rg -q '^## Trend Entry \([0-9]{4}-[0-9]{2}-[0-9]{2}\)$' "${trend_note_path}"; then
     bool_has_live_trend_entry=1
   fi
+fi
+
+trend_workflow_path="${repo_root}/.github/workflows/benchmark-trend.yml"
+if [ -f "${trend_workflow_path}" ] \
+  && rg -q '^[[:space:]]*schedule:' "${trend_workflow_path}" \
+  && rg -q 'cron:' "${trend_workflow_path}" \
+  && rg -q 'scripts/check-benchmark-evidence-quality.sh' "${trend_workflow_path}" \
+  && rg -q -- '--fail-on-warning' "${trend_workflow_path}" \
+  && rg -q 'benchmark-suite/scripts/check_regression_thresholds.sh' "${trend_workflow_path}"; then
+  bool_has_trend_workflow_guards=1
 fi
 
 pending_count=0
@@ -143,8 +185,10 @@ printf '%-6s %-8s %-64s %s\n' "-----" "--------" "------------------------------
 emit_check "M9-A" "release gate script exists" "${bool_has_release_gate}" "scripts/release-alpha-gate.sh"
 emit_check "M9-B" "release gate workflow exists" "${bool_has_release_gate_ci}" ".github/workflows/alpha-release-gate.yml"
 emit_check "M9-C" "promotion verifier/manifest chain exists" "${bool_has_release_verifier_chain}" "scripts/verify-release-promotion-inputs.sh + publish-manifest scripts"
-emit_check "M10-A" "cross-impl compare matrix evidence includes sec4/go/node/rust" "${bool_has_cross_impl_matrix}" "${matrix_path}"
+emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoint" "${bool_has_cross_impl_matrix}" "${matrix_path}"
+emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
+emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 
 echo
 if [ "${pending_count}" -eq 0 ]; then

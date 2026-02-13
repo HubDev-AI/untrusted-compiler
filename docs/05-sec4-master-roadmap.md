@@ -54,8 +54,10 @@ Current strict closure result:
 | Gate | Status | Meaning | Evidence |
 | --- | --- | --- | --- |
 | `M9-A/B/C` | PASS | Release gate + CI + promotion verifier chain exist | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
-| `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` | `benchmark-suite/results/summaries/compare-matrix.json` |
+| `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` for each endpoint | `benchmark-suite/results/summaries/compare-matrix.json` |
+| `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
+| `M13-B` | PASS | Trend workflow keeps strict quality + regression guard steps | `.github/workflows/benchmark-trend.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -615,6 +617,10 @@ Historical implementation bullets below are retained as build history; strict ga
   - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + benchmark evidence quality check + strict closure check (`--fail-on-pending`) in one flow,
   - closure refresh now enforces benchmark quality warnings as failures by default (`--fail-on-warning`) with explicit local override (`--quality-allow-warning`),
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
+- Milestone closure audit gate coverage is now stricter:
+  - `scripts/check-milestone-closure.sh` now enforces per-endpoint M10 impl coverage (not union-only),
+  - closure now validates compare-matrix row-contract alignment (`endpoint` + leader membership and endpoint consistency),
+  - closure now verifies scheduled trend workflow keeps strict quality + regression guard steps.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
   - malformed endpoint contract checks (`missing compared rows`, `leader endpoint mismatch`, `leader missing in compared`) now hard-fail with exit code `2`,
@@ -1405,6 +1411,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Trend Note Entry Importer".
 - Chapter: "M13 Slice: Trend Artifact Fetch Helper".
 - Chapter: "M13 Slice: Trend Note Update Command".
+- Chapter: "M13 Slice: Closure Audit Gate Expansion".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

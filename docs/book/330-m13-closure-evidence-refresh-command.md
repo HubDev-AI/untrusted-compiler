@@ -4,10 +4,12 @@ This slice adds a single operator command that refreshes both remaining strict-c
 
 ## Why this exists
 
-Two closure gates remain operationally coupled:
+Closure gates remain operationally coupled:
 
-1. `M10-A`: cross-implementation compare matrix must include `sec4/go/node/rust`.
-2. `M13-A`: trend chapter must contain at least one live `Trend Entry` block.
+1. `M10-A`: cross-implementation compare matrix must include `sec4/go/node/rust` for each endpoint.
+2. `M10-B`: cross-implementation matrix row contract must stay aligned.
+3. `M13-A`: trend chapter must contain at least one live `Trend Entry` block.
+4. `M13-B`: scheduled trend workflow must keep strict quality + regression guards.
 
 Before this slice, each gate had its own updater command. Operators had to run them manually in sequence, then run closure audit separately.
 
