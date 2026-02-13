@@ -36,9 +36,13 @@ Adding fixture-based guard tests closes this gap and keeps closure wiring valida
 - `benchmark-smoke.yml` now runs:
   - `scripts/test-benchmark-smoke-closure-gate.sh`
   - `scripts/test-benchmark-smoke-closure-gate-guard.sh`
+  - `scripts/test-benchmark-cross-impl-workflow-contract.sh`
+  - `scripts/test-benchmark-cross-impl-workflow-contract-guard.sh`
+  - `scripts/test-benchmark-trend-workflow-contract.sh`
+  - `scripts/test-benchmark-trend-workflow-contract-guard.sh`
 
 4. Tightened `M13-D` closure contract
-- `check-milestone-closure.sh` now requires benchmark-smoke workflow to include closure contract, guard, fixture, and strict audit commands.
+- `check-milestone-closure.sh` now requires benchmark-smoke workflow to include closure contract, guard, cross-impl/trend contract guards, fixture, and strict audit commands.
 - `test-check-milestone-closure.sh` fixture coverage now includes the new guard token.
 
 ## Validation

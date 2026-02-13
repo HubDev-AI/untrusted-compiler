@@ -114,6 +114,10 @@ jobs:
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
           scripts/test-benchmark-smoke-closure-gate-guard.sh
+          scripts/test-benchmark-cross-impl-workflow-contract.sh
+          scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+          scripts/test-benchmark-trend-workflow-contract.sh
+          scripts/test-benchmark-trend-workflow-contract-guard.sh
           scripts/test-check-milestone-closure.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML
@@ -669,6 +673,10 @@ jobs:
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
           scripts/test-benchmark-smoke-closure-gate-guard.sh
+          scripts/test-benchmark-cross-impl-workflow-contract.sh
+          scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+          scripts/test-benchmark-trend-workflow-contract.sh
+          scripts/test-benchmark-trend-workflow-contract-guard.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML
 
@@ -694,6 +702,10 @@ jobs:
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
           scripts/test-benchmark-smoke-closure-gate-guard.sh
+          scripts/test-benchmark-cross-impl-workflow-contract.sh
+          scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+          scripts/test-benchmark-trend-workflow-contract.sh
+          scripts/test-benchmark-trend-workflow-contract-guard.sh
           scripts/test-check-milestone-closure.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML

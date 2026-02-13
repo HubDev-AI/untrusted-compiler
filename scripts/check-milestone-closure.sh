@@ -292,6 +292,10 @@ benchmark_smoke_workflow_path="${repo_root}/.github/workflows/benchmark-smoke.ym
 if [ -f "${benchmark_smoke_workflow_path}" ] \
   && rg -q 'scripts/test-benchmark-smoke-closure-gate.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q 'scripts/test-benchmark-smoke-closure-gate-guard.sh' "${benchmark_smoke_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract.sh' "${benchmark_smoke_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract-guard.sh' "${benchmark_smoke_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${benchmark_smoke_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q 'scripts/test-check-milestone-closure.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q 'scripts/check-milestone-closure.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q -- '--fail-on-pending' "${benchmark_smoke_workflow_path}"; then
@@ -344,7 +348,7 @@ emit_check "M10-D" "naming-lock CI enforces cross-impl workflow contract + guard
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"
-emit_check "M13-D" "benchmark-smoke workflow enforces closure contract + guard + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
+emit_check "M13-D" "benchmark-smoke workflow enforces closure + cross-impl/trend contract guards + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
 emit_check "M13-E" "naming-lock CI enforces benchmark-trend workflow contract + guard tests" "${bool_has_trend_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then

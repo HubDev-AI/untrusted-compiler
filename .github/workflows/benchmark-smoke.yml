@@ -36,6 +36,10 @@ jobs:
           benchmark-suite/scripts/test_fetch_trend_artifact.sh
           benchmark-suite/scripts/test_update_trend_note_from_ci.sh
           benchmark-suite/scripts/test_update_cross_impl_matrix_from_ci.sh
+          scripts/test-benchmark-cross-impl-workflow-contract.sh
+          scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
+          scripts/test-benchmark-trend-workflow-contract.sh
+          scripts/test-benchmark-trend-workflow-contract-guard.sh
           scripts/test-refresh-closure-evidence-from-ci.sh
           scripts/test-check-benchmark-evidence-quality.sh
           scripts/test-benchmark-workflow-quality-gates.sh

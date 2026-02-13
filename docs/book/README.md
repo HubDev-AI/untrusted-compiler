@@ -321,5 +321,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `354-m13-trend-guard-regression-and-ci-gate.md`
 - `355-m12-cli-command-contract-guard-regression-test.md`
 - `356-m9-release-contract-workflow-guard-execution-contract.md`
+- `357-m13-benchmark-smoke-cross-impl-trend-guard-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.

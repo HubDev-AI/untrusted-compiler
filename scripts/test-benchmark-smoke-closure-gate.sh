@@ -40,6 +40,26 @@ if ! grep -q 'scripts/test-benchmark-smoke-closure-gate-guard.sh' "${workflow_pa
   exit 1
 fi
 
+if ! grep -q 'scripts/test-benchmark-cross-impl-workflow-contract.sh' "${workflow_path}"; then
+  echo "missing cross-impl workflow contract command in ${workflow_path}" >&2
+  exit 1
+fi
+
+if ! grep -q 'scripts/test-benchmark-cross-impl-workflow-contract-guard.sh' "${workflow_path}"; then
+  echo "missing cross-impl workflow guard command in ${workflow_path}" >&2
+  exit 1
+fi
+
+if ! grep -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${workflow_path}"; then
+  echo "missing trend workflow contract command in ${workflow_path}" >&2
+  exit 1
+fi
+
+if ! grep -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${workflow_path}"; then
+  echo "missing trend workflow guard command in ${workflow_path}" >&2
+  exit 1
+fi
+
 if ! grep -q -- '--fail-on-pending' "${workflow_path}"; then
   echo "missing strict closure flag (--fail-on-pending) in ${workflow_path}" >&2
   exit 1
