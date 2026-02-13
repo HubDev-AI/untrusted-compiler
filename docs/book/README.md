@@ -186,5 +186,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `219-m10-go-baseline-service.md`
 - `220-m10-rust-baseline-service.md`
 - `221-m10-endpoint-comparison-reporting.md`
+- `222-m10-multi-endpoint-comparison-matrix.md`
 
 As milestones progress, chapters will be added and linked from this index.

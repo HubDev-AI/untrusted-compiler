@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize report compare test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize report compare compare-matrix test-scripts
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
@@ -17,6 +17,7 @@ help:
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
 	@echo "  compare      Build endpoint comparison from report files"
+	@echo "  compare-matrix Build comparison matrix across all endpoints"
 	@echo "  test-scripts Run benchmark helper script tests"
 
 db-up:
@@ -52,8 +53,12 @@ report:
 compare:
 	scripts/compare_reports.sh results/summaries ping results/summaries/compare-ping.json
 
+compare-matrix:
+	scripts/compare_matrix.sh results/summaries results/summaries/compare-matrix.json
+
 test-scripts:
 	scripts/test_wrk2_summary.sh
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh
 	scripts/test_compare_reports.sh
+	scripts/test_compare_matrix.sh
