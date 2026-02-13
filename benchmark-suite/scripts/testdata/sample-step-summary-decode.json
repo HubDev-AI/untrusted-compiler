@@ -1,0 +1,51 @@
+{
+  "version": "0.1",
+  "impl": "ailang",
+  "endpoint": "decode",
+  "stepRates": [1000, 2000, 3000],
+  "stepDuration": "30s",
+  "steps": [
+    {
+      "version": "0.1",
+      "impl": "ailang",
+      "endpoint": "decode",
+      "targetRps": 1000,
+      "requestsPerSec": 995.1,
+      "latency": {
+        "p50": "2.10ms",
+        "p95": "4.40ms",
+        "p99": "6.90ms",
+        "max": "18.00ms"
+      },
+      "errors": 0
+    },
+    {
+      "version": "0.1",
+      "impl": "ailang",
+      "endpoint": "decode",
+      "targetRps": 2000,
+      "requestsPerSec": 1810.4,
+      "latency": {
+        "p50": "4.20ms",
+        "p95": "11.30ms",
+        "p99": "15.70ms",
+        "max": "41.00ms"
+      },
+      "errors": 0
+    },
+    {
+      "version": "0.1",
+      "impl": "ailang",
+      "endpoint": "decode",
+      "targetRps": 3000,
+      "requestsPerSec": 2230.0,
+      "latency": {
+        "p50": "7.10ms",
+        "p95": "18.20ms",
+        "p99": "24.50ms",
+        "max": "67.00ms"
+      },
+      "errors": 5
+    }
+  ]
+}

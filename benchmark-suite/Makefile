@@ -1,10 +1,12 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
 ENDPOINTS ?= ping,decode,users-post,users-get
 BASE_URL ?= http://127.0.0.1:8080
 ENDPOINT ?= ping
+STEP_SUMMARY ?= results/summaries/$(IMPL)-$(ENDPOINT)-step.json
+STEP_ANALYSIS ?= results/summaries/$(IMPL)-$(ENDPOINT)-step-analysis.json
 
 help:
 	@echo "Targets:"
@@ -20,6 +22,7 @@ help:
 	@echo "  bench-users-get Run users read benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get)"
 	@echo "  bench-step-profile Run step-load profile for one endpoint (ENDPOINT=...)"
+	@echo "  analyze-step-profile Analyze one step-profile summary artifact"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -67,6 +70,9 @@ bench-profile:
 bench-step-profile:
 	scripts/run_step_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
 
+analyze-step-profile:
+	scripts/analyze_step_profile.sh $(STEP_SUMMARY) $(STEP_ANALYSIS)
+
 bench-matrix:
 	scripts/run_comparison_matrix.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
@@ -97,6 +103,7 @@ test-scripts:
 	scripts/test_build_report.sh
 	scripts/test_compare_reports.sh
 	scripts/test_compare_matrix.sh
+	scripts/test_analyze_step_profile.sh
 	scripts/test_analyze_matrix.sh
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh

@@ -207,5 +207,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `240-m10-implementation-scoped-matrix-comparison.md`
 - `241-m10-markdown-report-implementation-scope-header.md`
 - `242-m10-step-load-profile-runner.md`
+- `243-m10-step-profile-knee-analysis.md`
 
 As milestones progress, chapters will be added and linked from this index.
