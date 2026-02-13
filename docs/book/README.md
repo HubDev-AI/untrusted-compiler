@@ -170,5 +170,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `203-m8-history-window-text-renderer-coverage.md`
 - `204-m11-language-server-stdio-bootstrap.md`
 - `205-m9-diagnostic-source-snippets-and-tag-context.md`
+- `206-m9-locked-build-and-deterministic-lockfile-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.

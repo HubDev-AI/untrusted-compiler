@@ -1,8 +1,8 @@
 use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
     emit_runtime_header, emit_runtime_source, render_security_audit_text, summarize_history_window,
-    run_security_audit_with_baseline, should_fail, write_lockfile_stub, write_security_map,
-    AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
+    run_security_audit_with_baseline, should_fail, validate_lockfile_stub, write_lockfile_stub,
+    write_security_map, AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
@@ -24,6 +24,8 @@ enum Commands {
         path: PathBuf,
         #[arg(long, value_enum)]
         emit: Option<BuildEmitTarget>,
+        #[arg(long, default_value_t = false)]
+        locked: bool,
     },
     Run {
         #[arg(long, default_value = ".")]
@@ -99,7 +101,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Build { path, emit } => cmd_build(&path, emit),
+        Commands::Build { path, emit, locked } => cmd_build(&path, emit, locked),
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run { path } => cmd_run(&path),
         Commands::Test { path } => cmd_test(&path),
@@ -521,7 +523,7 @@ fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<Path
     Ok(output_path)
 }
 
-fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
+fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result<(), i32> {
     let mir_json_mode = matches!(emit, Some(BuildEmitTarget::MirJson));
     match ailang_core::validate_project(path) {
         Ok(manifest) => {
@@ -533,7 +535,12 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
                 }
             };
 
-            if let Err(diag) = write_lockfile_stub(path, &manifest) {
+            if locked {
+                if let Err(diag) = validate_lockfile_stub(path, &manifest) {
+                    print_diagnostics(&[diag]);
+                    return Err(1);
+                }
+            } else if let Err(diag) = write_lockfile_stub(path, &manifest) {
                 print_diagnostics(&[diag]);
                 return Err(1);
             }
@@ -554,10 +561,11 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>) -> Result<(), i32> {
                     manifest.package.name,
                     manifest.entry_file()
                 );
-                println!(
-                    "wrote lockfile stub: {}",
-                    path.join("ailang.lock").display()
-                );
+                if locked {
+                    println!("verified lockfile: {}", path.join("ailang.lock").display());
+                } else {
+                    println!("wrote lockfile stub: {}", path.join("ailang.lock").display());
+                }
             }
 
             match emit {
@@ -736,7 +744,7 @@ fn cmd_run(path: &Path) -> Result<(), i32> {
         }
     };
 
-    cmd_build(path, Some(BuildEmitTarget::CBin))?;
+    cmd_build(path, Some(BuildEmitTarget::CBin), false)?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let status = match Command::new(&binary_path).status() {

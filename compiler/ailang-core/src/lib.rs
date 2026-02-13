@@ -47,6 +47,10 @@ pub fn write_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(
     manifest::write_lockfile_stub(project_root, manifest)
 }
 
+pub fn validate_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(), Diagnostic> {
+    manifest::validate_lockfile_stub(project_root, manifest)
+}
+
 pub fn parse_entry_ast(
     project_root: &Path,
     manifest: &Manifest,

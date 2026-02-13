@@ -577,6 +577,117 @@ fn sec_audit_history_window_summary_can_be_written_to_file() {
 }
 
 #[test]
+fn build_locked_fails_when_lockfile_missing() {
+    let project_dir = temp_dir("ailang-build-locked-missing-lock");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "locked_missing"
+version = "0.1.0"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("src/main.ai"), "fn main() -> Int {\n  0\n}\n")
+        .expect("source should be written");
+
+    let project = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["build", "--path", &project, "--locked"]);
+    assert!(!output.status.success(), "locked build should fail");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("[M0202]"),
+        "stderr should contain lockfile-missing code:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("ailang.lock is required in --locked mode"),
+        "stderr should explain missing lockfile:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn build_locked_succeeds_with_matching_lockfile() {
+    let project_dir = temp_dir("ailang-build-locked-valid-lock");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "locked_valid"
+version = "0.1.0"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("src/main.ai"), "fn main() -> Int {\n  0\n}\n")
+        .expect("source should be written");
+
+    let project = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let initial = run_cli(&["build", "--path", &project]);
+    assert!(initial.status.success(), "initial build should succeed");
+
+    let locked = run_cli(&["build", "--path", &project, "--locked"]);
+    assert!(locked.status.success(), "locked build should succeed");
+    let stdout = String::from_utf8(locked.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("verified lockfile:"),
+        "locked build should report lockfile verification:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn build_locked_fails_when_lockfile_is_stale() {
+    let project_dir = temp_dir("ailang-build-locked-stale-lock");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    let manifest_path = project_dir.join("ailang.toml");
+    fs::write(
+        &manifest_path,
+        r#"[package]
+name = "locked_stale"
+version = "0.1.0"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("src/main.ai"), "fn main() -> Int {\n  0\n}\n")
+        .expect("source should be written");
+
+    let project = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let initial = run_cli(&["build", "--path", &project]);
+    assert!(initial.status.success(), "initial build should succeed");
+
+    fs::write(
+        &manifest_path,
+        r#"[package]
+name = "locked_stale"
+version = "0.2.0"
+"#,
+    )
+    .expect("manifest update should be written");
+
+    let locked = run_cli(&["build", "--path", &project, "--locked"]);
+    assert!(!locked.status.success(), "locked build should fail on stale lock");
+    let stderr = String::from_utf8(locked.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("[M0203]"),
+        "stale lock should emit M0203:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn build_emit_mir_prints_textual_mir() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

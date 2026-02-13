@@ -1,5 +1,9 @@
-# AILang lockfile v0 (stub)
+# AILang lockfile v0 (deterministic)
 [package]
 name = "hello"
 version = "0.1.0"
 edition = "2026"
+
+[build]
+entry = "src/main.ai"
+manifest_fingerprint = "man_c7f3c8a97792177d"

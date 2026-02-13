@@ -147,14 +147,7 @@ pub fn validate_for_build(project_root: &Path, manifest: &Manifest) -> Vec<Diagn
 
 pub fn write_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(), Diagnostic> {
     let lock_path = project_root.join(LOCK_FILE_NAME);
-    let body = format!(
-        "# AILang lockfile v0 (stub)\n\
-[package]\n\
-name = \"{}\"\n\
-version = \"{}\"\n\
-edition = \"{}\"\n",
-        manifest.package.name, manifest.package.version, manifest.package.edition
-    );
+    let body = render_lockfile_stub(manifest);
 
     fs::write(&lock_path, body).map_err(|err| {
         Diagnostic::error(
@@ -164,4 +157,80 @@ edition = \"{}\"\n",
         )
         .with_note(err.to_string())
     })
+}
+
+pub fn validate_lockfile_stub(project_root: &Path, manifest: &Manifest) -> Result<(), Diagnostic> {
+    let lock_path = project_root.join(LOCK_FILE_NAME);
+    let current = fs::read_to_string(&lock_path).map_err(|err| {
+        let message = if err.kind() == std::io::ErrorKind::NotFound {
+            "ailang.lock is required in --locked mode"
+        } else {
+            "failed to read ailang.lock in --locked mode"
+        };
+
+        let mut diagnostic = Diagnostic::error("M0202", message, Span::point(lock_path.clone(), 1, 1))
+            .with_note(err.to_string());
+        if err.kind() == std::io::ErrorKind::NotFound {
+            diagnostic = diagnostic.with_note("run `ailang build` once to generate ailang.lock");
+        }
+        diagnostic
+    })?;
+
+    let expected = render_lockfile_stub(manifest);
+    if normalize_lockfile(&current) != normalize_lockfile(&expected) {
+        return Err(
+            Diagnostic::error(
+                "M0203",
+                "ailang.lock is out of date for current manifest",
+                Span::point(lock_path.clone(), 1, 1),
+            )
+            .with_note("run `ailang build` (without --locked) to refresh ailang.lock"),
+        );
+    }
+
+    Ok(())
+}
+
+fn render_lockfile_stub(manifest: &Manifest) -> String {
+    let manifest_fingerprint = manifest_fingerprint(manifest);
+    format!(
+        "# AILang lockfile v0 (deterministic)\n\
+[package]\n\
+name = \"{}\"\n\
+version = \"{}\"\n\
+edition = \"{}\"\n\
+\n\
+[build]\n\
+entry = \"{}\"\n\
+manifest_fingerprint = \"{}\"\n",
+        manifest.package.name,
+        manifest.package.version,
+        manifest.package.edition,
+        manifest.entry_file(),
+        manifest_fingerprint,
+    )
+}
+
+fn manifest_fingerprint(manifest: &Manifest) -> String {
+    let normalized = format!(
+        "name={}\nversion={}\nedition={}\nentry={}\n",
+        manifest.package.name,
+        manifest.package.version,
+        manifest.package.edition,
+        manifest.entry_file(),
+    );
+    format!("man_{:016x}", fnv1a64(normalized.as_bytes()))
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn normalize_lockfile(content: &str) -> String {
+    content.replace("\r\n", "\n")
 }
