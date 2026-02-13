@@ -3,12 +3,13 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--repo owner/repo] [--matrix <path>] [--entry <path>] [--target-matrix <path>] [--trend-note <path>] [--m10-out-dir <path>] [--m13-out-dir <path>] [--dry-run]
+usage: $0 [--repo owner/repo] [--matrix <path>] [--entry <path>] [--target-matrix <path>] [--trend-note <path>] [--m10-out-dir <path>] [--m13-out-dir <path>] [--quality-fail-on-warning] [--dry-run]
 
 Runs M10 + M13 evidence refresh in sequence:
 1) update cross-impl compare matrix from CI artifact (or --matrix)
 2) update trend note chapter from CI artifact (or --entry)
-3) run strict closure audit with fail-on-pending
+3) run benchmark evidence quality checker
+4) run strict closure audit with fail-on-pending
 USAGE
 }
 
@@ -22,6 +23,7 @@ target_matrix="${repo_root}/benchmark-suite/results/summaries/compare-matrix.jso
 trend_note="${repo_root}/docs/book/322-m13-first-trend-run-results-note.md"
 m10_out_dir="${repo_root}/benchmark-suite/results/cross-impl-download"
 m13_out_dir="${repo_root}/benchmark-suite/results/trend-download"
+quality_fail_on_warning="false"
 dry_run="false"
 
 while [ "$#" -gt 0 ]; do
@@ -82,6 +84,10 @@ while [ "$#" -gt 0 ]; do
       m13_out_dir="${1#--m13-out-dir=}"
       shift
       ;;
+    --quality-fail-on-warning)
+      quality_fail_on_warning="true"
+      shift
+      ;;
     --dry-run)
       dry_run="true"
       shift
@@ -126,16 +132,25 @@ closure_cmd=(
   --trend-note "${trend_note}"
   --fail-on-pending
 )
+quality_cmd=(
+  "${repo_root}/scripts/check-benchmark-evidence-quality.sh"
+  --matrix "${target_matrix}"
+)
+if [ "${quality_fail_on_warning}" = "true" ]; then
+  quality_cmd+=(--fail-on-warning)
+fi
 
 if [ "${dry_run}" = "true" ]; then
   echo "run: ${m10_cmd[*]}"
   echo "run: ${m13_cmd[*]}"
+  echo "run: ${quality_cmd[*]}"
   echo "run: ${closure_cmd[*]}"
   exit 0
 fi
 
 "${m10_cmd[@]}"
 "${m13_cmd[@]}"
+"${quality_cmd[@]}"
 "${closure_cmd[@]}"
 
 echo "closure evidence refreshed and validated"

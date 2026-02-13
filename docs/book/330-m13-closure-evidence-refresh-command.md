@@ -21,7 +21,9 @@ Before this slice, each gate had its own updater command. Operators had to run t
   - `benchmark-suite/scripts/update_cross_impl_matrix_from_ci.sh`
 - Step 2: runs M13 updater:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh`
-- Step 3: runs strict closure audit:
+- Step 3: runs benchmark evidence quality check:
+  - `scripts/check-benchmark-evidence-quality.sh`
+- Step 4: runs strict closure audit:
   - `scripts/check-milestone-closure.sh --fail-on-pending`
 
 3. Supported modes:
@@ -29,6 +31,8 @@ Before this slice, each gate had its own updater command. Operators had to run t
 - Local deterministic mode:
   - `--matrix <path>` for M10 matrix source
   - `--entry <path>` for M13 trend-entry source
+- Optional strict evidence-quality mode:
+  - `--quality-fail-on-warning`
 - `--dry-run` for command-plan preview.
 
 4. Test coverage:
@@ -69,4 +73,3 @@ scripts/refresh-closure-evidence-from-ci.sh --dry-run
 ## Notes
 
 This command reduces operator error and makes closure refresh reproducible. Live completion still depends on CI artifact availability and GitHub authentication.
-

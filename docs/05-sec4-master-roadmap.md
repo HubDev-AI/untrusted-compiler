@@ -602,7 +602,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - same-heading entries are now refreshed in place via importer replace mode (`--replace-existing`) to support same-day reruns,
   - benchmark smoke CI validates update command composition and local-entry import via `test_update_trend_note_from_ci.sh`.
 - M10+M13 closure refresh now has a single operator command:
-  - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + strict closure check (`--fail-on-pending`) in one flow,
+  - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + benchmark evidence quality check + strict closure check (`--fail-on-pending`) in one flow,
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix leader quality posture (`p99` validity + `constantRate`),
