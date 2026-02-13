@@ -24,3 +24,6 @@ jobs:
 
       - name: Validate roadmap closure gate alignment
         run: scripts/test-roadmap-closure-gate-alignment.sh
+
+      - name: Validate sec4 CLI command contract
+        run: scripts/test-sec4-cli-command-contract.sh

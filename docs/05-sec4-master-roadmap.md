@@ -1332,6 +1332,7 @@ Implementation order is intentionally linear to reduce thrash:
   - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
   - benchmark naming guard now verifies canonical implementation directory IDs and benchmark testdata `impl` values.
   - benchmark naming guard now validates canonical benchmark artifact filename patterns and benchmark testdata schema keys for report/summary/step artifacts.
+  - naming-lock CI now includes a static CLI command-surface contract test (`scripts/test-sec4-cli-command-contract.sh`) to enforce top-level `sec4 audit|gate|explain` wiring and guard against legacy nested `sec` alias reintroduction.
 - Remaining:
   - none for current M12 scope.
 
