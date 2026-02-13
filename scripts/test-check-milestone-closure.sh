@@ -188,6 +188,24 @@ if printf '%s\n' "$audit_output" | rg -q -- "$tmp"; then
   exit 1
 fi
 
+audit_json="$("$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json --fail-on-pending)"
+if ! printf '%s\n' "$audit_json" | jq -e '.overall == "PASS" and .pendingCount == 0' >/dev/null; then
+  echo "expected PASS json closure summary for passing fixture" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M9-H") != null' >/dev/null; then
+  echo "expected json closure output to include M9-H gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-D") != null' >/dev/null; then
+  echo "expected json closure output to include M13-D gate" >&2
+  exit 1
+fi
+if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
+  echo "expected repo-relative evidence paths in json closure output" >&2
+  exit 1
+fi
+
 cat > "$tmp/docs/book/322-m13-first-trend-run-results-note.md" <<'MD'
 # Trend note
 MD

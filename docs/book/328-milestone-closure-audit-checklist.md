@@ -80,6 +80,7 @@ Implementation progress and milestone closure are not the same. This checklist p
 ```bash
 scripts/check-milestone-closure.sh
 scripts/check-milestone-closure.sh --fail-on-pending
+scripts/check-milestone-closure.sh --format json
 scripts/test-check-milestone-closure.sh
 ```
 
@@ -95,6 +96,7 @@ scripts/test-check-milestone-closure.sh
   - repository files and optional matrix/trend-note paths.
 - Output:
   - structured PASS/PENDING table and overall status.
+  - optional machine-readable JSON (`--format json`) with `overall`, `pendingCount`, and per-gate rows.
   - evidence paths are rendered repository-relative when possible.
 - Constraints:
   - this checker validates closure evidence shape/guardrails; it does not replace full benchmark analysis.

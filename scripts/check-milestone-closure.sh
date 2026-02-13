@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--fail-on-pending]
+usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
 Checks strict closure evidence for milestone status gates (M9/M10/M13).
 USAGE
@@ -13,6 +13,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 matrix_path=""
 trend_note_path=""
 fail_on_pending="false"
+output_format="text"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -56,6 +57,18 @@ while [ "$#" -gt 0 ]; do
       fail_on_pending="true"
       shift
       ;;
+    --format)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      output_format="$2"
+      shift 2
+      ;;
+    --format=*)
+      output_format="${1#--format=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -67,6 +80,16 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+case "${output_format}" in
+  text|json)
+    ;;
+  *)
+    echo "unknown format: ${output_format}" >&2
+    usage
+    exit 2
+    ;;
+esac
 
 if [ -z "${matrix_path}" ]; then
   matrix_path="${repo_root}/benchmark-suite/results/summaries/compare-matrix.json"
@@ -113,6 +136,10 @@ bool_has_live_trend_entry=0
 bool_has_trend_workflow_guards=0
 bool_has_trend_workflow_artifact_upload=0
 bool_has_benchmark_smoke_closure_contract=0
+gate_codes=()
+gate_statuses=()
+gate_labels=()
+gate_evidence=()
 
 [ -f "${repo_root}/scripts/release-alpha-gate.sh" ] && bool_has_release_gate=1
 alpha_release_workflow_path="${repo_root}/.github/workflows/alpha-release-gate.yml"
@@ -269,14 +296,22 @@ emit_check() {
   if [ "${pass}" -eq 0 ]; then
     pending_count=$((pending_count + 1))
   fi
-  printf '%-6s %-8s %-64s %s\n' "${code}" "${status}" "${label}" "${rendered_evidence}"
+  gate_codes+=("${code}")
+  gate_statuses+=("${status}")
+  gate_labels+=("${label}")
+  gate_evidence+=("${rendered_evidence}")
+  if [ "${output_format}" = "text" ]; then
+    printf '%-6s %-8s %-64s %s\n' "${code}" "${status}" "${label}" "${rendered_evidence}"
+  fi
 }
 
-echo "Milestone Closure Audit"
-echo "repo: $(render_evidence "${repo_root}")"
-echo
-printf '%-6s %-8s %-64s %s\n' "Gate" "Status" "Check" "Evidence"
-printf '%-6s %-8s %-64s %s\n' "-----" "--------" "----------------------------------------------------------------" "--------"
+if [ "${output_format}" = "text" ]; then
+  echo "Milestone Closure Audit"
+  echo "repo: $(render_evidence "${repo_root}")"
+  echo
+  printf '%-6s %-8s %-64s %s\n' "Gate" "Status" "Check" "Evidence"
+  printf '%-6s %-8s %-64s %s\n' "-----" "--------" "----------------------------------------------------------------" "--------"
+fi
 
 emit_check "M9-A" "release gate script exists" "${bool_has_release_gate}" "scripts/release-alpha-gate.sh"
 emit_check "M9-B" "release gate workflow exists" "${bool_has_release_gate_ci}" ".github/workflows/alpha-release-gate.yml"
@@ -294,13 +329,50 @@ emit_check "M13-B" "benchmark trend workflow has strict quality + regression gua
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"
 emit_check "M13-D" "benchmark-smoke workflow enforces closure contract + guard + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
 
-echo
-if [ "${pending_count}" -eq 0 ]; then
-  echo "overall: PASS (all tracked closure checks satisfied)"
-  exit 0
+if [ "${output_format}" = "json" ]; then
+  gates_json='[]'
+  for i in "${!gate_codes[@]}"; do
+    gates_json="$(
+      jq \
+        --arg gate "${gate_codes[i]}" \
+        --arg status "${gate_statuses[i]}" \
+        --arg check "${gate_labels[i]}" \
+        --arg evidence "${gate_evidence[i]}" \
+        '. + [{gate: $gate, status: $status, check: $check, evidence: $evidence}]' \
+        <<<"${gates_json}"
+    )"
+  done
+
+  if [ "${pending_count}" -eq 0 ]; then
+    overall_status="PASS"
+    overall_message="all tracked closure checks satisfied"
+  else
+    overall_status="PENDING"
+    overall_message="${pending_count} check(s) not yet satisfied"
+  fi
+
+  jq \
+    -n \
+    --arg repo "$(render_evidence "${repo_root}")" \
+    --arg overall "${overall_status}" \
+    --arg message "${overall_message}" \
+    --argjson pendingCount "${pending_count}" \
+    --argjson gates "${gates_json}" \
+    '{repo: $repo, overall: $overall, message: $message, pendingCount: $pendingCount, gates: $gates}'
+else
+  echo
+  if [ "${pending_count}" -eq 0 ]; then
+    echo "overall: PASS (all tracked closure checks satisfied)"
+  else
+    echo "overall: PENDING (${pending_count} check(s) not yet satisfied)"
+  fi
 fi
 
-echo "overall: PENDING (${pending_count} check(s) not yet satisfied)"
 if [ "${fail_on_pending}" = "true" ]; then
+  if [ "${pending_count}" -eq 0 ]; then
+    exit 0
+  fi
   exit 1
 fi
+
+exit 0
