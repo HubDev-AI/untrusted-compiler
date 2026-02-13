@@ -903,6 +903,28 @@ impl Analyzer {
                     | BinaryOp::Le
                     | BinaryOp::Gt
                     | BinaryOp::Ge => {
+                        if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+                            && (left_type.contains_secret() || right_type.contains_secret())
+                        {
+                            self.diagnostics.push(
+                                Diagnostic::error(
+                                    "E1006",
+                                    "secret equality comparison is forbidden",
+                                    expr.span.clone(),
+                                )
+                                .with_tag("security")
+                                .with_tag("secret")
+                                .with_note(format!(
+                                    "left=`{}`, right=`{}`",
+                                    left_type.describe(),
+                                    right_type.describe()
+                                ))
+                                .with_note(
+                                    "use a constant-time comparison helper (for example `crypto.ctEq`) for secrets",
+                                ),
+                            );
+                        }
+
                         if !left_type.compatible_with(&right_type) {
                             self.diagnostics.push(
                                 Diagnostic::error(

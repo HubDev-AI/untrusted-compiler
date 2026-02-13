@@ -43,6 +43,24 @@ fn bad(token: Secret<String>) effects { log } -> Int {
 }
 
 #[test]
+fn secret_equality_comparison_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(a: Secret<String>, b: Secret<String>) -> Bool {
+  a == b
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "secret equality comparison is forbidden")
+        .expect("expected secret equality comparison diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn log_sink_payload_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() effects { log } -> Int {
