@@ -1009,8 +1009,9 @@ Implementation order is intentionally linear to reduce thrash:
   - `tree-sitter-ailang` scaffold with baseline highlight queries.
   - diagnostics budget/cap guardrails with `I9001` overflow signaling.
   - references/rename now aggregate deterministically across currently open workspace documents.
+  - open-document parse cache integrated into major LSP request paths.
 - Remaining:
-  - true incremental analysis (per-file cache + dependency invalidation).
+  - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive request deadline enforcement (beyond post-analysis overflow signaling).
   - full-project (unopened-file) references/rename determinism.
   - richer code-action edits (auto-fix text rewrites).
@@ -1039,6 +1040,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Tree-Sitter Grammar Scaffold".
 - Chapter: "M11 Slice: Diagnostics Analysis Budget Guardrails".
 - Chapter: "M11 Slice: Workspace Open-Document References and Rename".
+- Chapter: "M11 Slice: Open-Document Parse Cache".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

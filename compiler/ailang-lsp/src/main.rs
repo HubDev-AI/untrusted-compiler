@@ -14,6 +14,7 @@ const INVALID_REQUEST: i64 = -32600;
 #[derive(Default)]
 struct ServerState {
     documents: HashMap<String, String>,
+    parsed_programs: HashMap<String, Program>,
 }
 
 #[derive(Clone)]
@@ -125,6 +126,7 @@ fn handle_message<W: Write>(
         Some("textDocument/didOpen") => {
             if let Some((uri, text)) = parse_did_open(message) {
                 state.documents.insert(uri.clone(), text.clone());
+                refresh_program_cache(state, &uri, &text);
                 publish_analysis(writer, &uri, &text)?;
             } else if let Some(id) = id {
                 send_error_response(
@@ -138,6 +140,7 @@ fn handle_message<W: Write>(
         Some("textDocument/didChange") => {
             if let Some((uri, text)) = parse_did_change(message) {
                 state.documents.insert(uri.clone(), text.clone());
+                refresh_program_cache(state, &uri, &text);
                 publish_analysis(writer, &uri, &text)?;
             } else if let Some(id) = id {
                 send_error_response(
@@ -151,6 +154,7 @@ fn handle_message<W: Write>(
         Some("textDocument/didClose") => {
             if let Some(uri) = parse_did_close(message) {
                 state.documents.remove(&uri);
+                state.parsed_programs.remove(&uri);
                 publish_diagnostics(writer, &uri, Vec::new())?;
             } else if let Some(id) = id {
                 send_error_response(
@@ -403,9 +407,9 @@ fn definition_at_position(
     character: usize,
 ) -> io::Result<Value> {
     let (path, source) = load_document_source(state, uri)?;
-    let program = match parse_source(&path, &source) {
-        Ok(program) => program,
-        Err(_) => return Ok(Value::Null),
+    let program = match load_cached_program(state, uri, &path, &source) {
+        Some(program) => program,
+        None => return Ok(Value::Null),
     };
 
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
@@ -430,9 +434,9 @@ fn hover_at_position(
     character: usize,
 ) -> io::Result<Value> {
     let (path, source) = load_document_source(state, uri)?;
-    let program = match parse_source(&path, &source) {
-        Ok(program) => program,
-        Err(_) => return Ok(Value::Null),
+    let program = match load_cached_program(state, uri, &path, &source) {
+        Some(program) => program,
+        None => return Ok(Value::Null),
     };
 
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
@@ -464,9 +468,9 @@ fn references_at_position(
     include_declaration: bool,
 ) -> io::Result<Value> {
     let (path, source) = load_document_source(state, uri)?;
-    let program = match parse_source(&path, &source) {
-        Ok(program) => program,
-        Err(_) => return Ok(Value::Array(Vec::new())),
+    let program = match load_cached_program(state, uri, &path, &source) {
+        Some(program) => program,
+        None => return Ok(Value::Array(Vec::new())),
     };
 
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
@@ -480,7 +484,7 @@ fn references_at_position(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
             continue;
         };
         locations.extend(
@@ -525,7 +529,7 @@ fn completion_at_position(
         .map(|label| label.to_string())
         .collect::<HashSet<_>>();
 
-    if let Ok(program) = parse_source(&path, &source) {
+    if let Some(program) = load_cached_program(state, uri, &path, &source) {
         for symbol in collect_function_symbols(&program) {
             if seen_labels.insert(symbol.name.clone()) {
                 items.push(json!({
@@ -557,9 +561,9 @@ fn prepare_rename_at_position(
     character: usize,
 ) -> io::Result<Value> {
     let (path, source) = load_document_source(state, uri)?;
-    let program = match parse_source(&path, &source) {
-        Ok(program) => program,
-        Err(_) => return Ok(Value::Null),
+    let program = match load_cached_program(state, uri, &path, &source) {
+        Some(program) => program,
+        None => return Ok(Value::Null),
     };
 
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
@@ -590,9 +594,9 @@ fn rename_at_position(
     }
 
     let (path, source) = load_document_source(state, uri)?;
-    let program = match parse_source(&path, &source) {
-        Ok(program) => program,
-        Err(_) => {
+    let program = match load_cached_program(state, uri, &path, &source) {
+        Some(program) => program,
+        None => {
             return Ok(json!({
                 "changes": {
                     uri: []
@@ -616,7 +620,7 @@ fn rename_at_position(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
             continue;
         };
 
@@ -735,6 +739,33 @@ fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, 
     Ok((path, text))
 }
 
+fn refresh_program_cache(state: &mut ServerState, uri: &str, text: &str) {
+    let Some(path) = uri_to_path(uri) else {
+        state.parsed_programs.remove(uri);
+        return;
+    };
+    match parse_source(&path, text) {
+        Ok(program) => {
+            state.parsed_programs.insert(uri.to_string(), program);
+        }
+        Err(_) => {
+            state.parsed_programs.remove(uri);
+        }
+    }
+}
+
+fn load_cached_program(
+    state: &ServerState,
+    uri: &str,
+    path: &PathBuf,
+    source: &str,
+) -> Option<Program> {
+    if let Some(program) = state.parsed_programs.get(uri) {
+        return Some(program.clone());
+    }
+    parse_source(path, source).ok()
+}
+
 fn workspace_document_entries(
     state: &ServerState,
     primary_uri: &str,
@@ -765,7 +796,7 @@ fn find_symbol_declaration_in_workspace(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Ok(doc_program) = parse_source(&doc_path, &doc_source) else {
+        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
             continue;
         };
         if let Some(symbol) = collect_function_symbols(&doc_program)
@@ -1338,7 +1369,10 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{diagnostics_for_document_with_limits, read_message, run_stdio};
+    use super::{
+        diagnostics_for_document_with_limits, read_message, refresh_program_cache, run_stdio,
+        ServerState,
+    };
     use serde_json::{json, Value};
     use std::io::{BufReader, Cursor};
 
@@ -1516,6 +1550,26 @@ mod tests {
                     .unwrap_or(false)
             }),
             "budget overflow should append I9001 diagnostic",
+        );
+    }
+
+    #[test]
+    fn program_cache_tracks_parse_validity() {
+        let uri = "file:///tmp/lsp_cache.ai";
+        let valid_source = "fn main() -> Int {\n  0\n}\n";
+        let invalid_source = "fn main( -> Int {\n  0\n}\n";
+        let mut state = ServerState::default();
+
+        refresh_program_cache(&mut state, uri, valid_source);
+        assert!(
+            state.parsed_programs.contains_key(uri),
+            "valid source should populate parsed program cache",
+        );
+
+        refresh_program_cache(&mut state, uri, invalid_source);
+        assert!(
+            !state.parsed_programs.contains_key(uri),
+            "invalid source should evict parsed program cache entry",
         );
     }
 
