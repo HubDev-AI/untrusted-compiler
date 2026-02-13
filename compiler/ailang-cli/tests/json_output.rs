@@ -451,6 +451,16 @@ fn sec_audit_history_window_summary_can_be_written_to_file() {
         summary_json.get("severityLatestDelta").is_some(),
         "history summary should include severity latest delta"
     );
+    assert!(
+        summary_json.get("oldestTimeMs").is_some()
+            && summary_json.get("latestTimeMs").is_some(),
+        "history summary should include oldest/latest report timestamps"
+    );
+    assert!(
+        summary_json.get("oldestPolicyHash").is_some()
+            && summary_json.get("latestPolicyHash").is_some(),
+        "history summary should include oldest/latest policy hashes"
+    );
 
     let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
     assert!(
