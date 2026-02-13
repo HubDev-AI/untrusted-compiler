@@ -44,7 +44,13 @@ Verifier enforces:
 scripts/check-naming-lock.sh
 ```
 
-4. Record release evidence
+4. Generate publish-consumption manifest
+
+```bash
+scripts/generate-release-publish-manifest.sh
+```
+
+5. Record release evidence
 
 Capture artifacts from `build/release-alpha-gate/` and attach/upload as promotion evidence.
 
@@ -53,7 +59,8 @@ Capture artifacts from `build/release-alpha-gate/` and attach/upload as promotio
 `alpha-release-gate.yml` now executes:
 1. `scripts/release-alpha-gate.sh`
 2. `scripts/verify-release-promotion-inputs.sh`
-3. artifact upload
+3. `scripts/generate-release-publish-manifest.sh`
+4. artifact upload
 
 This CI path is the canonical non-local promotion gate.
 

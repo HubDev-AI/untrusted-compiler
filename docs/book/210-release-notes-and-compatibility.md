@@ -70,6 +70,7 @@ Required before tagging an alpha candidate:
 Canonical automation:
 - `scripts/release-alpha-gate.sh`
 - `scripts/verify-release-promotion-inputs.sh`
+- `scripts/generate-release-publish-manifest.sh`
 
 This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, verifies metadata identity-hash consistency with `sec4 audit` output (`policyHash`, `compilerHash`, `runtimeHash`), gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 

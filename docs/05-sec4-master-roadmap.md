@@ -500,6 +500,9 @@ Roadmap impact:
 - Release-publish integration checks now verify gate artifact consistency before promotion:
   - new script `scripts/verify-release-promotion-inputs.sh` validates checksum/summary identity stamps against copied artifacts (`policy`, runtime files, per-sample metadata/sbom/audit),
   - `.github/workflows/alpha-release-gate.yml` now runs promotion-input verification after `release-alpha-gate.sh`.
+- Release automation now emits a publish-consumption manifest:
+  - `scripts/generate-release-publish-manifest.sh` builds `publish-manifest.json` from verified release artifacts,
+  - `.github/workflows/alpha-release-gate.yml` now generates publish manifest before artifact upload.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
@@ -1367,11 +1370,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
-2. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
-3. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
-4. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
-5. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
+1. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
+2. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
+3. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
+4. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
+5. Add publish-manifest consumption checks in downstream release publishing tooling.
 
 ---
 

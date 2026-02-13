@@ -22,6 +22,9 @@ jobs:
       - name: Verify release promotion inputs
         run: scripts/verify-release-promotion-inputs.sh
 
+      - name: Generate release publish manifest
+        run: scripts/generate-release-publish-manifest.sh
+
       - name: Upload release-gate artifacts
         if: always()
         uses: actions/upload-artifact@v4
