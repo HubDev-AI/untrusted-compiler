@@ -808,6 +808,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: crypto.ctEq Intrinsic Bridge".
 - Chapter: "M7 Slice: security_map crypto.ctEq Tagging".
 - Chapter: "M7 Slice: security_map crypto Namespace Alias Resolution".
+- Chapter: "M7 Slice: security_map Helper Namespace Alias Resolution".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

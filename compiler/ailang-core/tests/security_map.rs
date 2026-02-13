@@ -548,6 +548,81 @@ fn boot(a: Secret<String>, b: Secret<String>) -> Int {
 }
 
 #[test]
+fn security_map_resolves_forwarded_data_helper_namespaces() {
+    let source = r#"
+fn sqlNs() {
+  sql
+}
+
+fn jsonNs() {
+  json
+}
+
+fn headersNs() {
+  headers
+}
+
+fn cookieNs() {
+  cookie
+}
+
+fn boot() -> Int {
+  let sqlRef = sqlNs();
+  sqlRef.q("SELECT 1", 1);
+
+  let jsonRef = jsonNs();
+  jsonRef.encode("schema", 1);
+
+  let headersRef = headersNs();
+  headersRef.value("ok");
+
+  let cookieRef = cookieNs();
+  cookieRef.build("sid", "v");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "sql.q"
+            && call.tags.iter().any(|tag| tag == "gate.sql.parameterize")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["template".to_string(), "params".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "json.encode"
+            && call.tags.iter().any(|tag| tag == "sink.json.encode")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["schema".to_string(), "value".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "headers.value"
+            && call.tags.iter().any(|tag| tag == "gate.header.value")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["value".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "cookie.build"
+            && call.tags.iter().any(|tag| tag == "gate.cookie.build")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["name".to_string(), "value".to_string()])
+    }));
+}
+
+#[test]
 fn parse_allow_annotations_reads_valid_annotation() {
     let source = r#"
 @allow(
