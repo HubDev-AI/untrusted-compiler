@@ -9,6 +9,8 @@
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 9800.0,
+          "loadGenerator": "wrk2",
+          "constantRate": true,
           "p99": "4.20ms"
         },
         {
@@ -16,6 +18,8 @@
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 9700.0,
+          "loadGenerator": "wrk2",
+          "constantRate": true,
           "p99": "4.80ms"
         },
         {
@@ -23,6 +27,8 @@
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 9000.0,
+          "loadGenerator": "wrk2",
+          "constantRate": true,
           "p99": "7.50ms"
         },
         {
@@ -30,6 +36,8 @@
           "endpoint": "ping",
           "targetRps": 10000,
           "requestsPerSec": 9750.0,
+          "loadGenerator": "wrk2",
+          "constantRate": true,
           "p99": "4.60ms"
         }
       ],
@@ -38,6 +46,8 @@
         "endpoint": "ping",
         "targetRps": 10000,
         "requestsPerSec": 9800.0,
+        "loadGenerator": "wrk2",
+        "constantRate": true,
         "p99": "4.20ms"
       }
     }

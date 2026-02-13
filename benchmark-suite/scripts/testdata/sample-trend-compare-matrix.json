@@ -8,6 +8,8 @@
         "endpoint": "ping",
         "targetRps": 10000,
         "requestsPerSec": 9000,
+        "constantRate": true,
+        "loadGenerator": "wrk2",
         "p99": "18.20ms"
       }
     },
@@ -18,6 +20,8 @@
         "endpoint": "decode",
         "targetRps": 2000,
         "requestsPerSec": 1100,
+        "constantRate": true,
+        "loadGenerator": "wrk2",
         "p99": "92.00ms"
       }
     }
