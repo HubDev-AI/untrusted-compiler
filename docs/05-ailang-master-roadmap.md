@@ -1007,6 +1007,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "AILang Editor Tooling and Zed LSP Spec".
 - Chapter: "LSP Protocol Mapping and Compiler Service API".
 - Chapter: "Zed Extension and Tree-sitter Integration Guide".
+- Chapter: "M11 Slice: Language Server Stdio Bootstrap".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

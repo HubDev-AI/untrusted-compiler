@@ -2,6 +2,7 @@
 members = [
   "compiler/ailang-core",
   "compiler/ailang-cli",
+  "compiler/ailang-lsp",
 ]
 resolver = "2"
 

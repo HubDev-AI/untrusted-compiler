@@ -194,3 +194,4 @@
 - If CLI logic starts modeling audit semantics (not just I/O), move that model into `ailang-core` early to avoid parallel behavior drift.
 - For trend features, attach computed window summaries to the primary report object before any stdout/file emission to avoid split-brain artifacts.
 - When adding optional report sections, add renderer coverage immediately so text-mode contracts don’t regress unnoticed.
+- For LSP bootstraps, start with strict stdio framing + initialize/shutdown/exit correctness and avoid advertising unsupported capabilities.
