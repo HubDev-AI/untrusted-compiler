@@ -36,6 +36,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-get`
    - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=ailang ENDPOINT=decode`
    - analyze step output: `make -C benchmark-suite analyze-step-profile IMPL=ailang ENDPOINT=decode`
+   - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=ailang,node,go,rust ENDPOINTS=decode`
 5. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
 6. Bundle summaries + env into one report:
@@ -84,3 +85,4 @@ Measure end-to-end service behavior across identical implementations:
 - Matrix comparison now scopes to selected implementations (`IMPLS`) so stale reports from other impls are excluded.
 - Published markdown reports also include implementation scope (`Implementations in matrix (...)`).
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
+- Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
