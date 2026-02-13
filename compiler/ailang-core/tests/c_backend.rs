@@ -620,7 +620,7 @@ fn main() -> Int {
   let limited = err.rateLimit(1, 2, 3);
   let internal = err.internal(1);
   let withPath = err.withPath(base, 1);
-  let withDetail = err.withDetail(base, 1, 2);
+  let withDetail = err.withDetail(base, "field", 2);
   let withLimit = err.withLimit(base, 1, 2, 3);
   let withDependency = err.withDependency(base, 1, 2, 3);
   let withCause = err.withCause(base, internal);
@@ -648,7 +648,7 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_err_rate_limit(1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_internal(1);"));
     assert!(c.contains("ailang_rt_err_with_path(base, 1);"));
-    assert!(c.contains("ailang_rt_err_with_detail(base, 1, 2);"));
+    assert!(c.contains("ailang_rt_err_with_detail(base, \"field\", 2);"));
     assert!(c.contains("ailang_rt_err_with_limit(base, 1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_with_cause(base, internal);"));

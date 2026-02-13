@@ -151,3 +151,4 @@
 - Added `db.queryOne` row-schema argument hardening so numeric/boolean placeholders are rejected with schema-tagged diagnostics, and aligned the db/fs/net `c-bin` integration fixture to use a schema-descriptor row argument.
 - Added `sql.q` signature hardening so the helper enforces `(template, params)` with a `String` template argument, and aligned CLI/core integration fixtures to use string SQL templates.
 - Added `cookie.build` signature hardening so the helper enforces `(name, value)` with string arguments, and aligned header/cookie integration fixtures and docs to use typed cookie-constructor values.
+- Added `err.withDetail` value-safety hardening so detail keys must be strings and detail values reject `Secret<_>`/`Untrusted<_>` payloads, with tagged diagnostics and aligned error-builder integration fixtures.

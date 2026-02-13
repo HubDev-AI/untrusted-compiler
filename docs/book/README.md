@@ -117,5 +117,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `149-m7-db-query-one-row-schema-argument-hardening.md`
 - `150-m7-sql-q-template-argument-hardening.md`
 - `151-m7-cookie-build-signature-hardening.md`
+- `152-m7-err-with-detail-value-safety-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1775,6 +1775,7 @@ impl Analyzer {
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_error_helper_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_json_sink(callee_name) && self.policy.json.require_schema_for_encode {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
@@ -3299,6 +3300,68 @@ impl Analyzer {
         }
     }
 
+    fn enforce_error_helper_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_err_with_detail_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 3 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "err.withDetail expects `(error, key, value)` arguments",
+                    span,
+                )
+                .with_tag("security")
+                .with_note("use `err.withDetail(errorValue, \"key\", value)`"),
+            );
+            return;
+        }
+
+        if !arg_types[1].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "err.withDetail key argument must be `String`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("use stable string keys for error details"),
+            );
+        }
+
+        if arg_types[2].contains_secret() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "err.withDetail value argument cannot be `Secret<_>`",
+                    args[2].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note("redact or derive safe values before attaching error details"),
+            );
+        } else if arg_types[2].contains_untrusted() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "err.withDetail value argument cannot be `Untrusted<_>`",
+                    args[2].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("taint")
+                .with_note("validate untrusted values before attaching error details"),
+            );
+        }
+    }
+
     fn bind_pattern(
         &mut self,
         pattern: &Pattern,
@@ -4435,6 +4498,10 @@ fn is_auth_require_call(name: &str) -> bool {
 
 fn is_auth_require_role_call(name: &str) -> bool {
     matches!(name, "auth_require_role" | "auth.requireRole")
+}
+
+fn is_err_with_detail_call(name: &str) -> bool {
+    matches!(name, "err_with_detail" | "err.withDetail")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

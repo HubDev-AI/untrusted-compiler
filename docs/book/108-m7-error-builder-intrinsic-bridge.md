@@ -55,7 +55,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 ### Failure modes and diagnostics
 
 - Misspelled helper names can fail semantic or C compilation.
-- Typed payload validation for error detail values (for example secret-safety in detail fields) is intentionally deferred to stricter security enforcement phases.
+- Strict value-safety hardening for `err.withDetail` is covered in a later M7 slice (`152-m7-err-with-detail-value-safety-hardening.md`).
 
 ### Example usage
 
@@ -63,7 +63,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 fn main() -> Int {
   let base = err.validation(1, 2);
   let internal = err.internal(1);
-  err.withDetail(base, 1, 2);
+  err.withDetail(base, "field", 2);
   err.withCause(base, internal);
   0
 }

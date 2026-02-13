@@ -614,6 +614,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn err_with_detail_secret_value_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(secret: Secret<String>) -> Int {
+  err.withDetail(1, "token", secret);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withDetail value argument cannot be `Secret<_>`")
+        .expect("expected err.withDetail secret-value diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn allow_annotation_diagnostic_has_security_policy_tags() {
     let source = r#"
 @allow(

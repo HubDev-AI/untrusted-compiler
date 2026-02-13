@@ -336,6 +336,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `cookie.build` signature typing is now hardened:
     - `cookie.build` requires `(name, value)` shape with string name/value arguments,
     - invalid cookie-constructor values emit tagged `E4001` security diagnostics.
+  - `err.withDetail` detail-value hardening is now active:
+    - key argument must be `String`,
+    - detail values reject `Secret<_>` and `Untrusted<_>` payloads with tagged diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -712,6 +715,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
+- Chapter: "M7 Slice: err.withDetail Value-Safety Hardening".
 - Chapter: "M7 Slice: res.text Intrinsic Bridge".
 - Chapter: "M7 Slice: Log Event Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: DB Transaction Intrinsic Bridge".
