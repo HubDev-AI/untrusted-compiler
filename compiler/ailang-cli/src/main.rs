@@ -65,6 +65,8 @@ enum SecCommands {
         #[arg(long)]
         history_dir: Option<PathBuf>,
         #[arg(long)]
+        history_window: Option<usize>,
+        #[arg(long)]
         write_report: Option<PathBuf>,
         #[arg(long)]
         fail_on: Option<String>,
@@ -116,6 +118,7 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             format,
             baseline,
             history_dir,
+            history_window,
             write_report,
             fail_on,
         } => cmd_sec_audit(
@@ -123,6 +126,7 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             format,
             baseline.as_deref(),
             history_dir.as_deref(),
+            history_window,
             write_report.as_deref(),
             fail_on.as_deref(),
         ),
@@ -134,9 +138,15 @@ fn cmd_sec_audit(
     format: AuditOutputFormat,
     baseline_path: Option<&Path>,
     history_dir_path: Option<&Path>,
+    history_window: Option<usize>,
     write_report_path: Option<&Path>,
     fail_on: Option<&str>,
 ) -> Result<(), i32> {
+    if history_window.is_some() && history_dir_path.is_none() {
+        eprintln!("--history-window requires --history-dir");
+        return Err(2);
+    }
+
     match ailang_core::validate_project(path) {
         Ok(manifest) => match analyze_entry_with_allows(path, &manifest) {
             Ok((program, allows)) => {
@@ -200,6 +210,13 @@ fn cmd_sec_audit(
                 } else {
                     None
                 };
+                let history_window_summary = if let (Some(history_dir_path), Some(window)) =
+                    (history_dir_path, history_window)
+                {
+                    compute_history_window_summary(history_dir_path, window)?
+                } else {
+                    None
+                };
 
                 if let Some(baseline_source) = baseline_source {
                     print_aux_line(
@@ -217,6 +234,9 @@ fn cmd_sec_audit(
                     format,
                     &format!("security map: {}", security_map_path.display()),
                 );
+                if let Some(summary) = history_window_summary.as_ref() {
+                    print_history_window_summary(format, summary);
+                }
 
                 if let Some(threshold) = fail_on {
                     let Some(threshold) = AuditSeverity::parse_threshold(threshold) else {
@@ -315,6 +335,138 @@ fn load_latest_history_baseline(history_dir: &Path) -> Result<Option<(AuditRepor
         .expect("history candidate list should not be empty");
     let report = load_audit_baseline(&latest)?;
     Ok(Some((report, latest)))
+}
+
+#[derive(Debug, Clone)]
+struct HistoryWindowSummary {
+    window: usize,
+    reports: usize,
+    oldest_risk_score: i64,
+    latest_risk_score: i64,
+    min_risk_score: i64,
+    max_risk_score: i64,
+    risk_score_delta: i64,
+}
+
+fn load_recent_history_reports(
+    history_dir: &Path,
+    window: usize,
+) -> Result<Vec<(AuditReport, PathBuf)>, i32> {
+    if !history_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let entries = match fs::read_dir(history_dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!(
+                "could not read history directory `{}`: {err}",
+                history_dir.display()
+            );
+            return Err(2);
+        }
+    };
+
+    let mut candidates = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        })
+        .collect::<Vec<_>>();
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    candidates.sort();
+    let keep = window.max(1);
+    let start = candidates.len().saturating_sub(keep);
+    let mut reports = Vec::new();
+    for path in candidates.into_iter().skip(start) {
+        let report = load_audit_baseline(&path)?;
+        reports.push((report, path));
+    }
+    Ok(reports)
+}
+
+fn compute_history_window_summary(
+    history_dir: &Path,
+    window: usize,
+) -> Result<Option<HistoryWindowSummary>, i32> {
+    let reports = load_recent_history_reports(history_dir, window)?;
+    if reports.is_empty() {
+        return Ok(None);
+    }
+
+    let risk_scores = reports
+        .iter()
+        .map(|(report, _)| report.summary.risk_score)
+        .collect::<Vec<_>>();
+    let oldest = *risk_scores
+        .first()
+        .expect("history summary risk-score list should be non-empty");
+    let latest = *risk_scores
+        .last()
+        .expect("history summary risk-score list should be non-empty");
+    let min = *risk_scores
+        .iter()
+        .min()
+        .expect("history summary min should exist");
+    let max = *risk_scores
+        .iter()
+        .max()
+        .expect("history summary max should exist");
+
+    Ok(Some(HistoryWindowSummary {
+        window: window.max(1),
+        reports: risk_scores.len(),
+        oldest_risk_score: oldest,
+        latest_risk_score: latest,
+        min_risk_score: min,
+        max_risk_score: max,
+        risk_score_delta: latest - oldest,
+    }))
+}
+
+fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWindowSummary) {
+    match format {
+        AuditOutputFormat::Text => {
+            print_aux_line(
+                format,
+                &format!(
+                    "history window summary: reports={}/{}, oldestRisk={}, latestRisk={}, minRisk={}, maxRisk={}, riskDelta={}",
+                    summary.reports,
+                    summary.window,
+                    summary.oldest_risk_score,
+                    summary.latest_risk_score,
+                    summary.min_risk_score,
+                    summary.max_risk_score,
+                    summary.risk_score_delta,
+                ),
+            );
+        }
+        AuditOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "window": summary.window,
+                "reports": summary.reports,
+                "oldestRiskScore": summary.oldest_risk_score,
+                "latestRiskScore": summary.latest_risk_score,
+                "minRiskScore": summary.min_risk_score,
+                "maxRiskScore": summary.max_risk_score,
+                "riskScoreDelta": summary.risk_score_delta,
+            });
+            print_aux_line(
+                format,
+                &format!(
+                    "history window summary: {}",
+                    serde_json::to_string(&payload)
+                        .expect("history window summary payload should serialize")
+                ),
+            );
+        }
+    }
 }
 
 fn write_audit_report(path: &Path, report: &AuditReport) -> Result<(), i32> {

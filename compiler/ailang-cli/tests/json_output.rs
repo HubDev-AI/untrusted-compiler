@@ -216,6 +216,95 @@ fn sec_audit_history_dir_writes_reports_and_autoloads_baseline() {
 }
 
 #[test]
+fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let history_dir = temp_dir("ailang-audit-history-window");
+    let history = history_dir
+        .to_str()
+        .expect("history path should be valid utf-8");
+
+    let first = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+    ]);
+    assert!(first.status.success(), "first history run should succeed");
+
+    let second = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+        "--history-window",
+        "2",
+    ]);
+    assert!(second.status.success(), "second history run should succeed");
+
+    let second_stdout = String::from_utf8(second.stdout).expect("stdout should be utf-8");
+    let second_report: Value =
+        serde_json::from_str(&second_stdout).expect("stdout should be parseable json");
+    assert!(
+        second_report.get("summary").is_some(),
+        "audit report should still be emitted on stdout"
+    );
+
+    let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
+    assert!(
+        second_stderr.contains("history window summary:"),
+        "history-window run should include summary line"
+    );
+    assert!(
+        second_stderr.contains("\"window\":2"),
+        "history-window summary should include requested window size"
+    );
+    assert!(
+        second_stderr.contains("\"reports\":2"),
+        "history-window summary should include number of sampled reports"
+    );
+
+    fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
+}
+
+#[test]
+fn sec_audit_history_window_requires_history_dir() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--history-window",
+        "2",
+    ]);
+    assert!(
+        !output.status.success(),
+        "history-window without history-dir should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("--history-window requires --history-dir"),
+        "expected explicit usage error for missing history-dir"
+    );
+}
+
+#[test]
 fn build_emit_mir_prints_textual_mir() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path
@@ -874,9 +963,9 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
+        r#"fn readSecret(sec: SecretsCap, token: Secret<String>) effects { secrets.read } -> Int {
   secrets.get(sec, "TOKEN");
-  secrets.redact(1);
+  secrets.redact(token);
   0
 }
 
@@ -899,7 +988,7 @@ fn main() -> Int {
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_secret_get(sec, \"TOKEN\")"));
-    assert!(generated_c.contains("ailang_rt_secret_redact(1)"));
+    assert!(generated_c.contains("ailang_rt_secret_redact(token)"));
 
     let binary_path = project_dir.join("build").join("secretreaddemo");
     assert!(binary_path.exists(), "compiled binary should exist");

@@ -186,3 +186,4 @@
 - Forwarded namespace call tagging depends on `is_tagged_call_namespace`; when adding dotted helper APIs (`sql.*`, `json.*`, `headers.*`, `cookie.*`), keep namespace list in sync.
 - Capability alias seeding from typed params is not enough; security-map canonicalization also needs member-path mapping for `ctx.caps.*` flows.
 - For canonical call tagging, normalize direct capability-member call paths (`ctx.caps.db.exec`) inside alias resolution, not only alias-binding paths.
+- Secret-type signature hardening cannot rely on local type inference from intrinsic calls in fixtures; use explicitly typed `Secret<_>` parameters/values in compile-path tests.
