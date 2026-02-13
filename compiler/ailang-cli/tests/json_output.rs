@@ -733,6 +733,48 @@ version = "0.1.0"
 }
 
 #[test]
+fn build_with_sbom_writes_deterministic_sbom_file() {
+    let project_dir = temp_dir("ailang-build-sbom");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("ailang.toml"),
+        r#"[package]
+name = "sbom_demo"
+version = "0.1.0"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("src/main.ai"), "fn main() -> Int {\n  0\n}\n")
+        .expect("source should be written");
+
+    let project = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let first = run_cli(&["build", "--path", &project, "--sbom"]);
+    assert!(first.status.success(), "first build --sbom should succeed");
+    let first_stdout = String::from_utf8(first.stdout).expect("stdout should be utf-8");
+    assert!(
+        first_stdout.contains("wrote sbom:"),
+        "build --sbom output should include sbom path:\n{first_stdout}"
+    );
+
+    let sbom_path = project_dir.join("build").join("sbom.json");
+    assert!(sbom_path.exists(), "sbom file should exist");
+    let first_sbom = fs::read_to_string(&sbom_path).expect("first sbom should be readable");
+
+    let second = run_cli(&["build", "--path", &project, "--sbom"]);
+    assert!(second.status.success(), "second build --sbom should succeed");
+    let second_sbom = fs::read_to_string(&sbom_path).expect("second sbom should be readable");
+    assert_eq!(
+        first_sbom, second_sbom,
+        "sbom output should be deterministic for identical inputs"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn build_emit_mir_prints_textual_mir() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

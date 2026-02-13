@@ -2,7 +2,7 @@ use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
     emit_runtime_header, emit_runtime_source, render_security_audit_text, summarize_history_window,
     run_security_audit_with_baseline, should_fail, validate_lockfile_stub, write_lockfile_stub,
-    write_build_metadata, write_security_map, AuditHistoryWindowSummary, AuditReport,
+    write_build_metadata, write_sbom, write_security_map, AuditHistoryWindowSummary, AuditReport,
     AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
@@ -27,6 +27,8 @@ enum Commands {
         emit: Option<BuildEmitTarget>,
         #[arg(long, default_value_t = false)]
         locked: bool,
+        #[arg(long, default_value_t = false)]
+        sbom: bool,
     },
     Run {
         #[arg(long, default_value = ".")]
@@ -102,7 +104,12 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Build { path, emit, locked } => cmd_build(&path, emit, locked),
+        Commands::Build {
+            path,
+            emit,
+            locked,
+            sbom,
+        } => cmd_build(&path, emit, locked, sbom),
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run { path } => cmd_run(&path),
         Commands::Test { path } => cmd_test(&path),
@@ -524,7 +531,7 @@ fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<Path
     Ok(output_path)
 }
 
-fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result<(), i32> {
+fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool, sbom: bool) -> Result<(), i32> {
     let mir_json_mode = matches!(emit, Some(BuildEmitTarget::MirJson));
     match ailang_core::validate_project(path) {
         Ok(manifest) => {
@@ -560,6 +567,29 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result
                     return Err(1);
                 }
             };
+            let sbom_path = if sbom {
+                match std::fs::read_to_string(&build_metadata_path)
+                    .ok()
+                    .and_then(|raw| serde_json::from_str::<ailang_core::BuildMetadata>(&raw).ok())
+                {
+                    Some(metadata) => match write_sbom(path, &metadata) {
+                        Ok(path) => Some(path),
+                        Err(diag) => {
+                            print_diagnostics(&[diag]);
+                            return Err(1);
+                        }
+                    },
+                    None => {
+                        eprintln!(
+                            "could not parse build metadata from `{}` before sbom generation",
+                            build_metadata_path.display()
+                        );
+                        return Err(1);
+                    }
+                }
+            } else {
+                None
+            };
 
             let mir = emit.map(|_| ailang_core::lower_program_to_mir(&program));
             let c_source = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
@@ -583,6 +613,9 @@ fn cmd_build(path: &Path, emit: Option<BuildEmitTarget>, locked: bool) -> Result
                     println!("wrote lockfile stub: {}", path.join("ailang.lock").display());
                 }
                 println!("wrote build metadata: {}", build_metadata_path.display());
+                if let Some(sbom_path) = sbom_path {
+                    println!("wrote sbom: {}", sbom_path.display());
+                }
             }
 
             match emit {
@@ -761,7 +794,7 @@ fn cmd_run(path: &Path) -> Result<(), i32> {
         }
     };
 
-    cmd_build(path, Some(BuildEmitTarget::CBin), false)?;
+    cmd_build(path, Some(BuildEmitTarget::CBin), false, false)?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let status = match Command::new(&binary_path).status() {

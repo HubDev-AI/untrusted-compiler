@@ -10,6 +10,7 @@ pub mod parser;
 pub mod policy;
 pub mod security_map;
 pub mod semantic;
+pub mod sbom;
 pub mod token;
 
 pub use audit::{
@@ -30,6 +31,7 @@ pub use security_map::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations,
     strip_allow_annotations, SecurityAllow, SecurityMap, SECURITY_MAP_FILE_NAME,
 };
+pub use sbom::{SbomDocument, SBOM_FILE_NAME};
 pub use semantic::analyze_program;
 
 use std::fs;
@@ -61,6 +63,10 @@ pub fn write_build_metadata(
     policy: &Policy,
 ) -> Result<PathBuf, Diagnostic> {
     build_metadata::write_build_metadata(project_root, manifest, policy)
+}
+
+pub fn write_sbom(project_root: &Path, build_metadata: &BuildMetadata) -> Result<PathBuf, Diagnostic> {
+    sbom::write_sbom(project_root, build_metadata)
 }
 
 pub fn parse_entry_ast(

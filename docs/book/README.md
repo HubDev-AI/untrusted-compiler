@@ -173,5 +173,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `206-m9-locked-build-and-deterministic-lockfile-validation.md`
 - `207-m9-reproducible-build-metadata-emission.md`
 - `208-m9-policy-profiles-artifacts-and-baseline-workflow.md`
+- `209-m9-optional-sbom-emission.md`
 
 As milestones progress, chapters will be added and linked from this index.
