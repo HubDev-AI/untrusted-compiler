@@ -184,5 +184,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `217-m10-benchmark-report-bundling.md`
 - `218-m10-node-baseline-service.md`
 - `219-m10-go-baseline-service.md`
+- `220-m10-rust-baseline-service.md`
 
 As milestones progress, chapters will be added and linked from this index.
