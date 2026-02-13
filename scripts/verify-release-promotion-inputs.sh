@@ -160,6 +160,7 @@ summary_policy_identity="$(read_summary_value "${SUMMARY_PATH}" "policy identity
 summary_compiler_identity="$(read_summary_value "${SUMMARY_PATH}" "compiler identity hash")"
 summary_runtime_identity="$(read_summary_value "${SUMMARY_PATH}" "runtime identity hash")"
 summary_naming_lock="$(read_summary_value "${SUMMARY_PATH}" "naming lock")"
+summary_milestone_closure="$(read_summary_value "${SUMMARY_PATH}" "milestone closure")"
 
 if [[ "${summary_policy_identity}" != "${policy_identity_expected}" ]]; then
   echo "error: summary/checksums mismatch for policy identity hash" >&2
@@ -175,6 +176,10 @@ if [[ "${summary_runtime_identity}" != "${runtime_identity_expected}" ]]; then
 fi
 if [[ "${summary_naming_lock}" != "PASS" ]]; then
   echo "error: summary naming lock status must be PASS" >&2
+  exit 1
+fi
+if [[ "${summary_milestone_closure}" != "PASS" ]]; then
+  echo "error: summary milestone closure status must be PASS" >&2
   exit 1
 fi
 

@@ -526,6 +526,10 @@ Historical implementation bullets below are retained as build history; strict ga
 - Release-publish integration checks now verify gate artifact consistency before promotion:
   - new script `scripts/verify-release-promotion-inputs.sh` validates checksum/summary identity stamps against copied artifacts (`policy`, runtime files, per-sample metadata/sbom/audit),
   - `.github/workflows/alpha-release-gate.yml` now runs promotion-input verification after `release-alpha-gate.sh`.
+- Alpha release gate now enforces milestone-closure readiness:
+  - `scripts/release-alpha-gate.sh` now runs `scripts/check-milestone-closure.sh --fail-on-pending`,
+  - release summary now stamps `milestone closure: PASS`,
+  - promotion verifier now requires the `milestone closure` summary stamp to be `PASS`.
 - Release automation now emits a publish-consumption manifest:
   - `scripts/generate-release-publish-manifest.sh` builds `publish-manifest.json` from verified release artifacts,
   - `.github/workflows/alpha-release-gate.yml` now generates publish manifest before artifact upload.

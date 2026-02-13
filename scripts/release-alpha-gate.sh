@@ -104,6 +104,7 @@ if [[ ! -x "${SEC4_BIN}" ]]; then
 fi
 
 run "${ROOT_DIR}/scripts/check-naming-lock.sh"
+run "${ROOT_DIR}/scripts/check-milestone-closure.sh" --fail-on-pending
 
 if [[ "${RUN_TESTS}" -eq 1 ]]; then
   run cargo test -q --manifest-path "${ROOT_DIR}/Cargo.toml"
@@ -249,6 +250,7 @@ SUMMARY_PATH="${OUT_DIR}/summary.txt"
   echo "runtime header sha256: ${RUNTIME_HEADER_HASH}"
   echo "runtime source sha256: ${RUNTIME_SOURCE_HASH}"
   echo "naming lock: PASS"
+  echo "milestone closure: PASS"
   echo "samples: ${SAMPLES[*]}"
   echo "artifacts: ${OUT_DIR}"
   echo "checksums: ${CHECKSUMS_FILE}"
