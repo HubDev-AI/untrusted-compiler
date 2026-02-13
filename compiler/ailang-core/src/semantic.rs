@@ -4627,12 +4627,28 @@ impl Analyzer {
             return;
         }
 
-        if matches!(callee_name, "log_obj" | "log.obj") && args.len() != 1 {
-            self.diagnostics.push(
-                Diagnostic::error("E4001", "log.obj expects exactly one argument", span)
+        if matches!(callee_name, "log_obj" | "log.obj") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.obj expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.obj(fields)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("LogValue") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.obj argument must be `LogValue`",
+                        args[0].span.clone(),
+                    )
                     .with_tag("security")
-                    .with_note("use `log.obj(fields)`"),
-            );
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass composed log value payloads into `log.obj`"),
+                );
+            }
         }
     }
 

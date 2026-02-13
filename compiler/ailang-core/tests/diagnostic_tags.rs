@@ -169,6 +169,24 @@ fn bad() -> Int {
 }
 
 #[test]
+fn log_obj_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.obj(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.obj argument must be `LogValue`")
+        .expect("expected log.obj argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn capability_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad() effects { db.write } -> Int {

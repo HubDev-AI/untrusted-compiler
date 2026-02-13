@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  log.obj(1);
+  0
+}

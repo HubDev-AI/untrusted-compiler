@@ -147,5 +147,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `180-m7-log-sink-payload-signature-hardening.md`
 - `181-m7-log-value-builder-label-signature-hardening.md`
 - `182-m7-log-value-builder-payload-signature-hardening.md`
+- `183-m7-log-object-builder-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

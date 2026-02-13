@@ -141,6 +141,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `log.bool(value)` requires `Bool`.
     - `log.field(key, value)` requires string keys and `LogValue` payloads.
     - `log.obj(fields)` now enforces single-argument arity.
+  - `log.obj` now also enforces typed payload input (`LogValue`) beyond arity-only checks.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
   - `security_map` call records now include optional `arg_roles` metadata for explainability.
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
@@ -789,6 +790,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Log Sink Payload Signature Hardening".
 - Chapter: "M7 Slice: Log Value Builder Label Signature Hardening".
 - Chapter: "M7 Slice: Log Value Builder Payload Signature Hardening".
+- Chapter: "M7 Slice: Log Object Builder Type Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

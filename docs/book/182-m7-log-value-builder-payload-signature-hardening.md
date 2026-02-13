@@ -74,4 +74,5 @@ fn main() -> Int {
 
 - Tradeoff: bridge fixtures using non-typed placeholders for builder payloads now fail and must be rewritten.
 - Next:
+  - `log.obj` input typing hardening is documented in `183-m7-log-object-builder-type-hardening.md`.
   - add deeper `log.obj` structural validation once collection typing for `LogValue` maps/lists is formalized.
