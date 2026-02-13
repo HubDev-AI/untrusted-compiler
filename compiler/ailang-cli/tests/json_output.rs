@@ -1260,7 +1260,7 @@ entry = "src/main.ai"
   let base = err.validation("VALIDATION.BAD_REQUEST", "invalid input");
   err.auth("AUTH.FORBIDDEN", "forbidden", 401);
   err.notFound("RESOURCE.NOT_FOUND", "missing");
-  err.conflict(1, 2);
+  err.conflict("RESOURCE.CONFLICT", "conflict");
   err.rateLimit(1, 2, 3);
   let internal = err.internal("internal");
   err.withPath(base, "$.field");
@@ -1288,7 +1288,7 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_err_validation(\"VALIDATION.BAD_REQUEST\", \"invalid input\")"));
     assert!(generated_c.contains("ailang_rt_err_auth(\"AUTH.FORBIDDEN\", \"forbidden\", 401)"));
     assert!(generated_c.contains("ailang_rt_err_not_found(\"RESOURCE.NOT_FOUND\", \"missing\")"));
-    assert!(generated_c.contains("ailang_rt_err_conflict(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_err_conflict(\"RESOURCE.CONFLICT\", \"conflict\")"));
     assert!(generated_c.contains("ailang_rt_err_rate_limit(1, 2, 3)"));
     assert!(generated_c.contains("ailang_rt_err_internal(\"internal\")"));
     assert!(generated_c.contains("ailang_rt_err_with_path(base, \"$.field\")"));
