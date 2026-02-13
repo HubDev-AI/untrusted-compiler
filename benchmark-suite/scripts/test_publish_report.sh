@@ -29,6 +29,15 @@ if ! grep -q '^## Endpoint Leaders$' "$out"; then
   exit 1
 fi
 
+if ! grep -q '^- Implementations in matrix (4):' "$out"; then
+  echo "missing matrix implementation scope header" >&2
+  exit 1
+fi
+if ! grep -q 'ailang' "$out" || ! grep -q 'go' "$out" || ! grep -q 'node' "$out" || ! grep -q 'rust' "$out"; then
+  echo "matrix implementation scope header missing expected implementation names" >&2
+  exit 1
+fi
+
 if ! grep -q '^- Endpoints in matrix (3):' "$out"; then
   echo "missing matrix endpoint scope header" >&2
   exit 1

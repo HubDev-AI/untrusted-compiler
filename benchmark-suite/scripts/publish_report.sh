@@ -35,12 +35,15 @@ mkdir -p "$(dirname "$out_path")"
 now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 endpoint_count="$(jq '.endpoints | length' "$matrix_path")"
 endpoint_list="$(jq -r '.endpoints | map(.endpoint) | join(", ")' "$matrix_path")"
+impl_count="$(jq '[.endpoints[].compared[].impl] | unique | length' "$matrix_path")"
+impl_list="$(jq -r '[.endpoints[].compared[].impl] | unique | join(", ")' "$matrix_path")"
 
 {
   echo "# Benchmark Comparative Report (v0.1)"
   echo
   echo "- Generated UTC: ${now_utc}"
   echo "- Matrix source: ${matrix_path}"
+  echo "- Implementations in matrix (${impl_count}): ${impl_list}"
   echo "- Endpoints in matrix (${endpoint_count}): ${endpoint_list}"
   if [ -n "$sec_audit_path" ]; then
     echo "- Security source: ${sec_audit_path}"

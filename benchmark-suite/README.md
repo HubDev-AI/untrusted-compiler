@@ -79,3 +79,4 @@ Measure end-to-end service behavior across identical implementations:
 - Per-implementation report bundles now include `selectedEndpoints` metadata when matrix runs are endpoint-filtered.
 - Published markdown reports include explicit endpoint scope in the header (`Endpoints in matrix (...)`) for partial-run clarity.
 - Matrix comparison now scopes to selected implementations (`IMPLS`) so stale reports from other impls are excluded.
+- Published markdown reports also include implementation scope (`Implementations in matrix (...)`).
