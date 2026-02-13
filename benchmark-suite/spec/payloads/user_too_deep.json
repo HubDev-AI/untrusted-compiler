@@ -1,0 +1,22 @@
+{
+  "id": "6f1c2e7c-9c4a-4d0d-8c1b-2b59a4c8f8e1",
+  "email": "user@example.com",
+  "age": 34,
+  "name": "John Doe",
+  "tags": ["alpha"],
+  "address": {
+    "line1": "123 Main Street",
+    "city": "Sofia",
+    "zip": "1000",
+    "country": "BG"
+  },
+  "meta": {
+    "flags": {
+      "a": true,
+      "b": false,
+      "c": true,
+      "deep": {"l1": {"l2": {"l3": {"l4": {"l5": {"l6": true}}}}}}
+    },
+    "notes": "Deep JSON benchmark payload."
+  }
+}
