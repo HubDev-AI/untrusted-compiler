@@ -1,0 +1,4 @@
+error[E4001]: cookie.build name argument must be `String`
+  --> invalid_cookie_build_argument_type.ai:2:16
+  note: found `Int`
+  note: use string cookie names

@@ -59,7 +59,7 @@ This protection is applied in both semantic analysis and `security_map` call res
 
 ```ailang
 fn configure() effects { net } -> Int {
-  let cookie = cookie.build(1, 2);
+  let cookie = cookie.build("session", "token");
   res.addCookie(cookie);
   0
 }

@@ -333,6 +333,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `sql.q` signature typing is now hardened:
     - `sql.q` requires `(template, params)` shape with a `String` template argument,
     - invalid template values emit tagged `E4001` schema diagnostics.
+  - `cookie.build` signature typing is now hardened:
+    - `cookie.build` requires `(name, value)` shape with string name/value arguments,
+    - invalid cookie-constructor values emit tagged `E4001` security diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -725,6 +728,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: res.html Signature Hardening".
 - Chapter: "M7 Slice: Header/Cookie Sink Signature Hardening".
 - Chapter: "M7 Slice: Header Constructor Signature Hardening".
+- Chapter: "M7 Slice: cookie.build Signature Hardening".
 - Chapter: "M7 Slice: Request Source Signature Hardening".
 - Chapter: "M7 Slice: path.base Signature Hardening".
 - Chapter: "M7 Slice: req.body Signature Hardening".

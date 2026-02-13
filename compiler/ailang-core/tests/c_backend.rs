@@ -373,7 +373,7 @@ fn main() -> Int {
 fn c_backend_rewrites_header_and_cookie_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { net } -> Int {
-  let cookie = cookie.build(1, 2);
+  let cookie = cookie.build("name", "value");
   res.setHeader(1, 2);
   res.addCookie(cookie);
   0
@@ -384,7 +384,7 @@ fn main() effects { net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("ailang_rt_cookie_build(1, 2);"));
+    assert!(c.contains("ailang_rt_cookie_build(\"name\", \"value\");"));
     assert!(c.contains("(void)(ailang_rt_set_header(1, 2));"));
     assert!(c.contains("(void)(ailang_rt_set_cookie(cookie));"));
 }

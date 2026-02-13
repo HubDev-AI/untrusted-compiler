@@ -154,6 +154,24 @@ fn bad() effects { net } -> Int {
 }
 
 #[test]
+fn cookie_build_signature_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  cookie.build(1, "value");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "cookie.build name argument must be `String`")
+        .expect("expected cookie.build name argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn req_query_signature_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

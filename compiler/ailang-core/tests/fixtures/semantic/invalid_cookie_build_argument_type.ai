@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  cookie.build(1, "value");
+  0
+}

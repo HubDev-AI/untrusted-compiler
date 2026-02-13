@@ -1763,6 +1763,7 @@ impl Analyzer {
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
+        self.enforce_cookie_build_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_sql_q_signature(callee_name, span.clone(), args, arg_types);
@@ -2456,6 +2457,57 @@ impl Analyzer {
                 .with_tag("security")
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note(format!("use string input for `{call_name}`")),
+            );
+        }
+    }
+
+    fn enforce_cookie_build_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_cookie_build_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 2 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "cookie.build expects `(name, value)` arguments",
+                    span,
+                )
+                .with_tag("security")
+                .with_note("use `cookie.build(\"name\", \"value\")`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "cookie.build name argument must be `String`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use string cookie names"),
+            );
+        }
+
+        if !arg_types[1].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "cookie.build value argument must be `String`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("use string cookie values"),
             );
         }
     }
@@ -4323,6 +4375,10 @@ fn is_req_header_call(name: &str) -> bool {
 
 fn is_sql_q_call(name: &str) -> bool {
     matches!(name, "sql_q" | "sql.q")
+}
+
+fn is_cookie_build_call(name: &str) -> bool {
+    matches!(name, "cookie_build" | "cookie.build")
 }
 
 fn is_path_base_call(name: &str) -> bool {

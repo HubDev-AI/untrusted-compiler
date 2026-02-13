@@ -726,7 +726,7 @@ entry = "src/main.ai"
         r#"fn configure() effects { net } -> Int {
   let name = headers.name("X-Test");
   let value = headers.value("ok");
-  let cookie = cookie.build(1, 2);
+  let cookie = cookie.build("session", "token");
   res.setHeader(name, value);
   res.addCookie(cookie);
   0
@@ -752,7 +752,7 @@ fn main() -> Int {
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_headers_name(\"X-Test\")"));
     assert!(generated_c.contains("ailang_rt_headers_value(\"ok\")"));
-    assert!(generated_c.contains("ailang_rt_cookie_build(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_cookie_build(\"session\", \"token\")"));
     assert!(generated_c.contains("ailang_rt_set_header(name, value)"));
     assert!(generated_c.contains("ailang_rt_set_cookie(cookie)"));
 

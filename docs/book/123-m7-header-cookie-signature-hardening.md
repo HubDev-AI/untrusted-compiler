@@ -60,9 +60,9 @@ Secret/taint sink diagnostics remain active and can co-emit with signature diagn
 
 ```ailang
 fn configure() effects { net } -> Int {
-  let name = headers.name(1);
-  let value = headers.value(2);
-  let cookie = cookie.build(1, 2);
+  let name = headers.name("X-Test");
+  let value = headers.value("ok");
+  let cookie = cookie.build("session", "token");
   res.setHeader(name, value);
   res.addCookie(cookie);
   0
