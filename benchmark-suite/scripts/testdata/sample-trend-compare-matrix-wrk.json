@@ -3,6 +3,17 @@
   "endpoints": [
     {
       "endpoint": "ping",
+      "compared": [
+        {
+          "impl": "go",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 152431.97,
+          "constantRate": false,
+          "loadGenerator": "wrk",
+          "p99": "1.75ms"
+        }
+      ],
       "leader": {
         "impl": "go",
         "endpoint": "ping",

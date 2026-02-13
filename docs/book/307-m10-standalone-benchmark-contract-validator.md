@@ -22,6 +22,7 @@ Schema checks were previously coupled to naming-lock. This slice makes benchmark
 - step summary/matrix samples
 - single-endpoint compare report sample
 - compare matrix sample
+- trend compare matrix samples
 - analysis sample
 - artifact manifest sample
 

@@ -3,6 +3,17 @@
   "endpoints": [
     {
       "endpoint": "ping",
+      "compared": [
+        {
+          "impl": "node",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 9000,
+          "constantRate": true,
+          "loadGenerator": "wrk2",
+          "p99": "18.20ms"
+        }
+      ],
       "leader": {
         "impl": "node",
         "endpoint": "ping",
@@ -15,6 +26,17 @@
     },
     {
       "endpoint": "decode",
+      "compared": [
+        {
+          "impl": "node",
+          "endpoint": "decode",
+          "targetRps": 2000,
+          "requestsPerSec": 1100,
+          "constantRate": true,
+          "loadGenerator": "wrk2",
+          "p99": "92.00ms"
+        }
+      ],
       "leader": {
         "impl": "node",
         "endpoint": "decode",

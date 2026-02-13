@@ -187,6 +187,20 @@ if ! validate_compare_matrix_rows "${samples_dir}/sample-compare-matrix.json" "c
   failed=1
 fi
 
+trend_compare_samples=(
+  "${samples_dir}/sample-trend-compare-matrix.json"
+  "${samples_dir}/sample-trend-compare-matrix-wrk.json"
+)
+for trend_sample in "${trend_compare_samples[@]}"; do
+  if ! validate_json_required_keys "${trend_sample}" "${compare_matrix_schema}" "trend compare-matrix sample"; then
+    failed=1
+    continue
+  fi
+  if ! validate_compare_matrix_rows "${trend_sample}" "trend compare-matrix sample"; then
+    failed=1
+  fi
+done
+
 if ! validate_json_required_keys "${samples_dir}/sample-analysis.json" "${analysis_schema}" "analysis sample"; then
   failed=1
 fi

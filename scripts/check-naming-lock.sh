@@ -314,6 +314,28 @@ check_benchmark_artifact_contract() {
     failed=1
   fi
 
+  local trend_compare_samples=(
+    "benchmark-suite/scripts/testdata/sample-trend-compare-matrix.json"
+    "benchmark-suite/scripts/testdata/sample-trend-compare-matrix-wrk.json"
+  )
+  local trend_compare_sample
+  for trend_compare_sample in "${trend_compare_samples[@]}"; do
+    if [[ ! -f "${trend_compare_sample}" ]]; then
+      echo "error: missing benchmark trend compare-matrix sample: ${trend_compare_sample}" >&2
+      failed=1
+      continue
+    fi
+    if ! validate_json_required_keys "${trend_compare_sample}" "${compare_matrix_schema}" "benchmark trend compare-matrix sample"; then
+      echo "error: benchmark trend compare-matrix sample schema mismatch: ${trend_compare_sample}" >&2
+      failed=1
+      continue
+    fi
+    if ! validate_compare_matrix_rows "${trend_compare_sample}" "benchmark trend compare-matrix sample"; then
+      echo "error: benchmark trend compare-matrix sample row-shape mismatch: ${trend_compare_sample}" >&2
+      failed=1
+    fi
+  done
+
   local analysis_sample="benchmark-suite/scripts/testdata/sample-analysis.json"
   if [[ ! -f "${analysis_sample}" ]]; then
     echo "error: missing benchmark analysis sample: ${analysis_sample}" >&2
