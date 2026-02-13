@@ -306,5 +306,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `339-m12-sec4-cli-command-contract-test.md`
 - `340-m10-cross-impl-workflow-closure-contract-gate.md`
 - `341-m9-release-contract-smoke-workflow.md`
+- `342-m9-release-contract-smoke-workflow-contract-test.md`
 
 As milestones progress, chapters will be added and linked from this index.

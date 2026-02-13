@@ -517,6 +517,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - `.github/workflows/alpha-release-gate.yml` executes the same gate on manual dispatch and alpha-tag pushes, and uploads captured artifacts.
 - Release contract tests are now CI-smoked on PR/main:
   - `.github/workflows/release-contract-smoke.yml` runs release/promotion/publish contract tests continuously (`test-verify-release-promotion-inputs`, `test-generate-release-publish-manifest`, `test-verify-release-publish-manifest`, plus alpha workflow contract check).
+  - naming-lock CI now enforces release-contract-smoke workflow step wiring via `scripts/test-release-contract-smoke-workflow-contract.sh`.
 - Alpha release-gate artifacts now include explicit policy identity + naming-lock status:
   - captures the active policy profile file in `build/release-alpha-gate/`,
   - records policy profile SHA256 in `checksums.txt` and `summary.txt`,
