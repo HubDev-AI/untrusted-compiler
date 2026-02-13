@@ -174,5 +174,8 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `207-m9-reproducible-build-metadata-emission.md`
 - `208-m9-policy-profiles-artifacts-and-baseline-workflow.md`
 - `209-m9-optional-sbom-emission.md`
+- `210-release-notes-and-compatibility.md`
+- `211-known-limits-of-v0.1-alpha.md`
+- `212-road-to-v0.2.md`
 
 As milestones progress, chapters will be added and linked from this index.
