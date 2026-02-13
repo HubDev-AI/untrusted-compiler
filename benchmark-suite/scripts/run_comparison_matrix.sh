@@ -156,7 +156,11 @@ for impl in "${impls[@]}"; do
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ping ${base_url}"
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} decode ${base_url}"
     echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} users-post ${base_url}"
-    echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json"
+    if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
+      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json ${sec_audit_path}"
+    else
+      echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json"
+    fi
     continue
   fi
 
@@ -179,7 +183,11 @@ for impl in "${impls[@]}"; do
   "${root_dir}/scripts/run_profile.sh" "$impl" ping "$base_url"
   "${root_dir}/scripts/run_profile.sh" "$impl" decode "$base_url"
   "${root_dir}/scripts/run_profile.sh" "$impl" users-post "$base_url"
-  "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json"
+  if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
+    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path"
+  else
+    "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json"
+  fi
 
   cleanup_impl
   trap - EXIT

@@ -50,6 +50,10 @@ if ! grep -q '=== impl=ailang ===' <<<"$ailang_out"; then
   echo "missing ailang implementation header" >&2
   exit 1
 fi
+if ! grep -q 'build_report.sh ailang .*baselines/sec-audit/default-secure-prod.hello.json' <<<"$ailang_out"; then
+  echo "expected ailang report command to include sec.audit artifact" >&2
+  exit 1
+fi
 
 if "$root_dir/scripts/run_comparison_matrix.sh" --dry-run --impls unknown >/dev/null 2>&1; then
   echo "expected unsupported implementation to fail" >&2
