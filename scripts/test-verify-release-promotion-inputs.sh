@@ -13,6 +13,16 @@ ARTIFACTS_DIR="${TMP_DIR}/artifacts"
 "${ROOT_DIR}/scripts/release-alpha-gate.sh" --skip-tests --out-dir "${ARTIFACTS_DIR}" >/dev/null
 "${ROOT_DIR}/scripts/verify-release-promotion-inputs.sh" --artifacts-dir "${ARTIFACTS_DIR}" >/dev/null
 
+cp "${ARTIFACTS_DIR}/summary.txt" "${ARTIFACTS_DIR}/summary.txt.bak"
+grep -v '^milestone closure: ' "${ARTIFACTS_DIR}/summary.txt.bak" > "${ARTIFACTS_DIR}/summary.txt"
+
+if "${ROOT_DIR}/scripts/verify-release-promotion-inputs.sh" --artifacts-dir "${ARTIFACTS_DIR}" >/dev/null 2>&1; then
+  echo "expected release promotion verifier to fail when milestone closure summary stamp is missing" >&2
+  exit 1
+fi
+
+mv "${ARTIFACTS_DIR}/summary.txt.bak" "${ARTIFACTS_DIR}/summary.txt"
+
 jq '.build.compilerHash = "cpl_tampered"' "${ARTIFACTS_DIR}/hello-audit.json" > "${ARTIFACTS_DIR}/hello-audit.json.tmp"
 mv "${ARTIFACTS_DIR}/hello-audit.json.tmp" "${ARTIFACTS_DIR}/hello-audit.json"
 

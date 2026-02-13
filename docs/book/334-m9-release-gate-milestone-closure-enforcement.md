@@ -36,6 +36,8 @@ scripts/test-generate-release-publish-manifest.sh
 scripts/test-verify-release-publish-manifest.sh
 ```
 
+`test-verify-release-promotion-inputs.sh` now also asserts verifier failure when the `milestone closure` summary stamp is removed.
+
 ## Tradeoffs
 
 - Release-gate strictness increases and can block releases when closure evidence drifts.
