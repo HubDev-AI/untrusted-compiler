@@ -550,6 +550,8 @@ Roadmap impact:
   - `docs/book/320-m13-release-publish-handoff-notes.md` captures the explicit external publish contract checklist.
 - M13 decode threshold tuning rubric is now documented:
   - `docs/book/321-m13-decode-threshold-tuning-rubric.md` defines deterministic keep/tighten/relax rules and bounded update limits.
+- M13 first trend-note scaffold is now added:
+  - `docs/book/322-m13-first-trend-run-results-note.md` captures first local readiness observation and explicit live-artifact follow-up steps.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1303,7 +1305,8 @@ M13-S1 go/no-go note:
 ### M13-S2 tracking (live status)
 - [x] Candidate scope locked and documented.
 - [x] Release publish handoff contract notes documented.
-- [ ] First trend-run results note captured with observations and follow-up actions.
+- [x] First trend-note chapter added with local readiness observation and follow-up actions.
+- [ ] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
 ### Exit criteria
@@ -1320,6 +1323,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13-S2 Candidate Scope and Delivery Contract".
 - Chapter: "M13 Slice: Release Publish Handoff Notes".
 - Chapter: "M13 Slice: Decode Threshold Tuning Rubric".
+- Chapter: "M13 Slice: First Trend-Run Results Note".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1411,7 +1415,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md`.
 
 ---
 
