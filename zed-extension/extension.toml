@@ -1,0 +1,12 @@
+id = "ailang"
+name = "AILang"
+version = "0.1.0"
+schema_version = 1
+
+[grammars.ailang]
+repository = "https://github.com/ailang/tree-sitter-ailang"
+rev = "TODO_SET_COMMIT_SHA"
+
+[language_servers.ailang-lsp]
+name = "AILang Language Server"
+languages = ["AILang"]
