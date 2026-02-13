@@ -76,12 +76,14 @@ Current strict closure result:
 | `M13-E` | PASS | Naming-lock CI enforces benchmark-trend workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M13-F` | PASS | Naming-lock CI enforces sec4 explain audit-coverage contract test | `.github/workflows/naming-lock.yml` |
 | `M14-A` | PASS | Naming-lock CI enforces replay capture contract test | `.github/workflows/naming-lock.yml` |
+| `M14-B` | PASS | Naming-lock CI enforces replay capture compatibility test | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
 - M9 implementation is functionally complete but release-candidate evidence remains a verification activity.
 - M10 and M13 closure evidence requirements are now satisfied.
 - M14 bootstrap replay-contract enforcement is active (`M14-A`).
+- M14 replay compatibility enforcement is active (`M14-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -675,6 +677,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of benchmark-trend workflow contract + guard tests (`M13-E`).
   - closure now verifies naming-lock CI enforcement of sec4 explain audit-coverage contract test (`M13-F`).
   - closure now verifies naming-lock CI enforcement of replay capture contract test (`M14-A`).
+  - closure now verifies naming-lock CI enforcement of replay capture compatibility test (`M14-B`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
@@ -1491,6 +1494,8 @@ M13-S1 go/no-go note:
 - Add capture JSON contract checker that validates required top-level/request/determinism/redaction fields.
 - Add fixture guard tests covering missing IDs, encoding-mode invariants, and invalid encoding values.
 - Wire replay-capture contract test into naming-lock CI and closure-audit gate checks.
+- Add replay-capture compatibility checker with deterministic hash mismatch handling and policy-mismatch override.
+- Wire replay-capture compatibility test into naming-lock CI and closure-audit gate checks.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1498,14 +1503,21 @@ M13-S1 go/no-go note:
 - [x] Added replay-capture guard regression script (`scripts/test-replay-capture-contract.sh`).
 - [x] Wired naming-lock CI enforcement for replay-capture contract test.
 - [x] Added strict closure gate `M14-A` for replay-capture CI enforcement.
+- [x] Added replay-capture compatibility checker (`scripts/check-replay-capture-compat.sh`).
+- [x] Added replay-capture compatibility regression script (`scripts/test-replay-capture-compat.sh`).
+- [x] Wired naming-lock CI enforcement for replay-capture compatibility test.
+- [x] Added strict closure gate `M14-B` for replay-capture compatibility CI enforcement.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
 - CI fails if replay-capture contract enforcement is removed from naming-lock workflow.
+- Replay-capture compatibility checker enforces compiler/runtime hash parity and policy-hash mismatch handling.
+- CI fails if replay-capture compatibility enforcement is removed from naming-lock workflow.
 - Closure audit reports replay-capture gate status alongside existing milestone gates.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
+- Chapter: "M14 Slice: Replay Capture Compatibility Contract Gate".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

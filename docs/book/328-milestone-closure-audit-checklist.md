@@ -100,6 +100,8 @@ Implementation progress and milestone closure are not the same. This checklist p
 5. M14 replay-capture contract bootstrap
 - naming-lock CI keeps replay-capture contract test:
   - `scripts/test-replay-capture-contract.sh`
+- naming-lock CI keeps replay-capture compatibility test:
+  - `scripts/test-replay-capture-compat.sh`
 
 ## Example usage
 
@@ -119,6 +121,7 @@ scripts/test-check-milestone-closure.sh
 - M13 live trend-note evidence, trend-workflow guards, and artifact-upload contract: PASS
 - M13 sec4 explain audit-coverage contract test enforcement in naming-lock CI: PASS
 - M14 replay-capture contract test enforcement in naming-lock CI: PASS
+- M14 replay-capture compatibility test enforcement in naming-lock CI: PASS
 
 ## Inputs, outputs, and constraints
 

@@ -22,6 +22,9 @@ jobs:
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
 
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

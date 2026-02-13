@@ -84,6 +84,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -227,7 +229,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M10-A","M10-B","M10-C","M10-D",
     "M11-A","M12-A",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
-    "M14-A"
+    "M14-A","M14-B"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -263,6 +265,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-F") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-A") != null' >/dev/null; then
   echo "expected json closure output to include M14-A gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-B") != null' >/dev/null; then
+  echo "expected json closure output to include M14-B gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -715,6 +721,11 @@ jobs:
         run: scripts/test-zed-grammar-pin-guard.sh
 YAML
 
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses replay-capture compatibility test" >&2
+  exit 1
+fi
+
 cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
 name: Naming Lock
 on:
@@ -732,6 +743,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -778,6 +791,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -824,6 +839,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -866,6 +883,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -912,6 +931,8 @@ jobs:
         run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate replay capture contract
         run: scripts/test-replay-capture-contract.sh
+      - name: Validate replay capture compatibility
+        run: scripts/test-replay-capture-compat.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
