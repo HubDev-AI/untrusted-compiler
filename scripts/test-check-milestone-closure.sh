@@ -16,7 +16,33 @@ chmod +x "$tmp/scripts/release-alpha-gate.sh"
 touch "$tmp/scripts/verify-release-promotion-inputs.sh"
 touch "$tmp/scripts/generate-release-publish-manifest.sh"
 touch "$tmp/scripts/verify-release-publish-manifest.sh"
-touch "$tmp/.github/workflows/alpha-release-gate.yml"
+cat > "$tmp/.github/workflows/alpha-release-gate.yml" <<'YAML'
+name: Alpha Release Gate
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+jobs:
+  alpha-release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run alpha release gate script
+        run: scripts/release-alpha-gate.sh
+      - name: Verify release promotion inputs
+        run: scripts/verify-release-promotion-inputs.sh build/release-alpha-gate/release-summary.txt
+      - name: Generate release publish manifest
+        run: scripts/generate-release-publish-manifest.sh
+      - name: Verify release publish manifest
+        run: scripts/verify-release-publish-manifest.sh build/release-alpha-gate/release-publish-manifest.json
+      - name: Upload alpha release gate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-release-gate-artifacts
+          path: build/release-alpha-gate
+YAML
 cat > "$tmp/.github/workflows/release-contract-smoke.yml" <<'YAML'
 name: Release Contract Smoke
 on:
@@ -304,6 +330,62 @@ set -euo pipefail
 scripts/check-milestone-closure.sh --fail-on-pending
 SH
 chmod +x "$tmp/scripts/release-alpha-gate.sh"
+
+cat > "$tmp/.github/workflows/alpha-release-gate.yml" <<'YAML'
+name: Alpha Release Gate
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+jobs:
+  alpha-release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run alpha release gate script
+        run: scripts/release-alpha-gate.sh
+      - name: Verify release promotion inputs
+        run: scripts/verify-release-promotion-inputs.sh build/release-alpha-gate/release-summary.txt
+      - name: Generate release publish manifest
+        run: scripts/generate-release-publish-manifest.sh
+      - name: Verify release publish manifest
+        run: scripts/verify-release-publish-manifest.sh build/release-alpha-gate/release-publish-manifest.json
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when alpha-release workflow misses artifact upload contract" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/alpha-release-gate.yml" <<'YAML'
+name: Alpha Release Gate
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+jobs:
+  alpha-release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run alpha release gate script
+        run: scripts/release-alpha-gate.sh
+      - name: Verify release promotion inputs
+        run: scripts/verify-release-promotion-inputs.sh build/release-alpha-gate/release-summary.txt
+      - name: Generate release publish manifest
+        run: scripts/generate-release-publish-manifest.sh
+      - name: Verify release publish manifest
+        run: scripts/verify-release-publish-manifest.sh build/release-alpha-gate/release-publish-manifest.json
+      - name: Upload alpha release gate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-release-gate-artifacts
+          path: build/release-alpha-gate
+YAML
 
 cat > "$tmp/.github/workflows/release-contract-smoke.yml" <<'YAML'
 name: Release Contract Smoke

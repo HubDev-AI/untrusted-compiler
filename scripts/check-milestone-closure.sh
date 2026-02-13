@@ -104,6 +104,7 @@ bool_has_release_verifier_chain=0
 bool_has_release_gate_closure_enforcement=0
 bool_has_release_contract_smoke_workflow=0
 bool_has_release_contract_smoke_ci_guard=0
+bool_has_alpha_release_workflow_contract=0
 bool_has_cross_impl_matrix=0
 bool_has_cross_impl_matrix_contract=0
 bool_has_cross_impl_workflow_contract=0
@@ -113,7 +114,8 @@ bool_has_trend_workflow_artifact_upload=0
 bool_has_benchmark_smoke_closure_contract=0
 
 [ -f "${repo_root}/scripts/release-alpha-gate.sh" ] && bool_has_release_gate=1
-[ -f "${repo_root}/.github/workflows/alpha-release-gate.yml" ] && bool_has_release_gate_ci=1
+alpha_release_workflow_path="${repo_root}/.github/workflows/alpha-release-gate.yml"
+[ -f "${alpha_release_workflow_path}" ] && bool_has_release_gate_ci=1
 [ -f "${repo_root}/scripts/verify-release-promotion-inputs.sh" ] \
   && [ -f "${repo_root}/scripts/generate-release-publish-manifest.sh" ] \
   && [ -f "${repo_root}/scripts/verify-release-publish-manifest.sh" ] \
@@ -124,6 +126,17 @@ if [ -f "${release_gate_script}" ] \
   && rg -q 'check-milestone-closure.sh' "${release_gate_script}" \
   && rg -q -- '--fail-on-pending' "${release_gate_script}"; then
   bool_has_release_gate_closure_enforcement=1
+fi
+
+if [ -f "${alpha_release_workflow_path}" ] \
+  && rg -q 'scripts/release-alpha-gate.sh' "${alpha_release_workflow_path}" \
+  && rg -q 'scripts/verify-release-promotion-inputs.sh' "${alpha_release_workflow_path}" \
+  && rg -q 'scripts/generate-release-publish-manifest.sh' "${alpha_release_workflow_path}" \
+  && rg -q 'scripts/verify-release-publish-manifest.sh' "${alpha_release_workflow_path}" \
+  && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${alpha_release_workflow_path}" \
+  && rg -q 'name:[[:space:]]*alpha-release-gate-artifacts' "${alpha_release_workflow_path}" \
+  && rg -q 'path:[[:space:]]*build/release-alpha-gate' "${alpha_release_workflow_path}"; then
+  bool_has_alpha_release_workflow_contract=1
 fi
 
 release_contract_smoke_workflow_path="${repo_root}/.github/workflows/release-contract-smoke.yml"
@@ -263,6 +276,7 @@ emit_check "M9-C" "promotion verifier/manifest chain exists" "${bool_has_release
 emit_check "M9-D" "release gate enforces strict milestone closure" "${bool_has_release_gate_closure_enforcement}" "scripts/release-alpha-gate.sh"
 emit_check "M9-E" "release-contract-smoke workflow keeps release verifier/publish tests" "${bool_has_release_contract_smoke_workflow}" "${release_contract_smoke_workflow_path}"
 emit_check "M9-F" "naming-lock CI enforces release-contract-smoke contract + guard tests" "${bool_has_release_contract_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M9-G" "alpha-release workflow keeps release/promotion/publish/upload contract" "${bool_has_alpha_release_workflow_contract}" "${alpha_release_workflow_path}"
 emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoint" "${bool_has_cross_impl_matrix}" "${matrix_path}"
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + artifact upload" "${bool_has_cross_impl_workflow_contract}" "${cross_impl_workflow_path}"
