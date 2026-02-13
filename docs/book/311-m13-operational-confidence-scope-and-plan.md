@@ -37,6 +37,12 @@ Acceptance criteria:
 - scheduled benchmark workflow added for scoped live run,
 - at least one deterministic regression threshold check implemented.
 
+Current status:
+- done: release promotion playbook (`313`),
+- done: scoped live workflow + threshold guard (`312`),
+- pending: trend retention/baseline policy,
+- pending: scoped live workflow expansion to one additional endpoint after stability window.
+
 ## Exit criteria
 
 M13 is complete when:

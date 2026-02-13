@@ -1254,6 +1254,13 @@ Implementation order is intentionally linear to reduce thrash:
 - Scheduled benchmark workflow exists and runs scoped live checks with artifact upload.
 - At least one deterministic regression threshold check is implemented for scheduled benchmark output.
 
+### M13-S1 tracking (live status)
+- [x] Promotion playbook chapter added (`docs/book/313-m13-release-promotion-playbook.md`).
+- [x] Scheduled scoped live benchmark workflow added (`.github/workflows/benchmark-trend.yml`).
+- [x] First regression threshold guard implemented (`benchmark-suite/scripts/check_regression_thresholds.sh`).
+- [ ] Trend retention/baseline comparison policy documented and enforced.
+- [ ] Scoped live benchmark workflow expanded to one additional endpoint after stability review.
+
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
 - Scheduled benchmark signals are available and trend-comparable over time.
@@ -1356,11 +1363,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
-2. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
-3. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
-4. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
-5. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
+1. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
+2. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
+3. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
+4. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
+5. Add M13-S1 completion notes and go/no-go criteria once remaining checklist items are closed.
 
 ---
 
