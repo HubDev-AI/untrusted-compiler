@@ -90,6 +90,9 @@ fn handle_message<W: Write>(
                             "implementationProvider": true,
                             "completionProvider": {
                                 "resolveProvider": false
+                            },
+                            "renameProvider": {
+                                "prepareProvider": true
                             }
                         },
                         "serverInfo": {
@@ -237,6 +240,40 @@ fn handle_message<W: Write>(
                 }
             }
         }
+        Some("textDocument/prepareRename") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character)) = parse_text_document_position(message) {
+                    match prepare_rename_at_position(state, &uri, line, character) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid prepareRename request payload".to_string(),
+                    )?;
+                }
+            }
+        }
+        Some("textDocument/rename") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character, new_name)) = parse_rename_request(message) {
+                    match rename_at_position(state, &uri, line, character, &new_name) {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid rename request payload".to_string(),
+                    )?;
+                }
+            }
+        }
         Some(other) => {
             if let Some(id) = id {
                 send_error_response(
@@ -311,6 +348,16 @@ fn parse_references_position(message: &Value) -> Option<(String, usize, usize, b
         .and_then(Value::as_bool)
         .unwrap_or(false);
     Some((uri, line, character, include_declaration))
+}
+
+fn parse_rename_request(message: &Value) -> Option<(String, usize, usize, String)> {
+    let (uri, line, character) = parse_text_document_position(message)?;
+    let new_name = message
+        .get("params")
+        .and_then(|params| params.get("newName"))
+        .and_then(Value::as_str)?
+        .to_string();
+    Some((uri, line, character, new_name))
 }
 
 fn definition_at_position(
@@ -456,6 +503,129 @@ fn completion_keyword_items() -> Vec<Value> {
         json!({"label": "if", "kind": 14}),
         json!({"label": "match", "kind": 14}),
     ]
+}
+
+fn prepare_rename_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+) -> io::Result<Value> {
+    let (path, source) = load_document_source(state, uri)?;
+    let program = match parse_source(&path, &source) {
+        Ok(program) => program,
+        Err(_) => return Ok(Value::Null),
+    };
+
+    let Some((symbol, hit)) = resolve_symbol_at_position(&program, &path, line, character) else {
+        return Ok(Value::Null);
+    };
+
+    Ok(json!({
+        "range": range_from_span(&hit.span),
+        "placeholder": symbol.name,
+    }))
+}
+
+fn rename_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+    new_name: &str,
+) -> io::Result<Value> {
+    if !is_valid_identifier_name(new_name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid rename target `{new_name}`"),
+        ));
+    }
+
+    let (path, source) = load_document_source(state, uri)?;
+    let program = match parse_source(&path, &source) {
+        Ok(program) => program,
+        Err(_) => {
+            return Ok(json!({
+                "changes": {
+                    uri: []
+                }
+            }))
+        }
+    };
+
+    let Some((symbol, _hit)) = resolve_symbol_at_position(&program, &path, line, character) else {
+        return Ok(json!({
+            "changes": {
+                uri: []
+            }
+        }));
+    };
+
+    let mut edits = collect_identifier_hits_by_name(&program, &path, &symbol.name)
+        .into_iter()
+        .map(|found| {
+            json!({
+                "range": range_from_span(&found.span),
+                "newText": new_name,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(decl_span) = function_declaration_name_span(&symbol, &source) {
+        edits.insert(
+            0,
+            json!({
+                "range": range_from_span(&decl_span),
+                "newText": new_name,
+            }),
+        );
+    }
+
+    Ok(json!({
+        "changes": {
+            uri: edits
+        }
+    }))
+}
+
+fn resolve_symbol_at_position(
+    program: &Program,
+    file: &PathBuf,
+    line: usize,
+    character: usize,
+) -> Option<(FunctionSymbol, IdentifierHit)> {
+    let hit = find_identifier_at_position(program, file, line, character)?;
+    let symbol = collect_function_symbols(program)
+        .into_iter()
+        .find(|symbol| symbol.name == hit.name)?;
+    Some((symbol, hit))
+}
+
+fn function_declaration_name_span(symbol: &FunctionSymbol, source: &str) -> Option<Span> {
+    let line_index = symbol.span.start_line.checked_sub(1)?;
+    let line_text = source.lines().nth(line_index)?;
+    let needle = format!("fn {}", symbol.name);
+    let fn_index = line_text.find(&needle)?;
+    let name_start_col = fn_index + 3;
+    let name_end_col = name_start_col + symbol.name.len();
+    Some(Span {
+        file: symbol.span.file.clone(),
+        start_line: symbol.span.start_line,
+        start_col: name_start_col + 1,
+        end_line: symbol.span.start_line,
+        end_col: name_end_col,
+    })
+}
+
+fn is_valid_identifier_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -1068,6 +1238,16 @@ mod tests {
             Some(false),
             "initialize response should advertise completion provider",
         );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("renameProvider"))
+                .and_then(|rename| rename.get("prepareProvider"))
+                .and_then(Value::as_bool),
+            Some(true),
+            "initialize response should advertise rename provider",
+        );
         assert_eq!(messages[1].get("id"), Some(&json!(2)));
     }
 
@@ -1638,6 +1818,133 @@ mod tests {
         assert!(
             labels.contains(&"let"),
             "completion should include keyword items",
+        );
+    }
+
+    #[test]
+    fn prepare_rename_returns_range_and_placeholder_for_call_identifier() {
+        let uri = "file:///tmp/lsp_prepare_rename.ai";
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "textDocument/prepareRename",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let prepare_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(9)))
+            .expect("prepareRename response should exist");
+        assert_eq!(
+            prepare_response
+                .get("result")
+                .and_then(|result| result.get("placeholder"))
+                .and_then(Value::as_str),
+            Some("helper"),
+            "prepareRename should expose function name placeholder",
+        );
+        assert_eq!(
+            prepare_response
+                .get("result")
+                .and_then(|result| result.get("range"))
+                .and_then(|range| range.get("start"))
+                .and_then(|start| start.get("line"))
+                .and_then(Value::as_u64),
+            Some(5),
+            "prepareRename should point to helper call-site range",
+        );
+    }
+
+    #[test]
+    fn rename_returns_workspace_edit_for_declaration_and_call_sites() {
+        let uri = "file:///tmp/lsp_rename.ai";
+        let source =
+            "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n\nfn two() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2},
+                "newName": "assist"
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let rename_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(10)))
+            .expect("rename response should exist");
+        let edits = rename_response
+            .get("result")
+            .and_then(|result| result.get("changes"))
+            .and_then(|changes| changes.get(uri))
+            .and_then(Value::as_array)
+            .expect("rename response should include changes for current uri");
+        assert_eq!(edits.len(), 3, "rename should include declaration and both call sites");
+        assert!(
+            edits.iter().all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
+            "all rename edits should apply the requested new name",
         );
     }
 
