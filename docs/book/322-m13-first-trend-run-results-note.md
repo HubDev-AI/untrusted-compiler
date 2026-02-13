@@ -58,3 +58,10 @@ Then import the generated entry into this chapter without duplicate insertion:
 benchmark-suite/scripts/import_trend_note_entry.sh \
   --entry benchmark-suite/results/summaries/trend-note-entry.md
 ```
+
+One-command flow (fetch + import):
+
+```bash
+benchmark-suite/scripts/update_trend_note_from_ci.sh \
+  --repo HubDev-AI/untrusted-compiler
+```

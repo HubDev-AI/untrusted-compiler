@@ -565,6 +565,9 @@ Roadmap impact:
 - M13 trend-artifact fetch helper is now implemented:
   - `benchmark-suite/scripts/fetch_trend_artifact.sh` pulls latest successful benchmark-trend artifact package via `gh`,
   - benchmark smoke CI validates dry-run fetch command generation via `test_fetch_trend_artifact.sh`.
+- M13 trend-note one-command updater is now implemented:
+  - `benchmark-suite/scripts/update_trend_note_from_ci.sh` chains fetch + import flows,
+  - benchmark smoke CI validates update command composition and local-entry import via `test_update_trend_note_from_ci.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1322,6 +1325,7 @@ M13-S1 go/no-go note:
 - [x] Trend-note entry renderer added for deterministic artifact-to-markdown conversion.
 - [x] Trend-note entry importer added for idempotent chapter updates.
 - [x] Trend-artifact fetch helper added for deterministic CI artifact retrieval workflow.
+- [x] Trend-note one-command updater added for fetch+import operator flow.
 - [ ] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
@@ -1343,6 +1347,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Trend Note Entry Renderer".
 - Chapter: "M13 Slice: Trend Note Entry Importer".
 - Chapter: "M13 Slice: Trend Artifact Fetch Helper".
+- Chapter: "M13 Slice: Trend Note Update Command".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1434,7 +1439,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using CI-generated `trend-note-entry.md` artifact and importer script.
+1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using `benchmark-suite/scripts/update_trend_note_from_ci.sh`.
 
 ---
 
