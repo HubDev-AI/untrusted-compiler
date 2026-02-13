@@ -1,0 +1,34 @@
+fn ping() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn decodeUser() effects { net } -> Int {
+  req.json("UserRequest");
+  res.ok(200, "DecodeResponse", 0);
+  0
+}
+
+fn createUser() effects { net } -> Int {
+  req.json("UserRequest");
+  res.ok(201, "CreateUserResponse", 0);
+  0
+}
+
+fn getUser() effects { net } -> Int {
+  req.pathParam("id");
+  res.json(200, "UserResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/ping", ping);
+  http.post(router, "/decode", decodeUser);
+  http.post(router, "/users", createUser);
+  http.get(router, "/users/:id", getUser);
+
+  http.serve(8080, router);
+  0
+}

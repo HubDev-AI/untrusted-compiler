@@ -192,5 +192,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `225-m10-matrix-tail-latency-analysis.md`
 - `226-m10-analysis-integrated-report-publishing.md`
 - `227-m10-c-baseline-service.md`
+- `228-m10-ailang-baseline-service.md`
 
 As milestones progress, chapters will be added and linked from this index.

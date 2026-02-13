@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls node,go,rust,c] [--sec-audit path]
+usage: $0 [--dry-run] [--impls ailang,node,go,rust,c] [--sec-audit path]
 
 Runs benchmark profiles for each implementation, builds per-impl reports,
 then emits compare-matrix and markdown report artifacts.
@@ -11,7 +11,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="node,go,rust"
+impls_csv="ailang,node,go,rust"
 sec_audit_path=""
 
 while [ "$#" -gt 0 ]; do
@@ -69,7 +69,7 @@ fi
 
 is_supported_impl() {
   case "$1" in
-    node|go|rust|c)
+    ailang|node|go|rust|c)
       return 0
       ;;
     *)
@@ -96,6 +96,13 @@ start_service() {
   fi
 
   case "$impl" in
+    ailang)
+      (
+        cd "$service_dir"
+        ./build.sh >/dev/null
+        PORT=8080 ./ailang-bench-server
+      ) &
+      ;;
     node)
       (
         cd "$service_dir"

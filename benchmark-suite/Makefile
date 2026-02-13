@@ -14,7 +14,7 @@ help:
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post)"
-	@echo "  bench-matrix Run cross-impl benchmark orchestrator (node,go,rust by default)"
+	@echo "  bench-matrix Run cross-impl benchmark orchestrator (ailang,node,go,rust by default)"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"

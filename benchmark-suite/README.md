@@ -45,6 +45,7 @@ Measure end-to-end service behavior across identical implementations:
 10. Run full cross-impl orchestrator:
    - `make -C benchmark-suite bench-matrix-dry`
    - `make -C benchmark-suite bench-matrix`
+   - default run includes `ailang,node,go,rust`; add `--impls ...` via direct script call to include `c`
 11. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
 12. Stop DB:
@@ -55,4 +56,4 @@ Measure end-to-end service behavior across identical implementations:
 - All services must implement identical endpoint behavior defined in `spec/endpoints.md`.
 - Use constant-rate load for primary comparisons.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
-- `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services; `services/ailang` remains a scaffold placeholder.
+- `services/ailang`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
