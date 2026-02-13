@@ -2458,11 +2458,11 @@ impl Analyzer {
         }
 
         let schema_ty = &arg_types[1];
-        if schema_ty.is_numeric()
+        let schema_is_invalid = schema_ty.is_numeric()
             || schema_ty.is_bool()
             || schema_ty.contains_secret()
-            || schema_ty.contains_untrusted()
-        {
+            || schema_ty.contains_untrusted();
+        if schema_is_invalid {
             self.diagnostics.push(
                 Diagnostic::error(
                     "E4001",
@@ -2473,6 +2473,20 @@ impl Analyzer {
                 .with_tag("schema")
                 .with_note(format!("found `{}`", schema_ty.describe()))
                 .with_note("schema argument should be a schema symbol/descriptor"),
+            );
+        }
+
+        if !schema_is_invalid && schema_value_type(schema_ty).is_none() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.decode schema argument must be `Schema<_>`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", schema_ty.describe()))
+                .with_note("pass an explicit schema descriptor such as `Schema<T>`"),
             );
         }
 

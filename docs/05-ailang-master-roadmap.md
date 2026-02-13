@@ -382,6 +382,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - schema argument rejects numeric/boolean/untrusted/secret payloads.
   - `json.decode` schema-argument typing is now hardened:
     - call shape is enforced as `(ctx, schema, raw)`,
+    - schema argument must be `Schema<_>`,
     - schema argument rejects numeric/boolean/untrusted/secret payloads.
   - `json.decode` context/payload typing is now hardened:
     - argument 1 must be `Ctx`,
@@ -763,6 +764,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".
+- Chapter: "M7 Slice: json.decode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Context/Payload Argument-Type Hardening".
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".

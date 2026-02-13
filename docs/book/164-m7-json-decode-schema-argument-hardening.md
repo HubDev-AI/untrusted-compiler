@@ -50,8 +50,8 @@ Examples:
 ## Example usage
 
 ```ailang
-fn useJson(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
-  json.decode(1, schema, raw);
+fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
+  json.decode(ctx, schema, raw);
   0
 }
 ```
@@ -60,4 +60,5 @@ fn useJson(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
 
 - Tradeoff: early bootstrap fixtures using placeholder schema values now fail semantic checks.
 - Next:
-  - harden `json.decode` context/payload typing beyond call-shape and schema-argument validation.
+  - enforce explicit `Schema<_>` descriptors for `json.decode` schema arguments (`172-m7-json-decode-schema-descriptor-hardening.md`).
+  - harden `json.decode` context/payload typing beyond call-shape and schema-argument validation (`165-m7-json-decode-context-payload-argument-type-hardening.md`).

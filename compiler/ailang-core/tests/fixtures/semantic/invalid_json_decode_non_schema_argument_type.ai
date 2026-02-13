@@ -1,0 +1,4 @@
+fn bad(ctx: Ctx, raw: Untrusted<Bytes>) -> Int {
+  json.decode(ctx, "schema", raw);
+  0
+}

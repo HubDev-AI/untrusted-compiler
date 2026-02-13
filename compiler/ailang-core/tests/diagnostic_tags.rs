@@ -164,6 +164,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn json_decode_non_schema_argument_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(ctx: Ctx, raw: Untrusted<Bytes>) -> Int {
+  json.decode(ctx, "schema", raw);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json.decode schema argument must be `Schema<_>`")
+        .expect("expected json.decode non-schema diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn json_decode_context_argument_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {

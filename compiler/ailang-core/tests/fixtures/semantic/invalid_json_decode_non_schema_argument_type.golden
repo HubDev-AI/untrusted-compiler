@@ -1,0 +1,4 @@
+error[E4001]: json.decode schema argument must be `Schema<_>`
+  --> invalid_json_decode_non_schema_argument_type.ai:2:20
+  note: found `String`
+  note: pass an explicit schema descriptor such as `Schema<T>`

@@ -44,7 +44,7 @@ The v0 stdlib surface includes explicit JSON helper APIs alongside req/res helpe
 ### Failure modes and diagnostics
 
 - Misspelled helper names can fail semantic/C compile phases.
-- `json.encode` and `json.decode` hardening is covered in later M7 slices (`163-m7-json-encode-schema-argument-hardening.md`, `164-m7-json-decode-schema-argument-hardening.md`, `165-m7-json-decode-context-payload-argument-type-hardening.md`, `171-m7-json-encode-schema-descriptor-hardening.md`).
+- `json.encode` and `json.decode` hardening is covered in later M7 slices (`163-m7-json-encode-schema-argument-hardening.md`, `164-m7-json-decode-schema-argument-hardening.md`, `165-m7-json-decode-context-payload-argument-type-hardening.md`, `171-m7-json-encode-schema-descriptor-hardening.md`, `172-m7-json-decode-schema-descriptor-hardening.md`).
 
 ### Example usage
 
