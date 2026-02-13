@@ -104,6 +104,9 @@ Implementation progress and milestone closure are not the same. This checklist p
   - `scripts/test-replay-capture-compat.sh`
 - naming-lock CI keeps replay stub-registry contract test:
   - `scripts/test-replay-stub-registry-contract.sh`
+- naming-lock CI keeps replay CLI json contract + guard tests:
+  - `scripts/test-replay-cli-json-contract.sh`
+  - `scripts/test-replay-cli-json-contract-guard.sh`
 
 ## Example usage
 
@@ -125,6 +128,7 @@ scripts/test-check-milestone-closure.sh
 - M14 replay-capture contract test enforcement in naming-lock CI: PASS
 - M14 replay-capture compatibility test enforcement in naming-lock CI: PASS
 - M14 replay stub-registry contract test enforcement in naming-lock CI: PASS
+- M14 replay CLI json contract+guard test enforcement in naming-lock CI: PASS
 
 ## Inputs, outputs, and constraints
 

@@ -42,7 +42,7 @@ Roadmap impact:
 - M11 editor tooling scope has no remaining tasks in this roadmap revision.
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - M13 operational confidence closure gates are green.
-- M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`).
+- M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -79,6 +79,7 @@ Current strict closure result:
 | `M14-A` | PASS | Naming-lock CI enforces replay capture contract test | `.github/workflows/naming-lock.yml` |
 | `M14-B` | PASS | Naming-lock CI enforces replay capture compatibility test | `.github/workflows/naming-lock.yml` |
 | `M14-C` | PASS | Naming-lock CI enforces replay stub registry contract test | `.github/workflows/naming-lock.yml` |
+| `M14-D` | PASS | Naming-lock CI enforces replay CLI json contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -87,6 +88,7 @@ Strict closure interpretation:
 - M14 bootstrap replay-contract enforcement is active (`M14-A`).
 - M14 replay compatibility enforcement is active (`M14-B`).
 - M14 replay stub-registry bootstrap enforcement is active (`M14-C`).
+- M14 replay CLI json contract enforcement is active (`M14-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -682,6 +684,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of replay capture contract test (`M14-A`).
   - closure now verifies naming-lock CI enforcement of replay capture compatibility test (`M14-B`).
   - closure now verifies naming-lock CI enforcement of replay stub registry contract test (`M14-C`).
+  - closure now verifies naming-lock CI enforcement of replay CLI json contract + guard tests (`M14-D`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
@@ -1507,6 +1510,7 @@ M13-S1 go/no-go note:
 - Extend `sec4 replay` command with optional `--stubs` contract validation for deterministic mock-mode bootstrap.
 - Add replay effects-mode guard semantics (`--effects deny|mock|allow`) with deterministic mode-policy checks.
 - Add replay JSON output mode (`--format json`) for machine-readable CI/operator integration.
+- Add replay CLI JSON-contract guard scripts and closure gate enforcement in naming-lock CI.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1528,6 +1532,7 @@ M13-S1 go/no-go note:
 - [x] Extended `sec4 replay` with `--effects deny|mock|allow` mode checks (`mock` requires stubs, `allow` warns).
 - [x] Hardened static `sec4` CLI command contract tests to require replay effects/output field wiring.
 - [x] Extended `sec4 replay` with `--format json` machine-readable success payload output.
+- [x] Added replay CLI json contract + guard scripts and strict closure gate `M14-D`.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1541,6 +1546,7 @@ M13-S1 go/no-go note:
 - `sec4 replay --stubs <path>` fails deterministically on invalid stub-registry contract payloads.
 - `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
 - `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning fields.
+- CI fails if replay CLI json contract + guard enforcement is removed from naming-lock workflow.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1550,6 +1556,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay CLI Stub Registry Validation".
 - Chapter: "M14 Slice: Replay CLI Effects-Mode Guardrails".
 - Chapter: "M14 Slice: Replay CLI JSON Output Mode".
+- Chapter: "M14 Slice: Replay CLI JSON Contract Closure Gate".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

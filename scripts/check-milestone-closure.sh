@@ -144,6 +144,7 @@ bool_has_explain_coverage_ci_guard=0
 bool_has_replay_capture_ci_guard=0
 bool_has_replay_compat_ci_guard=0
 bool_has_replay_stub_registry_ci_guard=0
+bool_has_replay_json_cli_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -229,6 +230,12 @@ fi
 if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-replay-stub-registry-contract.sh' "${naming_lock_workflow_path}"; then
   bool_has_replay_stub_registry_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-replay-cli-json-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-replay-cli-json-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_replay_json_cli_ci_guard=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
@@ -394,6 +401,7 @@ emit_check "M13-F" "naming-lock CI enforces sec4 explain audit-coverage contract
 emit_check "M14-A" "naming-lock CI enforces replay capture contract test" "${bool_has_replay_capture_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M14-B" "naming-lock CI enforces replay capture compatibility test" "${bool_has_replay_compat_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M14-C" "naming-lock CI enforces replay stub registry contract test" "${bool_has_replay_stub_registry_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tests" "${bool_has_replay_json_cli_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

@@ -28,6 +28,12 @@ jobs:
       - name: Validate replay stub registry contract
         run: scripts/test-replay-stub-registry-contract.sh
 
+      - name: Validate replay CLI json contract
+        run: scripts/test-replay-cli-json-contract.sh
+
+      - name: Validate replay CLI json contract guard behavior
+        run: scripts/test-replay-cli-json-contract-guard.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
