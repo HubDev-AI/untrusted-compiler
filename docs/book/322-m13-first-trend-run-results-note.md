@@ -35,9 +35,11 @@ Rationale:
 ## Follow-up action
 
 When the scheduled workflow (`benchmark-trend.yml`) artifacts are available:
-1. pull `benchmark-suite/results/summaries/trend-note-entry.md` from workflow artifacts (pre-rendered by CI),
-2. evaluate against current thresholds and baseline limits,
-3. append decision (`keep`, `tighten`, or `relax`) with rubric justification.
+1. download latest trend artifact package:
+   - `benchmark-suite/scripts/fetch_trend_artifact.sh --repo HubDev-AI/untrusted-compiler`
+2. pull `benchmark-suite/results/summaries/trend-note-entry.md` from downloaded artifacts.
+3. evaluate against current thresholds and baseline limits.
+4. append decision (`keep`, `tighten`, or `relax`) with rubric justification.
 
 ## Note rendering helper
 

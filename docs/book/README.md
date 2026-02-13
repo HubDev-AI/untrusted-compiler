@@ -289,5 +289,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `322-m13-first-trend-run-results-note.md`
 - `323-m13-trend-note-entry-renderer.md`
 - `324-m13-trend-note-entry-importer.md`
+- `325-m13-trend-artifact-fetch-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.

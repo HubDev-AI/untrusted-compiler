@@ -559,6 +559,9 @@ Roadmap impact:
 - M13 trend-note importer helper is now implemented:
   - `benchmark-suite/scripts/import_trend_note_entry.sh` appends rendered entries into chapter `322` with heading-based deduplication,
   - benchmark smoke CI validates idempotent import behavior via `test_import_trend_note_entry.sh`.
+- M13 trend-artifact fetch helper is now implemented:
+  - `benchmark-suite/scripts/fetch_trend_artifact.sh` pulls latest successful benchmark-trend artifact package via `gh`,
+  - benchmark smoke CI validates dry-run fetch command generation via `test_fetch_trend_artifact.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1315,6 +1318,7 @@ M13-S1 go/no-go note:
 - [x] First trend-note chapter added with local readiness observation and follow-up actions.
 - [x] Trend-note entry renderer added for deterministic artifact-to-markdown conversion.
 - [x] Trend-note entry importer added for idempotent chapter updates.
+- [x] Trend-artifact fetch helper added for deterministic CI artifact retrieval workflow.
 - [ ] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
@@ -1335,6 +1339,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: First Trend-Run Results Note".
 - Chapter: "M13 Slice: Trend Note Entry Renderer".
 - Chapter: "M13 Slice: Trend Note Entry Importer".
+- Chapter: "M13 Slice: Trend Artifact Fetch Helper".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
