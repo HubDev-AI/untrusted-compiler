@@ -29,6 +29,7 @@ jobs:
           benchmark-suite/scripts/test_publish_report.sh
           benchmark-suite/scripts/test_check_regression_thresholds.sh
           benchmark-suite/scripts/test_render_trend_note_entry.sh
+          benchmark-suite/scripts/test_import_trend_note_entry.sh
           benchmark-suite/scripts/test_run_comparison_matrix.sh
           benchmark-suite/scripts/test_run_step_matrix.sh
           benchmark-suite/scripts/test_run_full_benchmark_suite.sh

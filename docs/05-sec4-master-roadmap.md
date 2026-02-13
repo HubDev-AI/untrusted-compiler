@@ -556,6 +556,9 @@ Roadmap impact:
   - `benchmark-suite/scripts/render_trend_note_entry.sh` renders deterministic markdown entries from `compare-matrix.json`,
   - benchmark smoke CI validates renderer behavior via `test_render_trend_note_entry.sh`,
   - scheduled trend workflow now emits `trend-note-entry.md` artifact for direct chapter updates.
+- M13 trend-note importer helper is now implemented:
+  - `benchmark-suite/scripts/import_trend_note_entry.sh` appends rendered entries into chapter `322` with heading-based deduplication,
+  - benchmark smoke CI validates idempotent import behavior via `test_import_trend_note_entry.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1311,6 +1314,7 @@ M13-S1 go/no-go note:
 - [x] Release publish handoff contract notes documented.
 - [x] First trend-note chapter added with local readiness observation and follow-up actions.
 - [x] Trend-note entry renderer added for deterministic artifact-to-markdown conversion.
+- [x] Trend-note entry importer added for idempotent chapter updates.
 - [ ] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
@@ -1330,6 +1334,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Decode Threshold Tuning Rubric".
 - Chapter: "M13 Slice: First Trend-Run Results Note".
 - Chapter: "M13 Slice: Trend Note Entry Renderer".
+- Chapter: "M13 Slice: Trend Note Entry Importer".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1421,7 +1426,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using CI-generated `trend-note-entry.md` artifact.
+1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using CI-generated `trend-note-entry.md` artifact and importer script.
 
 ---
 

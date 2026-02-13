@@ -49,3 +49,10 @@ benchmark-suite/scripts/render_trend_note_entry.sh \
   --date 2026-02-13 \
   --baseline-dir benchmark-suite/baselines
 ```
+
+Then import the generated entry into this chapter without duplicate insertion:
+
+```bash
+benchmark-suite/scripts/import_trend_note_entry.sh \
+  --entry benchmark-suite/results/summaries/trend-note-entry.md
+```
