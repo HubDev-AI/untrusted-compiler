@@ -313,6 +313,120 @@ fn sec_audit_history_window_requires_history_dir() {
 }
 
 #[test]
+fn sec_audit_write_history_summary_requires_history_window() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let summary_path = temp_dir("ailang-history-summary-missing-window").join("summary.json");
+    let summary = summary_path
+        .to_str()
+        .expect("summary path should be valid utf-8");
+
+    let output = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--write-history-summary",
+        summary,
+    ]);
+    assert!(
+        !output.status.success(),
+        "write-history-summary without history-window should fail"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("--write-history-summary requires --history-window"),
+        "expected explicit usage error for missing history-window"
+    );
+}
+
+#[test]
+fn sec_audit_history_window_summary_can_be_written_to_file() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let history_dir = temp_dir("ailang-audit-history-window-write");
+    let history = history_dir
+        .to_str()
+        .expect("history path should be valid utf-8");
+    let summary_path = history_dir.join("summary").join("window.json");
+    let summary = summary_path
+        .to_str()
+        .expect("summary path should be valid utf-8");
+
+    let first = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+    ]);
+    assert!(first.status.success(), "first history run should succeed");
+
+    let second = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--format",
+        "json",
+        "--history-dir",
+        history,
+        "--history-window",
+        "2",
+        "--write-history-summary",
+        summary,
+    ]);
+    assert!(second.status.success(), "second history run should succeed");
+    assert!(
+        summary_path.exists(),
+        "history summary file should be written when requested"
+    );
+
+    let summary_raw =
+        fs::read_to_string(&summary_path).expect("history summary file should be readable");
+    let summary_json: Value =
+        serde_json::from_str(&summary_raw).expect("history summary should be parseable json");
+    assert_eq!(
+        summary_json
+            .get("window")
+            .and_then(Value::as_i64)
+            .expect("window should be present"),
+        2
+    );
+    assert_eq!(
+        summary_json
+            .get("reports")
+            .and_then(Value::as_i64)
+            .expect("reports should be present"),
+        2
+    );
+    assert!(
+        summary_json.get("severityRollup").is_some(),
+        "history summary should include severity rollups"
+    );
+    assert!(
+        summary_json.get("severityLatestDelta").is_some(),
+        "history summary should include severity latest delta"
+    );
+
+    let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
+    assert!(
+        second_stderr.contains("history summary:"),
+        "history-summary write should report output path"
+    );
+
+    fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
+}
+
+#[test]
 fn build_emit_mir_prints_textual_mir() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

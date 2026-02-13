@@ -67,6 +67,8 @@ enum SecCommands {
         #[arg(long)]
         history_window: Option<usize>,
         #[arg(long)]
+        write_history_summary: Option<PathBuf>,
+        #[arg(long)]
         write_report: Option<PathBuf>,
         #[arg(long)]
         fail_on: Option<String>,
@@ -119,6 +121,7 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             baseline,
             history_dir,
             history_window,
+            write_history_summary,
             write_report,
             fail_on,
         } => cmd_sec_audit(
@@ -127,6 +130,7 @@ fn cmd_sec(command: SecCommands) -> Result<(), i32> {
             baseline.as_deref(),
             history_dir.as_deref(),
             history_window,
+            write_history_summary.as_deref(),
             write_report.as_deref(),
             fail_on.as_deref(),
         ),
@@ -139,11 +143,16 @@ fn cmd_sec_audit(
     baseline_path: Option<&Path>,
     history_dir_path: Option<&Path>,
     history_window: Option<usize>,
+    write_history_summary_path: Option<&Path>,
     write_report_path: Option<&Path>,
     fail_on: Option<&str>,
 ) -> Result<(), i32> {
     if history_window.is_some() && history_dir_path.is_none() {
         eprintln!("--history-window requires --history-dir");
+        return Err(2);
+    }
+    if write_history_summary_path.is_some() && history_window.is_none() {
+        eprintln!("--write-history-summary requires --history-window");
         return Err(2);
     }
 
@@ -236,6 +245,17 @@ fn cmd_sec_audit(
                 );
                 if let Some(summary) = history_window_summary.as_ref() {
                     print_history_window_summary(format, summary);
+                }
+                if let Some(write_history_summary_path) = write_history_summary_path {
+                    let Some(summary) = history_window_summary.as_ref() else {
+                        eprintln!("history-window summary not available to write");
+                        return Err(2);
+                    };
+                    write_history_window_summary(write_history_summary_path, summary)?;
+                    print_aux_line(
+                        format,
+                        &format!("history summary: {}", write_history_summary_path.display()),
+                    );
                 }
 
                 if let Some(threshold) = fail_on {
@@ -520,6 +540,46 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
             );
         }
     }
+}
+
+fn write_history_window_summary(path: &Path, summary: &HistoryWindowSummary) -> Result<(), i32> {
+    if let Some(parent) = path.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            eprintln!(
+                "could not create history-summary directory `{}`: {err}",
+                parent.display()
+            );
+            return Err(2);
+        }
+    }
+
+    let payload = serde_json::json!({
+        "window": summary.window,
+        "reports": summary.reports,
+        "oldestRiskScore": summary.oldest_risk_score,
+        "latestRiskScore": summary.latest_risk_score,
+        "minRiskScore": summary.min_risk_score,
+        "maxRiskScore": summary.max_risk_score,
+        "riskScoreDelta": summary.risk_score_delta,
+        "averageRiskScore": summary.average_risk_score,
+        "highestSeveritySeen": summary.highest_severity_seen,
+        "severityRollup": summary.severity_rollup,
+        "severityLatestDelta": summary.severity_latest_delta,
+    });
+    let serialized = match serde_json::to_string_pretty(&payload) {
+        Ok(json) => json,
+        Err(err) => {
+            eprintln!("could not serialize history summary: {err}");
+            return Err(2);
+        }
+    };
+
+    if let Err(err) = fs::write(path, serialized) {
+        eprintln!("could not write history summary `{}`: {err}", path.display());
+        return Err(2);
+    }
+
+    Ok(())
 }
 
 fn write_audit_report(path: &Path, report: &AuditReport) -> Result<(), i32> {

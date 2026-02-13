@@ -161,5 +161,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `194-m7-security-map-direct-ctx-caps-member-call-resolution.md`
 - `195-m8-sec-audit-history-window-trend-summary.md`
 - `196-m8-sec-audit-history-window-severity-rollups.md`
+- `197-m8-sec-audit-history-summary-export.md`
 
 As milestones progress, chapters will be added and linked from this index.
