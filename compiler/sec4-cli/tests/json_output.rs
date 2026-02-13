@@ -61,6 +61,18 @@ fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
     files
 }
 
+fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"gate-contract\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), policy_source).expect("policy should be written");
+    fs::write(project_dir.join("src/main.ut"), "fn main() -> Int {\n  0\n}\n")
+        .expect("source should be written");
+}
+
 #[test]
 fn check_diagnostics_json_success_writes_only_json_on_stdout() {
     let hello_path = workspace_root().join("examples/hello");
@@ -479,6 +491,91 @@ fn sec_audit_json_keeps_stdout_parseable_json() {
         stderr.contains("security map:"),
         "security map location should be emitted via stderr"
     );
+}
+
+#[test]
+fn sec_gate_defaults_to_risk_high_threshold() {
+    let project_dir = temp_dir("sec4-gate-default-threshold");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = false
+report_only = false
+"#,
+    );
+
+    let path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["gate", "--path", &path]);
+    assert!(
+        !output.status.success(),
+        "gate should fail by default when HIGH findings are present"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("security audit failed: findings at or above threshold HIGH"),
+        "gate should report default HIGH threshold failure:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn sec_gate_json_mode_allows_high_when_threshold_is_critical() {
+    let project_dir = temp_dir("sec4-gate-custom-threshold");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = false
+report_only = false
+"#,
+    );
+
+    let path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "gate",
+        "--path",
+        &path,
+        "--format",
+        "json",
+        "--fail-on",
+        "risk>=CRITICAL",
+    ]);
+    assert!(
+        output.status.success(),
+        "gate should pass when only HIGH findings are present and threshold is CRITICAL"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value =
+        serde_json::from_str(&stdout).expect("gate --format json should emit parseable JSON");
+    let has_csp_disabled = parsed
+        .get("findings")
+        .and_then(Value::as_array)
+        .map(|findings| {
+            findings
+                .iter()
+                .any(|finding| finding.get("id").and_then(Value::as_str) == Some("CSP_DISABLED"))
+        })
+        .unwrap_or(false);
+    assert!(
+        has_csp_disabled,
+        "expected CSP_DISABLED finding in gate JSON output"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("security map:"),
+        "gate json mode should keep auxiliary lines on stderr"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
 
 #[test]
