@@ -607,7 +607,8 @@ Historical implementation bullets below are retained as build history; strict ga
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix leader quality posture (`p99` validity + `constantRate`),
-  - supports advisory mode and strict mode (`--fail-on-warning`) for future promotion-gate tightening.
+  - supports advisory mode and strict mode (`--fail-on-warning`) for promotion-gate tightening,
+  - scheduled benchmark trend workflow now runs strict quality mode before regression-threshold checks.
 
 ## 0. Product Direction (Locked Constraints)
 

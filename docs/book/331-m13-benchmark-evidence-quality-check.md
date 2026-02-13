@@ -8,6 +8,7 @@ Added:
 - `scripts/check-benchmark-evidence-quality.sh`
 - `scripts/test-check-benchmark-evidence-quality.sh`
 - `.github/workflows/benchmark-smoke.yml`
+- `.github/workflows/benchmark-trend.yml` quality-gate step (`--fail-on-warning`)
 
 ## Why it exists
 
@@ -56,6 +57,6 @@ scripts/check-benchmark-evidence-quality.sh --fail-on-warning
 ## Tradeoffs and next steps
 
 - Tradeoff:
-  - advisory mode avoids breaking local fallback workflows but allows WARN quality posture.
+  - advisory mode remains useful for local fallback workflows, but scheduled trend CI now runs strict mode and fails on WARN quality posture.
 - Next:
-  - decide whether promotion gates should require `--fail-on-warning` in production-grade benchmark evidence workflows.
+  - evaluate promoting strict quality mode into additional release/promotion workflows once cross-impl live evidence is consistently constant-rate.
