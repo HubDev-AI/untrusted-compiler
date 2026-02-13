@@ -768,7 +768,8 @@ fn bad() -> Int {
 fn err_with_limit_argument_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() -> Int {
-  err.withLimit(1, 2, 3, 4);
+  let base = err.validation("VAL.BAD", "bad");
+  err.withLimit(base, 2, 3, 4);
   1
 }
 "#;
@@ -779,6 +780,24 @@ fn bad() -> Int {
         .iter()
         .find(|diag| diag.message == "err.withLimit name argument must be `String`")
         .expect("expected err.withLimit name argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn err_with_limit_error_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  err.withLimit(1, "limit", 3, 4);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withLimit error argument must be `StdError`")
+        .expect("expected err.withLimit error argument diagnostic");
     assert!(diag.tags.iter().any(|tag| tag == "security"));
 }
 

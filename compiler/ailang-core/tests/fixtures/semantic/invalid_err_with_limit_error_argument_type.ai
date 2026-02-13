@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  err.withLimit(1, "limit", 10, 11);
+  0
+}

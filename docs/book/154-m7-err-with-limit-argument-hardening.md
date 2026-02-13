@@ -49,9 +49,8 @@ Example:
 ## Example usage
 
 ```ailang
-fn attach(base: Int) -> Int {
-  err.withLimit(base, "limit", 100, 120);
-  0
+fn attach(base: StdError) -> StdError {
+  err.withLimit(base, "limit", 100, 120)
 }
 ```
 
@@ -59,4 +58,4 @@ fn attach(base: Int) -> Int {
 
 - Tradeoff: permissive placeholder arguments in early bridge fixtures now fail semantic checks.
 - Next:
-  - extend strict typing to `err.withDependency` and remaining enrichers for full standard-error helper parity.
+  - strict `err.withLimit` error-argument typing is covered in a follow-up slice (`168-m7-err-with-limit-error-argument-hardening.md`).

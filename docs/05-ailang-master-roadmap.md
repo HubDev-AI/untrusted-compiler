@@ -345,6 +345,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - invalid path payloads emit tagged `E4001` security diagnostics.
   - `err.withLimit` argument typing is now hardened:
     - call shape is enforced as `(error, name, max, actual)`,
+    - first argument must be `StdError`,
     - `name` must be `String` and `max`/`actual` must be numeric.
   - `err.withDependency` argument typing is now hardened:
     - call shape is enforced as `(error, name, operation, retryable)`,
@@ -766,6 +767,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: err.withPath Path-Argument Hardening".
 - Chapter: "M7 Slice: err.withPath Error-Argument Hardening".
 - Chapter: "M7 Slice: err.withLimit Argument Hardening".
+- Chapter: "M7 Slice: err.withLimit Error-Argument Hardening".
 - Chapter: "M7 Slice: err.withDependency Argument Hardening".
 - Chapter: "M7 Slice: err.withCause Argument Hardening".
 - Chapter: "M7 Slice: err.internal Message-Argument Hardening".
