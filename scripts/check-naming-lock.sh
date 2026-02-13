@@ -222,6 +222,7 @@ check_benchmark_impl_contract() {
 check_benchmark_artifact_contract() {
   local failed=0
   local schema_root="benchmark-suite/spec/schemas"
+  local contract_validator="benchmark-suite/scripts/validate_contract_schema.sh"
   local report_schema="${schema_root}/report.schema.json"
   local summary_schema="${schema_root}/summary.schema.json"
   local step_summary_schema="${schema_root}/step-summary.schema.json"
@@ -241,6 +242,14 @@ check_benchmark_artifact_contract() {
     "benchmark-report\\.md"
     "\\$\\{impl\\}-service\\.log"
   )
+
+  if [[ ! -x "${contract_validator}" ]]; then
+    echo "error: missing executable benchmark contract validator: ${contract_validator}" >&2
+    failed=1
+  elif ! "${contract_validator}" >/dev/null; then
+    echo "error: benchmark contract validator failed: ${contract_validator}" >&2
+    failed=1
+  fi
 
   local pattern
   for pattern in "${benchmark_script_patterns[@]}"; do
