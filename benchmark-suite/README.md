@@ -23,15 +23,19 @@ Measure end-to-end service behavior across identical implementations:
 ## Initial workflow
 
 1. Start DB:
-   - `make db-up`
+   - `make -C benchmark-suite db-up`
 2. Apply schema:
-   - `make db-schema`
+   - `make -C benchmark-suite db-schema`
 3. Run benchmark profile (once service is implemented):
-   - `make bench-ping IMPL=ailang`
-   - `make bench-decode IMPL=ailang`
-   - `make bench-users IMPL=ailang`
-4. Stop DB:
-   - `make db-down`
+   - `make -C benchmark-suite bench-ping IMPL=ailang`
+   - `make -C benchmark-suite bench-decode IMPL=ailang`
+   - `make -C benchmark-suite bench-users IMPL=ailang`
+4. Convert raw wrk2 output to summary JSON:
+   - `make -C benchmark-suite summarize IMPL=ailang`
+5. Validate benchmark helper scripts:
+   - `make -C benchmark-suite test-scripts`
+6. Stop DB:
+   - `make -C benchmark-suite db-down`
 
 ## Notes
 

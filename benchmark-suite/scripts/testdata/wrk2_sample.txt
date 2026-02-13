@@ -1,0 +1,15 @@
+Running 30s test @ http://127.0.0.1:8080/ping
+  4 threads and 64 connections
+  Thread calibration: mean lat.: 1.231ms, rate sampling interval: 10ms
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.23ms    1.10ms  15.67ms   92.10%
+    Req/Sec     2.50k   120.00     2.80k    85.20%
+  Latency Distribution
+     50.000%    1.10ms
+     75.000%    1.40ms
+     90.000%    2.10ms
+     95.000%    3.20ms
+     99.000%    7.80ms
+  299812 requests in 30.00s, 35.80MB read
+Requests/sec:   9993.73
+Transfer/sec:      1.19MB

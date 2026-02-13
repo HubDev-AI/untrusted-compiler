@@ -179,5 +179,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `212-road-to-v0.2.md`
 - `213-m9-release-audit-baselines.md`
 - `214-m10-benchmark-harness-scaffold.md`
+- `215-m10-wrk2-summary-pipeline.md`
 
 As milestones progress, chapters will be added and linked from this index.
