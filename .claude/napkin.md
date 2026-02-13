@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-13 | self | Rewriting `scripts/test-check-milestone-closure.sh` with `awk` dropped the executable bit, causing a permission-denied test failure. | After file rewrites through temp files/move, reapply executable permissions (`chmod +x`) before rerunning script tests. |
 | 2026-02-13 | self | Added a new closure gate (`M12-A`) in `check-milestone-closure.sh` without updating the roadmap strict-closure table immediately, breaking the roadmap alignment test. | Whenever adding/removing closure gates, update `docs/05-sec4-master-roadmap.md` closure table in the same patch and rerun `scripts/test-roadmap-closure-gate-alignment.sh` before proceeding. |
 | 2026-02-12 | self | Added strict DB query type checks and initially broke capability-mismatch fixtures because they passed raw string SQL literals. | When tightening sink payload types, immediately align existing capability/alias fixtures to pass typed payload symbols so each fixture still isolates a single failure mode. |
 | 2026-02-12 | self | Estimated forbidden-effect diagnostic columns manually in a new semantic golden and missed by 2 chars after signature edits. | After adding security fixtures with policy diagnostics, run the golden test once and copy exact spans from failure output before proceeding. |

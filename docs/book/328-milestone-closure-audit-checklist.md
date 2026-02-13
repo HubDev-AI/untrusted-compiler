@@ -94,6 +94,8 @@ Implementation progress and milestone closure are not the same. This checklist p
 - naming-lock CI keeps benchmark-trend workflow contract guard:
   - `scripts/test-benchmark-trend-workflow-contract.sh`
   - `scripts/test-benchmark-trend-workflow-contract-guard.sh`
+- naming-lock CI keeps sec4 explain audit-coverage checker:
+  - `scripts/check-sec4-explain-audit-coverage.sh`
 
 ## Example usage
 
@@ -111,6 +113,7 @@ scripts/test-check-milestone-closure.sh
 - M11 Zed grammar pin CI contract+guard enforcement: PASS
 - M12 sec4 CLI command CI contract+guard enforcement: PASS
 - M13 live trend-note evidence, trend-workflow guards, and artifact-upload contract: PASS
+- M13 sec4 explain audit-coverage checker enforcement in naming-lock CI: PASS
 
 ## Inputs, outputs, and constraints
 
