@@ -1,0 +1,5 @@
+fn bad() -> Int {
+  let cause = err.internal("boom");
+  err.withCause(1, cause);
+  1
+}

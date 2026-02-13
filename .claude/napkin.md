@@ -165,3 +165,4 @@
 - Added `json.encode` schema-argument hardening so encoding requires `(schema, value)` with schema-shape validation (and typed value checks when schema is `Schema<T>`), with schema-tagged diagnostics and aligned json-helper fixtures.
 - Added `json.decode` schema-argument hardening so decoding requires `(ctx, schema, raw)` and rejects numeric/boolean/untrusted/secret schema placeholders, with schema-tagged diagnostics and aligned json-helper fixtures.
 - Added `json.decode` context/payload argument-type hardening so decode calls require `Ctx` in slot 1 and `Untrusted<Bytes>` in slot 3, with schema-tagged diagnostics and aligned json-helper integration fixtures.
+- Added `err.withCause` argument hardening so cause chaining enforces `(error, cause)` shape and requires `StdError` for both arguments, with security-tagged diagnostics and dedicated semantic/tag fixtures.

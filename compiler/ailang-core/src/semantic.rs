@@ -3939,6 +3939,48 @@ impl Analyzer {
             return;
         }
 
+        if is_err_with_cause_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withCause expects `(error, cause)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.withCause(errorValue, causeError)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("StdError") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withCause error argument must be `StdError`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use an error value created via `err.*` constructors"),
+                );
+            }
+
+            if !arg_types[1].is_named("StdError") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withCause cause argument must be `StdError`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass a nested `StdError` cause value"),
+                );
+            }
+            return;
+        }
+
         if !is_err_with_detail_call(callee_name) {
             return;
         }
@@ -5154,6 +5196,10 @@ fn is_err_with_limit_call(name: &str) -> bool {
 
 fn is_err_with_dependency_call(name: &str) -> bool {
     matches!(name, "err_with_dependency" | "err.withDependency")
+}
+
+fn is_err_with_cause_call(name: &str) -> bool {
+    matches!(name, "err_with_cause" | "err.withCause")
 }
 
 fn is_err_internal_call(name: &str) -> bool {

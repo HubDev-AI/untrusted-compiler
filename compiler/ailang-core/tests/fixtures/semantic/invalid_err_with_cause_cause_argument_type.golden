@@ -1,0 +1,4 @@
+error[E4001]: err.withCause cause argument must be `StdError`
+  --> invalid_err_with_cause_cause_argument_type.ai:3:23
+  note: found `Int`
+  note: pass a nested `StdError` cause value

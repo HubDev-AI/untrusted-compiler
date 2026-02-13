@@ -1,0 +1,5 @@
+fn bad() -> Int {
+  let base = err.validation("VAL.BAD", "bad");
+  err.withCause(base, 1);
+  1
+}

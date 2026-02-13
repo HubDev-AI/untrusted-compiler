@@ -56,6 +56,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 
 - Misspelled helper names can fail semantic or C compilation.
 - Strict value-safety hardening for `err.withDetail` is covered in a later M7 slice (`152-m7-err-with-detail-value-safety-hardening.md`).
+- `err.withCause` argument-shape/type hardening is covered in a later M7 slice (`166-m7-err-with-cause-argument-hardening.md`).
 
 ### Example usage
 

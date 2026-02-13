@@ -782,6 +782,44 @@ fn bad() -> Int {
 }
 
 #[test]
+fn err_with_cause_error_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  let cause = err.internal("boom");
+  err.withCause(1, cause);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withCause error argument must be `StdError`")
+        .expect("expected err.withCause error argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn err_with_cause_cause_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  let base = err.validation("VAL.BAD", "bad");
+  err.withCause(base, 1);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withCause cause argument must be `StdError`")
+        .expect("expected err.withCause cause argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn err_internal_argument_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() -> Int {

@@ -348,6 +348,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `err.withDependency` argument typing is now hardened:
     - call shape is enforced as `(error, name, operation, retryable)`,
     - dependency/operation are string-typed and retryable is boolean.
+  - `err.withCause` argument typing is now hardened:
+    - call shape is enforced as `(error, cause)`,
+    - both arguments must be `StdError`.
   - `err.internal` message typing is now hardened:
     - call shape is enforced as a single message argument,
     - message argument must be `String`.
@@ -762,6 +765,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: err.withPath Path-Argument Hardening".
 - Chapter: "M7 Slice: err.withLimit Argument Hardening".
 - Chapter: "M7 Slice: err.withDependency Argument Hardening".
+- Chapter: "M7 Slice: err.withCause Argument Hardening".
 - Chapter: "M7 Slice: err.internal Message-Argument Hardening".
 - Chapter: "M7 Slice: err.validation Constructor-Argument Hardening".
 - Chapter: "M7 Slice: err.auth Constructor-Argument Hardening".
