@@ -548,6 +548,8 @@ Roadmap impact:
 - M13 publish handoff contract notes are now documented:
   - `docs/book/313-m13-release-promotion-playbook.md` now defines required handoff files/fields for downstream tooling,
   - `docs/book/320-m13-release-publish-handoff-notes.md` captures the explicit external publish contract checklist.
+- M13 decode threshold tuning rubric is now documented:
+  - `docs/book/321-m13-decode-threshold-tuning-rubric.md` defines deterministic keep/tighten/relax rules and bounded update limits.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1302,7 +1304,7 @@ M13-S1 go/no-go note:
 - [x] Candidate scope locked and documented.
 - [x] Release publish handoff contract notes documented.
 - [ ] First trend-run results note captured with observations and follow-up actions.
-- [ ] Decode threshold tuning rubric documented with deterministic decision rules.
+- [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
@@ -1317,6 +1319,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Benchmark Regression Threshold Guard".
 - Chapter: "M13-S2 Candidate Scope and Delivery Contract".
 - Chapter: "M13 Slice: Release Publish Handoff Notes".
+- Chapter: "M13 Slice: Decode Threshold Tuning Rubric".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1408,8 +1411,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Review and tune decode endpoint thresholds after first scheduled trend runs.
-2. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+1. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
 
 ---
 

@@ -285,5 +285,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `318-m9-sec4-explain-low-frequency-audit-finding-coverage.md`
 - `319-m13-s2-candidate-scope-and-delivery-contract.md`
 - `320-m13-release-publish-handoff-notes.md`
+- `321-m13-decode-threshold-tuning-rubric.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -27,7 +27,7 @@ Dry-run benchmark CI catches orchestration drift, but M13 requires lightweight l
 
 Workflow behavior:
 1. installs Node + `wrk2`,
-2. runs `run_full_benchmark_suite.sh --impls node --endpoints ping`,
+2. runs `run_full_benchmark_suite.sh --impls node --endpoints ping,decode`,
 3. runs baseline-aware threshold checks for `ping` and `decode`,
 4. uploads resulting benchmark artifacts with retention policy (30 days).
 
@@ -81,4 +81,5 @@ benchmark-suite/scripts/check_regression_thresholds.sh \
 - Tradeoff:
   - one impl/endpoint scope is low cost but limited signal.
 - Next:
+  - apply the deterministic decode-threshold tuning rubric before changing workflow thresholds (`docs/book/321-m13-decode-threshold-tuning-rubric.md`),
   - expand scope incrementally (additional endpoint/impl) once trend stability is confirmed.
