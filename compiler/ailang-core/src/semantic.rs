@@ -1760,6 +1760,7 @@ impl Analyzer {
             }
         }
 
+        self.enforce_json_decode_helper_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_json_encode_helper_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
@@ -2405,6 +2406,51 @@ impl Analyzer {
                     .with_note("adjust encoded value type or use a matching schema"),
                 );
             }
+        }
+    }
+
+    fn enforce_json_decode_helper_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_json_decode_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 3 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.decode expects `(ctx, schema, raw)` arguments",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note("use `json.decode(ctx, schema, raw)`"),
+            );
+            return;
+        }
+
+        let schema_ty = &arg_types[1];
+        if schema_ty.is_numeric()
+            || schema_ty.is_bool()
+            || schema_ty.contains_secret()
+            || schema_ty.contains_untrusted()
+        {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.decode schema argument is invalid",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", schema_ty.describe()))
+                .with_note("schema argument should be a schema symbol/descriptor"),
+            );
         }
     }
 
@@ -4937,6 +4983,10 @@ fn is_req_json_gate(name: &str) -> bool {
 
 fn is_json_encode_call(name: &str) -> bool {
     matches!(name, "json_encode" | "json.encode")
+}
+
+fn is_json_decode_call(name: &str) -> bool {
+    matches!(name, "json_decode" | "json.decode")
 }
 
 fn is_http_route_registration(name: &str) -> bool {

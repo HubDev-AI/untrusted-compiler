@@ -354,8 +354,8 @@ fn main() effects { net } -> Int {
 #[test]
 fn c_backend_rewrites_json_helper_intrinsics_to_runtime_symbols() {
     let source = r#"
-fn useJson(schema: Schema<Int>) -> Int {
-  json.decode(1, 2, 3);
+fn useJson(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
+  json.decode(1, schema, raw);
   json.encode(schema, 3);
   0
 }
@@ -369,7 +369,7 @@ fn main() -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("(void)(ailang_rt_json_decode(1, 2, 3));"));
+    assert!(c.contains("(void)(ailang_rt_json_decode(1, schema, raw));"));
     assert!(c.contains("(void)(ailang_rt_json_encode(schema, 3));"));
 }
 

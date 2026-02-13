@@ -372,6 +372,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `json.encode` schema-argument typing is now hardened:
     - call shape is enforced as `(schema, value)`,
     - schema argument rejects numeric/boolean/untrusted/secret payloads.
+  - `json.decode` schema-argument typing is now hardened:
+    - call shape is enforced as `(ctx, schema, raw)`,
+    - schema argument rejects numeric/boolean/untrusted/secret payloads.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -747,6 +750,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: CSP Builder Signature Hardening".
 - Chapter: "M7 Slice: Log Builder Intrinsic Bootstrap".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
+- Chapter: "M7 Slice: json.decode Schema-Argument Hardening".
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
