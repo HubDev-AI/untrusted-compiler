@@ -93,6 +93,9 @@ fn handle_message<W: Write>(
                             },
                             "renameProvider": {
                                 "prepareProvider": true
+                            },
+                            "codeActionProvider": {
+                                "codeActionKinds": ["quickfix"]
                             }
                         },
                         "serverInfo": {
@@ -274,6 +277,21 @@ fn handle_message<W: Write>(
                 }
             }
         }
+        Some("textDocument/codeAction") => {
+            if let Some(id) = id {
+                if let Some(diagnostics) = parse_code_action_request(message) {
+                    let actions = code_actions_from_diagnostics(&diagnostics);
+                    send_response(writer, id, Value::Array(actions))?;
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid codeAction request payload".to_string(),
+                    )?;
+                }
+            }
+        }
         Some(other) => {
             if let Some(id) = id {
                 send_error_response(
@@ -358,6 +376,16 @@ fn parse_rename_request(message: &Value) -> Option<(String, usize, usize, String
         .and_then(Value::as_str)?
         .to_string();
     Some((uri, line, character, new_name))
+}
+
+fn parse_code_action_request(message: &Value) -> Option<Vec<Value>> {
+    let diagnostics = message
+        .get("params")
+        .and_then(|params| params.get("context"))
+        .and_then(|context| context.get("diagnostics"))
+        .and_then(Value::as_array)?
+        .clone();
+    Some(diagnostics)
 }
 
 fn definition_at_position(
@@ -626,6 +654,39 @@ fn is_valid_identifier_name(name: &str) -> bool {
         return false;
     }
     chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn code_actions_from_diagnostics(diagnostics: &[Value]) -> Vec<Value> {
+    let mut actions = Vec::new();
+    let mut seen_titles = HashSet::new();
+
+    for diagnostic in diagnostics {
+        let Some(code) = diagnostic.get("code").and_then(Value::as_str) else {
+            continue;
+        };
+
+        let title = match code {
+            "E1002" => Some("Insert validate/sanitize gate for untrusted value"),
+            "E1003" | "E1004" | "E1005" => Some("Redact secret before sink usage"),
+            "E2001" => Some("Declare missing effect in function signature"),
+            _ => None,
+        };
+
+        let Some(title) = title else {
+            continue;
+        };
+        if !seen_titles.insert(title.to_string()) {
+            continue;
+        }
+
+        actions.push(json!({
+            "title": title,
+            "kind": "quickfix",
+            "diagnostics": [diagnostic.clone()],
+        }));
+    }
+
+    actions
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -1247,6 +1308,17 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true),
             "initialize response should advertise rename provider",
+        );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("codeActionProvider"))
+                .and_then(|provider| provider.get("codeActionKinds"))
+                .and_then(Value::as_array)
+                .map(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("quickfix"))),
+            Some(true),
+            "initialize response should advertise quickfix code actions",
         );
         assert_eq!(messages[1].get("id"), Some(&json!(2)));
     }
@@ -1945,6 +2017,70 @@ mod tests {
         assert!(
             edits.iter().all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
             "all rename edits should apply the requested new name",
+        );
+    }
+
+    #[test]
+    fn code_action_returns_security_quickfix_for_untrusted_sink_diagnostic() {
+        let uri = "file:///tmp/lsp_code_action.ai";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 5}
+                },
+                "context": {
+                    "diagnostics": [
+                        {
+                            "code": "E1002",
+                            "message": "Untrusted data cannot flow into sink SqlQuery.",
+                            "range": {
+                                "start": {"line": 0, "character": 0},
+                                "end": {"line": 0, "character": 5}
+                            }
+                        }
+                    ]
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let code_action_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(11)))
+            .expect("codeAction response should exist");
+        let actions = code_action_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("codeAction result should be an array");
+        assert!(
+            actions.iter().any(|action| {
+                action
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(|title| title.contains("validate/sanitize"))
+                    .unwrap_or(false)
+            }),
+            "code actions should include a validate/sanitize quickfix for E1002",
         );
     }
 

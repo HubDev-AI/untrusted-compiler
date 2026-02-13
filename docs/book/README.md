@@ -221,5 +221,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `254-m11-implementation-provider.md`
 - `255-m11-completion-provider.md`
 - `256-m11-prepare-rename-and-rename.md`
+- `257-m11-code-action-quickfix-baseline.md`
 
 As milestones progress, chapters will be added and linked from this index.
