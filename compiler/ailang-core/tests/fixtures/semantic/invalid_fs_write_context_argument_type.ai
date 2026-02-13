@@ -1,0 +1,4 @@
+fn bad(fs: FsCap, path: PathSafe) effects { fs.write } -> Int {
+  fs.write(1, fs, path, 1);
+  0
+}

@@ -1768,7 +1768,7 @@ impl Analyzer {
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
-        self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args);
+        self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args);
@@ -2779,7 +2779,13 @@ impl Analyzer {
         }
     }
 
-    fn enforce_fs_sink_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_fs_sink_call_shapes(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         let (is_target, valid_shape, note) = if is_fs_read_call(callee_name) {
             (
                 true,
@@ -2796,16 +2802,42 @@ impl Analyzer {
             (false, true, "")
         };
 
-        if !is_target || valid_shape {
+        if !is_target {
             return;
         }
 
-        self.diagnostics.push(
-            Diagnostic::error("E4001", "fs sink call has invalid argument shape", span)
+        if !valid_shape {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "fs sink call has invalid argument shape", span)
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(note),
+            );
+            return;
+        }
+
+        let needs_context_check = (is_fs_read_call(callee_name) && args.len() == 3)
+            || (is_fs_write_call(callee_name) && args.len() == 4);
+        if needs_context_check && !arg_types[0].is_named("Ctx") {
+            let usage = if is_fs_read_call(callee_name) {
+                "fs.read(ctx, fsCap, path)"
+            } else {
+                "fs.write(ctx, fsCap, path, value)"
+            };
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "fs sink context argument must be `Ctx`",
+                    args[0].span.clone(),
+                )
                 .with_tag("security")
                 .with_tag("sink")
-            .with_note(note),
-        );
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note(format!(
+                    "use `{usage}` for context-first `{callee_name}` calls"
+                )),
+            );
+        }
     }
 
     fn enforce_secret_source_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {

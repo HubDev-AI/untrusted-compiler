@@ -311,6 +311,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `fs.read` requires `(fsCap, path)` or `(ctx, fsCap, path)`,
     - `fs.write` requires `(fsCap, path, value)` or `(ctx, fsCap, path, value)`,
     - malformed shapes emit tagged `E4001` sink diagnostics.
+  - FS sink context-first typing is now hardened:
+    - for context-first FS sink forms, argument 1 must be `Ctx`,
+    - type violations emit tagged `E4001` sink diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -702,6 +705,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Net Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: Net Sink Context-Argument Type Hardening".
 - Chapter: "M7 Slice: FS Sink Call-Shape Hardening".
+- Chapter: "M7 Slice: FS Sink Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Source Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Redact Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Reveal Call-Shape Hardening".

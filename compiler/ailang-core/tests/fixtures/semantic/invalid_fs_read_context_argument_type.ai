@@ -1,0 +1,4 @@
+fn bad(fs: FsCap, path: PathSafe) effects { fs.read } -> Int {
+  fs.read(1, fs, path);
+  0
+}
