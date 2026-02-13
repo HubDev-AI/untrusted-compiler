@@ -640,8 +640,15 @@ fn rename_at_position(
         }));
     };
     let target_name = hit.name;
-    let declaration =
-        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
+    let Some(declaration) =
+        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline)
+    else {
+        return Ok(json!({
+            "changes": {
+                uri: []
+            }
+        }));
+    };
     let mut edits_by_uri = BTreeMap::<String, Vec<Value>>::new();
 
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
@@ -669,19 +676,18 @@ fn rename_at_position(
         }
     }
 
-    if let Some(found) = declaration {
-        if let Some(decl_span) = function_declaration_name_span(&found.symbol, &found.source) {
-            edits_by_uri
-                .entry(found.uri)
-                .or_default()
-                .insert(
-                    0,
-                    json!({
-                        "range": range_from_span(&decl_span),
-                        "newText": new_name,
-                    }),
-                );
-        }
+    if let Some(decl_span) = function_declaration_name_span(&declaration.symbol, &declaration.source)
+    {
+        edits_by_uri
+            .entry(declaration.uri)
+            .or_default()
+            .insert(
+                0,
+                json!({
+                    "range": range_from_span(&decl_span),
+                    "newText": new_name,
+                }),
+            );
     }
 
     let mut changes = serde_json::Map::new();
@@ -968,6 +974,7 @@ fn find_symbol_declaration_in_workspace(
     primary_source: &str,
     deadline: &RequestDeadline,
 ) -> Option<DeclarationMatch> {
+    let mut matched: Option<DeclarationMatch> = None;
     for (doc_uri, doc_source) in
         workspace_document_entries(state, primary_uri, primary_source, deadline)
     {
@@ -984,14 +991,18 @@ fn find_symbol_declaration_in_workspace(
             .into_iter()
             .find(|symbol| symbol.name == target_name)
         {
-            return Some(DeclarationMatch {
+            let candidate = DeclarationMatch {
                 uri: doc_uri,
                 symbol,
                 source: doc_source,
-            });
+            };
+            if matched.is_some() {
+                return None;
+            }
+            matched = Some(candidate);
         }
     }
-    None
+    matched
 }
 
 fn collect_function_symbols(program: &Program) -> Vec<FunctionSymbol> {
@@ -2173,6 +2184,77 @@ mod tests {
     }
 
     #[test]
+    fn definition_returns_null_when_workspace_declaration_is_ambiguous() {
+        let root = make_temp_workspace("ailang_lsp_definition_ambiguous");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let file_c = root.join("c.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n";
+        let source_b = "fn main() -> Int {\n  helper()\n}\n";
+        let source_c = "fn helper() -> Int {\n  2\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        fs::write(&file_c, source_c).expect("source c should be written");
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let definition_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(20)))
+            .expect("definition response should exist");
+        assert!(
+            definition_response
+                .get("result")
+                .map(Value::is_null)
+                .unwrap_or(false),
+            "ambiguous declarations should return null definition",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn references_returns_call_sites_without_declaration_when_excluded() {
         let uri = "file:///tmp/lsp_references_calls.ai";
         let source =
@@ -2891,6 +2973,81 @@ mod tests {
         assert!(
             changes.get(&uri_b).is_some(),
             "rename should include edits for active open file",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rename_returns_empty_changes_when_workspace_declaration_is_ambiguous() {
+        let root = make_temp_workspace("ailang_lsp_rename_ambiguous");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let file_c = root.join("c.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n";
+        let source_b = "fn main() -> Int {\n  helper()\n}\n";
+        let source_c = "fn helper() -> Int {\n  2\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        fs::write(&file_c, source_c).expect("source c should be written");
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2},
+                "newName": "assist"
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let rename_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(21)))
+            .expect("rename response should exist");
+        let edits = rename_response
+            .get("result")
+            .and_then(|result| result.get("changes"))
+            .and_then(|changes| changes.get(&uri_b))
+            .and_then(Value::as_array)
+            .expect("rename result should include current-uri changes array");
+        assert!(
+            edits.is_empty(),
+            "ambiguous declarations should prevent rename edits",
         );
 
         let _ = fs::remove_dir_all(root);

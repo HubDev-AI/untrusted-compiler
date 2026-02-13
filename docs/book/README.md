@@ -233,5 +233,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `266-m11-code-action-validate-edit.md`
 - `267-m11-tree-sitter-outline-indent-textobjects.md`
 - `268-m11-workspace-aware-definition-and-hover.md`
+- `269-m11-ambiguous-declaration-safety-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.

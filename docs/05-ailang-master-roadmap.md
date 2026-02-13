@@ -1015,6 +1015,7 @@ Implementation order is intentionally linear to reduce thrash:
   - references/rename now include unopened workspace `.ai` files discovered from project root.
   - tree-sitter query surface now includes highlights + outline + indent + textobjects baseline.
   - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
+  - ambiguity-safe guardrails prevent definition/rename guesses when duplicate declarations exist.
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
@@ -1052,6 +1053,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Code-Action Validate Edit".
 - Chapter: "M11 Slice: Tree-Sitter Outline/Indent/Textobjects".
 - Chapter: "M11 Slice: Workspace-Aware Definition and Hover".
+- Chapter: "M11 Slice: Ambiguous Declaration Safety Guard".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
