@@ -1026,10 +1026,11 @@ Implementation order is intentionally linear to reduce thrash:
   - references/rename hit collection now targets callsite callee identifiers, reducing non-reference name collisions.
   - diagnostics analysis now short-circuits at budget boundaries (zero-budget early return + skip-analyze when parse consumed budget).
   - Zed grammar pinning now has an explicit validation gate (`scripts/check-zed-grammar-pin.sh`) to block placeholder revisions in release flow.
+  - definition/references payloads now propagate stable `symbolId` metadata for resolved symbols.
 - Remaining:
   - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
   - parser/analyzer-internal interrupt support for fully preemptive cancellation (stage-boundary cancellation is now covered).
-  - callsite-level symbol-ID binding for end-to-end precision across definition/references/rename (callsite-focused collection + declaration IDs are now in place).
+  - callsite-level symbol-ID binding for end-to-end precision across definition/references/rename (callsite-focused collection + symbolId metadata are now in place).
   - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
   - pin Zed grammar integration to a published immutable `tree-sitter-ailang` revision (validation gate is now in place).
 
@@ -1078,6 +1079,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Analysis-Stage Budget Short-Circuit".
 - Chapter: "M11 Slice: Zed Grammar Pin Validation Gate".
 - Chapter: "M11 Slice: Import Edge Extraction and Replacement Tests".
+- Chapter: "M11 Slice: Symbol-ID Metadata in Definition and References".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

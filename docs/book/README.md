@@ -248,5 +248,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `281-m11-analysis-stage-budget-short-circuit.md`
 - `282-m11-zed-grammar-pin-validation-gate.md`
 - `283-m11-import-edge-extraction-and-replacement-tests.md`
+- `284-m11-symbol-id-metadata-in-definition-and-references.md`
 
 As milestones progress, chapters will be added and linked from this index.

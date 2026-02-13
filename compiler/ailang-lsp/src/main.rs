@@ -453,7 +453,11 @@ fn definition_at_position(
         return Ok(Value::Null);
     };
 
-    Ok(location_from_span(&symbol_match.uri, &symbol_match.symbol.span))
+    Ok(location_from_span(
+        &symbol_match.uri,
+        &symbol_match.symbol.span,
+        Some(symbol_match.symbol.id.as_str()),
+    ))
 }
 
 fn hover_at_position(
@@ -510,6 +514,7 @@ fn references_at_position(
     let target_name = hit.name.clone();
     let declaration =
         find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
+    let symbol_id = declaration.as_ref().map(|found| found.symbol.id.clone());
     let mut locations = Vec::new();
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
         if deadline.is_expired() {
@@ -526,12 +531,19 @@ fn references_at_position(
         locations.extend(
             collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name, Some(&deadline))
                 .into_iter()
-                .map(|found| location_from_span(&doc_uri, &found.span)),
+                .map(|found| location_from_span(&doc_uri, &found.span, symbol_id.as_deref())),
         );
     }
     if include_declaration {
         if let Some(found) = declaration {
-            locations.insert(0, location_from_span(&found.uri, &found.symbol.span));
+            locations.insert(
+                0,
+                location_from_span(
+                    &found.uri,
+                    &found.symbol.span,
+                    Some(found.symbol.id.as_str()),
+                ),
+            );
         }
     }
     Ok(Value::Array(locations))
@@ -1656,11 +1668,17 @@ fn span_contains(span: &Span, file: &PathBuf, line: usize, character: usize) -> 
     true
 }
 
-fn location_from_span(uri: &str, span: &Span) -> Value {
-    json!({
+fn location_from_span(uri: &str, span: &Span, symbol_id: Option<&str>) -> Value {
+    let mut location = json!({
         "uri": uri,
         "range": range_from_span(span),
-    })
+    });
+    if let Some(symbol_id) = symbol_id {
+        if let Some(location_obj) = location.as_object_mut() {
+            location_obj.insert("data".to_string(), json!({ "symbolId": symbol_id }));
+        }
+    }
+    location
 }
 
 fn range_from_span(span: &Span) -> Value {
@@ -2644,6 +2662,16 @@ mod tests {
             Some(0),
             "definition should resolve to helper function declaration start line",
         );
+        assert!(
+            definition_response
+                .get("result")
+                .and_then(|result| result.get("data"))
+                .and_then(|data| data.get("symbolId"))
+                .and_then(Value::as_str)
+                .map(|value| !value.is_empty())
+                .unwrap_or(false),
+            "definition location should carry symbolId metadata for resolved declarations",
+        );
     }
 
     #[test]
@@ -3058,6 +3086,22 @@ mod tests {
             declaration_line,
             Some(0),
             "first reference should be helper declaration",
+        );
+        let mut symbol_ids = references
+            .iter()
+            .filter_map(|location| {
+                location
+                    .get("data")
+                    .and_then(|data| data.get("symbolId"))
+                    .and_then(Value::as_str)
+            })
+            .collect::<Vec<_>>();
+        symbol_ids.sort_unstable();
+        symbol_ids.dedup();
+        assert_eq!(
+            symbol_ids.len(),
+            1,
+            "resolved references should share one symbolId metadata value",
         );
     }
 
