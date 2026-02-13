@@ -1163,8 +1163,9 @@ Implementation order is intentionally linear to reduce thrash:
   - release hardening gate (`scripts/release-alpha-gate.sh`) now executes naming-lock validation as part of alpha readiness.
   - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
   - benchmark naming guard now verifies canonical implementation directory IDs and benchmark testdata `impl` values.
+  - benchmark naming guard now validates canonical benchmark artifact filename patterns and benchmark testdata schema keys for report/summary/step artifacts.
 - Remaining:
-  - expand naming-lock checks to benchmark raw-artifact filenames/schema keys after final M10 artifact schema freeze.
+  - none for current M12 scope.
 
 ### Exit criteria
 - `rg` across tracked source/docs returns no legacy pre-rename tokens outside historical commit logs and third-party artifacts.
