@@ -309,8 +309,8 @@ fn handle_message<W: Write>(
         }
         Some("textDocument/codeAction") => {
             if let Some(id) = id {
-                if let Some(diagnostics) = parse_code_action_request(message) {
-                    let actions = code_actions_from_diagnostics(&diagnostics);
+                if let Some((uri, diagnostics)) = parse_code_action_request(message) {
+                    let actions = code_actions_from_diagnostics(state, &uri, &diagnostics);
                     send_response(writer, id, Value::Array(actions))?;
                 } else {
                     send_error_response(
@@ -408,14 +408,20 @@ fn parse_rename_request(message: &Value) -> Option<(String, usize, usize, String
     Some((uri, line, character, new_name))
 }
 
-fn parse_code_action_request(message: &Value) -> Option<Vec<Value>> {
+fn parse_code_action_request(message: &Value) -> Option<(String, Vec<Value>)> {
+    let uri = message
+        .get("params")
+        .and_then(|params| params.get("textDocument"))
+        .and_then(|doc| doc.get("uri"))
+        .and_then(Value::as_str)?
+        .to_string();
     let diagnostics = message
         .get("params")
         .and_then(|params| params.get("context"))
         .and_then(|context| context.get("diagnostics"))
         .and_then(Value::as_array)?
         .clone();
-    Some(diagnostics)
+    Some((uri, diagnostics))
 }
 
 fn definition_at_position(
@@ -719,20 +725,47 @@ fn is_valid_identifier_name(name: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
-fn code_actions_from_diagnostics(diagnostics: &[Value]) -> Vec<Value> {
+fn code_actions_from_diagnostics(
+    state: &ServerState,
+    uri: &str,
+    diagnostics: &[Value],
+) -> Vec<Value> {
     let mut actions = Vec::new();
     let mut seen_titles = HashSet::new();
+    let source = state.documents.get(uri).cloned();
 
     for diagnostic in diagnostics {
         let Some(code) = diagnostic.get("code").and_then(Value::as_str) else {
             continue;
         };
 
-        let title = match code {
-            "E1002" => Some("Insert validate/sanitize gate for untrusted value"),
-            "E1003" | "E1004" | "E1005" => Some("Redact secret before sink usage"),
-            "E2001" => Some("Declare missing effect in function signature"),
-            _ => None,
+        let (title, edit) = match code {
+            "E1002" => (
+                Some("Insert validate/sanitize gate for untrusted value"),
+                None,
+            ),
+            "E1003" | "E1004" | "E1005" => {
+                let redact_edit = source.as_ref().and_then(|text| {
+                    extract_range_text_from_diagnostic(diagnostic, text).map(|selected| {
+                        json!({
+                            "changes": {
+                                uri: [
+                                    {
+                                        "range": diagnostic.get("range").cloned().unwrap_or(Value::Null),
+                                        "newText": format!("redact({selected})"),
+                                    }
+                                ]
+                            }
+                        })
+                    })
+                });
+                (Some("Wrap with redact(...)"), redact_edit)
+            }
+            "E2001" => (
+                Some("Declare missing effect in function signature"),
+                None,
+            ),
+            _ => (None, None),
         };
 
         let Some(title) = title else {
@@ -742,14 +775,51 @@ fn code_actions_from_diagnostics(diagnostics: &[Value]) -> Vec<Value> {
             continue;
         }
 
-        actions.push(json!({
+        let mut action = json!({
             "title": title,
             "kind": "quickfix",
             "diagnostics": [diagnostic.clone()],
-        }));
+        });
+        if let Some(edit) = edit {
+            if let Some(action_obj) = action.as_object_mut() {
+                action_obj.insert("edit".to_string(), edit);
+            }
+        }
+        actions.push(action);
     }
 
     actions
+}
+
+fn extract_range_text_from_diagnostic(diagnostic: &Value, source: &str) -> Option<String> {
+    let range = diagnostic.get("range")?;
+    extract_range_text(source, range)
+}
+
+fn extract_range_text(source: &str, range: &Value) -> Option<String> {
+    let start = range.get("start")?;
+    let end = range.get("end")?;
+    let start_line = start.get("line")?.as_u64()? as usize;
+    let start_char = start.get("character")?.as_u64()? as usize;
+    let end_line = end.get("line")?.as_u64()? as usize;
+    let end_char = end.get("character")?.as_u64()? as usize;
+    if start_line != end_line {
+        return None;
+    }
+
+    let line = source.lines().nth(start_line)?;
+    if end_char < start_char {
+        return None;
+    }
+    let selected = line
+        .chars()
+        .skip(start_char)
+        .take(end_char.saturating_sub(start_char))
+        .collect::<String>();
+    if selected.is_empty() {
+        return None;
+    }
+    Some(selected)
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -2493,6 +2563,95 @@ mod tests {
                     .unwrap_or(false)
             }),
             "code actions should include a validate/sanitize quickfix for E1002",
+        );
+    }
+
+    #[test]
+    fn code_action_can_emit_redact_edit_for_secret_diagnostic() {
+        let uri = "file:///tmp/lsp_code_action_redact.ai";
+        let source = "fn main() -> Int {\n  token\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 1, "character": 2},
+                    "end": {"line": 1, "character": 7}
+                },
+                "context": {
+                    "diagnostics": [
+                        {
+                            "code": "E1003",
+                            "message": "Secret value cannot be logged.",
+                            "range": {
+                                "start": {"line": 1, "character": 2},
+                                "end": {"line": 1, "character": 7}
+                            }
+                        }
+                    ]
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let code_action_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(14)))
+            .expect("codeAction response should exist");
+        let actions = code_action_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("codeAction result should be an array");
+        let redact_action = actions
+            .iter()
+            .find(|action| {
+                action
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(|title| title.contains("redact"))
+                    .unwrap_or(false)
+            })
+            .expect("expected redact quickfix action");
+        assert_eq!(
+            redact_action
+                .get("edit")
+                .and_then(|edit| edit.get("changes"))
+                .and_then(|changes| changes.get(uri))
+                .and_then(Value::as_array)
+                .and_then(|edits| edits.first())
+                .and_then(|edit| edit.get("newText"))
+                .and_then(Value::as_str),
+            Some("redact(token)"),
+            "redact quickfix should wrap selected diagnostic range text",
         );
     }
 

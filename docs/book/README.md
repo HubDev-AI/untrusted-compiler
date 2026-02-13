@@ -228,5 +228,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `261-m11-workspace-open-document-references-and-rename.md`
 - `262-m11-open-document-parse-cache.md`
 - `263-m11-request-deadline-guardrails.md`
+- `264-m11-code-action-redact-edit.md`
 
 As milestones progress, chapters will be added and linked from this index.
