@@ -12,7 +12,7 @@ This directory contains an initial scaffold for Zed integration:
 
 ## Notes
 
-- `grammars.untrusted.rev` is a placeholder and must be updated to a real commit SHA from the `tree-sitter-untrusted` grammar repository.
+- `grammars.untrusted.rev` is pinned to a commit SHA and should be updated whenever grammar changes are intentionally rolled forward.
 - This scaffold is intentionally minimal and focused on LSP wiring.
 
 ## Validation

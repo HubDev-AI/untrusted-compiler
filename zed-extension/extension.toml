@@ -5,7 +5,7 @@ schema_version = 1
 
 [grammars.untrusted]
 repository = "https://github.com/HubDev-AI/untrusted-compiler"
-rev = "TODO_SET_COMMIT_SHA"
+rev = "e5ab04b3d433f87d57d090127d056fb78df5d38b"
 
 [language_servers.sec4audit-lsp]
 name = "Untrusted<T> Language Server"

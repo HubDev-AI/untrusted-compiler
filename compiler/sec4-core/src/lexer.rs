@@ -1,9 +1,19 @@
-use crate::diagnostics::{Diagnostic, Span};
+use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::token::{Keyword, Symbol, Token, TokenKind};
+use crate::{InterruptSignal, NeverInterrupt};
 use std::path::{Path, PathBuf};
 
 pub fn lex(file: &Path, source: &str) -> Result<Vec<Token>, Vec<Diagnostic>> {
-    let mut lexer = Lexer::new(file.to_path_buf(), source);
+    let interrupt = NeverInterrupt;
+    lex_with_interrupt(file, source, &interrupt)
+}
+
+pub fn lex_with_interrupt(
+    file: &Path,
+    source: &str,
+    interrupt: &dyn InterruptSignal,
+) -> Result<Vec<Token>, Vec<Diagnostic>> {
+    let mut lexer = Lexer::new(file.to_path_buf(), source, interrupt);
     lexer.lex_all();
 
     if lexer.diagnostics.is_empty() {
@@ -13,7 +23,7 @@ pub fn lex(file: &Path, source: &str) -> Result<Vec<Token>, Vec<Diagnostic>> {
     }
 }
 
-struct Lexer {
+struct Lexer<'a> {
     file: PathBuf,
     chars: Vec<char>,
     index: usize,
@@ -23,10 +33,12 @@ struct Lexer {
     last_col: usize,
     tokens: Vec<Token>,
     diagnostics: Vec<Diagnostic>,
+    interrupt: &'a dyn InterruptSignal,
+    interrupted: bool,
 }
 
-impl Lexer {
-    fn new(file: PathBuf, source: &str) -> Self {
+impl<'a> Lexer<'a> {
+    fn new(file: PathBuf, source: &str, interrupt: &'a dyn InterruptSignal) -> Self {
         Self {
             file,
             chars: source.chars().collect(),
@@ -37,11 +49,21 @@ impl Lexer {
             last_col: 1,
             tokens: Vec::new(),
             diagnostics: Vec::new(),
+            interrupt,
+            interrupted: false,
         }
     }
 
     fn lex_all(&mut self) {
+        if self.interrupt_if_requested() {
+            return;
+        }
+
         while let Some(ch) = self.peek() {
+            if self.interrupt_if_requested() {
+                break;
+            }
+
             if ch.is_whitespace() {
                 self.advance();
                 continue;
@@ -176,6 +198,9 @@ impl Lexer {
 
     fn skip_line_comment(&mut self) {
         while let Some(ch) = self.peek() {
+            if self.interrupt_if_requested() {
+                return;
+            }
             self.advance();
             if ch == '\n' {
                 break;
@@ -188,6 +213,9 @@ impl Lexer {
         let mut text = String::new();
 
         while let Some(ch) = self.peek() {
+            if self.interrupt_if_requested() {
+                return;
+            }
             if Self::is_identifier_continue(ch) {
                 text.push(ch);
                 self.advance();
@@ -221,6 +249,9 @@ impl Lexer {
         let mut text = String::new();
 
         while let Some(ch) = self.peek() {
+            if self.interrupt_if_requested() {
+                return;
+            }
             if ch.is_ascii_digit() {
                 text.push(ch);
                 self.advance();
@@ -234,6 +265,9 @@ impl Lexer {
             self.advance();
 
             while let Some(ch) = self.peek() {
+                if self.interrupt_if_requested() {
+                    return;
+                }
                 if ch.is_ascii_digit() {
                     text.push(ch);
                     self.advance();
@@ -254,6 +288,9 @@ impl Lexer {
         let mut terminated = false;
 
         while let Some(ch) = self.peek() {
+            if self.interrupt_if_requested() {
+                return;
+            }
             match ch {
                 '"' => {
                     self.advance();
@@ -262,6 +299,9 @@ impl Lexer {
                 }
                 '\\' => {
                     self.advance();
+                    if self.interrupt_if_requested() {
+                        return;
+                    }
                     let Some(escaped) = self.peek() else {
                         break;
                     };
@@ -393,5 +433,28 @@ impl Lexer {
 
     fn is_identifier_continue(ch: char) -> bool {
         ch == '_' || ch.is_ascii_alphanumeric()
+    }
+
+    fn interrupt_if_requested(&mut self) -> bool {
+        if self.interrupt.is_interrupted() {
+            if !self.interrupted {
+                self.interrupted = true;
+                self.diagnostics.push(self.interruption_diagnostic());
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn interruption_diagnostic(&self) -> Diagnostic {
+        Diagnostic {
+            severity: Severity::Info,
+            code: "I9001".to_string(),
+            message: "analysis budget exceeded; parsing stopped early".to_string(),
+            span: Span::point(self.file.clone(), self.line, self.col),
+            notes: vec!["increase the analysis budget to complete parsing".to_string()],
+            tags: vec!["analysis".to_string()],
+        }
     }
 }

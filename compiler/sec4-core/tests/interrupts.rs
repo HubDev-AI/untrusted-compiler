@@ -2,6 +2,7 @@ use sec4_core::{
     analyze_program_with_interrupt, parse_source, parse_source_with_interrupt, InterruptSignal,
     Severity,
 };
+use std::cell::Cell;
 use std::path::Path;
 
 struct AlwaysInterrupted;
@@ -9,6 +10,30 @@ struct AlwaysInterrupted;
 impl InterruptSignal for AlwaysInterrupted {
     fn is_interrupted(&self) -> bool {
         true
+    }
+}
+
+struct InterruptAfterNChecks {
+    remaining: Cell<usize>,
+}
+
+impl InterruptAfterNChecks {
+    fn new(remaining: usize) -> Self {
+        Self {
+            remaining: Cell::new(remaining),
+        }
+    }
+}
+
+impl InterruptSignal for InterruptAfterNChecks {
+    fn is_interrupted(&self) -> bool {
+        let remaining = self.remaining.get();
+        if remaining == 0 {
+            true
+        } else {
+            self.remaining.set(remaining - 1);
+            false
+        }
     }
 }
 
@@ -42,5 +67,22 @@ fn analyze_program_with_interrupt_emits_budget_info_diagnostic() {
                 && diag.message.contains("semantic checks stopped early")
         }),
         "interrupt-aware analysis should emit I9001 info diagnostic",
+    );
+}
+
+#[test]
+fn parse_source_with_interrupt_can_stop_during_lexing() {
+    let source = format!("// {}\nfn main() -> Int {{\n  0\n}}\n", "a".repeat(10_000));
+    let interrupt = InterruptAfterNChecks::new(128);
+    let diagnostics = parse_source_with_interrupt(Path::new("main.ut"), &source, &interrupt)
+        .expect_err("parse should stop when interrupt is signaled during lexing");
+
+    assert!(
+        diagnostics.iter().any(|diag| {
+            diag.code == "I9001"
+                && diag.severity == Severity::Info
+                && diag.message.contains("parsing stopped early")
+        }),
+        "lexer-stage interruption should emit I9001 info diagnostic",
     );
 }

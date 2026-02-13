@@ -19,7 +19,7 @@ pub fn parse_source_with_interrupt(
     source: &str,
     interrupt: &dyn InterruptSignal,
 ) -> Result<Program, Vec<Diagnostic>> {
-    let tokens = lexer::lex(file, source)?;
+    let tokens = lexer::lex_with_interrupt(file, source, interrupt)?;
     Parser::new(tokens, interrupt).parse_program()
 }
 
