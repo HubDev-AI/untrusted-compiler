@@ -1,0 +1,4 @@
+fn bad(ctx: Ctx, schema: Schema<Int>) -> Int {
+  json.decode(ctx, schema, 3);
+  0
+}

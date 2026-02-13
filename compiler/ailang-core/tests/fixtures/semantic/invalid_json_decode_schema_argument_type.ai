@@ -1,4 +1,4 @@
-fn bad() -> Int {
-  json.decode(1, 2, 3);
+fn bad(ctx: Ctx, raw: Untrusted<Bytes>) -> Int {
+  json.decode(ctx, 2, raw);
   0
 }

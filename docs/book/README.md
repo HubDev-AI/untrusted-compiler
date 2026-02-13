@@ -130,5 +130,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `162-m7-csp-builder-signature-hardening.md`
 - `163-m7-json-encode-schema-argument-hardening.md`
 - `164-m7-json-decode-schema-argument-hardening.md`
+- `165-m7-json-decode-context-payload-argument-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

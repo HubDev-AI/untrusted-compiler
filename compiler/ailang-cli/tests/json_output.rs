@@ -669,8 +669,8 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn useJson(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
-  json.decode(1, schema, raw);
+        r#"fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
+  json.decode(ctx, schema, raw);
   json.encode(schema, 3);
   0
 }
@@ -693,7 +693,7 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_json_decode(1, schema, raw)"));
+    assert!(generated_c.contains("ailang_rt_json_decode(ctx, schema, raw)"));
     assert!(generated_c.contains("ailang_rt_json_encode(schema, 3)"));
 
     let binary_path = project_dir.join("build").join("jsonhelpersdemo");

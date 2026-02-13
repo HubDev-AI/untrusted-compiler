@@ -1,4 +1,4 @@
 error[E4001]: json.decode schema argument is invalid
-  --> invalid_json_decode_schema_argument_type.ai:2:18
+  --> invalid_json_decode_schema_argument_type.ai:2:20
   note: found `Int`
   note: schema argument should be a schema symbol/descriptor

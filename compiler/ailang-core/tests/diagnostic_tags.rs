@@ -145,6 +145,44 @@ fn bad() -> Int {
 }
 
 #[test]
+fn json_decode_context_argument_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
+  json.decode(1, schema, raw);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json.decode first argument must be `Ctx`")
+        .expect("expected json.decode context diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
+fn json_decode_raw_argument_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(ctx: Ctx, schema: Schema<Int>) -> Int {
+  json.decode(ctx, schema, 3);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json.decode raw argument must be `Untrusted<Bytes>`")
+        .expect("expected json.decode raw diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn res_html_sink_diagnostic_has_security_sink_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

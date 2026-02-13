@@ -102,6 +102,16 @@ impl Type {
         )
     }
 
+    fn is_untrusted_bytes(&self) -> bool {
+        matches!(
+            self,
+            Type::Named { name, args }
+                if name == "Untrusted"
+                    && args.len() == 1
+                    && args[0].is_named("Bytes")
+        )
+    }
+
     fn compatible_with(&self, other: &Type) -> bool {
         match (self, other) {
             (Type::Unknown, _) | (_, Type::Unknown) => true,
@@ -2450,6 +2460,32 @@ impl Analyzer {
                 .with_tag("schema")
                 .with_note(format!("found `{}`", schema_ty.describe()))
                 .with_note("schema argument should be a schema symbol/descriptor"),
+            );
+        }
+
+        if !arg_types[0].is_named("Ctx") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.decode first argument must be `Ctx`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe())),
+            );
+        }
+
+        if !arg_types[2].is_untrusted_bytes() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.decode raw argument must be `Untrusted<Bytes>`",
+                    args[2].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[2].describe())),
             );
         }
     }
