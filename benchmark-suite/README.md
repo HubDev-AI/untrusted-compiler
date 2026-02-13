@@ -62,11 +62,13 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-full`
 14. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
-15. Validate benchmark helper scripts:
+15. Verify benchmark bundle completeness:
+   - `make -C benchmark-suite verify-bundle IMPLS=ailang,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
+16. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-16. Validate cross-impl service contract parity:
+17. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-17. Stop DB:
+18. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -98,3 +100,4 @@ Measure end-to-end service behavior across identical implementations:
 - Step matrix orchestrator runs `run_step_profile` + `analyze_step_profile` per impl/endpoint and then emits one scoped `step-matrix.json`.
 - Full-suite runner chains fixed-target matrix + step matrix and republishes `results/benchmark-report.md` with both standard and step-load signals.
 - Full-suite runner also emits `results/artifact-manifest.json` (sha256 + size per artifact, excluding logs).
+- `verify_benchmark_bundle.sh` checks required artifacts/JSON validity for selected IMPLS and ENDPOINTS.

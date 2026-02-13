@@ -213,5 +213,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `246-m10-step-load-matrix-orchestrator.md`
 - `247-m10-full-suite-orchestrator.md`
 - `248-m10-artifact-manifest-and-provenance.md`
+- `249-m10-benchmark-bundle-verification-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.
