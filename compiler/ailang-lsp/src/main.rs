@@ -37,6 +37,24 @@ struct DeclarationMatch {
     source: String,
 }
 
+struct RequestDeadline {
+    started_at: Instant,
+    budget_ms: u128,
+}
+
+impl RequestDeadline {
+    fn new(budget_ms: u128) -> Self {
+        Self {
+            started_at: Instant::now(),
+            budget_ms,
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        self.started_at.elapsed().as_millis() >= self.budget_ms
+    }
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let first = args.next();
@@ -467,6 +485,7 @@ fn references_at_position(
     character: usize,
     include_declaration: bool,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
     let program = match load_cached_program(state, uri, &path, &source) {
         Some(program) => program,
@@ -478,9 +497,13 @@ fn references_at_position(
     };
 
     let target_name = hit.name.clone();
-    let declaration = find_symbol_declaration_in_workspace(state, &target_name, uri, &source);
+    let declaration =
+        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
     let mut locations = Vec::new();
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+        if deadline.is_expired() {
+            break;
+        }
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
@@ -560,6 +583,7 @@ fn prepare_rename_at_position(
     line: usize,
     character: usize,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
     let program = match load_cached_program(state, uri, &path, &source) {
         Some(program) => program,
@@ -569,7 +593,7 @@ fn prepare_rename_at_position(
     let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
         return Ok(Value::Null);
     };
-    if find_symbol_declaration_in_workspace(state, &hit.name, uri, &source).is_none() {
+    if find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline).is_none() {
         return Ok(Value::Null);
     }
 
@@ -586,6 +610,7 @@ fn rename_at_position(
     character: usize,
     new_name: &str,
 ) -> io::Result<Value> {
+    let deadline = RequestDeadline::new(request_budget_ms());
     if !is_valid_identifier_name(new_name) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -613,10 +638,14 @@ fn rename_at_position(
         }));
     };
     let target_name = hit.name;
-    let declaration = find_symbol_declaration_in_workspace(state, &target_name, uri, &source);
+    let declaration =
+        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
     let mut edits_by_uri = BTreeMap::<String, Vec<Value>>::new();
 
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+        if deadline.is_expired() {
+            break;
+        }
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
@@ -791,8 +820,12 @@ fn find_symbol_declaration_in_workspace(
     target_name: &str,
     primary_uri: &str,
     primary_source: &str,
+    deadline: &RequestDeadline,
 ) -> Option<DeclarationMatch> {
     for (doc_uri, doc_source) in workspace_document_entries(state, primary_uri, primary_source) {
+        if deadline.is_expired() {
+            break;
+        }
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
@@ -1194,6 +1227,13 @@ fn max_diagnostics_per_document() -> usize {
         .unwrap_or(200)
 }
 
+fn request_budget_ms() -> u128 {
+    std::env::var("AILANG_LSP_REQUEST_BUDGET_MS")
+        .ok()
+        .and_then(|raw| raw.parse::<u128>().ok())
+        .unwrap_or_else(analysis_budget_ms)
+}
+
 fn uri_to_path(uri: &str) -> Option<PathBuf> {
     let parsed = Url::parse(uri).ok()?;
     if parsed.scheme() != "file" {
@@ -1371,7 +1411,7 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 mod tests {
     use super::{
         diagnostics_for_document_with_limits, read_message, refresh_program_cache, run_stdio,
-        ServerState,
+        RequestDeadline, ServerState,
     };
     use serde_json::{json, Value};
     use std::io::{BufReader, Cursor};
@@ -1571,6 +1611,12 @@ mod tests {
             !state.parsed_programs.contains_key(uri),
             "invalid source should evict parsed program cache entry",
         );
+    }
+
+    #[test]
+    fn request_deadline_zero_budget_expires_immediately() {
+        let deadline = RequestDeadline::new(0);
+        assert!(deadline.is_expired(), "zero budget should be treated as expired");
     }
 
     #[test]

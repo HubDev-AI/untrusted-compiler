@@ -1010,9 +1010,10 @@ Implementation order is intentionally linear to reduce thrash:
   - diagnostics budget/cap guardrails with `I9001` overflow signaling.
   - references/rename now aggregate deterministically across currently open workspace documents.
   - open-document parse cache integrated into major LSP request paths.
+  - request-deadline guardrails applied to multi-document references/rename scans.
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
-  - preemptive request deadline enforcement (beyond post-analysis overflow signaling).
+  - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
   - full-project (unopened-file) references/rename determinism.
   - richer code-action edits (auto-fix text rewrites).
   - production grammar coverage and pinned published grammar revision.
@@ -1041,6 +1042,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Diagnostics Analysis Budget Guardrails".
 - Chapter: "M11 Slice: Workspace Open-Document References and Rename".
 - Chapter: "M11 Slice: Open-Document Parse Cache".
+- Chapter: "M11 Slice: Request-Deadline Guardrails".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
