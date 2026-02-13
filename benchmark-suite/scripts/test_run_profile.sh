@@ -27,4 +27,18 @@ if ! grep -q -- '-t2 -c16 -d7s -R1234' <<<"$override_out"; then
   exit 1
 fi
 
+users_get_out="$(BENCH_TARGET_USERS_GET=3456 "${root_dir}/scripts/run_profile.sh" --dry-run ailang users-get 2>&1)"
+if ! grep -q 'endpoint=users-get' <<<"$users_get_out"; then
+  echo "run_profile users-get dry-run missing endpoint output" >&2
+  exit 1
+fi
+if ! grep -q 'targetRps=3456' <<<"$users_get_out"; then
+  echo "run_profile users-get override missing targetRps output" >&2
+  exit 1
+fi
+if ! grep -q 'users-get seedUserId: 6f1c2e7c-9c4a-4d0d-8c1b-2b59a4c8f8e1' <<<"$users_get_out"; then
+  echo "run_profile users-get dry-run missing seed user id output" >&2
+  exit 1
+fi
+
 echo "run_profile test passed"

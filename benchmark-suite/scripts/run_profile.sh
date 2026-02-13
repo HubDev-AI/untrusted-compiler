@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post> [base_url]" >&2
+  echo "usage: $0 [--dry-run] <impl> <endpoint:ping|decode|users-post|users-get> [base_url]" >&2
 }
 
 dry_run="false"
@@ -31,6 +31,8 @@ duration="60s"
 target=""
 raw="${raw_dir}/${impl}-${endpoint}.txt"
 summary="${sum_dir}/${impl}-${endpoint}.json"
+payload_path="${root_dir}/spec/payloads/user_4kb.json"
+seed_user_id=""
 
 threads="${BENCH_THREADS:-$threads}"
 conns="${BENCH_CONNECTIONS:-$conns}"
@@ -56,6 +58,12 @@ case "$endpoint" in
     target="${BENCH_TARGET:-$target}"
     cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/post_users.lua" "$base_url")
     ;;
+  users-get)
+    target=2000
+    target="${BENCH_TARGET_USERS_GET:-$target}"
+    target="${BENCH_TARGET:-$target}"
+    cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/get_user.lua" "$base_url")
+    ;;
   *)
     echo "unsupported endpoint: $endpoint" >&2
     usage
@@ -69,6 +77,12 @@ echo "raw: $raw"
 echo "summary: $summary"
 
 if [ "$dry_run" = "true" ]; then
+  if [ "$endpoint" = "users-get" ] && [ -f "$payload_path" ]; then
+    seed_user_id="$(jq -r '.id // empty' "$payload_path" 2>/dev/null || true)"
+    if [ -n "$seed_user_id" ]; then
+      echo "users-get seedUserId: $seed_user_id"
+    fi
+  fi
   exit 0
 fi
 
@@ -77,5 +91,37 @@ if ! command -v wrk2 >/dev/null 2>&1; then
   exit 127
 fi
 
-"${cmd[@]}" | tee "$raw"
+if [ "$endpoint" = "users-get" ]; then
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required for users-get seed setup" >&2
+    exit 127
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "jq is required for users-get seed setup" >&2
+    exit 127
+  fi
+  if [ ! -f "$payload_path" ]; then
+    echo "seed payload not found: $payload_path" >&2
+    exit 2
+  fi
+  seed_user_id="$(jq -r '.id // empty' "$payload_path")"
+  if [ -z "$seed_user_id" ]; then
+    echo "seed payload missing id field: $payload_path" >&2
+    exit 2
+  fi
+  seed_status="$(curl -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" --data-binary "@${payload_path}" "${base_url}/users")"
+  case "$seed_status" in
+    200|201|409) ;;
+    *)
+      echo "failed to seed users-get benchmark user, status=${seed_status}" >&2
+      exit 1
+      ;;
+  esac
+  BENCH_USER_ID="$seed_user_id" "${cmd[@]}" | tee "$raw"
+elif [ "$endpoint" = "decode" ] || [ "$endpoint" = "users-post" ]; then
+  BENCH_PAYLOAD_FILE="$payload_path" "${cmd[@]}" | tee "$raw"
+else
+  "${cmd[@]}" | tee "$raw"
+fi
+
 "${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary"

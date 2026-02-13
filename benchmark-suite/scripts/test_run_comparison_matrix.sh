@@ -24,6 +24,11 @@ if ! grep -q 'run_profile.sh --dry-run go decode' <<<"$out"; then
   exit 1
 fi
 
+if ! grep -q 'run_profile.sh --dry-run node users-get' <<<"$out"; then
+  echo "missing node users-get dry-run command" >&2
+  exit 1
+fi
+
 if ! grep -q 'build_report.sh go' <<<"$out"; then
   echo "missing go report command" >&2
   exit 1

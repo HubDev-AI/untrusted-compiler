@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
@@ -16,7 +16,8 @@ help:
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
-	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post)"
+	@echo "  bench-users-get Run users read benchmark (requires service at $(BASE_URL))"
+	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post|users-get)"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (ailang,node,go,rust by default)"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -54,6 +55,9 @@ bench-decode:
 
 bench-users:
 	wrk2 --latency -t4 -c64 -d60s -R500 -s load/wrk2/post_users.lua $(BASE_URL) | tee results/raw/$(IMPL)-users-post.txt
+
+bench-users-get:
+	scripts/run_profile.sh $(IMPL) users-get $(BASE_URL)
 
 bench-profile:
 	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)

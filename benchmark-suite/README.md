@@ -33,6 +33,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=ping`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
+   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-get`
 5. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
 6. Bundle summaries + env into one report:
@@ -66,9 +67,10 @@ Measure end-to-end service behavior across identical implementations:
 - Orchestrator embeds `sec.audit` data into `ailang-report.json` when baseline artifact is available.
 - For quick local loops, override profile runtime via env vars:
   - `BENCH_THREADS`, `BENCH_CONNECTIONS`, `BENCH_DURATION`
-  - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST`
+  - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST|BENCH_TARGET_USERS_GET`
 - Override orchestrator bind port with `BENCH_PORT` (default `18085`) if needed.
 - Override individual smoke-script ports with `BENCH_SMOKE_PORT` when running service smoke checks directly.
 - Orchestrator now runs `scripts/preflight.sh` automatically:
   - dry-run mode uses `--dry-run-only`,
   - real runs require `wrk2` and implementation toolchains to be present.
+- `users-get` profile seeds one deterministic user before load and passes `BENCH_USER_ID` into `load/wrk2/get_user.lua`.
