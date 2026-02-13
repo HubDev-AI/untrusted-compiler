@@ -38,9 +38,11 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite compare`
 7. Build all-endpoint comparison matrix:
    - `make -C benchmark-suite compare-matrix`
-8. Validate benchmark helper scripts:
+8. Generate markdown benchmark report:
+   - `make -C benchmark-suite publish-report`
+9. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-9. Stop DB:
+10. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
