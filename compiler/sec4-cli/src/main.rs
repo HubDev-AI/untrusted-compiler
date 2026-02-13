@@ -65,6 +65,18 @@ enum Commands {
         #[arg(long)]
         fail_on: Option<String>,
     },
+    Replay {
+        #[arg(long)]
+        capture: PathBuf,
+        #[arg(long)]
+        policy_hash: String,
+        #[arg(long)]
+        compiler_hash: String,
+        #[arg(long)]
+        runtime_hash: String,
+        #[arg(long, default_value_t = false)]
+        allow_policy_mismatch: bool,
+    },
     Explain {
         code: String,
         #[arg(long, value_enum, default_value_t = ExplainOutputFormat::Text)]
@@ -148,6 +160,19 @@ fn main() {
             None,
             Some(fail_on.as_deref().unwrap_or("risk>=HIGH")),
         ),
+        Commands::Replay {
+            capture,
+            policy_hash,
+            compiler_hash,
+            runtime_hash,
+            allow_policy_mismatch,
+        } => cmd_replay_check(
+            &capture,
+            &policy_hash,
+            &compiler_hash,
+            &runtime_hash,
+            allow_policy_mismatch,
+        ),
         Commands::Explain { code, format } => cmd_explain(&code, format),
     };
 
@@ -167,6 +192,247 @@ fn cmd_audit(args: AuditArgs) -> Result<(), i32> {
         args.write_report.as_deref(),
         args.fail_on.as_deref(),
     )
+}
+
+fn cmd_replay_check(
+    capture_path: &Path,
+    expected_policy_hash: &str,
+    expected_compiler_hash: &str,
+    expected_runtime_hash: &str,
+    allow_policy_mismatch: bool,
+) -> Result<(), i32> {
+    let capture_bytes = match fs::read(capture_path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!(
+                "replay compatibility failed: cannot read capture {}: {err}",
+                capture_path.display()
+            );
+            return Err(1);
+        }
+    };
+
+    let capture_json: serde_json::Value = match serde_json::from_slice(&capture_bytes) {
+        Ok(value) => value,
+        Err(err) => {
+            eprintln!(
+                "replay compatibility failed: capture {} is not valid JSON: {err}",
+                capture_path.display()
+            );
+            return Err(1);
+        }
+    };
+
+    if let Err(message) = validate_replay_capture_contract(&capture_json) {
+        eprintln!("replay compatibility failed: {message}");
+        return Err(1);
+    }
+
+    let capture_policy_hash =
+        json_required_str(&capture_json, "policyHash").expect("policyHash checked by contract");
+    let capture_compiler_hash = json_required_str(&capture_json, "compilerHash")
+        .expect("compilerHash checked by contract");
+    let capture_runtime_hash =
+        json_required_str(&capture_json, "runtimeHash").expect("runtimeHash checked by contract");
+
+    if capture_compiler_hash != expected_compiler_hash {
+        eprintln!(
+            "replay compatibility failed: compilerHash mismatch ({capture_compiler_hash} != {expected_compiler_hash})"
+        );
+        return Err(1);
+    }
+
+    if capture_runtime_hash != expected_runtime_hash {
+        eprintln!(
+            "replay compatibility failed: runtimeHash mismatch ({capture_runtime_hash} != {expected_runtime_hash})"
+        );
+        return Err(1);
+    }
+
+    if capture_policy_hash != expected_policy_hash {
+        if allow_policy_mismatch {
+            eprintln!(
+                "warning: policyHash mismatch allowed ({capture_policy_hash} != {expected_policy_hash})"
+            );
+        } else {
+            eprintln!(
+                "replay compatibility failed: policyHash mismatch ({capture_policy_hash} != {expected_policy_hash})"
+            );
+            return Err(1);
+        }
+    }
+
+    println!("replay capture compatibility check passed");
+    Ok(())
+}
+
+fn json_required_str<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .filter(|entry| !entry.is_empty())
+}
+
+fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), String> {
+    if capture.get("version").and_then(serde_json::Value::as_str) != Some("0.1") {
+        return Err("capture.version must be \"0.1\"".to_string());
+    }
+
+    for key in [
+        "captureId",
+        "traceId",
+        "policyHash",
+        "compilerHash",
+        "runtimeHash",
+    ] {
+        if json_required_str(capture, key).is_none() {
+            return Err(format!("capture.{key} must be a non-empty string"));
+        }
+    }
+
+    if capture
+        .get("timeMs")
+        .and_then(serde_json::Value::as_i64)
+        .is_none()
+    {
+        return Err("capture.timeMs must be an integer timestamp".to_string());
+    }
+
+    let request = capture
+        .get("request")
+        .ok_or_else(|| "capture.request must be an object".to_string())?;
+    if request
+        .get("method")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return Err("capture.request.method must be a string".to_string());
+    }
+    if request
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return Err("capture.request.path must be a string".to_string());
+    }
+    if request
+        .get("headers")
+        .and_then(serde_json::Value::as_object)
+        .is_none()
+    {
+        return Err("capture.request.headers must be an object".to_string());
+    }
+
+    let body = request
+        .get("body")
+        .ok_or_else(|| "capture.request.body must be an object".to_string())?;
+    let encoding = body
+        .get("encoding")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "capture.request.body.encoding must be a string".to_string())?;
+    if body
+        .get("truncated")
+        .and_then(serde_json::Value::as_bool)
+        .is_none()
+    {
+        return Err("capture.request.body.truncated must be a boolean".to_string());
+    }
+    match encoding {
+        "base64" => {
+            if body
+                .get("bytes")
+                .and_then(serde_json::Value::as_str)
+                .is_none()
+            {
+                return Err(
+                    "capture.request.body.bytes must be present for encoding=base64".to_string(),
+                );
+            }
+        }
+        "none" => {
+            if body
+                .get("sha256")
+                .and_then(serde_json::Value::as_str)
+                .is_none()
+            {
+                return Err(
+                    "capture.request.body.sha256 must be present for encoding=none".to_string(),
+                );
+            }
+        }
+        _ => {
+            return Err(format!(
+                "capture.request.body.encoding must be base64|none (got {encoding})"
+            ))
+        }
+    }
+
+    let determinism = capture
+        .get("determinism")
+        .ok_or_else(|| "capture.determinism must be an object".to_string())?;
+    if determinism
+        .get("seed")
+        .and_then(serde_json::Value::as_i64)
+        .is_none()
+    {
+        return Err("capture.determinism.seed must be an integer".to_string());
+    }
+    if determinism
+        .get("time")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|time| time.get("mode"))
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return Err("capture.determinism.time.mode must be a string".to_string());
+    }
+    if determinism
+        .get("time")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|time| time.get("nowMs"))
+        .and_then(serde_json::Value::as_i64)
+        .is_none()
+    {
+        return Err("capture.determinism.time.nowMs must be an integer".to_string());
+    }
+    if determinism
+        .get("uuid")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|uuid| uuid.get("mode"))
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return Err("capture.determinism.uuid.mode must be a string".to_string());
+    }
+
+    let budget = determinism
+        .get("budget")
+        .ok_or_else(|| "capture.determinism.budget must be an object".to_string())?;
+    for key in ["maxBodyBytes", "maxJsonBytes", "maxJsonDepth", "deadlineMs"] {
+        if budget.get(key).and_then(serde_json::Value::as_i64).is_none() {
+            return Err(format!("capture.determinism.budget.{key} must be an integer"));
+        }
+    }
+
+    let redaction = capture
+        .get("redaction")
+        .ok_or_else(|| "capture.redaction must be an object".to_string())?;
+    if redaction
+        .get("headers")
+        .and_then(serde_json::Value::as_array)
+        .is_none()
+    {
+        return Err("capture.redaction.headers must be an array".to_string());
+    }
+    if redaction
+        .get("jsonPaths")
+        .and_then(serde_json::Value::as_array)
+        .is_none()
+    {
+        return Err("capture.redaction.jsonPaths must be an array".to_string());
+    }
+
+    Ok(())
 }
 
 fn cmd_explain(code: &str, format: ExplainOutputFormat) -> Result<(), i32> {

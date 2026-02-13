@@ -73,6 +73,44 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
         .expect("source should be written");
 }
 
+fn write_capture_file(path: &PathBuf, policy_hash: &str, compiler_hash: &str, runtime_hash: &str) {
+    let payload = serde_json::json!({
+        "version": "0.1",
+        "captureId": "cap_01",
+        "traceId": "tr_01",
+        "timeMs": 1760000000000_i64,
+        "policyHash": policy_hash,
+        "compilerHash": compiler_hash,
+        "runtimeHash": runtime_hash,
+        "request": {
+            "method": "GET",
+            "path": "/ping",
+            "headers": {},
+            "body": {
+                "encoding": "base64",
+                "bytes": "e30=",
+                "truncated": false
+            }
+        },
+        "determinism": {
+            "seed": 1_i64,
+            "time": {"mode": "frozen", "nowMs": 1760000000000_i64},
+            "uuid": {"mode": "seeded"},
+            "budget": {
+                "maxBodyBytes": 1_i64,
+                "maxJsonBytes": 1_i64,
+                "maxJsonDepth": 1_i64,
+                "deadlineMs": 1_i64
+            }
+        },
+        "redaction": {"headers": [], "jsonPaths": []}
+    });
+
+    let rendered =
+        serde_json::to_string_pretty(&payload).expect("capture payload should serialize to json");
+    fs::write(path, rendered).expect("capture file should be written");
+}
+
 #[test]
 fn check_diagnostics_json_success_writes_only_json_on_stdout() {
     let hello_path = workspace_root().join("examples/hello");
@@ -337,6 +375,145 @@ fn explain_json_mode_writes_parseable_payload() {
             .expect("docsPath should be present"),
         "docs/book/55-v0-typing-effects-security-rules.md"
     );
+}
+
+#[test]
+fn replay_check_passes_when_capture_hashes_match() {
+    let dir = temp_dir("sec4-replay-match");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(output.status.success(), "replay check should pass");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("replay capture compatibility check passed"),
+        "stdout should confirm replay compatibility pass:\n{stdout}"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(stderr.trim().is_empty(), "stderr should be empty:\n{stderr}");
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_fails_on_policy_mismatch_without_allow_flag() {
+    let dir = temp_dir("sec4-replay-policy-mismatch");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_B",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail without allow-policy-mismatch"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("policyHash mismatch"),
+        "stderr should include policy mismatch reason:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_allows_policy_mismatch_with_allow_flag() {
+    let dir = temp_dir("sec4-replay-policy-allow");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_B",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+        "--allow-policy-mismatch",
+    ]);
+    assert!(output.status.success(), "replay check should pass with allow flag");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("policyHash mismatch allowed"),
+        "stderr should include policy mismatch warning:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_still_fails_on_compiler_mismatch_with_allow_flag() {
+    let dir = temp_dir("sec4-replay-compiler-mismatch");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_B",
+        "--runtime-hash",
+        "rt_A",
+        "--allow-policy-mismatch",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail on compiler mismatch even with allow flag"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("compilerHash mismatch"),
+        "stderr should include compiler mismatch reason:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
 }
 
 #[test]
