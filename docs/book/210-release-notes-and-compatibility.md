@@ -72,6 +72,11 @@ Canonical automation:
 
 This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 
+Release gate artifact stamping includes:
+- copied active policy profile file in release artifact directory,
+- policy profile SHA256 in `checksums.txt` and `summary.txt`,
+- explicit `naming lock: PASS` in `summary.txt`.
+
 CI wiring:
 - `.github/workflows/alpha-release-gate.yml`
 - `.github/workflows/naming-lock.yml`

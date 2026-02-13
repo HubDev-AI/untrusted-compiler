@@ -485,6 +485,10 @@ Roadmap impact:
   - `scripts/release-alpha-gate.sh` runs tests, locked builds, deterministic SBOM/metadata checks, policy-audited sample gates, and artifact capture in one command.
 - M9 release hardening gate is now CI-wired:
   - `.github/workflows/alpha-release-gate.yml` executes the same gate on manual dispatch and alpha-tag pushes, and uploads captured artifacts.
+- Alpha release-gate artifacts now include explicit policy identity + naming-lock status:
+  - captures the active policy profile file in `build/release-alpha-gate/`,
+  - records policy profile SHA256 in `checksums.txt` and `summary.txt`,
+  - stamps `naming lock: PASS` in release summary output.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
@@ -1283,7 +1287,7 @@ Day 14:
 1. Evolve benchmark artifact contract from markdown spec to machine-validated schema assets while keeping `artifact-contract-v0.1.md` as canonical human-readable reference.
 2. Extend `sec4 explain` beyond initial exact mappings (`E2003`, `E4004`, `E5001`, `E6001`) to cover broader high-frequency diagnostic codes.
 3. Add CI-level benchmark smoke gate for selected M10 scripts (`preflight`, `compare_matrix`, `publish_report`) to catch contract drift early.
-4. Add release-profile validation that stamps and verifies naming-lock + policy profile IDs directly inside release summary artifacts.
+4. Extend release summary stamping to include explicit compiler/runtime binary identity checks alongside policy/naming-lock identity.
 5. Define M13 scope explicitly (post-M12): prioritize either performance consistency hardening, deeper replay/stub support, or expanded editor UX quick-fix coverage.
 
 ---

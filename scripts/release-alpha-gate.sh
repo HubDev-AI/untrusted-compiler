@@ -68,6 +68,9 @@ run() {
   "$@"
 }
 
+PROFILE_HASH="$(hash_file "${PROFILE_PATH}")"
+PROFILE_BASENAME="$(basename "${PROFILE_PATH}")"
+
 SEC4_BIN="${ROOT_DIR}/target/debug/sec4"
 if [[ ! -x "${SEC4_BIN}" ]]; then
   run cargo build -p sec4 --manifest-path "${ROOT_DIR}/Cargo.toml" >/dev/null
@@ -87,6 +90,8 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 
 CHECKSUMS_FILE="${OUT_DIR}/checksums.txt"
 : > "${CHECKSUMS_FILE}"
+run cp "${PROFILE_PATH}" "${OUT_DIR}/${PROFILE_BASENAME}"
+echo "policy_profile_sha256 ${PROFILE_HASH}" >> "${CHECKSUMS_FILE}"
 
 SAMPLES=("hello" "hello-api")
 for sample in "${SAMPLES[@]}"; do
@@ -152,6 +157,8 @@ SUMMARY_PATH="${OUT_DIR}/summary.txt"
 {
   echo "sec4 alpha release gate: PASS"
   echo "policy profile: ${PROFILE_PATH}"
+  echo "policy profile sha256: ${PROFILE_HASH}"
+  echo "naming lock: PASS"
   echo "samples: ${SAMPLES[*]}"
   echo "artifacts: ${OUT_DIR}"
   echo "checksums: ${CHECKSUMS_FILE}"
