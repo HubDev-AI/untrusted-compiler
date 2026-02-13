@@ -292,5 +292,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `325-m13-trend-artifact-fetch-helper.md`
 - `326-m9-sec4-explain-audit-coverage-guard.md`
 - `327-m13-trend-note-update-command.md`
+- `328-milestone-closure-audit-checklist.md`
 
 As milestones progress, chapters will be added and linked from this index.

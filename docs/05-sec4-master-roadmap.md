@@ -41,6 +41,29 @@ Roadmap impact:
 - M11 editor tooling scope has no remaining tasks in this roadmap revision.
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 
+## Formal Closure Audit (Strict, 2026-02-13)
+
+Canonical closure should be evaluated with:
+
+```bash
+scripts/check-milestone-closure.sh
+```
+
+Current strict closure result:
+
+| Gate | Status | Meaning | Evidence |
+| --- | --- | --- | --- |
+| `M9-A/B/C` | PASS | Release gate + CI + promotion verifier chain exist | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
+| `M10-A` | PENDING | No committed live cross-impl matrix evidence for `sec4/go/node/rust` yet | `benchmark-suite/results/summaries/compare-matrix.json` |
+| `M13-A` | PENDING | No live trend-entry block appended in chapter 322 yet | `docs/book/322-m13-first-trend-run-results-note.md` |
+
+Strict closure interpretation:
+- M11 and M12 are complete for current scope.
+- M9 implementation is functionally complete but release-candidate evidence remains a verification activity.
+- M10 and M13 remain open until live evidence is captured and committed.
+
+Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
+
 - M0 bootstrap completed and committed.
 - M1 frontend bootstrap completed:
   - Lexer/token model with span-aware diagnostics.
@@ -1241,6 +1264,8 @@ Implementation order is intentionally linear to reduce thrash:
 ### Progress so far
 - Completed:
   - canonical command surface now routes through top-level `sec4 audit`, `sec4 explain`, `sec4 gate` only (legacy nested `sec` alias removed).
+  - developer workflow skill naming is aligned with locked ecosystem naming:
+    - `skills/ailang-dev-workflow/` is now `skills/sec4-dev-workflow/`.
   - automated naming-lock guard (`scripts/check-naming-lock.sh`) validates:
     - absence of legacy language/extension tokens and old editor/server names,
     - presence of locked contract tokens (`Untrusted<T>`, `.ut`, `ut/std|ut/http|ut/sec`, canonical command names).
