@@ -85,7 +85,8 @@ fn handle_message<W: Write>(
                                 "change": 1
                             },
                             "definitionProvider": true,
-                            "hoverProvider": true
+                            "hoverProvider": true,
+                            "referencesProvider": true
                         },
                         "serverInfo": {
                             "name": "ailang-language-server",
@@ -176,6 +177,28 @@ fn handle_message<W: Write>(
                 }
             }
         }
+        Some("textDocument/references") => {
+            if let Some(id) = id {
+                if let Some((uri, line, character, include_declaration)) =
+                    parse_references_position(message)
+                {
+                    match references_at_position(state, &uri, line, character, include_declaration)
+                    {
+                        Ok(result) => send_response(writer, id, result)?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
+                    }
+                } else {
+                    send_error_response(
+                        writer,
+                        id,
+                        INVALID_REQUEST,
+                        "invalid references request payload".to_string(),
+                    )?;
+                }
+            }
+        }
         Some(other) => {
             if let Some(id) = id {
                 send_error_response(
@@ -241,6 +264,17 @@ fn parse_text_document_position(message: &Value) -> Option<(String, usize, usize
     Some((uri, line, character))
 }
 
+fn parse_references_position(message: &Value) -> Option<(String, usize, usize, bool)> {
+    let (uri, line, character) = parse_text_document_position(message)?;
+    let include_declaration = message
+        .get("params")
+        .and_then(|params| params.get("context"))
+        .and_then(|context| context.get("includeDeclaration"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Some((uri, line, character, include_declaration))
+}
+
 fn definition_at_position(
     state: &ServerState,
     uri: &str,
@@ -299,6 +333,38 @@ fn hover_at_position(
         },
         "range": range_from_span(&hit.span),
     }))
+}
+
+fn references_at_position(
+    state: &ServerState,
+    uri: &str,
+    line: usize,
+    character: usize,
+    include_declaration: bool,
+) -> io::Result<Value> {
+    let (path, source) = load_document_source(state, uri)?;
+    let program = match parse_source(&path, &source) {
+        Ok(program) => program,
+        Err(_) => return Ok(Value::Array(Vec::new())),
+    };
+
+    let Some(hit) = find_identifier_at_position(&program, &path, line, character) else {
+        return Ok(Value::Array(Vec::new()));
+    };
+
+    let symbols = collect_function_symbols(&program);
+    let Some(symbol) = symbols.into_iter().find(|symbol| symbol.name == hit.name) else {
+        return Ok(Value::Array(Vec::new()));
+    };
+
+    let mut locations = collect_identifier_hits_by_name(&program, &path, &symbol.name)
+        .into_iter()
+        .map(|found| location_from_span(uri, &found.span))
+        .collect::<Vec<_>>();
+    if include_declaration {
+        locations.insert(0, location_from_span(uri, &symbol.span));
+    }
+    Ok(Value::Array(locations))
 }
 
 fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, String)> {
@@ -464,6 +530,102 @@ fn find_identifier_in_expr(
             }),
         ExprKind::Block(block) => find_identifier_in_block(block, file, line, character),
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => None,
+    }
+}
+
+fn collect_identifier_hits_by_name(
+    program: &Program,
+    file: &PathBuf,
+    target_name: &str,
+) -> Vec<IdentifierHit> {
+    let mut hits = Vec::new();
+    for item in &program.items {
+        if let ItemKind::Function(function) = &item.kind {
+            collect_identifier_hits_in_block(&function.body, file, target_name, &mut hits);
+        }
+    }
+    hits
+}
+
+fn collect_identifier_hits_in_block(
+    block: &Block,
+    file: &PathBuf,
+    target_name: &str,
+    hits: &mut Vec<IdentifierHit>,
+) {
+    for statement in &block.statements {
+        collect_identifier_hits_in_statement(statement, file, target_name, hits);
+    }
+    if let Some(tail) = &block.tail {
+        collect_identifier_hits_in_expr(tail, file, target_name, hits);
+    }
+}
+
+fn collect_identifier_hits_in_statement(
+    statement: &Stmt,
+    file: &PathBuf,
+    target_name: &str,
+    hits: &mut Vec<IdentifierHit>,
+) {
+    match &statement.kind {
+        StmtKind::Let { value, .. } => collect_identifier_hits_in_expr(value, file, target_name, hits),
+        StmtKind::Return { value } => {
+            if let Some(expr) = value {
+                collect_identifier_hits_in_expr(expr, file, target_name, hits);
+            }
+        }
+        StmtKind::Expr { expr } => collect_identifier_hits_in_expr(expr, file, target_name, hits),
+    }
+}
+
+fn collect_identifier_hits_in_expr(
+    expr: &Expr,
+    file: &PathBuf,
+    target_name: &str,
+    hits: &mut Vec<IdentifierHit>,
+) {
+    match &expr.kind {
+        ExprKind::Identifier(name) => {
+            if name == target_name && &expr.span.file == file {
+                hits.push(IdentifierHit {
+                    name: name.clone(),
+                    span: expr.span.clone(),
+                });
+            }
+        }
+        ExprKind::Unary { expr, .. } => collect_identifier_hits_in_expr(expr, file, target_name, hits),
+        ExprKind::Binary { left, right, .. } => {
+            collect_identifier_hits_in_expr(left, file, target_name, hits);
+            collect_identifier_hits_in_expr(right, file, target_name, hits);
+        }
+        ExprKind::Member { object, .. } => {
+            collect_identifier_hits_in_expr(object, file, target_name, hits);
+        }
+        ExprKind::Call { callee, args } => {
+            collect_identifier_hits_in_expr(callee, file, target_name, hits);
+            for arg in args {
+                collect_identifier_hits_in_expr(arg, file, target_name, hits);
+            }
+        }
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_identifier_hits_in_expr(condition, file, target_name, hits);
+            collect_identifier_hits_in_block(then_branch, file, target_name, hits);
+            if let Some(expr) = else_branch {
+                collect_identifier_hits_in_expr(expr, file, target_name, hits);
+            }
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            collect_identifier_hits_in_expr(scrutinee, file, target_name, hits);
+            for arm in arms {
+                collect_identifier_hits_in_expr(&arm.value, file, target_name, hits);
+            }
+        }
+        ExprKind::Block(block) => collect_identifier_hits_in_block(block, file, target_name, hits),
+        ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => {}
     }
 }
 
@@ -787,6 +949,15 @@ mod tests {
             Some(1),
             "initialize response should advertise full text sync"
         );
+        assert_eq!(
+            messages[0]
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|caps| caps.get("referencesProvider"))
+                .and_then(Value::as_bool),
+            Some(true),
+            "initialize response should advertise references provider"
+        );
         assert_eq!(messages[1].get("id"), Some(&json!(2)));
     }
 
@@ -1088,6 +1259,149 @@ mod tests {
         assert!(
             contents.contains("fn helper() -> Int"),
             "hover should include helper signature"
+        );
+    }
+
+    #[test]
+    fn references_returns_call_sites_without_declaration_when_excluded() {
+        let uri = "file:///tmp/lsp_references_calls.ai";
+        let source =
+            "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n\nfn two() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2},
+                "context": {"includeDeclaration": false}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let references_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(4)))
+            .expect("references response should exist");
+        let references = references_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("references result should be an array");
+        assert_eq!(
+            references.len(),
+            2,
+            "only call-site references should be returned when declaration is excluded",
+        );
+
+        let mut lines = references
+            .iter()
+            .filter_map(|location| {
+                location
+                    .get("range")
+                    .and_then(|range| range.get("start"))
+                    .and_then(|start| start.get("line"))
+                    .and_then(Value::as_u64)
+            })
+            .collect::<Vec<_>>();
+        lines.sort_unstable();
+        assert_eq!(lines, vec![5, 9], "expected both helper call-site lines");
+    }
+
+    #[test]
+    fn references_can_include_declaration_when_requested() {
+        let uri = "file:///tmp/lsp_references_declaration.ai";
+        let source =
+            "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n\nfn two() -> Int {\n  helper()\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": {"uri": uri},
+                "position": {"line": 5, "character": 2},
+                "context": {"includeDeclaration": true}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let references_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(5)))
+            .expect("references response should exist");
+        let references = references_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("references result should be an array");
+        assert_eq!(
+            references.len(),
+            3,
+            "declaration should be added when includeDeclaration is true",
+        );
+
+        let declaration_line = references
+            .first()
+            .and_then(|location| location.get("range"))
+            .and_then(|range| range.get("start"))
+            .and_then(|start| start.get("line"))
+            .and_then(Value::as_u64);
+        assert_eq!(
+            declaration_line,
+            Some(0),
+            "first reference should be helper declaration",
         );
     }
 
