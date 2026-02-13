@@ -2878,6 +2878,23 @@ impl Analyzer {
                 .with_note("use `secrets.get(ctx, secretsCap, name)` for context-first calls"),
             );
         }
+
+        let name_index = if args.len() == 3 { 2 } else { 1 };
+        if !arg_types[name_index].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "secret source name argument must be `String`",
+                    args[name_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!("found `{}`", arg_types[name_index].describe()))
+                .with_note(
+                    "use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`",
+                ),
+            );
+        }
     }
 
     fn enforce_secret_redact_call_shape(&mut self, callee_name: &str, span: Span, args: &[Expr]) {

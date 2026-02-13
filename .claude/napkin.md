@@ -141,3 +141,4 @@
 - Added secret-source context-first type hardening for `secrets.get`, so slot-1 context must be `Ctx` in context-first form, with secret-tagged diagnostics and dedicated semantic fixture coverage.
 - Added secret-reveal context-first type hardening for `secrets.reveal`, so slot-1 context must be `Ctx` in context-first form, with secret-tagged diagnostics and dedicated semantic fixture coverage.
 - Added secret-reveal payload typing hardening so `secrets.reveal` value argument must be `Secret<_>`, with secret-tagged diagnostics and dedicated semantic fixture coverage.
+- Added secret-source name typing hardening so `secrets.get` name argument must be `String`, with secret-tagged diagnostics and dedicated semantic fixture coverage.
