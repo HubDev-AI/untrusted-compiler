@@ -29,6 +29,15 @@ if ! grep -q '^## Endpoint Leaders$' "$out"; then
   exit 1
 fi
 
+if ! grep -q '^- Endpoints in matrix (3):' "$out"; then
+  echo "missing matrix endpoint scope header" >&2
+  exit 1
+fi
+if ! grep -q 'decode' "$out" || ! grep -q 'ping' "$out" || ! grep -q 'users-post' "$out"; then
+  echo "matrix endpoint scope header missing expected endpoint names" >&2
+  exit 1
+fi
+
 if ! grep -q '| ping | go |' "$out"; then
   echo "missing ping leader row" >&2
   exit 1
