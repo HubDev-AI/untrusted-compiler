@@ -53,7 +53,7 @@ Current strict closure result:
 
 | Gate | Status | Meaning | Evidence |
 | --- | --- | --- | --- |
-| `M9-A/B/C` | PASS | Release gate + CI + promotion verifier chain exist | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
+| `M9-A/B/C/D` | PASS | Release gate + CI + promotion verifier chain exist, with strict closure enforcement wired in | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
 | `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` for each endpoint | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |

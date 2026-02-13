@@ -2,6 +2,8 @@
 
 This slice ties alpha release readiness to strict milestone closure evidence.
 
+It also feeds closure-audit gate `M9-D`, which verifies that the release gate keeps strict closure enforcement wired in.
+
 ## What it is
 
 Updated:

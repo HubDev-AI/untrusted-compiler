@@ -23,6 +23,7 @@ Implementation progress and milestone closure are not the same. This checklist p
 - release gate script exists,
 - release gate workflow exists,
 - promotion verifier + publish manifest verifier chain exists.
+- release gate script includes strict closure enforcement (`check-milestone-closure.sh --fail-on-pending`).
 
 2. M10 live comparison evidence
 - compare matrix includes implementation IDs per endpoint:

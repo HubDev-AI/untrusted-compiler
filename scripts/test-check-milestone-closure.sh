@@ -7,7 +7,12 @@ trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/scripts" "$tmp/.github/workflows" "$tmp/benchmark-suite/results/summaries" "$tmp/docs/book"
 
-touch "$tmp/scripts/release-alpha-gate.sh"
+cat > "$tmp/scripts/release-alpha-gate.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+scripts/check-milestone-closure.sh --fail-on-pending
+SH
+chmod +x "$tmp/scripts/release-alpha-gate.sh"
 touch "$tmp/scripts/verify-release-promotion-inputs.sh"
 touch "$tmp/scripts/generate-release-publish-manifest.sh"
 touch "$tmp/scripts/verify-release-publish-manifest.sh"
@@ -165,6 +170,45 @@ YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
   echo "expected pending failure without benchmark trend artifact upload step" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/benchmark-trend.yml" <<'YAML'
+name: Benchmark Trend
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+jobs:
+  scoped-live-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json \
+            --fail-on-warning
+      - name: Check regression thresholds (ping)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint ping
+      - name: Upload benchmark trend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-trend-node-ping
+          path: benchmark-suite/results
+YAML
+
+cat > "$tmp/scripts/release-alpha-gate.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+scripts/check-milestone-closure.sh
+SH
+chmod +x "$tmp/scripts/release-alpha-gate.sh"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when release gate omits strict closure flag" >&2
   exit 1
 fi
 

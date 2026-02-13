@@ -86,6 +86,7 @@ status_for() {
 bool_has_release_gate=0
 bool_has_release_gate_ci=0
 bool_has_release_verifier_chain=0
+bool_has_release_gate_closure_enforcement=0
 bool_has_cross_impl_matrix=0
 bool_has_cross_impl_matrix_contract=0
 bool_has_live_trend_entry=0
@@ -98,6 +99,13 @@ bool_has_trend_workflow_artifact_upload=0
   && [ -f "${repo_root}/scripts/generate-release-publish-manifest.sh" ] \
   && [ -f "${repo_root}/scripts/verify-release-publish-manifest.sh" ] \
   && bool_has_release_verifier_chain=1
+
+release_gate_script="${repo_root}/scripts/release-alpha-gate.sh"
+if [ -f "${release_gate_script}" ] \
+  && rg -q 'check-milestone-closure.sh' "${release_gate_script}" \
+  && rg -q -- '--fail-on-pending' "${release_gate_script}"; then
+  bool_has_release_gate_closure_enforcement=1
+fi
 
 if [ -f "${matrix_path}" ]; then
   if jq -e '
@@ -193,6 +201,7 @@ printf '%-6s %-8s %-64s %s\n' "-----" "--------" "------------------------------
 emit_check "M9-A" "release gate script exists" "${bool_has_release_gate}" "scripts/release-alpha-gate.sh"
 emit_check "M9-B" "release gate workflow exists" "${bool_has_release_gate_ci}" ".github/workflows/alpha-release-gate.yml"
 emit_check "M9-C" "promotion verifier/manifest chain exists" "${bool_has_release_verifier_chain}" "scripts/verify-release-promotion-inputs.sh + publish-manifest scripts"
+emit_check "M9-D" "release gate enforces strict milestone closure" "${bool_has_release_gate_closure_enforcement}" "scripts/release-alpha-gate.sh"
 emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoint" "${bool_has_cross_impl_matrix}" "${matrix_path}"
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
