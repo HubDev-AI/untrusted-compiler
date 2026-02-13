@@ -26,6 +26,7 @@ This slice enforces the executable source contract directly in CI.
   - top-level `Gate { ... }` subcommand,
   - top-level `Explain { ... }` subcommand,
   - top-level `Replay { ... }` subcommand,
+  - replay `effects: ReplayEffectsMode` field wiring,
   - gate default fail threshold wiring: `risk>=HIGH`.
 - Asserts legacy nested `Sec` alias patterns are absent.
 

@@ -331,5 +331,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `364-m14-replay-stub-registry-contract-bootstrap.md`
 - `365-m14-replay-cli-stub-registry-validation.md`
 - `366-m14-replay-cli-effects-mode-guardrails.md`
+- `367-m14-replay-effects-field-cli-contract-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -10,6 +10,12 @@ trap 'rm -rf "${tmp}"' EXIT
 cli_path="${tmp}/main.rs"
 
 cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -20,6 +26,7 @@ enum Commands {
     },
     Replay {
         capture: String,
+        effects: ReplayEffectsMode,
     },
 }
 
@@ -32,6 +39,12 @@ RS
 "${contract_script}" --cli "${cli_path}" >/dev/null
 
 cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -42,6 +55,7 @@ enum Commands {
     },
     Replay {
         capture: String,
+        effects: ReplayEffectsMode,
     },
 }
 
@@ -57,6 +71,12 @@ if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
 fi
 
 cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -67,6 +87,7 @@ enum Commands {
     },
     Replay {
         capture: String,
+        effects: ReplayEffectsMode,
     },
     Sec {
         cmd: String,
@@ -85,6 +106,12 @@ if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
 fi
 
 cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -103,6 +130,37 @@ RS
 
 if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
   echo "expected command contract failure when replay subcommand is missing" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
+enum Commands {
+    Audit(AuditArgs),
+    Gate {
+        fail_on: Option<String>,
+    },
+    Explain {
+        code: String,
+    },
+    Replay {
+        capture: String,
+    },
+}
+
+fn gate_default(fail_on: Option<String>) -> Option<String> {
+    let _x = Some(fail_on.as_deref().unwrap_or("risk>=HIGH"));
+    None
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected command contract failure when replay effects mode field is missing" >&2
   exit 1
 fi
 
