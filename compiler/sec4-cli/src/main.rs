@@ -264,6 +264,7 @@ fn cmd_replay_check(
     let capture_runtime_hash =
         json_required_str(&capture_json, "runtimeHash").expect("runtimeHash checked by contract");
     let mut warnings = Vec::new();
+    let mut stub_counts: Option<(usize, usize, usize)> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -333,11 +334,33 @@ fn cmd_replay_check(
             eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
             return Err(1);
         }
+
+        let stubs_obj = stubs_json
+            .get("stubs")
+            .and_then(serde_json::Value::as_object)
+            .expect("stub registry stubs object shape already validated");
+        let net_count = stubs_obj
+            .get("net")
+            .and_then(serde_json::Value::as_array)
+            .expect("stub registry stubs.net shape already validated")
+            .len();
+        let db_count = stubs_obj
+            .get("db")
+            .and_then(serde_json::Value::as_array)
+            .map_or(0, Vec::len);
+        let fs_count = stubs_obj
+            .get("fs")
+            .and_then(serde_json::Value::as_array)
+            .map_or(0, Vec::len);
+        stub_counts = Some((net_count, db_count, fs_count));
     }
 
     match output_format {
         ReplayOutputFormat::Text => {
             println!("replay capture compatibility check passed");
+            if let Some((net, db, fs)) = stub_counts {
+                println!("replay stubs loaded: net={net} db={db} fs={fs}");
+            }
         }
         ReplayOutputFormat::Json => {
             let payload = serde_json::json!({
@@ -354,6 +377,11 @@ fn cmd_replay_check(
                 "runtimeHashMatched": capture_runtime_hash == expected_runtime_hash,
                 "allowPolicyMismatch": allow_policy_mismatch,
                 "warnings": warnings,
+                "stubCounts": stub_counts.map(|(net, db, fs)| serde_json::json!({
+                    "net": net,
+                    "db": db,
+                    "fs": fs,
+                })),
             });
             println!(
                 "{}",

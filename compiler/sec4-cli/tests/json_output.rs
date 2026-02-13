@@ -440,7 +440,6 @@ fn replay_check_passes_when_capture_hashes_match() {
         stdout.contains("replay capture compatibility check passed"),
         "stdout should confirm replay compatibility pass:\n{stdout}"
     );
-
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.trim().is_empty(),
@@ -596,6 +595,10 @@ fn replay_check_with_stub_registry_passes() {
     assert!(
         stdout.contains("replay capture compatibility check passed"),
         "stdout should confirm replay compatibility pass:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("replay stubs loaded: net=1 db=0 fs=0"),
+        "stdout should include replay stub inventory summary:\n{stdout}"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
@@ -972,6 +975,33 @@ fn replay_check_json_mode_writes_parseable_payload() {
             .and_then(Value::as_array)
             .is_some_and(|warnings| warnings.is_empty()),
         "warnings should be present and empty for clean mock run"
+    );
+    assert_eq!(
+        parsed
+            .get("stubCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("net"))
+            .and_then(Value::as_u64)
+            .expect("stubCounts.net should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("stubCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("db"))
+            .and_then(Value::as_u64)
+            .expect("stubCounts.db should be present"),
+        0
+    );
+    assert_eq!(
+        parsed
+            .get("stubCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("fs"))
+            .and_then(Value::as_u64)
+            .expect("stubCounts.fs should be present"),
+        0
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");

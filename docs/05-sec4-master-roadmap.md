@@ -1512,6 +1512,7 @@ M13-S1 go/no-go note:
 - Add replay JSON output mode (`--format json`) for machine-readable CI/operator integration.
 - Add replay CLI JSON-contract guard scripts and closure gate enforcement in naming-lock CI.
 - Enforce mandatory replay redaction baseline (`authorization`, `cookie`, `set-cookie`; `$.password`, `$.token`, `$.secret`, `$.apiKey`) in stub-contract validators.
+- Surface replay stub inventory counts (`net/db/fs`) in CLI text/json outputs for mock-mode observability.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1535,6 +1536,7 @@ M13-S1 go/no-go note:
 - [x] Extended `sec4 replay` with `--format json` machine-readable success payload output.
 - [x] Added replay CLI json contract + guard scripts and strict closure gate `M14-D`.
 - [x] Enforced required replay redaction headers/jsonPaths in shell + CLI stub-contract validators with regression tests.
+- [x] Added replay stub inventory summary output (`stubCounts` JSON + text summary line).
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1550,6 +1552,7 @@ M13-S1 go/no-go note:
 - `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning fields.
 - CI fails if replay CLI json contract + guard enforcement is removed from naming-lock workflow.
 - Replay stub-contract validation fails when required redaction headers/jsonPaths are incomplete.
+- Replay outputs include deterministic stub inventory counts when `--stubs` is supplied.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1562,6 +1565,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay CLI JSON Contract Closure Gate".
 - Chapter: "M14 Slice: Replay Redaction Header Baseline Enforcement".
 - Chapter: "M14 Slice: Replay Redaction JSONPath Baseline Enforcement".
+- Chapter: "M14 Slice: Replay Stub Inventory Output".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
