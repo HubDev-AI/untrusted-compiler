@@ -37,5 +37,9 @@ if grep -q '"endpoint": "decode"' "$filtered_out"; then
   echo "filtered report should not include decode summary" >&2
   exit 1
 fi
+if [ "$(jq -r '.selectedEndpoints[0] // empty' "$filtered_out")" != "ping" ]; then
+  echo "filtered report selectedEndpoints missing ping" >&2
+  exit 1
+fi
 
 echo "build_report test passed"

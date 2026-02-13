@@ -55,6 +55,21 @@ else
   sec_audit_json='null'
 fi
 
+if [ -n "$endpoints_csv" ]; then
+  selected_endpoints_json="$(
+    IFS=',' read -r -a endpoints <<< "$endpoints_csv"
+    json='[]'
+    for raw_endpoint in "${endpoints[@]}"; do
+      endpoint="${raw_endpoint// /}"
+      [ -z "$endpoint" ] && continue
+      json="$(jq -c --arg endpoint "$endpoint" '. + [$endpoint]' <<<"$json")"
+    done
+    printf '%s' "$json"
+  )"
+else
+  selected_endpoints_json='null'
+fi
+
 mkdir -p "$(dirname "$out")"
 
 jq -n \
@@ -62,12 +77,14 @@ jq -n \
   --argjson env "$env_json" \
   --argjson summaries "$summaries_json" \
   --argjson secAudit "$sec_audit_json" \
+  --argjson selectedEndpoints "$selected_endpoints_json" \
   '{
     version: "0.1",
     impl: $impl,
     env: $env,
     summaries: $summaries,
-    secAudit: $secAudit
+    secAudit: $secAudit,
+    selectedEndpoints: $selectedEndpoints
   }' > "$out"
 
 echo "wrote $out"

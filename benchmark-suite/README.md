@@ -76,3 +76,4 @@ Measure end-to-end service behavior across identical implementations:
   - real runs require `wrk2` and implementation toolchains to be present.
 - `users-get` profile seeds one deterministic user before load and passes `BENCH_USER_ID` into `load/wrk2/get_user.lua`.
 - Matrix runs pass selected endpoint set into report bundling, so filtered runs do not accidentally include stale endpoint summaries from previous runs.
+- Per-implementation report bundles now include `selectedEndpoints` metadata when matrix runs are endpoint-filtered.
