@@ -12,8 +12,9 @@ pub mod semantic;
 pub mod token;
 
 pub use audit::{
-    render_security_audit_text, run_security_audit, run_security_audit_with_baseline, should_fail,
-    AuditReport, AuditSeverity, AuditTrend,
+    render_security_audit_text, run_security_audit, run_security_audit_with_baseline,
+    should_fail, summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity,
+    AuditTrend,
 };
 pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
 pub use diagnostics::{Diagnostic, Severity, Span};

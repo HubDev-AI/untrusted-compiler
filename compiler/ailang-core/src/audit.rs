@@ -236,6 +236,38 @@ pub struct AuditTrend {
     pub resolved_finding_ids: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuditHistoryWindowSummary {
+    pub window: usize,
+    pub reports: usize,
+    #[serde(rename = "oldestRiskScore")]
+    pub oldest_risk_score: i64,
+    #[serde(rename = "latestRiskScore")]
+    pub latest_risk_score: i64,
+    #[serde(rename = "oldestTimeMs")]
+    pub oldest_time_ms: i64,
+    #[serde(rename = "latestTimeMs")]
+    pub latest_time_ms: i64,
+    #[serde(rename = "oldestPolicyHash")]
+    pub oldest_policy_hash: String,
+    #[serde(rename = "latestPolicyHash")]
+    pub latest_policy_hash: String,
+    #[serde(rename = "minRiskScore")]
+    pub min_risk_score: i64,
+    #[serde(rename = "maxRiskScore")]
+    pub max_risk_score: i64,
+    #[serde(rename = "riskScoreDelta")]
+    pub risk_score_delta: i64,
+    #[serde(rename = "averageRiskScore")]
+    pub average_risk_score: f64,
+    #[serde(rename = "highestSeveritySeen")]
+    pub highest_severity_seen: String,
+    #[serde(rename = "severityRollup")]
+    pub severity_rollup: HashMap<String, i64>,
+    #[serde(rename = "severityLatestDelta")]
+    pub severity_latest_delta: HashMap<String, i64>,
+}
+
 pub fn run_security_audit(policy: &Policy, security_map: &SecurityMap) -> AuditReport {
     run_security_audit_with_baseline(policy, security_map, None)
 }
@@ -1055,6 +1087,81 @@ pub fn should_fail(report: &AuditReport, threshold: AuditSeverity) -> bool {
         .findings
         .iter()
         .any(|finding| finding.severity >= threshold)
+}
+
+pub fn summarize_history_window(
+    reports: &[AuditReport],
+    window: usize,
+) -> Option<AuditHistoryWindowSummary> {
+    if reports.is_empty() || window == 0 {
+        return None;
+    }
+
+    let oldest = reports
+        .first()
+        .expect("history summary reports should be non-empty");
+    let latest = reports
+        .last()
+        .expect("history summary reports should be non-empty");
+
+    let risk_scores = reports
+        .iter()
+        .map(|report| report.summary.risk_score)
+        .collect::<Vec<_>>();
+    let oldest_risk_score = *risk_scores
+        .first()
+        .expect("history summary risk scores should be non-empty");
+    let latest_risk_score = *risk_scores
+        .last()
+        .expect("history summary risk scores should be non-empty");
+    let min_risk_score = *risk_scores
+        .iter()
+        .min()
+        .expect("history summary min risk should exist");
+    let max_risk_score = *risk_scores
+        .iter()
+        .max()
+        .expect("history summary max risk should exist");
+    let average_risk_score = risk_scores.iter().sum::<i64>() as f64 / risk_scores.len() as f64;
+
+    let severity_keys = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+    let mut severity_rollup = HashMap::new();
+    let mut highest_severity_seen = "LOW".to_string();
+    for key in severity_keys {
+        let total = reports
+            .iter()
+            .map(|report| report.summary.finding_counts.get(key).copied().unwrap_or(0))
+            .sum::<i64>();
+        severity_rollup.insert(key.to_string(), total);
+        if total > 0 {
+            highest_severity_seen = key.to_string();
+        }
+    }
+
+    let mut severity_latest_delta = HashMap::new();
+    for key in severity_keys {
+        let oldest_count = oldest.summary.finding_counts.get(key).copied().unwrap_or(0);
+        let latest_count = latest.summary.finding_counts.get(key).copied().unwrap_or(0);
+        severity_latest_delta.insert(key.to_string(), latest_count - oldest_count);
+    }
+
+    Some(AuditHistoryWindowSummary {
+        window,
+        reports: reports.len(),
+        oldest_risk_score,
+        latest_risk_score,
+        oldest_time_ms: oldest.build.time_ms,
+        latest_time_ms: latest.build.time_ms,
+        oldest_policy_hash: oldest.policy.hash.clone(),
+        latest_policy_hash: latest.policy.hash.clone(),
+        min_risk_score,
+        max_risk_score,
+        risk_score_delta: latest_risk_score - oldest_risk_score,
+        average_risk_score,
+        highest_severity_seen,
+        severity_rollup,
+        severity_latest_delta,
+    })
 }
 
 fn compute_trend(current: &AuditReport, baseline: &AuditReport) -> AuditTrend {

@@ -1,8 +1,8 @@
 use ailang_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
-    emit_runtime_header, emit_runtime_source, render_security_audit_text,
+    emit_runtime_header, emit_runtime_source, render_security_audit_text, summarize_history_window,
     run_security_audit_with_baseline, should_fail, write_lockfile_stub, write_security_map,
-    AuditReport, AuditSeverity, Diagnostic,
+    AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use std::fs;
@@ -361,29 +361,10 @@ fn load_latest_history_baseline(history_dir: &Path) -> Result<Option<(AuditRepor
     Ok(Some((report, latest)))
 }
 
-#[derive(Debug, Clone)]
-struct HistoryWindowSummary {
-    window: usize,
-    reports: usize,
-    oldest_risk_score: i64,
-    latest_risk_score: i64,
-    oldest_time_ms: i64,
-    latest_time_ms: i64,
-    oldest_policy_hash: String,
-    latest_policy_hash: String,
-    min_risk_score: i64,
-    max_risk_score: i64,
-    risk_score_delta: i64,
-    average_risk_score: f64,
-    highest_severity_seen: String,
-    severity_rollup: std::collections::HashMap<String, i64>,
-    severity_latest_delta: std::collections::HashMap<String, i64>,
-}
-
 fn load_recent_history_reports(
     history_dir: &Path,
     window: usize,
-) -> Result<Vec<(AuditReport, PathBuf)>, i32> {
+) -> Result<Vec<AuditReport>, i32> {
     if !history_dir.exists() {
         return Ok(Vec::new());
     }
@@ -418,7 +399,7 @@ fn load_recent_history_reports(
     let mut reports = Vec::new();
     for path in candidates.into_iter().skip(start) {
         let report = load_audit_baseline(&path)?;
-        reports.push((report, path));
+        reports.push(report);
     }
     Ok(reports)
 }
@@ -426,90 +407,12 @@ fn load_recent_history_reports(
 fn compute_history_window_summary(
     history_dir: &Path,
     window: usize,
-) -> Result<Option<HistoryWindowSummary>, i32> {
+) -> Result<Option<AuditHistoryWindowSummary>, i32> {
     let reports = load_recent_history_reports(history_dir, window)?;
-    if reports.is_empty() {
-        return Ok(None);
-    }
-
-    let risk_scores = reports
-        .iter()
-        .map(|(report, _)| report.summary.risk_score)
-        .collect::<Vec<_>>();
-    let oldest = *risk_scores
-        .first()
-        .expect("history summary risk-score list should be non-empty");
-    let latest = *risk_scores
-        .last()
-        .expect("history summary risk-score list should be non-empty");
-    let average = risk_scores.iter().sum::<i64>() as f64 / risk_scores.len() as f64;
-    let min = *risk_scores
-        .iter()
-        .min()
-        .expect("history summary min should exist");
-    let max = *risk_scores
-        .iter()
-        .max()
-        .expect("history summary max should exist");
-    let severity_keys = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-    let mut severity_rollup = std::collections::HashMap::new();
-    let mut highest_seen = "LOW".to_string();
-    for key in severity_keys {
-        let total = reports
-            .iter()
-            .map(|(report, _)| report.summary.finding_counts.get(key).copied().unwrap_or(0))
-            .sum::<i64>();
-        severity_rollup.insert(key.to_string(), total);
-        if total > 0 {
-            highest_seen = key.to_string();
-        }
-    }
-
-    let oldest_report = reports
-        .first()
-        .expect("history summary should contain at least one report");
-    let latest_report = reports
-        .last()
-        .expect("history summary should contain at least one report");
-    let mut severity_latest_delta = std::collections::HashMap::new();
-    for key in severity_keys {
-        let oldest_count = oldest_report
-            .0
-            .summary
-            .finding_counts
-            .get(key)
-            .copied()
-            .unwrap_or(0);
-        let latest_count = latest_report
-            .0
-            .summary
-            .finding_counts
-            .get(key)
-            .copied()
-            .unwrap_or(0);
-        severity_latest_delta.insert(key.to_string(), latest_count - oldest_count);
-    }
-
-    Ok(Some(HistoryWindowSummary {
-        window: window.max(1),
-        reports: risk_scores.len(),
-        oldest_risk_score: oldest,
-        latest_risk_score: latest,
-        oldest_time_ms: oldest_report.0.build.time_ms,
-        latest_time_ms: latest_report.0.build.time_ms,
-        oldest_policy_hash: oldest_report.0.policy.hash.clone(),
-        latest_policy_hash: latest_report.0.policy.hash.clone(),
-        min_risk_score: min,
-        max_risk_score: max,
-        risk_score_delta: latest - oldest,
-        average_risk_score: average,
-        highest_severity_seen: highest_seen,
-        severity_rollup,
-        severity_latest_delta,
-    }))
+    Ok(summarize_history_window(&reports, window.max(1)))
 }
 
-fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWindowSummary) {
+fn print_history_window_summary(format: AuditOutputFormat, summary: &AuditHistoryWindowSummary) {
     match format {
         AuditOutputFormat::Text => {
             print_aux_line(
@@ -531,28 +434,11 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
             );
         }
         AuditOutputFormat::Json => {
-            let payload = serde_json::json!({
-                "window": summary.window,
-                "reports": summary.reports,
-                "oldestRiskScore": summary.oldest_risk_score,
-                "latestRiskScore": summary.latest_risk_score,
-                "oldestTimeMs": summary.oldest_time_ms,
-                "latestTimeMs": summary.latest_time_ms,
-                "oldestPolicyHash": summary.oldest_policy_hash,
-                "latestPolicyHash": summary.latest_policy_hash,
-                "minRiskScore": summary.min_risk_score,
-                "maxRiskScore": summary.max_risk_score,
-                "riskScoreDelta": summary.risk_score_delta,
-                "averageRiskScore": summary.average_risk_score,
-                "highestSeveritySeen": summary.highest_severity_seen,
-                "severityRollup": summary.severity_rollup,
-                "severityLatestDelta": summary.severity_latest_delta,
-            });
             print_aux_line(
                 format,
                 &format!(
                     "history window summary: {}",
-                    serde_json::to_string(&payload)
+                    serde_json::to_string(summary)
                         .expect("history window summary payload should serialize")
                 ),
             );
@@ -560,7 +446,7 @@ fn print_history_window_summary(format: AuditOutputFormat, summary: &HistoryWind
     }
 }
 
-fn write_history_window_summary(path: &Path, summary: &HistoryWindowSummary) -> Result<(), i32> {
+fn write_history_window_summary(path: &Path, summary: &AuditHistoryWindowSummary) -> Result<(), i32> {
     if let Some(parent) = path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {
             eprintln!(
@@ -571,24 +457,7 @@ fn write_history_window_summary(path: &Path, summary: &HistoryWindowSummary) -> 
         }
     }
 
-    let payload = serde_json::json!({
-        "window": summary.window,
-        "reports": summary.reports,
-        "oldestRiskScore": summary.oldest_risk_score,
-        "latestRiskScore": summary.latest_risk_score,
-        "oldestTimeMs": summary.oldest_time_ms,
-        "latestTimeMs": summary.latest_time_ms,
-        "oldestPolicyHash": summary.oldest_policy_hash,
-        "latestPolicyHash": summary.latest_policy_hash,
-        "minRiskScore": summary.min_risk_score,
-        "maxRiskScore": summary.max_risk_score,
-        "riskScoreDelta": summary.risk_score_delta,
-        "averageRiskScore": summary.average_risk_score,
-        "highestSeveritySeen": summary.highest_severity_seen,
-        "severityRollup": summary.severity_rollup,
-        "severityLatestDelta": summary.severity_latest_delta,
-    });
-    let serialized = match serde_json::to_string_pretty(&payload) {
+    let serialized = match serde_json::to_string_pretty(summary) {
         Ok(json) => json,
         Err(err) => {
             eprintln!("could not serialize history summary: {err}");
