@@ -172,25 +172,29 @@ for impl in "${impls[@]}"; do
 done
 
 matrix_path="${summaries_dir}/compare-matrix.json"
+analysis_path="${summaries_dir}/analysis.json"
 report_md_path="${results_dir}/benchmark-report.md"
 
 if [ "$dry_run" = "true" ]; then
   echo "run: ${root_dir}/scripts/compare_matrix.sh ${summaries_dir} ${matrix_path}"
+  echo "run: ${root_dir}/scripts/analyze_matrix.sh ${matrix_path} ${analysis_path}"
   if [ -n "$sec_audit_path" ]; then
-    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path}"
+    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path} ${analysis_path}"
   else
-    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path}"
+    echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} \"\" ${analysis_path}"
   fi
   exit 0
 fi
 
 "${root_dir}/scripts/compare_matrix.sh" "$summaries_dir" "$matrix_path"
+"${root_dir}/scripts/analyze_matrix.sh" "$matrix_path" "$analysis_path"
 
 if [ -n "$sec_audit_path" ]; then
-  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "$sec_audit_path"
+  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "$sec_audit_path" "$analysis_path"
 else
-  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path"
+  "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "" "$analysis_path"
 fi
 
 echo "comparison matrix written to ${matrix_path}"
+echo "analysis written to ${analysis_path}"
 echo "benchmark report written to ${report_md_path}"

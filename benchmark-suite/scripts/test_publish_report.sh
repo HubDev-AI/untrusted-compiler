@@ -13,8 +13,11 @@ cp "$root_dir/scripts/testdata/sample-rust-report.json" "$tmp/rust-report.json"
 matrix="$tmp/compare-matrix.json"
 "$root_dir/scripts/compare_matrix.sh" "$tmp" "$matrix" >/dev/null
 
+analysis="$tmp/analysis.json"
+"$root_dir/scripts/analyze_matrix.sh" "$matrix" "$analysis" >/dev/null
+
 out="$tmp/report.md"
-"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" >/dev/null
+"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" >/dev/null
 
 if ! grep -q '^# Benchmark Comparative Report (v0.1)$' "$out"; then
   echo "missing report title" >&2
@@ -33,6 +36,16 @@ fi
 
 if ! grep -q '^## Tail Latency Signals$' "$out"; then
   echo "missing tail latency section" >&2
+  exit 1
+fi
+
+if ! grep -q '^## Matrix Analysis$' "$out"; then
+  echo "missing matrix analysis section" >&2
+  exit 1
+fi
+
+if ! grep -q 'Highest severity: MEDIUM' "$out"; then
+  echo "missing analysis highest severity summary" >&2
   exit 1
 fi
 

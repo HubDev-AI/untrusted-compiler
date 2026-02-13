@@ -40,7 +40,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite compare-matrix`
 8. Analyze tail-latency and target-coverage signals:
    - `make -C benchmark-suite analyze-matrix`
-9. Generate markdown benchmark report:
+9. Generate markdown benchmark report (matrix + analysis + sec.audit):
    - `make -C benchmark-suite publish-report`
 10. Run full cross-impl orchestrator:
    - `make -C benchmark-suite bench-matrix-dry`

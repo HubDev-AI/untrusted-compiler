@@ -70,7 +70,7 @@ analyze-matrix:
 	scripts/analyze_matrix.sh results/summaries/compare-matrix.json results/summaries/analysis.json
 
 publish-report:
-	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json
+	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json
 
 test-scripts:
 	scripts/test_wrk2_summary.sh

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 4 ]; then
+  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json]" >&2
   exit 2
 fi
 
 matrix_path="$1"
 out_path="$2"
 sec_audit_path="${3:-}"
+analysis_path="${4:-}"
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -25,6 +26,11 @@ if [ -n "$sec_audit_path" ] && [ ! -f "$sec_audit_path" ]; then
   exit 2
 fi
 
+if [ -n "$analysis_path" ] && [ ! -f "$analysis_path" ]; then
+  echo "analysis file not found: ${analysis_path}" >&2
+  exit 2
+fi
+
 mkdir -p "$(dirname "$out_path")"
 now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
@@ -35,6 +41,9 @@ now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "- Matrix source: ${matrix_path}"
   if [ -n "$sec_audit_path" ]; then
     echo "- Security source: ${sec_audit_path}"
+  fi
+  if [ -n "$analysis_path" ]; then
+    echo "- Analysis source: ${analysis_path}"
   fi
   echo
 
@@ -64,22 +73,46 @@ now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
   echo "## Tail Latency Signals"
   echo
-  jq -r '
-    def p99num:
-      ((.p99 // "") | tostring | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // "0" | tonumber);
-    .endpoints[]
-    | .endpoint as $ep
-    | (.compared | map(p99num)) as $vals
-    | {
-        endpoint: $ep,
-        p99Min: ($vals | min),
-        p99Max: ($vals | max),
-        ratio: (if (($vals | min) > 0) then (($vals | max) / ($vals | min)) else null end)
-      }
-    | . as $row
-    | "- \($row.endpoint): p99 min=\($row.p99Min)ms, max=\($row.p99Max)ms, spread="
-      + (if $row.ratio == null then "n/a" else (((($row.ratio * 100) | round) / 100) | tostring) + "x" end)
-  ' "$matrix_path"
+  if [ -n "$analysis_path" ]; then
+    jq -r '.endpoints[] | .metrics as $m | "- \(.endpoint): p99 min=\($m.p99MinMs)ms, max=\($m.p99MaxMs)ms, spread=\(if $m.p99SpreadX == null then "n/a" else (((($m.p99SpreadX * 100) | round) / 100) | tostring) + "x" end)"' "$analysis_path"
+  else
+    jq -r '
+      def p99num:
+        ((.p99 // "") | tostring | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // "0" | tonumber);
+      .endpoints[]
+      | .endpoint as $ep
+      | (.compared | map(p99num)) as $vals
+      | {
+          endpoint: $ep,
+          p99Min: ($vals | min),
+          p99Max: ($vals | max),
+          ratio: (if (($vals | min) > 0) then (($vals | max) / ($vals | min)) else null end)
+        }
+      | . as $row
+      | "- \($row.endpoint): p99 min=\($row.p99Min)ms, max=\($row.p99Max)ms, spread="
+        + (if $row.ratio == null then "n/a" else (((($row.ratio * 100) | round) / 100) | tostring) + "x" end)
+    ' "$matrix_path"
+  fi
+  echo
+
+  echo "## Matrix Analysis"
+  echo
+  if [ -n "$analysis_path" ]; then
+    analysis_highest="$(jq -r '.summary.highestSeverity // "unknown"' "$analysis_path")"
+    analysis_endpoints="$(jq -r '.summary.endpointCount // 0' "$analysis_path")"
+    analysis_low="$(jq -r '.summary.findingCounts.LOW // 0' "$analysis_path")"
+    analysis_medium="$(jq -r '.summary.findingCounts.MEDIUM // 0' "$analysis_path")"
+    analysis_high="$(jq -r '.summary.findingCounts.HIGH // 0' "$analysis_path")"
+    analysis_critical="$(jq -r '.summary.findingCounts.CRITICAL // 0' "$analysis_path")"
+    echo "- Endpoints analyzed: ${analysis_endpoints}"
+    echo "- Highest severity: ${analysis_highest}"
+    echo "- Findings: LOW=${analysis_low}, MEDIUM=${analysis_medium}, HIGH=${analysis_high}, CRITICAL=${analysis_critical}"
+    echo
+    echo "Top analysis findings:"
+    jq -r '.endpoints[] | .endpoint as $ep | (.findings[]? | "- [\(.severity)] \(.id) (\($ep)): \(.message)")' "$analysis_path" | head -n 8
+  else
+    echo "- No analysis artifact provided."
+  fi
   echo
 
   echo "## Security Posture"

@@ -29,6 +29,11 @@ if ! grep -q 'compare_matrix.sh' <<<"$out"; then
   exit 1
 fi
 
+if ! grep -q 'analyze_matrix.sh' <<<"$out"; then
+  echo "missing matrix analysis command" >&2
+  exit 1
+fi
+
 if ! grep -q 'publish_report.sh' <<<"$out"; then
   echo "missing publish report command" >&2
   exit 1
