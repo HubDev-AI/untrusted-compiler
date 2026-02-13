@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  err.withPath(1, "$.field");
+  1
+}

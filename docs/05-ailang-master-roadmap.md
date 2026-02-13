@@ -340,6 +340,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - key argument must be `String`,
     - detail values reject `Secret<_>` and `Untrusted<_>` payloads with tagged diagnostics.
   - `err.withPath` path typing is now hardened:
+    - first argument must be `StdError`,
     - path argument must be `String`,
     - invalid path payloads emit tagged `E4001` security diagnostics.
   - `err.withLimit` argument typing is now hardened:
@@ -763,6 +764,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: err.withDetail Value-Safety Hardening".
 - Chapter: "M7 Slice: err.withPath Path-Argument Hardening".
+- Chapter: "M7 Slice: err.withPath Error-Argument Hardening".
 - Chapter: "M7 Slice: err.withLimit Argument Hardening".
 - Chapter: "M7 Slice: err.withDependency Argument Hardening".
 - Chapter: "M7 Slice: err.withCause Argument Hardening".

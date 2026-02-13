@@ -3812,6 +3812,19 @@ impl Analyzer {
                 return;
             }
 
+            if !arg_types[0].is_named("StdError") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withPath error argument must be `StdError`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use an error value created via `err.*` constructors"),
+                );
+            }
+
             if !arg_types[1].is_named("String") {
                 self.diagnostics.push(
                     Diagnostic::error(

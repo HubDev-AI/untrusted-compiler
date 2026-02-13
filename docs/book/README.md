@@ -132,5 +132,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `164-m7-json-decode-schema-argument-hardening.md`
 - `165-m7-json-decode-context-payload-argument-type-hardening.md`
 - `166-m7-err-with-cause-argument-hardening.md`
+- `167-m7-err-with-path-error-argument-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

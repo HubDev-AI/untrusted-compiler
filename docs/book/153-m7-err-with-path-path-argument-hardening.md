@@ -48,7 +48,7 @@ Example:
 ## Example usage
 
 ```ailang
-fn attach(base: Int) -> Int {
+fn attach(base: StdError) -> Int {
   err.withPath(base, "$.field");
   0
 }
@@ -58,4 +58,4 @@ fn attach(base: Int) -> Int {
 
 - Tradeoff: permissive placeholder path arguments in earlier bridge fixtures are now rejected.
 - Next:
-  - continue strict typing across remaining error-helper enrichers (`withLimit`, `withDependency`) for complete standard-error contract parity.
+  - strict `err.withPath` error-argument typing is covered in a follow-up slice (`167-m7-err-with-path-error-argument-hardening.md`).

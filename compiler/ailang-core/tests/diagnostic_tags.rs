@@ -731,7 +731,8 @@ fn bad(secret: Secret<String>) -> Int {
 fn err_with_path_argument_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() -> Int {
-  err.withPath(1, 2);
+  let base = err.validation("VAL.BAD", "bad");
+  err.withPath(base, 2);
   1
 }
 "#;
@@ -742,6 +743,24 @@ fn bad() -> Int {
         .iter()
         .find(|diag| diag.message == "err.withPath path argument must be `String`")
         .expect("expected err.withPath path argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn err_with_path_error_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  err.withPath(1, "$.field");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.withPath error argument must be `StdError`")
+        .expect("expected err.withPath error argument diagnostic");
     assert!(diag.tags.iter().any(|tag| tag == "security"));
 }
 
