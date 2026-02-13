@@ -68,10 +68,6 @@ enum Commands {
     Explain {
         code: String,
     },
-    Sec {
-        #[command(subcommand)]
-        command: SecCommands,
-    },
 }
 
 #[derive(Args, Debug)]
@@ -92,11 +88,6 @@ struct AuditArgs {
     write_report: Option<PathBuf>,
     #[arg(long)]
     fail_on: Option<String>,
-}
-
-#[derive(Subcommand, Debug)]
-enum SecCommands {
-    Audit(AuditArgs),
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -150,17 +141,10 @@ fn main() {
             Some(fail_on.as_deref().unwrap_or("risk>=HIGH")),
         ),
         Commands::Explain { code } => cmd_explain(&code),
-        Commands::Sec { command } => cmd_sec(command),
     };
 
     if let Err(code) = result {
         std::process::exit(code);
-    }
-}
-
-fn cmd_sec(command: SecCommands) -> Result<(), i32> {
-    match command {
-        SecCommands::Audit(args) => cmd_audit(args),
     }
 }
 

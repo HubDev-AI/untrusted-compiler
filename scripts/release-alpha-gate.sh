@@ -73,6 +73,8 @@ if [[ ! -x "${SEC4_BIN}" ]]; then
   run cargo build -p sec4 --manifest-path "${ROOT_DIR}/Cargo.toml" >/dev/null
 fi
 
+run "${ROOT_DIR}/scripts/check-naming-lock.sh"
+
 if [[ "${RUN_TESTS}" -eq 1 ]]; then
   run cargo test -q --manifest-path "${ROOT_DIR}/Cargo.toml"
 fi

@@ -478,6 +478,10 @@ Roadmap impact:
   - `scripts/release-alpha-gate.sh` runs tests, locked builds, deterministic SBOM/metadata checks, policy-audited sample gates, and artifact capture in one command.
 - M9 release hardening gate is now CI-wired:
   - `.github/workflows/alpha-release-gate.yml` executes the same gate on manual dispatch and alpha-tag pushes, and uploads captured artifacts.
+- M12 naming-alignment enforcement has started:
+  - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
+  - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
+  - alpha release gate now runs naming-lock validation before artifact checks.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1146,7 +1150,17 @@ Implementation order is intentionally linear to reduce thrash:
   - benchmark harness implementation IDs and artifact names
   - editor tooling identifiers (LSP + Zed + tree-sitter scaffolds)
   - runtime ABI docs/examples
-- Keep compatibility shims only where needed to avoid breaking ongoing validation during migration (for example legacy `sec4 sec audit` alias while docs move to `sec4 audit`).
+- Remove transitional aliases once migration is complete; canonical command surface is `sec4 audit`, `sec4 explain`, and `sec4 gate`.
+
+### Progress so far
+- Completed:
+  - canonical command surface now routes through top-level `sec4 audit`, `sec4 explain`, `sec4 gate` only (legacy nested `sec` alias removed).
+  - automated naming-lock guard (`scripts/check-naming-lock.sh`) validates:
+    - absence of legacy language/extension tokens and old editor/server names,
+    - presence of locked contract tokens (`Untrusted<T>`, `.ut`, `ut/std|ut/http|ut/sec`, canonical command names).
+  - release hardening gate (`scripts/release-alpha-gate.sh`) now executes naming-lock validation as part of alpha readiness.
+- Remaining:
+  - expand naming-lock checks to benchmark raw-artifact naming conventions after final M10 artifact schema freeze.
 
 ### Exit criteria
 - `rg` across tracked source/docs returns no legacy pre-rename tokens outside historical commit logs and third-party artifacts.

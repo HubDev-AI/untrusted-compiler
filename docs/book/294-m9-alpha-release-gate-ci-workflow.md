@@ -17,6 +17,7 @@ Key behavior:
   - manual dispatch (`workflow_dispatch`),
   - alpha tag pushes (`v0.1.0-alpha*`).
 - Uploads captured release-gate artifacts from `build/release-alpha-gate/`.
+- Includes naming-lock validation as part of the gate script before build/audit checks.
 
 ## Why it exists
 

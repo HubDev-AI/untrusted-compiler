@@ -206,7 +206,7 @@ fn sec_audit_json_keeps_stdout_parseable_json() {
         .to_str()
         .expect("example path should be valid utf-8");
 
-    let output = run_cli(&["sec", "audit", "--path", hello, "--format", "json"]);
+    let output = run_cli(&["audit", "--path", hello, "--format", "json"]);
     assert!(output.status.success(), "expected success status");
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
@@ -241,7 +241,6 @@ fn sec_audit_history_dir_writes_reports_and_autoloads_baseline() {
         .expect("history path should be valid utf-8");
 
     let first = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -261,7 +260,6 @@ fn sec_audit_history_dir_writes_reports_and_autoloads_baseline() {
     assert_eq!(list_json_files(&history_dir).len(), 1);
 
     let second = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -309,7 +307,6 @@ fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
         .expect("history path should be valid utf-8");
 
     let first = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -321,7 +318,6 @@ fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
     assert!(first.status.success(), "first history run should succeed");
 
     let second = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -395,11 +391,10 @@ fn sec_audit_history_window_summary_is_emitted_on_stdout_in_text_mode() {
         .to_str()
         .expect("history path should be valid utf-8");
 
-    let first = run_cli(&["sec", "audit", "--path", hello, "--history-dir", history]);
+    let first = run_cli(&["audit", "--path", hello, "--history-dir", history]);
     assert!(first.status.success(), "first history run should succeed");
 
     let second = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -432,7 +427,7 @@ fn sec_audit_history_window_requires_history_dir() {
         .to_str()
         .expect("example path should be valid utf-8");
 
-    let output = run_cli(&["sec", "audit", "--path", hello, "--history-window", "2"]);
+    let output = run_cli(&["audit", "--path", hello, "--history-window", "2"]);
     assert!(
         !output.status.success(),
         "history-window without history-dir should fail"
@@ -457,7 +452,6 @@ fn sec_audit_history_window_zero_is_rejected() {
         .expect("history path should be valid utf-8");
 
     let output = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -491,14 +485,7 @@ fn sec_audit_write_history_summary_requires_history_window() {
         .to_str()
         .expect("summary path should be valid utf-8");
 
-    let output = run_cli(&[
-        "sec",
-        "audit",
-        "--path",
-        hello,
-        "--write-history-summary",
-        summary,
-    ]);
+    let output = run_cli(&["audit", "--path", hello, "--write-history-summary", summary]);
     assert!(
         !output.status.success(),
         "write-history-summary without history-window should fail"
@@ -527,7 +514,6 @@ fn sec_audit_history_window_summary_can_be_written_to_file() {
         .expect("summary path should be valid utf-8");
 
     let first = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,
@@ -539,7 +525,6 @@ fn sec_audit_history_window_summary_can_be_written_to_file() {
     assert!(first.status.success(), "first history run should succeed");
 
     let second = run_cli(&[
-        "sec",
         "audit",
         "--path",
         hello,

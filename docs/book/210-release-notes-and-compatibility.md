@@ -21,7 +21,7 @@ This chapter captures the current v0.1-alpha release posture after M9 hardening 
 ## CLI compatibility (alpha)
 
 Stable in v0.1-alpha:
-- `check`, `build`, `run`, `audit`
+- `check`, `build`, `run`, `audit`, `gate`, `explain`
 - `build --emit mir|mir-json|c|c-bin`
 - `build --locked`
 - `build --sbom`
@@ -60,16 +60,17 @@ Canonical profile files in `policies/` are the compatibility reference for curre
 
 Required before tagging an alpha candidate:
 1. `cargo test -q` passes in clean workspace.
-2. `sec4 build --locked` passes on sample projects.
-3. `sec4 build --sbom` produces deterministic SBOM output.
-4. `sec4 audit --format json` passes for `default-secure-prod` profile at required threshold.
-5. `build_metadata.json` and `sbom.json` are captured for release artifacts.
-6. Known-limits and roadmap chapters are reviewed with release notes.
+2. `scripts/check-naming-lock.sh` passes.
+3. `sec4 build --locked` passes on sample projects.
+4. `sec4 build --sbom` produces deterministic SBOM output.
+5. `sec4 audit --format json` passes for `default-secure-prod` profile at required threshold.
+6. `build_metadata.json` and `sbom.json` are captured for release artifacts.
+7. Known-limits and roadmap chapters are reviewed with release notes.
 
 Canonical automation:
 - `scripts/release-alpha-gate.sh`
 
-This script executes the checklist end-to-end against sample projects using the secure policy profile, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
+This script executes the checklist end-to-end against sample projects using the secure policy profile, validates naming lock compliance, verifies deterministic `build_metadata.json` + `sbom.json` hashes across repeated builds, gates `sec4 audit` at `risk>=HIGH`, and captures release artifacts under `build/release-alpha-gate/`.
 
 CI wiring:
 - `.github/workflows/alpha-release-gate.yml`
