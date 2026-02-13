@@ -39,7 +39,8 @@ The script fails fast if required checksum keys or sample artifacts are missing.
 1. release gate,
 2. promotion verifier,
 3. publish manifest generation,
-4. artifact upload.
+4. publish-manifest verifier,
+5. artifact upload.
 
 ## Inputs, outputs, and constraints
 

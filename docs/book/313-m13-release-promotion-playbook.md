@@ -50,7 +50,13 @@ scripts/check-naming-lock.sh
 scripts/generate-release-publish-manifest.sh
 ```
 
-5. Record release evidence
+5. Verify publish-manifest consumption contract
+
+```bash
+scripts/verify-release-publish-manifest.sh
+```
+
+6. Record release evidence
 
 Capture artifacts from `build/release-alpha-gate/` and attach/upload as promotion evidence.
 
@@ -60,7 +66,8 @@ Capture artifacts from `build/release-alpha-gate/` and attach/upload as promotio
 1. `scripts/release-alpha-gate.sh`
 2. `scripts/verify-release-promotion-inputs.sh`
 3. `scripts/generate-release-publish-manifest.sh`
-4. artifact upload
+4. `scripts/verify-release-publish-manifest.sh`
+5. artifact upload
 
 This CI path is the canonical non-local promotion gate.
 

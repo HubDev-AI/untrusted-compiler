@@ -281,5 +281,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `314-m9-sec4-explain-audit-finding-coverage-expansion.md`
 - `315-m13-release-publish-manifest-generation.md`
 - `316-m13-benchmark-trend-endpoint-expansion-and-go-note.md`
+- `317-m13-release-publish-manifest-consumption-verifier.md`
 
 As milestones progress, chapters will be added and linked from this index.

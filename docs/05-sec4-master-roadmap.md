@@ -503,6 +503,9 @@ Roadmap impact:
 - Release automation now emits a publish-consumption manifest:
   - `scripts/generate-release-publish-manifest.sh` builds `publish-manifest.json` from verified release artifacts,
   - `.github/workflows/alpha-release-gate.yml` now generates publish manifest before artifact upload.
+- Release automation now verifies downstream publish-manifest consumption:
+  - `scripts/verify-release-publish-manifest.sh` validates manifest identity/artifact bindings against release checksums,
+  - `.github/workflows/alpha-release-gate.yml` now verifies publish manifest before artifact upload.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
@@ -1379,9 +1382,9 @@ Day 14:
 
 1. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
 2. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
-3. Add publish-manifest consumption checks in downstream release publishing tooling.
-4. Review and tune decode endpoint thresholds after first scheduled trend runs.
-5. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+3. Review and tune decode endpoint thresholds after first scheduled trend runs.
+4. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+5. Add release publish pipeline handoff notes for external tooling integration.
 
 ---
 
