@@ -16,6 +16,11 @@ enum ReplayEffectsMode {
     Allow,
 }
 
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -27,6 +32,7 @@ enum Commands {
     Replay {
         capture: String,
         effects: ReplayEffectsMode,
+        format: ReplayOutputFormat,
     },
 }
 
@@ -45,6 +51,11 @@ enum ReplayEffectsMode {
     Allow,
 }
 
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -56,6 +67,7 @@ enum Commands {
     Replay {
         capture: String,
         effects: ReplayEffectsMode,
+        format: ReplayOutputFormat,
     },
 }
 
@@ -77,6 +89,11 @@ enum ReplayEffectsMode {
     Allow,
 }
 
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -88,6 +105,7 @@ enum Commands {
     Replay {
         capture: String,
         effects: ReplayEffectsMode,
+        format: ReplayOutputFormat,
     },
     Sec {
         cmd: String,
@@ -110,6 +128,11 @@ enum ReplayEffectsMode {
     Deny,
     Mock,
     Allow,
+}
+
+enum ReplayOutputFormat {
+    Text,
+    Json,
 }
 
 enum Commands {
@@ -140,6 +163,11 @@ enum ReplayEffectsMode {
     Allow,
 }
 
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
 enum Commands {
     Audit(AuditArgs),
     Gate {
@@ -150,6 +178,7 @@ enum Commands {
     },
     Replay {
         capture: String,
+        format: ReplayOutputFormat,
     },
 }
 
@@ -161,6 +190,43 @@ RS
 
 if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
   echo "expected command contract failure when replay effects mode field is missing" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
+enum Commands {
+    Audit(AuditArgs),
+    Gate {
+        fail_on: Option<String>,
+    },
+    Explain {
+        code: String,
+    },
+    Replay {
+        capture: String,
+        effects: ReplayEffectsMode,
+    },
+}
+
+fn gate_default(fail_on: Option<String>) -> Option<String> {
+    let _x = Some(fail_on.as_deref().unwrap_or("risk>=HIGH"));
+    None
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected command contract failure when replay output format field is missing" >&2
   exit 1
 fi
 

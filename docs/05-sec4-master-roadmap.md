@@ -1374,7 +1374,7 @@ Implementation order is intentionally linear to reduce thrash:
   - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
   - benchmark naming guard now verifies canonical implementation directory IDs and benchmark testdata `impl` values.
   - benchmark naming guard now validates canonical benchmark artifact filename patterns and benchmark testdata schema keys for report/summary/step artifacts.
-  - naming-lock CI now includes a static CLI command-surface contract test (`scripts/test-sec4-cli-command-contract.sh`) to enforce top-level `sec4 audit|gate|explain|replay` wiring, replay effects-mode field presence, and guard against legacy nested `sec` alias reintroduction.
+  - naming-lock CI now includes a static CLI command-surface contract test (`scripts/test-sec4-cli-command-contract.sh`) to enforce top-level `sec4 audit|gate|explain|replay` wiring, replay effects/output field presence, and guard against legacy nested `sec` alias reintroduction.
 - Remaining:
   - none for current M12 scope.
 
@@ -1506,6 +1506,7 @@ M13-S1 go/no-go note:
 - Wire replay stub-registry contract test into naming-lock CI and closure-audit gate checks.
 - Extend `sec4 replay` command with optional `--stubs` contract validation for deterministic mock-mode bootstrap.
 - Add replay effects-mode guard semantics (`--effects deny|mock|allow`) with deterministic mode-policy checks.
+- Add replay JSON output mode (`--format json`) for machine-readable CI/operator integration.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1525,7 +1526,8 @@ M13-S1 go/no-go note:
 - [x] Added strict closure gate `M14-C` for replay stub-registry CI enforcement.
 - [x] Extended `sec4 replay` with optional `--stubs` contract validation and duplicate-signature detection.
 - [x] Extended `sec4 replay` with `--effects deny|mock|allow` mode checks (`mock` requires stubs, `allow` warns).
-- [x] Hardened static `sec4` CLI command contract tests to require replay effects-mode field wiring.
+- [x] Hardened static `sec4` CLI command contract tests to require replay effects/output field wiring.
+- [x] Extended `sec4 replay` with `--format json` machine-readable success payload output.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1538,6 +1540,7 @@ M13-S1 go/no-go note:
 - CLI contract guard fails if top-level `sec4 replay` command wiring is removed.
 - `sec4 replay --stubs <path>` fails deterministically on invalid stub-registry contract payloads.
 - `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
+- `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning fields.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1546,6 +1549,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Stub Registry Contract Bootstrap".
 - Chapter: "M14 Slice: Replay CLI Stub Registry Validation".
 - Chapter: "M14 Slice: Replay CLI Effects-Mode Guardrails".
+- Chapter: "M14 Slice: Replay CLI JSON Output Mode".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -790,6 +790,82 @@ fn replay_check_allow_mode_emits_warning() {
 }
 
 #[test]
+fn replay_check_json_mode_writes_parseable_payload() {
+    let dir = temp_dir("sec4-replay-json-mode");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+    write_stub_registry_file(&stubs);
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--effects",
+        "mock",
+        "--format",
+        "json",
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(output.status.success(), "replay json mode should pass");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value =
+        serde_json::from_str(&stdout).expect("replay --format json should output parseable json");
+    assert_eq!(
+        parsed
+            .get("ok")
+            .and_then(Value::as_bool)
+            .expect("ok should be present"),
+        true
+    );
+    assert_eq!(
+        parsed
+            .get("effectsMode")
+            .and_then(Value::as_str)
+            .expect("effectsMode should be present"),
+        "mock"
+    );
+    assert_eq!(
+        parsed
+            .get("policyHashMatched")
+            .and_then(Value::as_bool)
+            .expect("policyHashMatched should be present"),
+        true
+    );
+    assert!(
+        parsed
+            .get("warnings")
+            .and_then(Value::as_array)
+            .is_some_and(|warnings| warnings.is_empty()),
+        "warnings should be present and empty for clean mock run"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should be empty:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn explain_cors_wildcard_finding_prints_targeted_guidance() {
     let output = run_cli(&["explain", "CORS_CREDENTIALS_WITH_WILDCARD"]);
     assert!(

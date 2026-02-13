@@ -53,6 +53,7 @@ require_pattern '^\s*Gate \{\s*$' 'top-level gate subcommand'
 require_pattern '^\s*Explain \{\s*$' 'top-level explain subcommand'
 require_pattern '^\s*Replay \{\s*$' 'top-level replay subcommand'
 require_pattern '^\s*effects:\s*ReplayEffectsMode,\s*$' 'replay effects mode field'
+require_pattern '^\s*format:\s*ReplayOutputFormat,\s*$' 'replay output format field'
 require_pattern 'Some\(fail_on\.as_deref\(\)\.unwrap_or\("risk>=HIGH"\)\)' 'gate default fail threshold'
 
 forbid_pattern '^\s*Sec\s*\{' 'legacy nested sec subcommand alias'

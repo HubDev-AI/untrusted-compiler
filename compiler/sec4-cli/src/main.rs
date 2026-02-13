@@ -73,6 +73,8 @@ enum Commands {
         stubs: Option<PathBuf>,
         #[arg(long, value_enum, default_value_t = ReplayEffectsMode::Deny)]
         effects: ReplayEffectsMode,
+        #[arg(long, value_enum, default_value_t = ReplayOutputFormat::Text)]
+        format: ReplayOutputFormat,
         #[arg(long)]
         policy_hash: String,
         #[arg(long)]
@@ -142,6 +144,12 @@ enum ReplayEffectsMode {
     Allow,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -176,6 +184,7 @@ fn main() {
             capture,
             stubs,
             effects,
+            format,
             policy_hash,
             compiler_hash,
             runtime_hash,
@@ -187,6 +196,7 @@ fn main() {
             &runtime_hash,
             allow_policy_mismatch,
             effects,
+            format,
             stubs.as_deref(),
         ),
         Commands::Explain { code, format } => cmd_explain(&code, format),
@@ -217,6 +227,7 @@ fn cmd_replay_check(
     expected_runtime_hash: &str,
     allow_policy_mismatch: bool,
     effects_mode: ReplayEffectsMode,
+    output_format: ReplayOutputFormat,
     stubs_path: Option<&Path>,
 ) -> Result<(), i32> {
     let capture_bytes = match fs::read(capture_path) {
@@ -252,6 +263,7 @@ fn cmd_replay_check(
         json_required_str(&capture_json, "compilerHash").expect("compilerHash checked by contract");
     let capture_runtime_hash =
         json_required_str(&capture_json, "runtimeHash").expect("runtimeHash checked by contract");
+    let mut warnings = Vec::new();
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -269,9 +281,11 @@ fn cmd_replay_check(
 
     if capture_policy_hash != expected_policy_hash {
         if allow_policy_mismatch {
-            eprintln!(
-                "warning: policyHash mismatch allowed ({capture_policy_hash} != {expected_policy_hash})"
+            let warning = format!(
+                "policyHash mismatch allowed ({capture_policy_hash} != {expected_policy_hash})"
             );
+            warnings.push(warning.clone());
+            eprintln!("warning: {warning}");
         } else {
             eprintln!(
                 "replay compatibility failed: policyHash mismatch ({capture_policy_hash} != {expected_policy_hash})"
@@ -286,9 +300,10 @@ fn cmd_replay_check(
     }
 
     if effects_mode == ReplayEffectsMode::Allow {
-        eprintln!(
-            "warning: replay effects mode is allow; use deny/mock outside isolated environments"
-        );
+        let warning =
+            "replay effects mode is allow; use deny/mock outside isolated environments".to_string();
+        warnings.push(warning.clone());
+        eprintln!("warning: {warning}");
     }
 
     if let Some(stubs_path) = stubs_path {
@@ -320,7 +335,33 @@ fn cmd_replay_check(
         }
     }
 
-    println!("replay capture compatibility check passed");
+    match output_format {
+        ReplayOutputFormat::Text => {
+            println!("replay capture compatibility check passed");
+        }
+        ReplayOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "ok": true,
+                "capture": capture_path.to_string_lossy(),
+                "stubs": stubs_path.map(|path| path.to_string_lossy().to_string()),
+                "effectsMode": match effects_mode {
+                    ReplayEffectsMode::Deny => "deny",
+                    ReplayEffectsMode::Mock => "mock",
+                    ReplayEffectsMode::Allow => "allow",
+                },
+                "policyHashMatched": capture_policy_hash == expected_policy_hash,
+                "compilerHashMatched": capture_compiler_hash == expected_compiler_hash,
+                "runtimeHashMatched": capture_runtime_hash == expected_runtime_hash,
+                "allowPolicyMismatch": allow_policy_mismatch,
+                "warnings": warnings,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("replay payload should serialize as JSON")
+            );
+        }
+    }
     Ok(())
 }
 
