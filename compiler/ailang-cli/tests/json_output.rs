@@ -800,7 +800,7 @@ entry = "src/main.ai"
   db.tx(db);
   db.execTx(tx, built);
   db.exec(db, built);
-  db.queryOne(db, built, 1);
+  db.queryOne(db, built, "Row");
   query;
   fs.read(fs, path);
   fs.write(fs, path, 1);
@@ -830,7 +830,7 @@ fn main() -> Int {
     assert!(generated_c.contains("ailang_rt_db_tx(db)"));
     assert!(generated_c.contains("ailang_rt_db_exec_tx(tx, built)"));
     assert!(generated_c.contains("ailang_rt_db_exec(db, built)"));
-    assert!(generated_c.contains("ailang_rt_db_query_one(db, built, 1)"));
+    assert!(generated_c.contains("ailang_rt_db_query_one(db, built, \"Row\")"));
     assert!(generated_c.contains("ailang_rt_fs_read(fs, path)"));
     assert!(generated_c.contains("ailang_rt_fs_write(fs, path, 1)"));
     assert!(generated_c.contains("ailang_rt_http_get(net, url)"));

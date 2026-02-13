@@ -2626,35 +2626,42 @@ impl Analyzer {
         }
 
         if is_db_exec_call(callee_name) && args.len() == 3 {
-            self.enforce_db_sink_context_type(
+            if !self.enforce_db_sink_context_type(
                 callee_name,
                 args,
                 arg_types,
                 "db.exec(ctx, capability, query)",
-            );
+            ) {
+                return;
+            }
             self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
             return;
         }
 
         if is_db_exec_tx_call(callee_name) && args.len() == 3 {
-            self.enforce_db_sink_context_type(
+            if !self.enforce_db_sink_context_type(
                 callee_name,
                 args,
                 arg_types,
                 "db.execTx(ctx, tx, query)",
-            );
+            ) {
+                return;
+            }
             self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
             return;
         }
 
         if is_db_query_one_call(callee_name) && args.len() == 4 {
-            self.enforce_db_sink_context_type(
+            if !self.enforce_db_sink_context_type(
                 callee_name,
                 args,
                 arg_types,
                 "db.queryOne(ctx, capability, query, rowSchema)",
-            );
+            ) {
+                return;
+            }
             self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
+            self.enforce_db_query_one_row_schema_type(args, arg_types, 3);
             return;
         }
 
@@ -2670,6 +2677,7 @@ impl Analyzer {
 
         if is_db_query_one_call(callee_name) && args.len() == 3 {
             self.enforce_db_sink_query_type(callee_name, args, arg_types, 1);
+            self.enforce_db_query_one_row_schema_type(args, arg_types, 2);
         }
     }
 
@@ -2679,10 +2687,10 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
         usage: &str,
-    ) {
+    ) -> bool {
         let context_type = &arg_types[0];
         if context_type.is_named("Ctx") {
-            return;
+            return true;
         }
 
         self.diagnostics.push(
@@ -2696,6 +2704,7 @@ impl Analyzer {
             .with_note(format!("found `{}`", context_type.describe()))
             .with_note(format!("use `{usage}` for context-first `{callee_name}` calls")),
         );
+        false
     }
 
     fn enforce_db_sink_query_type(
@@ -2726,6 +2735,34 @@ impl Analyzer {
                 "use typed `SqlQuery` values when calling `{callee_name}`"
             )),
         );
+    }
+
+    fn enforce_db_query_one_row_schema_type(
+        &mut self,
+        args: &[Expr],
+        arg_types: &[Type],
+        row_schema_index: usize,
+    ) {
+        let row_schema_type = &arg_types[row_schema_index];
+        if row_schema_type.contains_untrusted() || row_schema_type.contains_secret() {
+            return;
+        }
+
+        if row_schema_type.is_numeric() || row_schema_type.is_bool() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "db.queryOne row schema argument is invalid",
+                    args[row_schema_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", row_schema_type.describe()))
+                .with_note(
+                    "use `db.queryOne(capability, query, rowSchema)` with a schema descriptor",
+                ),
+            );
+        }
     }
 
     fn enforce_db_tx_call_shape(

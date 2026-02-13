@@ -1,0 +1,4 @@
+error[E4001]: db.queryOne row schema argument is invalid
+  --> invalid_db_query_one_row_schema_argument_type.ai:2:26
+  note: found `Int`
+  note: use `db.queryOne(capability, query, rowSchema)` with a schema descriptor

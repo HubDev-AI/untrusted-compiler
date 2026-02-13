@@ -34,6 +34,7 @@
 | 2026-02-12 | self | Moved `Span` into a helper call, then reused it in the same function and hit borrow-after-move compile failure. | Pass cloned spans (`span.clone()`) when the caller still needs the original for later diagnostics. |
 | 2026-02-12 | self | Inserted a new Rust test into `diagnostic_tags.rs` before closing an existing raw string literal, causing parser errors that looked unrelated (`unknown prefix`, unterminated string). | After editing Rust tests with raw strings, immediately inspect surrounding lines with `nl -ba` to verify string boundaries before running tests. |
 | 2026-02-12 | self | Repeated a span move regression by passing `span` by value into a new helper and then reusing it later in the same function. | When adding helper calls inside semantic enforcement, default to `span.clone()` unless the value is consumed as the final use site. |
+| 2026-02-13 | self | Added stricter `db.queryOne` row-schema checks but initially missed updating the CLI `c-bin` db/fs/net integration fixture, which then failed. | When tightening semantic call contracts, immediately audit and update affected CLI integration fixtures (`json_output.rs`) before final validation. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).
@@ -147,3 +148,4 @@
 - Added net sink URL typing hardening so `httpClient.get` requires `PublicUrl` and `httpClient.getInternal` requires `InternalUrl`, with sink-tagged diagnostics and typed-URL fixture alignment.
 - Added FS sink path typing hardening so `fs.read`/`fs.write` require `PathSafe` path arguments in compact/context-first forms, with sink-tagged diagnostics and typed-path fixture alignment.
 - Added secret-redact payload typing hardening so `secrets.redact` requires `Secret<_>`, with secret-tagged diagnostics and fixture/tag coverage.
+- Added `db.queryOne` row-schema argument hardening so numeric/boolean placeholders are rejected with schema-tagged diagnostics, and aligned the db/fs/net `c-bin` integration fixture to use a schema-descriptor row argument.
