@@ -60,4 +60,5 @@ fn useJson(schema: Schema<Int>) -> Int {
 
 - Tradeoff: placeholder `json.encode` schema arguments used in early bootstrap fixtures now fail semantic checks.
 - Next:
+  - enforce explicit `Schema<_>` descriptors for `json.encode` schema arguments (`171-m7-json-encode-schema-descriptor-hardening.md`).
   - apply equivalent strict schema-shape enforcement to `json.decode` call contracts.

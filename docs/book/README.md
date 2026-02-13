@@ -136,5 +136,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `168-m7-err-with-limit-error-argument-hardening.md`
 - `169-m7-err-with-dependency-error-argument-hardening.md`
 - `170-m7-err-with-detail-error-argument-hardening.md`
+- `171-m7-json-encode-schema-descriptor-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

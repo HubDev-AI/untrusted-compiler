@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  json.encode("schema", 2);
+  0
+}

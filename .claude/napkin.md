@@ -170,3 +170,4 @@
 - Added `err.withLimit` base-error argument hardening so the first argument must be `StdError`, with security-tagged diagnostics and dedicated semantic/tag fixture coverage.
 - Added `err.withDependency` base-error argument hardening so the first argument must be `StdError`, with security-tagged diagnostics and dedicated semantic/tag fixture coverage.
 - Added `err.withDetail` base-error argument hardening so the first argument must be `StdError`, while preserving key/value secret/taint checks and adding dedicated semantic/tag fixtures.
+- Added `json.encode` schema-descriptor hardening so schema arguments must be explicit `Schema<_>` types (not generic placeholders like `String`), with schema-tagged diagnostics and dedicated fixture/tag coverage.

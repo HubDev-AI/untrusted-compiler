@@ -2397,25 +2397,38 @@ impl Analyzer {
             return;
         }
 
-        if let Some(expected_value_ty) = schema_value_type(schema_ty) {
-            let actual_value_ty = &arg_types[1];
-            if !expected_value_ty.compatible_with(actual_value_ty) {
-                self.diagnostics.push(
-                    Diagnostic::error(
-                        "E4001",
-                        "json.encode value does not match schema type",
-                        args[1].span.clone(),
-                    )
-                    .with_tag("security")
-                    .with_tag("schema")
-                    .with_note(format!(
-                        "schema expects `{}`, got `{}`",
-                        expected_value_ty.describe(),
-                        actual_value_ty.describe()
-                    ))
-                    .with_note("adjust encoded value type or use a matching schema"),
-                );
-            }
+        let Some(expected_value_ty) = schema_value_type(schema_ty) else {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.encode schema argument must be `Schema<_>`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", schema_ty.describe()))
+                .with_note("pass an explicit schema descriptor such as `Schema<T>`"),
+            );
+            return;
+        };
+
+        let actual_value_ty = &arg_types[1];
+        if !expected_value_ty.compatible_with(actual_value_ty) {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "json.encode value does not match schema type",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!(
+                    "schema expects `{}`, got `{}`",
+                    expected_value_ty.describe(),
+                    actual_value_ty.describe()
+                ))
+                .with_note("adjust encoded value type or use a matching schema"),
+            );
         }
     }
 

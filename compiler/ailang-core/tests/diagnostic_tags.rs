@@ -126,6 +126,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn json_encode_non_schema_argument_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad() -> Int {
+  json.encode("schema", 2);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json.encode schema argument must be `Schema<_>`")
+        .expect("expected json.encode non-schema diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn json_decode_schema_argument_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() -> Int {
