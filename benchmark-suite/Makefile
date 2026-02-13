@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize report compare compare-matrix publish-report test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix publish-report test-scripts
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
@@ -14,6 +14,8 @@ help:
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post)"
+	@echo "  bench-matrix Run cross-impl benchmark orchestrator (node,go,rust by default)"
+	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
 	@echo "  compare      Build endpoint comparison from report files"
@@ -45,6 +47,12 @@ bench-users:
 bench-profile:
 	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
 
+bench-matrix:
+	scripts/run_comparison_matrix.sh
+
+bench-matrix-dry:
+	scripts/run_comparison_matrix.sh --dry-run
+
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json
 
@@ -67,3 +75,4 @@ test-scripts:
 	scripts/test_compare_reports.sh
 	scripts/test_compare_matrix.sh
 	scripts/test_publish_report.sh
+	scripts/test_run_comparison_matrix.sh

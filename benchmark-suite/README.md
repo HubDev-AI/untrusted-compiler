@@ -40,9 +40,12 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite compare-matrix`
 8. Generate markdown benchmark report:
    - `make -C benchmark-suite publish-report`
-9. Validate benchmark helper scripts:
+9. Run full cross-impl orchestrator:
+   - `make -C benchmark-suite bench-matrix-dry`
+   - `make -C benchmark-suite bench-matrix`
+10. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-10. Stop DB:
+11. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
