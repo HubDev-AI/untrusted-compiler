@@ -27,9 +27,9 @@ Measure end-to-end service behavior across identical implementations:
 2. Apply schema:
    - `make -C benchmark-suite db-schema`
 3. Run benchmark profile (once service is implemented):
-   - `make -C benchmark-suite bench-ping IMPL=ailang`
-   - `make -C benchmark-suite bench-decode IMPL=ailang`
-   - `make -C benchmark-suite bench-users IMPL=ailang`
+   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=ping`
+   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode`
+   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
 4. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
 5. Validate benchmark helper scripts:

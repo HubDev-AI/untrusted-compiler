@@ -1,7 +1,8 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users summarize test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile summarize test-scripts
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
+ENDPOINT ?= ping
 
 help:
 	@echo "Targets:"
@@ -12,6 +13,7 @@ help:
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
+	@echo "  bench-profile Run one named profile via script (ENDPOINT=ping|decode|users-post)"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  test-scripts Run benchmark helper script tests"
 
@@ -36,8 +38,12 @@ bench-decode:
 bench-users:
 	wrk2 --latency -t4 -c64 -d60s -R500 -s load/wrk2/post_users.lua $(BASE_URL) | tee results/raw/$(IMPL)-users-post.txt
 
+bench-profile:
+	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
+
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json
 
 test-scripts:
 	scripts/test_wrk2_summary.sh
+	scripts/test_run_profile.sh
