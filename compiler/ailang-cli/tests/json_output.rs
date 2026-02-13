@@ -1265,7 +1265,7 @@ entry = "src/main.ai"
   let internal = err.internal(1);
   err.withPath(base, "$.field");
   err.withDetail(base, "field", 2);
-  err.withLimit(base, 1, 2, 3);
+  err.withLimit(base, "limit", 2, 3);
   err.withDependency(base, 1, 2, 3);
   err.withCause(base, internal);
   0
@@ -1293,7 +1293,7 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_err_internal(1)"));
     assert!(generated_c.contains("ailang_rt_err_with_path(base, \"$.field\")"));
     assert!(generated_c.contains("ailang_rt_err_with_detail(base, \"field\", 2)"));
-    assert!(generated_c.contains("ailang_rt_err_with_limit(base, 1, 2, 3)"));
+    assert!(generated_c.contains("ailang_rt_err_with_limit(base, \"limit\", 2, 3)"));
     assert!(generated_c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3)"));
     assert!(generated_c.contains("ailang_rt_err_with_cause(base, internal)"));
 

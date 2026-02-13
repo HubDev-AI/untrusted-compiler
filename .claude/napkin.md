@@ -153,3 +153,4 @@
 - Added `cookie.build` signature hardening so the helper enforces `(name, value)` with string arguments, and aligned header/cookie integration fixtures and docs to use typed cookie-constructor values.
 - Added `err.withDetail` value-safety hardening so detail keys must be strings and detail values reject `Secret<_>`/`Untrusted<_>` payloads, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.withPath` path typing hardening so error-path payloads must be strings, with tagged diagnostics and aligned error-builder integration fixtures.
+- Added `err.withLimit` argument hardening so limit names are strings and max/actual values are numeric, with tagged diagnostics and aligned error-builder integration fixtures.

@@ -621,7 +621,7 @@ fn main() -> Int {
   let internal = err.internal(1);
   let withPath = err.withPath(base, "$.field");
   let withDetail = err.withDetail(base, "field", 2);
-  let withLimit = err.withLimit(base, 1, 2, 3);
+  let withLimit = err.withLimit(base, "limit", 2, 3);
   let withDependency = err.withDependency(base, 1, 2, 3);
   let withCause = err.withCause(base, internal);
   auth;
@@ -649,7 +649,7 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_err_internal(1);"));
     assert!(c.contains("ailang_rt_err_with_path(base, \"$.field\");"));
     assert!(c.contains("ailang_rt_err_with_detail(base, \"field\", 2);"));
-    assert!(c.contains("ailang_rt_err_with_limit(base, 1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_with_limit(base, \"limit\", 2, 3);"));
     assert!(c.contains("ailang_rt_err_with_dependency(base, 1, 2, 3);"));
     assert!(c.contains("ailang_rt_err_with_cause(base, internal);"));
 }

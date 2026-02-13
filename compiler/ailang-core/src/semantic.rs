@@ -3336,6 +3336,61 @@ impl Analyzer {
             return;
         }
 
+        if is_err_with_limit_call(callee_name) {
+            if args.len() != 4 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withLimit expects `(error, name, max, actual)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.withLimit(errorValue, \"limit\", max, actual)`"),
+                );
+                return;
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withLimit name argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use stable string names for limit descriptors"),
+                );
+            }
+
+            if !arg_types[2].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withLimit max argument must be numeric",
+                        args[2].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[2].describe()))
+                    .with_note("use `Int`/`Int64` values for max limits"),
+                );
+            }
+
+            if !arg_types[3].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.withLimit actual argument must be numeric",
+                        args[3].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[3].describe()))
+                    .with_note("use `Int`/`Int64` values for actual limits"),
+                );
+            }
+            return;
+        }
+
         if !is_err_with_detail_call(callee_name) {
             return;
         }
@@ -4535,6 +4590,10 @@ fn is_err_with_detail_call(name: &str) -> bool {
 
 fn is_err_with_path_call(name: &str) -> bool {
     matches!(name, "err_with_path" | "err.withPath")
+}
+
+fn is_err_with_limit_call(name: &str) -> bool {
+    matches!(name, "err_with_limit" | "err.withLimit")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

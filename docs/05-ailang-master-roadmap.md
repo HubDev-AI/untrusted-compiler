@@ -342,6 +342,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `err.withPath` path typing is now hardened:
     - path argument must be `String`,
     - invalid path payloads emit tagged `E4001` security diagnostics.
+  - `err.withLimit` argument typing is now hardened:
+    - call shape is enforced as `(error, name, max, actual)`,
+    - `name` must be `String` and `max`/`actual` must be numeric.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -720,6 +723,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Error Builder Intrinsic Bridge".
 - Chapter: "M7 Slice: err.withDetail Value-Safety Hardening".
 - Chapter: "M7 Slice: err.withPath Path-Argument Hardening".
+- Chapter: "M7 Slice: err.withLimit Argument Hardening".
 - Chapter: "M7 Slice: res.text Intrinsic Bridge".
 - Chapter: "M7 Slice: Log Event Helper Intrinsic Bridge".
 - Chapter: "M7 Slice: DB Transaction Intrinsic Bridge".
