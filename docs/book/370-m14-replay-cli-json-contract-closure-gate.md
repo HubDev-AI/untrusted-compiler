@@ -26,7 +26,7 @@ Replay JSON output and fields are now part of operational tooling. Without expli
   - `ReplayOutputFormat` enum exists,
   - replay command includes `format: ReplayOutputFormat`,
   - default replay format remains text,
-  - replay JSON payload keeps required keys (`policyHashMatched`, `compilerHashMatched`, `runtimeHashMatched`, `effectsMode`, `warnings`).
+  - replay JSON payload keeps required keys (`policyHashMatched`, `compilerHashMatched`, `runtimeHashMatched`, `effectsMode`, `warnings`, `stubCounts`).
 
 2. Added replay JSON contract guard script
 - `scripts/test-replay-cli-json-contract-guard.sh` validates:

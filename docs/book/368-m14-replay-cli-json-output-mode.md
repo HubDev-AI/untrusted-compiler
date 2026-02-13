@@ -30,6 +30,7 @@ Updated:
   - `runtimeHashMatched`
   - `allowPolicyMismatch`
   - `warnings`
+  - `stubCounts`
 
 3. Added regression test coverage
 - `replay_check_json_mode_writes_parseable_payload` verifies JSON payload parseability and key contract fields.

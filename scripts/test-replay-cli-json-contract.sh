@@ -58,5 +58,6 @@ require_literal '"compilerHashMatched"' 'json payload compiler hash key'
 require_literal '"runtimeHashMatched"' 'json payload runtime hash key'
 require_literal '"effectsMode"' 'json payload effects mode key'
 require_literal '"warnings"' 'json payload warnings key'
+require_literal '"stubCounts"' 'json payload stub counts key'
 
 echo "replay cli json contract test passed"

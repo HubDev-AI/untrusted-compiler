@@ -338,5 +338,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `371-m14-replay-redaction-header-baseline-enforcement.md`
 - `372-m14-replay-redaction-jsonpath-baseline-enforcement.md`
 - `373-m14-replay-stub-inventory-output.md`
+- `374-m14-replay-stub-counts-json-contract-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

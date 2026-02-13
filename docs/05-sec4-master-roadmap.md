@@ -1549,7 +1549,7 @@ M13-S1 go/no-go note:
 - CLI contract guard fails if top-level `sec4 replay` command wiring is removed.
 - `sec4 replay --stubs <path>` fails deterministically on invalid stub-registry contract payloads.
 - `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
-- `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning fields.
+- `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning + stub-count fields.
 - CI fails if replay CLI json contract + guard enforcement is removed from naming-lock workflow.
 - Replay stub-contract validation fails when required redaction headers/jsonPaths are incomplete.
 - Replay outputs include deterministic stub inventory counts when `--stubs` is supplied.

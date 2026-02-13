@@ -33,7 +33,8 @@ fn render(output_format: ReplayOutputFormat) {
                 "compilerHashMatched": true,
                 "runtimeHashMatched": true,
                 "effectsMode": "deny",
-                "warnings": []
+                "warnings": [],
+                "stubCounts": {"net": 1, "db": 0, "fs": 0}
             });
             println!(
                 "{}",
@@ -70,7 +71,8 @@ fn render(output_format: ReplayOutputFormat) {
                 "compilerHashMatched": true,
                 "runtimeHashMatched": true,
                 "effectsMode": "deny",
-                "warnings": []
+                "warnings": [],
+                "stubCounts": {"net": 1, "db": 0, "fs": 0}
             });
             println!(
                 "{}",
@@ -109,7 +111,8 @@ fn render(output_format: ReplayOutputFormat) {
                 "compilerHashMatched": true,
                 "runtimeHashMatched": true,
                 "effectsMode": "deny",
-                "warnings": []
+                "warnings": [],
+                "stubCounts": {"net": 1, "db": 0, "fs": 0}
             });
             println!(
                 "{}",
@@ -122,6 +125,46 @@ RS
 
 if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
   echo "expected replay json contract failure when policyHashMatched key is missing" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
+enum Commands {
+    Replay {
+        #[arg(long, value_enum, default_value_t = ReplayOutputFormat::Text)]
+        format: ReplayOutputFormat,
+    },
+}
+
+fn render(output_format: ReplayOutputFormat) {
+    match output_format {
+        ReplayOutputFormat::Text => {
+            println!("ok");
+        }
+        ReplayOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "policyHashMatched": true,
+                "compilerHashMatched": true,
+                "runtimeHashMatched": true,
+                "effectsMode": "deny",
+                "warnings": []
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).expect("payload should serialize")
+            );
+        }
+    }
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected replay json contract failure when stubCounts key is missing" >&2
   exit 1
 fi
 
