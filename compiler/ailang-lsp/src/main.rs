@@ -1968,9 +1968,9 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 mod tests {
     use super::{
         collect_function_symbols, collect_identifier_hits_by_name, diagnostics_for_document_with_limits,
-        find_identifier_at_position, load_cached_program, parse_env_bool, read_message,
-        refresh_program_cache, run_stdio, update_open_document_import_edges, RequestDeadline,
-        ServerState,
+        extract_open_document_import_uris, find_identifier_at_position, load_cached_program,
+        parse_env_bool, read_message, refresh_program_cache, run_stdio, update_open_document_import_edges,
+        RequestDeadline, ServerState,
     };
     use ailang_core::parse_source;
     use serde_json::{json, Value};
@@ -2277,6 +2277,100 @@ mod tests {
         assert!(
             !state.open_document_symbols.contains_key(dependent_uri),
             "dependency refresh should invalidate dependent symbol cache entries",
+        );
+    }
+
+    #[test]
+    fn extract_open_document_import_uris_resolves_relative_literals() {
+        let source_path = PathBuf::from("/tmp/lsp_imports/src/main.ai");
+        let source_uri = Url::from_file_path(&source_path)
+            .expect("source uri")
+            .to_string();
+        let source = "import \"./dep.ai\"\nimport '../lib/util.ai'\nimport \"https://example.com\"\nimport \"./nested/../dep2.ai\"\n";
+
+        let imports = extract_open_document_import_uris(&source_uri, source);
+        let dep_uri = Url::from_file_path("/tmp/lsp_imports/src/dep.ai")
+            .expect("dep uri")
+            .to_string();
+        let util_uri = Url::from_file_path("/tmp/lsp_imports/lib/util.ai")
+            .expect("util uri")
+            .to_string();
+        let dep2_uri = Url::from_file_path("/tmp/lsp_imports/src/dep2.ai")
+            .expect("dep2 uri")
+            .to_string();
+
+        assert_eq!(
+            imports.len(),
+            3,
+            "only relative import literals should be tracked",
+        );
+        assert!(imports.contains(&dep_uri));
+        assert!(imports.contains(&util_uri));
+        assert!(imports.contains(&dep2_uri));
+    }
+
+    #[test]
+    fn update_open_document_import_edges_replaces_previous_import_set() {
+        let mut state = ServerState::default();
+        let source_uri = Url::from_file_path("/tmp/lsp_import_replace/main.ai")
+            .expect("source uri")
+            .to_string();
+        let dep_a_uri = Url::from_file_path("/tmp/lsp_import_replace/a.ai")
+            .expect("dep a uri")
+            .to_string();
+        let dep_b_uri = Url::from_file_path("/tmp/lsp_import_replace/b.ai")
+            .expect("dep b uri")
+            .to_string();
+        let dep_c_uri = Url::from_file_path("/tmp/lsp_import_replace/c.ai")
+            .expect("dep c uri")
+            .to_string();
+
+        update_open_document_import_edges(
+            &mut state,
+            &source_uri,
+            "import \"./a.ai\"\nimport \"./b.ai\"\n",
+        );
+        assert!(
+            state
+                .reverse_open_document_imports
+                .get(&dep_a_uri)
+                .map(|dependents| dependents.contains(&source_uri))
+                .unwrap_or(false),
+            "first import set should register dependency a",
+        );
+        assert!(
+            state
+                .reverse_open_document_imports
+                .get(&dep_b_uri)
+                .map(|dependents| dependents.contains(&source_uri))
+                .unwrap_or(false),
+            "first import set should register dependency b",
+        );
+
+        update_open_document_import_edges(&mut state, &source_uri, "import \"./c.ai\"\n");
+        assert!(
+            state
+                .reverse_open_document_imports
+                .get(&dep_a_uri)
+                .map(|dependents| !dependents.contains(&source_uri))
+                .unwrap_or(true),
+            "dependency a edge should be removed after import set replacement",
+        );
+        assert!(
+            state
+                .reverse_open_document_imports
+                .get(&dep_b_uri)
+                .map(|dependents| !dependents.contains(&source_uri))
+                .unwrap_or(true),
+            "dependency b edge should be removed after import set replacement",
+        );
+        assert!(
+            state
+                .reverse_open_document_imports
+                .get(&dep_c_uri)
+                .map(|dependents| dependents.contains(&source_uri))
+                .unwrap_or(false),
+            "replacement import set should register dependency c",
         );
     }
 

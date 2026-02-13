@@ -1022,6 +1022,7 @@ Implementation order is intentionally linear to reduce thrash:
   - expired request budgets now short-circuit uncached parse loading paths, preventing late parse work on stale requests.
   - open-document symbol indexing now caches deterministic function symbol metadata (stable IDs) and reuses it in completion/declaration scans.
   - open-document import graph tracking now invalidates dependent parse/symbol caches on dependency refresh.
+  - import-edge extraction and replacement behavior now has dedicated deterministic unit coverage.
   - references/rename hit collection now targets callsite callee identifiers, reducing non-reference name collisions.
   - diagnostics analysis now short-circuits at budget boundaries (zero-budget early return + skip-analyze when parse consumed budget).
   - Zed grammar pinning now has an explicit validation gate (`scripts/check-zed-grammar-pin.sh`) to block placeholder revisions in release flow.
@@ -1076,6 +1077,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Callsite-Focused Reference Hit Collection".
 - Chapter: "M11 Slice: Analysis-Stage Budget Short-Circuit".
 - Chapter: "M11 Slice: Zed Grammar Pin Validation Gate".
+- Chapter: "M11 Slice: Import Edge Extraction and Replacement Tests".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
