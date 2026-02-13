@@ -219,6 +219,17 @@ if ! printf '%s\n' "$audit_json" | jq -e '.overall == "PASS" and .pendingCount =
   echo "expected PASS json closure summary for passing fixture" >&2
   exit 1
 fi
+if ! printf '%s\n' "$audit_json" | jq -e '
+  [.gates[].gate] == [
+    "M9-A","M9-B","M9-C","M9-D","M9-E","M9-F","M9-G","M9-H",
+    "M10-A","M10-B","M10-C","M10-D",
+    "M11-A","M12-A",
+    "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F"
+  ]
+' >/dev/null; then
+  echo "expected deterministic gate ordering in json closure output" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M9-H") != null' >/dev/null; then
   echo "expected json closure output to include M9-H gate" >&2
   exit 1
