@@ -32,7 +32,14 @@ Roadmap impact:
   - editor tooling (LSP + Zed + tree-sitter)
   - runtime ABI/docs
 
-## Current Status (2026-02-11)
+## Current Status (2026-02-13)
+
+- Milestone progression reached M12 slices with active enforcement.
+- M9 release hardening gate is operational both locally and in CI:
+  - `scripts/release-alpha-gate.sh`
+  - `.github/workflows/alpha-release-gate.yml`
+- M11 editor tooling scope has no remaining tasks in this roadmap revision.
+- M12 naming alignment scope has no remaining tasks in this roadmap revision.
 
 - M0 bootstrap completed and committed.
 - M1 frontend bootstrap completed:
