@@ -209,5 +209,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `242-m10-step-load-profile-runner.md`
 - `243-m10-step-profile-knee-analysis.md`
 - `244-m10-step-analysis-comparison-matrix.md`
+- `245-m10-step-load-section-in-markdown-reports.md`
 
 As milestones progress, chapters will be added and linked from this index.

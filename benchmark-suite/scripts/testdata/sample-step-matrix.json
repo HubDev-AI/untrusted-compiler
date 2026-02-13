@@ -1,0 +1,51 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "decode",
+      "compared": [
+        {
+          "impl": "go",
+          "endpoint": "decode",
+          "kneeDetected": true,
+          "kneeAtTargetRps": 3000,
+          "kneeObservedRps": 2510,
+          "achievedRatioMin": 0.79,
+          "achievedRatioMax": 0.98,
+          "p99MinMs": 7.2,
+          "p99MaxMs": 24.1,
+          "stepCount": 3
+        },
+        {
+          "impl": "ailang",
+          "endpoint": "decode",
+          "kneeDetected": true,
+          "kneeAtTargetRps": 2000,
+          "kneeObservedRps": 1820,
+          "achievedRatioMin": 0.74,
+          "achievedRatioMax": 0.99,
+          "p99MinMs": 6.9,
+          "p99MaxMs": 24.5,
+          "stepCount": 3
+        }
+      ],
+      "leader": {
+        "impl": "go",
+        "endpoint": "decode",
+        "kneeDetected": true,
+        "kneeAtTargetRps": 3000,
+        "kneeObservedRps": 2510,
+        "achievedRatioMin": 0.79,
+        "achievedRatioMax": 0.98,
+        "p99MinMs": 7.2,
+        "p99MaxMs": 24.1,
+        "stepCount": 3
+      }
+    }
+  ],
+  "summary": {
+    "endpointCount": 1,
+    "implementationCount": 2,
+    "kneeDetectedCount": 2
+  }
+}

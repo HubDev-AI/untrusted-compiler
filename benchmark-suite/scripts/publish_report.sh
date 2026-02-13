@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 4 ]; then
-  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 5 ]; then
+  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json]" >&2
   exit 2
 fi
 
@@ -10,6 +10,7 @@ matrix_path="$1"
 out_path="$2"
 sec_audit_path="${3:-}"
 analysis_path="${4:-}"
+step_matrix_path="${5:-}"
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -28,6 +29,11 @@ fi
 
 if [ -n "$analysis_path" ] && [ ! -f "$analysis_path" ]; then
   echo "analysis file not found: ${analysis_path}" >&2
+  exit 2
+fi
+
+if [ -n "$step_matrix_path" ] && [ ! -f "$step_matrix_path" ]; then
+  echo "step matrix file not found: ${step_matrix_path}" >&2
   exit 2
 fi
 
@@ -50,6 +56,9 @@ impl_list="$(jq -r '[.endpoints[].compared[].impl] | unique | join(", ")' "$matr
   fi
   if [ -n "$analysis_path" ]; then
     echo "- Analysis source: ${analysis_path}"
+  fi
+  if [ -n "$step_matrix_path" ]; then
+    echo "- Step matrix source: ${step_matrix_path}"
   fi
   echo
 
@@ -118,6 +127,23 @@ impl_list="$(jq -r '[.endpoints[].compared[].impl] | unique | join(", ")' "$matr
     jq -r '.endpoints[] | .endpoint as $ep | (.findings[]? | "- [\(.severity)] \(.id) (\($ep)): \(.message)")' "$analysis_path" | head -n 8
   else
     echo "- No analysis artifact provided."
+  fi
+  echo
+
+  echo "## Step-Load Signals"
+  echo
+  if [ -n "$step_matrix_path" ]; then
+    step_endpoint_count="$(jq -r '.summary.endpointCount // 0' "$step_matrix_path")"
+    step_impl_count="$(jq -r '.summary.implementationCount // 0' "$step_matrix_path")"
+    step_knee_count="$(jq -r '.summary.kneeDetectedCount // 0' "$step_matrix_path")"
+    echo "- Endpoints analyzed: ${step_endpoint_count}"
+    echo "- Implementations compared: ${step_impl_count}"
+    echo "- Knee detections: ${step_knee_count}"
+    echo
+    echo "Per-endpoint leaders (step-load):"
+    jq -r '.endpoints[] | "- \(.endpoint): leader=\(.leader.impl), kneeTarget=\(.leader.kneeAtTargetRps), achievedMin=\(((((.leader.achievedRatioMin // 0) * 10000) | round) / 100) )%"' "$step_matrix_path"
+  else
+    echo "- No step-matrix artifact provided."
   fi
   echo
 

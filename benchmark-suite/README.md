@@ -86,3 +86,4 @@ Measure end-to-end service behavior across identical implementations:
 - Published markdown reports also include implementation scope (`Implementations in matrix (...)`).
 - Step-load runner writes aggregated summaries to `results/summaries/<impl>-<endpoint>-step.json`; analyzer writes `...-step-analysis.json`.
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
+- `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.

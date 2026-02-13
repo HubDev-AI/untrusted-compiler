@@ -17,7 +17,7 @@ analysis="$tmp/analysis.json"
 "$root_dir/scripts/analyze_matrix.sh" "$matrix" "$analysis" >/dev/null
 
 out="$tmp/report.md"
-"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" >/dev/null
+"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" "$root_dir/scripts/testdata/sample-step-matrix.json" >/dev/null
 
 if ! grep -q '^# Benchmark Comparative Report (v0.1)$' "$out"; then
   echo "missing report title" >&2
@@ -69,6 +69,19 @@ fi
 
 if ! grep -q '^## Security Posture$' "$out"; then
   echo "missing security posture section" >&2
+  exit 1
+fi
+
+if ! grep -q '^## Step-Load Signals$' "$out"; then
+  echo "missing step-load signals section" >&2
+  exit 1
+fi
+if ! grep -q 'Knee detections: 2' "$out"; then
+  echo "missing step-load knee detection summary" >&2
+  exit 1
+fi
+if ! grep -q 'decode: leader=go, kneeTarget=3000' "$out"; then
+  echo "missing step-load leader detail" >&2
   exit 1
 fi
 
