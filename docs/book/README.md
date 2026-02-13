@@ -241,5 +241,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `274-m11-multiline-effect-quickfix-support.md`
 - `275-m11-deadline-aware-semantic-walk-cancellation.md`
 - `276-m11-tree-sitter-grammar-coverage-expansion.md`
+- `277-m11-parse-stage-short-circuit-on-expired-deadlines.md`
 
 As milestones progress, chapters will be added and linked from this index.

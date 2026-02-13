@@ -432,7 +432,7 @@ fn definition_at_position(
 ) -> io::Result<Value> {
     let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
-    let program = match load_cached_program(state, uri, &path, &source) {
+    let program = match load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         Some(program) => program,
         None => return Ok(Value::Null),
     };
@@ -458,7 +458,7 @@ fn hover_at_position(
 ) -> io::Result<Value> {
     let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
-    let program = match load_cached_program(state, uri, &path, &source) {
+    let program = match load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         Some(program) => program,
         None => return Ok(Value::Null),
     };
@@ -491,7 +491,7 @@ fn references_at_position(
 ) -> io::Result<Value> {
     let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
-    let program = match load_cached_program(state, uri, &path, &source) {
+    let program = match load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         Some(program) => program,
         None => return Ok(Value::Array(Vec::new())),
     };
@@ -512,7 +512,9 @@ fn references_at_position(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
+        let Some(doc_program) =
+            load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(&deadline))
+        else {
             continue;
         };
         locations.extend(
@@ -558,7 +560,7 @@ fn completion_at_position(
         .map(|label| label.to_string())
         .collect::<HashSet<_>>();
 
-    if let Some(program) = load_cached_program(state, uri, &path, &source) {
+    if let Some(program) = load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         for symbol in collect_function_symbols(&program, Some(&deadline)) {
             if seen_labels.insert(symbol.name.clone()) {
                 items.push(json!({
@@ -591,7 +593,7 @@ fn prepare_rename_at_position(
 ) -> io::Result<Value> {
     let deadline = RequestDeadline::new(request_budget_ms());
     let (path, source) = load_document_source(state, uri)?;
-    let program = match load_cached_program(state, uri, &path, &source) {
+    let program = match load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         Some(program) => program,
         None => return Ok(Value::Null),
     };
@@ -626,7 +628,7 @@ fn rename_at_position(
     }
 
     let (path, source) = load_document_source(state, uri)?;
-    let program = match load_cached_program(state, uri, &path, &source) {
+    let program = match load_cached_program(state, uri, &path, &source, Some(&deadline)) {
         Some(program) => program,
         None => {
             return Ok(json!({
@@ -664,7 +666,9 @@ fn rename_at_position(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
+        let Some(doc_program) =
+            load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(&deadline))
+        else {
             continue;
         };
 
@@ -1010,9 +1014,13 @@ fn load_cached_program(
     uri: &str,
     path: &PathBuf,
     source: &str,
+    deadline: Option<&RequestDeadline>,
 ) -> Option<Program> {
     if let Some(program) = state.parsed_programs.get(uri) {
         return Some(program.clone());
+    }
+    if deadline_exceeded(deadline) {
+        return None;
     }
     parse_source(path, source).ok()
 }
@@ -1130,7 +1138,9 @@ fn find_symbol_declaration_in_workspace(
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
         };
-        let Some(doc_program) = load_cached_program(state, &doc_uri, &doc_path, &doc_source) else {
+        let Some(doc_program) =
+            load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(deadline))
+        else {
             continue;
         };
         if let Some(symbol) = collect_function_symbols(&doc_program, Some(deadline))
@@ -1784,8 +1794,8 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 mod tests {
     use super::{
         collect_function_symbols, collect_identifier_hits_by_name, diagnostics_for_document_with_limits,
-        find_identifier_at_position, parse_env_bool, read_message, refresh_program_cache, run_stdio,
-        RequestDeadline, ServerState,
+        find_identifier_at_position, load_cached_program, parse_env_bool, read_message,
+        refresh_program_cache, run_stdio, RequestDeadline, ServerState,
     };
     use ailang_core::parse_source;
     use serde_json::{json, Value};
@@ -2044,6 +2054,26 @@ mod tests {
         assert!(
             hits.is_empty(),
             "identifier hit collection should short-circuit immediately for expired deadlines"
+        );
+    }
+
+    #[test]
+    fn load_cached_program_skips_parse_when_deadline_is_expired() {
+        let state = ServerState::default();
+        let path = PathBuf::from("/tmp/lsp_deadline_parse_skip.ai");
+        let source = "fn alpha() -> Int { 1 }\n";
+        let deadline = RequestDeadline::new(0);
+
+        let program = load_cached_program(
+            &state,
+            "file:///tmp/lsp_deadline_parse_skip.ai",
+            &path,
+            source,
+            Some(&deadline),
+        );
+        assert!(
+            program.is_none(),
+            "expired deadline should skip on-demand parse for uncached documents"
         );
     }
 
