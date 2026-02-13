@@ -157,5 +157,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `190-m7-security-map-crypto-cteq-tagging.md`
 - `191-m7-security-map-crypto-namespace-alias-resolution.md`
 - `192-m7-security-map-helper-namespace-alias-resolution.md`
+- `193-m7-security-map-ctx-caps-capability-alias-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.

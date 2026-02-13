@@ -871,6 +871,9 @@ fn normalize_callable_forward_target(
     allow_function_fallback: bool,
 ) -> Option<String> {
     let resolved = resolve_forward_summary_name(name, summaries);
+    let resolved = capability_namespace_alias_for_member_path(resolved.as_str())
+        .unwrap_or(resolved.as_str())
+        .to_string();
     if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
         Some(resolved)
     } else if allow_function_fallback && function_names.contains(resolved.as_str()) {
@@ -885,6 +888,9 @@ fn normalize_callable_summary_target(
     summaries: &HashMap<String, String>,
 ) -> Option<String> {
     let resolved = resolve_forward_summary_name(name, summaries);
+    let resolved = capability_namespace_alias_for_member_path(resolved.as_str())
+        .unwrap_or(resolved.as_str())
+        .to_string();
     if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
         Some(resolved)
     } else {
@@ -1013,6 +1019,9 @@ fn infer_callable_alias(
     callable_summaries: &HashMap<String, String>,
 ) -> Option<String> {
     if let Some(name) = resolve_callable_name(expr, callable_aliases) {
+        let name = capability_namespace_alias_for_member_path(name.as_str())
+            .unwrap_or(name.as_str())
+            .to_string();
         if call_tags_for(name.as_str()).is_some()
             || is_tagged_call_namespace(name.as_str())
             || summaries.contains_key(name.as_str())
@@ -1859,6 +1868,26 @@ fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> 
         "FsCap" => Some("fs"),
         "SecretsCap" => Some("secrets"),
         _ => None,
+    }
+}
+
+fn capability_namespace_alias_for_member_path(name: &str) -> Option<&'static str> {
+    if name == "caps.db" || name.ends_with(".caps.db") {
+        Some("db")
+    } else if name == "caps.net" || name.ends_with(".caps.net") {
+        Some("httpClient")
+    } else if name == "caps.internalNet"
+        || name.ends_with(".caps.internalNet")
+        || name == "caps.internal_net"
+        || name.ends_with(".caps.internal_net")
+    {
+        Some("httpClient")
+    } else if name == "caps.fs" || name.ends_with(".caps.fs") {
+        Some("fs")
+    } else if name == "caps.secrets" || name.ends_with(".caps.secrets") {
+        Some("secrets")
+    } else {
+        None
     }
 }
 
