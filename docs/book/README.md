@@ -261,5 +261,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `294-m9-alpha-release-gate-ci-workflow.md`
 - `295-m12-naming-lock-guard-and-cli-surface-alignment.md`
 - `296-m12-naming-lock-ci-workflow.md`
+- `297-m12-benchmark-impl-id-naming-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.

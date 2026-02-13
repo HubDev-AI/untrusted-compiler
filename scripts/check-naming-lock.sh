@@ -58,6 +58,46 @@ require_contract_token() {
   fi
 }
 
+check_benchmark_impl_contract() {
+  local failed=0
+  local impl_root="benchmark-suite/services"
+  local required_impls=("sec4" "go" "node" "rust" "c")
+  local required
+
+  for required in "${required_impls[@]}"; do
+    if [[ ! -d "${impl_root}/${required}" ]]; then
+      echo "error: missing benchmark implementation directory: ${impl_root}/${required}" >&2
+      failed=1
+    fi
+  done
+
+  if [[ -d "${impl_root}/ai""lang" ]]; then
+    echo "error: legacy benchmark implementation directory detected: ${impl_root}/ai""lang" >&2
+    failed=1
+  fi
+
+  local sample_values
+  sample_values="$(
+    rg -n --no-filename '"impl"[[:space:]]*:' benchmark-suite/scripts/testdata/*.json 2>/dev/null \
+      | awk -F'"' '{print $4}' \
+      | sort -u || true
+  )"
+
+  local impl_value
+  for impl_value in ${sample_values}; do
+    case "${impl_value}" in
+      sec4|go|node|rust|c)
+        ;;
+      *)
+        echo "error: benchmark testdata uses unsupported impl id: ${impl_value}" >&2
+        failed=1
+        ;;
+    esac
+  done
+
+  return "${failed}"
+}
+
 check_legacy_patterns
 require_contract_token "Untrusted<T>" "Untrusted<T>"
 require_contract_token "sec4 audit" "sec4 audit"
@@ -68,5 +108,6 @@ require_contract_token "ut/std" "ut/std"
 require_contract_token "ut/http" "ut/http"
 require_contract_token "ut/sec" "ut/sec"
 require_contract_token "path_suffixes\\s*=\\s*\\[\\s*\"ut\"\\s*\\]" "zed path_suffixes=[\"ut\"]"
+check_benchmark_impl_contract
 
 echo "ok: naming lock check passed"

@@ -482,7 +482,8 @@ Roadmap impact:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,
   - alpha release gate now runs naming-lock validation before artifact checks,
-  - `.github/workflows/naming-lock.yml` runs the naming-lock check on `main` pushes and pull requests.
+  - `.github/workflows/naming-lock.yml` runs the naming-lock check on `main` pushes and pull requests,
+  - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1161,8 +1162,9 @@ Implementation order is intentionally linear to reduce thrash:
     - presence of locked contract tokens (`Untrusted<T>`, `.ut`, `ut/std|ut/http|ut/sec`, canonical command names).
   - release hardening gate (`scripts/release-alpha-gate.sh`) now executes naming-lock validation as part of alpha readiness.
   - dedicated CI workflow (`.github/workflows/naming-lock.yml`) now enforces naming lock on pull requests and `main` pushes.
+  - benchmark naming guard now verifies canonical implementation directory IDs and benchmark testdata `impl` values.
 - Remaining:
-  - expand naming-lock checks to benchmark raw-artifact naming conventions after final M10 artifact schema freeze.
+  - expand naming-lock checks to benchmark raw-artifact filenames/schema keys after final M10 artifact schema freeze.
 
 ### Exit criteria
 - `rg` across tracked source/docs returns no legacy pre-rename tokens outside historical commit logs and third-party artifacts.
