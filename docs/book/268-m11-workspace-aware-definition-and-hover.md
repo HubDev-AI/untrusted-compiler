@@ -5,7 +5,7 @@ This chapter documents extending `definition` and `hover` resolution beyond loca
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `textDocument/definition` now resolves declaration via workspace declaration lookup.
@@ -42,7 +42,7 @@ Before this slice, definition/hover were effectively local-file for declaration 
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - definition resolving to declaration in unopened workspace file.
 - hover resolving signature from unopened workspace file declaration.
 

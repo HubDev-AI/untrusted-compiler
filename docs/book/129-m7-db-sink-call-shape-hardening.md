@@ -31,10 +31,10 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for missing-query DB calls
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - DB/fs/net CLI integration test in `compiler/ailang-cli/tests/json_output.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - DB/fs/net CLI integration test in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of DB sink calls that omit required query/schema arguments,
   - updated semantic fixtures to valid query-bearing forms.
@@ -49,7 +49,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn persist(ctx: Ctx, db: DbCap, tx: TxCap, q: SqlQuery) effects { db.write, db.read, db.tx } -> Int {
   db.exec(ctx, db, q);
   db.execTx(tx, q);

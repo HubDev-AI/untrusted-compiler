@@ -49,7 +49,7 @@ Step analysis was previously per-implementation only. Comparing saturation behav
 ## Example usage
 
 ```bash
-make -C benchmark-suite compare-step-matrix IMPLS=ailang,node,go,rust ENDPOINTS=decode
+make -C benchmark-suite compare-step-matrix IMPLS=sec4,node,go,rust ENDPOINTS=decode
 ```
 
 ## Tradeoffs and next steps

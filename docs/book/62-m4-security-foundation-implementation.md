@@ -3,7 +3,7 @@
 This chapter documents the first implemented code slice of M4 (security foundation hardening).
 
 ## Scope delivered in this slice
-- Added compiler policy loading from `ailang.policy` (defaulting to secure policy when file is absent).
+- Added compiler policy loading from `sec4.policy` (defaulting to secure policy when file is absent).
 - Added policy parser/schema validation for major sections with strict unknown-key rejection.
 - Enforced default forbidden effects (`shell`, `unsafe`, `secrets.reveal`) at semantic analysis time.
 - Added capability-aware intrinsic checks for sensitive operations:

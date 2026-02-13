@@ -5,7 +5,7 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-cp "$root_dir/scripts/testdata/sample-ailang-report.json" "$tmp/ailang-report.json"
+cp "$root_dir/scripts/testdata/sample-sec4-report.json" "$tmp/sec4-report.json"
 cp "$root_dir/scripts/testdata/sample-go-report.json" "$tmp/go-report.json"
 cp "$root_dir/scripts/testdata/sample-node-report.json" "$tmp/node-report.json"
 cp "$root_dir/scripts/testdata/sample-rust-report.json" "$tmp/rust-report.json"
@@ -33,7 +33,7 @@ if ! grep -q '^- Implementations in matrix (4):' "$out"; then
   echo "missing matrix implementation scope header" >&2
   exit 1
 fi
-if ! grep -q 'ailang' "$out" || ! grep -q 'go' "$out" || ! grep -q 'node' "$out" || ! grep -q 'rust' "$out"; then
+if ! grep -q 'sec4' "$out" || ! grep -q 'go' "$out" || ! grep -q 'node' "$out" || ! grep -q 'rust' "$out"; then
   echo "matrix implementation scope header missing expected implementation names" >&2
   exit 1
 fi

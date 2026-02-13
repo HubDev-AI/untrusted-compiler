@@ -5,7 +5,7 @@ This chapter documents the first M5 slice that introduces a backend-neutral MIR 
 Follow-up M5 control-flow widening for explicit `return if` / `return match` is documented in `docs/book/74-m5-return-control-flow-lowering.md`.
 
 ## Scope delivered
-- Added a new MIR module in `ailang-core`:
+- Added a new MIR module in `sec4-core`:
   - `MirProgram`
   - `MirFunction`
   - `MirBlock`
@@ -18,12 +18,12 @@ Follow-up M5 control-flow widening for explicit `return if` / `return match` is 
 - Added deterministic textual MIR rendering:
   - `MirProgram::render_text()`
 - Added CLI integration:
-  - `ailang build --emit mir`
-  - `ailang build --emit mir-json`
+  - `sec4 build --emit mir`
+  - `sec4 build --emit mir-json`
 - Added tests:
-  - core MIR lowering tests in `compiler/ailang-core/tests/mir.rs`
-  - fixture-based MIR golden tests in `compiler/ailang-core/tests/golden_mir.rs`
-  - CLI emit test in `compiler/ailang-cli/tests/json_output.rs`
+  - core MIR lowering tests in `compiler/sec4-core/tests/mir.rs`
+  - fixture-based MIR golden tests in `compiler/sec4-core/tests/golden_mir.rs`
+  - CLI emit test in `compiler/sec4-cli/tests/json_output.rs`
 
 ## What it is
 MIR is a compiler-internal, backend-neutral representation between AST/semantic phases and backend code generation. In this slice, MIR is intentionally minimal and inspection-first.
@@ -67,8 +67,8 @@ MIR is a compiler-internal, backend-neutral representation between AST/semantic 
 ## CLI behavior
 
 Build now supports:
-- `ailang build --path <project> --emit mir`
-- `ailang build --path <project> --emit mir-json`
+- `sec4 build --path <project> --emit mir`
+- `sec4 build --path <project> --emit mir-json`
 
 Behavior:
 1. project validation + semantic analysis run as before

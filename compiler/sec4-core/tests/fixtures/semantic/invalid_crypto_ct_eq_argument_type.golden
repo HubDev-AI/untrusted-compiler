@@ -1,0 +1,9 @@
+error[E4001]: crypto.ctEq first argument must be `Secret<_>`
+  --> invalid_crypto_ct_eq_argument_type.ut:2:15
+  note: found `String`
+  note: pass secret values only
+
+error[E4001]: crypto.ctEq second argument must be `Secret<_>`
+  --> invalid_crypto_ct_eq_argument_type.ut:2:18
+  note: found `String`
+  note: pass secret values only

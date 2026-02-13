@@ -1,14 +1,14 @@
-# 195 M8 Slice: sec.audit History-Window Trend Summary
+# 195 M8 Slice: sec4 audit History-Window Trend Summary
 
 This chapter documents the M8 CLI slice that extends audit trend visibility from a single baseline to configurable multi-run windows.
 
 ## What it is
 
-Added `--history-window <N>` to `ailang sec audit` (requires `--history-dir`) and emit a history-window trend summary over the most recent `N` persisted audit reports.
+Added `--history-window <N>` to `sec4 audit` (requires `--history-dir`) and emit a history-window trend summary over the most recent `N` persisted audit reports.
 
 ## Why it exists
 
-`sec.audit` already supported latest-baseline trend deltas, but operators could not quickly inspect how risk scores moved across several recent runs. This slice adds a bounded, deterministic multi-run summary without changing stdout JSON report shape.
+`sec4 audit` already supported latest-baseline trend deltas, but operators could not quickly inspect how risk scores moved across several recent runs. This slice adds a bounded, deterministic multi-run summary without changing stdout JSON report shape.
 
 ## How it works internally
 
@@ -31,8 +31,8 @@ Added `--history-window <N>` to `ailang sec audit` (requires `--history-dir`) an
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
   - optional history-window summary in audit command auxiliary output.
 - Constraints:
@@ -49,10 +49,10 @@ Added `--history-window <N>` to `ailang sec audit` (requires `--history-dir`) an
 ## Example usage
 
 ```bash
-ailang sec audit \
+sec4 audit \
   --path examples/hello \
   --format json \
-  --history-dir .ailang/audit-history \
+  --history-dir .sec4/audit-history \
   --history-window 5
 ```
 

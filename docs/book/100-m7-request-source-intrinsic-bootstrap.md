@@ -13,10 +13,10 @@ Added runtime bridge coverage for request-source intrinsics:
 - `req.header` / `req_header`
 
 They now lower to runtime ABI stubs:
-- `ailang_rt_req_body`
-- `ailang_rt_req_query`
-- `ailang_rt_req_path_param`
-- `ailang_rt_req_header`
+- `sec4_rt_req_body`
+- `sec4_rt_req_query`
+- `sec4_rt_req_path_param`
+- `sec4_rt_req_header`
 
 ### Why it exists
 
@@ -25,13 +25,13 @@ M7’s HTTP runtime surface includes request extraction beyond JSON decode. Befo
 ### How it works internally
 
 - Extended intrinsic rewrite table in `c_backend.rs` with dotted and underscore aliases for all four request-source calls.
-- Added runtime C declarations/definitions in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
+- Added runtime C declarations/definitions in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
 - Extended core C-backend tests and CLI `c-bin` integration coverage to assert the generated C contains expected runtime symbols.
-- Updated `examples/hello-api/src/main.ai` to exercise request-source calls in the sample service flow.
+- Updated `examples/hello-api/src/main.ut` to exercise request-source calls in the sample service flow.
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code using request extraction helpers.
+- Input: Untrusted<T> code using request extraction helpers.
 - Output: successful `build --emit c-bin` with request-source calls lowered to runtime ABI stubs.
 - Constraints:
   - runtime return values are still placeholder stubs.
@@ -44,7 +44,7 @@ M7’s HTTP runtime surface includes request extraction beyond JSON decode. Befo
 
 ### Example usage
 
-```ailang
+```ut
 fn createUser(schema: Schema<Int>) effects { net } -> Int {
   req.body(1, 2);
   req.query(1, 2);
@@ -62,8 +62,8 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - req/res rewrite test now covers request-source intrinsics
   - runtime header/source assertions include new request-source ABI symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - req/res `c-bin` integration fixture now asserts request-source runtime symbol lowering

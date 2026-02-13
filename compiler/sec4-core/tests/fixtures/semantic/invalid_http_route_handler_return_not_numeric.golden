@@ -1,0 +1,4 @@
+error[E4001]: route handler must return `Int`/`Int64` in v0 runtime bridge
+  --> invalid_http_route_handler_return_not_numeric.ut:6:31
+  note: function `health` returns `Bool`
+  note: adjust handler return type to `Int` or `Int64` for current runtime bridge compatibility

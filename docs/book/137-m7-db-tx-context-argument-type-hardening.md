@@ -24,11 +24,11 @@ In `enforce_db_tx_call_shape(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_db_tx_context_argument_type.ai`
+    - `invalid_db_tx_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first `db.tx` calls,
   - capability-tagged diagnostics aligned with existing capability enforcement flows.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn begin(ctx: Ctx, db: DbCap) effects { db.tx } -> Int {
   db.tx(ctx, db);
   0

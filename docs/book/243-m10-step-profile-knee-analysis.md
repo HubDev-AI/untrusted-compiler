@@ -50,13 +50,13 @@ Step-load runs generate many summaries. Without an analyzer, spotting saturation
 ## Example usage
 
 ```bash
-make -C benchmark-suite analyze-step-profile IMPL=ailang ENDPOINT=decode
+make -C benchmark-suite analyze-step-profile IMPL=sec4 ENDPOINT=decode
 ```
 
 Custom threshold:
 
 ```bash
-benchmark-suite/scripts/analyze_step_profile.sh benchmark-suite/results/summaries/ailang-decode-step.json benchmark-suite/results/summaries/ailang-decode-step-analysis.json 0.85
+benchmark-suite/scripts/analyze_step_profile.sh benchmark-suite/results/summaries/sec4-decode-step.json benchmark-suite/results/summaries/sec4-decode-step-analysis.json 0.85
 ```
 
 ## Tradeoffs and next steps

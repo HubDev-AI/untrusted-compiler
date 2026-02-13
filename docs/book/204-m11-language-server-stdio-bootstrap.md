@@ -1,12 +1,12 @@
 # 204 M11 Slice: Language Server Stdio Bootstrap
 
-This chapter documents the first executable scaffold for editor integration: a minimal `ailang-language-server` binary.
+This chapter documents the first executable scaffold for editor integration: a minimal `sec4audit-language-server` binary.
 
 ## What it is
 
 Added a new workspace crate:
-- `compiler/ailang-lsp`
-- binary name: `ailang-language-server`
+- `compiler/sec4-lsp`
+- binary name: `sec4audit-language-server`
 
 The server currently implements a minimal JSON-RPC/LSP stdio loop with support for:
 - `initialize`
@@ -21,8 +21,8 @@ The project needed a concrete LSP process endpoint to unblock editor wiring (`--
 ## How it works internally
 
 1. CLI contract:
-   - `ailang-language-server --stdio`
-   - `ailang-language-server --version`
+   - `sec4audit-language-server --stdio`
+   - `sec4audit-language-server --version`
 2. Message framing:
    - reads `Content-Length` headers
    - parses JSON-RPC payloads
@@ -36,8 +36,8 @@ The project needed a concrete LSP process endpoint to unblock editor wiring (`--
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-lsp/Cargo.toml`
-  - `compiler/ailang-lsp/src/main.rs`
+  - `compiler/sec4-lsp/Cargo.toml`
+  - `compiler/sec4-lsp/src/main.rs`
   - workspace `Cargo.toml` member update
 - Outputs:
   - runnable LSP bootstrap binary and unit tests for request/response framing.
@@ -54,11 +54,11 @@ The project needed a concrete LSP process endpoint to unblock editor wiring (`--
 ## Example usage
 
 ```bash
-cargo run -p ailang-language-server -- --stdio
+cargo run -p sec4audit-language-server -- --stdio
 ```
 
 ```bash
-cargo test -p ailang-language-server
+cargo test -p sec4audit-language-server
 ```
 
 ## Tradeoffs and next steps
@@ -66,4 +66,4 @@ cargo test -p ailang-language-server
 - Tradeoff: capabilities are intentionally minimal to avoid advertising unimplemented features.
 - Next:
   - connect `initialize` workspace context to compiler project loading
-  - add first language feature bridge (`textDocument/publishDiagnostics`) backed by `ailang-core`.
+  - add first language feature bridge (`textDocument/publishDiagnostics`) backed by `sec4-core`.

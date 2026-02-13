@@ -5,12 +5,12 @@ This chapter documents preemptive request-deadline checks for multi-document LSP
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - Added request deadline model:
   - `RequestDeadline { started_at, budget_ms }`
-  - `request_budget_ms()` config via `AILANG_LSP_REQUEST_BUDGET_MS` (fallback to analysis budget).
+  - `request_budget_ms()` config via `SEC4AUDIT_LSP_REQUEST_BUDGET_MS` (fallback to analysis budget).
 - Applied deadline checks in multi-document loops:
   - declaration lookup across workspace-open documents,
   - references aggregation,
@@ -44,7 +44,7 @@ M11 requires bounded behavior to avoid perceived hangs in editor flows. Referenc
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - zero-budget deadline semantics (`RequestDeadline::new(0)` is immediately expired).
 
 ## Tradeoffs and next steps

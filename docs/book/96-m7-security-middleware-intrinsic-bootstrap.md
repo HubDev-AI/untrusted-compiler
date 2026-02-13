@@ -13,14 +13,14 @@ Semantic and C backend now support these middleware intrinsics:
 - `withAuth` / `auth.withAuth`
 
 They are lowered to runtime ABI stubs:
-- `ailang_rt_with_security_headers`
-- `ailang_rt_with_cors`
-- `ailang_rt_with_csrf`
-- `ailang_rt_with_auth`
+- `sec4_rt_with_security_headers`
+- `sec4_rt_with_cors`
+- `sec4_rt_with_csrf`
+- `sec4_rt_with_auth`
 
 ### Why it exists
 
-Security-first router bootstrap is a core AILang goal. This slice ensures middleware-shaped code paths are executable in the current bridge architecture while concrete middleware behavior is implemented later.
+Security-first router bootstrap is a core Untrusted<T> goal. This slice ensures middleware-shaped code paths are executable in the current bridge architecture while concrete middleware behavior is implemented later.
 
 ### How it works internally
 
@@ -32,7 +32,7 @@ Security-first router bootstrap is a core AILang goal. This slice ensures middle
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code invoking middleware intrinsics.
+- Input: Untrusted<T> code invoking middleware intrinsics.
 - Output: C-valid runtime stub calls and successful `c-bin` compilation.
 - Constraints:
   - runtime middleware behavior is currently placeholder.
@@ -45,7 +45,7 @@ Security-first router bootstrap is a core AILang goal. This slice ensures middle
 
 ### Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   sec.withSecurityHeaders();
   cors.withCors();
@@ -63,7 +63,7 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_security_middleware_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_security_middleware_intrinsics_when_clang_available`

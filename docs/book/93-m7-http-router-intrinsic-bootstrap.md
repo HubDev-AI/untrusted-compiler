@@ -13,10 +13,10 @@ C emission now rewrites:
 - `http.serve(...)`
 
 to runtime symbols:
-- `ailang_rt_http_router(...)`
-- `ailang_rt_http_route_get(...)`
-- `ailang_rt_http_route_post(...)`
-- `ailang_rt_http_serve(...)`
+- `sec4_rt_http_router(...)`
+- `sec4_rt_http_route_get(...)`
+- `sec4_rt_http_route_post(...)`
+- `sec4_rt_http_serve(...)`
 
 Runtime ABI stubs for these symbols were added under `runtime/c/`.
 
@@ -31,11 +31,11 @@ M7 requires a router/runtime bridge. This slice provides the first executable br
   - `http.serve` (`net` effect required)
 - Intrinsic namespace support now includes `http`.
 - C emitter rewrite table maps HTTP router intrinsics to runtime ABI symbols.
-- Runtime ABI (`runtime/c/ailang_runtime.h/.c`) now declares/defines corresponding stub functions.
+- Runtime ABI (`runtime/c/sec4_runtime.h/.c`) now declares/defines corresponding stub functions.
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code using router intrinsics.
+- Input: Untrusted<T> code using router intrinsics.
 - Output: C-valid runtime calls and runnable `c-bin` artifacts.
 - Constraints:
   - runtime behavior is still placeholder/stub (returns numeric placeholders).
@@ -49,7 +49,7 @@ M7 requires a router/runtime bridge. This slice provides the first executable br
 
 ### Example usage
 
-```ailang
+```ut
 fn buildRouter() effects { net } -> Int {
   let router = http.router();
   http.get(router, 1, 1);
@@ -67,7 +67,7 @@ fn buildRouter() effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_http_router_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_http_router_intrinsics_when_clang_available`

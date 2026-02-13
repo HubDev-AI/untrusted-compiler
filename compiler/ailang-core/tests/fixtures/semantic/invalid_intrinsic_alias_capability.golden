@@ -1,3 +1,0 @@
-error[E2004]: capability type mismatch
-  --> invalid_intrinsic_alias_capability.ai:3:8
-  note: `db.exec` expects capability `DbCap` at argument 1, got `NetCap`

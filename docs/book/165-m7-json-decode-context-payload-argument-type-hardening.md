@@ -25,15 +25,15 @@ In `enforce_json_decode_helper_signature`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_json_decode_context_argument_type.ai`
-    - `invalid_json_decode_raw_argument_type.ai`
+    - `invalid_json_decode_context_argument_type.ut`
+    - `invalid_json_decode_raw_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - integration fixture alignment:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of invalid `json.decode` context/raw argument types,
   - tagged diagnostics suitable for CLI/editor security surfacing.
@@ -50,7 +50,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
   json.decode(ctx, schema, raw);
   0

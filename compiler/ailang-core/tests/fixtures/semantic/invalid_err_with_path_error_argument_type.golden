@@ -1,4 +1,0 @@
-error[E4001]: err.withPath error argument must be `StdError`
-  --> invalid_err_with_path_error_argument_type.ai:2:16
-  note: found `Int`
-  note: use an error value created via `err.*` constructors

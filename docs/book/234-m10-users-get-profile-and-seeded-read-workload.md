@@ -62,7 +62,7 @@ The M10 benchmark spec requires both DB write and DB read workloads (`POST /user
 ## Example usage
 
 ```bash
-make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-get
+make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-get
 ```
 
 With override:

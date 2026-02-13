@@ -1,6 +1,6 @@
 # 41 Type System (v0.1-lite)
 
-This chapter documents the M2 minimal type checker in `compiler/ailang-core/src/semantic.rs`.
+This chapter documents the M2 minimal type checker in `compiler/sec4-core/src/semantic.rs`.
 
 ## What it is
 
@@ -44,7 +44,7 @@ M2 must reject basic semantic bugs with deterministic diagnostics before MIR/bac
 ## Example usage
 
 ```bash
-cargo test -p ailang-core --test golden_semantic
+cargo test -p sec4-core --test golden_semantic
 ```
 
 The semantic golden suite includes unknown-name, type-mismatch, and non-exhaustive `match` fixtures.

@@ -1,0 +1,14 @@
+error[E4001]: err.withDependency name argument must be `String`
+  --> invalid_err_with_dependency_argument_type.ut:3:28
+  note: found `Int`
+  note: use stable string names for dependencies
+
+error[E4001]: err.withDependency operation argument must be `String`
+  --> invalid_err_with_dependency_argument_type.ut:3:31
+  note: found `Int`
+  note: use stable string operation names
+
+error[E4001]: err.withDependency retryable argument must be `Bool`
+  --> invalid_err_with_dependency_argument_type.ut:3:34
+  note: found `Int`
+  note: use boolean retryable flags

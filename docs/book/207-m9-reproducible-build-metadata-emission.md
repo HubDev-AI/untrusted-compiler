@@ -4,7 +4,7 @@ This chapter documents a Release Hardening (`M9`) slice that adds deterministic 
 
 ## What it is
 
-`ailang build` now writes `build/build_metadata.json` on successful builds.
+`sec4 build` now writes `build/build_metadata.json` on successful builds.
 
 The metadata contains deterministic build identity fields:
 - package identity (`name`, `version`, `edition`, `entry`),
@@ -32,14 +32,14 @@ By emitting deterministic metadata from build inputs, CI/release pipelines can c
    - loads policy and writes metadata file,
    - reports metadata path in text output mode.
 4. Updated audit build summary hash source:
-   - `sec.audit` now uses shared compiler/runtime hash helpers for consistency.
+   - `sec4 audit` now uses shared compiler/runtime hash helpers for consistency.
 
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/build_metadata.rs`
-  - `compiler/ailang-core/src/audit.rs`
-  - `compiler/ailang-cli/src/main.rs`
+  - `compiler/sec4-core/src/build_metadata.rs`
+  - `compiler/sec4-core/src/audit.rs`
+  - `compiler/sec4-cli/src/main.rs`
 - Outputs:
   - deterministic `build/build_metadata.json` file.
 - Constraints:
@@ -57,7 +57,7 @@ All emit standard span+note diagnostics and fail the build command.
 ## Example usage
 
 ```bash
-ailang build --path examples/hello
+sec4 build --path examples/hello
 cat examples/hello/build/build_metadata.json
 ```
 
@@ -69,4 +69,4 @@ The file is stable across repeated builds when manifest/policy/runtime/lockfile 
   - current metadata schema is intentionally small and release-focused.
 - Next:
   - add optional SBOM emission alongside metadata (`M9` optional item),
-  - add release profile automation that captures `sec.audit` JSON + `build_metadata.json` together.
+  - add release profile automation that captures `sec4 audit` JSON + `build_metadata.json` together.

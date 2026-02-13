@@ -25,14 +25,14 @@ In semantic trust-gate enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_json_decode_schema_argument_type.ai`
+    - `invalid_json_decode_schema_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - integration fixture alignment:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed `json.decode` schema arguments,
   - schema-tagged diagnostics for CLI/editor tooling.
@@ -49,7 +49,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
   json.decode(ctx, schema, raw);
   0

@@ -1,3 +1,0 @@
-error[M0003]: package.name must not be empty
-  --> ailang.toml:1:1
-  note: set [package].name to a non-empty identifier

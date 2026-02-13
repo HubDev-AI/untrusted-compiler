@@ -1,6 +1,0 @@
-error[E1002]: untrusted value cannot flow into filesystem sink
-  --> invalid_untrusted_to_fs.ai:2:16
-  note: sink `fs.read` requires trusted `PathSafe` values
-  note: argument 2 has type `Untrusted<String>`
-  note: origin: identifier `path` carries type `Untrusted<String>`
-  note: validate input via `path.under(...)` before filesystem access

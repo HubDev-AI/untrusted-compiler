@@ -1,4 +1,0 @@
-error[E4001]: fs sink path argument must be `PathSafe`
-  --> invalid_fs_write_path_argument_type.ai:2:16
-  note: found `Int`
-  note: use typed `PathSafe` values when calling `fs.write`

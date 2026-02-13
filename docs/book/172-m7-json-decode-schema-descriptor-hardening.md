@@ -25,11 +25,11 @@ In `enforce_json_decode_helper_signature`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_json_decode_non_schema_argument_type.ai`
+    - `invalid_json_decode_non_schema_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-`Schema<_>` decode schema arguments,
   - stable schema-tagged diagnostics for tooling.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn decodeUser(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
   json.decode(ctx, schema, raw);
   0

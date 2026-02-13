@@ -1,13 +1,13 @@
 # 276 M11 Slice: Tree-sitter Grammar Coverage Expansion
 
-This chapter documents expanding the AILang tree-sitter grammar/query coverage beyond the initial scaffold.
+This chapter documents expanding the Untrusted<T> tree-sitter grammar/query coverage beyond the initial scaffold.
 
 ## What it is
 
 Updated:
-- `tree-sitter-ailang/grammar.js`
-- `tree-sitter-ailang/queries/highlights.scm`
-- `tree-sitter-ailang/queries/outline.scm`
+- `tree-sitter-untrusted/grammar.js`
+- `tree-sitter-untrusted/queries/highlights.scm`
+- `tree-sitter-untrusted/queries/outline.scm`
 
 Key changes:
 - function signatures now parse optional `effects { ... }` clauses.
@@ -22,7 +22,7 @@ Key changes:
 
 ## Why it exists
 
-The initial grammar was intentionally minimal and did not parse several common AILang forms used in security/effects-first code. This caused incomplete highlighting/navigation structure in editor clients.
+The initial grammar was intentionally minimal and did not parse several common Untrusted<T> forms used in security/effects-first code. This caused incomplete highlighting/navigation structure in editor clients.
 
 ## How it works internally
 
@@ -34,7 +34,7 @@ The initial grammar was intentionally minimal and did not parse several common A
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - AILang source with function/effects/member-call syntax.
+  - Untrusted<T> source with function/effects/member-call syntax.
 - Outputs:
   - richer parse tree nodes and editor-facing highlight/outline captures.
 - Constraints:
@@ -47,7 +47,7 @@ The initial grammar was intentionally minimal and did not parse several common A
 
 ## Tests added/updated
 
-- Attempted: `npm --prefix tree-sitter-ailang test`
+- Attempted: `npm --prefix tree-sitter-untrusted test`
 - Result: blocked in this environment (`tree-sitter` CLI missing).
 
 ## Tradeoffs and next steps

@@ -1,0 +1,7 @@
+error[E2003]: operation requires capability
+  --> invalid_missing_capability.ut:2:3
+  note: `db_write` requires argument 1 capability `DbCap`
+
+error[E4001]: db sink call has invalid argument shape
+  --> invalid_missing_capability.ut:2:3
+  note: use `db.exec(capability, query)` or `db.exec(ctx, capability, query)`

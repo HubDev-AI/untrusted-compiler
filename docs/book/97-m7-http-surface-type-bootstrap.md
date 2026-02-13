@@ -25,7 +25,7 @@ M7 docs and examples are HTTP-first. Without these names in the catalog, API-sha
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang signatures referencing HTTP surface types.
+- Input: Untrusted<T> signatures referencing HTTP surface types.
 - Output: successful semantic type resolution and compile pipeline progression.
 - Constraints:
   - backend still lowers unknown runtime structures to placeholder C scalar forms in M7 bootstrap mode.
@@ -38,7 +38,7 @@ M7 docs and examples are HTTP-first. Without these names in the catalog, API-sha
 
 ### Example usage
 
-```ailang
+```ut
 fn wireRoutes(router: Router, request: Request, response: Response) effects { net } -> Int {
   http.get(router, 1, 1);
   http.post(router, 1, 1);
@@ -54,5 +54,5 @@ fn wireRoutes(router: Router, request: Request, response: Response) effects { ne
 
 ## Tests updated
 
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_accepts_http_surface_types_when_clang_available`

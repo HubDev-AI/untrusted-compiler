@@ -17,8 +17,8 @@ After resolving handler symbols during route registration checks, semantic analy
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture `invalid_http_route_handler_return_not_numeric.ai`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture `invalid_http_route_handler_return_not_numeric.ut`
 - Outputs:
   - compile-time rejection of route handlers returning non-numeric types in bridge mode.
 - Constraint:
@@ -32,7 +32,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn health() effects { net } -> Int {
   res.text(200, "ok");
   0

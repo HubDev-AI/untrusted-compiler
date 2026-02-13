@@ -1,0 +1,4 @@
+error[E4001]: log.str argument must be `String`
+  --> invalid_log_str_argument_type.ut:2:11
+  note: found `Int`
+  note: pass safe string payloads to `log.str`

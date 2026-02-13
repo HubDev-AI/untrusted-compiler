@@ -11,8 +11,8 @@ Added intrinsic support for:
 - `json.encode` / `json_encode`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_json_decode`
-- `ailang_rt_json_encode`
+- `sec4_rt_json_decode`
+- `sec4_rt_json_encode`
 
 Also added `Json` as a recognized primitive type name in semantic analysis.
 
@@ -48,7 +48,7 @@ The v0 stdlib surface includes explicit JSON helper APIs alongside req/res helpe
 
 ### Example usage
 
-```ailang
+```ut
 fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
   json.decode(ctx, schema, raw);
   json.encode(schema, 3);
@@ -63,8 +63,8 @@ fn useJson(ctx: Ctx, schema: Schema<Int>, raw: Untrusted<Bytes>) -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_json_helper_intrinsics_to_runtime_symbols`
   - runtime ABI assertions include JSON helper symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_json_helper_intrinsics_when_clang_available`

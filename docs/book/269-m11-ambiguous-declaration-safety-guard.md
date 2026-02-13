@@ -5,7 +5,7 @@ This chapter documents ambiguity-safe declaration resolution behavior for worksp
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - workspace declaration lookup now treats duplicate declaration names as ambiguous.
@@ -39,7 +39,7 @@ Name-based symbol matching can produce incorrect edits/navigation in the presenc
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - ambiguous declaration returns `null` for definition.
 - ambiguous declaration returns empty edits for rename.
 

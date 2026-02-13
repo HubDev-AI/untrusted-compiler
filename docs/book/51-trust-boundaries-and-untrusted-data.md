@@ -8,7 +8,7 @@ A compiler-enforced model where untrusted input cannot flow into sensitive sinks
 
 ## Why it exists
 
-Without explicit trust boundaries, backend code relies on conventions that AI-generated code can easily violate. AILang needs compile-time checks, not style-only guidance.
+Without explicit trust boundaries, backend code relies on conventions that AI-generated code can easily violate. Untrusted<T> needs compile-time checks, not style-only guidance.
 
 ## How it works internally
 
@@ -38,7 +38,7 @@ Planned diagnostics include:
 
 Target pattern:
 
-```ailang
+```ut
 schema CreateUserRequest {
   email: Email = validate.email
 }

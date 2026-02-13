@@ -4,7 +4,7 @@ This chapter defines minimal, policy-driven auth middleware that integrates with
 
 ## 1) Types
 
-```ailang
+```ut
 type AuthMode = "token" | "cookie" | "mixed"
 
 type AuthConfig = {
@@ -29,7 +29,7 @@ type AuthConfig = {
 
 ## 2) Principal model
 
-```ailang
+```ut
 type Principal = {
   userId: String
   role?: String
@@ -39,7 +39,7 @@ type Principal = {
 
 ## 3) Context integration
 
-```ailang
+```ut
 type Ctx = {
   ...
   principal?: Principal
@@ -48,7 +48,7 @@ type Ctx = {
 
 ## 4) Middleware API
 
-```ailang
+```ut
 module auth {
   fn fromPolicy() -> AuthConfig
   fn withAuth(r: Router, cfg: AuthConfig) -> Router
@@ -61,7 +61,7 @@ Behavior:
 
 ## 5) Handler helpers
 
-```ailang
+```ut
 module auth {
   fn require(ctx: Ctx) -> Result<Principal, HttpError>
   fn requireRole(ctx: Ctx, role: String) -> Result<Principal, HttpError>
@@ -72,4 +72,4 @@ module auth {
 - auth middleware must not log raw tokens/cookies
 - capture/redaction rules apply to auth material by default
 - middleware tag attrs should include: mode, crossSiteFrontend, cookieEnabled, tokenEnabled
-- `sec.audit` uses these attrs to determine CSRF requirements and cross-site cookie safety findings
+- `sec4 audit` uses these attrs to determine CSRF requirements and cross-site cookie safety findings

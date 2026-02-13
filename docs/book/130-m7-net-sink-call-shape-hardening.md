@@ -29,10 +29,10 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for missing-URL net calls
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - DB/fs/net CLI integration test fixture (`compiler/ailang-cli/tests/json_output.rs`)
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - DB/fs/net CLI integration test fixture (`compiler/sec4-cli/tests/json_output.rs`)
 - Outputs:
   - compile-time rejection of malformed net sink argument shapes,
   - updated semantic capability fixture to include explicit URL argument.
@@ -49,7 +49,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn fetch(net: NetCap, internal: InternalNetCap) effects { net } -> Int {
   httpClient.get(net, "https://example.com");
   httpClient.getInternal(internal, "http://internal.local");

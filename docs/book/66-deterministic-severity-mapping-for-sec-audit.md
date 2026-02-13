@@ -1,4 +1,4 @@
-# 66 Deterministic Severity Mapping for sec.audit (v0)
+# 66 Deterministic Severity Mapping for sec4 audit (v0)
 
 This chapter defines rule-based severity mapping from policy state + metadata tags + allowlist state to stable findings.
 

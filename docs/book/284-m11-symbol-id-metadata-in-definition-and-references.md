@@ -5,7 +5,7 @@ This chapter documents propagating stable symbol IDs into LSP navigation payload
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - definition results now include `data.symbolId` when declaration resolution is unique.
@@ -39,7 +39,7 @@ M11 still tracks symbol-ID precision as a remaining area. Attaching symbol IDs t
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now verifies:
+`compiler/sec4-lsp` now verifies:
 - definition payload includes non-empty `data.symbolId` on resolved calls.
 - references with declaration included share one consistent `symbolId` value.
 

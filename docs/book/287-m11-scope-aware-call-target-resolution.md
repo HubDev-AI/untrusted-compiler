@@ -5,7 +5,7 @@ This chapter documents making LSP call-target resolution scope-aware so shadowed
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - cursor target resolution (`definition`/`hover`/`references`/`prepareRename`/`rename` entry path) is now:
@@ -44,7 +44,7 @@ Name-based resolution could misclassify local shadowed identifiers as function r
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `definition_returns_null_for_shadowed_function_name_call`
 - `prepare_rename_returns_null_for_shadowed_function_name_call`
 

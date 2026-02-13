@@ -4,7 +4,7 @@ This chapter defines an implementable v0 standard-library API surface for securi
 
 ## 1) Core wrappers and safe sink types
 
-```ailang
+```ut
 type Untrusted<T> = { __untrusted: T }
 type Secret<T> = { __secret: T }
 
@@ -21,7 +21,7 @@ type LogValue = opaque
 
 ## 2) Budget and context
 
-```ailang
+```ut
 type Budget = {
   maxBodyBytes: Int64
   maxJsonBytes: Int64
@@ -41,7 +41,7 @@ type Ctx = {
 
 ## 3) Capabilities
 
-```ailang
+```ut
 type Caps = {
   db?: DbCap
   net?: NetCap
@@ -60,7 +60,7 @@ type SecretsCap = opaque
 
 ## 4) Logging interface
 
-```ailang
+```ut
 type Log = {
   info: fn(LogValue) effects { log } -> Unit
   warn: fn(LogValue) effects { log } -> Unit
@@ -82,7 +82,7 @@ module log {
 
 ## 5) HTTP server and request API
 
-```ailang
+```ut
 type Router = opaque
 type Request = opaque
 type Response = opaque
@@ -110,7 +110,7 @@ module req {
 
 ## 6) Response and sink APIs
 
-```ailang
+```ut
 module res {
   fn text(status: Int, body: String) -> Response
   fn json<T>(status: Int, s: Schema<T>, value: T) -> Result<Response, HttpError>
@@ -123,7 +123,7 @@ module res {
 
 ## 7) Validation and sanitization gates
 
-```ailang
+```ut
 module validate {
   fn email(u: Untrusted<String>) -> Result<Email, ValidationError>
   fn nonEmpty(u: Untrusted<String>) -> Result<NonEmptyString, ValidationError>
@@ -141,7 +141,7 @@ module sanitize {
 
 ## 8) URL and SSRF-safe client surface
 
-```ailang
+```ut
 module url {
   fn public(u: Untrusted<String>, ctx: Ctx)
     effects { net }
@@ -165,7 +165,7 @@ module httpClient {
 
 ## 9) Path safety and filesystem
 
-```ailang
+```ut
 module path {
   fn base(p: String) -> PathSafe
   fn under(base: PathSafe, u: Untrusted<String>) -> Result<PathSafe, ValidationError>
@@ -179,7 +179,7 @@ module fs {
 
 ## 10) SQL and DB surface
 
-```ailang
+```ut
 module sql {
   fn q(template: String, params: List<DbParam>) -> SqlQuery
 }
@@ -207,7 +207,7 @@ module db {
 
 ## 11) Secrets and schema APIs
 
-```ailang
+```ut
 module secrets {
   fn get(ctx: Ctx, cap: SecretsCap, name: String)
     effects { secrets.read }
@@ -230,7 +230,7 @@ module json {
 
 ## 12) Canonical handler pattern
 
-```ailang
+```ut
 schema CreateUserRequest {
   email: Email = validate.email
 }

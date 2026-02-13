@@ -1,3 +1,0 @@
-error[E4001]: net sink call has invalid argument shape
-  --> invalid_net_call_missing_url.ai:2:3
-  note: use `httpClient.get(netCap, url)` or `httpClient.get(ctx, netCap, url)`

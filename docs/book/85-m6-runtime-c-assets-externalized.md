@@ -7,10 +7,10 @@ This chapter documents the next M6 vertical slice: moving runtime ABI C code out
 ### What it is
 
 Runtime ABI artifacts now live in dedicated source files:
-- `runtime/c/ailang_runtime.h`
-- `runtime/c/ailang_runtime.c`
+- `runtime/c/sec4_runtime.h`
+- `runtime/c/sec4_runtime.c`
 
-`ailang-core` now emits runtime header/source content via `include_str!` from these files.
+`sec4-core` now emits runtime header/source content via `include_str!` from these files.
 
 ### Why it exists
 
@@ -20,8 +20,8 @@ Keeping runtime C assets in real files improves maintainability and makes runtim
 
 - Added runtime source files under `runtime/c/`.
 - Updated:
-  - `emit_runtime_header()` -> `include_str!("../../../runtime/c/ailang_runtime.h")`
-  - `emit_runtime_source()` -> `include_str!("../../../runtime/c/ailang_runtime.c")`
+  - `emit_runtime_header()` -> `include_str!("../../../runtime/c/sec4_runtime.h")`
+  - `emit_runtime_source()` -> `include_str!("../../../runtime/c/sec4_runtime.c")`
 - Existing CLI compile flow remains unchanged:
   - writes runtime assets into project `build/`
   - compiles generated C + runtime C with `clang`
@@ -30,11 +30,11 @@ Keeping runtime C assets in real files improves maintainability and makes runtim
 
 - Input: canonical runtime ABI files in repository runtime directory.
 - Output: same emitted runtime header/source payload as before, but sourced from external files.
-- Constraint: relative include path from `ailang-core/src/c_backend.rs` must remain valid if project layout changes.
+- Constraint: relative include path from `sec4-core/src/c_backend.rs` must remain valid if project layout changes.
 
 ### Failure modes and diagnostics
 
-- If runtime files are moved/renamed without updating `include_str!` paths, compile-time errors occur in `ailang-core`.
+- If runtime files are moved/renamed without updating `include_str!` paths, compile-time errors occur in `sec4-core`.
 - Runtime API mismatches continue to surface in existing C emitter and CLI compile tests.
 
 ### Example usage
@@ -42,12 +42,12 @@ Keeping runtime C assets in real files improves maintainability and makes runtim
 No CLI behavior change for users:
 
 ```bash
-cargo run -p ailang -- build --emit c-bin --path examples/hello
+cargo run -p sec4 -- build --emit c-bin --path examples/hello
 ```
 
 Runtime assets written to the target project build dir still include:
-- `build/ailang_runtime.h`
-- `build/ailang_runtime.c`
+- `build/sec4_runtime.h`
+- `build/sec4_runtime.c`
 
 ### Tradeoffs and next steps
 
@@ -57,5 +57,5 @@ Runtime assets written to the target project build dir still include:
 
 ## Tests re-validated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-- `compiler/ailang-cli/tests/json_output.rs` (`build_emit_c_bin*` coverage)
+- `compiler/sec4-core/tests/c_backend.rs`
+- `compiler/sec4-cli/tests/json_output.rs` (`build_emit_c_bin*` coverage)

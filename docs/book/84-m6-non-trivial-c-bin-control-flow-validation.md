@@ -6,7 +6,7 @@ This chapter documents the next M6 vertical slice: proving the C backend pipelin
 
 ### What it is
 
-A new clang-gated CLI integration test now builds and runs a temporary AILang project that includes:
+A new clang-gated CLI integration test now builds and runs a temporary Untrusted<T> project that includes:
 - a helper function call
 - `if/else` branch control flow
 - a `main` function that returns through that helper path
@@ -18,10 +18,10 @@ M6 exit criteria require runnable support beyond trivial linear returns. This te
 ### How it works internally
 
 - Test creates a temporary project on disk:
-  - `ailang.toml`
-  - `src/main.ai` with `choose(flag: Bool)` + `main()`
+  - `sec4.toml`
+  - `src/main.ut` with `choose(flag: Bool)` + `main()`
 - Runs:
-  - `ailang build --emit c-bin --path <temp-project>`
+  - `sec4 build --emit c-bin --path <temp-project>`
 - Validates:
   - generated C contains expected function signature and branch/call patterns
   - compiled binary exists
@@ -45,7 +45,7 @@ M6 exit criteria require runnable support beyond trivial linear returns. This te
 
 Representative source used by the test:
 
-```ailang
+```ut
 fn choose(flag: Bool) -> Int {
   if flag { 0 } else { 1 }
 }
@@ -63,5 +63,5 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_calls_and_control_flow_when_clang_available`

@@ -28,12 +28,12 @@ In `semantic.rs`, `enforce_log_sink_signatures(...)` now runs for log sinks:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture `invalid_log_sink_payload_argument_type.ai`
-  - tag test coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture `invalid_log_sink_payload_argument_type.ut`
+  - tag test coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
   - log intrinsic integration fixtures in:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection for non-`LogValue` log sink payloads.
   - existing secret/taint sink diagnostics remain unchanged.
@@ -48,7 +48,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() effects { log } -> Int {
   log.info(log.event("event"));
   0

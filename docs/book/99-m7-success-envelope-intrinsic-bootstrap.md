@@ -11,8 +11,8 @@ Added semantic recognition and C-runtime lowering for:
 - `res.okMeta` / `res_ok_meta`
 
 They lower to runtime ABI stubs:
-- `ailang_rt_res_ok`
-- `ailang_rt_res_ok_meta`
+- `sec4_rt_res_ok`
+- `sec4_rt_res_ok_meta`
 
 ### Why it exists
 
@@ -26,12 +26,12 @@ The v0 response surface includes optional success envelopes. This slice keeps th
   - `res.ok(status, schema, value)`
   - `res.okMeta(status, schema, value, meta)`
 - Extended C intrinsic rewriting in `c_backend.rs` to map calls to runtime ABI symbols.
-- Added runtime C declarations/definitions in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
-- Extended security-map sink tagging so `sec.audit` treats these helpers as JSON response sinks.
+- Added runtime C declarations/definitions in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
+- Extended security-map sink tagging so `sec4 audit` treats these helpers as JSON response sinks.
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code calling success-envelope helpers.
+- Input: Untrusted<T> code calling success-envelope helpers.
 - Output: generated C invoking runtime stubs and successful `c-bin` builds.
 - Constraints:
   - runtime envelope structure/serialization behavior is still placeholder in M7 bootstrap mode.
@@ -47,7 +47,7 @@ The v0 response surface includes optional success envelopes. This slice keeps th
 
 ### Example usage
 
-```ailang
+```ut
 fn createUser(schema: Schema<Int>) effects { net } -> Int {
   res.ok(201, schema, 1);
   res.okMeta(201, schema, 1, 2);
@@ -62,10 +62,10 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - extended req/res rewrite coverage with `res.ok` and `res.okMeta`
   - runtime ABI header/source assertions include new stub symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - extended req/res `c-bin` integration fixture to assert `res.ok` and `res.okMeta` lowering
-- `compiler/ailang-core/tests/security_map.rs`
+- `compiler/sec4-core/tests/security_map.rs`
   - existing suite validates updated JSON sink tag mapping remains consistent

@@ -24,10 +24,10 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_secret_redact_missing_arg.ai`
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `invalid_secret_redact_missing_arg.ut`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of malformed redact calls,
   - tagged diagnostics suitable for future editor quick-fix surfaces.
@@ -42,7 +42,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn logSafe(token: Secret<String>) -> Int {
   let masked = secrets.redact(token);
   masked;

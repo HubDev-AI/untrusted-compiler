@@ -1,6 +1,6 @@
-# AILang Book
+# Untrusted<T> Book
 
-This folder is the long-form, chapter-oriented documentation track for AILang.
+This folder is the long-form, chapter-oriented documentation track for Untrusted<T>.
 
 ## Chapter order
 - `00-preface.md`
@@ -14,7 +14,7 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `40-name-resolution-and-symbols.md`
 - `41-type-system-v0.1-lite.md`
 - `42-structural-composition-not-inheritance.md`
-- `43-ailang-v0-scope.md`
+- `43-sec4-v0-scope.md`
 - `50-effect-system-and-auditable-side-effects.md`
 - `51-trust-boundaries-and-untrusted-data.md`
 - `52-security-first-priorities.md`
@@ -37,7 +37,7 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `69-auth-middleware-api-v0.md`
 - `70-m4-security-map-and-sec-audit-implementation.md`
 - `71-benchmarking-and-comparison-spec.md`
-- `72-ailang-editor-tooling-and-zed-lsp-spec.md`
+- `72-sec4-editor-tooling-and-zed-lsp-spec.md`
 - `73-m5-mir-bootstrap-and-introspection.md`
 - `74-m5-return-control-flow-lowering.md`
 - `75-m5-statement-control-flow-continuations.md`
@@ -192,10 +192,10 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `225-m10-matrix-tail-latency-analysis.md`
 - `226-m10-analysis-integrated-report-publishing.md`
 - `227-m10-c-baseline-service.md`
-- `228-m10-ailang-baseline-service.md`
+- `228-m10-sec4-baseline-service.md`
 - `229-m10-cross-impl-contract-parity-smoke.md`
 - `230-m10-benchmark-profile-env-overrides.md`
-- `231-m10-ailang-report-secaudit-embedding.md`
+- `231-m10-sec4-report-secaudit-embedding.md`
 - `232-m10-orchestrator-readiness-and-tooling-hardening.md`
 - `233-m10-benchmark-preflight-and-early-fail-checks.md`
 - `234-m10-users-get-profile-and-seeded-read-workload.md`

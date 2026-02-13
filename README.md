@@ -1,14 +1,14 @@
-# AILang
+# Untrusted<T>
 
-AILang is a backend-focused, AI-operable programming language project. The goal is a small but real compiler pipeline with strong safety defaults, explicit effects, and security-by-construction boundaries.
+Untrusted<T> is a backend-focused, AI-operable programming language project. The goal is a small but real compiler pipeline with strong safety defaults, explicit effects, and security-by-construction boundaries.
 
-## Is AILang a good idea, or just syntax sugar?
+## Is Untrusted<T> a good idea, or just syntax sugar?
 
-AILang can be a good idea, but only if it enforces semantics that are not reliably enforceable with TypeScript + linting alone.
+Untrusted<T> can be a good idea, but only if it enforces semantics that are not reliably enforceable with TypeScript + linting alone.
 
 ### If it is only syntax sugar
 
-If AILang is only a thin wrapper over TS/JS and does not enforce stronger guarantees, it is likely not worth the complexity. In that case, a practical stack is:
+If Untrusted<T> is only a thin wrapper over TS/JS and does not enforce stronger guarantees, it is likely not worth the complexity. In that case, a practical stack is:
 
 - TypeScript framework
 - strict lint rules
@@ -19,14 +19,14 @@ If AILang is only a thin wrapper over TS/JS and does not enforce stronger guaran
 
 ### When it becomes a real language
 
-AILang is not just sugar if the compiler/toolchain enforces properties such as:
+Untrusted<T> is not just sugar if the compiler/toolchain enforces properties such as:
 
 - typed trust boundaries (`Untrusted<T>` cannot reach sensitive sinks without explicit gates)
 - typed sinks (`SqlQuery`, `HtmlSafe`, `UrlSafe`, `PathSafe` accepted instead of raw strings)
 - effects checking (functions must declare and satisfy side-effect usage)
 - deterministic debugging/replay support in the toolchain
 
-If those checks are compile-time guarantees, AILang is a real language design, not a style guide.
+If those checks are compile-time guarantees, Untrusted<T> is a real language design, not a style guide.
 
 ### Does it need its own compiler?
 
@@ -41,7 +41,7 @@ The backend can initially target existing toolchains (for example, C + `clang`, 
 
 ### Practical litmus test
 
-If AILang can reject these at compile time, it is clearly more than sugar:
+If Untrusted<T> can reject these at compile time, it is clearly more than sugar:
 
 - raw SQL string concatenation
 - unescaped user input sent to HTML sink
@@ -58,7 +58,23 @@ If it cannot, it is mostly convention.
 - M3 effects slice completed: parsed `effects { ... }` declarations + compile-time effect usage enforcement.
 - Security-first M4 planning/spec is now locked in docs (capabilities, policy-as-code, typed sink expansion, strict baseline).
 
-Roadmap: `docs/05-ailang-master-roadmap.md`
+Roadmap: `docs/05-sec4-master-roadmap.md`
 Book docs: `docs/book/README.md`
-v0 scope (one-page): `docs/book/43-ailang-v0-scope.md`
+v0 scope (one-page): `docs/book/43-sec4-v0-scope.md`
 security baseline: `docs/book/53-v0-security-baseline.md`
+
+## Ecosystem naming lock
+
+- Language title: `Untrusted<T>`
+- Tooling brand: `sec4Audit`
+- CLI/tooling command: `sec4`
+- Security policy workflow:
+  - `sec4 audit`
+  - `sec4 explain`
+  - `sec4 gate`
+- GitHub repo: `https://github.com/HubDev-AI/untrusted-compiler`
+- Source file extension: `.ut`
+- Package namespaces:
+  - `ut/std`
+  - `ut/http`
+  - `ut/sec`

@@ -1,16 +1,16 @@
 # 265 M11 Slice: Unopened Workspace-File References and Rename
 
-This chapter documents extending references/rename resolution beyond open documents to include unopened `.ai` files in the project workspace.
+This chapter documents extending references/rename resolution beyond open documents to include unopened `.ut` files in the project workspace.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
-- workspace scan now includes unopened `.ai` files discovered from project root.
+- workspace scan now includes unopened `.ut` files discovered from project root.
 - project root detection:
-  - walk upward from active file URI until `ailang.toml` is found,
+  - walk upward from active file URI until `sec4.toml` is found,
   - fallback to active file directory.
 - references/rename/declaration lookup now operate on:
   - open document state,
@@ -23,7 +23,7 @@ Open-document-only resolution was insufficient for realistic refactors where dec
 ## How it works internally
 
 1. Build base document set from `state.documents` + active document.
-2. Discover workspace `.ai` files via recursive directory scan from project root.
+2. Discover workspace `.ut` files via recursive directory scan from project root.
 3. Add unopened file entries not already present in open-document set.
 4. Apply existing parse/cache, deadline checks, and symbol collection logic across the expanded set.
 
@@ -46,7 +46,7 @@ Open-document-only resolution was insufficient for realistic refactors where dec
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - references request including hits from an unopened file in a temp workspace.
 - rename request emitting edits for an unopened file in a temp workspace.
 

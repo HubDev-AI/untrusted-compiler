@@ -5,7 +5,7 @@ This chapter documents tightening rename/reference hit collection to function ca
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - identifier hit collection now records function references from call callee positions only.
@@ -39,7 +39,7 @@ Name-only identifier matching over-collected hits and could include non-referenc
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `callsite_hit_collection_ignores_non_callee_identifiers`:
   - validates only direct callee hit is collected (argument identifier with same name is excluded).
 

@@ -1,11 +1,11 @@
 # 252 M11 Slice: Definition and Hover Navigation
 
-This chapter documents adding compiler-backed symbol navigation (`definition`) and signature hover support to `ailang-language-server`.
+This chapter documents adding compiler-backed symbol navigation (`definition`) and signature hover support to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises:
@@ -26,7 +26,7 @@ After diagnostics were wired, editors still lacked basic code navigation and typ
 
 1. Parse request payload (`textDocument` URI + `position`).
 2. Load document source from in-memory LSP state (fallback to disk for file URIs).
-3. Parse source with `ailang_core::parse_source`.
+3. Parse source with `sec4_core::parse_source`.
 4. Traverse AST to:
    - locate identifier under cursor,
    - collect function symbols and signatures.
@@ -52,7 +52,7 @@ After diagnostics were wired, editors still lacked basic code navigation and typ
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - definition request resolving function call to declaration span.
 - hover request returning function signature markdown.
 

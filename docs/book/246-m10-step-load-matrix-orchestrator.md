@@ -61,7 +61,7 @@ Step-load tooling was available but required manual command choreography. This o
 ## Example usage
 
 ```bash
-make -C benchmark-suite bench-step-matrix IMPLS=ailang,node,go,rust ENDPOINTS=decode,users-post
+make -C benchmark-suite bench-step-matrix IMPLS=sec4,node,go,rust ENDPOINTS=decode,users-post
 ```
 
 Dry run:

@@ -1,0 +1,13 @@
+name = "Untrusted<T>"
+grammar = "untrusted"
+path_suffixes = ["ut"]
+
+line_comments = ["// "]
+block_comments = [{ start = "/*", end = "*/" }]
+
+brackets = [
+  { start = "{", end = "}", close = true, newline = true },
+  { start = "(", end = ")", close = true, newline = false },
+  { start = "[", end = "]", close = true, newline = false },
+  { start = "\"", end = "\"", close = true, newline = false, not_in = ["comment"] },
+]

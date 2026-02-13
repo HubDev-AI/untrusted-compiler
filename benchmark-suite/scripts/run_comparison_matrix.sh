@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls ailang,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+usage: $0 [--dry-run] [--impls sec4,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
 
 Runs benchmark profiles for each implementation, builds per-impl reports,
 then emits compare-matrix and markdown report artifacts.
@@ -11,7 +11,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="ailang,node,go,rust"
+impls_csv="sec4,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
 
@@ -98,7 +98,7 @@ fi
 
 is_supported_impl() {
   case "$1" in
-    ailang|node|go|rust|c)
+    sec4|node|go|rust|c)
       return 0
       ;;
     *)
@@ -152,11 +152,11 @@ start_service() {
   fi
 
   case "$impl" in
-    ailang)
+    sec4)
       (
         cd "$service_dir"
         ./build.sh >/dev/null
-        PORT="$bench_port" ./ailang-bench-server
+        PORT="$bench_port" ./sec4-bench-server
       ) >"$log_file" 2>&1 &
       ;;
     node)
@@ -220,7 +220,7 @@ for impl in "${impls[@]}"; do
       [ -z "$endpoint" ] && continue
       echo "run: ${root_dir}/scripts/run_profile.sh --dry-run ${impl} ${endpoint} ${base_url}"
     done
-    if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
+    if [ "$impl" = "sec4" ] && [ -n "$sec_audit_path" ]; then
       echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json ${sec_audit_path} ${endpoints_csv}"
     else
       echo "run: ${root_dir}/scripts/build_report.sh ${impl} ${results_dir} ${summaries_dir}/${impl}-report.json \"\" ${endpoints_csv}"
@@ -259,7 +259,7 @@ for impl in "${impls[@]}"; do
     [ -z "$endpoint" ] && continue
     "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
   done
-  if [ "$impl" = "ailang" ] && [ -n "$sec_audit_path" ]; then
+  if [ "$impl" = "sec4" ] && [ -n "$sec_audit_path" ]; then
     "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path" "$endpoints_csv"
   else
     "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "" "$endpoints_csv"

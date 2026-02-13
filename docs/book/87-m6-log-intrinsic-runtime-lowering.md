@@ -13,12 +13,12 @@ C emission now rewrites these intrinsic spellings:
 - `log.emit(...)`
 
 and underscore aliases to:
-- `ailang_rt_log_any(...)`
+- `sec4_rt_log_any(...)`
 
 Runtime ABI now exposes:
-- `void ailang_rt_log_any();`
+- `void sec4_rt_log_any();`
 
-with a no-op stub implementation in `runtime/c/ailang_runtime.c`.
+with a no-op stub implementation in `runtime/c/sec4_runtime.c`.
 
 ### Why it exists
 
@@ -27,13 +27,13 @@ Without rewriting, dotted logging calls produce invalid C symbol names and fail 
 ### How it works internally
 
 - `lower_c_expr(...)` now rewrites supported log intrinsic names using placeholder-based substitution (same pattern used for `time.now`) to avoid replacement collisions.
-- Runtime ABI header/source were extended with `ailang_rt_log_any`.
+- Runtime ABI header/source were extended with `sec4_rt_log_any`.
 - Existing C emission paths (`let`, `eval`, `return`, `branch`, `switch`) all pass expressions through `lower_c_expr(...)`, so rewritten calls apply consistently.
 
 ### Inputs, outputs, and constraints
 
 - Input: MIR expression text containing supported log intrinsic call names.
-- Output: C-valid runtime call sites (`ailang_rt_log_any(...)`).
+- Output: C-valid runtime call sites (`sec4_rt_log_any(...)`).
 - Constraints:
   - runtime log behavior is currently no-op.
   - rewrite coverage is currently limited to listed log intrinsic families.
@@ -46,7 +46,7 @@ Without rewriting, dotted logging calls produce invalid C symbol names and fail 
 
 ### Example usage
 
-```ailang
+```ut
 fn main() effects { log } -> Int {
   log.info(log.event(1));
   0
@@ -56,7 +56,7 @@ fn main() effects { log } -> Int {
 Generated C includes:
 
 ```c
-(void)(ailang_rt_log_any(ailang_rt_log_event(1)));
+(void)(sec4_rt_log_any(sec4_rt_log_event(1)));
 ```
 
 ### Tradeoffs and next steps
@@ -67,8 +67,8 @@ Generated C includes:
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime content assertions include `ailang_rt_log_any`
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime content assertions include `sec4_rt_log_any`
   - new `c_backend_rewrites_log_intrinsics_to_runtime_symbol`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_log_intrinsic_when_clang_available`

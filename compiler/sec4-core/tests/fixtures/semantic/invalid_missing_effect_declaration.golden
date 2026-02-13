@@ -1,0 +1,3 @@
+error[E4002]: effect used but not declared
+  --> invalid_missing_effect_declaration.ut:5:21
+  note: function `handler` uses `db.write` but does not declare it in `effects { ... }`

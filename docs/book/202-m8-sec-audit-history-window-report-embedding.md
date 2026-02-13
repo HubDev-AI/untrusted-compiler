@@ -1,10 +1,10 @@
-# 202 M8 Slice: sec.audit historyWindow Report Embedding
+# 202 M8 Slice: sec4 audit historyWindow Report Embedding
 
 This chapter documents the M8 step that embeds history-window summaries directly into the canonical audit report JSON.
 
 ## What it is
 
-Added optional `historyWindow` to `AuditReport` and wired CLI `sec audit` so runs with `--history-window` include that field in stdout JSON and written report artifacts.
+Added optional `historyWindow` to `AuditReport` and wired CLI `audit` so runs with `--history-window` include that field in stdout JSON and written report artifacts.
 
 ## Why it exists
 
@@ -24,9 +24,9 @@ History-window metrics were previously only auxiliary output (stderr lines and o
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/audit.rs`
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-core/src/audit.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
   - canonical report JSON now carries `historyWindow` when requested.
 - Constraints:
@@ -42,10 +42,10 @@ History-window metrics were previously only auxiliary output (stderr lines and o
 ## Example usage
 
 ```bash
-ailang sec audit \
+sec4 audit \
   --path examples/hello \
   --format json \
-  --history-dir .ailang/audit-history \
+  --history-dir .sec4/audit-history \
   --history-window 5
 ```
 

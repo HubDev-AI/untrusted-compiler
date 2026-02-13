@@ -22,7 +22,7 @@ The C service implements the shared contract endpoints:
 
 ## Why it exists
 
-M10 includes an optional C floor reference for benchmarking context. This slice adds a runnable, low-dependency C server so AILang comparisons can include a near-backend-floor baseline.
+M10 includes an optional C floor reference for benchmarking context. This slice adds a runnable, low-dependency C server so Untrusted<T> comparisons can include a near-backend-floor baseline.
 
 ## How it works internally
 

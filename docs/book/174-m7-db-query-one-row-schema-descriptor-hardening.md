@@ -25,16 +25,16 @@ In `enforce_db_query_one_row_schema_type`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_db_query_one_non_schema_argument_type.ai`
+    - `invalid_db_query_one_non_schema_argument_type.ut`
   - fixture alignment:
-    - `compiler/ailang-core/tests/fixtures/semantic/valid_capabilities_effects_ctx.ai`
-    - `compiler/ailang-core/tests/fixtures/semantic/invalid_capability_mismatch.ai`
+    - `compiler/sec4-core/tests/fixtures/semantic/valid_capabilities_effects_ctx.ut`
+    - `compiler/sec4-core/tests/fixtures/semantic/invalid_capability_mismatch.ut`
   - integration fixture alignment:
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-`Schema<_>` row-schema arguments in `db.queryOne`,
   - deterministic schema-tagged diagnostics.
@@ -49,7 +49,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn load(db: DbCap, query: SqlQuery, rowSchema: Schema<Int>) effects { db.read } -> Int {
   db.queryOne(db, query, rowSchema);
   0

@@ -25,14 +25,14 @@ The helper runs in the same semantic pass as other intrinsic signature checks.
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_log_event_argument_type.ai`
-    - `invalid_log_redacted_argument_type.ai`
-  - tag tests in `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `invalid_log_event_argument_type.ut`
+    - `invalid_log_redacted_argument_type.ut`
+  - tag tests in `compiler/sec4-core/tests/diagnostic_tags.rs`
   - log-intrinsic and log-builder integration fixtures in:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - non-string event/redaction labels are rejected at compile time.
   - log integration fixtures use string labels and continue to pass through `c-bin`.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let event = log.event("user.created");
   let redacted = log.redacted("token");

@@ -1,4 +1,4 @@
-# 67 sec.audit Examples and Policy Profiles
+# 67 sec4 audit Examples and Policy Profiles
 
 This chapter provides baseline example outputs and aligned policy profiles for deterministic audit behavior.
 
@@ -56,5 +56,5 @@ Reference profile characteristics:
 ## 5) Profile guidance
 - Keep prod profile strict by default.
 - Allow dev profile flexibility but require explicit risk visibility.
-- Run `sec.audit --format json` in CI for both profiles.
+- Run `sec4 audit --format json` in CI for both profiles.
 - Gate production release with `--fail-on risk>=HIGH` unless explicit security approval exists.

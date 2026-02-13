@@ -11,19 +11,19 @@ C emission now rewrites:
 - `secrets.reveal(...)` / `secret_reveal(...)`
 
 to runtime symbols:
-- `ailang_rt_secret_get(...)`
-- `ailang_rt_secret_reveal(...)`
+- `sec4_rt_secret_get(...)`
+- `sec4_rt_secret_reveal(...)`
 
 Runtime ABI now includes stubs for both functions.
 
 ### Why it exists
 
-Secrets APIs are part of AILang’s security-first core model. This slice keeps backend intrinsic coverage aligned with semantic capabilities/effects, even while runtime behavior remains stubbed in M6.
+Secrets APIs are part of Untrusted<T>’s security-first core model. This slice keeps backend intrinsic coverage aligned with semantic capabilities/effects, even while runtime behavior remains stubbed in M6.
 
 ### How it works internally
 
 - Added replacements in `lower_c_expr(...)` for dotted and underscore secrets intrinsic spellings.
-- Added `ailang_rt_secret_get` and `ailang_rt_secret_reveal` declarations/definitions under `runtime/c/`.
+- Added `sec4_rt_secret_get` and `sec4_rt_secret_reveal` declarations/definitions under `runtime/c/`.
 - Rewritten calls flow through existing emission paths automatically.
 
 ### Inputs, outputs, and constraints
@@ -41,7 +41,7 @@ Secrets APIs are part of AILang’s security-first core model. This slice keeps 
 
 ### Example usage
 
-```ailang
+```ut
 fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
   secrets.get(sec, 1);
   0
@@ -56,7 +56,7 @@ fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_secret_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_secret_read_intrinsic_when_clang_available`

@@ -1,0 +1,4 @@
+error[E4001]: net sink URL argument must be `PublicUrl`
+  --> invalid_net_public_url_argument_type.ut:2:23
+  note: found `Int`
+  note: use typed `PublicUrl` values when calling `httpClient.get`

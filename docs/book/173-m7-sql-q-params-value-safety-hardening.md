@@ -24,12 +24,12 @@ In `enforce_sql_q_signature`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_sql_q_params_secret.ai`
-    - `invalid_sql_q_params_untrusted.ai`
+    - `invalid_sql_q_params_secret.ut`
+    - `invalid_sql_q_params_untrusted.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of secret/untrusted SQL params in `sql.q`,
   - stable diagnostics for CLI/editor feedback.
@@ -46,7 +46,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn buildQuery(userId: String) -> SqlQuery {
   sql.q("SELECT * FROM users WHERE id = $1", userId)
 }

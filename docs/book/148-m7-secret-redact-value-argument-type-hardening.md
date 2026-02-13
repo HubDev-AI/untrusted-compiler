@@ -25,11 +25,11 @@ In semantic call-shape enforcement for `secrets.redact`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_secret_redact_value_argument_type.ai`
+    - `invalid_secret_redact_value_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-secret redact payloads,
   - security/secret-tagged diagnostics aligned with secret-handling guarantees.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn scrub(secret: Secret<String>) -> String {
   secrets.redact(secret)
 }

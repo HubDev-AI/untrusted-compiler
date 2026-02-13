@@ -10,7 +10,7 @@ Added intrinsic support for:
 - `res.text` / `res_text`
 
 Lowered runtime ABI stub:
-- `ailang_rt_res_text`
+- `sec4_rt_res_text`
 
 ### Why it exists
 
@@ -22,14 +22,14 @@ The v0 stdlib surface includes `res.text(status, body)` as the simplest response
   - `res.text` requires `effects { net }`
   - return type is bootstrap `Unit` (consistent with other response emit helpers in M7)
 - Added C rewrite mappings in `c_backend.rs`:
-  - `res.text` / `res_text` -> `ailang_rt_res_text`
+  - `res.text` / `res_text` -> `sec4_rt_res_text`
 - Added runtime C declaration/definition in `runtime/c/`.
 - Extended req/res bridge tests to assert `res.text` lowering in both core and CLI integration paths.
 
 ### Inputs, outputs, and constraints
 
 - Input: `res.text(status, body)` calls in bootstrap service code.
-- Output: generated C calls to `ailang_rt_res_text(status, body)`.
+- Output: generated C calls to `sec4_rt_res_text(status, body)`.
 - Constraints:
   - runtime behavior remains a stub in M7 bootstrap mode.
   - strict response typing (`Response` object behavior) remains deferred to behavior-level runtime slices.
@@ -41,7 +41,7 @@ The v0 stdlib surface includes `res.text(status, body)` as the simplest response
 
 ### Example usage
 
-```ailang
+```ut
 fn health() effects { net } -> Int {
   res.text(200, 1);
   0
@@ -55,9 +55,9 @@ fn health() effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime ABI assertions include `ailang_rt_res_text`
-  - updated req/res rewrite test to assert `ailang_rt_res_text(...)`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime ABI assertions include `sec4_rt_res_text`
+  - updated req/res rewrite test to assert `sec4_rt_res_text(...)`
+- `compiler/sec4-cli/tests/json_output.rs`
   - updated req/res `c-bin` integration fixture to call `res.text(200, ...)`
-  - asserts generated C contains `ailang_rt_res_text(...)`
+  - asserts generated C contains `sec4_rt_res_text(...)`

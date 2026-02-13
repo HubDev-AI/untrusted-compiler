@@ -52,7 +52,7 @@ scheme = "bearer"
 - `csrf.enabled=false` is acceptable
 - CORS remains policy-governed independently
 
-## 4) sec.audit finding updates
+## 4) sec4 audit finding updates
 - `CSRF_REQUIRED_BUT_DISABLED` (HIGH)
 - `COOKIE_CROSS_SITE_WITHOUT_CORS_CREDS` (MEDIUM)
 - `COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN` (HIGH)

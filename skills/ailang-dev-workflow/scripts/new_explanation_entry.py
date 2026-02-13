@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Append a standard AILang explanation section to a markdown file."""
+"""Append a standard Untrusted<T> explanation section to a markdown file."""
 
 import argparse
 from datetime import datetime

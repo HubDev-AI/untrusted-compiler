@@ -16,17 +16,17 @@ Added intrinsic support for log-value constructors:
 - `log.redacted` / `log_redacted`
 
 Runtime ABI stubs added:
-- `ailang_rt_log_event`
-- `ailang_rt_log_field`
-- `ailang_rt_log_obj`
-- `ailang_rt_log_str`
-- `ailang_rt_log_i64`
-- `ailang_rt_log_bool`
-- `ailang_rt_log_redacted`
+- `sec4_rt_log_event`
+- `sec4_rt_log_field`
+- `sec4_rt_log_obj`
+- `sec4_rt_log_str`
+- `sec4_rt_log_i64`
+- `sec4_rt_log_bool`
+- `sec4_rt_log_redacted`
 
 ### Why it exists
 
-AILang’s logging model is structured and redaction-first. Before this slice, only sink calls (`log.info`/`warn`/`error`/`emit`) compiled through the runtime bridge, while log-value constructor APIs in the spec were missing.
+Untrusted<T>’s logging model is structured and redaction-first. Before this slice, only sink calls (`log.info`/`warn`/`error`/`emit`) compiled through the runtime bridge, while log-value constructor APIs in the spec were missing.
 
 ### How it works internally
 
@@ -37,7 +37,7 @@ AILang’s logging model is structured and redaction-first. Before this slice, o
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang expressions building structured log payload fragments.
+- Input: Untrusted<T> expressions building structured log payload fragments.
 - Output: generated C calling runtime log-builder stubs.
 - Constraints:
   - runtime value semantics are placeholder in M7 bootstrap mode.
@@ -50,7 +50,7 @@ AILang’s logging model is structured and redaction-first. Before this slice, o
 
 ### Example usage
 
-```ailang
+```ut
 fn build() -> Int {
   let event = log.event(1);
   let field = log.field(1, 2);
@@ -69,8 +69,8 @@ fn build() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_log_builder_intrinsics_to_runtime_symbols`
   - runtime ABI assertions include log builder symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_log_builder_intrinsics_when_clang_available`

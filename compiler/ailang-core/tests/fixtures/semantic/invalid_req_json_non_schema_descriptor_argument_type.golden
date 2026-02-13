@@ -1,4 +1,0 @@
-error[E4001]: req.json schema argument must be `String` or `Schema<_>`
-  --> invalid_req_json_non_schema_descriptor_argument_type.ai:2:12
-  note: found `PathSafe`
-  note: pass a schema-name string in bridge mode or a typed `Schema<T>` descriptor

@@ -1,0 +1,3 @@
+error[E4001]: sec.csp expects no arguments
+  --> invalid_sec_csp_argument_shape.ut:2:3
+  note: use `sec.csp()`

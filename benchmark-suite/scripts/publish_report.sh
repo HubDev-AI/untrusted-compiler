@@ -167,7 +167,7 @@ impl_list="$(jq -r '[.endpoints[].compared[].impl] | unique | join(", ")' "$matr
       jq -r '.findings[] | "- [\(.severity)] \(.id): \(.suggestion)"' "$sec_audit_path" | head -n 5
     fi
   else
-    echo "- No sec.audit artifact provided."
+    echo "- No sec4 audit artifact provided."
   fi
 } > "$out_path"
 

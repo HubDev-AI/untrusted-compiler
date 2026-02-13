@@ -13,10 +13,10 @@ Added intrinsic support for:
 - `secrets.redact` / `secret_redact`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_path_base`
-- `ailang_rt_headers_name`
-- `ailang_rt_headers_value`
-- `ailang_rt_secret_redact`
+- `sec4_rt_path_base`
+- `sec4_rt_headers_name`
+- `sec4_rt_headers_value`
+- `sec4_rt_secret_redact`
 
 ### Why it exists
 
@@ -41,7 +41,7 @@ These helpers are part of the v0 security-first stdlib surface. Without runtime 
 
 ### Inputs, outputs, and constraints
 
-- Input: helper calls in compile-path AILang code.
+- Input: helper calls in compile-path Untrusted<T> code.
 - Output: generated C calling runtime helper stubs and successful `c-bin` build/run.
 - Constraints:
   - helper runtime semantics are still placeholder stubs in M7 bootstrap mode.
@@ -54,7 +54,7 @@ These helpers are part of the v0 security-first stdlib surface. Without runtime 
 
 ### Example usage
 
-```ailang
+```ut
 fn createUser(origin: Untrusted<String>) -> Int {
   let base = path.base(1);
   headers.name(1);
@@ -72,8 +72,8 @@ fn createUser(origin: Untrusted<String>) -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - header/source runtime symbol assertions include new helper symbols
   - gate and secret intrinsic rewrite tests include new helper calls
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - gate and secret `c-bin` integration fixtures assert new helper symbol lowering

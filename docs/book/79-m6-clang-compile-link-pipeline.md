@@ -6,7 +6,7 @@ Follow-up run-command integration is documented in `docs/book/80-m6-run-command-
 
 ## Scope delivered
 - Added CLI emit target:
-  - `ailang build --emit c-bin`
+  - `sec4 build --emit c-bin`
 - `c-bin` pipeline now:
   1. lowers AST -> MIR
   2. emits C source
@@ -23,7 +23,7 @@ Follow-up run-command integration is documented in `docs/book/80-m6-run-command-
 - Emitted C backend now forces `main` to return `int` for clang compatibility.
 
 ## Why this matters
-- This is the first end-to-end runnable backend flow for AILang.
+- This is the first end-to-end runnable backend flow for Untrusted<T>.
 - The project now has a concrete path from source to executable artifact.
 - It validates the M5 MIR work against a real native toolchain.
 
@@ -38,4 +38,4 @@ Follow-up run-command integration is documented in `docs/book/80-m6-run-command-
 - C emission remains intentionally simple; richer ABI/runtime integration is still pending.
 
 ## Next step
-- Wire `ailang run` to execute binaries produced by the C compile pipeline.
+- Wire `sec4 run` to execute binaries produced by the C compile pipeline.

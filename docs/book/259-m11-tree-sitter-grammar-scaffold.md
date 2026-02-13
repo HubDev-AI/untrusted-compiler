@@ -1,14 +1,14 @@
 # 259 M11 Slice: Tree-Sitter Grammar Scaffold
 
-This chapter documents adding a bootstrap `tree-sitter-ailang` project to support syntax highlighting integration for editor clients (starting with Zed).
+This chapter documents adding a bootstrap `tree-sitter-untrusted` project to support syntax highlighting integration for editor clients (starting with Zed).
 
 ## What it is
 
 Added:
-- `tree-sitter-ailang/package.json`
-- `tree-sitter-ailang/grammar.js`
-- `tree-sitter-ailang/queries/highlights.scm`
-- `tree-sitter-ailang/README.md`
+- `tree-sitter-untrusted/package.json`
+- `tree-sitter-untrusted/grammar.js`
+- `tree-sitter-untrusted/queries/highlights.scm`
+- `tree-sitter-untrusted/README.md`
 
 Key scope:
 - baseline grammar rules for:
@@ -32,17 +32,17 @@ LSP covers diagnostics/navigation/completion, but editor UX also depends on synt
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - AILang source text.
+  - Untrusted<T> source text.
 - Outputs:
   - parse trees + highlight captures via Tree-sitter tooling.
 - Constraints:
   - grammar is intentionally partial and bootstrap-level in this slice.
-  - does not yet model full AILang syntax surface (effects, schemas, enums, match arms, etc.).
+  - does not yet model full Untrusted<T> syntax surface (effects, schemas, enums, match arms, etc.).
 
 ## Verification
 
 - LSP regression suite remains green:
-  - `cargo test -p ailang-language-server`
+  - `cargo test -p sec4audit-language-server`
 
 ## Tradeoffs and next steps
 

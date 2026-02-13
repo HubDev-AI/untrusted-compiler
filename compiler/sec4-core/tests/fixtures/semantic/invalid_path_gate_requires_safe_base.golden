@@ -1,0 +1,4 @@
+error[E4001]: path gate expects `PathSafe` base
+  --> invalid_path_gate_requires_safe_base.ut:2:14
+  note: `path.under` first argument must be `PathSafe`
+  note: found `String`

@@ -1,0 +1,4 @@
+error[E4001]: res.addCookie argument must be `Cookie`
+  --> invalid_add_cookie_requires_cookie.ut:2:17
+  note: found `Int`
+  note: construct cookies with `cookie.build(...)`

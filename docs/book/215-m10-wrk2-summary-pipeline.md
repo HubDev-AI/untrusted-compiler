@@ -45,9 +45,9 @@ The benchmark plan requires machine-readable summaries (`summary.json`) in addit
 ## Example usage
 
 ```bash
-make -C benchmark-suite bench-ping IMPL=ailang
-make -C benchmark-suite summarize IMPL=ailang
-cat benchmark-suite/results/summaries/ailang-ping.json
+make -C benchmark-suite bench-ping IMPL=sec4
+make -C benchmark-suite summarize IMPL=sec4
+cat benchmark-suite/results/summaries/sec4-ping.json
 ```
 
 ## Tradeoffs and next steps

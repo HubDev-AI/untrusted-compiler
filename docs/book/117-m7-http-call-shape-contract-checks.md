@@ -24,7 +24,7 @@ During intrinsic call checks:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for invalid route/serve call shapes
 - Outputs:
   - compile-time rejection of malformed route/serve calls
@@ -39,7 +39,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() effects { net } -> Int {
   let router = http.router();
   http.get(router, "/health", health);

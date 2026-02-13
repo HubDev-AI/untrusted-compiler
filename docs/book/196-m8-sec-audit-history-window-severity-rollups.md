@@ -1,4 +1,4 @@
-# 196 M8 Slice: sec.audit History-Window Severity Rollups
+# 196 M8 Slice: sec4 audit History-Window Severity Rollups
 
 This chapter documents the follow-up M8 enhancement that adds severity rollups to the history-window trend summary.
 
@@ -25,10 +25,10 @@ Risk-score drift alone is not enough to explain posture movement. Severity rollu
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
-  - richer history-window auxiliary summary in `sec audit`.
+  - richer history-window auxiliary summary in `audit`.
 - Constraints:
   - values remain auxiliary output; core audit report schema is unchanged.
 
@@ -39,10 +39,10 @@ Risk-score drift alone is not enough to explain posture movement. Severity rollu
 ## Example usage
 
 ```bash
-ailang sec audit \
+sec4 audit \
   --path examples/hello \
   --format json \
-  --history-dir .ailang/audit-history \
+  --history-dir .sec4/audit-history \
   --history-window 5
 ```
 

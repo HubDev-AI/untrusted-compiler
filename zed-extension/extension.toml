@@ -1,12 +1,12 @@
-id = "ailang"
-name = "AILang"
+id = "untrusted"
+name = "Untrusted<T>"
 version = "0.1.0"
 schema_version = 1
 
-[grammars.ailang]
-repository = "https://github.com/ailang/tree-sitter-ailang"
+[grammars.untrusted]
+repository = "https://github.com/HubDev-AI/untrusted-compiler"
 rev = "TODO_SET_COMMIT_SHA"
 
-[language_servers.ailang-lsp]
-name = "AILang Language Server"
-languages = ["AILang"]
+[language_servers.sec4audit-lsp]
+name = "Untrusted<T> Language Server"
+languages = ["Untrusted<T>"]

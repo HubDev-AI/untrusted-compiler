@@ -1,4 +1,0 @@
-error[E4004]: json response status must be numeric
-  --> invalid_json_encode_status_type.ai:2:12
-  note: found `String`
-  note: use an `Int`/`Int64` status code in `res.json(status, schema, value)`

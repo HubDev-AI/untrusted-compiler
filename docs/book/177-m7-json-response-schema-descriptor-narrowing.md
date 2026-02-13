@@ -27,11 +27,11 @@ In `enforce_json_response_schema_requirements`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_json_response_non_schema_descriptor_argument_type.ai`
+    - `invalid_json_response_non_schema_descriptor_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-schema descriptor placeholders for JSON response sinks,
   - deterministic schema-tagged diagnostics.
@@ -46,7 +46,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn ok(schema: Schema<Int>) effects { net } -> Int {
   res.json(schema, 1);
   0

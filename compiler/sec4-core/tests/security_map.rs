@@ -1,0 +1,756 @@
+use sec4_core::{
+    build_security_map, parse_allow_annotations, parse_source, strip_allow_annotations, Policy,
+};
+use std::path::Path;
+
+#[test]
+fn security_map_collects_sensitive_calls_and_middleware() {
+    let source = r#"
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
+  sec.withSecurityHeaders();
+  cors.withCors();
+  csrf.withCsrf();
+  auth.withAuth();
+  let raw = req.query("q");
+  validate.email(raw);
+  validate.headerValue(raw);
+  sanitize.html(raw);
+  url.public(raw);
+  path.under(PathSafe(), raw);
+  res.json("UserSchema", 1);
+  db.exec(DbCap());
+  db.exec(Ctx(), DbCap(), raw);
+  secrets.reveal(SecretsCap(), 1);
+  crypto.ctEq(a, b);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "sink.sql.exec")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "effect.secrets.reveal")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "source.http.query")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.validate.email")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.header.value")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.sanitize.html")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.url.public")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.path.under")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.cors")));
+    assert!(map.calls.iter().any(|call| call
+        .tags
+        .iter()
+        .any(|tag| tag == "middleware.security_headers")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.csrf")));
+    assert!(map
+        .calls
+        .iter()
+        .any(|call| call.tags.iter().any(|tag| tag == "middleware.auth")));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "res.json"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["schema".to_string(), "value".to_string()])
+    }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string()])
+    }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.arg_roles.as_ref().is_some_and(|roles| {
+                roles
+                    == &vec![
+                        "context".to_string(),
+                        "capability".to_string(),
+                        "query".to_string(),
+                    ]
+            })
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 2
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "crypto.ctEq"
+            && call.arg_roles.as_ref().is_some_and(|roles| {
+                roles == &vec!["left_secret".to_string(), "right_secret".to_string()]
+            })
+    }));
+    assert!(map
+        .middleware
+        .iter()
+        .any(|entry| entry.tags.iter().any(|tag| tag == "middleware.cors")));
+    assert!(map.middleware.iter().any(|entry| {
+        entry.tags.iter().any(|tag| tag == "middleware.cors")
+            && matches!(
+                entry.attrs.get("reflectOrigin"),
+                Some(sec4_core::security_map::TagAttr::Bool(false))
+            )
+    }));
+    assert!(map.middleware.iter().any(|entry| entry
+        .tags
+        .iter()
+        .any(|tag| tag == "middleware.security_headers")));
+}
+
+#[test]
+fn security_map_symbol_registry_contains_gate_and_source_tags() {
+    let source = r#"
+fn boot() -> Int {
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    let has_symbol_tag = |symbol: &str, tag: &str| {
+        map.symbols.iter().any(|entry| {
+            entry.sym == symbol && entry.tags.iter().any(|symbol_tag| symbol_tag.id == tag)
+        })
+    };
+
+    assert!(has_symbol_tag("req.query", "source.http.query"));
+    assert!(has_symbol_tag("req.pathParam", "source.http.path"));
+    assert!(has_symbol_tag("validate.headerValue", "gate.header.value"));
+    assert!(has_symbol_tag("validate.email", "gate.validate.email"));
+    assert!(has_symbol_tag("sanitize.html", "gate.sanitize.html"));
+    assert!(has_symbol_tag("path.under", "gate.path.under"));
+    assert!(has_symbol_tag("url.public", "gate.url.public"));
+    assert!(has_symbol_tag("url.internal", "gate.url.internal"));
+    assert!(has_symbol_tag("crypto.ctEq", "gate.crypto.ct_eq"));
+}
+
+#[test]
+fn security_map_tags_sql_select_without_limit_calls() {
+    let source = r#"
+fn bad() -> Int {
+  db.exec(DbCap(), "SELECT id FROM users");
+  db.exec(Ctx(), DbCap(), "SELECT email FROM users");
+  db.exec(DbCap(), "SELECT id FROM users LIMIT 1");
+  db.exec(Ctx(), DbCap(), "SELECT email FROM users LIMIT 10");
+  db.exec(DbCap(), sql.q("SELECT name FROM users", List()));
+  db.exec(DbCap(), sql.q("SELECT name FROM users LIMIT 5", List()));
+  db.exec(DbCap(), "SELECT 'limit' as marker FROM users");
+  db.exec(DbCap(), "SELECT id FROM users -- limit\n");
+  db.exec(DbCap(), "SELECT id FROM users /* limit */");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    let flagged = map
+        .calls
+        .iter()
+        .filter(|call| {
+            call.tags
+                .iter()
+                .any(|tag| tag == "sql.select_without_limit")
+        })
+        .count();
+
+    assert_eq!(flagged, 6);
+}
+
+#[test]
+fn security_map_still_supports_underscore_intrinsic_names() {
+    let source = r#"
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
+  db_write(DbCap());
+  secret_reveal(SecretsCap(), 1);
+  crypto_ct_eq(a, b);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(
+        |call| call.callee == "db_write" && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+    ));
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "secret_reveal" && call.tags.iter().any(|tag| tag == "effect.secrets.reveal")
+    }));
+    assert!(map.calls.iter().any(|call| call.callee == "crypto_ct_eq"
+        && call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")));
+}
+
+#[test]
+fn security_map_tracks_origin_edges_for_sink_arguments() {
+    let source = r#"
+fn boot() -> Int {
+  let raw = req.query("q");
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_tracks_origin_edges_through_composite_expressions() {
+    let source = r#"
+fn boot() -> Int {
+  let raw = req.query("q");
+  let merged = raw + " suffix";
+  db.exec(DbCap(), merged);
+  db.exec(DbCap(), if true { raw } else { raw });
+  db.exec(DbCap(), match true { true => raw, false => raw });
+  db.exec(DbCap(), { let shadow = raw; shadow });
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    let traced = map
+        .calls
+        .iter()
+        .filter(|call| call.callee == "db.exec")
+        .filter(|call| {
+            call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+        })
+        .count();
+
+    assert_eq!(traced, 4);
+}
+
+#[test]
+fn security_map_tracks_origin_edges_across_forwarding_functions() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn passThrough(input: String) -> String {
+  input
+}
+
+fn boot() -> Int {
+  let raw = passThrough(queryParam());
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:queryParam"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                        && edge.trace.iter().any(|step| step == "call:passThrough")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_tracks_origin_edges_across_multi_hop_forwarding_functions() {
+    let source = r#"
+fn queryParam() -> String {
+  req.query("q")
+}
+
+fn passThrough(input: String) -> String {
+  input
+}
+
+fn passthroughTwice(input: String) -> String {
+  passThrough(input)
+}
+
+fn wrap() -> String {
+  passthroughTwice(queryParam())
+}
+
+fn boot() -> Int {
+  let raw = wrap();
+  db.exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && edge.origin == "call:wrap"
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                        && edge.trace.iter().any(|step| step == "call:queryParam")
+                        && edge.trace.iter().any(|step| step == "call:passThrough")
+                        && edge
+                            .trace
+                            .iter()
+                            .any(|step| step == "call:passthroughTwice")
+                        && edge.trace.iter().any(|step| step == "call:wrap")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_intrinsic_alias_value_calls() {
+    let source = r#"
+fn boot() -> Int {
+  let raw = req.query("q");
+  let exec = db.exec;
+  exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_member_alias_value_calls() {
+    let source = r#"
+fn boot(db: DbCap) -> Int {
+  let raw = req.query("q");
+  let repo = db;
+  repo.exec(db, raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_forwarded_callable_alias_calls() {
+    let source = r#"
+fn getExec() {
+  db.exec
+}
+
+fn boot() -> Int {
+  let raw = req.query("q");
+  let exec = getExec();
+  exec(DbCap(), raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_typed_capability_member_calls_without_local_alias() {
+    let source = r#"
+fn boot(repo: DbCap) -> Int {
+  let raw = req.query("q");
+  repo.exec(repo, raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_forwarded_typed_capability_member_callable() {
+    let source = r#"
+fn getExec(repo: DbCap) {
+  repo.exec
+}
+
+fn boot(repo: DbCap) -> Int {
+  let raw = req.query("q");
+  let exec = getExec(repo);
+  exec(repo, raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                        && edge.trace.iter().any(|step| step == "call:req.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_forwarded_crypto_namespace_callable() {
+    let source = r#"
+fn cryptoNs() {
+  crypto
+}
+
+fn boot(a: Secret<String>, b: Secret<String>) -> Int {
+  let c = cryptoNs();
+  c.ctEq(a, b);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "crypto.ctEq"
+            && call.tags.iter().any(|tag| tag == "gate.crypto.ct_eq")
+            && call.arg_roles.as_ref().is_some_and(|roles| {
+                roles == &vec!["left_secret".to_string(), "right_secret".to_string()]
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_forwarded_data_helper_namespaces() {
+    let source = r#"
+fn sqlNs() {
+  sql
+}
+
+fn jsonNs() {
+  json
+}
+
+fn headersNs() {
+  headers
+}
+
+fn cookieNs() {
+  cookie
+}
+
+fn boot() -> Int {
+  let sqlRef = sqlNs();
+  sqlRef.q("SELECT 1", 1);
+
+  let jsonRef = jsonNs();
+  jsonRef.encode("schema", 1);
+
+  let headersRef = headersNs();
+  headersRef.value("ok");
+
+  let cookieRef = cookieNs();
+  cookieRef.build("sid", "v");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "sql.q"
+            && call.tags.iter().any(|tag| tag == "gate.sql.parameterize")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["template".to_string(), "params".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "json.encode"
+            && call.tags.iter().any(|tag| tag == "sink.json.encode")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["schema".to_string(), "value".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "headers.value"
+            && call.tags.iter().any(|tag| tag == "gate.header.value")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["value".to_string()])
+    }));
+
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "cookie.build"
+            && call.tags.iter().any(|tag| tag == "gate.cookie.build")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["name".to_string(), "value".to_string()])
+    }));
+}
+
+#[test]
+fn security_map_resolves_ctx_caps_member_alias_calls() {
+    let source = r#"
+fn boot(ctx: Ctx) -> Int {
+  let raw = req.query("q");
+  let repo = ctx.caps.db;
+  repo.exec(repo, raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn security_map_resolves_direct_ctx_caps_member_calls() {
+    let source = r#"
+fn boot(ctx: Ctx) -> Int {
+  let raw = req.query("q");
+  ctx.caps.db.exec(ctx.caps.db, raw);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let map = build_security_map(&program, &Policy::default());
+    assert!(map.calls.iter().any(|call| {
+        call.callee == "db.exec"
+            && call.tags.iter().any(|tag| tag == "sink.sql.exec")
+            && call
+                .arg_roles
+                .as_ref()
+                .is_some_and(|roles| roles == &vec!["capability".to_string(), "query".to_string()])
+            && call.origin_edges.as_ref().is_some_and(|edges| {
+                edges.iter().any(|edge| {
+                    edge.arg_index == 1
+                        && edge.origin == "call:req.query"
+                        && edge.tags.iter().any(|tag| tag == "source.http.query")
+                })
+            })
+    }));
+}
+
+#[test]
+fn parse_allow_annotations_reads_valid_annotation() {
+    let source = r#"
+@allow(
+  policy = "net.internal.enabled",
+  bypass = ["sink.net.internal_request"],
+  reason = "Calls inventory service",
+  ticket = "SEC-123",
+  expires = "2099-01-01",
+)
+fn main() -> Int { 1 }
+"#;
+
+    let annotations = parse_allow_annotations(Path::new("main.ut"), source)
+        .expect("@allow annotation should parse");
+    assert_eq!(annotations.len(), 1);
+    let allow = &annotations[0];
+    assert_eq!(allow.policy, "net.internal.enabled");
+    assert_eq!(allow.bypass, vec!["sink.net.internal_request".to_string()]);
+    assert_eq!(allow.reason, "Calls inventory service");
+    assert_eq!(allow.ticket, "SEC-123");
+    assert_eq!(allow.expires, "2099-01-01");
+}
+
+#[test]
+fn parse_allow_annotations_rejects_missing_required_fields() {
+    let source = r#"
+@allow(
+  policy = "effects.forbid",
+  bypass = ["effect.secrets.reveal"],
+  reason = "temporary debugging",
+  expires = "2099-01-01",
+)
+fn main() -> Int { 1 }
+"#;
+
+    let diagnostics = parse_allow_annotations(Path::new("main.ut"), source)
+        .expect_err("missing ticket must be rejected");
+    assert!(diagnostics.iter().any(|diag| diag.code == "A7001"));
+}
+
+#[test]
+fn parse_allow_annotations_rejects_expired_annotations() {
+    let source = r#"
+@allow(
+  policy = "effects.forbid",
+  bypass = ["effect.secrets.reveal"],
+  reason = "legacy path",
+  ticket = "SEC-124",
+  expires = "2000-01-01",
+)
+fn main() -> Int { 1 }
+"#;
+
+    let diagnostics = parse_allow_annotations(Path::new("main.ut"), source)
+        .expect_err("expired annotation must be rejected");
+    assert!(diagnostics.iter().any(|diag| diag.code == "A7002"));
+}
+
+#[test]
+fn strip_allow_annotations_keeps_source_parseable() {
+    let source = r#"
+@allow(
+  policy = "effects.forbid",
+  bypass = ["effect.secrets.reveal"],
+  reason = "legacy path",
+  ticket = "SEC-124",
+  expires = "2099-01-01",
+)
+fn main() -> Int { 1 }
+"#;
+    let stripped = strip_allow_annotations(source);
+    let program =
+        parse_source(Path::new("main.ut"), &stripped).expect("source should parse after stripping");
+    assert_eq!(program.items.len(), 1);
+}

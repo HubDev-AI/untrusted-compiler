@@ -13,7 +13,7 @@ Added:
 The report combines:
 - environment metadata (`results/env.json` when present),
 - per-endpoint summary files (`results/summaries/<impl>-*.json`),
-- optional `sec.audit` JSON (script parameter).
+- optional `sec4 audit` JSON (script parameter).
 
 ## Why it exists
 
@@ -47,17 +47,17 @@ M10 requires reproducible, machine-readable benchmark outputs. Per-endpoint file
 ## Example usage
 
 ```bash
-make -C benchmark-suite report IMPL=ailang
-cat benchmark-suite/results/summaries/ailang-report.json
+make -C benchmark-suite report IMPL=sec4
+cat benchmark-suite/results/summaries/sec4-report.json
 ```
 
 Direct script usage with sec-audit inclusion:
 
 ```bash
 benchmark-suite/scripts/build_report.sh \
-  ailang \
+  sec4 \
   benchmark-suite/results \
-  benchmark-suite/results/summaries/ailang-report.json \
+  benchmark-suite/results/summaries/sec4-report.json \
   baselines/sec-audit/default-secure-prod.hello.json
 ```
 

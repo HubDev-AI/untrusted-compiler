@@ -15,12 +15,12 @@ Added member-path capability alias normalization so security-map call resolution
 
 Before this slice, capability alias seeding only handled function parameters typed as capability tokens (`DbCap`, `NetCap`, and so on). Calls routed through context capability bags could lose canonical callee names and tags:
 
-```ailang
+```ut
 let repo = ctx.caps.db;
 repo.exec(repo, raw); // previously not normalized to db.exec
 ```
 
-That produced metadata gaps in both `security_map` and downstream `sec.audit` evidence.
+That produced metadata gaps in both `security_map` and downstream `sec4 audit` evidence.
 
 ## How it works internally
 
@@ -34,8 +34,8 @@ That produced metadata gaps in both `security_map` and downstream `sec.audit` ev
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/security_map.rs`
-  - `compiler/ailang-core/tests/security_map.rs`
+  - `compiler/sec4-core/src/security_map.rs`
+  - `compiler/sec4-core/tests/security_map.rs`
 - Output:
   - canonical sink/gate metadata preserved when capability handles are sourced from context capability bags.
 - Constraint:
@@ -47,7 +47,7 @@ That produced metadata gaps in both `security_map` and downstream `sec.audit` ev
 
 ## Example usage
 
-```ailang
+```ut
 fn writeUser(ctx: Ctx, raw: SqlQuery) {
   let dbCap = ctx.caps.db;
   dbCap.exec(dbCap, raw)

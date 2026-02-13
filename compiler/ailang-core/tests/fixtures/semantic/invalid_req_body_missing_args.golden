@@ -1,3 +1,0 @@
-error[E4001]: req.body expects `(ctx, request)` arguments
-  --> invalid_req_body_missing_args.ai:2:3
-  note: use `req.body(ctx, request)`

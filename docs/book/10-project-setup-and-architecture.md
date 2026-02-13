@@ -11,8 +11,8 @@
 ## Compiler workspace
 
 The compiler is a Rust workspace with two crates:
-- `compiler/ailang-core`: shared compiler foundations (manifest + diagnostics for M0).
-- `compiler/ailang-cli`: command-line entrypoint and M0 command routing.
+- `compiler/sec4-core`: shared compiler foundations (manifest + diagnostics for M0).
+- `compiler/sec4-cli`: command-line entrypoint and M0 command routing.
 
 ## Why this split now
 

@@ -25,12 +25,12 @@ In `enforce_fs_sink_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_fs_read_context_argument_type.ai`
-    - `invalid_fs_write_context_argument_type.ai`
+    - `invalid_fs_read_context_argument_type.ut`
+    - `invalid_fs_write_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first FS sink calls,
   - sink-tagged diagnostics aligned with tooling and audit expectations.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn load(ctx: Ctx, fs: FsCap, path: PathSafe) effects { fs.read } -> Int {
   fs.read(ctx, fs, path);
   0

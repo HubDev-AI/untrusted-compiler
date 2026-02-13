@@ -32,9 +32,9 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for invalid query/header call forms
-  - diagnostic tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - diagnostic tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
   - req/res and cors-origin CLI `c-bin` integration fixtures
 - Outputs:
   - compile-time rejection of malformed request-source key calls,
@@ -50,7 +50,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn decode(schema: Schema<Int>) effects { net } -> Int {
   let q = req.query("q");
   let id = req.pathParam("id");

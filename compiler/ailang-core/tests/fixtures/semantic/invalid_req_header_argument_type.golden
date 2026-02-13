@@ -1,4 +1,0 @@
-error[E4001]: req.header argument must be `String`
-  --> invalid_req_header_argument_type.ai:2:14
-  note: found `Int`
-  note: use string key input for `req.header`

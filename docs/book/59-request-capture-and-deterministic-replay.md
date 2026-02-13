@@ -74,7 +74,7 @@ Rules:
 ## 5) Replay model
 
 CLI shape:
-- `ailang replay <capture.json> [--override-budget ...]`
+- `sec4 replay <capture.json> [--override-budget ...]`
 
 Replay runtime responsibilities:
 - reconstruct synthetic request

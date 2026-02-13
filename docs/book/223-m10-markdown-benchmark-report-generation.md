@@ -12,7 +12,7 @@ Added:
 
 The script generates a markdown benchmark report from:
 - comparison matrix JSON,
-- optional `sec.audit` JSON.
+- optional `sec4 audit` JSON.
 
 ## Why it exists
 
@@ -25,7 +25,7 @@ M10 requires public-facing comparative reporting, not only machine artifacts. Th
 3. Renders endpoint leaders table from matrix `leader` rows.
 4. Renders endpoint ranking lists from matrix `compared` rows.
 5. Computes p99 spread per endpoint from recorded p99 values.
-6. If provided, appends security posture summary from `sec.audit`:
+6. If provided, appends security posture summary from `sec4 audit`:
    - policy name/hash,
    - finding count,
    - highest severity,
@@ -36,7 +36,7 @@ M10 requires public-facing comparative reporting, not only machine artifacts. Th
 
 - Inputs:
   - `compare-matrix.json`
-  - optional `sec.audit` JSON.
+  - optional `sec4 audit` JSON.
 - Output:
   - markdown report (`results/benchmark-report.md` by default).
 - Constraints:
@@ -47,7 +47,7 @@ M10 requires public-facing comparative reporting, not only machine artifacts. Th
 
 - missing matrix file -> explicit error.
 - matrix without endpoints -> explicit error.
-- missing optional sec audit file when specified -> explicit error.
+- missing optional audit file when specified -> explicit error.
 - malformed JSON -> `jq` parse failure.
 
 ## Example usage

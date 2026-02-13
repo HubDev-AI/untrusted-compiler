@@ -4,7 +4,7 @@ Examples below map directly to the current M1 parser behavior.
 
 ## Function with explicit return type
 
-```ailang
+```ut
 fn main() -> Int {
   0
 }
@@ -12,7 +12,7 @@ fn main() -> Int {
 
 ## Struct and enum declarations
 
-```ailang
+```ut
 struct User {
   id: Int,
   email: String,
@@ -26,7 +26,7 @@ enum MaybeUser {
 
 ## Option/Result generic types
 
-```ailang
+```ut
 fn resolve_user(found: Bool) -> Result<Option<User>, String> {
   let selected: Option<User> = match found {
     true => Some(User()),
@@ -38,7 +38,7 @@ fn resolve_user(found: Bool) -> Result<Option<User>, String> {
 
 ## Optional type sugar (`T?`)
 
-```ailang
+```ut
 fn parse_age(raw: String) -> Int? {
   return None;
 }
@@ -49,7 +49,7 @@ In M1 AST, `Int?` is normalized to `Option<Int>`.
 ## `check --emit ast`
 
 ```bash
-cargo run -p ailang -- check --path examples/hello --emit ast
+cargo run -p sec4 -- check --path examples/hello --emit ast
 ```
 
 This prints pretty JSON AST with source spans.

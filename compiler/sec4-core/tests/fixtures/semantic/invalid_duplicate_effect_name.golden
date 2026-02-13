@@ -1,0 +1,3 @@
+error[E4003]: duplicate effect declaration
+  --> invalid_duplicate_effect_name.ut:1:34
+  note: effect `db.write` is declared more than once

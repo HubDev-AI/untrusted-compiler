@@ -5,19 +5,19 @@ This chapter documents what was implemented in M0 and how it currently works.
 ## Workspace and Module Skeleton
 
 ### What it is
-A canonical repo layout and Rust workspace split into `ailang-core` and `ailang-cli`.
+A canonical repo layout and Rust workspace split into `sec4-core` and `sec4-cli`.
 
 ### Why it exists
 To establish stable project boundaries before parser/type/backend work begins.
 
 ### How it works internally
 - Root workspace (`Cargo.toml`) defines shared crate management.
-- `ailang-core` contains reusable compiler logic.
-- `ailang-cli` delegates command behavior to `ailang-core` functions.
+- `sec4-core` contains reusable compiler logic.
+- `sec4-cli` delegates command behavior to `sec4-core` functions.
 
 ### Inputs, outputs, and constraints
 - Input: repo filesystem with expected directory structure.
-- Output: compilable workspace with runnable `ailang` binary.
+- Output: compilable workspace with runnable `sec4` binary.
 - Constraint: M0 does not include full compilation pipeline.
 
 ### Failure modes and diagnostics
@@ -25,7 +25,7 @@ To establish stable project boundaries before parser/type/backend work begins.
 
 ### Example usage
 ```bash
-cargo run -p ailang -- check --path examples/hello
+cargo run -p sec4 -- check --path examples/hello
 ```
 
 ### Tradeoffs and next steps
@@ -63,7 +63,7 @@ Diagnostics are emitted automatically on invalid manifest/entry path.
 ## Manifest and Build Validation
 
 ### What it is
-M0 parser/validator for `ailang.toml` and entry file metadata.
+M0 parser/validator for `sec4.toml` and entry file metadata.
 
 ### Why it exists
 Compiler commands need a deterministic project contract before language compilation exists.
@@ -71,11 +71,11 @@ Compiler commands need a deterministic project contract before language compilat
 ### How it works internally
 - Parse TOML into `ManifestFile` (`package`, optional `build`).
 - Validate required fields.
-- Validate entry file existence and `.ai` extension.
+- Validate entry file existence and `.ut` extension.
 - `build` writes lockfile stub.
 
 ### Inputs, outputs, and constraints
-- Input: `<project>/ailang.toml`, expected entry file.
+- Input: `<project>/sec4.toml`, expected entry file.
 - Output: `Manifest` object or diagnostics.
 - Constraint: lockfile is a stub, not dependency resolution.
 
@@ -88,7 +88,7 @@ Compiler commands need a deterministic project contract before language compilat
 
 ### Example usage
 ```bash
-cargo run -p ailang -- build --path examples/hello
+cargo run -p sec4 -- build --path examples/hello
 ```
 
 ### Tradeoffs and next steps
@@ -104,7 +104,7 @@ Fixture-driven tests for manifest parsing and diagnostic rendering.
 Prevent regressions in output contracts and ensure deterministic diagnostics.
 
 ### How it works internally
-- Fixtures under `compiler/ailang-core/tests/fixtures/manifest`.
+- Fixtures under `compiler/sec4-core/tests/fixtures/manifest`.
 - Test iterates `.toml` files and compares output to `.golden` files.
 
 ### Inputs, outputs, and constraints
@@ -118,7 +118,7 @@ Prevent regressions in output contracts and ensure deterministic diagnostics.
 
 ### Example usage
 ```bash
-cargo test -p ailang-core
+cargo test -p sec4-core
 ```
 
 ### Tradeoffs and next steps

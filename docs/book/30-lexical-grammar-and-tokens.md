@@ -1,10 +1,10 @@
 # 30 Lexical Grammar and Tokens
 
-This chapter documents the M1 lexer implementation in `compiler/ailang-core/src/lexer.rs` and token model in `compiler/ailang-core/src/token.rs`.
+This chapter documents the M1 lexer implementation in `compiler/sec4-core/src/lexer.rs` and token model in `compiler/sec4-core/src/token.rs`.
 
 ## What it is
 
-A deterministic lexer that turns `.ai` source text into a stream of tokens with source spans.
+A deterministic lexer that turns `.ut` source text into a stream of tokens with source spans.
 
 ## Why it exists
 

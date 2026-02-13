@@ -54,7 +54,7 @@ M10 fairness guidance requires more than one fixed rate. Step-load runs help ide
 Default step profile:
 
 ```bash
-make -C benchmark-suite bench-step-profile IMPL=ailang ENDPOINT=decode
+make -C benchmark-suite bench-step-profile IMPL=sec4 ENDPOINT=decode
 ```
 
 Custom rates:

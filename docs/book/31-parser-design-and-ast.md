@@ -1,6 +1,6 @@
 # 31 Parser Design and AST
 
-This chapter documents the recursive-descent parser in `compiler/ailang-core/src/parser.rs` and AST model in `compiler/ailang-core/src/ast.rs`.
+This chapter documents the recursive-descent parser in `compiler/sec4-core/src/parser.rs` and AST model in `compiler/sec4-core/src/ast.rs`.
 
 ## What it is
 
@@ -8,7 +8,7 @@ A span-preserving parser for core v0.1-lite declarations, statements, expression
 
 ## Why it exists
 
-M1 establishes the first real language frontend stage so `ailang check` can validate syntax and produce AST output.
+M1 establishes the first real language frontend stage so `sec4 check` can validate syntax and produce AST output.
 
 ## AST scope (M1)
 

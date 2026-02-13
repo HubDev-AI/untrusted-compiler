@@ -11,8 +11,8 @@ Added intrinsic support for:
 - `sec.cspAdd` / `sec_csp_add`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_sec_csp`
-- `ailang_rt_sec_csp_add`
+- `sec4_rt_sec_csp`
+- `sec4_rt_sec_csp_add`
 
 Added semantic primitive type-name support for security config shapes:
 - `CorsConfig`, `SecurityHeadersConfig`, `CsrfConfig`, `AuthConfig`
@@ -49,7 +49,7 @@ The security middleware spec uses structured config types and CSP builders. With
 
 ### Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let csp = sec.csp();
   sec.cspAdd(csp, "default-src", "'self'");
@@ -64,9 +64,9 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - policy-config rewrite coverage now asserts `sec.csp` and `sec.cspAdd` lowering
   - runtime ABI assertions include CSP helper symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - policy-config `c-bin` fixture now asserts CSP helper symbol lowering
   - added `build_emit_c_bin_accepts_security_config_surface_types_when_clang_available`

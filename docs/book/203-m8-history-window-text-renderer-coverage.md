@@ -22,7 +22,7 @@ After embedding `historyWindow` into the canonical report, text output also gain
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/tests/audit_history_window.rs`
+  - `compiler/sec4-core/tests/audit_history_window.rs`
 - Output:
   - regression coverage for text-rendered history-window section.
 - Constraint:

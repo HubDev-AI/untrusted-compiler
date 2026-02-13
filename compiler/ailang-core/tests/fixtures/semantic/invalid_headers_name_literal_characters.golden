@@ -1,3 +1,0 @@
-error[E4001]: headers.name literal contains invalid characters
-  --> invalid_headers_name_literal_characters.ai:2:16
-  note: header names should contain ASCII alphanumerics and '-' only

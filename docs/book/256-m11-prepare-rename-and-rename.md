@@ -1,11 +1,11 @@
 # 256 M11 Slice: Prepare-Rename and Rename
 
-This chapter documents adding baseline rename workflow support (`textDocument/prepareRename` + `textDocument/rename`) to `ailang-language-server`.
+This chapter documents adding baseline rename workflow support (`textDocument/prepareRename` + `textDocument/rename`) to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises `renameProvider.prepareProvider: true`.
@@ -53,7 +53,7 @@ Rename is a core editor operation needed for day-to-day refactoring. Without it,
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - initialize capability advertisement for rename provider.
 - prepareRename returns expected call-site range and placeholder.
 - rename returns workspace edits covering declaration + call sites.

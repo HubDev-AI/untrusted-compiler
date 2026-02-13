@@ -17,7 +17,7 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
 fi
 
 results_dir="$1"
-impls_csv="${2:-ailang,node,go,rust}"
+impls_csv="${2:-sec4,node,go,rust}"
 endpoints_csv="${3:-ping,decode,users-post,users-get}"
 
 summaries_dir="${results_dir}/summaries"

@@ -1,6 +1,6 @@
 # 213 M9 Slice: Release Audit Baselines
 
-This chapter documents the `M9` baseline artifacts for `sec.audit` under canonical policy profiles.
+This chapter documents the `M9` baseline artifacts for `sec4 audit` under canonical policy profiles.
 
 ## What it is
 
@@ -18,7 +18,7 @@ Both baselines are generated against `examples/hello` with the corresponding pol
 
 1. Apply profile policy file to the sample project.
 2. Run:
-   - `ailang sec audit --path examples/hello --format json`
+   - `sec4 audit --path examples/hello --format json`
 3. Store resulting JSON report under `baselines/sec-audit/`.
 
 The baseline contains:
@@ -30,8 +30,8 @@ The baseline contains:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `policies/default-secure-prod.ailang.policy`
-  - `policies/permissive-dev.ailang.policy`
+  - `policies/default-secure-prod.sec4.policy`
+  - `policies/permissive-dev.sec4.policy`
   - `examples/hello`
 - Outputs:
   - baseline audit JSON snapshots in `baselines/sec-audit/`.
@@ -49,13 +49,13 @@ The baseline contains:
 Compare current report to baseline:
 
 ```bash
-ailang sec audit --path examples/hello --format json --baseline baselines/sec-audit/default-secure-prod.hello.json
+sec4 audit --path examples/hello --format json --baseline baselines/sec-audit/default-secure-prod.hello.json
 ```
 
 Use threshold gating:
 
 ```bash
-ailang sec audit --path examples/hello --format json --fail-on risk>=HIGH
+sec4 audit --path examples/hello --format json --fail-on risk>=HIGH
 ```
 
 ## Tradeoffs and next steps

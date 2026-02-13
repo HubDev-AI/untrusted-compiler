@@ -5,7 +5,7 @@ This chapter documents request-deadline propagation into on-demand parse loading
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `load_cached_program(...)` now accepts an optional request deadline.
@@ -40,7 +40,7 @@ Before this slice, expired requests could still trigger fresh parse work for unc
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `load_cached_program_skips_parse_when_deadline_is_expired`:
   - verifies uncached parse is skipped for expired deadlines.
 

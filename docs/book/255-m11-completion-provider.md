@@ -1,11 +1,11 @@
 # 255 M11 Slice: Completion Provider
 
-This chapter documents adding baseline `textDocument/completion` support to `ailang-language-server`.
+This chapter documents adding baseline `textDocument/completion` support to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises `completionProvider` (`resolveProvider: false`).
@@ -45,7 +45,7 @@ M11 requires practical in-editor assistance beyond diagnostics/navigation. Basel
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - initialize response includes completion provider capability.
 - completion response contains both a known function symbol and keyword entry.
 

@@ -7,14 +7,14 @@ This chapter documents the optional `M9` release-hardening item: SBOM generation
 Added optional SBOM output in build flow:
 
 ```bash
-ailang build --sbom
+sec4 build --sbom
 ```
 
 When enabled, build writes `build/sbom.json` alongside lockfile and build metadata.
 
 ## Why it exists
 
-`M9` calls out optional SBOM generation. A built-in path removes ad-hoc scripting from release pipelines and keeps artifact provenance tied to deterministic AILang metadata.
+`M9` calls out optional SBOM generation. A built-in path removes ad-hoc scripting from release pipelines and keeps artifact provenance tied to deterministic Untrusted<T> metadata.
 
 ## How it works internally
 
@@ -36,8 +36,8 @@ When enabled, build writes `build/sbom.json` alongside lockfile and build metada
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/sbom.rs`
-  - `compiler/ailang-cli/src/main.rs`
+  - `compiler/sec4-core/src/sbom.rs`
+  - `compiler/sec4-cli/src/main.rs`
 - Outputs:
   - deterministic `build/sbom.json` artifact when `--sbom` is set.
 - Constraints:
@@ -54,7 +54,7 @@ CLI also fails if it cannot parse generated build metadata before SBOM generatio
 ## Example usage
 
 ```bash
-ailang build --path examples/hello --sbom
+sec4 build --path examples/hello --sbom
 cat examples/hello/build/sbom.json
 ```
 

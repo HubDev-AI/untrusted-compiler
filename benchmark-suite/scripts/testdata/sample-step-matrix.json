@@ -17,7 +17,7 @@
           "stepCount": 3
         },
         {
-          "impl": "ailang",
+          "impl": "sec4",
           "endpoint": "decode",
           "kneeDetected": true,
           "kneeAtTargetRps": 2000,

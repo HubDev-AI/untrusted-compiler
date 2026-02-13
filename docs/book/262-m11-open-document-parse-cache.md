@@ -1,11 +1,11 @@
 # 262 M11 Slice: Open-Document Parse Cache
 
-This chapter documents adding a lightweight parse-cache layer for open documents in `ailang-language-server`.
+This chapter documents adding a lightweight parse-cache layer for open documents in `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `ServerState` now tracks:
@@ -47,7 +47,7 @@ M11 requires incremental analysis direction and responsive editor behavior. Reus
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - parse cache population on valid source,
 - parse cache eviction on invalid source update.
 

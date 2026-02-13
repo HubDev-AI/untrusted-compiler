@@ -1,3 +1,0 @@
-error[E4001]: path gate expects exactly two arguments
-  --> invalid_path_under_extra_args.ai:2:3
-  note: `path.under` call shape is `path.under(base, input)`

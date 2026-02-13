@@ -1,3 +1,0 @@
-error[E4001]: cookie.build value literal cannot contain CR/LF
-  --> invalid_cookie_build_value_crlf_literal.ai:2:27
-  note: cookie values must not include response-splitting sequences

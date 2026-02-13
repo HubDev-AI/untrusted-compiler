@@ -1,4 +1,0 @@
-error[E4001]: log.withError error argument must be `StdError`
-  --> invalid_log_with_error_argument_type.ai:2:24
-  note: found `Int`
-  note: pass a typed standard error value

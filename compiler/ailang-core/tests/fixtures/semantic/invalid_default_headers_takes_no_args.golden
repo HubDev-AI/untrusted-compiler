@@ -1,3 +1,0 @@
-error[E4001]: policy/bootstrap constructor takes no arguments
-  --> invalid_default_headers_takes_no_args.ai:2:3
-  note: `sec.defaultHeaders` should be called without arguments

@@ -1,4 +1,0 @@
-error[E4001]: security middleware bootstrap argument has invalid type
-  --> invalid_with_cors_wrong_config_type.ai:4:25
-  note: `cors.withCors` argument 2 expects `CorsConfig`, got `AuthConfig`
-  note: use `cors.withCors(router, corsCfg)`

@@ -11,7 +11,7 @@ Added `benchmark-suite/` with initial reproducibility infrastructure:
 - shared docker-compose DB,
 - orchestration Makefile,
 - result directory structure and environment-capture script,
-- placeholder service directories for AILang/Go/Node/Rust/C.
+- placeholder service directories for Untrusted<T>/Go/Node/Rust/C.
 
 ## Why it exists
 
@@ -60,7 +60,7 @@ make -C benchmark-suite env
 Once service implementations are added:
 
 ```bash
-make -C benchmark-suite bench-ping IMPL=ailang
+make -C benchmark-suite bench-ping IMPL=sec4
 ```
 
 ## Tradeoffs and next steps
@@ -68,5 +68,5 @@ make -C benchmark-suite bench-ping IMPL=ailang
 - Tradeoff:
   - scaffold prioritizes reproducibility contracts first, leaving implementation-specific service wiring for subsequent M10 slices.
 - Next:
-  - add AILang benchmark service implementation under `benchmark-suite/services/ailang`,
+  - add Untrusted<T> benchmark service implementation under `benchmark-suite/services/sec4`,
   - add normalized result summary generator (`summary.json`) and first comparative run artifacts.

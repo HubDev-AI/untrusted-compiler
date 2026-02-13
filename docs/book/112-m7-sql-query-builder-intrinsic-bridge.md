@@ -10,7 +10,7 @@ Added intrinsic support for:
 - `sql.q` / `sql_q`
 
 Lowered runtime ABI stub:
-- `ailang_rt_sql_q`
+- `sec4_rt_sql_q`
 
 ### Why it exists
 
@@ -22,8 +22,8 @@ The v0 stdlib surface includes an explicit SQL query-construction helper before 
   - `sql.q` returns `SqlQuery` (no effect/capability requirement).
 - Added `sql` namespace recognition in semantic intrinsic namespace catalog.
 - Added C rewrite mapping:
-  - `sql.q` / `sql_q` -> `ailang_rt_sql_q`
-- Added runtime C declaration/definition for `ailang_rt_sql_q`.
+  - `sql.q` / `sql_q` -> `sec4_rt_sql_q`
+- Added runtime C declaration/definition for `sec4_rt_sql_q`.
 - Added security-map tagging:
   - `sql.q` -> `gate.sql.parameterize`
 - Added argument role labeling for security-map call records:
@@ -33,7 +33,7 @@ The v0 stdlib surface includes an explicit SQL query-construction helper before 
 ### Inputs, outputs, and constraints
 
 - Input: calls like `sql.q(template, params)`.
-- Output: generated C invoking `ailang_rt_sql_q(...)`.
+- Output: generated C invoking `sec4_rt_sql_q(...)`.
 - Constraints:
   - runtime behavior remains stubbed in M7 bootstrap mode.
   - this slice validates compile/link and metadata coverage, not full SQL templating semantics.
@@ -45,7 +45,7 @@ The v0 stdlib surface includes an explicit SQL query-construction helper before 
 
 ### Example usage
 
-```ailang
+```ut
 fn txDemo(db: DbCap, tx: TxCap) effects { db.tx, db.write } -> Int {
   let built = sql.q("SELECT 1", 2);
   db.tx(db);
@@ -61,9 +61,9 @@ fn txDemo(db: DbCap, tx: TxCap) effects { db.tx, db.write } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime ABI assertions include `ailang_rt_sql_q`
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime ABI assertions include `sec4_rt_sql_q`
   - db/fs/net rewrite coverage now asserts `sql.q` lowering with transaction sinks
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - db/fs/net `c-bin` integration fixture now builds query via `sql.q`
-  - generated C assertions include `ailang_rt_sql_q(...)`
+  - generated C assertions include `sec4_rt_sql_q(...)`

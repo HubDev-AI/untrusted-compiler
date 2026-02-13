@@ -1,6 +1,6 @@
 # 95 M7 Slice: `hello-api` Run Flow Validation
 
-This chapter documents the next M7 slice: pinning `ailang run` behavior for the new `hello-api` sample.
+This chapter documents the next M7 slice: pinning `sec4 run` behavior for the new `hello-api` sample.
 
 ## Run-Path Coverage for `examples/hello-api`
 
@@ -9,7 +9,7 @@ This chapter documents the next M7 slice: pinning `ailang run` behavior for the 
 Added a clang-gated integration test:
 - `run_command_executes_hello_api_example_when_clang_available`
 
-The test verifies `ailang run --path examples/hello-api` succeeds and compiles through the C backend pipeline.
+The test verifies `sec4 run --path examples/hello-api` succeeds and compiles through the C backend pipeline.
 
 ### Why it exists
 
@@ -18,7 +18,7 @@ The test verifies `ailang run --path examples/hello-api` succeeds and compiles t
 ### How it works internally
 
 - Test invokes:
-  - `ailang run --path <workspace>/examples/hello-api`
+  - `sec4 run --path <workspace>/examples/hello-api`
 - Asserts:
   - command exits successfully
   - stdout contains `compiled binary:` (proves `c-bin` pipeline execution)
@@ -37,7 +37,7 @@ The test verifies `ailang run --path examples/hello-api` succeeds and compiles t
 ### Example usage
 
 ```bash
-cargo run -p ailang -- run --path examples/hello-api
+cargo run -p sec4 -- run --path examples/hello-api
 ```
 
 ### Tradeoffs and next steps
@@ -47,5 +47,5 @@ cargo run -p ailang -- run --path examples/hello-api
 
 ## Tests updated
 
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `run_command_executes_hello_api_example_when_clang_available`

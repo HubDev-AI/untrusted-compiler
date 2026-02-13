@@ -21,7 +21,7 @@ M11 still requires pinning Zed grammar integration to an immutable published rev
 
 ## How it works internally
 
-1. Read `grammars.ailang.rev` from `zed-extension/extension.toml`.
+1. Read `grammars.sec4.rev` from `zed-extension/extension.toml`.
 2. Validate presence and non-placeholder value.
 3. Validate commit-like SHA shape.
 4. Exit non-zero with actionable error if invalid.
@@ -50,4 +50,4 @@ M11 still requires pinning Zed grammar integration to an immutable published rev
 - Tradeoff:
   - this is a policy/checkpoint gate, not the final pin itself.
 - Next:
-  - publish/finalize `tree-sitter-ailang` repo revision and replace placeholder with pinned immutable SHA.
+  - publish/finalize `tree-sitter-untrusted` repo revision and replace placeholder with pinned immutable SHA.

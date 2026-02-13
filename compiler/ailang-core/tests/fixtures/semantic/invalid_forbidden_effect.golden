@@ -1,3 +1,0 @@
-error[E2002]: effect forbidden by policy
-  --> invalid_forbidden_effect.ai:1:20
-  note: effect `shell` is forbidden by the active policy

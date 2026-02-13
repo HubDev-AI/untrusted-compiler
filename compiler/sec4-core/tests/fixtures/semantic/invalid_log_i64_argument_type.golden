@@ -1,0 +1,4 @@
+error[E4001]: log.i64 argument must be numeric
+  --> invalid_log_i64_argument_type.ut:2:11
+  note: found `Bool`
+  note: pass `Int`/`Int64` values to `log.i64`

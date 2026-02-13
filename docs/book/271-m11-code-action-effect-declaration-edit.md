@@ -5,7 +5,7 @@ This chapter documents extending code-action auto-fixes to missing-effect diagno
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `E2001` quick-fix can now emit a concrete insertion edit:
@@ -15,7 +15,7 @@ Key changes:
 
 ## Why it exists
 
-Missing-effect diagnostics are frequent in effect-audited workflows. A direct insertion edit reduces friction and keeps effect declarations explicit, aligned with AILang security/audit goals.
+Missing-effect diagnostics are frequent in effect-audited workflows. A direct insertion edit reduces friction and keeps effect declarations explicit, aligned with Untrusted<T> security/audit goals.
 
 ## How it works internally
 
@@ -40,7 +40,7 @@ Missing-effect diagnostics are frequent in effect-audited workflows. A direct in
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - `E2001` code-action emits insertion edit ` effects { net }`.
 
 ## Tradeoffs and next steps

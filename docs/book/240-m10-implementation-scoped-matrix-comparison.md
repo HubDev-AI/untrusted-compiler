@@ -49,7 +49,7 @@ Even with endpoint filtering fixed, compare-matrix still scanned all report file
 ## Example usage
 
 ```bash
-benchmark-suite/scripts/compare_matrix.sh benchmark-suite/results/summaries benchmark-suite/results/summaries/compare-matrix.json "ailang,node"
+benchmark-suite/scripts/compare_matrix.sh benchmark-suite/results/summaries benchmark-suite/results/summaries/compare-matrix.json "sec4,node"
 ```
 
 ## Tradeoffs and next steps

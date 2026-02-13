@@ -31,8 +31,8 @@ Follow-up recursive nested CFG lowering is documented in `docs/book/76-m5-nested
   - `mir_lowering_splits_statement_if_into_continuation_blocks`
   - `mir_lowering_splits_statement_match_into_continuation_blocks`
 - MIR fixture/golden coverage:
-  - `valid_stmt_if.ai` + `.golden`
-  - `valid_stmt_match.ai` + `.golden`
+  - `valid_stmt_if.ut` + `.golden`
+  - `valid_stmt_match.ut` + `.golden`
 
 ## Tradeoffs
 - Branch-body lowering still uses expression rendering for nested control-flow expressions that are not yet recursively CFG-lowered.

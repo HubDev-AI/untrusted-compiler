@@ -1,4 +1,0 @@
-error[E4001]: fs sink context argument must be `Ctx`
-  --> invalid_fs_write_context_argument_type.ai:2:12
-  note: found `Int`
-  note: use `fs.write(ctx, fsCap, path, value)` for context-first `fs.write` calls

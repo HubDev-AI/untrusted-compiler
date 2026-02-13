@@ -35,12 +35,12 @@ M10 requires explicit tail-latency and failure-mode analysis in final benchmark 
 
 - Inputs:
   - matrix (`compare-matrix.json`),
-  - optional sec audit,
+  - optional audit,
   - optional analysis (`analysis.json`).
 - Outputs:
   - markdown benchmark report with analysis-aware sections.
 - Constraints:
-  - analysis and sec audit paths are validated when provided.
+  - analysis and audit paths are validated when provided.
 
 ## Failure modes and diagnostics
 

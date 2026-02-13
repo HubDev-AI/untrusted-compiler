@@ -18,7 +18,7 @@ Implemented endpoints:
 
 ## Why it exists
 
-M10 requires cross-language comparisons. A runnable Node baseline is the first concrete non-AILang comparator and unblocks harness integration checks (`bench-profile`, summary generation, report bundling).
+M10 requires cross-language comparisons. A runnable Node baseline is the first concrete non-Untrusted<T> comparator and unblocks harness integration checks (`bench-profile`, summary generation, report bundling).
 
 ## How it works internally
 

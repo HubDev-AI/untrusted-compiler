@@ -1,0 +1,9 @@
+error[E4001]: err.notFound code argument must be `String`
+  --> invalid_err_not_found_argument_type.ut:2:16
+  note: found `Int`
+  note: use stable not-found error code strings
+
+error[E4001]: err.notFound message argument must be `String`
+  --> invalid_err_not_found_argument_type.ut:2:19
+  note: found `Int`
+  note: use safe not-found message strings

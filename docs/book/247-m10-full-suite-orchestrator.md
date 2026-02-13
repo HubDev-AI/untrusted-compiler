@@ -55,7 +55,7 @@ M10 now has two complementary execution tracks (fixed and step). Running them ma
 ## Example usage
 
 ```bash
-make -C benchmark-suite bench-full IMPLS=ailang,node,go,rust ENDPOINTS=decode,users-post
+make -C benchmark-suite bench-full IMPLS=sec4,node,go,rust ENDPOINTS=decode,users-post
 ```
 
 Dry run:

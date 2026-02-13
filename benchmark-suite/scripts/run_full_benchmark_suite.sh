@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls ailang,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+usage: $0 [--dry-run] [--impls sec4,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
 
 Runs fixed-target matrix + step-load matrix and emits a combined markdown report
 with step-load signals included.
@@ -11,7 +11,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="ailang,node,go,rust"
+impls_csv="sec4,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
 

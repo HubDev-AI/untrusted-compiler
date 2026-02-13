@@ -1,4 +1,0 @@
-error[E4001]: net sink context argument must be `Ctx`
-  --> invalid_net_internal_context_argument_type.ai:2:26
-  note: found `Int`
-  note: use `httpClient.getInternal(ctx, internalNetCap, url)` for context-first `httpClient.getInternal` calls

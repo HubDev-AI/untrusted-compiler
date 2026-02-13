@@ -5,7 +5,7 @@ This chapter documents dependency-aware cache invalidation for open-document sem
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - server state now tracks open-document import edges:
@@ -44,7 +44,7 @@ Without dependency-aware invalidation, dependent documents could retain stale pa
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `refresh_program_cache_invalidates_open_document_dependents`:
   - verifies dependency refresh evicts dependent parse and symbol caches.
 

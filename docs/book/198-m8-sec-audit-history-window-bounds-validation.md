@@ -1,6 +1,6 @@
-# 198 M8 Slice: sec.audit History-Window Bounds Validation
+# 198 M8 Slice: sec4 audit History-Window Bounds Validation
 
-This chapter documents a hardening pass for `sec audit` history-window argument validation.
+This chapter documents a hardening pass for `audit` history-window argument validation.
 
 ## What it is
 
@@ -23,8 +23,8 @@ The initial implementation silently coerced zero to one (`max(1)` behavior). Tha
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
   - strict argument validation for history-window bounds.
 - Constraint:
@@ -41,13 +41,13 @@ The initial implementation silently coerced zero to one (`max(1)` behavior). Tha
 Valid:
 
 ```bash
-ailang sec audit --history-dir .ailang/audit-history --history-window 3
+sec4 audit --history-dir .sec4/audit-history --history-window 3
 ```
 
 Invalid:
 
 ```bash
-ailang sec audit --history-dir .ailang/audit-history --history-window 0
+sec4 audit --history-dir .sec4/audit-history --history-window 0
 ```
 
 ## Tradeoffs and next steps

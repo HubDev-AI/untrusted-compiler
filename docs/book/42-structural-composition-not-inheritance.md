@@ -1,6 +1,6 @@
 # 42 Structural Composition, Not Inheritance
 
-This chapter records the M2 alignment with AILang's no-inheritance direction.
+This chapter records the M2 alignment with Untrusted<T>'s no-inheritance direction.
 
 ## What it is
 
@@ -8,7 +8,7 @@ A type-checking approach centered on explicit data shapes and function signature
 
 ## Why it exists
 
-AILang v0.1-lite targets TypeScript-like ergonomics while avoiding inheritance/trait complexity and hidden implementation graphs.
+Untrusted<T> v0.1-lite targets TypeScript-like ergonomics while avoiding inheritance/trait complexity and hidden implementation graphs.
 
 ## How it works internally
 
@@ -32,7 +32,7 @@ AILang v0.1-lite targets TypeScript-like ergonomics while avoiding inheritance/t
 
 Use `enum` + `match` for variation and explicit behavior boundaries:
 
-```ailang
+```ut
 enum State { On, Off }
 
 fn to_int(s: State) -> Int {

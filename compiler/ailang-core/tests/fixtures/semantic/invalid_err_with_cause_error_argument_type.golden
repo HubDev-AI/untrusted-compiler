@@ -1,4 +1,0 @@
-error[E4001]: err.withCause error argument must be `StdError`
-  --> invalid_err_with_cause_error_argument_type.ai:3:17
-  note: found `Int`
-  note: use an error value created via `err.*` constructors

@@ -5,7 +5,7 @@ This chapter documents upgrading the code-action baseline with a concrete auto-e
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `textDocument/codeAction` parsing now includes request document URI.
@@ -42,7 +42,7 @@ M11 requires actionable security-first editor UX. Guidance-only actions help, bu
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - `E1003` code-action on open document emits `newText = "redact(token)"` for selected range.
 
 ## Tradeoffs and next steps

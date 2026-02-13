@@ -1,0 +1,6 @@
+error[E1002]: untrusted value cannot flow into SQL sink
+  --> invalid_untrusted_from_req_query_to_sql.ut:3:16
+  note: sink `db.exec` requires trusted SQL inputs
+  note: argument 2 has type `Untrusted<String>`
+  note: origin: value comes from call `req.query(...)`
+  note: validate input and construct typed `SqlQuery`

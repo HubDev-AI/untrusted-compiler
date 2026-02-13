@@ -28,15 +28,15 @@ In semantic trust-gate enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_sec_csp_argument_shape.ai`
-    - `invalid_sec_csp_add_argument_type.ai`
+    - `invalid_sec_csp_argument_shape.ut`
+    - `invalid_sec_csp_add_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - integration fixture alignment:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed CSP builder calls,
   - stable diagnostics for tooling and CI.
@@ -53,7 +53,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn cspPolicy() -> Int {
   let p = sec.csp();
   sec.cspAdd(p, "default-src", "'self'");

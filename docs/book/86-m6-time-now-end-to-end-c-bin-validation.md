@@ -12,23 +12,23 @@ Added a clang-gated CLI integration test that builds and runs a temporary projec
 
 ### Why it exists
 
-We already added intrinsic rewriting for `time.now` in the C emitter, but this slice proves the full user path via `ailang build --emit c-bin`, not only unit-level emitter tests.
+We already added intrinsic rewriting for `time.now` in the C emitter, but this slice proves the full user path via `sec4 build --emit c-bin`, not only unit-level emitter tests.
 
 ### How it works internally
 
 - Test writes a temporary project with:
-  - `ailang.toml`
-  - `src/main.ai` using `time.now`
+  - `sec4.toml`
+  - `src/main.ut` using `time.now`
 - Runs:
-  - `ailang build --emit c-bin --path <temp-project>`
+  - `sec4 build --emit c-bin --path <temp-project>`
 - Asserts:
   - build succeeds
-  - generated C contains `ailang_rt_time_now()`
+  - generated C contains `sec4_rt_time_now()`
   - compiled binary exists and executes successfully
 
 ### Inputs, outputs, and constraints
 
-- Input: tiny intrinsic-using AILang project.
+- Input: tiny intrinsic-using Untrusted<T> project.
 - Output:
   - generated C and runtime C compilation artifacts
   - executable binary in temp `build/`
@@ -42,7 +42,7 @@ We already added intrinsic rewriting for `time.now` in the C emitter, but this s
 
 ### Example usage
 
-```ailang
+```ut
 fn main() effects { time.now } -> Int64 {
   time.now()
 }
@@ -56,5 +56,5 @@ fn main() effects { time.now } -> Int64 {
 
 ## Tests updated
 
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_time_now_intrinsic_when_clang_available`

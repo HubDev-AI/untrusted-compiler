@@ -24,11 +24,11 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_db_tx_argument_shape.ai`
+    - `invalid_db_tx_argument_shape.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of malformed `db.tx` argument shapes,
   - capability-tagged diagnostics suitable for tooling surfaces.
@@ -43,7 +43,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn startTx(ctx: Ctx, db: DbCap) effects { db.tx } -> Int {
   db.tx(ctx, db);
   0

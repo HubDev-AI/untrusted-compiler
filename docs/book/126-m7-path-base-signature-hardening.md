@@ -28,10 +28,10 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for invalid `path.base` argument type and arity
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - gate intrinsic CLI `c-bin` integration fixture in `compiler/ailang-cli/tests/json_output.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - gate intrinsic CLI `c-bin` integration fixture in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed `path.base(...)` calls,
   - integration fixture updated to string path input (`"/tmp/base"`).
@@ -46,7 +46,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn config() -> Int {
   let base = path.base("/srv/app");
   base;

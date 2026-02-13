@@ -1,0 +1,4 @@
+error[E4001]: http.serve port must be numeric
+  --> invalid_http_serve_port_not_numeric.ut:2:14
+  note: found `String`
+  note: use `Int`/`Int64` port values such as `8080`

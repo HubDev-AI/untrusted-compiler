@@ -7,7 +7,7 @@ This chapter documents fixes for orchestrator hangs and environment-preflight is
 Updated:
 - `benchmark-suite/scripts/run_comparison_matrix.sh`
 - `benchmark-suite/scripts/run_profile.sh`
-- `benchmark-suite/services/ailang/smoke.sh`
+- `benchmark-suite/services/sec4/smoke.sh`
 - `benchmark-suite/services/c/smoke.sh`
 - `benchmark-suite/README.md`
 
@@ -17,7 +17,7 @@ Key hardening changes:
 - tightened readiness checks to require `/ping` response body equals `ok`,
 - added per-service log files in `results/raw/*-service.log` and failure tail output,
 - added explicit `wrk2` preflight in non-dry-run profile execution,
-- hardened AILang/C smoke readiness checks and moved default smoke ports off `8080`.
+- hardened Untrusted<T>/C smoke readiness checks and moved default smoke ports off `8080`.
 
 ## Why it exists
 
@@ -32,7 +32,7 @@ The previous runner could appear "stuck" when service startup used command subst
    - `GET /ping` returns exact body `ok`.
 4. On readiness failure, orchestrator prints log tail for the failing implementation.
 5. `run_profile.sh` fails fast with a clear message if `wrk2` is missing.
-6. AILang/C smoke scripts use dedicated default ports (`18084` and `18083`) and robust readiness state tracking.
+6. Untrusted<T>/C smoke scripts use dedicated default ports (`18084` and `18083`) and robust readiness state tracking.
 
 ## Inputs, outputs, and constraints
 
@@ -62,7 +62,7 @@ benchmark-suite/scripts/run_comparison_matrix.sh --dry-run
 Run on custom port:
 
 ```bash
-BENCH_PORT=19085 benchmark-suite/scripts/run_comparison_matrix.sh --impls ailang,node
+BENCH_PORT=19085 benchmark-suite/scripts/run_comparison_matrix.sh --impls sec4,node
 ```
 
 ## Tradeoffs and next steps

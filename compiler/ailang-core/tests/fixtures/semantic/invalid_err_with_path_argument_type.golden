@@ -1,4 +1,0 @@
-error[E4001]: err.withPath path argument must be `String`
-  --> invalid_err_with_path_argument_type.ai:3:22
-  note: found `Int`
-  note: use stable path strings such as `"$.field"`

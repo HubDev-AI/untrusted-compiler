@@ -25,11 +25,11 @@ In `enforce_error_helper_signatures`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_err_with_path_error_argument_type.ai`
+    - `invalid_err_with_path_error_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-`StdError` base arguments in `err.withPath`,
   - stable diagnostics for CI/editor surfaces.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn attachPath(base: StdError) -> StdError {
   err.withPath(base, "$.field")
 }

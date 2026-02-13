@@ -7,8 +7,8 @@ This chapter documents the next M7 bootstrap slice: adding a concrete HTTP/JSON-
 ### What it is
 
 Added a new example project:
-- `examples/hello-api/ailang.toml`
-- `examples/hello-api/src/main.ai`
+- `examples/hello-api/sec4.toml`
+- `examples/hello-api/src/main.ut`
 - `examples/hello-api/build/.gitignore`
 
 It demonstrates:
@@ -32,7 +32,7 @@ M7 needs a sample service path. This slice introduces a stable example target fo
 
 ### Inputs, outputs, and constraints
 
-- Input: `examples/hello-api/src/main.ai`.
+- Input: `examples/hello-api/src/main.ut`.
 - Output on build:
   - `examples/hello-api/build/generated.c`
   - `examples/hello-api/build/hello-api` (compiled binary)
@@ -49,7 +49,7 @@ M7 needs a sample service path. This slice introduces a stable example target fo
 ### Example usage
 
 ```bash
-cargo run -p ailang -- build --path examples/hello-api --emit c-bin
+cargo run -p sec4 -- build --path examples/hello-api --emit c-bin
 ```
 
 ### Tradeoffs and next steps
@@ -60,5 +60,5 @@ cargo run -p ailang -- build --path examples/hello-api --emit c-bin
 
 ## Tests updated
 
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_compiles_hello_api_example_when_clang_available`

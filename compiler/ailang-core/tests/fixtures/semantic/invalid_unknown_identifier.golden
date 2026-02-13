@@ -1,3 +1,0 @@
-error[N3003]: unknown identifier
-  --> invalid_unknown_identifier.ai:2:3
-  note: `missing` is not defined in this scope

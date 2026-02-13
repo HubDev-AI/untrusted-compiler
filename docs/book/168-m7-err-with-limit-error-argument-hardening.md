@@ -25,11 +25,11 @@ In `enforce_error_helper_signatures`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_err_with_limit_error_argument_type.ai`
+    - `invalid_err_with_limit_error_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-`StdError` `err.withLimit` base arguments,
   - stable diagnostics for CI/editor flows.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn attachLimit(base: StdError) -> StdError {
   err.withLimit(base, "json.max_depth", 32, 40)
 }

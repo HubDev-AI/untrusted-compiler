@@ -1,0 +1,4 @@
+error[E4001]: log.field key argument must be `String`
+  --> invalid_log_field_argument_type.ut:2:13
+  note: found `Int`
+  note: pass stable field-name strings

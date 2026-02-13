@@ -7,8 +7,8 @@ This chapter documents the next M6 vertical slice: routing generated C return va
 ### What it is
 
 Generated C now routes typed return expressions through runtime ABI identity functions:
-- `Int`/`Int64` returns -> `ailang_rt_identity_i64(...)`
-- `Bool` returns -> `ailang_rt_identity_bool(...)`
+- `Int`/`Int64` returns -> `sec4_rt_identity_i64(...)`
+- `Bool` returns -> `sec4_rt_identity_bool(...)`
 
 ### Why it exists
 
@@ -20,7 +20,7 @@ This makes runtime ABI usage real in emitted code, not only linked as passive fi
 - On `MirTerminator::Return { value: Some(...) }`, emitter now generates:
   - `return <identity_fn>(<value>);` when the return type is supported.
   - plain `return <value>;` for unsupported/unknown types.
-- Runtime identity functions were already scaffolded in `ailang_runtime.h/.c`; this slice integrates call sites with those ABI functions.
+- Runtime identity functions were already scaffolded in `sec4_runtime.h/.c`; this slice integrates call sites with those ABI functions.
 
 ### Inputs, outputs, and constraints
 
@@ -37,9 +37,9 @@ This makes runtime ABI usage real in emitted code, not only linked as passive fi
 
 ### Example usage
 
-AILang input:
+Untrusted<T> input:
 
-```ailang
+```ut
 fn truthy(flag: Bool) -> Bool {
   flag
 }
@@ -48,7 +48,7 @@ fn truthy(flag: Bool) -> Bool {
 Generated C return (simplified):
 
 ```c
-return ailang_rt_identity_bool(flag);
+return sec4_rt_identity_bool(flag);
 ```
 
 ### Tradeoffs and next steps
@@ -59,7 +59,7 @@ return ailang_rt_identity_bool(flag);
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - existing return assertions now verify runtime identity calls
   - new test `c_backend_routes_bool_returns_through_runtime_identity`
 - Existing CLI clang-gated compile test remains green with runtime-linked return wrappers.

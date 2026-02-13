@@ -4,9 +4,9 @@ This chapter documents a Release Hardening (`M9`) slice that adds explicit lockf
 
 ## What it is
 
-Added `ailang build --locked` with deterministic lockfile validation:
-- `build` (default) writes deterministic `ailang.lock`,
-- `build --locked` refuses to proceed unless `ailang.lock` exists and matches current manifest inputs.
+Added `sec4 build --locked` with deterministic lockfile validation:
+- `build` (default) writes deterministic `sec4.lock`,
+- `build --locked` refuses to proceed unless `sec4.lock` exists and matches current manifest inputs.
 
 Lockfile contents now include a deterministic manifest fingerprint derived from package/build fields.
 
@@ -33,9 +33,9 @@ Lockfile contents now include a deterministic manifest fingerprint derived from 
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/manifest.rs`
-  - `compiler/ailang-core/src/lib.rs`
-  - `compiler/ailang-cli/src/main.rs`
+  - `compiler/sec4-core/src/manifest.rs`
+  - `compiler/sec4-core/src/lib.rs`
+  - `compiler/sec4-cli/src/main.rs`
 - Outputs:
   - deterministic lockfile body with manifest fingerprint,
   - CLI locked-mode control path with explicit diagnostics.
@@ -46,7 +46,7 @@ Lockfile contents now include a deterministic manifest fingerprint derived from 
 ## Failure modes and diagnostics
 
 - `M0202`: lockfile missing/unreadable in locked mode.
-  - note includes regeneration guidance (`ailang build`).
+  - note includes regeneration guidance (`sec4 build`).
 - `M0203`: lockfile stale vs current manifest/build entry.
   - note points to non-locked rebuild for refresh.
 
@@ -55,16 +55,16 @@ Lockfile contents now include a deterministic manifest fingerprint derived from 
 Generate/refresh lockfile:
 
 ```bash
-ailang build --path examples/hello
+sec4 build --path examples/hello
 ```
 
 Verify lockfile in CI:
 
 ```bash
-ailang build --path examples/hello --locked
+sec4 build --path examples/hello --locked
 ```
 
-If `ailang.toml` changes without lock refresh, locked mode fails with `M0203`.
+If `sec4.toml` changes without lock refresh, locked mode fails with `M0203`.
 
 ## Tradeoffs and next steps
 

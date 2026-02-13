@@ -25,14 +25,14 @@ In semantic call enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_sql_q_template_argument_type.ai`
+    - `invalid_sql_q_template_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - CLI/C backend integration fixture alignment:
-    - `compiler/ailang-cli/tests/json_output.rs`
-    - `compiler/ailang-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
 - Outputs:
   - compile-time rejection of malformed `sql.q` template arguments,
   - stable schema-tagged diagnostics for tooling.
@@ -47,7 +47,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn buildQuery() -> SqlQuery {
   sql.q("SELECT 1", 2)
 }

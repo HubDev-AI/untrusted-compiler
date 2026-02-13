@@ -1,0 +1,4 @@
+error[E4001]: db sink context argument must be `Ctx`
+  --> invalid_db_exec_tx_context_argument_type.ut:2:13
+  note: found `Int`
+  note: use `db.execTx(ctx, tx, query)` for context-first `db.execTx` calls

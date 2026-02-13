@@ -1,11 +1,11 @@
-# 64 sec.audit Spec (Security Posture Report) v0
+# 64 sec4 audit Spec (Security Posture Report) v0
 
-`sec.audit` provides a deterministic security posture report for CI and human review.
+`sec4 audit` provides a deterministic security posture report for CI and human review.
 
 ## 1) Command and formats
 
 CLI:
-- `ailang sec audit [--format text|json] [--fail-on risk>=HIGH]`
+- `sec4 audit [--format text|json] [--fail-on risk>=HIGH]`
 
 Output:
 - `text`: posture summary + ranked findings
@@ -79,7 +79,7 @@ Each finding includes:
 - exception count above hygiene threshold
 
 ## 4) Data sources
-`sec.audit` uses:
+`sec4 audit` uses:
 1. policy file
 2. router bootstrap middleware usage
 3. compiler metadata (tags, effects, allowlist annotations)

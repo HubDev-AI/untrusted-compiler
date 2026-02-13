@@ -31,8 +31,8 @@ Adding source snippets and tag context makes failures easier to triage during lo
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/diagnostics.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-core/src/diagnostics.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - richer human-facing diagnostic text for non-JSON CLI mode,
   - regression tests for snippet + tag rendering behavior.
@@ -52,7 +52,7 @@ Before:
 
 ```text
 error[E4001]: req.query argument must be `String`
-  --> src/main.ai:2:24
+  --> src/main.ut:2:24
   note: found `Int`
 ```
 
@@ -60,7 +60,7 @@ After:
 
 ```text
 error[E4001]: req.query argument must be `String`
-  --> src/main.ai:2:24
+  --> src/main.ut:2:24
   tags: security, schema
     |
   2 |   let name = req.query(12);

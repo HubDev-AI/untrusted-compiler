@@ -28,7 +28,7 @@ The checks produce:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - HTTP route-related fixtures in core/CLI tests
 - Outputs:
   - stronger semantic diagnostics for invalid route registration
@@ -44,7 +44,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn health() effects { net } -> Int {
   res.text(200, "ok");
   0

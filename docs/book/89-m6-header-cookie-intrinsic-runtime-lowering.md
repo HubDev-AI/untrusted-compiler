@@ -11,8 +11,8 @@ C emission now rewrites:
 - `res.addCookie(...)`
 
 and underscore aliases to runtime symbols:
-- `ailang_rt_set_header(...)`
-- `ailang_rt_set_cookie(...)`
+- `sec4_rt_set_header(...)`
+- `sec4_rt_set_cookie(...)`
 
 Runtime ABI now includes stub declarations/definitions for both functions.
 
@@ -23,13 +23,13 @@ Typed header/cookie APIs are core to the security model. This slice keeps backen
 ### How it works internally
 
 - Added rewrite rules in `lower_c_expr(...)` for dotted and underscore forms.
-- Added runtime stubs in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
+- Added runtime stubs in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
 - Existing expression rewrite flow applies these mappings across emitted statements/returns/branches.
 
 ### Inputs, outputs, and constraints
 
 - Input: MIR expression text with supported header/cookie intrinsic spellings.
-- Output: C-valid runtime calls (`ailang_rt_set_header`, `ailang_rt_set_cookie`).
+- Output: C-valid runtime calls (`sec4_rt_set_header`, `sec4_rt_set_cookie`).
 - Constraints:
   - stubs currently return placeholder `int64_t` values.
   - this is compile-path scaffolding; not full HTTP header/cookie semantics.
@@ -41,7 +41,7 @@ Typed header/cookie APIs are core to the security model. This slice keeps backen
 
 ### Example usage
 
-```ailang
+```ut
 fn configure() effects { net } -> Int {
   res.setHeader(1, 2);
   res.addCookie(1);
@@ -57,7 +57,7 @@ fn configure() effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_header_and_cookie_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_header_cookie_intrinsics_when_clang_available`

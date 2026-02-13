@@ -1,6 +1,6 @@
 # runtime/
 
-AILang runtime components live here.
+Untrusted<T> runtime components live here.
 
 M0 status:
 - Runtime ABI is not implemented yet.

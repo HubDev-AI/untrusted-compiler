@@ -5,7 +5,7 @@ This chapter documents extending code-action auto-edits to untrusted-flow diagno
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `E1002` quick-fix actions can now emit a concrete edit when source/range text is available.
@@ -40,7 +40,7 @@ Security-first editor UX should reduce repetitive manual fixes. Adding validate-
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - `E1002` code-action on open document emits `newText = "validate(input)?"` for selected range.
 
 ## Tradeoffs and next steps

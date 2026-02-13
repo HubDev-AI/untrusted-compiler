@@ -4,7 +4,7 @@ CORS is a first-class attack surface for web backends and must be explicit, type
 
 ## 1) Typed CORS config
 
-```ailang
+```ut
 type CorsConfig = {
   allowedOrigins: CorsOrigins
   allowedMethods: List<HttpMethod>
@@ -24,7 +24,7 @@ type Origin = opaque
 
 Origin gate:
 
-```ailang
+```ut
 module cors {
   fn origin(u: Untrusted<String>) -> Result<Origin, ValidationError>
 }
@@ -32,7 +32,7 @@ module cors {
 
 ## 2) Middleware contract
 
-```ailang
+```ut
 module cors {
   fn withCors(r: Router, cfg: CorsConfig) -> Router
 }

@@ -1,0 +1,9 @@
+error[E4001]: res.setHeader name must be `HeaderName`
+  --> invalid_set_header_requires_typed_args.ut:2:17
+  note: found `Int`
+  note: construct name with `headers.name(...)`
+
+error[E4001]: res.setHeader value must be `HeaderValue`
+  --> invalid_set_header_requires_typed_args.ut:2:20
+  note: found `Int`
+  note: construct value with `headers.value(...)`

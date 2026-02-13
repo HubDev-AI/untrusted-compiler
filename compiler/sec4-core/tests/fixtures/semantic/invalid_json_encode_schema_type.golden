@@ -1,0 +1,4 @@
+error[E4004]: json response schema argument is invalid
+  --> invalid_json_encode_schema_type.ut:2:17
+  note: found `Int`
+  note: schema argument should be a schema symbol/descriptor, not numeric/boolean/untrusted/secret data

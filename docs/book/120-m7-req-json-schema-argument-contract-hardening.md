@@ -28,8 +28,8 @@ Diagnostics for this rule are tagged with `security` and `schema` for tooling/LS
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture `invalid_req_json_schema_arg_type.ai`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture `invalid_req_json_schema_arg_type.ut`
   - diagnostic tag tests
 - Outputs:
   - compile-time rejection of invalid schema gate arguments
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn createUser() effects { net } -> Int {
   req.json("CreateUserRequest");
   0

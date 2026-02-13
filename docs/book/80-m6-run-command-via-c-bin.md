@@ -1,9 +1,9 @@
 # 80 M6 Slice: `run` Command via C Backend
 
-This chapter documents the next M6 vertical slice: wiring `ailang run` to the C backend pipeline.
+This chapter documents the next M6 vertical slice: wiring `sec4 run` to the C backend pipeline.
 
 ## Scope delivered
-- `ailang run --path <project>` now:
+- `sec4 run --path <project>` now:
   1. builds through `--emit c-bin` pipeline,
   2. executes the compiled binary from `build/<package-name>`.
 - Added integration coverage for `run` execution (clang-gated).
@@ -14,7 +14,7 @@ This chapter documents the next M6 vertical slice: wiring `ailang run` to the C 
 - Non-zero binary exit status is propagated as CLI failure.
 
 ## Why this matters
-- Establishes first practical end-to-end execution path for AILang projects.
+- Establishes first practical end-to-end execution path for Untrusted<T> projects.
 - Confirms MIR + C emission + clang pipeline can power the user-facing `run` flow.
 - Makes runtime iteration possible before full runtime ABI/intrinsic coverage lands.
 

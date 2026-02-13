@@ -3,34 +3,6 @@
 version = 4
 
 [[package]]
-name = "ailang"
-version = "0.1.0"
-dependencies = [
- "ailang-core",
- "clap",
- "serde_json",
-]
-
-[[package]]
-name = "ailang-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "ailang-language-server"
-version = "0.1.0"
-dependencies = [
- "ailang-core",
- "serde_json",
- "url",
-]
-
-[[package]]
 name = "anstream"
 version = "0.6.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -337,6 +309,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21b2ebcf727b7760c461f091f9f0f539b77b8e87f2fd88131e7f1b433b3cece4"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "sec4"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "sec4-core",
+ "serde_json",
+]
+
+[[package]]
+name = "sec4-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "sec4audit-language-server"
+version = "0.1.0"
+dependencies = [
+ "sec4-core",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

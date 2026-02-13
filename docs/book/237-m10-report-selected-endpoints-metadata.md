@@ -44,7 +44,7 @@ Filtered matrix runs and full runs can both produce valid reports. Downstream co
 
 ```json
 {
-  "impl": "ailang",
+  "impl": "sec4",
   "selectedEndpoints": ["ping", "decode"]
 }
 ```

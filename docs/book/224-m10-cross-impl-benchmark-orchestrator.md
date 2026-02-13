@@ -77,6 +77,6 @@ benchmark-suite/scripts/run_comparison_matrix.sh --impls node,go
 - Tradeoff:
   - orchestrator currently runs services sequentially on one port for deterministic local execution, not parallelized multi-host execution.
 - Next:
-  - add AILang service integration once runtime HTTP path reaches benchmark-ready behavior,
+  - add Untrusted<T> service integration once runtime HTTP path reaches benchmark-ready behavior,
   - add optional C floor comparator integration,
   - support configurable endpoint sets and alternative load profiles.

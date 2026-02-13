@@ -6,7 +6,7 @@ This chapter documents an M7 slice that moves `examples/hello-api` from placehol
 
 Implemented two linked changes:
 - Semantic analyzer now accepts declared function symbols as value expressions (for example passing `health` as a route handler argument).
-- `examples/hello-api/src/main.ai` now registers:
+- `examples/hello-api/src/main.ut` now registers:
   - `GET /health` -> `health`
   - `POST /users` -> `createUser`
   and composes middleware in a policy-shaped chain.
@@ -27,8 +27,8 @@ This keeps strict unknown-name diagnostics while enabling handler-style wiring A
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - `examples/hello-api/src/main.ai`
+  - `compiler/sec4-core/src/semantic.rs`
+  - `examples/hello-api/src/main.ut`
   - integration + semantic fixtures
 - Outputs:
   - `hello-api` generated C now contains explicit route paths and handler symbols.
@@ -40,12 +40,12 @@ This keeps strict unknown-name diagnostics while enabling handler-style wiring A
 
 - Unknown non-function identifiers still raise `N3003`.
 - Regressions in handler-symbol acceptance are covered by:
-  - semantic golden fixture `valid_function_symbol_handler_reference.ai`
+  - semantic golden fixture `valid_function_symbol_handler_reference.ut`
   - CLI c-bin integration for `hello-api`.
 
 ## Example usage
 
-```ailang
+```ut
 fn health() effects { net } -> Int {
   res.text(200, "ok");
   0

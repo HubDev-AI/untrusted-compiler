@@ -1,11 +1,11 @@
 # 254 M11 Slice: Implementation Provider
 
-This chapter documents adding `textDocument/implementation` support to `ailang-language-server`.
+This chapter documents adding `textDocument/implementation` support to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises `implementationProvider: true`.
@@ -42,7 +42,7 @@ The M11 tooling plan requires baseline navigation parity across common editor ac
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - initialize capability advertisement for implementation provider.
 - implementation lookup resolving a call identifier to declaration location.
 

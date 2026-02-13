@@ -30,11 +30,11 @@ In `enforce_db_query_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_db_query_argument_type.ai`
+    - `invalid_db_query_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - semantic fixture alignment updates for capability/alias call paths so they continue to isolate capability assertions using typed `SqlQuery` values.
 - Outputs:
   - compile-time rejection of non-`SqlQuery` DB sink query values,
@@ -50,7 +50,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn writeUser(db: DbCap, query: SqlQuery) effects { db.write } -> Int {
   db.exec(db, query);
   0

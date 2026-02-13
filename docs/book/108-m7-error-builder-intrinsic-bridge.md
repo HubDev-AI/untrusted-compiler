@@ -20,17 +20,17 @@ Added intrinsic support for:
 - `err.withCause` / `err_with_cause`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_err_validation`
-- `ailang_rt_err_auth`
-- `ailang_rt_err_not_found`
-- `ailang_rt_err_conflict`
-- `ailang_rt_err_rate_limit`
-- `ailang_rt_err_internal`
-- `ailang_rt_err_with_path`
-- `ailang_rt_err_with_detail`
-- `ailang_rt_err_with_limit`
-- `ailang_rt_err_with_dependency`
-- `ailang_rt_err_with_cause`
+- `sec4_rt_err_validation`
+- `sec4_rt_err_auth`
+- `sec4_rt_err_not_found`
+- `sec4_rt_err_conflict`
+- `sec4_rt_err_rate_limit`
+- `sec4_rt_err_internal`
+- `sec4_rt_err_with_path`
+- `sec4_rt_err_with_detail`
+- `sec4_rt_err_with_limit`
+- `sec4_rt_err_with_dependency`
+- `sec4_rt_err_with_cause`
 
 ### Why it exists
 
@@ -40,14 +40,14 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 
 - Added semantic intrinsic entries in `semantic.rs` for all `err.*` helpers.
 - Each helper now returns `StdError` in bootstrap typing mode.
-- Added C rewrite mappings in `c_backend.rs` from `err.*`/`err_*` calls to `ailang_rt_err_*` symbols.
-- Added runtime declarations/definitions in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
+- Added C rewrite mappings in `c_backend.rs` from `err.*`/`err_*` calls to `sec4_rt_err_*` symbols.
+- Added runtime declarations/definitions in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
 - Added C backend and CLI integration tests to assert rewriting and runnable `c-bin` output.
 
 ### Inputs, outputs, and constraints
 
 - Input: error-helper calls in bootstrap projects.
-- Output: generated C that links against runtime `ailang_rt_err_*` symbols.
+- Output: generated C that links against runtime `sec4_rt_err_*` symbols.
 - Constraints:
   - runtime implementations are still stubs in M7 bootstrap mode.
   - this slice validates compile/link coverage; full error-envelope behavior stays for behavior-level runtime slices.
@@ -60,7 +60,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 
 ### Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let base = err.validation("VALIDATION.BAD_REQUEST", "invalid input");
   let internal = err.internal("internal");
@@ -77,8 +77,8 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_error_builder_intrinsics_to_runtime_symbols`
-  - runtime ABI assertions include all `ailang_rt_err_*` symbols
-- `compiler/ailang-cli/tests/json_output.rs`
+  - runtime ABI assertions include all `sec4_rt_err_*` symbols
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_error_builder_intrinsics_when_clang_available`

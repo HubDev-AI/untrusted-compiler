@@ -5,7 +5,7 @@ This chapter documents extending LSP references/rename from single-document beha
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - `textDocument/references` now aggregates identifier hits across all currently opened LSP documents.
@@ -54,7 +54,7 @@ M11 exit criteria call out deterministic references/rename behavior on multi-fil
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - references request collecting hits from two open documents.
 - rename request returning edits for two open documents (declaration + call sites).
 

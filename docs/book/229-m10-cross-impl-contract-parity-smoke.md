@@ -12,7 +12,7 @@ Updated:
 - `benchmark-suite/Makefile` (`test-services` target, script-test wiring)
 - `benchmark-suite/README.md`
 
-The parity script runs smoke checks across selected implementations (`ailang,node,go,rust,c`) to ensure endpoint behavior remains aligned.
+The parity script runs smoke checks across selected implementations (`sec4,node,go,rust,c`) to ensure endpoint behavior remains aligned.
 
 ## Why it exists
 
@@ -51,7 +51,7 @@ make -C benchmark-suite test-services
 Dry run:
 
 ```bash
-benchmark-suite/scripts/test_service_contracts.sh --dry-run --impls ailang,node
+benchmark-suite/scripts/test_service_contracts.sh --dry-run --impls sec4,node
 ```
 
 ## Tradeoffs and next steps

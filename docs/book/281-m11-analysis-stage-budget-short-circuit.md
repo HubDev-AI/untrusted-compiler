@@ -5,7 +5,7 @@ This chapter documents additional preemptive cancellation in the diagnostics ana
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - diagnostics path now short-circuits immediately when analysis budget is zero.
@@ -39,7 +39,7 @@ Request/semantic traversal cancellation was already in place, but diagnostics co
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `diagnostics_zero_budget_short_circuits_before_parse_errors`:
   - verifies zero-budget mode returns only `I9001` and skips parser diagnostics work.
 

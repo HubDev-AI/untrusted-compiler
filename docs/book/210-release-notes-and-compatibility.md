@@ -5,30 +5,30 @@ This chapter captures the current v0.1-alpha release posture after M9 hardening 
 ## Release highlights
 
 - Security-first compiler checks for typed sinks, trust boundaries, secrets, effects, capabilities, and policy-driven restrictions.
-- Deterministic security posture reporting via `ailang sec audit` and `security_map` metadata.
+- Deterministic security posture reporting via `sec4 audit` and `security_map` metadata.
 - Deterministic lock strategy:
-  - `ailang build` writes deterministic `ailang.lock`,
-  - `ailang build --locked` validates lock freshness.
+  - `sec4 build` writes deterministic `sec4.lock`,
+  - `sec4 build --locked` validates lock freshness.
 - Deterministic build provenance artifacts:
   - `build/build_metadata.json`,
   - optional `build/sbom.json` via `--sbom`.
 - Canonical policy profiles committed as runnable artifacts:
-  - `policies/default-secure-prod.ailang.policy`,
-  - `policies/permissive-dev.ailang.policy`.
+  - `policies/default-secure-prod.sec4.policy`,
+  - `policies/permissive-dev.sec4.policy`.
 
 ## Compatibility contract
 
 ## CLI compatibility (alpha)
 
 Stable in v0.1-alpha:
-- `check`, `build`, `run`, `sec audit`
+- `check`, `build`, `run`, `audit`
 - `build --emit mir|mir-json|c|c-bin`
 - `build --locked`
 - `build --sbom`
 
 Alpha-stable behavior expectations:
 - deterministic diagnostic codes,
-- deterministic `sec.audit` finding IDs/severities for same policy+inputs,
+- deterministic `sec4 audit` finding IDs/severities for same policy+inputs,
 - deterministic `build_metadata.json` and `sbom.json` for same inputs.
 
 May still evolve within alpha:
@@ -41,7 +41,7 @@ Stable artifact names:
 - `build/security_map.json`
 - `build/build_metadata.json`
 - `build/sbom.json` (when `--sbom` enabled)
-- `ailang.lock`
+- `sec4.lock`
 
 Versioned schemas:
 - `AuditReport.version = "0.1"`
@@ -60,9 +60,9 @@ Canonical profile files in `policies/` are the compatibility reference for curre
 
 Required before tagging an alpha candidate:
 1. `cargo test -q` passes in clean workspace.
-2. `ailang build --locked` passes on sample projects.
-3. `ailang build --sbom` produces deterministic SBOM output.
-4. `ailang sec audit --format json` passes for `default-secure-prod` profile at required threshold.
+2. `sec4 build --locked` passes on sample projects.
+3. `sec4 build --sbom` produces deterministic SBOM output.
+4. `sec4 audit --format json` passes for `default-secure-prod` profile at required threshold.
 5. `build_metadata.json` and `sbom.json` are captured for release artifacts.
 6. Known-limits and roadmap chapters are reviewed with release notes.
 

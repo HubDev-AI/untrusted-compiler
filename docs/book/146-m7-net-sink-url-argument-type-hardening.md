@@ -28,12 +28,12 @@ In `enforce_net_sink_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_net_public_url_argument_type.ai`
-    - `invalid_net_internal_url_argument_type.ai`
+    - `invalid_net_public_url_argument_type.ut`
+    - `invalid_net_internal_url_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - semantic fixture alignment updates replacing raw URL literals with typed URL parameters in valid capability fixtures.
 - Outputs:
   - compile-time rejection of non-typed net sink URL values,
@@ -51,7 +51,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn fetch(ctx: Ctx, net: NetCap, url: PublicUrl) effects { net } -> Int {
   httpClient.get(ctx, net, url);
   0

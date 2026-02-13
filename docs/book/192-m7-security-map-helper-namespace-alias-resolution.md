@@ -14,7 +14,7 @@ Extended `security_map` namespace canonicalization so forwarded aliases for thes
 
 `security_map` already tagged direct calls like `sql.q(...)` or `json.encode(...)`, but forwarded namespace values could lose canonical names and tags:
 
-```ailang
+```ut
 fn sqlNs() { sql }
 let s = sqlNs();
 s.q("SELECT 1", 1); // previously untagged
@@ -35,8 +35,8 @@ That made audit metadata incomplete under normal helper indirection patterns.
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/security_map.rs`
-  - `compiler/ailang-core/tests/security_map.rs`
+  - `compiler/sec4-core/src/security_map.rs`
+  - `compiler/sec4-core/tests/security_map.rs`
 - Output:
   - stable tagging and arg-role metadata for forwarded helper namespace calls.
 - Constraint:
@@ -48,7 +48,7 @@ That made audit metadata incomplete under normal helper indirection patterns.
 
 ## Example usage
 
-```ailang
+```ut
 fn jsonNs() { json }
 
 fn encode(v: Int) {

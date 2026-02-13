@@ -1,9 +1,0 @@
-error[E4001]: err.validation code argument must be `String`
-  --> invalid_err_validation_argument_type.ai:2:18
-  note: found `Int`
-  note: use stable error code strings
-
-error[E4001]: err.validation message argument must be `String`
-  --> invalid_err_validation_argument_type.ai:2:21
-  note: found `Int`
-  note: use safe validation message strings

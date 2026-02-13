@@ -22,9 +22,9 @@ In binary comparison analysis (`ExprKind::Binary`):
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture: `invalid_secret_equality_comparison.ai`
-  - tag test coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture: `invalid_secret_equality_comparison.ut`
+  - tag test coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection for direct secret equality checks.
 - Constraint:
@@ -37,7 +37,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn bad(a: Secret<String>, b: Secret<String>) -> Bool {
   a == b
 }

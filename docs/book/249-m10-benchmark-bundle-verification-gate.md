@@ -50,7 +50,7 @@ As M10 outputs grew, it became easy to miss one artifact and still think a run w
 ## Example usage
 
 ```bash
-make -C benchmark-suite verify-bundle IMPLS=ailang,node,go,rust ENDPOINTS=ping,decode,users-post,users-get
+make -C benchmark-suite verify-bundle IMPLS=sec4,node,go,rust ENDPOINTS=ping,decode,users-post,users-get
 ```
 
 ## Tradeoffs and next steps

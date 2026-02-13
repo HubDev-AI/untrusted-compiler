@@ -1,3 +1,0 @@
-error[E4001]: trust gate expects exactly one input argument
-  --> invalid_validate_email_extra_args.ai:2:3
-  note: `validate.email` call shape is `validate.email(input)`

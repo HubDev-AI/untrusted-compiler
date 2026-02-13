@@ -1,4 +1,0 @@
-error[E4001]: res.html argument must be `HtmlSafe`
-  --> invalid_res_html_requires_htmlsafe.ai:2:12
-  note: found `Int`
-  note: use `sanitize.html(untrusted)` or another HtmlSafe-producing gate

@@ -10,17 +10,17 @@ Added intrinsic support for:
 - `cors.origin` / `cors_origin`
 
 It lowers to runtime ABI stub:
-- `ailang_rt_cors_origin`
+- `sec4_rt_cors_origin`
 
 ### Why it exists
 
-The CORS spec in AILang docs includes typed origin validation. Without bridge support, CORS gate usage could not be represented end-to-end in `c-bin` flows.
+The CORS spec in Untrusted<T> docs includes typed origin validation. Without bridge support, CORS gate usage could not be represented end-to-end in `c-bin` flows.
 
 ### How it works internally
 
 - Added semantic intrinsic entry for `cors.origin` returning `Origin`.
 - Classified `cors.origin` as an untrusted-string gate so semantic gate checks require `Untrusted<String>` input.
-- Added C backend rewrite mapping to `ailang_rt_cors_origin`.
+- Added C backend rewrite mapping to `sec4_rt_cors_origin`.
 - Added runtime C declaration/definition in `runtime/c/`.
 - Added security-map tags so this call is visible as `gate.cors.origin` in security metadata.
 - Added `c-bin` integration coverage and exercised usage in `examples/hello-api`.
@@ -40,7 +40,7 @@ The CORS spec in AILang docs includes typed origin validation. Without bridge su
 
 ### Example usage
 
-```ailang
+```ut
 fn main() effects { net } -> Int {
   let origin = req.header(1, 2);
   cors.origin(origin);
@@ -55,10 +55,10 @@ fn main() effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_cors_origin_intrinsic_to_runtime_symbol`
-  - runtime ABI symbol assertions now include `ailang_rt_cors_origin`
-- `compiler/ailang-cli/tests/json_output.rs`
+  - runtime ABI symbol assertions now include `sec4_rt_cors_origin`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_cors_origin_intrinsic_when_clang_available`
-- `compiler/ailang-core/src/security_map.rs`
+- `compiler/sec4-core/src/security_map.rs`
   - added gate tag mapping for `cors.origin` / `cors_origin`

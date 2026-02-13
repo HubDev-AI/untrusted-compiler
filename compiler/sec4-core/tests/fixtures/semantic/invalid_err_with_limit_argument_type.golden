@@ -1,0 +1,4 @@
+error[E4001]: err.withLimit name argument must be `String`
+  --> invalid_err_with_limit_argument_type.ut:3:23
+  note: found `Int`
+  note: use stable string names for limit descriptors

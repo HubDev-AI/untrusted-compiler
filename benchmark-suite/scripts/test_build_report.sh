@@ -6,15 +6,15 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/summaries"
-cp "$root_dir/scripts/testdata/sample-summary-ping.json" "$tmp/summaries/ailang-ping.json"
-cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/ailang-decode.json"
+cp "$root_dir/scripts/testdata/sample-summary-ping.json" "$tmp/summaries/sec4-ping.json"
+cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/sec4-decode.json"
 cp "$root_dir/scripts/testdata/sample-env.json" "$tmp/env.json"
-cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/ailang-users-post.json"
+cp "$root_dir/scripts/testdata/sample-summary-decode.json" "$tmp/summaries/sec4-users-post.json"
 
 out="$tmp/report.json"
-"$root_dir/scripts/build_report.sh" ailang "$tmp" "$out" >/dev/null
+"$root_dir/scripts/build_report.sh" sec4 "$tmp" "$out" >/dev/null
 
-if ! grep -q '"impl": "ailang"' "$out"; then
+if ! grep -q '"impl": "sec4"' "$out"; then
   echo "missing impl in report" >&2
   exit 1
 fi
@@ -28,7 +28,7 @@ if ! grep -q '"cpu": "test-cpu"' "$out"; then
 fi
 
 filtered_out="$tmp/report-filtered.json"
-"$root_dir/scripts/build_report.sh" ailang "$tmp" "$filtered_out" "" "ping" >/dev/null
+"$root_dir/scripts/build_report.sh" sec4 "$tmp" "$filtered_out" "" "ping" >/dev/null
 if ! grep -q '"endpoint": "ping"' "$filtered_out"; then
   echo "missing ping summary in filtered report" >&2
   exit 1

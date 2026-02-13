@@ -1,8 +1,8 @@
 # 71 Benchmarking and Comparison Spec (Post-Stability)
 
-This chapter defines how AILang will be benchmarked once the language/runtime is stable and working end-to-end.
+This chapter defines how Untrusted<T> will be benchmarked once the language/runtime is stable and working end-to-end.
 
-The goal is not to claim "compiler speed" (v0 uses a C + clang backend). The goal is to prove service-level outcomes that match AILang's design:
+The goal is not to claim "compiler speed" (v0 uses a C + clang backend). The goal is to prove service-level outcomes that match Untrusted<T>'s design:
 
 - secure defaults with low overhead
 - predictable performance under load
@@ -23,7 +23,7 @@ Core comparison set:
 1. Go (`net/http` + one common router, e.g. `chi` or `fiber`)
 2. Node.js TypeScript (Fastify baseline)
 3. Rust (`axum` baseline)
-4. AILang (C + clang backend)
+4. Untrusted<T> (C + clang backend)
 
 Optional:
 
@@ -65,7 +65,7 @@ Metrics:
 
 Purpose:
 
-- validate AILang schema-gate design in realistic traffic
+- validate Untrusted<T> schema-gate design in realistic traffic
 
 ### Layer C: Real backend workload
 
@@ -138,9 +138,9 @@ For all implementations:
 - fixed pool size (initial baseline: `32`)
 - fixed statement timeout (initial baseline: `2s`)
 
-## 8. AILang differentiator tracks
+## 8. Untrusted<T> differentiator tracks
 
-In addition to pure latency/throughput, benchmark these AILang-specific claims:
+In addition to pure latency/throughput, benchmark these Untrusted<T>-specific claims:
 
 ### 8.1 Security defaults overhead
 
@@ -171,7 +171,7 @@ Each run must write:
 - raw load output
 - machine-readable summary (`summary.json`)
 - environment metadata (`env.json`)
-- policy/audit metadata for AILang (`sec.audit` JSON + policy hash)
+- policy/audit metadata for Untrusted<T> (`sec4 audit` JSON + policy hash)
 
 Recommended summary fields:
 
@@ -191,7 +191,7 @@ benchmark-suite/
     payloads/
     db/
   services/
-    ailang/
+    sec4/
     go/
     node/
     rust/
@@ -219,6 +219,6 @@ These are starter targets and must be calibrated on actual benchmark hardware:
 
 Public positioning line:
 
-> AILang combines a security-typed backend frontend with a C/clang runtime path: high-level safety constraints with low-level performance characteristics.
+> Untrusted<T> combines a security-typed backend frontend with a C/clang runtime path: high-level safety constraints with low-level performance characteristics.
 
 This framing is valid only if measurements are reproducible and fair by the rules above.

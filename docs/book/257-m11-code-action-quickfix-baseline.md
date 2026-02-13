@@ -1,11 +1,11 @@
 # 257 M11 Slice: Code-Action Quickfix Baseline
 
-This chapter documents adding baseline `textDocument/codeAction` quick-fix support to `ailang-language-server`.
+This chapter documents adding baseline `textDocument/codeAction` quick-fix support to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises `codeActionProvider` with `quickfix` support.
@@ -44,7 +44,7 @@ M11 aims for security-first editor UX, not just passive diagnostics. Quick-fix a
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - initialize capability advertisement for `quickfix` code actions.
 - code-action request for `E1002` yields validate/sanitize quick-fix action.
 

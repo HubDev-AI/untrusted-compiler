@@ -30,7 +30,7 @@ Checks are intentionally scoped to canonical dotted APIs in this slice, preservi
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures and CLI c-bin integration fixtures
 - Outputs:
   - typed middleware bootstrap chaining in semantic layer
@@ -47,7 +47,7 @@ Representative diagnostics:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let headers = sec.defaultHeaders();
   let corsCfg = cors.fromPolicy();

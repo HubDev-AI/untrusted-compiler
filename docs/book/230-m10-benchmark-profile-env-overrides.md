@@ -52,7 +52,7 @@ Resolution order for target RPS:
 Default profile:
 
 ```bash
-benchmark-suite/scripts/run_profile.sh ailang ping
+benchmark-suite/scripts/run_profile.sh sec4 ping
 ```
 
 Fast local profile:
@@ -62,7 +62,7 @@ BENCH_THREADS=2 \
 BENCH_CONNECTIONS=16 \
 BENCH_DURATION=7s \
 BENCH_TARGET=1234 \
-benchmark-suite/scripts/run_profile.sh --dry-run ailang decode
+benchmark-suite/scripts/run_profile.sh --dry-run sec4 decode
 ```
 
 ## Tradeoffs and next steps

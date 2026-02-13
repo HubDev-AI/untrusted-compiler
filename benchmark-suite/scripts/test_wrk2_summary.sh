@@ -6,12 +6,12 @@ out="${root_dir}/results/summaries/test-summary.json"
 
 "${root_dir}/scripts/wrk2_summary.sh" \
   "${root_dir}/scripts/testdata/wrk2_sample.txt" \
-  "ailang" \
+  "sec4" \
   "ping" \
   "10000" \
   "$out" >/dev/null
 
-if ! grep -q '"impl": "ailang"' "$out"; then
+if ! grep -q '"impl": "sec4"' "$out"; then
   echo "missing impl in summary" >&2
   exit 1
 fi

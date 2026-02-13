@@ -27,10 +27,10 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for missing-arg and wrong-type `req.body` calls
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - req/res CLI `c-bin` integration fixture in `compiler/ailang-cli/tests/json_output.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - req/res CLI `c-bin` integration fixture in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed `req.body(...)` calls,
   - integration fixture now uses explicit `ctx`/`req` parameters.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn decode(ctx: Ctx, req: Request, schema: Schema<Int>) effects { net } -> Int {
   let raw = req.body(ctx, req);
   raw;

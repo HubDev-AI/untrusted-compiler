@@ -1,6 +1,6 @@
 # 40 Name Resolution and Symbols
 
-This chapter documents the M2 name resolution pass in `compiler/ailang-core/src/semantic.rs`.
+This chapter documents the M2 name resolution pass in `compiler/sec4-core/src/semantic.rs`.
 
 ## What it is
 
@@ -36,7 +36,7 @@ Parsing alone cannot detect unknown identifiers, unknown types, or duplicate dec
 ## Example usage
 
 ```bash
-cargo run -p ailang -- check --path examples/hello
+cargo run -p sec4 -- check --path examples/hello
 ```
 
 Semantic diagnostics now run as part of `check` and `build`.

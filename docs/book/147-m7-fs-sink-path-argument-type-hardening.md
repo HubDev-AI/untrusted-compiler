@@ -28,12 +28,12 @@ In `enforce_fs_sink_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_fs_read_path_argument_type.ai`
-    - `invalid_fs_write_path_argument_type.ai`
+    - `invalid_fs_read_path_argument_type.ut`
+    - `invalid_fs_write_path_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - semantic fixture alignment updates replacing raw path literals with typed `PathSafe` parameters in valid capability fixtures.
 - Outputs:
   - compile-time rejection of non-`PathSafe` FS path values,
@@ -51,7 +51,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn store(ctx: Ctx, fs: FsCap, path: PathSafe) effects { fs.write } -> Int {
   fs.write(ctx, fs, path, "payload");
   0

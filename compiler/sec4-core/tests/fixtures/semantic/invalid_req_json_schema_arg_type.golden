@@ -1,0 +1,4 @@
+error[E4001]: schema gate argument is invalid
+  --> invalid_req_json_schema_arg_type.ut:2:12
+  note: found `Int`
+  note: `req.json` expects a schema symbol/descriptor, not numeric/boolean/untrusted/secret data

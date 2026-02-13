@@ -12,9 +12,9 @@ C emission now rewrites:
 - `httpClient.get(...)` / `httpClient.getInternal(...)`
 
 and underscore aliases to runtime symbols:
-- `ailang_rt_db_exec`, `ailang_rt_db_query_one`
-- `ailang_rt_fs_read`, `ailang_rt_fs_write`
-- `ailang_rt_http_get`, `ailang_rt_http_get_internal`
+- `sec4_rt_db_exec`, `sec4_rt_db_query_one`
+- `sec4_rt_fs_read`, `sec4_rt_fs_write`
+- `sec4_rt_http_get`, `sec4_rt_http_get_internal`
 
 Runtime ABI now includes stub declarations/definitions for each symbol.
 
@@ -25,7 +25,7 @@ These APIs are central to backend work. This slice extends the C backend’s int
 ### How it works internally
 
 - Added string-based replacements in `lower_c_expr(...)` for dotted and underscore intrinsic names.
-- Added matching runtime stubs under `runtime/c/ailang_runtime.h/.c`.
+- Added matching runtime stubs under `runtime/c/sec4_runtime.h/.c`.
 - Existing expression rewrite path automatically applies lowering across statement and return contexts.
 
 ### Inputs, outputs, and constraints
@@ -43,7 +43,7 @@ These APIs are central to backend work. This slice extends the C backend’s int
 
 ### Example usage
 
-```ailang
+```ut
 fn ioOps(
   db: DbCap,
   fs: FsCap,
@@ -69,7 +69,7 @@ fn ioOps(
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_db_fs_and_net_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_db_fs_net_intrinsics_when_clang_available`

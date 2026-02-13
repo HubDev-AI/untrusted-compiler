@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
-out="$("${root_dir}/scripts/run_profile.sh" --dry-run ailang ping 2>&1)"
+out="$("${root_dir}/scripts/run_profile.sh" --dry-run sec4 ping 2>&1)"
 
 if ! grep -q 'endpoint=ping' <<<"$out"; then
   echo "run_profile dry-run missing endpoint output" >&2
@@ -17,7 +17,7 @@ if ! grep -q 'command: wrk2 --latency' <<<"$out"; then
   exit 1
 fi
 
-override_out="$(BENCH_THREADS=2 BENCH_CONNECTIONS=16 BENCH_DURATION=7s BENCH_TARGET=1234 "${root_dir}/scripts/run_profile.sh" --dry-run ailang decode 2>&1)"
+override_out="$(BENCH_THREADS=2 BENCH_CONNECTIONS=16 BENCH_DURATION=7s BENCH_TARGET=1234 "${root_dir}/scripts/run_profile.sh" --dry-run sec4 decode 2>&1)"
 if ! grep -q 'targetRps=1234' <<<"$override_out"; then
   echo "run_profile override missing targetRps output" >&2
   exit 1
@@ -27,7 +27,7 @@ if ! grep -q -- '-t2 -c16 -d7s -R1234' <<<"$override_out"; then
   exit 1
 fi
 
-users_get_out="$(BENCH_TARGET_USERS_GET=3456 "${root_dir}/scripts/run_profile.sh" --dry-run ailang users-get 2>&1)"
+users_get_out="$(BENCH_TARGET_USERS_GET=3456 "${root_dir}/scripts/run_profile.sh" --dry-run sec4 users-get 2>&1)"
 if ! grep -q 'endpoint=users-get' <<<"$users_get_out"; then
   echo "run_profile users-get dry-run missing endpoint output" >&2
   exit 1

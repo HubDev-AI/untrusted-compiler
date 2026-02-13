@@ -13,10 +13,10 @@ Added semantic recognition and C-runtime lowering for:
 - `auth.fromPolicy` / `auth_from_policy`
 
 They are lowered to runtime ABI stubs:
-- `ailang_rt_sec_default_headers`
-- `ailang_rt_cors_from_policy`
-- `ailang_rt_csrf_from_policy`
-- `ailang_rt_auth_from_policy`
+- `sec4_rt_sec_default_headers`
+- `sec4_rt_cors_from_policy`
+- `sec4_rt_csrf_from_policy`
+- `sec4_rt_auth_from_policy`
 
 ### Why it exists
 
@@ -26,12 +26,12 @@ The security-first router bootstrap spec uses policy-derived helpers as the cano
 
 - Extended semantic intrinsic registry in `semantic.rs` so policy-config helper names are known callable intrinsics.
 - Extended C expression intrinsic rewrite rules in `c_backend.rs` to map helper calls to runtime ABI symbols.
-- Added runtime C declarations/definitions in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
-- Updated `examples/hello-api/src/main.ai` to include these policy-config helper calls in the bootstrap flow.
+- Added runtime C declarations/definitions in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
+- Updated `examples/hello-api/src/main.ut` to include these policy-config helper calls in the bootstrap flow.
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code invoking policy-config helpers.
+- Input: Untrusted<T> code invoking policy-config helpers.
 - Output: generated C calling runtime helper stubs and successful `c-bin` compilation.
 - Constraints:
   - helper behavior is currently placeholder runtime stubs.
@@ -44,7 +44,7 @@ The security-first router bootstrap spec uses policy-derived helpers as the cano
 
 ### Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   sec.defaultHeaders();
   cors.fromPolicy();
@@ -65,7 +65,7 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_policy_config_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_policy_config_intrinsics_when_clang_available`

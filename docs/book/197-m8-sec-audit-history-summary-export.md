@@ -1,10 +1,10 @@
-# 197 M8 Slice: sec.audit History-Summary Export
+# 197 M8 Slice: sec4 audit History-Summary Export
 
 This chapter documents the M8 follow-up that persists history-window metrics to a JSON artifact.
 
 ## What it is
 
-Added `--write-history-summary <path>` to `ailang sec audit`.
+Added `--write-history-summary <path>` to `sec4 audit`.
 
 When combined with `--history-dir` and `--history-window`, the command now writes a JSON file containing the computed multi-run window summary (risk metrics + severity rollups/deltas).
 
@@ -25,8 +25,8 @@ History-window output on stderr is useful for humans, but CI/reporting pipelines
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
   - JSON summary artifact containing:
     - window/reports
@@ -48,10 +48,10 @@ History-window output on stderr is useful for humans, but CI/reporting pipelines
 ## Example usage
 
 ```bash
-ailang sec audit \
+sec4 audit \
   --path examples/hello \
   --format json \
-  --history-dir .ailang/audit-history \
+  --history-dir .sec4/audit-history \
   --history-window 10 \
   --write-history-summary artifacts/audit/history-window.json
 ```

@@ -1,0 +1,4 @@
+error[E4001]: err.withDetail error argument must be `StdError`
+  --> invalid_err_with_detail_error_argument_type.ut:2:18
+  note: found `Int`
+  note: use an error value created via `err.*` constructors

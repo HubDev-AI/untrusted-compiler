@@ -33,10 +33,10 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for invalid header constructor calls
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - header/cookie and gate `c-bin` integration fixtures in `compiler/ailang-cli/tests/json_output.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - header/cookie and gate `c-bin` integration fixtures in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of invalid `headers.name/value` call shapes,
   - integration fixtures updated to explicit string constructor arguments.
@@ -51,7 +51,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn configure() effects { net } -> Int {
   let name = headers.name("X-Test");
   let value = headers.value("ok");

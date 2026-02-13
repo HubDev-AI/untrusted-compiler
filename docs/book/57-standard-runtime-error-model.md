@@ -12,7 +12,7 @@ Every runtime error should be:
 
 ## 1) Canonical runtime error type
 
-```ailang
+```ut
 type ErrorCode = String
 
 type ErrorKind =
@@ -117,7 +117,7 @@ Examples:
 
 ## 5) Constructor API
 
-```ailang
+```ut
 module err {
   fn validation(code: String, message: String) -> StdError
   fn auth(code: String, message: String, status: Int) -> StdError
@@ -141,7 +141,7 @@ Typechecker rule:
 
 Recommended handler shape:
 
-```ailang
+```ut
 type HttpError = StdError
 type Handler = fn(Ctx, Request) -> Result<Response, HttpError>
 ```

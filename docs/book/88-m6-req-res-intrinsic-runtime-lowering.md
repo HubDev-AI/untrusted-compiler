@@ -12,9 +12,9 @@ C emission now rewrites these intrinsic calls:
 - `res.html(...)`
 
 and underscore aliases to runtime symbols:
-- `ailang_rt_req_json(...)`
-- `ailang_rt_res_json(...)`
-- `ailang_rt_res_html(...)`
+- `sec4_rt_req_json(...)`
+- `sec4_rt_res_json(...)`
+- `sec4_rt_res_html(...)`
 
 Runtime ABI now includes corresponding stub declarations/definitions.
 
@@ -25,7 +25,7 @@ As with other dotted intrinsics, direct `req.*`/`res.*` names are not valid C sy
 ### How it works internally
 
 - Extended `lower_c_expr(...)` replacements for `req.json`, `res.json`, and `res.html`.
-- Added runtime stubs in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
+- Added runtime stubs in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
 - Existing emission paths already route every expression through `lower_c_expr(...)`, so rewrites apply consistently in statements and return/branch contexts.
 
 ### Inputs, outputs, and constraints
@@ -44,7 +44,7 @@ As with other dotted intrinsics, direct `req.*`/`res.*` names are not valid C sy
 
 ### Example usage
 
-```ailang
+```ut
 fn decode(schema: Schema<Int>) effects { net } -> Int {
   req.json(schema);
   0
@@ -65,7 +65,7 @@ fn encode(schema: Schema<Int>) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_req_and_res_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_req_res_intrinsics_when_clang_available`

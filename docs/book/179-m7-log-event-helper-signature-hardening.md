@@ -29,12 +29,12 @@ The checks run in the same semantic enforcement pass as other stdlib helper cont
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixtures under `compiler/ailang-core/tests/fixtures/semantic/`
-  - diagnostic tag tests in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixtures under `compiler/sec4-core/tests/fixtures/semantic/`
+  - diagnostic tag tests in `compiler/sec4-core/tests/diagnostic_tags.rs`
   - log-builder integration fixtures in:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - malformed helper usage fails fast during semantic analysis.
   - `c-bin` log-builder integration continues to pass with typed helper arguments.
@@ -51,7 +51,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let event = log.event(1);
   let attr = log.attrRedacted("token");

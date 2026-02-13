@@ -5,7 +5,7 @@ This chapter documents additional test coverage for open-document import graph b
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - added direct tests for import-edge extraction and import-set replacement behavior:
@@ -38,7 +38,7 @@ Import-driven invalidation is correctness-critical. These tests lock in URI norm
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `extract_open_document_import_uris_resolves_relative_literals`
 - `update_open_document_import_edges_replaces_previous_import_set`
 

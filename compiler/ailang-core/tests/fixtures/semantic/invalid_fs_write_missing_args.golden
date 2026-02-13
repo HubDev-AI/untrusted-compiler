@@ -1,3 +1,0 @@
-error[E4001]: fs sink call has invalid argument shape
-  --> invalid_fs_write_missing_args.ai:2:3
-  note: use `fs.write(fsCap, path, value)` or `fs.write(ctx, fsCap, path, value)`

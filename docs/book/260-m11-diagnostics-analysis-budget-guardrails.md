@@ -1,19 +1,19 @@
 # 260 M11 Slice: Diagnostics Analysis Budget Guardrails
 
-This chapter documents bounded-analysis guardrails for diagnostics in `ailang-language-server`.
+This chapter documents bounded-analysis guardrails for diagnostics in `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - diagnostics flow now supports explicit limits:
   - analysis budget (ms),
   - maximum diagnostics per document.
 - default limits:
-  - `AILANG_LSP_ANALYSIS_BUDGET_MS` (default `200`)
-  - `AILANG_LSP_MAX_DIAGNOSTICS` (default `200`)
+  - `SEC4AUDIT_LSP_ANALYSIS_BUDGET_MS` (default `200`)
+  - `SEC4AUDIT_LSP_MAX_DIAGNOSTICS` (default `200`)
 - when budget is exceeded, server appends info diagnostic:
   - code `I9001`
   - message indicates results may be incomplete.
@@ -46,7 +46,7 @@ M11 requires bounded execution behavior for editor responsiveness and safety. Th
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - budget-overflow path appends `I9001` diagnostic via limits-aware helper.
 
 ## Tradeoffs and next steps

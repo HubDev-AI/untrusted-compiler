@@ -1,4 +1,4 @@
-# 70 M4 Implementation: security_map and sec.audit (Current Slice)
+# 70 M4 Implementation: security_map and sec4 audit (Current Slice)
 
 This chapter documents the M4 implementation slice that introduced compiler-emitted security metadata and a first deterministic security audit command.
 
@@ -13,13 +13,13 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
   - risk scoring and severity ranking
   - text + JSON report output
 - Added CLI command:
-  - `ailang sec audit --path <project> [--format text|json] [--fail-on 'risk>=HIGH']`
+  - `sec4 audit --path <project> [--format text|json] [--fail-on 'risk>=HIGH']`
 - Added `@allow(...)` annotation pipeline:
   - parser-compatible source preprocessing strips `@allow(...)` before AST parsing
   - annotation parser validates required fields (`policy`, `bypass`, `reason`, `ticket`, `expires`)
   - expired annotations are rejected during analysis
-  - parsed allowlist entries are emitted in `security_map.allows` and surfaced in `sec.audit` exceptions
-- Added deterministic allowlist hygiene findings in `sec.audit`:
+  - parsed allowlist entries are emitted in `security_map.allows` and surfaced in `sec4 audit` exceptions
+- Added deterministic allowlist hygiene findings in `sec4 audit`:
   - high-risk bypass findings (`SECRETS_REVEAL_ALLOWLISTED`, `INTERNAL_NET_CALL_ALLOWLISTED`)
   - expiry hygiene findings (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`)
   - exception-volume hygiene finding (`ALLOW_COUNT_HIGH`)
@@ -72,7 +72,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - Added logging/SQL policy ingestion and deterministic audit findings:
   - `Policy` now carries parsed `[logging]` and `[sql]` posture fields
   - parser validation now enforces valid `sql.require_limit_on_select` values (`off|warn|enforce`)
-  - `sec.audit` now emits policy-aware findings:
+  - `sec4 audit` now emits policy-aware findings:
     - `LOG_STRUCTURED_ONLY_DISABLED`
     - `LOG_REMOTE_IP_ENABLED`
     - `LOG_USER_AGENT_ENABLED`
@@ -82,7 +82,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
 - Added callsite-driven SQL limit hygiene detection:
   - `security_map` now tags SQL sink callsites with `sql.select_without_limit` when a query literal/template call contains `SELECT` and no `LIMIT`
   - detection currently covers direct string SQL and `sql.q("...", ...)` call forms at `db.exec` / `db.queryOne` sinks
-  - `sec.audit` now emits `SQL_SELECT_WITHOUT_LIMIT` with deterministic severity mapping:
+  - `sec4 audit` now emits `SQL_SELECT_WITHOUT_LIMIT` with deterministic severity mapping:
     - `MEDIUM` when `sql.require_limit_on_select = "warn"`
     - `HIGH` when `sql.require_limit_on_select = "enforce"`
   - tests cover callsite tagging and severity mapping behavior
@@ -144,7 +144,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - composite expression flows (`binary`, `if`, `match`, `block`)
     - forwarding function flows (`queryParam -> passThrough -> db.exec`)
     - deeper forwarding chains (`queryParam -> passThrough -> passthroughTwice -> wrap -> db.exec`)
-- Added richer deterministic callsite evidence in `sec.audit` findings:
+- Added richer deterministic callsite evidence in `sec4 audit` findings:
   - finding evidence now includes bounded `sampleCalls` arrays for representative callsites
   - each sample includes callee, location, argument roles, and available origin-edge metadata
   - enabled finding coverage currently includes:
@@ -172,7 +172,7 @@ This chapter documents the M4 implementation slice that introduced compiler-emit
     - non-call expiry-window posture rollups (`ALLOW_EXPIRY_WINDOW_ROLLUP`) with sampled exceptions
   - call sampling now supports both single-tag and multi-tag families for deterministic SQL sink aggregation
   - audit tests now assert presence and shape of `sampleCalls` evidence
-  - text-format `sec.audit` output now shows bounded sample-call previews and trace snippets for fast triage
+  - text-format `sec4 audit` output now shows bounded sample-call previews and trace snippets for fast triage
 - Added context-first stdlib capability signature support:
   - semantic capability checks now resolve capability argument positions for both compact and context-first forms:
     - compact examples: `db.exec(cap, query)`, `httpClient.get(cap, url)`
@@ -272,7 +272,7 @@ Call-level tags alone do not show which argument carried untrusted or gate-deriv
 - Current origin inference is intentionally conservative and tag-oriented (origin chain details are flattened in summaries).
 - Next step is to extend provenance detail beyond summary tags (for example branch-sensitive call-chain traces).
 
-### Slice Explanation: `sec.audit` Callsite Evidence
+### Slice Explanation: `sec4 audit` Callsite Evidence
 
 #### 1) What it is
 This slice enriches audit findings with deterministic `sampleCalls` evidence extracted from `security_map.calls`.
@@ -348,10 +348,10 @@ Count-only posture findings are hard to act on. Sample snapshots let reviewers i
 - this adds visibility for high exception volume but not trend/aging aggregates.
 - next step is rollup evidence for expiring/soon-expiring exception posture.
 
-### Slice Explanation: Trace-Aware `sec.audit` Text Previews
+### Slice Explanation: Trace-Aware `sec4 audit` Text Previews
 
 #### 1) What it is
-This slice enhances text-mode `sec.audit` rendering to include concise sample-call previews, including provenance trace snippets when present.
+This slice enhances text-mode `sec4 audit` rendering to include concise sample-call previews, including provenance trace snippets when present.
 
 #### 2) Why it exists
 JSON output already carried detailed `sampleCalls`, but text output only listed finding IDs and suggestions. Operators needed quick actionable context directly in terminal output.
@@ -378,7 +378,7 @@ JSON output already carried detailed `sampleCalls`, but text output only listed 
 - finding line:
   - `HIGH SQL_RAW_ALLOWED_BY_POLICY ...`
 - preview line:
-  - `sample: db.exec@main.ai:12 trace=call:req.query -> call:wrap -> ...`
+  - `sample: db.exec@main.ut:12 trace=call:req.query -> call:wrap -> ...`
 
 #### 7) Tradeoffs and next steps
 - previews improve triage speed but are not full provenance dumps.
@@ -457,10 +457,10 @@ Allowlist findings previously reported only annotation metadata. Reviewers still
 - evidence currently focuses on call-tag matches and does not include richer exception aggregation views.
 - next step is adding deterministic evidence snapshots for non-call posture exceptions (for example high exception-count families).
 
-### Slice Explanation: Middleware-Tagged Posture Evidence in `sec.audit`
+### Slice Explanation: Middleware-Tagged Posture Evidence in `sec4 audit`
 
 #### 1) What it is
-This slice extends `sec.audit` evidence to include middleware-tagged `sampleCalls` for CORS, security-headers, and auth/CSRF posture findings.
+This slice extends `sec4 audit` evidence to include middleware-tagged `sampleCalls` for CORS, security-headers, and auth/CSRF posture findings.
 
 #### 2) Why it exists
 Posture findings previously showed only policy state, without concrete code locations that configured router security. Middleware-tagged samples make these findings actionable.
@@ -900,7 +900,7 @@ Before this slice, diagnostics for `db.exec(cap, raw)` where `raw` was produced 
 - this raises explainability for common helper-and-variable flows with minimal analysis overhead.
 - next step is to expose the same provenance in structured diagnostic metadata for editor/LSP quick-fix tooling.
 
-### Slice Explanation: Expiry-Window Aging Metrics and Severity Inputs in `sec.audit`
+### Slice Explanation: Expiry-Window Aging Metrics and Severity Inputs in `sec4 audit`
 
 #### 1) What it is
 This slice extends `ALLOW_EXPIRY_WINDOW_ROLLUP` evidence with deterministic aging metrics and explicit severity-input metadata.
@@ -946,10 +946,10 @@ The rollup previously provided counts and samples, but not enough structured age
 - this gives deterministic aging context in a single report but does not yet compute longitudinal trends across multiple runs.
 - next step is adding persisted trend deltas (for example day-over-day expiry pressure change) while keeping audits reproducible.
 
-### Slice Explanation: Baseline Trend Deltas for `sec.audit`
+### Slice Explanation: Baseline Trend Deltas for `sec4 audit`
 
 #### 1) What it is
-This slice adds optional baseline comparison to `sec.audit` and emits deterministic trend deltas in the audit report.
+This slice adds optional baseline comparison to `sec4 audit` and emits deterministic trend deltas in the audit report.
 
 #### 2) Why it exists
 Single-report posture is useful, but teams also need quick answers to "did risk get better or worse since last stable run?" without introducing non-deterministic storage dependencies.
@@ -963,7 +963,7 @@ Single-report posture is useful, but teams also need quick answers to "did risk 
   - `findingCountDelta`
   - `severityDeltas` (`LOW|MEDIUM|HIGH|CRITICAL`)
   - bounded `addedFindingIds` / `resolvedFindingIds`
-- CLI `sec audit` accepts `--baseline <path>` and parses prior JSON report to populate trend output.
+- CLI `audit` accepts `--baseline <path>` and parses prior JSON report to populate trend output.
 - text rendering includes a compact trend summary line plus added/resolved IDs when present.
 
 #### 4) Inputs/outputs and constraints
@@ -983,9 +983,9 @@ Single-report posture is useful, but teams also need quick answers to "did risk 
 
 #### 6) Example usage
 - run once:
-  - `ailang sec audit --path . --format json > build/audit-baseline.json`
+  - `sec4 audit --path . --format json > build/audit-baseline.json`
 - compare later:
-  - `ailang sec audit --path . --format text --baseline build/audit-baseline.json`
+  - `sec4 audit --path . --format text --baseline build/audit-baseline.json`
 - output shows whether risk score and finding counts increased or decreased and which finding IDs were added/resolved.
 
 #### 7) Tradeoffs and next steps
@@ -1036,7 +1036,7 @@ Roadmapped editor/LSP support needs machine-consumable diagnostics (not only tex
 ### Slice Explanation: CLI Diagnostics JSON Emission for Tooling
 
 #### 1) What it is
-This slice adds `ailang check --emit diagnostics-json`, a machine-readable diagnostics output mode for automation/editor bootstrap workflows.
+This slice adds `sec4 check --emit diagnostics-json`, a machine-readable diagnostics output mode for automation/editor bootstrap workflows.
 
 #### 2) Why it exists
 Structured tags and spans are most useful when directly consumable by tools. This mode removes the need to parse ANSI/plain text diagnostics.
@@ -1062,7 +1062,7 @@ Structured tags and spans are most useful when directly consumable by tools. Thi
 
 #### 6) Example usage
 - success:
-  - `ailang check --path examples/hello --emit diagnostics-json`
+  - `sec4 check --path examples/hello --emit diagnostics-json`
   - output: `[]`
 - failure:
   - returns array with diagnostic tags (for example `security`, `capability`) suitable for tool pipelines.
@@ -1074,13 +1074,13 @@ Structured tags and spans are most useful when directly consumable by tools. Thi
 ### Slice Explanation: Persisted Audit Report Output (`--write-report`)
 
 #### 1) What it is
-This slice adds `ailang sec audit --write-report <path>` so audit reports can be persisted as JSON artifacts for later baseline/trend comparison.
+This slice adds `sec4 audit --write-report <path>` so audit reports can be persisted as JSON artifacts for later baseline/trend comparison.
 
 #### 2) Why it exists
 Baseline comparison is most useful when teams can capture and store reports in CI artifacts or repository-local build outputs without manual redirection pipelines.
 
 #### 3) How it works internally
-- `sec audit` accepts optional `--write-report`.
+- `audit` accepts optional `--write-report`.
 - after report generation, CLI serializes the exact `AuditReport` JSON and writes it to the requested path.
 - parent directories are created automatically when needed.
 - write/serialization failures return explicit non-zero exit (`Err(2)`).
@@ -1101,9 +1101,9 @@ Baseline comparison is most useful when teams can capture and store reports in C
 
 #### 6) Example usage
 - capture baseline:
-  - `ailang sec audit --path . --format json --write-report build/audit-baseline.json`
+  - `sec4 audit --path . --format json --write-report build/audit-baseline.json`
 - compare against baseline later:
-  - `ailang sec audit --path . --baseline build/audit-baseline.json --write-report build/audit-current.json`
+  - `sec4 audit --path . --baseline build/audit-baseline.json --write-report build/audit-current.json`
 
 #### 7) Tradeoffs and next steps
 - this provides deterministic artifact persistence but not managed time-series history.
@@ -1112,13 +1112,13 @@ Baseline comparison is most useful when teams can capture and store reports in C
 ### Slice Explanation: Audit History Directory (`--history-dir`) with Auto-Baseline
 
 #### 1) What it is
-This slice adds `ailang sec audit --history-dir <path>` for opt-in report history capture and automatic baseline loading from prior history entries.
+This slice adds `sec4 audit --history-dir <path>` for opt-in report history capture and automatic baseline loading from prior history entries.
 
 #### 2) Why it exists
 Single-file baseline comparisons are useful but manual. Teams need a low-friction way to persist each run and get deterministic trend deltas across iterative runs.
 
 #### 3) How it works internally
-- CLI `sec audit` now accepts optional `--history-dir`.
+- CLI `audit` now accepts optional `--history-dir`.
 - when `--baseline` is not provided and `--history-dir` is set:
   - CLI loads the latest `.json` report in that directory as baseline (if present),
   - audit engine computes trend deltas against that loaded baseline.
@@ -1130,7 +1130,7 @@ Single-file baseline comparisons are useful but manual. Teams need a low-frictio
 
 #### 4) Inputs/outputs and constraints
 - Input:
-  - `sec audit --history-dir <dir>` (optionally with `--baseline` and/or `--write-report`).
+  - `audit --history-dir <dir>` (optionally with `--baseline` and/or `--write-report`).
 - Output:
   - persisted timestamped history report under the target directory,
   - optional `trend` section when a prior baseline is available.
@@ -1145,9 +1145,9 @@ Single-file baseline comparisons are useful but manual. Teams need a low-frictio
 
 #### 6) Example usage
 - first run (no trend yet):
-  - `ailang sec audit --path examples/hello --format json --history-dir build/audit-history`
+  - `sec4 audit --path examples/hello --format json --history-dir build/audit-history`
 - second run (auto-baseline from first report):
-  - `ailang sec audit --path examples/hello --format json --history-dir build/audit-history`
+  - `sec4 audit --path examples/hello --format json --history-dir build/audit-history`
   - output includes `trend` with deterministic deltas.
 
 #### 7) Tradeoffs and next steps
@@ -1164,15 +1164,15 @@ Tooling and editor integrations require parseable stdout payloads without human 
 
 #### 3) How it works internally
 - `check --emit diagnostics-json` now suppresses success banner lines and emits only JSON (`[]` or diagnostics array) on stdout.
-- `sec audit --format json` now emits only the serialized `AuditReport` on stdout.
+- `audit --format json` now emits only the serialized `AuditReport` on stdout.
 - human-oriented context lines (for example `security map: ...`) are redirected to stderr in JSON mode.
 - text modes keep existing human-readable output behavior.
 - integration tests in the CLI crate assert JSON parsing directly from stdout for both command families.
 
 #### 4) Inputs/outputs and constraints
 - Input:
-  - `ailang check --emit diagnostics-json`
-  - `ailang sec audit --format json`
+  - `sec4 check --emit diagnostics-json`
+  - `sec4 audit --format json`
 - Output:
   - stdout is always valid JSON payload for the selected command in JSON mode.
   - stderr may contain auxiliary human hints.
@@ -1184,8 +1184,8 @@ Tooling and editor integrations require parseable stdout payloads without human 
 - failing audit baseline/report path operations still report CLI errors on stderr with non-zero exit.
 
 #### 6) Example usage
-- `ailang check --path examples/hello --emit diagnostics-json | jq .`
-- `ailang sec audit --path examples/hello --format json | jq '.summary'`
+- `sec4 check --path examples/hello --emit diagnostics-json | jq .`
+- `sec4 audit --path examples/hello --format json | jq '.summary'`
 
 #### 7) Tradeoffs and next steps
 - this keeps compatibility for human workflows while making JSON modes deterministic for automation.
@@ -1241,7 +1241,7 @@ Origin reflection is a high-risk CORS pattern. The policy model already had `for
   - `cors.reflect_origin=true` with `cors.forbid_reflect_origin=true` -> `P6003`.
 - `security_map` middleware tagging now emits:
   - `reflectOrigin` attribute for `middleware.cors`.
-- `sec.audit` adds deterministic finding:
+- `sec4 audit` adds deterministic finding:
   - `CORS_REFLECT_ORIGIN_ENABLED` (HIGH) with `sampleCalls` evidence from `middleware.cors` callsites.
 
 #### 4) Inputs/outputs and constraints
@@ -1279,7 +1279,7 @@ This slice adds a deterministic SSRF posture finding when DNS resolution checks 
 The security baseline requires DNS/final-IP validation for outbound public requests. Without an explicit audit signal, teams can disable `net.ssrf.resolve_dns` and miss a meaningful regression in SSRF defenses.
 
 #### 3) How it works internally
-- `sec.audit` now emits `DNS_RESOLUTION_DISABLED` when:
+- `sec4 audit` now emits `DNS_RESOLUTION_DISABLED` when:
   - `policy.env == "prod"` and
   - `policy.net_ssrf.resolve_dns == false`.
 - evidence payload includes:
@@ -1323,7 +1323,7 @@ The security baseline treats outbound egress posture as first-class. Without exp
 - policy model now persists `[net.public]` domain lists:
   - `allowed_domains`
   - `blocked_domains`
-- `sec.audit` now emits `PUBLIC_EGRESS_NO_DOMAIN_POLICY` when:
+- `sec4 audit` now emits `PUBLIC_EGRESS_NO_DOMAIN_POLICY` when:
   - at least one `sink.net.public_request` callsite exists in `security_map`,
   - `policy.net_public.allowed_domains` is empty, and
   - `policy.net_public.blocked_domains` is empty.
@@ -1367,7 +1367,7 @@ This slice adds a deterministic posture finding when CSRF protection is enabled 
 Partial method protection (`POST` only, for example) creates easy bypass paths through other state-mutating methods (`PUT`, `PATCH`, `DELETE`). The audit now calls that out explicitly.
 
 #### 3) How it works internally
-- `sec.audit` computes normalized uppercase method coverage from `policy.csrf.protected_methods`.
+- `sec4 audit` computes normalized uppercase method coverage from `policy.csrf.protected_methods`.
 - required baseline set is fixed in v0:
   - `POST`
   - `PUT`
@@ -1416,7 +1416,7 @@ This slice adds typed-policy support for filesystem symlink posture and a determ
 - policy model now persists:
   - `fs.forbid_symlinks` with accepted values `off|warn|enforce`.
 - parser validation now rejects invalid values with `P6003`.
-- `sec.audit` emits `SYMLINK_POLICY_WEAK` when:
+- `sec4 audit` emits `SYMLINK_POLICY_WEAK` when:
   - `fs.enabled=true`, and
   - `fs.forbid_symlinks != "enforce"`.
 - evidence includes:
@@ -1457,7 +1457,7 @@ This slice adds a low-severity security-headers posture finding when an explicit
 Referrer policy is part of baseline response-hardening posture. Weak values can leak more request-origin information than needed.
 
 #### 3) How it works internally
-- `sec.audit` now evaluates `policy.security_headers.referrer_policy` when security headers are enabled.
+- `sec4 audit` now evaluates `policy.security_headers.referrer_policy` when security headers are enabled.
 - weak policy set in v0:
   - `no-referrer-when-downgrade`
   - `unsafe-url`
@@ -1539,10 +1539,10 @@ These headers are small but high-frequency hardening controls. Weak settings sho
 This slice makes replay posture severity deterministic by environment when `replay.effects = "allow"` is configured.
 
 #### 2) Why it exists
-Allowing real side effects during replay is materially riskier in production than in local/dev workflows. Severity now reflects that risk difference directly in `sec.audit`.
+Allowing real side effects during replay is materially riskier in production than in local/dev workflows. Severity now reflects that risk difference directly in `sec4 audit`.
 
 #### 3) How it works internally
-- `sec.audit` still emits `REPLAY_EFFECTS_ALLOW` when replay mode is `allow`.
+- `sec4 audit` still emits `REPLAY_EFFECTS_ALLOW` when replay mode is `allow`.
 - severity mapping now uses policy environment:
   - `HIGH` when `policy.env == "prod"`
   - `MEDIUM` otherwise
@@ -1576,21 +1576,21 @@ Allowing real side effects during replay is materially riskier in production tha
 ## Core architecture
 - `policy` remains source of truth for effective security posture and validation.
 - `security_map` is generated statically from parsed program calls + policy-derived middleware attrs.
-- `sec.audit` consumes policy + `security_map` and computes findings via a deterministic rule table.
+- `sec4 audit` consumes policy + `security_map` and computes findings via a deterministic rule table.
 
 ## Files added/updated
-- `compiler/ailang-core/src/security_map.rs`
-- `compiler/ailang-core/src/audit.rs`
-- `compiler/ailang-core/src/policy.rs` (expanded policy fields + validation for security_headers/csrf/auth coupling)
-- `compiler/ailang-core/src/lib.rs` (module exports + `write_security_map`)
-- `compiler/ailang-cli/src/main.rs` (new `sec audit` command)
+- `compiler/sec4-core/src/security_map.rs`
+- `compiler/sec4-core/src/audit.rs`
+- `compiler/sec4-core/src/policy.rs` (expanded policy fields + validation for security_headers/csrf/auth coupling)
+- `compiler/sec4-core/src/lib.rs` (module exports + `write_security_map`)
+- `compiler/sec4-cli/src/main.rs` (new `audit` command)
 
 ## Tests added
-- `compiler/ailang-core/tests/security_map.rs`
-- `compiler/ailang-core/tests/sec_audit.rs`
-- `compiler/ailang-core/tests/diagnostic_tags.rs`
-- `compiler/ailang-cli/tests/json_output.rs`
-- extended `compiler/ailang-core/tests/policy.rs` for csrf/auth/cors validations
+- `compiler/sec4-core/tests/security_map.rs`
+- `compiler/sec4-core/tests/sec_audit.rs`
+- `compiler/sec4-core/tests/diagnostic_tags.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
+- extended `compiler/sec4-core/tests/policy.rs` for csrf/auth/cors validations
 
 ## Current limitations
 - middleware detection currently relies on known callable names (dynamic dispatch and indirect call targets are not yet mapped).

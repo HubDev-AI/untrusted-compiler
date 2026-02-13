@@ -27,13 +27,13 @@ In `enforce_db_query_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_db_exec_context_argument_type.ai`
-    - `invalid_db_exec_tx_context_argument_type.ai`
-    - `invalid_db_query_one_context_argument_type.ai`
+    - `invalid_db_exec_context_argument_type.ut`
+    - `invalid_db_exec_tx_context_argument_type.ut`
+    - `invalid_db_query_one_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first DB sink calls,
   - sink-tagged diagnostics consumable by editor/LSP tooling.
@@ -52,7 +52,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn readUser(ctx: Ctx, db: DbCap, query: SqlQuery) effects { db.read } -> Int {
   db.queryOne(ctx, db, query, 1);
   0

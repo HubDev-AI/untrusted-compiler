@@ -5,7 +5,7 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-cp "$root_dir/scripts/testdata/sample-ailang-report.json" "$tmp/ailang-report.json"
+cp "$root_dir/scripts/testdata/sample-sec4-report.json" "$tmp/sec4-report.json"
 cp "$root_dir/scripts/testdata/sample-go-report.json" "$tmp/go-report.json"
 cp "$root_dir/scripts/testdata/sample-node-report.json" "$tmp/node-report.json"
 
@@ -20,8 +20,8 @@ if ! grep -q '"impl": "go"' "$out"; then
   echo "missing go row in compare output" >&2
   exit 1
 fi
-if ! grep -q '"impl": "ailang"' "$out"; then
-  echo "missing ailang row in compare output" >&2
+if ! grep -q '"impl": "sec4"' "$out"; then
+  echo "missing sec4 row in compare output" >&2
   exit 1
 fi
 if ! grep -q '"leader": {' "$out"; then

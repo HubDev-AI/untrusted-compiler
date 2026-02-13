@@ -25,12 +25,12 @@ In `enforce_error_helper_signatures`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_err_with_cause_error_argument_type.ai`
-    - `invalid_err_with_cause_cause_argument_type.ai`
+    - `invalid_err_with_cause_error_argument_type.ut`
+    - `invalid_err_with_cause_cause_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid `err.withCause` arguments,
   - tagged diagnostics suitable for CLI/editor feedback.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn buildError() -> StdError {
   let base = err.validation("VALIDATION.BAD", "invalid input");
   let cause = err.internal("db timeout");

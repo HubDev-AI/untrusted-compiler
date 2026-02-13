@@ -22,9 +22,9 @@ In `enforce_header_builder_signatures(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture: `invalid_headers_value_crlf_literal.ai`
-  - tag test coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture: `invalid_headers_value_crlf_literal.ut`
+  - tag test coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of CR/LF header-value literals.
 - Constraint:
@@ -37,7 +37,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn ok() -> Int {
   headers.value("application/json");
   0

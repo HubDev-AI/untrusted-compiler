@@ -1,5 +1,5 @@
 {
-  "impl": "ailang",
+  "impl": "sec4",
   "endpoint": "decode",
   "targetRps": 2000,
   "requestsPerSec": 1989.11,

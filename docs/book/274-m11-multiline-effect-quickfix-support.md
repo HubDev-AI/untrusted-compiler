@@ -5,7 +5,7 @@ This chapter documents extending `E2001` quick-fix editing to function signature
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - signature scanning now spans from the detected `fn` line to the signature/body boundary.
@@ -42,7 +42,7 @@ The previous quick-fix implementation assumed single-line function signatures. R
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now covers:
+`compiler/sec4-lsp` now covers:
 - insertion of missing effect for multiline signatures without an effects block,
 - append of missing effect for multiline signatures with existing effects.
 

@@ -1,11 +1,11 @@
 # 270 M11 Slice: Language Server Operations Guide
 
-This chapter documents adding operational documentation for `ailang-language-server`.
+This chapter documents adding operational documentation for `sec4audit-language-server`.
 
 ## What it is
 
 Added:
-- `compiler/ailang-lsp/README.md`
+- `compiler/sec4-lsp/README.md`
 
 Guide content includes:
 - startup commands (`--stdio`, `--version`),

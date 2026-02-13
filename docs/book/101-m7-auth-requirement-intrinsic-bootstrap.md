@@ -11,8 +11,8 @@ Added intrinsic support for:
 - `auth.requireRole` / `auth_require_role`
 
 These now lower to runtime ABI stubs:
-- `ailang_rt_auth_require`
-- `ailang_rt_auth_require_role`
+- `sec4_rt_auth_require`
+- `sec4_rt_auth_require_role`
 
 ### Why it exists
 
@@ -22,13 +22,13 @@ The v0 auth middleware API includes handler-side principal checks (`require` / `
 
 - Added semantic intrinsic registry entries in `semantic.rs`.
 - Added C lowering replacements in `c_backend.rs` for dotted and underscore aliases.
-- Added runtime C declarations/definitions in `runtime/c/ailang_runtime.h` and `runtime/c/ailang_runtime.c`.
+- Added runtime C declarations/definitions in `runtime/c/sec4_runtime.h` and `runtime/c/sec4_runtime.c`.
 - Added core and CLI integration tests for end-to-end `c-bin` lowering.
-- Updated `examples/hello-api/src/main.ai` to include auth requirement helper calls in handler flow.
+- Updated `examples/hello-api/src/main.ut` to include auth requirement helper calls in handler flow.
 
 ### Inputs, outputs, and constraints
 
-- Input: AILang code invoking auth requirement helpers.
+- Input: Untrusted<T> code invoking auth requirement helpers.
 - Output: successful `build --emit c-bin` with calls lowered to runtime ABI symbols.
 - Constraints:
   - runtime auth semantics are still placeholder stubs in bootstrap mode.
@@ -41,7 +41,7 @@ The v0 auth middleware API includes handler-side principal checks (`require` / `
 
 ### Example usage
 
-```ailang
+```ut
 fn createUser(schema: Schema<Int>) effects { net } -> Int {
   auth.require(1);
   auth.requireRole(1, 2);
@@ -57,8 +57,8 @@ fn createUser(schema: Schema<Int>) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_auth_requirement_intrinsics_to_runtime_symbols`
   - runtime ABI symbol assertions include auth requirement helpers
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_auth_requirement_intrinsics_when_clang_available`

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--impls ailang,node,go,rust,c] [--dry-run-only]" >&2
+  echo "usage: $0 [--impls sec4,node,go,rust,c] [--dry-run-only]" >&2
 }
 
-impls_csv="ailang,node,go,rust,c"
+impls_csv="sec4,node,go,rust,c"
 dry_run_only="false"
 
 while [ "$#" -gt 0 ]; do
@@ -40,7 +40,7 @@ done
 
 is_supported_impl() {
   case "$1" in
-    ailang|node|go|rust|c) return 0 ;;
+    sec4|node|go|rust|c) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -76,9 +76,9 @@ for raw_impl in "${impls[@]}"; do
   fi
 
   case "$impl" in
-    ailang)
-      check_cmd "cargo" "AILang compiler runner" || missing=1
-      check_cmd "cc" "C compiler for AILang runtime link" || missing=1
+    sec4)
+      check_cmd "cargo" "Untrusted<T> compiler runner" || missing=1
+      check_cmd "cc" "C compiler for Untrusted<T> runtime link" || missing=1
       ;;
     node)
       check_cmd "node" "Node benchmark service" || missing=1

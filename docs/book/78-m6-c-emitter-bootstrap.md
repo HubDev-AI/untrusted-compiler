@@ -1,21 +1,21 @@
 # 78 M6 Bootstrap: C Emitter from MIR
 
-This chapter documents the first M6 vertical slice: emitting C source from MIR through the AILang CLI.
+This chapter documents the first M6 vertical slice: emitting C source from MIR through the Untrusted<T> CLI.
 
 Follow-up clang compile/link integration is documented in `docs/book/79-m6-clang-compile-link-pipeline.md`.
 
 ## Scope delivered
-- Added a C backend emitter in `ailang-core`:
+- Added a C backend emitter in `sec4-core`:
   - `emit_c_program(&MirProgram) -> String`
 - Added CLI support:
-  - `ailang build --emit c`
+  - `sec4 build --emit c`
 - Added test coverage:
-  - core C backend tests in `compiler/ailang-core/tests/c_backend.rs`
-  - CLI integration coverage in `compiler/ailang-cli/tests/json_output.rs`
+  - core C backend tests in `compiler/sec4-core/tests/c_backend.rs`
+  - CLI integration coverage in `compiler/sec4-cli/tests/json_output.rs`
 
 ## What changed
-- New module: `compiler/ailang-core/src/c_backend.rs`.
-- `ailang-core` now exports the C emitter via `emit_c_program`.
+- New module: `compiler/sec4-core/src/c_backend.rs`.
+- `sec4-core` now exports the C emitter via `emit_c_program`.
 - CLI build emit targets now include `c` and print generated C from lowered MIR.
 
 ## C emission shape (current)

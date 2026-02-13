@@ -1,4 +1,4 @@
-# 199 M8 Slice: sec.audit History-Window Range Metadata
+# 199 M8 Slice: sec4 audit History-Window Range Metadata
 
 This chapter documents the addition of explicit range anchors for history-window summaries.
 
@@ -27,8 +27,8 @@ Window metrics are more actionable when they are anchored to concrete report bou
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - richer history summary payload with deterministic interval anchors.
 - Constraint:
@@ -41,10 +41,10 @@ Window metrics are more actionable when they are anchored to concrete report bou
 ## Example usage
 
 ```bash
-ailang sec audit \
+sec4 audit \
   --path examples/hello \
   --format json \
-  --history-dir .ailang/audit-history \
+  --history-dir .sec4/audit-history \
   --history-window 5 \
   --write-history-summary artifacts/audit/history-window.json
 ```

@@ -1,0 +1,4 @@
+error[E4001]: db.queryOne row schema argument must be `Schema<_>`
+  --> invalid_db_query_one_non_schema_argument_type.ut:2:26
+  note: found `String`
+  note: use `db.queryOne(capability, query, rowSchema)` with a typed schema descriptor

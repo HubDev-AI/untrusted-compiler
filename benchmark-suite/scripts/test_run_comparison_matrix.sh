@@ -73,13 +73,13 @@ if ! grep -q '=== impl=c ===' <<<"$c_out"; then
   exit 1
 fi
 
-ailang_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls ailang)"
-if ! grep -q '=== impl=ailang ===' <<<"$ailang_out"; then
-  echo "missing ailang implementation header" >&2
+sec4_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls sec4)"
+if ! grep -q '=== impl=sec4 ===' <<<"$sec4_out"; then
+  echo "missing sec4 implementation header" >&2
   exit 1
 fi
-if ! grep -q 'build_report.sh ailang .*baselines/sec-audit/default-secure-prod.hello.json' <<<"$ailang_out"; then
-  echo "expected ailang report command to include sec.audit artifact" >&2
+if ! grep -q 'build_report.sh sec4 .*baselines/sec-audit/default-secure-prod.hello.json' <<<"$sec4_out"; then
+  echo "expected sec4 report command to include sec4 audit artifact" >&2
   exit 1
 fi
 

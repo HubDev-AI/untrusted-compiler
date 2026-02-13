@@ -5,7 +5,7 @@ This chapter documents test hardening for symbol metadata on callsite-only refer
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - extended `references_returns_call_sites_without_declaration_when_excluded` to assert:

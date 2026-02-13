@@ -1,8 +1,8 @@
 use zed_extension_api as zed;
 
-struct AilangExtension;
+struct UntrustedExtension;
 
-impl zed::Extension for AilangExtension {
+impl zed::Extension for UntrustedExtension {
     fn new() -> Self {
         Self
     }
@@ -12,13 +12,13 @@ impl zed::Extension for AilangExtension {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        if language_server_id.as_ref() != "ailang-lsp" {
+        if language_server_id.as_ref() != "sec4audit-lsp" {
             return Err(format!("unsupported language server id: {language_server_id}").into());
         }
 
         let command = worktree
-            .which("ailang-language-server")
-            .unwrap_or_else(|| "ailang-language-server".into());
+            .which("sec4audit-language-server")
+            .unwrap_or_else(|| "sec4audit-language-server".into());
 
         Ok(zed::Command {
             command,
@@ -28,4 +28,4 @@ impl zed::Extension for AilangExtension {
     }
 }
 
-zed::register_extension!(AilangExtension);
+zed::register_extension!(UntrustedExtension);

@@ -48,7 +48,7 @@ File-existence checks alone do not detect post-run tampering or stale mismatched
 ## Example usage
 
 ```bash
-benchmark-suite/scripts/verify_benchmark_bundle.sh benchmark-suite/results ailang,node,go,rust ping,decode,users-post,users-get
+benchmark-suite/scripts/verify_benchmark_bundle.sh benchmark-suite/results sec4,node,go,rust ping,decode,users-post,users-get
 ```
 
 Skip integrity check:

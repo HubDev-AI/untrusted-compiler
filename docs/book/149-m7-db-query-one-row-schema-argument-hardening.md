@@ -29,11 +29,11 @@ To avoid duplicate diagnostics, secret/untrusted wrappers in this slot continue 
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_db_query_one_row_schema_argument_type.ai`
+    - `invalid_db_query_one_row_schema_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid primitive row-schema placeholders,
   - schema-tagged diagnostics for editor/CLI consumers.
@@ -48,7 +48,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn load(db: DbCap, query: SqlQuery, rowSchema: Schema<Int>) effects { db.read } -> Int {
   db.queryOne(db, query, rowSchema);
   0

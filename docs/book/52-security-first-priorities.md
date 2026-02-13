@@ -1,12 +1,12 @@
-# 52 Security-First Priorities for AILang v0
+# 52 Security-First Priorities for Untrusted<T> v0
 
-This chapter captures the high-leverage security changes required to keep AILang secure from day one without adding Rust-like complexity.
+This chapter captures the high-leverage security changes required to keep Untrusted<T> secure from day one without adding Rust-like complexity.
 
 ## 1) Capability-based security model for sensitive operations
 
 Effects are required for auditing, but dangerous operations also require explicit capabilities (tokens) for authorization.
 
-```ailang
+```ut
 function fetchUser(net: NetCap, url: UrlSafe) effects { net } -> Result<Bytes, NetError>
 ```
 
@@ -22,7 +22,7 @@ Runtime should provide these only to allowed entrypoints.
 
 ## 2) Policy-as-code enforced by compiler
 
-A policy file (`policy.ai` or `ailang.policy`) must be enforced as hard compile errors, not warnings.
+A policy file (`policy.ut` or `sec4.policy`) must be enforced as hard compile errors, not warnings.
 
 Examples:
 - forbid `shell`
@@ -50,7 +50,7 @@ Rules:
 - `log.*` accepts only `LogValue`
 - `Secret<T>` cannot become `LogValue` except redacted forms
 
-```ailang
+```ut
 log.info({ event: "user_created", userId, email: redact(emailSecret) })
 ```
 

@@ -27,12 +27,12 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_fs_write_missing_args.ai`
-    - updated `valid_capabilities_effects.ai`
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - db/fs/net CLI integration test (`compiler/ailang-cli/tests/json_output.rs`)
+    - `invalid_fs_write_missing_args.ut`
+    - updated `valid_capabilities_effects.ut`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - db/fs/net CLI integration test (`compiler/sec4-cli/tests/json_output.rs`)
 - Outputs:
   - compile-time rejection of malformed FS sink argument shapes,
   - updated semantic capability fixture to pass explicit path/value arguments.
@@ -49,7 +49,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn writeFile(fs: FsCap) effects { fs.write, fs.read } -> Int {
   fs.write(fs, "/tmp/a", "payload");
   fs.read(fs, "/tmp/a");

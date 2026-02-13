@@ -5,10 +5,10 @@ This chapter documents expanding the Tree-sitter query surface beyond syntax hig
 ## What it is
 
 Updated:
-- `tree-sitter-ailang/queries/indents.scm`
-- `tree-sitter-ailang/queries/outline.scm`
-- `tree-sitter-ailang/queries/textobjects.scm`
-- `tree-sitter-ailang/README.md`
+- `tree-sitter-untrusted/queries/indents.scm`
+- `tree-sitter-untrusted/queries/outline.scm`
+- `tree-sitter-untrusted/queries/textobjects.scm`
+- `tree-sitter-untrusted/README.md`
 
 Key additions:
 - block indent/outdent hints,
@@ -17,7 +17,7 @@ Key additions:
 
 ## Why it exists
 
-M11 editor experience is not only diagnostics/navigation. Structural editor features (outline, indentation behavior, textobjects) depend on query coverage. This slice improves practical editing ergonomics for AILang files in Tree-sitter-aware clients.
+M11 editor experience is not only diagnostics/navigation. Structural editor features (outline, indentation behavior, textobjects) depend on query coverage. This slice improves practical editing ergonomics for Untrusted<T> files in Tree-sitter-aware clients.
 
 ## How it works internally
 
@@ -29,7 +29,7 @@ M11 editor experience is not only diagnostics/navigation. Structural editor feat
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - parse tree nodes produced by `tree-sitter-ailang`.
+  - parse tree nodes produced by `tree-sitter-untrusted`.
 - Outputs:
   - additional structural metadata for editor UX.
 - Constraints:

@@ -24,11 +24,11 @@ In `enforce_secret_reveal_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_secret_reveal_context_argument_type.ai`
+    - `invalid_secret_reveal_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first `secrets.reveal` calls,
   - secret-tagged diagnostics aligned with security-first tooling.
@@ -43,7 +43,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn revealOne(ctx: Ctx, sec: SecretsCap, token: Secret<String>)
   effects { secrets.reveal }
   -> Int

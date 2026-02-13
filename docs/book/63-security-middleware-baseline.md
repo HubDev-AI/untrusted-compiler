@@ -1,10 +1,10 @@
 # 63 Security Middleware Baseline (CORS, Security Headers, CSRF) v0
 
-This chapter defines first-class web security posture in AILang runtime/stdlib using typed middleware, typed config, and policy enforcement.
+This chapter defines first-class web security posture in Untrusted<T> runtime/stdlib using typed middleware, typed config, and policy enforcement.
 
 ## 1) Canonical router bootstrap
 
-```ailang
+```ut
 function buildRouter(): Router {
   let r = http.router()
 
@@ -23,7 +23,7 @@ Policy determines what is enabled; application bootstrap stays consistent.
 
 ### Types
 
-```ailang
+```ut
 type Origin = opaque
 type OriginPattern = opaque
 
@@ -45,7 +45,7 @@ type CorsConfig = {
 
 ### API
 
-```ailang
+```ut
 module cors {
   fn origin(u: Untrusted<String>) -> Result<Origin, ValidationError>
   fn withCors(r: Router, cfg: CorsConfig) -> Router
@@ -62,7 +62,7 @@ module cors {
 
 ### Types
 
-```ailang
+```ut
 type SecurityHeadersConfig = {
   enabled: Bool
 
@@ -87,7 +87,7 @@ type CspPolicy = opaque
 
 ### API
 
-```ailang
+```ut
 module sec {
   fn defaultHeaders() -> SecurityHeadersConfig
   fn withSecurityHeaders(r: Router, cfg: SecurityHeadersConfig) -> Router
@@ -111,7 +111,7 @@ CSRF is required for cookie/session auth and optional for token-only auth.
 
 ### Types
 
-```ailang
+```ut
 type CsrfMode = "off" | "double_submit" | "synchronizer_token"
 
 type CsrfConfig = {
@@ -132,7 +132,7 @@ type CsrfConfig = {
 
 ### API
 
-```ailang
+```ut
 module csrf {
   fn withCsrf(r: Router, cfg: CsrfConfig) -> Router
   fn fromPolicy() -> CsrfConfig
@@ -195,7 +195,7 @@ protected_methods = ["POST","PUT","PATCH","DELETE"]
 
 ## 6) Typed header primitives
 
-```ailang
+```ut
 module headers {
   fn name(s: String) -> HeaderName
   fn value(s: String) -> HeaderValue

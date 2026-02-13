@@ -5,7 +5,7 @@ This chapter documents refining the `E2001` code-action quick-fix so it can upda
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - if a function already has `effects { ... }`, the quick-fix now appends a missing effect inside that block.
@@ -44,7 +44,7 @@ The previous behavior only handled signatures without an effects block. In commo
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now covers:
+`compiler/sec4-lsp` now covers:
 - append missing effect into existing effects block,
 - omit effect quick-fix when the effect is already declared,
 - existing insertion path for signatures without effects remains covered.

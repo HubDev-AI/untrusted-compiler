@@ -25,12 +25,12 @@ In `enforce_json_response_schema_requirements`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_json_response_meta_secret_argument_type.ai`
-    - `invalid_json_response_meta_untrusted_argument_type.ai`
+    - `invalid_json_response_meta_secret_argument_type.ut`
+    - `invalid_json_response_meta_untrusted_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of secret/untrusted metadata values for `res.okMeta`,
   - deterministic tagged diagnostics for editor/CLI consumers.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn ok(schema: String, meta: Int) effects { net } -> Int {
   res.okMeta(201, schema, 1, meta);
   0

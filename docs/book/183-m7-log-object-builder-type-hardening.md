@@ -24,9 +24,9 @@ In `semantic.rs`, `enforce_log_value_builder_signatures(...)` now:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture: `invalid_log_obj_argument_type.ai`
-  - tag test coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture: `invalid_log_obj_argument_type.ut`
+  - tag test coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection for non-`LogValue` `log.obj` payloads.
 - Constraint:
@@ -39,7 +39,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let field = log.field("count", log.i64(1));
   let obj = log.obj(field);

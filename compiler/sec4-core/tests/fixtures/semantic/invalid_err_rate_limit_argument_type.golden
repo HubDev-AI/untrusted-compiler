@@ -1,0 +1,9 @@
+error[E4001]: err.rateLimit code argument must be `String`
+  --> invalid_err_rate_limit_argument_type.ut:2:17
+  note: found `Int`
+  note: use stable rate-limit error code strings
+
+error[E4001]: err.rateLimit message argument must be `String`
+  --> invalid_err_rate_limit_argument_type.ut:2:20
+  note: found `Int`
+  note: use safe rate-limit message strings

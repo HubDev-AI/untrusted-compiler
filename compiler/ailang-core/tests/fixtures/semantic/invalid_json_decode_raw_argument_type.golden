@@ -1,3 +1,0 @@
-error[E4001]: json.decode raw argument must be `Untrusted<Bytes>`
-  --> invalid_json_decode_raw_argument_type.ai:2:28
-  note: found `Int`

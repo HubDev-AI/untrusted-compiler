@@ -33,10 +33,10 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture: `invalid_res_html_requires_htmlsafe.ai`
-  - diagnostic tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - req/res CLI integration fixture in `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture: `invalid_res_html_requires_htmlsafe.ut`
+  - diagnostic tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - req/res CLI integration fixture in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of non-`HtmlSafe` `res.html(...)` calls,
   - req/res integration path updated to a valid gate flow:
@@ -54,7 +54,7 @@ Arity mismatch example:
 
 ## Example usage
 
-```ailang
+```ut
 fn render() effects { net } -> Int {
   let raw = req.query(1, 2);
   let safe = sanitize.html(raw);

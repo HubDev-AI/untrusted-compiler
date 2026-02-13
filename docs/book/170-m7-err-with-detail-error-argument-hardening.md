@@ -25,11 +25,11 @@ In `enforce_error_helper_signatures`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_err_with_detail_error_argument_type.ai`
+    - `invalid_err_with_detail_error_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-`StdError` `err.withDetail` base arguments,
   - stable diagnostics for tooling and CI.
@@ -44,7 +44,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn attachDetail(base: StdError) -> StdError {
   err.withDetail(base, "field", 2)
 }

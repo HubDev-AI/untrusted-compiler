@@ -50,7 +50,7 @@ Matrix filtering (`--endpoints ...`) is useful for focused runs, but report bund
 Direct report build with endpoint scope:
 
 ```bash
-benchmark-suite/scripts/build_report.sh ailang benchmark-suite/results benchmark-suite/results/summaries/ailang-report.json "" "ping,decode"
+benchmark-suite/scripts/build_report.sh sec4 benchmark-suite/results benchmark-suite/results/summaries/sec4-report.json "" "ping,decode"
 ```
 
 ## Tradeoffs and next steps

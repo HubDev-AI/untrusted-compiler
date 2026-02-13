@@ -1,0 +1,4 @@
+error[E4001]: log.withAttr key argument must be `String`
+  --> invalid_log_with_attr_argument_type.ut:2:23
+  note: found `Int`
+  note: pass a stable attribute name

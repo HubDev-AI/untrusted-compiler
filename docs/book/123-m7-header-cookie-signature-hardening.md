@@ -32,10 +32,10 @@ In semantic intrinsic enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for invalid header/cookie argument types
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - header/cookie `c-bin` integration fixture in `compiler/ailang-cli/tests/json_output.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - header/cookie `c-bin` integration fixture in `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed `res.setHeader` and `res.addCookie` calls,
   - integration fixture updated to valid typed flow:
@@ -58,7 +58,7 @@ Secret/taint sink diagnostics remain active and can co-emit with signature diagn
 
 ## Example usage
 
-```ailang
+```ut
 fn configure() effects { net } -> Int {
   let name = headers.name("X-Test");
   let value = headers.value("ok");

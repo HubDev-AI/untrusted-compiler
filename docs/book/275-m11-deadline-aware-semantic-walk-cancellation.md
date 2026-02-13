@@ -5,7 +5,7 @@ This chapter documents extending LSP request deadline enforcement into semantic 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - request-deadline checks now propagate into:
@@ -29,7 +29,7 @@ Loop-level deadline checks already limited workspace scan loops, but deep AST wa
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `RequestDeadline` derived from `AILANG_LSP_REQUEST_BUDGET_MS`.
+  - `RequestDeadline` derived from `SEC4AUDIT_LSP_REQUEST_BUDGET_MS`.
 - Outputs:
   - deterministic best-effort results within request budget.
 - Constraints:
@@ -42,7 +42,7 @@ Loop-level deadline checks already limited workspace scan loops, but deep AST wa
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `deadline_aware_semantic_walks_can_short_circuit`:
   - validates immediate short-circuit for symbol collection, identifier lookup, and hit collection with an expired deadline.
 

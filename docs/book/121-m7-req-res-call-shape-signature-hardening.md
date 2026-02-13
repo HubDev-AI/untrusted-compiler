@@ -31,7 +31,7 @@ All violations emit deterministic `E4001` diagnostics.
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for `req.json` arity and `res.text` body type
   - req/res CLI integration fixture updates
 - Outputs:
@@ -48,7 +48,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn createUser() effects { net } -> Int {
   req.json("CreateUserRequest");
   res.text(200, "ok");

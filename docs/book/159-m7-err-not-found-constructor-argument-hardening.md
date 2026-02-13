@@ -26,14 +26,14 @@ In semantic call enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_err_not_found_argument_type.ai`
+    - `invalid_err_not_found_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - integration fixture alignment:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed not-found constructor values,
   - stable diagnostics for tooling and CI.
@@ -48,7 +48,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn makeNotFound() -> Int {
   err.notFound("RESOURCE.NOT_FOUND", "missing");
   0

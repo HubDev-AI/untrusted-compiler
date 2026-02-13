@@ -1,4 +1,0 @@
-error[E4001]: db sink query argument must be `SqlQuery`
-  --> invalid_db_query_argument_type.ai:2:15
-  note: found `Int`
-  note: use typed `SqlQuery` values when calling `db.exec`

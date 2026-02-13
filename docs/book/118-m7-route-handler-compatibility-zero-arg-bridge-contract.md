@@ -26,7 +26,7 @@ The diagnostic includes:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures and `examples/hello-api`
 - Outputs:
   - compile-time rejection of parameterized route handlers in current bridge mode
@@ -41,7 +41,7 @@ Example failure:
 
 ## Example usage
 
-```ailang
+```ut
 fn createUser() effects { net } -> Int {
   req.json("CreateUserRequest");
   res.ok(201, "CreateUserResponse", 1);

@@ -25,12 +25,12 @@ In `enforce_net_sink_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_net_public_context_argument_type.ai`
-    - `invalid_net_internal_context_argument_type.ai`
+    - `invalid_net_public_context_argument_type.ut`
+    - `invalid_net_internal_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first net sink calls,
   - sink-tagged diagnostics aligned with security-first tooling surfaces.
@@ -47,7 +47,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn fetch(ctx: Ctx, net: NetCap, url: PublicUrl) effects { net } -> Int {
   httpClient.get(ctx, net, url);
   0

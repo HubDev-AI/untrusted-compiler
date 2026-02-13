@@ -1,0 +1,4 @@
+error[E4001]: route registration expects `Router` as first argument
+  --> invalid_http_route_router_not_router.ut:6:12
+  note: `http.get` argument 1 expects `Router`, got `Int`
+  note: create router with `http.router()` and pass that value

@@ -1,7 +1,7 @@
 .PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
-IMPL ?= ailang
-IMPLS ?= ailang,node,go,rust
+IMPL ?= sec4
+IMPLS ?= sec4,node,go,rust
 ENDPOINTS ?= ping,decode,users-post,users-get
 BASE_URL ?= http://127.0.0.1:8080
 ENDPOINT ?= ping
@@ -39,7 +39,7 @@ help:
 	@echo "  compare      Build endpoint comparison from report files"
 	@echo "  compare-matrix Build comparison matrix across all endpoints"
 	@echo "  analyze-matrix Analyze tail-latency/target-coverage signals from matrix"
-	@echo "  publish-report Build markdown benchmark report from matrix + sec.audit"
+	@echo "  publish-report Build markdown benchmark report from matrix + sec4 audit"
 	@echo "  test-scripts Run benchmark helper script tests"
 	@echo "  test-services Run cross-impl service contract smoke checks"
 

@@ -10,7 +10,7 @@ Extended `security_map` callable alias resolution so `crypto` is treated as a ta
 
 Before this slice, forwarded namespace aliases such as:
 
-```ailang
+```ut
 fn cryptoNs() { crypto }
 let c = cryptoNs();
 c.ctEq(a, b);
@@ -31,8 +31,8 @@ were not normalized to `crypto.ctEq`, so gate tags and argument roles were dropp
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/security_map.rs`
-  - `compiler/ailang-core/tests/security_map.rs`
+  - `compiler/sec4-core/src/security_map.rs`
+  - `compiler/sec4-core/tests/security_map.rs`
 - Output:
   - consistent metadata tagging for forwarded `crypto` namespace calls.
 - Constraint:
@@ -44,7 +44,7 @@ were not normalized to `crypto.ctEq`, so gate tags and argument roles were dropp
 
 ## Example usage
 
-```ailang
+```ut
 fn cryptoNs() { crypto }
 
 fn same(a: Secret<String>, b: Secret<String>) -> Bool {

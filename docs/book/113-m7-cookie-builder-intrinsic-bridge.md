@@ -10,7 +10,7 @@ Added intrinsic support for:
 - `cookie.build` / `cookie_build`
 
 Lowered runtime ABI stub:
-- `ailang_rt_cookie_build`
+- `sec4_rt_cookie_build`
 
 Also added alias-resolution hardening in semantic and security-map analysis.
 
@@ -24,8 +24,8 @@ The v0 stdlib surface includes typed cookie construction so response code can pa
   - `cookie.build` returns `Cookie`
 - Added `cookie` to intrinsic namespace recognition.
 - Added C rewrite mapping:
-  - `cookie.build` / `cookie_build` -> `ailang_rt_cookie_build`
-- Added runtime C declaration/definition for `ailang_rt_cookie_build`.
+  - `cookie.build` / `cookie_build` -> `sec4_rt_cookie_build`
+- Added runtime C declaration/definition for `sec4_rt_cookie_build`.
 - Added security-map tagging and arg-role metadata:
   - `cookie.build` -> `gate.cookie.build`
   - arg roles: `name`, `value`
@@ -45,7 +45,7 @@ This protection is applied in both semantic analysis and `security_map` call res
 ### Inputs, outputs, and constraints
 
 - Input: cookie helper calls in bootstrap service code.
-- Output: generated C calls to `ailang_rt_cookie_build(...)` and `ailang_rt_set_cookie(...)`.
+- Output: generated C calls to `sec4_rt_cookie_build(...)` and `sec4_rt_set_cookie(...)`.
 - Constraints:
   - runtime cookie behavior is still stubbed in M7.
   - this slice validates compile/link coverage and analysis stability.
@@ -57,7 +57,7 @@ This protection is applied in both semantic analysis and `security_map` call res
 
 ### Example usage
 
-```ailang
+```ut
 fn configure() effects { net } -> Int {
   let cookie = cookie.build("session", "token");
   res.addCookie(cookie);
@@ -72,9 +72,9 @@ fn configure() effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime ABI assertions include `ailang_rt_cookie_build`
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime ABI assertions include `sec4_rt_cookie_build`
   - header/cookie rewrite test now asserts typed cookie-build flow
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - header/cookie `c-bin` integration fixture uses `cookie.build(...)`
-  - generated C assertions include `ailang_rt_cookie_build(...)`
+  - generated C assertions include `sec4_rt_cookie_build(...)`

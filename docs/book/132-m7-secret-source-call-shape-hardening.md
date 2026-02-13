@@ -26,12 +26,12 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_secret_get_missing_name.ai`
-    - updated `valid_capabilities_effects.ai`
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
-  - secret-read CLI integration test (`compiler/ailang-cli/tests/json_output.rs`)
+    - `invalid_secret_get_missing_name.ut`
+    - updated `valid_capabilities_effects.ut`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
+  - secret-read CLI integration test (`compiler/sec4-cli/tests/json_output.rs`)
 - Outputs:
   - compile-time rejection of malformed `secrets.get` argument shapes,
   - updated fixtures/integration to explicit secret-name usage (`"TOKEN"`).
@@ -46,7 +46,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn readSecret(sec: SecretsCap) effects { secrets.read } -> Int {
   secrets.get(sec, "TOKEN");
   0

@@ -1,3 +1,3 @@
-module ailang-bench-go
+module sec4-bench-go
 
 go 1.25

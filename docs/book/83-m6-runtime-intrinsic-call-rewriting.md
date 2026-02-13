@@ -11,18 +11,18 @@ The C emitter now rewrites:
 - `time_now(...)`
 
 to:
-- `ailang_rt_time_now(...)`
+- `sec4_rt_time_now(...)`
 
-A runtime stub for `ailang_rt_time_now` is now part of `ailang_runtime.h/.c`.
+A runtime stub for `sec4_rt_time_now` is now part of `sec4_runtime.h/.c`.
 
 ### Why it exists
 
-AILang source-level intrinsic names can contain dotted namespaces (`time.now`). Those names are not valid C symbols. This slice introduces a minimal intrinsic-call lowering rule so generated C remains valid while preserving runtime ABI wiring.
+Untrusted<T> source-level intrinsic names can contain dotted namespaces (`time.now`). Those names are not valid C symbols. This slice introduces a minimal intrinsic-call lowering rule so generated C remains valid while preserving runtime ABI wiring.
 
 ### How it works internally
 
 - `emit_runtime_header()` now declares:
-  - `int64_t ailang_rt_time_now(void);`
+  - `int64_t sec4_rt_time_now(void);`
 - `emit_runtime_source()` now defines a minimal stub:
   - returns `0` for now.
 - C emission now runs expression strings through `lower_c_expr(...)` before writing them in:
@@ -48,9 +48,9 @@ AILang source-level intrinsic names can contain dotted namespaces (`time.now`). 
 
 ### Example usage
 
-AILang:
+Untrusted<T>:
 
-```ailang
+```ut
 fn current() effects { time.now } -> Int64 {
   time.now()
 }
@@ -59,7 +59,7 @@ fn current() effects { time.now } -> Int64 {
 Generated C return (simplified):
 
 ```c
-return ailang_rt_identity_i64(ailang_rt_time_now());
+return sec4_rt_identity_i64(sec4_rt_time_now());
 ```
 
 ### Tradeoffs and next steps
@@ -70,6 +70,6 @@ return ailang_rt_identity_i64(ailang_rt_time_now());
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - validates runtime header/source include `ailang_rt_time_now`
-  - validates `time.now()` lowers to `ailang_rt_time_now()` in emitted C
+- `compiler/sec4-core/tests/c_backend.rs`
+  - validates runtime header/source include `sec4_rt_time_now`
+  - validates `time.now()` lowers to `sec4_rt_time_now()` in emitted C

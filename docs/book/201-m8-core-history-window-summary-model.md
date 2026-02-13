@@ -1,6 +1,6 @@
 # 201 M8 Slice: Core History-Window Summary Model
 
-This chapter documents the M8 refactor that moves history-window summary semantics from CLI-only code into `ailang-core`.
+This chapter documents the M8 refactor that moves history-window summary semantics from CLI-only code into `sec4-core`.
 
 ## What it is
 
@@ -16,7 +16,7 @@ History-window behavior was previously duplicated in CLI logic. That made trend 
 
 ## How it works internally
 
-1. Core (`ailang-core/src/audit.rs`)
+1. Core (`sec4-core/src/audit.rs`)
    - Defines `AuditHistoryWindowSummary` with serialized field names matching existing summary payload expectations.
    - Implements `summarize_history_window(...)`:
      - oldest/latest/min/max/average risk
@@ -26,7 +26,7 @@ History-window behavior was previously duplicated in CLI logic. That made trend 
      - latest-vs-oldest severity deltas
 2. Core exports
    - `lib.rs` re-exports the new type and function.
-3. CLI (`ailang-cli/src/main.rs`)
+3. CLI (`sec4-cli/src/main.rs`)
    - keeps history file loading in CLI
    - delegates summary computation to core helper
    - uses core struct serialization for stderr and `--write-history-summary`.
@@ -34,10 +34,10 @@ History-window behavior was previously duplicated in CLI logic. That made trend 
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/audit.rs`
-  - `compiler/ailang-core/src/lib.rs`
-  - `compiler/ailang-cli/src/main.rs`
-  - `compiler/ailang-core/tests/audit_history_window.rs`
+  - `compiler/sec4-core/src/audit.rs`
+  - `compiler/sec4-core/src/lib.rs`
+  - `compiler/sec4-cli/src/main.rs`
+  - `compiler/sec4-core/tests/audit_history_window.rs`
 - Outputs:
   - canonical core summary model reused by CLI.
 - Constraints:

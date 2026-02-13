@@ -40,7 +40,7 @@ Implementation-filtered runs (for example `IMPLS=node,go`) should be obvious in 
 ## Example output
 
 ```markdown
-- Implementations in matrix (4): ailang, go, node, rust
+- Implementations in matrix (4): sec4, go, node, rust
 ```
 
 ## Tradeoffs and next steps

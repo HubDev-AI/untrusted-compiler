@@ -6,9 +6,9 @@ This chapter documents the next M6 vertical slice: introducing explicit runtime 
 
 ### What it is
 
-AILang now emits runtime ABI companion files for the C backend:
-- `ailang_runtime.h`
-- `ailang_runtime.c`
+Untrusted<T> now emits runtime ABI companion files for the C backend:
+- `sec4_runtime.h`
+- `sec4_runtime.c`
 
 Generated C now includes the runtime header explicitly.
 
@@ -18,18 +18,18 @@ The C backend needs a stable integration seam for runtime intrinsics and stdlib-
 
 ### How it works internally
 
-- `ailang-core` now exposes:
+- `sec4-core` now exposes:
   - `emit_runtime_header()`
   - `emit_runtime_source()`
 - `emit_c_program(...)` now emits:
-  - `#include "ailang_runtime.h"`
+  - `#include "sec4_runtime.h"`
 - CLI compile flow (`build --emit c-bin`) now:
   1. writes `build/generated.c`
-  2. writes `build/ailang_runtime.h`
-  3. writes `build/ailang_runtime.c`
+  2. writes `build/sec4_runtime.h`
+  3. writes `build/sec4_runtime.c`
   4. invokes `clang` with both C files and `-I build` include path
 
-The initial runtime functions are identity stubs (`ailang_rt_identity_i64`, `ailang_rt_identity_bool`) to lock the ABI flow without adding behavior-heavy runtime logic yet.
+The initial runtime functions are identity stubs (`sec4_rt_identity_i64`, `sec4_rt_identity_bool`) to lock the ABI flow without adding behavior-heavy runtime logic yet.
 
 ### Inputs, outputs, and constraints
 
@@ -50,13 +50,13 @@ The initial runtime functions are identity stubs (`ailang_rt_identity_i64`, `ail
 ### Example usage
 
 ```bash
-cargo run -p ailang -- build --emit c-bin --path examples/hello
+cargo run -p sec4 -- build --emit c-bin --path examples/hello
 ```
 
 Expected artifacts:
 - `examples/hello/build/generated.c`
-- `examples/hello/build/ailang_runtime.h`
-- `examples/hello/build/ailang_runtime.c`
+- `examples/hello/build/sec4_runtime.h`
+- `examples/hello/build/sec4_runtime.c`
 - `examples/hello/build/hello`
 
 ### Tradeoffs and next steps
@@ -67,8 +67,8 @@ Expected artifacts:
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - asserts generated C includes runtime header
   - validates emitted runtime header/source content
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - `build_emit_c_bin_compiles_binary_when_clang_available` now asserts runtime files are written

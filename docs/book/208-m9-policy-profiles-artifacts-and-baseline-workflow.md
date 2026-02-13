@@ -5,8 +5,8 @@ This chapter documents a Release Hardening (`M9`) slice that promotes policy pro
 ## What it is
 
 Added canonical policy profile files:
-- `policies/default-secure-prod.ailang.policy`
-- `policies/permissive-dev.ailang.policy`
+- `policies/default-secure-prod.sec4.policy`
+- `policies/permissive-dev.sec4.policy`
 
 Added parser tests that validate both files as first-class policy inputs.
 
@@ -14,12 +14,12 @@ Added parser tests that validate both files as first-class policy inputs.
 
 `M9` requires finalized secure policy profiles and release audit baselines. Keeping profiles only in prose is error-prone; real files are needed for reproducible audits and release checks.
 
-By committing profile artifacts, CI and release scripts can run `sec.audit` against the exact same profile definitions.
+By committing profile artifacts, CI and release scripts can run `sec4 audit` against the exact same profile definitions.
 
 ## How it works internally
 
 1. Added two concrete policy files under `policies/`.
-2. Added regression tests in `compiler/ailang-core/tests/policy.rs` using `include_str!`:
+2. Added regression tests in `compiler/sec4-core/tests/policy.rs` using `include_str!`:
    - parse profile contents with `parse_policy_str(...)`,
    - assert core posture toggles (mode/env/cors/internal-net/fs/replay).
 3. Profiles use only currently-supported policy keys in the parser, so they are executable inputs, not aspirational examples.
@@ -27,9 +27,9 @@ By committing profile artifacts, CI and release scripts can run `sec.audit` agai
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `policies/default-secure-prod.ailang.policy`
-  - `policies/permissive-dev.ailang.policy`
-  - `compiler/ailang-core/tests/policy.rs`
+  - `policies/default-secure-prod.sec4.policy`
+  - `policies/permissive-dev.sec4.policy`
+  - `compiler/sec4-core/tests/policy.rs`
 - Outputs:
   - stable, versioned profile artifacts for audit and release workflows.
 - Constraints:
@@ -46,15 +46,15 @@ By committing profile artifacts, CI and release scripts can run `sec.audit` agai
 Use a profile in a project root:
 
 ```bash
-cp policies/default-secure-prod.ailang.policy examples/hello/ailang.policy
-ailang sec audit --path examples/hello --format json
+cp policies/default-secure-prod.sec4.policy examples/hello/sec4.policy
+sec4 audit --path examples/hello --format json
 ```
 
 Swap to permissive dev profile for local posture comparisons:
 
 ```bash
-cp policies/permissive-dev.ailang.policy examples/hello/ailang.policy
-ailang sec audit --path examples/hello --format text
+cp policies/permissive-dev.sec4.policy examples/hello/sec4.policy
+sec4 audit --path examples/hello --format text
 ```
 
 ## Tradeoffs and next steps

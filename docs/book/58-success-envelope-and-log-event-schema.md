@@ -14,7 +14,7 @@ This chapter adds two aligned API contracts:
 
 ### Shape
 
-```ailang
+```ut
 type StdSuccess<T> = {
   ok: Bool
   status: Int
@@ -44,7 +44,7 @@ Example JSON:
 
 ### Minimal API
 
-```ailang
+```ut
 module res {
   fn ok<T>(status: Int, schema: Schema<T>, value: T) -> Result<Response, HttpError>
   fn okMeta<T>(status: Int, schema: Schema<T>, value: T, meta: Map<String, ErrorDetailValue>) -> Result<Response, HttpError>
@@ -65,7 +65,7 @@ Optional policy knob:
 
 ### Types
 
-```ailang
+```ut
 type LogLevel = "debug" | "info" | "warn" | "error"
 
 type LogEvent = {
@@ -129,7 +129,7 @@ Hard rule:
 
 ### Logging API
 
-```ailang
+```ut
 type Log = {
   emit: fn(LogEvent) effects { log } -> Unit
   info: fn(event: String, attrs?: Map<String, LogAttr>) effects { log } -> Unit

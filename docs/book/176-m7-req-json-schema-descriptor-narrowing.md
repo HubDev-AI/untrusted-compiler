@@ -27,11 +27,11 @@ In `enforce_trust_gate_requirements` for `req.json`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_req_json_non_schema_descriptor_argument_type.ai`
+    - `invalid_req_json_non_schema_descriptor_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of non-schema descriptor placeholders for `req.json`,
   - deterministic schema-tagged diagnostics for CLI/editor tooling.
@@ -46,7 +46,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn createUser() effects { net } -> Int {
   req.json("CreateUserRequest");
   0

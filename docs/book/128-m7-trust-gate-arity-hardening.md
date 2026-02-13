@@ -28,11 +28,11 @@ In semantic trust-gate enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures for extra-argument gate misuse:
     - `validate.email(input, input)`
     - `path.under(base, input, input)`
-  - diagnostic-tag coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - diagnostic-tag coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of malformed gate arity,
   - deterministic gate-shape diagnostics for editor/tooling consumers.
@@ -49,7 +49,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn validateInput(base: PathSafe, input: Untrusted<String>) -> Int {
   validate.email(input);
   path.under(base, input);

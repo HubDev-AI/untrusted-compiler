@@ -25,15 +25,15 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_auth_require_argument_type.ai`
-    - `invalid_auth_require_role_missing_arg.ai`
+    - `invalid_auth_require_argument_type.ut`
+    - `invalid_auth_require_role_missing_arg.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - C-lowering integration coverage updates:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of malformed auth-helper invocations,
   - tagged diagnostics consumable by future editor quick-fix flows.
@@ -50,7 +50,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn ensureAdmin(ctx: Ctx) -> Int {
   auth.require(ctx);
   auth.requireRole(ctx, "admin");

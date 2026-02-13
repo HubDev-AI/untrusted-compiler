@@ -11,8 +11,8 @@ Added intrinsic support for:
 - `db.execTx` / `db_exec_tx`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_db_tx`
-- `ailang_rt_db_exec_tx`
+- `sec4_rt_db_tx`
+- `sec4_rt_db_exec_tx`
 
 ### Why it exists
 
@@ -35,7 +35,7 @@ The v0 stdlib surface includes a transaction capability path (`DbCap` -> `TxCap`
 ### Inputs, outputs, and constraints
 
 - Input: transaction helper calls in bootstrap code.
-- Output: generated C calls to `ailang_rt_db_tx(...)` and `ailang_rt_db_exec_tx(...)`.
+- Output: generated C calls to `sec4_rt_db_tx(...)` and `sec4_rt_db_exec_tx(...)`.
 - Constraints:
   - runtime transaction behavior remains stubbed in M7.
   - this slice validates compile-path typing, effect checks, capability checks, and metadata tags.
@@ -48,7 +48,7 @@ The v0 stdlib surface includes a transaction capability path (`DbCap` -> `TxCap`
 
 ### Example usage
 
-```ailang
+```ut
 fn txDemo(db: DbCap, tx: TxCap, query: SqlQuery) effects { db.tx, db.write } -> Int {
   db.tx(db);
   db.execTx(tx, query);
@@ -63,9 +63,9 @@ fn txDemo(db: DbCap, tx: TxCap, query: SqlQuery) effects { db.tx, db.write } -> 
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime ABI assertions include `ailang_rt_db_tx` and `ailang_rt_db_exec_tx`
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime ABI assertions include `sec4_rt_db_tx` and `sec4_rt_db_exec_tx`
   - db/fs/net rewrite test now covers `db.tx` and `db.execTx`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - db/fs/net `c-bin` integration fixture now uses `TxCap` and transaction helper calls
   - generated C assertions include transaction runtime symbols

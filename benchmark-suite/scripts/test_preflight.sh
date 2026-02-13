@@ -3,7 +3,7 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
-out="$($root_dir/scripts/preflight.sh --impls ailang,node --dry-run-only)"
+out="$($root_dir/scripts/preflight.sh --impls sec4,node --dry-run-only)"
 if ! grep -q '^OK       HTTP probing (curl)$' <<<"$out"; then
   echo "preflight missing curl check" >&2
   exit 1
@@ -12,12 +12,12 @@ if ! grep -q '^OK       JSON processing (jq)$' <<<"$out"; then
   echo "preflight missing jq check" >&2
   exit 1
 fi
-if ! grep -q 'AILang compiler runner' <<<"$out"; then
-  echo "preflight missing ailang tool check" >&2
+if ! grep -q 'Untrusted<T> compiler runner' <<<"$out"; then
+  echo "preflight missing sec4 tool check" >&2
   exit 1
 fi
 
-out_equals="$($root_dir/scripts/preflight.sh --impls=ailang,node --dry-run-only)"
+out_equals="$($root_dir/scripts/preflight.sh --impls=sec4,node --dry-run-only)"
 if ! grep -q '^preflight passed$' <<<"$out_equals"; then
   echo "preflight did not pass with --impls= syntax" >&2
   exit 1

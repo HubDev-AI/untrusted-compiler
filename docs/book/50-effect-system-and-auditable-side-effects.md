@@ -4,7 +4,7 @@ This chapter documents the implemented M3 effects slice.
 
 ## What it is
 
-AILang now supports function effect declarations via `effects { ... }` and compiler checks that used effects are a subset of declared effects.
+Untrusted<T> now supports function effect declarations via `effects { ... }` and compiler checks that used effects are a subset of declared effects.
 
 ## Why it exists
 
@@ -44,7 +44,7 @@ Example failing case:
 
 ## Example usage
 
-```ailang
+```ut
 fn do_write() effects { db.write } -> Int {
   1
 }

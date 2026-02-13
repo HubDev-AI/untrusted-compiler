@@ -13,10 +13,10 @@ Added intrinsic support for:
 - `log.withError` / `log_with_error`
 
 Lowered runtime ABI stubs:
-- `ailang_rt_log_attr_redacted`
-- `ailang_rt_log_with_attr`
-- `ailang_rt_log_with_http`
-- `ailang_rt_log_with_error`
+- `sec4_rt_log_attr_redacted`
+- `sec4_rt_log_with_attr`
+- `sec4_rt_log_with_http`
+- `sec4_rt_log_with_error`
 
 Also added primitive type names:
 - `LogAttr`
@@ -39,7 +39,7 @@ The v0 logging model uses structured events and explicit redaction helpers. With
 ### Inputs, outputs, and constraints
 
 - Input: structured log helper calls in bootstrap service code.
-- Output: generated C calls to runtime symbols `ailang_rt_log_*`.
+- Output: generated C calls to runtime symbols `sec4_rt_log_*`.
 - Constraints:
   - runtime behavior remains stubbed in M7.
   - this slice validates compile/link and API-shape coverage, not final runtime log serialization behavior.
@@ -53,7 +53,7 @@ The v0 logging model uses structured events and explicit redaction helpers. With
 
 ### Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let event = log.event("user.created");
   let attr = log.attrRedacted("token");
@@ -72,9 +72,9 @@ fn main() -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
-  - runtime ABI assertions include new `ailang_rt_log_*` helper symbols
+- `compiler/sec4-core/tests/c_backend.rs`
+  - runtime ABI assertions include new `sec4_rt_log_*` helper symbols
   - log-builder rewrite test now asserts `attrRedacted/withAttr/withHttp/withError` lowering
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - log-builder `c-bin` integration fixture now includes new helper calls
   - generated C assertions cover all new runtime symbols

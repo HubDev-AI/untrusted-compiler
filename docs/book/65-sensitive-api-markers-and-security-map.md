@@ -1,12 +1,12 @@
 # 65 Sensitive API Markers and security_map Metadata (v0)
 
-This chapter defines compiler-level semantic tags used by `sec.audit` and related tooling.
+This chapter defines compiler-level semantic tags used by `sec4 audit` and related tooling.
 
 ## 1) Tag model
 
 ### Tag record
 
-```ailang
+```ut
 type Tag = {
   id: String
   kind: "source" | "sink" | "gate" | "effect" | "capability" | "policy" | "middleware"
@@ -93,7 +93,7 @@ All security-relevant stdlib symbols must be pre-tagged in compiler symbol regis
 
 Annotation shape:
 
-```ailang
+```ut
 @allow(policy="net.internal.enabled",
        bypass=["sink.net.internal_request"],
        reason="Calls internal inventory service",

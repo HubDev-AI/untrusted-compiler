@@ -50,13 +50,13 @@ Running wrk2 manually per endpoint is error-prone and inconsistent. The profile 
 Dry-run command resolution:
 
 ```bash
-benchmark-suite/scripts/run_profile.sh --dry-run ailang ping
+benchmark-suite/scripts/run_profile.sh --dry-run sec4 ping
 ```
 
 Real profile run:
 
 ```bash
-make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode
+make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=decode
 ```
 
 ## Tradeoffs and next steps

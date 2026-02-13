@@ -1,6 +1,11 @@
 # stdlib/
 
-AILang standard library modules live here.
+Untrusted<T> standard library modules live here.
+
+Namespace lock:
+- `ut/std`
+- `ut/http`
+- `ut/sec`
 
 M0 status:
 - No stdlib implementation yet.

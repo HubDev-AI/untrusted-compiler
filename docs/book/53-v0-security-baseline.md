@@ -1,4 +1,4 @@
-# 53 AILang v0 Security Baseline
+# 53 Untrusted<T> v0 Security Baseline
 
 This chapter defines compile-time rules and runtime requirements for the v0 security-first baseline.
 

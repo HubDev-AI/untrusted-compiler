@@ -5,7 +5,7 @@ This directory is the reproducible benchmark harness scaffold for M10.
 ## Goal
 
 Measure end-to-end service behavior across identical implementations:
-- AILang
+- Untrusted<T>
 - Go
 - Node.js (TypeScript)
 - Rust
@@ -30,29 +30,29 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite preflight`
    - for dry-run-only checks: `make -C benchmark-suite preflight-dry`
 4. Run benchmark profile (once service is implemented):
-   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=ping`
-   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode`
-   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
-   - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-get`
-   - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=ailang ENDPOINT=decode`
-   - analyze step output: `make -C benchmark-suite analyze-step-profile IMPL=ailang ENDPOINT=decode`
-   - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=ailang,node,go,rust ENDPOINTS=decode`
+   - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=ping`
+   - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=decode`
+   - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-post`
+   - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-get`
+   - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=sec4 ENDPOINT=decode`
+   - analyze step output: `make -C benchmark-suite analyze-step-profile IMPL=sec4 ENDPOINT=decode`
+   - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=sec4,node,go,rust ENDPOINTS=decode`
 5. Convert raw wrk2 output to summary JSON:
-   - `make -C benchmark-suite summarize IMPL=ailang`
+   - `make -C benchmark-suite summarize IMPL=sec4`
 6. Bundle summaries + env into one report:
-   - `make -C benchmark-suite report IMPL=ailang`
+   - `make -C benchmark-suite report IMPL=sec4`
 7. Build endpoint comparison from report bundles:
    - `make -C benchmark-suite compare`
 8. Build all-endpoint comparison matrix:
    - `make -C benchmark-suite compare-matrix`
 9. Analyze tail-latency and target-coverage signals:
    - `make -C benchmark-suite analyze-matrix`
-10. Generate markdown benchmark report (matrix + analysis + sec.audit):
+10. Generate markdown benchmark report (matrix + analysis + sec4 audit):
    - `make -C benchmark-suite publish-report`
 11. Run full cross-impl orchestrator:
    - `make -C benchmark-suite bench-matrix-dry`
    - `make -C benchmark-suite bench-matrix`
-   - default run includes `ailang,node,go,rust`; override with `IMPLS=ailang,node,go,rust,c`
+   - default run includes `sec4,node,go,rust`; override with `IMPLS=sec4,node,go,rust,c`
    - override endpoint set with `ENDPOINTS=ping,decode` for focused runs
 12. Run step-load cross-impl orchestrator:
    - `make -C benchmark-suite bench-step-matrix-dry`
@@ -63,7 +63,7 @@ Measure end-to-end service behavior across identical implementations:
 14. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
 15. Verify benchmark bundle completeness:
-   - `make -C benchmark-suite verify-bundle IMPLS=ailang,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
+   - `make -C benchmark-suite verify-bundle IMPLS=sec4,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
 16. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
@@ -78,8 +78,8 @@ Measure end-to-end service behavior across identical implementations:
 - Use constant-rate load for primary comparisons.
 - Ensure `wrk2` is installed and available in `PATH` for non-dry-run profile execution.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
-- `services/ailang`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
-- Orchestrator embeds `sec.audit` data into `ailang-report.json` when baseline artifact is available.
+- `services/sec4`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
+- Orchestrator embeds `sec4 audit` data into `sec4-report.json` when baseline artifact is available.
 - For quick local loops, override profile runtime via env vars:
   - `BENCH_THREADS`, `BENCH_CONNECTIONS`, `BENCH_DURATION`
   - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST|BENCH_TARGET_USERS_GET`

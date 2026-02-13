@@ -1,0 +1,4 @@
+error[E4001]: log sink argument must be `LogValue`
+  --> invalid_log_sink_payload_argument_type.ut:2:12
+  note: found `Int`
+  note: construct payloads via `log.event/field/obj/str/i64/bool/redacted`

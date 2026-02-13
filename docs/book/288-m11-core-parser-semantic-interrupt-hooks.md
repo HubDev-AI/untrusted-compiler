@@ -1,15 +1,15 @@
 # 288 M11 Slice: Core Parser/Semantic Interrupt Hooks
 
-This chapter documents adding interrupt-aware parse and semantic entrypoints in `ailang-core` and wiring LSP budget/deadline flows to use them.
+This chapter documents adding interrupt-aware parse and semantic entrypoints in `sec4-core` and wiring LSP budget/deadline flows to use them.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-core/src/lib.rs`
-- `compiler/ailang-core/src/parser.rs`
-- `compiler/ailang-core/src/semantic.rs`
-- `compiler/ailang-core/tests/interrupts.rs`
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-core/src/lib.rs`
+- `compiler/sec4-core/src/parser.rs`
+- `compiler/sec4-core/src/semantic.rs`
+- `compiler/sec4-core/tests/interrupts.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - Introduced shared core interrupt contract:
@@ -38,10 +38,10 @@ Before this slice, LSP could only short-circuit between stages. A long parse/sem
 
 ## Tests added/updated
 
-- `compiler/ailang-core/tests/interrupts.rs`
+- `compiler/sec4-core/tests/interrupts.rs`
   - `parse_source_with_interrupt_emits_budget_info_diagnostic`
   - `analyze_program_with_interrupt_emits_budget_info_diagnostic`
-- Existing `compiler/ailang-lsp` test suite remains green with budget/deadline scenarios.
+- Existing `compiler/sec4-lsp` test suite remains green with budget/deadline scenarios.
 
 ## Tradeoffs and next steps
 

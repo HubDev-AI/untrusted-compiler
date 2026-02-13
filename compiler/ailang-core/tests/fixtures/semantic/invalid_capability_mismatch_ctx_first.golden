@@ -1,3 +1,0 @@
-error[E2004]: capability type mismatch
-  --> invalid_capability_mismatch_ctx_first.ai:2:16
-  note: `db.exec` expects capability `DbCap` at argument 2, got `NetCap`

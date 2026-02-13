@@ -1,6 +1,6 @@
 # 55 v0 Typing and Effects Rules (Security-Critical Core)
 
-This chapter captures the minimal formal rule set that makes AILang security checks enforceable at compile time.
+This chapter captures the minimal formal rule set that makes Untrusted<T> security checks enforceable at compile time.
 
 ## 1) Core judgments
 

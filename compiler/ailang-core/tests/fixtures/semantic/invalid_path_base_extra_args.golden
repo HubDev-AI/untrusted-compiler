@@ -1,3 +1,0 @@
-error[E4001]: path.base expects exactly one argument
-  --> invalid_path_base_extra_args.ai:2:3
-  note: use `path.base("/base/path")`

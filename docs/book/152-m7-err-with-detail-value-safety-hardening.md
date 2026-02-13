@@ -27,14 +27,14 @@ In semantic call enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_err_with_detail_secret_value.ai`
+    - `invalid_err_with_detail_secret_value.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - integration fixture alignment:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection of unsafe error-detail payloads,
   - deterministic, tagged diagnostics for tooling.
@@ -51,7 +51,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn attach(base: StdError, value: Int) -> StdError {
   err.withDetail(base, "field", value)
 }

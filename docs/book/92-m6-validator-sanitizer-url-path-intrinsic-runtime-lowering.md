@@ -18,21 +18,21 @@ C emission now rewrites:
 - `path.under` / `validate.pathUnder`
 
 and underscore aliases to runtime symbols:
-- `ailang_rt_validate_*`
-- `ailang_rt_sanitize_html`
-- `ailang_rt_url_public` / `ailang_rt_url_internal`
-- `ailang_rt_path_under`
+- `sec4_rt_validate_*`
+- `sec4_rt_sanitize_html`
+- `sec4_rt_url_public` / `sec4_rt_url_internal`
+- `sec4_rt_path_under`
 
 Runtime ABI stubs were added for all these functions.
 
 ### Why it exists
 
-These gates define trusted-boundary flow in AILang. Completing their backend lowering means the C pipeline can now compile representative programs that exercise the full security-gate surface, not just effectful sinks.
+These gates define trusted-boundary flow in Untrusted<T>. Completing their backend lowering means the C pipeline can now compile representative programs that exercise the full security-gate surface, not just effectful sinks.
 
 ### How it works internally
 
 - Added mapping rules in `lower_c_expr(...)` for dotted/underscore gate names.
-- Added corresponding runtime stubs in `runtime/c/ailang_runtime.h/.c`.
+- Added corresponding runtime stubs in `runtime/c/sec4_runtime.h/.c`.
 - Added C-backend and CLI integration tests that validate emitted symbols and runnable `c-bin` outputs.
 
 ### Inputs, outputs, and constraints
@@ -51,7 +51,7 @@ These gates define trusted-boundary flow in AILang. Completing their backend low
 
 ### Example usage
 
-```ailang
+```ut
 fn gates(input: Untrusted<String>, base: PathSafe) effects { net } -> Int {
   validate.headerValue(input);
   validate.email(input);
@@ -70,7 +70,7 @@ fn gates(input: Untrusted<String>, base: PathSafe) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - new `c_backend_rewrites_gate_intrinsics_to_runtime_symbols`
-- `compiler/ailang-cli/tests/json_output.rs`
+- `compiler/sec4-cli/tests/json_output.rs`
   - new `build_emit_c_bin_handles_gate_intrinsics_when_clang_available`

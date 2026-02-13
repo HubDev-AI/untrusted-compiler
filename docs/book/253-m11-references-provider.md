@@ -1,11 +1,11 @@
 # 253 M11 Slice: References Provider
 
-This chapter documents adding `textDocument/references` support to `ailang-language-server`.
+This chapter documents adding `textDocument/references` support to `sec4audit-language-server`.
 
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - LSP now advertises `referencesProvider: true`.
@@ -21,7 +21,7 @@ After diagnostics, definition, and hover, references is the next baseline naviga
 
 1. Parse request URI/position plus `includeDeclaration`.
 2. Load source from current LSP document state (or disk fallback for `file://` URI).
-3. Parse source via `ailang_core::parse_source`.
+3. Parse source via `sec4_core::parse_source`.
 4. Find identifier under cursor.
 5. Resolve matching function symbol by name.
 6. Collect all identifier hits with the same name across function bodies.
@@ -47,7 +47,7 @@ After diagnostics, definition, and hover, references is the next baseline naviga
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` unit tests now also cover:
+`compiler/sec4-lsp` unit tests now also cover:
 - initialize response advertises references provider.
 - references query returns call sites when declaration is excluded.
 - references query includes declaration when requested.

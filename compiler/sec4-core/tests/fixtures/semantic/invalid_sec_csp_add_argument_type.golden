@@ -1,0 +1,9 @@
+error[E4001]: sec.cspAdd directive argument must be `String`
+  --> invalid_sec_csp_add_argument_type.ut:3:19
+  note: found `Int`
+  note: use string CSP directive names
+
+error[E4001]: sec.cspAdd sources argument must be `String`
+  --> invalid_sec_csp_add_argument_type.ut:3:22
+  note: found `Int`
+  note: use string CSP source-list descriptors

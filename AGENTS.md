@@ -1,6 +1,6 @@
-# AILang Agent Collaboration Guide
+# Untrusted<T> Agent Collaboration Guide
 
-This file defines the minimum working agreement for any AI agent contributing to AILang.
+This file defines the minimum working agreement for any AI agent contributing to Untrusted<T>.
 
 ## Project Root
 
@@ -8,7 +8,7 @@ This file defines the minimum working agreement for any AI agent contributing to
 
 ## Source of Truth
 
-- Master roadmap: `docs/05-ailang-master-roadmap.md`
+- Master roadmap: `docs/05-sec4-master-roadmap.md`
 - Book index: `docs/book/README.md`
 - Security baseline: `docs/book/53-v0-security-baseline.md`
 - Security stdlib/API contract: `docs/book/54-v0-stdlib-security-surface.md`
@@ -48,9 +48,9 @@ This file defines the minimum working agreement for any AI agent contributing to
 From repo root, run as needed:
 
 - `cargo test -q`
-- `cargo run -q -p ailang -- check --path examples/hello`
-- `cargo run -q -p ailang -- check --path examples/hello --emit ast`
-- `cargo run -q -p ailang -- build --path examples/hello`
+- `cargo run -q -p sec4 -- check --path examples/hello`
+- `cargo run -q -p sec4 -- check --path examples/hello --emit ast`
+- `cargo run -q -p sec4 -- build --path examples/hello`
 
 ## Guardrails
 

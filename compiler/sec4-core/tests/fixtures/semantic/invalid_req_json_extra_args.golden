@@ -1,0 +1,3 @@
+error[E4001]: schema gate expects exactly one schema argument
+  --> invalid_req_json_extra_args.ut:2:3
+  note: `req.json` call shape is `req.json(schema)`

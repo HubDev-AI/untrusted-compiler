@@ -1,4 +1,4 @@
-# 200 M8 Slice: sec.audit History-Window Output-Mode Validation
+# 200 M8 Slice: sec4 audit History-Window Output-Mode Validation
 
 This chapter documents integration coverage that validates history-window summary behavior across output modes.
 
@@ -10,7 +10,7 @@ Added CLI integration coverage proving:
 
 ## Why it exists
 
-`sec audit` has strict output contracts:
+`audit` has strict output contracts:
 - JSON mode must keep stdout machine-parseable.
 - Text mode should keep stderr clean on success.
 
@@ -28,7 +28,7 @@ History-window summaries are auxiliary output, so mode-specific routing must sta
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-cli/tests/json_output.rs`
+  - `compiler/sec4-cli/tests/json_output.rs`
 - Output:
   - explicit regression guard for output-channel routing of history-window summaries.
 - Constraint:
@@ -45,13 +45,13 @@ History-window summaries are auxiliary output, so mode-specific routing must sta
 Text mode:
 
 ```bash
-ailang sec audit --history-dir .ailang/audit-history --history-window 2
+sec4 audit --history-dir .sec4/audit-history --history-window 2
 ```
 
 JSON mode:
 
 ```bash
-ailang sec audit --format json --history-dir .ailang/audit-history --history-window 2
+sec4 audit --format json --history-dir .sec4/audit-history --history-window 2
 ```
 
 ## Tradeoffs and next steps

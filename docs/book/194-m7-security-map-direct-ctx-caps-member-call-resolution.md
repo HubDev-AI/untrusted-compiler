@@ -27,8 +27,8 @@ The previous slice handled local aliases (for example `let repo = ctx.caps.db; r
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/security_map.rs`
-  - `compiler/ailang-core/tests/security_map.rs`
+  - `compiler/sec4-core/src/security_map.rs`
+  - `compiler/sec4-core/tests/security_map.rs`
 - Output:
   - direct capability-bag calls now emit canonical security metadata.
 - Constraint:
@@ -40,7 +40,7 @@ The previous slice handled local aliases (for example `let repo = ctx.caps.db; r
 
 ## Example usage
 
-```ailang
+```ut
 fn write(ctx: Ctx, q: SqlQuery) {
   ctx.caps.db.exec(ctx.caps.db, q)
 }

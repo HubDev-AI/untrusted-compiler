@@ -1,6 +1,6 @@
 # Book Writing Checklist
 
-Before completing a task, confirm the docs update can be read by someone new to AILang.
+Before completing a task, confirm the docs update can be read by someone new to Untrusted<T>.
 
 - Motivation is stated before implementation details.
 - Behavior/spec is explicit and testable.

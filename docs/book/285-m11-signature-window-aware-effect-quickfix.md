@@ -5,7 +5,7 @@ This chapter documents improving `E2001` quick-fix anchoring with parser-derived
 ## What it is
 
 Updated:
-- `compiler/ailang-lsp/src/main.rs`
+- `compiler/sec4-lsp/src/main.rs`
 
 Key changes:
 - effect quick-fix now derives a function signature search window from parsed AST spans:
@@ -40,7 +40,7 @@ Pure text scanning for nearest `fn` line can be confused by `fn` text inside fun
 
 ## Tests added/updated
 
-`compiler/ailang-lsp` now includes:
+`compiler/sec4-lsp` now includes:
 - `code_action_effect_quickfix_uses_function_signature_window_not_body_text_hits`:
   - validates `fn` text in function body comments does not break effect quick-fix anchoring.
 

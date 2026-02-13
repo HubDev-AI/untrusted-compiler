@@ -1,0 +1,4 @@
+error[E4001]: schema gate requires schema argument
+  --> invalid_missing_schema_gate.ut:2:3
+  note: `req.json` must be called as `req.json(schema)` in v0.1
+  note: this gate converts inbound untrusted payload into trusted typed data

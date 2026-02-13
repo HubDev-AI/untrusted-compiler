@@ -24,17 +24,17 @@ In semantic trust/sink contract enforcement:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_secret_reveal_missing_secret.ai`
+    - `invalid_secret_reveal_missing_secret.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
   - security metadata/audit fixtures:
-    - `compiler/ailang-core/tests/security_map.rs`
-    - `compiler/ailang-core/tests/sec_audit.rs`
+    - `compiler/sec4-core/tests/security_map.rs`
+    - `compiler/sec4-core/tests/sec_audit.rs`
 - Outputs:
   - compile-time rejection of malformed reveal helper calls,
-  - preserved deterministic `security_map`/`sec.audit` coverage using canonical reveal shape.
+  - preserved deterministic `security_map`/`sec4 audit` coverage using canonical reveal shape.
 - Constraint:
   - this slice changes semantic contracts only; runtime ABI symbols remain unchanged.
 
@@ -46,7 +46,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn unsafeUnseal(ctx: Ctx, sec: SecretsCap, token: Secret<String>)
   effects { secrets.reveal }
   -> Int

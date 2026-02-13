@@ -33,8 +33,8 @@ Follow-up continuation-based statement control-flow lowering is documented in `d
   - `mir_lowering_splits_return_if_into_branch_blocks`
   - `mir_lowering_splits_return_match_into_switch_blocks`
 - MIR fixture/golden coverage:
-  - `valid_return_if.ai` + `.golden`
-  - `valid_return_match.ai` + `.golden`
+  - `valid_return_if.ut` + `.golden`
+  - `valid_return_match.ut` + `.golden`
 
 ## Tradeoffs
 - This slice handles control flow at function return sites only.

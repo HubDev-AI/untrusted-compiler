@@ -52,13 +52,13 @@ Full matrix runs are expensive and slower to debug. Endpoint filtering allows sh
 Focused ping-only dry run:
 
 ```bash
-make -C benchmark-suite bench-matrix-dry IMPLS=ailang,node ENDPOINTS=ping
+make -C benchmark-suite bench-matrix-dry IMPLS=sec4,node ENDPOINTS=ping
 ```
 
 Focused decode/users-post real run:
 
 ```bash
-make -C benchmark-suite bench-matrix IMPLS=ailang,node,go,rust ENDPOINTS=decode,users-post
+make -C benchmark-suite bench-matrix IMPLS=sec4,node,go,rust ENDPOINTS=decode,users-post
 ```
 
 ## Tradeoffs and next steps

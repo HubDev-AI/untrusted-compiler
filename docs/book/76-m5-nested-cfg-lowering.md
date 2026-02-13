@@ -31,8 +31,8 @@ Follow-up MIR block-id normalization is documented in `docs/book/77-m5-canonical
   - `mir_lowering_recurses_nested_statement_if_in_branch_tail`
   - `mir_lowering_recurses_nested_return_if_match`
 - MIR fixture/golden coverage:
-  - `valid_nested_stmt_if.ai` + `.golden`
-  - `valid_nested_return_if_match.ai` + `.golden`
+  - `valid_nested_stmt_if.ut` + `.golden`
+  - `valid_nested_return_if_match.ut` + `.golden`
 
 ## Tradeoffs
 - Continuation block ids are reserved early in statement-context lowering, so block numbering may place join blocks before branch-arm ids.

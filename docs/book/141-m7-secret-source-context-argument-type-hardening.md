@@ -24,11 +24,11 @@ In `enforce_secret_source_call_shapes(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixture:
-    - `invalid_secret_get_context_argument_type.ai`
+    - `invalid_secret_get_context_argument_type.ut`
   - diagnostic-tag coverage:
-    - `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection of invalid context-first `secrets.get` calls,
   - secret-tagged diagnostics aligned with security-first tooling surfaces.
@@ -43,7 +43,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn readSecret(ctx: Ctx, sec: SecretsCap) effects { secrets.read } -> Int {
   secrets.get(ctx, sec, "API_TOKEN");
   0

@@ -10,7 +10,7 @@ Added intrinsic support for:
 - `csrf.issueToken` / `csrf_issue_token`
 
 It lowers to runtime ABI stub:
-- `ailang_rt_csrf_issue_token`
+- `sec4_rt_csrf_issue_token`
 
 ### Why it exists
 
@@ -40,7 +40,7 @@ The CSRF middleware spec includes token issuance helpers. Without bridge support
 
 ### Example usage
 
-```ailang
+```ut
 fn issue(ctx: Int) effects { net } -> Int {
   csrf.issueToken(ctx);
   0
@@ -54,10 +54,10 @@ fn issue(ctx: Int) effects { net } -> Int {
 
 ## Tests updated
 
-- `compiler/ailang-core/tests/c_backend.rs`
+- `compiler/sec4-core/tests/c_backend.rs`
   - added `c_backend_rewrites_csrf_issue_token_intrinsic_to_runtime_symbol`
-  - runtime ABI assertions include `ailang_rt_csrf_issue_token`
-- `compiler/ailang-cli/tests/json_output.rs`
+  - runtime ABI assertions include `sec4_rt_csrf_issue_token`
+- `compiler/sec4-cli/tests/json_output.rs`
   - added `build_emit_c_bin_handles_csrf_issue_token_intrinsic_when_clang_available`
-- `compiler/ailang-core/src/security_map.rs`
+- `compiler/sec4-core/src/security_map.rs`
   - added `csrf.issueToken` call-tag mapping to `effect.net`

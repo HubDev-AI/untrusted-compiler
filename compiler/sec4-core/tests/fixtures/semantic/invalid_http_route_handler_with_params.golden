@@ -1,0 +1,4 @@
+error[E4001]: route handler must not declare parameters in v0 runtime bridge
+  --> invalid_http_route_handler_with_params.ut:7:31
+  note: function `createUser` declares 1 parameter(s); route handlers are currently zero-arg
+  note: move request/schema acquisition into the handler body (for example via `req.json(...)`)

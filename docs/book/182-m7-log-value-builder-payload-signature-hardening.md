@@ -28,16 +28,16 @@ Checks run before log sinks, so malformed builder payloads fail early.
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
+  - `compiler/sec4-core/src/semantic.rs`
   - semantic fixtures:
-    - `invalid_log_str_argument_type.ai`
-    - `invalid_log_i64_argument_type.ai`
-    - `invalid_log_bool_argument_type.ai`
-    - `invalid_log_field_argument_type.ai`
-  - tag tests in `compiler/ailang-core/tests/diagnostic_tags.rs`
+    - `invalid_log_str_argument_type.ut`
+    - `invalid_log_i64_argument_type.ut`
+    - `invalid_log_bool_argument_type.ut`
+    - `invalid_log_field_argument_type.ut`
+  - tag tests in `compiler/sec4-core/tests/diagnostic_tags.rs`
   - log builder integration fixtures in:
-    - `compiler/ailang-core/tests/c_backend.rs`
-    - `compiler/ailang-cli/tests/json_output.rs`
+    - `compiler/sec4-core/tests/c_backend.rs`
+    - `compiler/sec4-cli/tests/json_output.rs`
 - Outputs:
   - compile-time rejection for malformed log builder payload arguments.
   - typed log builder fixtures continue to pass `c-bin` integration tests.
@@ -54,7 +54,7 @@ Examples:
 
 ## Example usage
 
-```ailang
+```ut
 fn main() -> Int {
   let count = log.i64(1);
   let field = log.field("count", count);

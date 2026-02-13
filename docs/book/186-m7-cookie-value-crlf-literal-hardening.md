@@ -22,9 +22,9 @@ In `enforce_cookie_build_signature(...)`:
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/semantic.rs`
-  - semantic fixture: `invalid_cookie_build_value_crlf_literal.ai`
-  - tag test coverage in `compiler/ailang-core/tests/diagnostic_tags.rs`
+  - `compiler/sec4-core/src/semantic.rs`
+  - semantic fixture: `invalid_cookie_build_value_crlf_literal.ut`
+  - tag test coverage in `compiler/sec4-core/tests/diagnostic_tags.rs`
 - Outputs:
   - compile-time rejection for CR/LF cookie value literals.
 - Constraint:
@@ -37,7 +37,7 @@ Example:
 
 ## Example usage
 
-```ailang
+```ut
 fn ok() -> Int {
   cookie.build("session", "abc123");
   0

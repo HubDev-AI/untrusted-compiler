@@ -58,19 +58,19 @@ When tool dependencies were missing (most often `wrk2`), runs could appear stall
 Dry-run preflight:
 
 ```bash
-make -C benchmark-suite preflight-dry IMPLS=ailang,node,go,rust,c
+make -C benchmark-suite preflight-dry IMPLS=sec4,node,go,rust,c
 ```
 
 Real-run preflight:
 
 ```bash
-make -C benchmark-suite preflight IMPLS=ailang,node,go,rust
+make -C benchmark-suite preflight IMPLS=sec4,node,go,rust
 ```
 
 Matrix dry run (includes orchestrator-integrated preflight):
 
 ```bash
-make -C benchmark-suite bench-matrix-dry IMPLS=ailang,node
+make -C benchmark-suite bench-matrix-dry IMPLS=sec4,node
 ```
 
 ## Tradeoffs and next steps

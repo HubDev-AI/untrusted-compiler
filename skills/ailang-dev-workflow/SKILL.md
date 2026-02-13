@@ -1,15 +1,15 @@
 ---
-name: ailang-dev-workflow
-description: "Execute AILang implementation work from planning through code, tests, and documentation. Use when building or changing compiler/runtime/stdlib features, refining language rules, adding security constraints, or preparing releases. Enforce a strict workflow: pick milestone scope, implement smallest vertical slice, validate with tests, update docs as book chapters, and provide a clear explanation for every implemented part (what it is, how it works, why chosen, tradeoffs)."
+name: sec4-dev-workflow
+description: "Execute Untrusted<T> implementation work from planning through code, tests, and documentation. Use when building or changing compiler/runtime/stdlib features, refining language rules, adding security constraints, or preparing releases. Enforce a strict workflow: pick milestone scope, implement smallest vertical slice, validate with tests, update docs as book chapters, and provide a clear explanation for every implemented part (what it is, how it works, why chosen, tradeoffs)."
 ---
 
-# AILang Dev Workflow
+# Untrusted<T> Dev Workflow
 
 ## Overview
-Use this skill to keep AILang development disciplined and cumulative: implementation, testing, and documentation move together so `docs/` evolves into a coherent book, not scattered notes.
+Use this skill to keep Untrusted<T> development disciplined and cumulative: implementation, testing, and documentation move together so `docs/` evolves into a coherent book, not scattered notes.
 
 ## Workflow
-1. Read current scope from `docs/05-ailang-master-roadmap.md`.
+1. Read current scope from `docs/05-sec4-master-roadmap.md`.
 2. Select one milestone-sized task or smaller vertical slice.
 3. Implement only the smallest end-to-end change that can be tested.
 4. Run relevant verification (`build/check/test/lint` for touched area).

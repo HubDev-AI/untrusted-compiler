@@ -26,8 +26,8 @@ The previous slice added the intrinsic bridge and semantic checks, but audit met
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - `compiler/ailang-core/src/security_map.rs`
-  - `compiler/ailang-core/tests/security_map.rs`
+  - `compiler/sec4-core/src/security_map.rs`
+  - `compiler/sec4-core/tests/security_map.rs`
 - Output:
   - richer `security_map` metadata for constant-time secret comparisons.
 - Constraint:
@@ -40,7 +40,7 @@ The previous slice added the intrinsic bridge and semantic checks, but audit met
 
 ## Example usage
 
-```ailang
+```ut
 fn same(a: Secret<String>, b: Secret<String>) -> Bool {
   crypto.ctEq(a, b)
 }

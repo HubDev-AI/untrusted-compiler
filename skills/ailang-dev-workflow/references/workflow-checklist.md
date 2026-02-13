@@ -1,9 +1,9 @@
 # Workflow Checklist
 
-Use this on every AILang task.
+Use this on every Untrusted<T> task.
 
 ## 1. Scope
-- Identify milestone from `docs/05-ailang-master-roadmap.md`.
+- Identify milestone from `docs/05-sec4-master-roadmap.md`.
 - Define one small deliverable with clear exit criteria.
 
 ## 2. Implement
