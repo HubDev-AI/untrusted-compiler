@@ -137,7 +137,8 @@ fi
 
 naming_lock_workflow_path="${repo_root}/.github/workflows/naming-lock.yml"
 if [ -f "${naming_lock_workflow_path}" ] \
-  && rg -q 'scripts/test-release-contract-smoke-workflow-contract.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-release-contract-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-release-contract-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_release_contract_smoke_ci_guard=1
 fi
 
@@ -261,7 +262,7 @@ emit_check "M9-B" "release gate workflow exists" "${bool_has_release_gate_ci}" "
 emit_check "M9-C" "promotion verifier/manifest chain exists" "${bool_has_release_verifier_chain}" "scripts/verify-release-promotion-inputs.sh + publish-manifest scripts"
 emit_check "M9-D" "release gate enforces strict milestone closure" "${bool_has_release_gate_closure_enforcement}" "scripts/release-alpha-gate.sh"
 emit_check "M9-E" "release-contract-smoke workflow keeps release verifier/publish tests" "${bool_has_release_contract_smoke_workflow}" "${release_contract_smoke_workflow_path}"
-emit_check "M9-F" "naming-lock CI enforces release-contract-smoke workflow contract test" "${bool_has_release_contract_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M9-F" "naming-lock CI enforces release-contract-smoke contract + guard tests" "${bool_has_release_contract_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoint" "${bool_has_cross_impl_matrix}" "${matrix_path}"
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + artifact upload" "${bool_has_cross_impl_workflow_contract}" "${cross_impl_workflow_path}"

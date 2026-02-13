@@ -21,6 +21,7 @@ But closure could still pass if CI stopped enforcing the static workflow contrac
 1. Added closure gate `M9-F`
 - `check-milestone-closure.sh` now validates `.github/workflows/naming-lock.yml` includes:
   - `scripts/test-release-contract-smoke-workflow-contract.sh`
+  - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`
 
 2. Expanded fixture coverage
 - `test-check-milestone-closure.sh` now:
