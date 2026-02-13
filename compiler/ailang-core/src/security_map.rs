@@ -871,9 +871,7 @@ fn normalize_callable_forward_target(
     allow_function_fallback: bool,
 ) -> Option<String> {
     let resolved = resolve_forward_summary_name(name, summaries);
-    let resolved = capability_namespace_alias_for_member_path(resolved.as_str())
-        .unwrap_or(resolved.as_str())
-        .to_string();
+    let resolved = capability_member_path_alias(resolved.as_str()).unwrap_or(resolved);
     if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
         Some(resolved)
     } else if allow_function_fallback && function_names.contains(resolved.as_str()) {
@@ -888,9 +886,7 @@ fn normalize_callable_summary_target(
     summaries: &HashMap<String, String>,
 ) -> Option<String> {
     let resolved = resolve_forward_summary_name(name, summaries);
-    let resolved = capability_namespace_alias_for_member_path(resolved.as_str())
-        .unwrap_or(resolved.as_str())
-        .to_string();
+    let resolved = capability_member_path_alias(resolved.as_str()).unwrap_or(resolved);
     if call_tags_for(resolved.as_str()).is_some() || is_tagged_call_namespace(resolved.as_str()) {
         Some(resolved)
     } else {
@@ -1019,9 +1015,7 @@ fn infer_callable_alias(
     callable_summaries: &HashMap<String, String>,
 ) -> Option<String> {
     if let Some(name) = resolve_callable_name(expr, callable_aliases) {
-        let name = capability_namespace_alias_for_member_path(name.as_str())
-            .unwrap_or(name.as_str())
-            .to_string();
+        let name = capability_member_path_alias(name.as_str()).unwrap_or(name);
         if call_tags_for(name.as_str()).is_some()
             || is_tagged_call_namespace(name.as_str())
             || summaries.contains_key(name.as_str())
@@ -1891,6 +1885,35 @@ fn capability_namespace_alias_for_member_path(name: &str) -> Option<&'static str
     }
 }
 
+fn capability_member_path_alias(name: &str) -> Option<String> {
+    if let Some(namespace) = capability_namespace_alias_for_member_path(name) {
+        return Some(namespace.to_string());
+    }
+
+    let patterns = [
+        ("caps.db.", "db"),
+        ("caps.net.", "httpClient"),
+        ("caps.internalNet.", "httpClient"),
+        ("caps.internal_net.", "httpClient"),
+        ("caps.fs.", "fs"),
+        ("caps.secrets.", "secrets"),
+    ];
+
+    for (pattern, namespace) in patterns {
+        if let Some(tail) = name.strip_prefix(pattern) {
+            return Some(format!("{namespace}.{tail}"));
+        }
+
+        let infix = format!(".{pattern}");
+        if let Some(position) = name.rfind(&infix) {
+            let tail = &name[position + infix.len()..];
+            return Some(format!("{namespace}.{tail}"));
+        }
+    }
+
+    None
+}
+
 fn callable_name(expr: &Expr) -> Option<String> {
     match &expr.kind {
         ExprKind::Identifier(name) => Some(name.clone()),
@@ -1924,6 +1947,13 @@ fn resolve_alias_name(mut name: String, callable_aliases: &HashMap<String, Strin
         if let Some(next) = callable_aliases.get(name.as_str()) {
             name = next.clone();
             continue;
+        }
+
+        if let Some(next) = capability_member_path_alias(name.as_str()) {
+            if next != name {
+                name = next;
+                continue;
+            }
         }
 
         let Some((head, tail)) = name.split_once('.') else {
