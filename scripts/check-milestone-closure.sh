@@ -105,6 +105,7 @@ bool_has_release_gate_closure_enforcement=0
 bool_has_release_contract_smoke_workflow=0
 bool_has_release_contract_smoke_ci_guard=0
 bool_has_alpha_release_workflow_contract=0
+bool_has_alpha_release_ci_guard=0
 bool_has_cross_impl_matrix=0
 bool_has_cross_impl_matrix_contract=0
 bool_has_cross_impl_workflow_contract=0
@@ -153,6 +154,12 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-release-contract-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-release-contract-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_release_contract_smoke_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-alpha-release-workflow-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-alpha-release-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_alpha_release_ci_guard=1
 fi
 
 if [ -f "${matrix_path}" ]; then
@@ -277,6 +284,7 @@ emit_check "M9-D" "release gate enforces strict milestone closure" "${bool_has_r
 emit_check "M9-E" "release-contract-smoke workflow keeps release verifier/publish tests" "${bool_has_release_contract_smoke_workflow}" "${release_contract_smoke_workflow_path}"
 emit_check "M9-F" "naming-lock CI enforces release-contract-smoke contract + guard tests" "${bool_has_release_contract_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M9-G" "alpha-release workflow keeps release/promotion/publish/upload contract" "${bool_has_alpha_release_workflow_contract}" "${alpha_release_workflow_path}"
+emit_check "M9-H" "naming-lock CI enforces alpha-release workflow contract + guard tests" "${bool_has_alpha_release_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoint" "${bool_has_cross_impl_matrix}" "${matrix_path}"
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + artifact upload" "${bool_has_cross_impl_workflow_contract}" "${cross_impl_workflow_path}"

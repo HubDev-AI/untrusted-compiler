@@ -32,6 +32,9 @@ Implementation progress and milestone closure are not the same. This checklist p
 - naming-lock CI keeps the release-contract-smoke workflow contract guard:
   - `scripts/test-release-contract-smoke-workflow-contract.sh`
   - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`
+- naming-lock CI keeps the alpha-release workflow contract guard:
+  - `scripts/test-alpha-release-workflow-contract.sh`
+  - `scripts/test-alpha-release-workflow-contract-guard.sh`
 - alpha-release workflow keeps release/promotion/publish/upload contract:
   - `scripts/release-alpha-gate.sh`
   - `scripts/verify-release-promotion-inputs.sh`

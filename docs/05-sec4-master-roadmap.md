@@ -60,6 +60,7 @@ Current strict closure result:
 | `M9-E` | PASS | Release-contract-smoke workflow keeps release verifier/publish checks | `.github/workflows/release-contract-smoke.yml` |
 | `M9-F` | PASS | Naming-lock CI enforces release-contract-smoke contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M9-G` | PASS | Alpha-release workflow keeps release/promotion/publish/upload contract | `.github/workflows/alpha-release-gate.yml` |
+| `M9-H` | PASS | Naming-lock CI enforces alpha-release workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` for each endpoint | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-C` | PASS | Cross-impl evidence workflow keeps scoped run, strict quality gate, and artifact upload contract | `.github/workflows/benchmark-cross-impl-evidence.yml` |
@@ -651,7 +652,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies scheduled trend workflow artifact upload contract (`benchmark-trend-*` + `benchmark-suite/results`).
   - benchmark smoke CI now executes strict closure audit against repository evidence (`scripts/check-milestone-closure.sh --fail-on-pending`) and includes a workflow contract test to prevent gate-step drift.
   - roadmap closure table gate IDs are now CI-aligned to executable closure gates via `scripts/test-roadmap-closure-gate-alignment.sh` (run in `naming-lock.yml`).
-  - closure now verifies release-contract smoke wiring (`M9-E`), naming-lock CI enforcement of its contract + guard tests (`M9-F`), and alpha-release workflow contract wiring (`M9-G`).
+  - closure now verifies release-contract smoke wiring (`M9-E`), naming-lock CI enforcement of its contract + guard tests (`M9-F`), alpha-release workflow contract wiring (`M9-G`), and naming-lock CI enforcement of alpha contract + guard tests (`M9-H`).
   - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure contract tests plus strict closure audit wiring (`M13-D`).

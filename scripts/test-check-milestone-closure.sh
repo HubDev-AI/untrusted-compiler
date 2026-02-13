@@ -76,6 +76,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Validate alpha release workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
       - name: Validate release-contract-smoke workflow guard behavior
@@ -445,12 +449,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
+      - name: Validate release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
 YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
-  echo "expected pending failure when naming-lock workflow misses release-contract-smoke guard test step" >&2
+  echo "expected pending failure when naming-lock workflow misses alpha-release guard test step" >&2
   exit 1
 fi
 
@@ -467,6 +475,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate alpha release workflow contract
+        run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Validate alpha release workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
       - name: Validate release-contract-smoke workflow guard behavior
