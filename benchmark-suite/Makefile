@@ -1,6 +1,7 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
+IMPLS ?= ailang,node,go,rust
 BASE_URL ?= http://127.0.0.1:8080
 ENDPOINT ?= ping
 
@@ -10,6 +11,8 @@ help:
 	@echo "  db-down      Stop benchmark postgres"
 	@echo "  db-schema    Apply benchmark schema"
 	@echo "  env          Capture environment metadata"
+	@echo "  preflight    Validate required benchmark tooling for IMPLS=$(IMPLS)"
+	@echo "  preflight-dry Validate dry-run tooling only (skips wrk2 requirement)"
 	@echo "  bench-ping   Run ping benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-decode Run decode benchmark (requires service at $(BASE_URL))"
 	@echo "  bench-users  Run users write benchmark (requires service at $(BASE_URL))"
@@ -37,6 +40,12 @@ db-schema:
 env:
 	scripts/capture_env.sh results/env.json
 
+preflight:
+	scripts/preflight.sh --impls "$(IMPLS)"
+
+preflight-dry:
+	scripts/preflight.sh --impls "$(IMPLS)" --dry-run-only
+
 bench-ping:
 	wrk2 --latency -t4 -c64 -d60s -R10000 $(BASE_URL)/ping | tee results/raw/$(IMPL)-ping.txt
 
@@ -50,10 +59,10 @@ bench-profile:
 	scripts/run_profile.sh $(IMPL) $(ENDPOINT) $(BASE_URL)
 
 bench-matrix:
-	scripts/run_comparison_matrix.sh
+	scripts/run_comparison_matrix.sh --impls "$(IMPLS)"
 
 bench-matrix-dry:
-	scripts/run_comparison_matrix.sh --dry-run
+	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)"
 
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json
@@ -82,6 +91,7 @@ test-scripts:
 	scripts/test_analyze_matrix.sh
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh
+	scripts/test_preflight.sh
 	scripts/test_test_service_contracts.sh
 
 test-services:

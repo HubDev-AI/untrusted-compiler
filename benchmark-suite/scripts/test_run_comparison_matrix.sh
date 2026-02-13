@@ -2,7 +2,12 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
-out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls node,go)"
+out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls=node,go)"
+
+if ! grep -q '^preflight passed$' <<<"$out"; then
+  echo "missing preflight pass output" >&2
+  exit 1
+fi
 
 if ! grep -q '=== impl=node ===' <<<"$out"; then
   echo "missing node implementation header" >&2

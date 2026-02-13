@@ -26,31 +26,34 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite db-up`
 2. Apply schema:
    - `make -C benchmark-suite db-schema`
-3. Run benchmark profile (once service is implemented):
+3. Validate benchmark tooling before runs:
+   - `make -C benchmark-suite preflight`
+   - for dry-run-only checks: `make -C benchmark-suite preflight-dry`
+4. Run benchmark profile (once service is implemented):
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=ping`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=decode`
    - `make -C benchmark-suite bench-profile IMPL=ailang ENDPOINT=users-post`
-4. Convert raw wrk2 output to summary JSON:
+5. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=ailang`
-5. Bundle summaries + env into one report:
+6. Bundle summaries + env into one report:
    - `make -C benchmark-suite report IMPL=ailang`
-6. Build endpoint comparison from report bundles:
+7. Build endpoint comparison from report bundles:
    - `make -C benchmark-suite compare`
-7. Build all-endpoint comparison matrix:
+8. Build all-endpoint comparison matrix:
    - `make -C benchmark-suite compare-matrix`
-8. Analyze tail-latency and target-coverage signals:
+9. Analyze tail-latency and target-coverage signals:
    - `make -C benchmark-suite analyze-matrix`
-9. Generate markdown benchmark report (matrix + analysis + sec.audit):
+10. Generate markdown benchmark report (matrix + analysis + sec.audit):
    - `make -C benchmark-suite publish-report`
-10. Run full cross-impl orchestrator:
+11. Run full cross-impl orchestrator:
    - `make -C benchmark-suite bench-matrix-dry`
    - `make -C benchmark-suite bench-matrix`
-   - default run includes `ailang,node,go,rust`; add `--impls ...` via direct script call to include `c`
-11. Validate benchmark helper scripts:
+   - default run includes `ailang,node,go,rust`; override with `IMPLS=ailang,node,go,rust,c`
+12. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-12. Validate cross-impl service contract parity:
+13. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-13. Stop DB:
+14. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -66,3 +69,6 @@ Measure end-to-end service behavior across identical implementations:
   - `BENCH_TARGET`, or endpoint-specific `BENCH_TARGET_PING|BENCH_TARGET_DECODE|BENCH_TARGET_USERS_POST`
 - Override orchestrator bind port with `BENCH_PORT` (default `18085`) if needed.
 - Override individual smoke-script ports with `BENCH_SMOKE_PORT` when running service smoke checks directly.
+- Orchestrator now runs `scripts/preflight.sh` automatically:
+  - dry-run mode uses `--dry-run-only`,
+  - real runs require `wrk2` and implementation toolchains to be present.

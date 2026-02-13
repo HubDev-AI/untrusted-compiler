@@ -28,6 +28,10 @@ while [ "$#" -gt 0 ]; do
       impls_csv="$2"
       shift 2
       ;;
+    --impls=*)
+      impls_csv="${1#--impls=}"
+      shift
+      ;;
     --sec-audit)
       if [ "$#" -lt 2 ]; then
         usage
@@ -35,6 +39,10 @@ while [ "$#" -gt 0 ]; do
       fi
       sec_audit_path="$2"
       shift 2
+      ;;
+    --sec-audit=*)
+      sec_audit_path="${1#--sec-audit=}"
+      shift
       ;;
     -h|--help)
       usage
@@ -88,6 +96,12 @@ for raw_impl in "${impls[@]}"; do
     exit 2
   fi
 done
+
+if [ "$dry_run" = "true" ]; then
+  "${root_dir}/scripts/preflight.sh" --impls "$impls_csv" --dry-run-only
+else
+  "${root_dir}/scripts/preflight.sh" --impls "$impls_csv"
+fi
 
 start_service() {
   local impl="$1"
@@ -186,6 +200,7 @@ for impl in "${impls[@]}"; do
   }
   trap cleanup_impl EXIT
 
+  echo "waiting for readiness impl=${impl} url=${base_url}/ping"
   if ! wait_for_ready "$pid"; then
     echo "service failed readiness check for impl=${impl} on port ${bench_port}" >&2
     if [ -n "$log_file" ] && [ -f "$log_file" ]; then

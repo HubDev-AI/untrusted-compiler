@@ -953,6 +953,7 @@ Implementation order is intentionally linear to reduce thrash:
   - same DB schema/indexes/query text/pool size/timeouts
   - same payload shapes and validation rules
   - same load profile (constant-rate + step-load)
+  - benchmark preflight checks for required tooling with deterministic early-fail output
 - Run benchmark matrix and collect:
   - throughput, p50/p95/p99, error rate
   - CPU and RSS memory
@@ -975,6 +976,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "Benchmarking and Comparison Spec".
 - Chapter: "Benchmark Harness and Reproducibility Guide".
 - Chapter: "First Public Performance and Security Report".
+- Chapter: "M10 Slice: Benchmark Preflight and Early-Fail Checks".
 
 ## M11 - Editor Tooling and Zed Integration
 ### Trigger condition
