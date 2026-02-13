@@ -137,6 +137,7 @@ bool_has_live_trend_entry=0
 bool_has_trend_workflow_guards=0
 bool_has_trend_workflow_artifact_upload=0
 bool_has_benchmark_smoke_closure_contract=0
+bool_has_trend_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -194,6 +195,12 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-benchmark-cross-impl-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_cross_impl_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_trend_ci_guard=1
 fi
 
 if [ -f "${matrix_path}" ]; then
@@ -336,6 +343,7 @@ emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"
 emit_check "M13-D" "benchmark-smoke workflow enforces closure contract + guard + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
+emit_check "M13-E" "naming-lock CI enforces benchmark-trend workflow contract + guard tests" "${bool_has_trend_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

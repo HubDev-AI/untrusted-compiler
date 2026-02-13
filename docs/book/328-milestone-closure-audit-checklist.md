@@ -77,6 +77,9 @@ Implementation progress and milestone closure are not the same. This checklist p
   - runs `scripts/test-benchmark-smoke-closure-gate-guard.sh`
   - runs `scripts/test-check-milestone-closure.sh`
   - runs `scripts/check-milestone-closure.sh --fail-on-pending`
+- naming-lock CI keeps benchmark-trend workflow contract guard:
+  - `scripts/test-benchmark-trend-workflow-contract.sh`
+  - `scripts/test-benchmark-trend-workflow-contract-guard.sh`
 
 ## Example usage
 

@@ -69,6 +69,7 @@ Current strict closure result:
 | `M13-B` | PASS | Trend workflow keeps strict quality + regression guard steps | `.github/workflows/benchmark-trend.yml` |
 | `M13-C` | PASS | Trend workflow uploads benchmark artifacts for trend-note ingestion | `.github/workflows/benchmark-trend.yml` |
 | `M13-D` | PASS | Benchmark-smoke workflow enforces closure contract, guard, and strict closure audit | `.github/workflows/benchmark-smoke.yml` |
+| `M13-E` | PASS | Naming-lock CI enforces benchmark-trend workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -658,6 +659,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure contract + guard tests plus strict closure audit wiring (`M13-D`).
+  - closure now verifies naming-lock CI enforcement of benchmark-trend workflow contract + guard tests (`M13-E`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),

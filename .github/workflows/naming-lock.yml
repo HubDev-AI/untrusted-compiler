@@ -34,6 +34,12 @@ jobs:
       - name: Validate benchmark cross-impl workflow guard behavior
         run: scripts/test-benchmark-cross-impl-workflow-contract-guard.sh
 
+      - name: Validate benchmark trend workflow contract
+        run: scripts/test-benchmark-trend-workflow-contract.sh
+
+      - name: Validate benchmark trend workflow guard behavior
+        run: scripts/test-benchmark-trend-workflow-contract-guard.sh
+
       - name: Validate sec4 CLI command contract
         run: scripts/test-sec4-cli-command-contract.sh
 
