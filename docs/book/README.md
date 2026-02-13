@@ -211,5 +211,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `244-m10-step-analysis-comparison-matrix.md`
 - `245-m10-step-load-section-in-markdown-reports.md`
 - `246-m10-step-load-matrix-orchestrator.md`
+- `247-m10-full-suite-orchestrator.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -57,11 +57,14 @@ Measure end-to-end service behavior across identical implementations:
 12. Run step-load cross-impl orchestrator:
    - `make -C benchmark-suite bench-step-matrix-dry`
    - `make -C benchmark-suite bench-step-matrix`
-13. Validate benchmark helper scripts:
+13. Run full combined suite (fixed + step + combined publish):
+   - `make -C benchmark-suite bench-full-dry`
+   - `make -C benchmark-suite bench-full`
+14. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-14. Validate cross-impl service contract parity:
+15. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-15. Stop DB:
+16. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -91,3 +94,4 @@ Measure end-to-end service behavior across identical implementations:
 - Step comparison matrix is written to `results/summaries/step-matrix.json` by default.
 - `publish_report.sh` accepts optional step matrix input and renders a `Step-Load Signals` section when provided.
 - Step matrix orchestrator runs `run_step_profile` + `analyze_step_profile` per impl/endpoint and then emits one scoped `step-matrix.json`.
+- Full-suite runner chains fixed-target matrix + step matrix and republishes `results/benchmark-report.md` with both standard and step-load signals.

@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
@@ -29,6 +29,8 @@ help:
 	@echo "  bench-step-matrix-dry Print step-load orchestrator command plan"
 	@echo "  bench-matrix Run cross-impl benchmark orchestrator (IMPLS=$(IMPLS), ENDPOINTS=$(ENDPOINTS))"
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
+	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
+	@echo "  bench-full-dry Print full-suite command plan"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
 	@echo "  compare      Build endpoint comparison from report files"
@@ -92,6 +94,12 @@ bench-matrix:
 bench-matrix-dry:
 	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
+bench-full:
+	scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+
+bench-full-dry:
+	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json
 
@@ -123,6 +131,7 @@ test-scripts:
 	scripts/test_run_comparison_matrix.sh
 	scripts/test_run_step_profile.sh
 	scripts/test_run_step_matrix.sh
+	scripts/test_run_full_benchmark_suite.sh
 	scripts/test_preflight.sh
 	scripts/test_test_service_contracts.sh
 
