@@ -324,6 +324,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - FS sink path typing is now hardened:
     - FS sink path arguments must be `PathSafe` in compact and context-first forms,
     - non-`PathSafe` path inputs emit tagged `E4001` sink diagnostics.
+  - Secret redact payload typing is now hardened:
+    - `secrets.redact` argument must be `Secret<_>`,
+    - non-secret redact payloads emit tagged `E4001` secret diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -735,6 +738,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Secret Source Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Source Name-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Redact Call-Shape Hardening".
+- Chapter: "M7 Slice: Secret Redact Value-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Reveal Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Reveal Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Reveal Value-Argument Type Hardening".

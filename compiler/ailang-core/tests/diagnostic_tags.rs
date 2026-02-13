@@ -469,6 +469,25 @@ fn bad() -> Int {
 }
 
 #[test]
+fn secret_redact_value_type_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad() -> Int {
+  secrets.redact("token");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "secret redact argument must be `Secret<_>`")
+        .expect("expected secret redact argument type diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn secret_reveal_shape_diagnostic_has_security_secret_tags() {
     let source = r#"
 fn bad(sec: SecretsCap) effects { secrets.reveal } -> Int {

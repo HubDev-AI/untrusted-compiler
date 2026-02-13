@@ -146,3 +146,4 @@
 - Added DB sink query typing hardening so `db.exec`, `db.execTx`, and `db.queryOne` require `SqlQuery` payloads in compact/context-first forms, with sink-tagged diagnostics and fixture alignment across alias/capability tests.
 - Added net sink URL typing hardening so `httpClient.get` requires `PublicUrl` and `httpClient.getInternal` requires `InternalUrl`, with sink-tagged diagnostics and typed-URL fixture alignment.
 - Added FS sink path typing hardening so `fs.read`/`fs.write` require `PathSafe` path arguments in compact/context-first forms, with sink-tagged diagnostics and typed-path fixture alignment.
+- Added secret-redact payload typing hardening so `secrets.redact` requires `Secret<_>`, with secret-tagged diagnostics and fixture/tag coverage.
