@@ -35,7 +35,7 @@ Rationale:
 ## Follow-up action
 
 When the scheduled workflow (`benchmark-trend.yml`) artifacts are available:
-1. record leader metrics (`p99`, coverage, achieved/target) for `ping` and `decode`,
+1. pull `benchmark-suite/results/summaries/trend-note-entry.md` from workflow artifacts (pre-rendered by CI),
 2. evaluate against current thresholds and baseline limits,
 3. append decision (`keep`, `tighten`, or `relax`) with rubric justification.
 

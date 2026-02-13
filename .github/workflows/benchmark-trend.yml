@@ -48,6 +48,15 @@ jobs:
             --min-target-coverage 60 \
             --baseline benchmark-suite/baselines/node-decode-trend-baseline.json
 
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode \
+            --date "$(date -u +%Y-%m-%d)" \
+            --baseline-dir benchmark-suite/baselines \
+            --out benchmark-suite/results/summaries/trend-note-entry.md
+
       - name: Upload benchmark trend artifacts
         if: always()
         uses: actions/upload-artifact@v4

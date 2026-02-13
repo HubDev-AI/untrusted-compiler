@@ -554,7 +554,8 @@ Roadmap impact:
   - `docs/book/322-m13-first-trend-run-results-note.md` captures first local readiness observation and explicit live-artifact follow-up steps.
 - M13 trend-note rendering helper is now implemented:
   - `benchmark-suite/scripts/render_trend_note_entry.sh` renders deterministic markdown entries from `compare-matrix.json`,
-  - benchmark smoke CI now validates renderer behavior via `test_render_trend_note_entry.sh`.
+  - benchmark smoke CI validates renderer behavior via `test_render_trend_note_entry.sh`,
+  - scheduled trend workflow now emits `trend-note-entry.md` artifact for direct chapter updates.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1420,7 +1421,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md`.
+1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using CI-generated `trend-note-entry.md` artifact.
 
 ---
 

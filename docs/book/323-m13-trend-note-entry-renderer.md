@@ -9,6 +9,7 @@ Updated:
 - `benchmark-suite/scripts/test_render_trend_note_entry.sh`
 - `benchmark-suite/scripts/testdata/sample-trend-compare-matrix.json`
 - `.github/workflows/benchmark-smoke.yml`
+- `.github/workflows/benchmark-trend.yml`
 - `docs/book/322-m13-first-trend-run-results-note.md`
 - `docs/05-sec4-master-roadmap.md`
 
@@ -36,6 +37,8 @@ It outputs either:
 - overall absolute/baseline status summaries.
 
 `benchmark-smoke.yml` now runs this test in CI.
+
+`benchmark-trend.yml` now renders `benchmark-suite/results/summaries/trend-note-entry.md` before artifact upload, so scheduled live runs produce a ready-to-append note fragment.
 
 ## Inputs, outputs, and constraints
 
