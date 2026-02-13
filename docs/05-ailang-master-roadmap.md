@@ -321,6 +321,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - FS sink context-first typing is now hardened:
     - for context-first FS sink forms, argument 1 must be `Ctx`,
     - type violations emit tagged `E4001` sink diagnostics.
+  - FS sink path typing is now hardened:
+    - FS sink path arguments must be `PathSafe` in compact and context-first forms,
+    - non-`PathSafe` path inputs emit tagged `E4001` sink diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -727,6 +730,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Net Sink URL-Argument Type Hardening".
 - Chapter: "M7 Slice: FS Sink Call-Shape Hardening".
 - Chapter: "M7 Slice: FS Sink Context-Argument Type Hardening".
+- Chapter: "M7 Slice: FS Sink Path-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Source Call-Shape Hardening".
 - Chapter: "M7 Slice: Secret Source Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Secret Source Name-Argument Type Hardening".

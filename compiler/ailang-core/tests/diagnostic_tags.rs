@@ -383,6 +383,25 @@ fn bad(fs: FsCap, path: PathSafe) effects { fs.read } -> Int {
 }
 
 #[test]
+fn fs_sink_path_type_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad(fs: FsCap) effects { fs.read } -> Int {
+  fs.read(fs, 1);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "fs sink path argument must be `PathSafe`")
+        .expect("expected fs sink path type diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn secret_source_shape_diagnostic_has_security_secret_tags() {
     let source = r#"
 fn bad(sec: SecretsCap) effects { secrets.read } -> Int {

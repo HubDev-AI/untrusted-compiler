@@ -1,0 +1,4 @@
+fn bad(fs: FsCap) effects { fs.read } -> Int {
+  fs.read(fs, 1);
+  0
+}

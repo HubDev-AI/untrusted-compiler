@@ -145,3 +145,4 @@
 - Added secret-source name typing hardening so `secrets.get` name argument must be `String`, with secret-tagged diagnostics and dedicated semantic fixture coverage.
 - Added DB sink query typing hardening so `db.exec`, `db.execTx`, and `db.queryOne` require `SqlQuery` payloads in compact/context-first forms, with sink-tagged diagnostics and fixture alignment across alias/capability tests.
 - Added net sink URL typing hardening so `httpClient.get` requires `PublicUrl` and `httpClient.getInternal` requires `InternalUrl`, with sink-tagged diagnostics and typed-URL fixture alignment.
+- Added FS sink path typing hardening so `fs.read`/`fs.write` require `PathSafe` path arguments in compact/context-first forms, with sink-tagged diagnostics and typed-path fixture alignment.

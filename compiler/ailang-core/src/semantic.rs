@@ -2911,6 +2911,32 @@ impl Analyzer {
                 )),
             );
         }
+
+        let path_index = if is_fs_read_call(callee_name) {
+            if args.len() == 3 { 2 } else { 1 }
+        } else if args.len() == 4 {
+            2
+        } else {
+            1
+        };
+        if arg_types[path_index].contains_untrusted() || arg_types[path_index].contains_secret() {
+            return;
+        }
+        if !arg_types[path_index].is_named("PathSafe") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "fs sink path argument must be `PathSafe`",
+                    args[path_index].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("sink")
+                .with_note(format!("found `{}`", arg_types[path_index].describe()))
+                .with_note(format!(
+                    "use typed `PathSafe` values when calling `{callee_name}`"
+                )),
+            );
+        }
     }
 
     fn enforce_secret_source_call_shapes(

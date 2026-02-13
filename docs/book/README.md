@@ -112,5 +112,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `144-m7-secret-source-name-argument-type-hardening.md`
 - `145-m7-db-sink-query-argument-type-hardening.md`
 - `146-m7-net-sink-url-argument-type-hardening.md`
+- `147-m7-fs-sink-path-argument-type-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
