@@ -1028,6 +1028,7 @@ Implementation order is intentionally linear to reduce thrash:
   - Zed grammar pinning now has an explicit validation gate (`scripts/check-zed-grammar-pin.sh`) to block placeholder revisions in release flow.
   - definition/references payloads now propagate stable `symbolId` metadata for resolved symbols.
   - effect quick-fix anchoring now uses parser-derived function signature windows to avoid body-text `fn` false anchors.
+  - symbolId metadata coverage now explicitly includes callsite-only reference responses.
 - Remaining:
   - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
   - parser/analyzer-internal interrupt support for fully preemptive cancellation (stage-boundary cancellation is now covered).
@@ -1082,6 +1083,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Import Edge Extraction and Replacement Tests".
 - Chapter: "M11 Slice: Symbol-ID Metadata in Definition and References".
 - Chapter: "M11 Slice: Signature-Window-Aware Effect Quickfix".
+- Chapter: "M11 Slice: SymbolId Metadata Coverage for Callsite References".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

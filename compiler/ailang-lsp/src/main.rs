@@ -3048,6 +3048,17 @@ mod tests {
             .collect::<Vec<_>>();
         lines.sort_unstable();
         assert_eq!(lines, vec![5, 9], "expected both helper call-site lines");
+        assert!(
+            references.iter().all(|location| {
+                location
+                    .get("data")
+                    .and_then(|data| data.get("symbolId"))
+                    .and_then(Value::as_str)
+                    .map(|value| !value.is_empty())
+                    .unwrap_or(false)
+            }),
+            "call-site references should carry non-empty symbolId metadata for resolved symbols",
+        );
     }
 
     #[test]
