@@ -280,6 +280,54 @@ fn explain_topic(
     ];
 
     match code {
+        "CORS_CREDENTIALS_WITH_WILDCARD" => {
+            return (
+                "CORS Credentials With Wildcard Origin",
+                "Credentialed CORS cannot be paired with wildcard origins; switch to explicit origin allowlists.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "INTERNAL_NET_ENABLED_NO_ALLOWLIST" => {
+            return (
+                "Internal Network Enabled Without Allowlist",
+                "Internal network access is enabled without CIDR/domain allowlists and must be constrained.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "CAPTURE_REDACTION_INCOMPLETE" => {
+            return (
+                "Capture Redaction Incomplete",
+                "Request capture redaction policy is missing mandatory sensitive header/path redactions.",
+                &POLICY_FIXES,
+                "docs/book/59-request-capture-and-deterministic-replay.md",
+            );
+        }
+        "SECRETS_REVEAL_USED" => {
+            return (
+                "Secrets Reveal Usage Detected",
+                "Secret reveal paths are present and must be removed or tightly allowlisted with governance metadata.",
+                &POLICY_FIXES,
+                "docs/book/53-v0-security-baseline.md",
+            );
+        }
+        "ALLOW_COUNT_HIGH" => {
+            return (
+                "Allowlist Exception Count High",
+                "The project has a high number of allowlist exceptions and should reduce bypass surface.",
+                &POLICY_FIXES,
+                "docs/book/64-sec-audit-spec.md",
+            );
+        }
+        "ALLOW_EXPIRY_WINDOW_ROLLUP" => {
+            return (
+                "Allowlist Expiry Window Risk Rollup",
+                "Allowlist expiry concentration indicates renewal/removal backlog and elevated governance risk.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
         "ALLOW_EXPIRED" => {
             return (
                 "Expired Policy Allowlist Exception",

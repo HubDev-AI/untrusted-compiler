@@ -328,6 +328,52 @@ fn explain_json_mode_writes_parseable_payload() {
 }
 
 #[test]
+fn explain_cors_wildcard_finding_prints_targeted_guidance() {
+    let output = run_cli(&["explain", "CORS_CREDENTIALS_WITH_WILDCARD"]);
+    assert!(
+        output.status.success(),
+        "explain should succeed for cors wildcard finding id"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("CORS_CREDENTIALS_WITH_WILDCARD - CORS Credentials With Wildcard Origin"),
+        "stdout should include mapped finding topic:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docs/book/66-deterministic-severity-mapping-for-sec-audit.md"),
+        "stdout should include mapped finding docs pointer:\n{stdout}"
+    );
+}
+
+#[test]
+fn explain_allow_count_high_finding_in_json_mode_is_parseable() {
+    let output = run_cli(&["explain", "ALLOW_COUNT_HIGH", "--format", "json"]);
+    assert!(
+        output.status.success(),
+        "explain json mode should succeed for finding id"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value = serde_json::from_str(&stdout).expect("output should be parseable json");
+
+    assert_eq!(
+        parsed
+            .get("code")
+            .and_then(Value::as_str)
+            .expect("code should be present"),
+        "ALLOW_COUNT_HIGH"
+    );
+    assert_eq!(
+        parsed
+            .get("topic")
+            .and_then(Value::as_str)
+            .expect("topic should be present"),
+        "Allowlist Exception Count High"
+    );
+}
+
+#[test]
 fn sec_audit_json_keeps_stdout_parseable_json() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

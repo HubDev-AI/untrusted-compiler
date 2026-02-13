@@ -278,5 +278,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `311-m13-operational-confidence-scope-and-plan.md`
 - `312-m13-scoped-live-benchmark-workflow-and-threshold-guard.md`
 - `313-m13-release-promotion-playbook.md`
+- `314-m9-sec4-explain-audit-finding-coverage-expansion.md`
 
 As milestones progress, chapters will be added and linked from this index.

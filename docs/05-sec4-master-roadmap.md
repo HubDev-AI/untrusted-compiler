@@ -508,7 +508,7 @@ Roadmap impact:
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
-- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy allowlist finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`) with direct chapter pointers.
+- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy/audit finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`, `ALLOW_COUNT_HIGH`, `ALLOW_EXPIRY_WINDOW_ROLLUP`, `CORS_CREDENTIALS_WITH_WILDCARD`, `INTERNAL_NET_ENABLED_NO_ALLOWLIST`, `CAPTURE_REDACTION_INCOMPLETE`, `SECRETS_REVEAL_USED`) with direct chapter pointers.
 - `sec4 explain` now supports machine-readable output mode:
   - `sec4 explain <CODE> --format json` emits structured payload (`code`, `topic`, `summary`, `likelyActions`, `relatedCommands`, `docsPath`).
 - Benchmark artifact schema/version contract is now centralized:
@@ -1356,11 +1356,11 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Evaluate adding `sec4 explain` coverage for remaining policy/severity finding IDs used by `sec4 audit`.
-2. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
-3. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
-4. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
-5. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
+1. Start M13-S1 implementation tracking with explicit checklist updates in this roadmap and linked book chapters.
+2. Add trend-history retention and baseline comparison policy for `benchmark-trend` artifacts.
+3. Add publish pipeline consumption checks for promotion artifacts (beyond gate/verifier) in release automation.
+4. Expand scoped live benchmark workflow to include one additional endpoint once weekly trend signal is stable.
+5. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
 
 ---
 
