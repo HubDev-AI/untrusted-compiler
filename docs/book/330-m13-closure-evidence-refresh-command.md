@@ -41,6 +41,7 @@ Before this slice, each gate had its own updater command. Operators had to run t
 - `scripts/test-refresh-closure-evidence-from-ci.sh`
 - Validates:
   - dry-run command composition,
+  - strict-vs-allow quality mode command composition and importer propagation,
   - local fixture-backed matrix and trend-note import,
   - strict closure check passes for the provided fixture targets.
 

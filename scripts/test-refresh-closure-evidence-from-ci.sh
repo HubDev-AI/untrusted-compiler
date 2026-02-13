@@ -53,6 +53,24 @@ if ! grep -q 'check-benchmark-evidence-quality.sh --matrix .* --fail-on-warning'
   exit 1
 fi
 
+dry_allow_out="$("${root_dir}/scripts/refresh-closure-evidence-from-ci.sh" \
+  --dry-run \
+  --repo HubDev-AI/untrusted-compiler \
+  --matrix "${matrix_src}" \
+  --entry "${entry}" \
+  --target-matrix "${matrix_target}" \
+  --trend-note "${trend_note}" \
+  --quality-allow-warning)"
+
+if ! grep -q 'update_cross_impl_matrix_from_ci.sh .* --quality-allow-warning' <<<"${dry_allow_out}"; then
+  echo "dry-run missing importer quality-allow-warning propagation" >&2
+  exit 1
+fi
+if grep -q 'check-benchmark-evidence-quality.sh --matrix .* --fail-on-warning' <<<"${dry_allow_out}"; then
+  echo "dry-run should not include strict evidence quality flag when quality-allow-warning is set" >&2
+  exit 1
+fi
+
 "${root_dir}/scripts/refresh-closure-evidence-from-ci.sh" \
   --repo HubDev-AI/untrusted-compiler \
   --matrix "${matrix_src}" \
