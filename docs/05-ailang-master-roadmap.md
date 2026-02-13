@@ -330,6 +330,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `db.queryOne` row-schema typing is now hardened:
     - row schema arguments reject numeric/boolean placeholder values,
     - invalid row-schema values emit tagged `E4001` schema diagnostics.
+  - `sql.q` signature typing is now hardened:
+    - `sql.q` requires `(template, params)` shape with a `String` template argument,
+    - invalid template values emit tagged `E4001` schema diagnostics.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -730,6 +733,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: DB Sink Context-Argument Type Hardening".
 - Chapter: "M7 Slice: DB Sink Query-Argument Type Hardening".
 - Chapter: "M7 Slice: db.queryOne Row-Schema Argument Hardening".
+- Chapter: "M7 Slice: sql.q Template-Argument Hardening".
 - Chapter: "M7 Slice: db.tx Call-Shape Hardening".
 - Chapter: "M7 Slice: db.tx Context-Argument Type Hardening".
 - Chapter: "M7 Slice: Net Sink Call-Shape Hardening".

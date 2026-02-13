@@ -287,6 +287,26 @@ fn bad(db: DbCap, query: SqlQuery) effects { db.read } -> Int {
 }
 
 #[test]
+fn sql_q_template_type_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(db: DbCap) effects { db.write } -> Int {
+  let query = sql.q(1, 2);
+  db.exec(db, query);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "sql.q template argument must be `String`")
+        .expect("expected sql.q template argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn db_tx_shape_diagnostic_has_security_capability_tags() {
     let source = r#"
 fn bad(db: DbCap) effects { db.tx } -> Int {

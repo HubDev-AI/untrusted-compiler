@@ -1,0 +1,4 @@
+error[E4001]: sql.q template argument must be `String`
+  --> invalid_sql_q_template_argument_type.ai:2:21
+  note: found `Int`
+  note: use SQL template strings such as `"SELECT ..."`

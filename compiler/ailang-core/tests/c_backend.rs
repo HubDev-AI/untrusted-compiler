@@ -393,7 +393,7 @@ fn main() effects { net } -> Int {
 fn c_backend_rewrites_db_fs_and_net_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
-  let query = sql.q(1, 2);
+  let query = sql.q("SELECT 1", 2);
   db.tx(1);
   db.execTx(1, query);
   db.exec(1, query);
@@ -410,7 +410,7 @@ fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("ailang_rt_sql_q(1, 2);"));
+    assert!(c.contains("ailang_rt_sql_q(\"SELECT 1\", 2);"));
     assert!(c.contains("(void)(ailang_rt_db_tx(1));"));
     assert!(c.contains("(void)(ailang_rt_db_exec_tx(1, query));"));
     assert!(c.contains("(void)(ailang_rt_db_exec(1, query));"));

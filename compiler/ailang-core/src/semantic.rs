@@ -1765,6 +1765,7 @@ impl Analyzer {
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_sql_q_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -2577,6 +2578,42 @@ impl Analyzer {
                 .with_tag("security")
                 .with_note(format!("found `{}`", arg_types[0].describe()))
                 .with_note("use string base path values"),
+            );
+        }
+    }
+
+    fn enforce_sql_q_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_sql_q_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 2 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "sql.q expects `(template, params)` arguments", span)
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note("use `sql.q(\"SELECT ...\", params)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sql.q template argument must be `String`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use SQL template strings such as `\"SELECT ...\"`"),
             );
         }
     }
@@ -4282,6 +4319,10 @@ fn is_req_path_param_call(name: &str) -> bool {
 
 fn is_req_header_call(name: &str) -> bool {
     matches!(name, "req_header" | "req.header")
+}
+
+fn is_sql_q_call(name: &str) -> bool {
+    matches!(name, "sql_q" | "sql.q")
 }
 
 fn is_path_base_call(name: &str) -> bool {

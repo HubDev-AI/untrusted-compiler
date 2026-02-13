@@ -115,5 +115,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `147-m7-fs-sink-path-argument-type-hardening.md`
 - `148-m7-secret-redact-value-argument-type-hardening.md`
 - `149-m7-db-query-one-row-schema-argument-hardening.md`
+- `150-m7-sql-q-template-argument-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

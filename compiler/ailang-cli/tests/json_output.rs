@@ -796,7 +796,7 @@ entry = "src/main.ai"
   path: PathSafe,
   url: PublicUrl
 ) effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
-  let built = sql.q(1, 2);
+  let built = sql.q("SELECT 1", 2);
   db.tx(db);
   db.execTx(tx, built);
   db.exec(db, built);
@@ -826,7 +826,7 @@ fn main() -> Int {
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_sql_q(1, 2)"));
+    assert!(generated_c.contains("ailang_rt_sql_q(\"SELECT 1\", 2)"));
     assert!(generated_c.contains("ailang_rt_db_tx(db)"));
     assert!(generated_c.contains("ailang_rt_db_exec_tx(tx, built)"));
     assert!(generated_c.contains("ailang_rt_db_exec(db, built)"));

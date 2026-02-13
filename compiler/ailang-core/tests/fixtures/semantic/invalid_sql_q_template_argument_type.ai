@@ -1,0 +1,5 @@
+fn bad(db: DbCap) effects { db.write } -> Int {
+  let query = sql.q(1, 2);
+  db.exec(db, query);
+  0
+}

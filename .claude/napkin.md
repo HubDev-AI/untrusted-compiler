@@ -149,3 +149,4 @@
 - Added FS sink path typing hardening so `fs.read`/`fs.write` require `PathSafe` path arguments in compact/context-first forms, with sink-tagged diagnostics and typed-path fixture alignment.
 - Added secret-redact payload typing hardening so `secrets.redact` requires `Secret<_>`, with secret-tagged diagnostics and fixture/tag coverage.
 - Added `db.queryOne` row-schema argument hardening so numeric/boolean placeholders are rejected with schema-tagged diagnostics, and aligned the db/fs/net `c-bin` integration fixture to use a schema-descriptor row argument.
+- Added `sql.q` signature hardening so the helper enforces `(template, params)` with a `String` template argument, and aligned CLI/core integration fixtures to use string SQL templates.

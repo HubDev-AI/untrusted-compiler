@@ -47,7 +47,7 @@ The v0 stdlib surface includes an explicit SQL query-construction helper before 
 
 ```ailang
 fn txDemo(db: DbCap, tx: TxCap) effects { db.tx, db.write } -> Int {
-  let built = sql.q(1, 2);
+  let built = sql.q("SELECT 1", 2);
   db.tx(db);
   db.execTx(tx, built);
   0
