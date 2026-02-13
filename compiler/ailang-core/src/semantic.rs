@@ -1708,6 +1708,7 @@ impl Analyzer {
             args,
             arg_types,
         );
+        self.enforce_csp_builder_signatures(callee_name, span.clone(), args, arg_types);
 
         if is_req_json_gate(callee_name) {
             if args.is_empty() {
@@ -2060,6 +2061,81 @@ impl Analyzer {
                     .with_note(usage_note),
                 );
             }
+        }
+    }
+
+    fn enforce_csp_builder_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if is_sec_csp_call(callee_name) {
+            if !args.is_empty() {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "sec.csp expects no arguments", span)
+                        .with_tag("security")
+                        .with_note("use `sec.csp()`"),
+                );
+            }
+            return;
+        }
+
+        if !is_sec_csp_add_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 3 {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sec.cspAdd expects `(policy, directive, sources)` arguments",
+                    span,
+                )
+                .with_tag("security")
+                .with_note("use `sec.cspAdd(cspPolicy, \"directive\", \"sources\")`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_named("CspPolicy") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sec.cspAdd policy argument must be `CspPolicy`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("build policy values via `sec.csp()`"),
+            );
+        }
+
+        if !arg_types[1].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sec.cspAdd directive argument must be `String`",
+                    args[1].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[1].describe()))
+                .with_note("use string CSP directive names"),
+            );
+        }
+
+        if !arg_types[2].is_named("String") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "sec.cspAdd sources argument must be `String`",
+                    args[2].span.clone(),
+                )
+                .with_tag("security")
+                .with_note(format!("found `{}`", arg_types[2].describe()))
+                .with_note("use string CSP source-list descriptors"),
+            );
         }
     }
 
@@ -4944,6 +5020,14 @@ fn is_err_conflict_call(name: &str) -> bool {
 
 fn is_err_rate_limit_call(name: &str) -> bool {
     matches!(name, "err_rate_limit" | "err.rateLimit")
+}
+
+fn is_sec_csp_call(name: &str) -> bool {
+    matches!(name, "sec_csp" | "sec.csp")
+}
+
+fn is_sec_csp_add_call(name: &str) -> bool {
+    matches!(name, "sec_csp_add" | "sec.cspAdd")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {

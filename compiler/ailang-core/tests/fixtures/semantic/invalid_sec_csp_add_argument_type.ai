@@ -1,0 +1,5 @@
+fn bad() -> Int {
+  let csp = sec.csp();
+  sec.cspAdd(csp, 1, 2);
+  0
+}

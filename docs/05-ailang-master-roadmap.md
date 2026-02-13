@@ -366,6 +366,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - `err.rateLimit` constructor typing is now hardened:
     - call shape is enforced as `(code, message, retryAfterMs)`,
     - code/message are string-typed and retry-after is numeric.
+  - CSP builder signature typing is now hardened:
+    - `sec.csp` is enforced as zero-argument constructor,
+    - `sec.cspAdd` enforces `(CspPolicy, String, String)` in the current runtime bridge.
   - Secret source call-shape contract is now hardened:
     - `secrets.get` requires `(secretsCap, name)` or `(ctx, secretsCap, name)`,
     - malformed shapes emit tagged `E4001` secret diagnostics.
@@ -738,6 +741,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: CORS Origin Gate Intrinsic Bootstrap".
 - Chapter: "M7 Slice: CSRF IssueToken Intrinsic Bootstrap".
 - Chapter: "M7 Slice: CSP Builder and Security Config Surface Bootstrap".
+- Chapter: "M7 Slice: CSP Builder Signature Hardening".
 - Chapter: "M7 Slice: Log Builder Intrinsic Bootstrap".
 - Chapter: "M7 Slice: Path/Header/Redact Helper Bridge".
 - Chapter: "M7 Slice: JSON Helper Intrinsic Bridge".

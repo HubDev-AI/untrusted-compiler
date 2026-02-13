@@ -1136,10 +1136,10 @@ entry = "src/main.ai"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ai"),
-        r#"fn main() -> Int {
+r#"fn main() -> Int {
   sec.defaultHeaders();
   let csp = sec.csp();
-  sec.cspAdd(csp, 1, 2);
+  sec.cspAdd(csp, "default-src", "'self'");
   cors.fromPolicy();
   csrf.fromPolicy();
   auth.fromPolicy();
@@ -1162,7 +1162,7 @@ entry = "src/main.ai"
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_sec_default_headers()"));
     assert!(generated_c.contains("ailang_rt_sec_csp()"));
-    assert!(generated_c.contains("ailang_rt_sec_csp_add(csp, 1, 2)"));
+    assert!(generated_c.contains("ailang_rt_sec_csp_add(csp, \"default-src\", \"'self'\")"));
     assert!(generated_c.contains("ailang_rt_cors_from_policy()"));
     assert!(generated_c.contains("ailang_rt_csrf_from_policy()"));
     assert!(generated_c.contains("ailang_rt_auth_from_policy()"));

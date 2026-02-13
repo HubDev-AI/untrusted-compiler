@@ -535,7 +535,7 @@ fn c_backend_rewrites_policy_config_intrinsics_to_runtime_symbols() {
 fn main() -> Int {
   sec.defaultHeaders();
   let csp = sec.csp();
-  sec.cspAdd(csp, 1, 2);
+  sec.cspAdd(csp, "default-src", "'self'");
   cors.fromPolicy();
   csrf.fromPolicy();
   auth.fromPolicy();
@@ -549,7 +549,7 @@ fn main() -> Int {
 
     assert!(c.contains("(void)(ailang_rt_sec_default_headers());"));
     assert!(c.contains("ailang_rt_sec_csp();"));
-    assert!(c.contains("(void)(ailang_rt_sec_csp_add(csp, 1, 2));"));
+    assert!(c.contains("(void)(ailang_rt_sec_csp_add(csp, \"default-src\", \"'self'\"));"));
     assert!(c.contains("(void)(ailang_rt_cors_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_csrf_from_policy());"));
     assert!(c.contains("(void)(ailang_rt_auth_from_policy());"));

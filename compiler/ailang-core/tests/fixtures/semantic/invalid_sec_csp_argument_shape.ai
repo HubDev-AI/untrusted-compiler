@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  sec.csp(1);
+  0
+}

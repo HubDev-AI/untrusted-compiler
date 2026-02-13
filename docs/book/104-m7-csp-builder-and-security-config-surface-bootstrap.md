@@ -52,7 +52,7 @@ The security middleware spec uses structured config types and CSP builders. With
 ```ailang
 fn main() -> Int {
   let csp = sec.csp();
-  sec.cspAdd(csp, 1, 2);
+  sec.cspAdd(csp, "default-src", "'self'");
   0
 }
 ```
