@@ -604,6 +604,9 @@ Historical implementation bullets below are retained as build history; strict ga
 - M10+M13 closure refresh now has a single operator command:
   - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + strict closure check (`--fail-on-pending`) in one flow,
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
+- Benchmark evidence quality checker is now available:
+  - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix leader quality posture (`p99` validity + `constantRate`),
+  - supports advisory mode and strict mode (`--fail-on-warning`) for future promotion-gate tightening.
 
 ## 0. Product Direction (Locked Constraints)
 
