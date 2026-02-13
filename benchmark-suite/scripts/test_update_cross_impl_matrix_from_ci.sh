@@ -44,6 +44,37 @@ if "$root_dir/update_cross_impl_matrix_from_ci.sh" --matrix "$matrix_bad" --targ
   exit 1
 fi
 
+matrix_partial="$tmp/compare-matrix-partial-endpoint.json"
+cat > "$matrix_partial" <<'EOF'
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "ping",
+      "compared": [
+        {"impl":"sec4","endpoint":"ping","targetRps":10000,"requestsPerSec":9800,"p99":"4.20ms","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"go","endpoint":"ping","targetRps":10000,"requestsPerSec":9700,"p99":"4.80ms","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"node","endpoint":"ping","targetRps":10000,"requestsPerSec":9000,"p99":"7.50ms","loadGenerator":"wrk2","constantRate":true},
+        {"impl":"rust","endpoint":"ping","targetRps":10000,"requestsPerSec":9750,"p99":"4.60ms","loadGenerator":"wrk2","constantRate":true}
+      ],
+      "leader": {"impl":"sec4","endpoint":"ping","targetRps":10000,"requestsPerSec":9800,"p99":"4.20ms","loadGenerator":"wrk2","constantRate":true}
+    },
+    {
+      "endpoint": "decode",
+      "compared": [
+        {"impl":"sec4","endpoint":"decode","targetRps":2000,"requestsPerSec":1800,"p99":"14.20ms","loadGenerator":"wrk2","constantRate":true}
+      ],
+      "leader": {"impl":"sec4","endpoint":"decode","targetRps":2000,"requestsPerSec":1800,"p99":"14.20ms","loadGenerator":"wrk2","constantRate":true}
+    }
+  ]
+}
+EOF
+
+if "$root_dir/update_cross_impl_matrix_from_ci.sh" --matrix "$matrix_partial" --target "$target" >/dev/null 2>&1; then
+  echo "expected failure when an endpoint is missing required impl coverage" >&2
+  exit 1
+fi
+
 warn_matrix="$tmp/warn-matrix.json"
 jq '
   .endpoints[0].compared[0].constantRate = false

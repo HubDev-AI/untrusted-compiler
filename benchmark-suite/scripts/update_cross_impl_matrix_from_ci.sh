@@ -147,15 +147,22 @@ if ! jq -e '
   .endpoints as $eps
   | ($eps | type == "array")
   and ($eps | length > 0)
-  and (
-    [ $eps[]?.compared[]?.impl ] | unique | sort
-    | (index("sec4") != null)
-    and (index("go") != null)
-    and (index("node") != null)
-    and (index("rust") != null)
+  and all(
+    $eps[];
+    . as $entry
+    | ($entry.endpoint | type == "string")
+    and ($entry.compared | type == "array")
+    and ($entry.compared | length > 0)
+    and (
+      [ $entry.compared[]?.impl ] | unique | sort
+      | (index("sec4") != null)
+      and (index("go") != null)
+      and (index("node") != null)
+      and (index("rust") != null)
+    )
   )
 ' "${matrix_path}" >/dev/null; then
-  echo "matrix does not include required impl set (sec4/go/node/rust): ${matrix_path}" >&2
+  echo "matrix does not include required impl set (sec4/go/node/rust) for each endpoint: ${matrix_path}" >&2
   exit 1
 fi
 

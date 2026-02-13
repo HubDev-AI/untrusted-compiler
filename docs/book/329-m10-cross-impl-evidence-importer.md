@@ -28,7 +28,7 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
   - artifact-fetch mode (default): uses `gh run list` + `gh run download`
   - direct mode: `--matrix <path>` for local/offline import
 - Enforces matrix coverage for required impl IDs:
-  - `sec4`, `go`, `node`, `rust`
+  - `sec4`, `go`, `node`, `rust` in each endpoint group
 - Enforces benchmark evidence quality before import:
   - strict by default: `check-benchmark-evidence-quality.sh --fail-on-warning`
   - optional local override: `--quality-allow-warning`
@@ -41,7 +41,7 @@ Before this slice, the benchmark harness could generate matrix outputs, but ther
   - dry-run command composition
   - strict-vs-allow quality mode command composition
   - successful import from a valid matrix fixture
-  - rejection of matrix inputs that do not include required impl coverage
+  - rejection of matrix inputs that do not include required per-endpoint impl coverage
   - strict-quality rejection for non-constant-rate leader matrices, with explicit opt-out behavior
 
 4. Smoke CI integration:
