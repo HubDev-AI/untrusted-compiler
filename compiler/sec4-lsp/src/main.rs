@@ -476,8 +476,12 @@ fn definition_at_position(
     else {
         return Ok(Value::Null);
     };
+    let Some(symbol_id) = resolve_call_target_symbol_id(state, &hit.name, uri, &source, &deadline)
+    else {
+        return Ok(Value::Null);
+    };
     let Some(symbol_match) =
-        find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline)
+        find_symbol_declaration_by_id(state, &symbol_id, uri, &source, &deadline)
     else {
         return Ok(Value::Null);
     };
@@ -506,8 +510,12 @@ fn hover_at_position(
     else {
         return Ok(Value::Null);
     };
+    let Some(symbol_id) = resolve_call_target_symbol_id(state, &hit.name, uri, &source, &deadline)
+    else {
+        return Ok(Value::Null);
+    };
     let Some(symbol_match) =
-        find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline)
+        find_symbol_declaration_by_id(state, &symbol_id, uri, &source, &deadline)
     else {
         return Ok(Value::Null);
     };
@@ -541,13 +549,25 @@ fn references_at_position(
     };
 
     let target_name = hit.name.clone();
+    let Some(target_symbol_id) =
+        resolve_call_target_symbol_id(state, &target_name, uri, &source, &deadline)
+    else {
+        return Ok(Value::Array(Vec::new()));
+    };
     let declaration =
-        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
-    let symbol_id = declaration.as_ref().map(|found| found.symbol.id.clone());
+        find_symbol_declaration_by_id(state, &target_symbol_id, uri, &source, &deadline);
     let mut locations = Vec::new();
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
         if deadline.is_expired() {
             break;
+        }
+        let Some(doc_symbol_id) =
+            resolve_call_target_symbol_id(state, &target_name, &doc_uri, &doc_source, &deadline)
+        else {
+            continue;
+        };
+        if doc_symbol_id != target_symbol_id {
+            continue;
         }
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
@@ -560,7 +580,9 @@ fn references_at_position(
         locations.extend(
             collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name, Some(&deadline))
                 .into_iter()
-                .map(|found| location_from_span(&doc_uri, &found.span, symbol_id.as_deref())),
+                .map(|found| {
+                    location_from_span(&doc_uri, &found.span, Some(target_symbol_id.as_str()))
+                }),
         );
     }
     if include_declaration {
@@ -570,7 +592,7 @@ fn references_at_position(
                 location_from_span(
                     &found.uri,
                     &found.symbol.span,
-                    Some(found.symbol.id.as_str()),
+                    Some(target_symbol_id.as_str()),
                 ),
             );
         }
@@ -659,7 +681,11 @@ fn prepare_rename_at_position(
     else {
         return Ok(Value::Null);
     };
-    if find_symbol_declaration_in_workspace(state, &hit.name, uri, &source, &deadline).is_none() {
+    let Some(symbol_id) = resolve_call_target_symbol_id(state, &hit.name, uri, &source, &deadline)
+    else {
+        return Ok(Value::Null);
+    };
+    if find_symbol_declaration_by_id(state, &symbol_id, uri, &source, &deadline).is_none() {
         return Ok(Value::Null);
     }
 
@@ -705,8 +731,17 @@ fn rename_at_position(
         }));
     };
     let target_name = hit.name;
+    let Some(target_symbol_id) =
+        resolve_call_target_symbol_id(state, &target_name, uri, &source, &deadline)
+    else {
+        return Ok(json!({
+            "changes": {
+                uri: []
+            }
+        }));
+    };
     let Some(declaration) =
-        find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline)
+        find_symbol_declaration_by_id(state, &target_symbol_id, uri, &source, &deadline)
     else {
         return Ok(json!({
             "changes": {
@@ -719,6 +754,14 @@ fn rename_at_position(
     for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
         if deadline.is_expired() {
             break;
+        }
+        let Some(doc_symbol_id) =
+            resolve_call_target_symbol_id(state, &target_name, &doc_uri, &doc_source, &deadline)
+        else {
+            continue;
+        };
+        if doc_symbol_id != target_symbol_id {
+            continue;
         }
         let Some(doc_path) = uri_to_path(&doc_uri) else {
             continue;
@@ -1345,53 +1388,111 @@ fn collect_ai_files(root: &PathBuf, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn find_symbol_declaration_in_workspace(
+fn document_symbols_for_uri(
+    state: &ServerState,
+    doc_uri: &str,
+    doc_source: &str,
+    deadline: &RequestDeadline,
+) -> Option<Vec<FunctionSymbol>> {
+    if deadline.is_expired() {
+        return None;
+    }
+    if let Some(cached_symbols) = state.open_document_symbols.get(doc_uri) {
+        return Some(cached_symbols.clone());
+    }
+    let doc_path = uri_to_path(doc_uri)?;
+    let doc_program = load_cached_program(state, doc_uri, &doc_path, doc_source, Some(deadline))?;
+    Some(collect_function_symbols(&doc_program, Some(deadline)))
+}
+
+fn resolve_unique_symbol_id_in_workspace(
     state: &ServerState,
     target_name: &str,
     primary_uri: &str,
     primary_source: &str,
     deadline: &RequestDeadline,
-) -> Option<DeclarationMatch> {
-    let mut matched: Option<DeclarationMatch> = None;
+) -> Option<String> {
+    let mut matched_id: Option<String> = None;
     for (doc_uri, doc_source) in
         workspace_document_entries(state, primary_uri, primary_source, deadline)
     {
         if deadline.is_expired() {
             break;
         }
-        let symbols = if let Some(cached_symbols) = state.open_document_symbols.get(&doc_uri) {
-            cached_symbols.clone()
-        } else {
-            let Some(doc_path) = uri_to_path(&doc_uri) else {
-                continue;
-            };
-            let Some(doc_program) =
-                load_cached_program(state, &doc_uri, &doc_path, &doc_source, Some(deadline))
-            else {
-                continue;
-            };
-            collect_function_symbols(&doc_program, Some(deadline))
+        let Some(symbols) = document_symbols_for_uri(state, &doc_uri, &doc_source, deadline) else {
+            continue;
         };
-
-        if let Some(symbol) = symbols
-            .into_iter()
-            .find(|symbol| symbol.name == target_name)
-        {
-            let candidate = DeclarationMatch {
-                uri: doc_uri,
-                symbol,
-                source: doc_source,
-            };
-            if let Some(existing) = &matched {
-                if existing.symbol.id != candidate.symbol.id {
+        for symbol in symbols {
+            if symbol.name != target_name {
+                continue;
+            }
+            if let Some(existing) = &matched_id {
+                if existing != &symbol.id {
                     return None;
                 }
                 continue;
             }
-            matched = Some(candidate);
+            matched_id = Some(symbol.id);
         }
     }
-    matched
+    matched_id
+}
+
+fn resolve_call_target_symbol_id(
+    state: &ServerState,
+    target_name: &str,
+    primary_uri: &str,
+    primary_source: &str,
+    deadline: &RequestDeadline,
+) -> Option<String> {
+    let local_symbols =
+        document_symbols_for_uri(state, primary_uri, primary_source, deadline).unwrap_or_default();
+    let mut local_matches = local_symbols
+        .iter()
+        .filter(|symbol| symbol.name == target_name)
+        .map(|symbol| symbol.id.clone())
+        .collect::<Vec<_>>();
+    local_matches.sort();
+    local_matches.dedup();
+
+    match local_matches.as_slice() {
+        [only] => Some(only.clone()),
+        [] => resolve_unique_symbol_id_in_workspace(
+            state,
+            target_name,
+            primary_uri,
+            primary_source,
+            deadline,
+        ),
+        _ => None,
+    }
+}
+
+fn find_symbol_declaration_by_id(
+    state: &ServerState,
+    symbol_id: &str,
+    primary_uri: &str,
+    primary_source: &str,
+    deadline: &RequestDeadline,
+) -> Option<DeclarationMatch> {
+    for (doc_uri, doc_source) in
+        workspace_document_entries(state, primary_uri, primary_source, deadline)
+    {
+        if deadline.is_expired() {
+            break;
+        }
+        let Some(symbols) = document_symbols_for_uri(state, &doc_uri, &doc_source, deadline) else {
+            continue;
+        };
+        if let Some(symbol) = symbols.into_iter().find(|symbol| symbol.id == symbol_id) {
+            return Some(DeclarationMatch {
+                uri: doc_uri,
+                symbol,
+                source: doc_source,
+            });
+        }
+    }
+    None
 }
 
 fn deadline_exceeded(deadline: Option<&RequestDeadline>) -> bool {
@@ -3540,6 +3641,91 @@ mod tests {
     }
 
     #[test]
+    fn references_bind_to_local_symbol_id_when_workspace_has_duplicate_names() {
+        let root = make_temp_workspace("sec4_lsp_refs_symbol_id_local");
+        let file_a = root.join("a.ut");
+        let file_b = root.join("b.ut");
+        let policy_file = root.join("sec4.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn helper() -> Int {\n  2\n}\n\nfn two() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_a = Url::from_file_path(&file_a)
+            .expect("file a uri")
+            .to_string();
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_a,
+                    "languageId": "untrusted",
+                    "version": 1,
+                    "text": source_a
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": {"uri": uri_a},
+                "position": {"line": 5, "character": 2},
+                "context": {"includeDeclaration": true}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let references_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(22)))
+            .expect("references response should exist");
+        let references = references_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("references result should be an array");
+        assert!(
+            !references.is_empty(),
+            "local declaration references should be resolved",
+        );
+        let uris = references
+            .iter()
+            .filter_map(|location| location.get("uri").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert!(
+            uris.iter().all(|entry| *entry == uri_a.as_str()),
+            "references should stay bound to local symbol id and avoid duplicate-name workspace hits",
+        );
+        assert!(
+            !uris.contains(&uri_b.as_str()),
+            "references should not include duplicate-name callsites from other declarations",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn implementation_returns_declaration_location_for_call_identifier() {
         let uri = "file:///tmp/lsp_implementation.ut";
         let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
@@ -4107,6 +4293,88 @@ mod tests {
         assert!(
             edits.is_empty(),
             "ambiguous declarations should prevent rename edits",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rename_binds_to_local_symbol_id_when_workspace_has_duplicate_names() {
+        let root = make_temp_workspace("sec4_lsp_rename_symbol_id_local");
+        let file_a = root.join("a.ut");
+        let file_b = root.join("b.ut");
+        let policy_file = root.join("sec4.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn helper() -> Int {\n  2\n}\n\nfn two() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_a = Url::from_file_path(&file_a)
+            .expect("file a uri")
+            .to_string();
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_a,
+                    "languageId": "untrusted",
+                    "version": 1,
+                    "text": source_a
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {"uri": uri_a},
+                "position": {"line": 5, "character": 2},
+                "newName": "assist"
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let rename_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(23)))
+            .expect("rename response should exist");
+        let changes = rename_response
+            .get("result")
+            .and_then(|result| result.get("changes"))
+            .expect("rename result should include changes object");
+
+        let local_edits = changes
+            .get(&uri_a)
+            .and_then(Value::as_array)
+            .expect("rename should include local edits");
+        assert!(
+            !local_edits.is_empty(),
+            "local symbol declaration and callsites should be renamed",
+        );
+        assert!(
+            changes.get(&uri_b).is_none(),
+            "rename should not affect duplicate-name declarations in other files",
         );
 
         let _ = fs::remove_dir_all(root);

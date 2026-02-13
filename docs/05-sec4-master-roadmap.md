@@ -1058,12 +1058,12 @@ Implementation order is intentionally linear to reduce thrash:
   - effect quick-fix anchoring now uses parser-derived function signature windows to avoid body-text `fn` false anchors.
   - symbolId metadata coverage now explicitly includes callsite-only reference responses.
   - call-target resolution is now scope-aware, preventing shadowed local names from being resolved as function symbols in navigation/rename flows.
+  - callsite navigation/editing now resolves target symbols by `symbolId` (local-first declaration resolution) and filters references/rename edits by resolved symbol identity to avoid duplicate-name cross-binding.
   - interrupt-aware core analysis hooks now exist in `sec4-core` parser/semantic pipelines, and LSP diagnostics/requested parses now use those hooks for preemptive in-stage cancellation.
   - lexer-stage interrupt checks now use the same core interrupt signal path, so budget/deadline cancellation can stop tokenization early with `I9001` info diagnostics.
   - Zed grammar integration is now pinned to an immutable `tree-sitter-untrusted` revision SHA in extension metadata.
 - Remaining:
   - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
-  - end-to-end symbol-ID-based callsite binding across definition/references/rename (callsite-focused collection + symbol metadata + scope-aware target resolution are now in place).
   - fully AST-aware code-action rewrites for complex signature layouts (signature-window-aware anchoring is now in place).
 
 ### Exit criteria
@@ -1117,6 +1117,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Scope-Aware Call-Target Resolution".
 - Chapter: "M11 Slice: Core Parser/Semantic Interrupt Hooks".
 - Chapter: "M11 Slice: Lexer Interrupt Hooks and Zed Grammar Pin".
+- Chapter: "M11 Slice: Symbol-ID Callsite Binding for References and Rename".
 
 ## M12 - Naming Alignment and Ecosystem Lock
 ### Trigger condition
