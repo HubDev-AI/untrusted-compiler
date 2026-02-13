@@ -1016,6 +1016,7 @@ Implementation order is intentionally linear to reduce thrash:
   - tree-sitter query surface now includes highlights + outline + indent + textobjects baseline.
   - definition/hover now resolve declarations/signatures via workspace lookup (including unopened files).
   - ambiguity-safe guardrails prevent definition/rename guesses when duplicate declarations exist.
+  - unopened-file scan can now be toggled for performance-sensitive editor sessions.
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
@@ -1056,6 +1057,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Ambiguous Declaration Safety Guard".
 - Chapter: "M11 Slice: Language Server Operations Guide".
 - Chapter: "M11 Slice: Code-Action Effect-Declaration Edit".
+- Chapter: "M11 Slice: Unopened-Scan Toggle".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

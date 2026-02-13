@@ -993,32 +993,45 @@ fn workspace_document_entries(
         seen_uris.insert(primary_uri.to_string());
     }
 
-    if let Some(root) = project_root_for_uri(primary_uri) {
-        let mut ai_files = Vec::new();
-        collect_ai_files(&root, &mut ai_files);
-        ai_files.sort();
+    if scan_unopened_workspace_files() {
+        if let Some(root) = project_root_for_uri(primary_uri) {
+            let mut ai_files = Vec::new();
+            collect_ai_files(&root, &mut ai_files);
+            ai_files.sort();
 
-        for file in ai_files {
-            if deadline.is_expired() {
-                break;
+            for file in ai_files {
+                if deadline.is_expired() {
+                    break;
+                }
+                let Ok(file_url) = Url::from_file_path(&file) else {
+                    continue;
+                };
+                let file_uri = file_url.to_string();
+                if seen_uris.contains(&file_uri) {
+                    continue;
+                }
+                let Ok(file_source) = fs::read_to_string(&file) else {
+                    continue;
+                };
+                entries.push((file_uri.clone(), file_source));
+                seen_uris.insert(file_uri);
             }
-            let Ok(file_url) = Url::from_file_path(&file) else {
-                continue;
-            };
-            let file_uri = file_url.to_string();
-            if seen_uris.contains(&file_uri) {
-                continue;
-            }
-            let Ok(file_source) = fs::read_to_string(&file) else {
-                continue;
-            };
-            entries.push((file_uri.clone(), file_source));
-            seen_uris.insert(file_uri);
         }
     }
 
     entries.sort_by(|left, right| left.0.cmp(&right.0));
     entries
+}
+
+fn scan_unopened_workspace_files() -> bool {
+    std::env::var("AILANG_LSP_SCAN_UNOPENED_FILES")
+        .ok()
+        .map(|raw| parse_env_bool(&raw))
+        .unwrap_or(true)
+}
+
+fn parse_env_bool(raw: &str) -> bool {
+    !matches!(raw.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off" | "no")
 }
 
 fn project_root_for_uri(uri: &str) -> Option<PathBuf> {
@@ -1656,7 +1669,8 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        diagnostics_for_document_with_limits, read_message, refresh_program_cache, run_stdio,
+        diagnostics_for_document_with_limits, parse_env_bool, read_message, refresh_program_cache,
+        run_stdio,
         RequestDeadline, ServerState,
     };
     use serde_json::{json, Value};
@@ -1878,6 +1892,18 @@ mod tests {
     fn request_deadline_zero_budget_expires_immediately() {
         let deadline = RequestDeadline::new(0);
         assert!(deadline.is_expired(), "zero budget should be treated as expired");
+    }
+
+    #[test]
+    fn parse_env_bool_handles_common_false_values() {
+        assert!(!parse_env_bool("false"));
+        assert!(!parse_env_bool("FALSE"));
+        assert!(!parse_env_bool("0"));
+        assert!(!parse_env_bool("off"));
+        assert!(!parse_env_bool("no"));
+        assert!(parse_env_bool("true"));
+        assert!(parse_env_bool("1"));
+        assert!(parse_env_bool("yes"));
     }
 
     #[test]
