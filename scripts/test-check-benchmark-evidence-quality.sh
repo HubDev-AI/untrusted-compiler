@@ -29,4 +29,25 @@ if "${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${warn_m
   exit 1
 fi
 
+bad_matrix="${tmp}/bad-matrix.json"
+jq '.endpoints[0].leader.impl = "mismatch"' "${good_matrix}" > "${bad_matrix}"
+
+set +e
+bad_out="$("${repo_root}/scripts/check-benchmark-evidence-quality.sh" --matrix "${bad_matrix}" 2>&1)"
+bad_code=$?
+set -e
+
+if [ "${bad_code}" -ne 2 ]; then
+  echo "expected malformed matrix to fail with exit code 2" >&2
+  exit 1
+fi
+if ! grep -q 'leader row missing in compared' <<<"${bad_out}"; then
+  echo "expected malformed matrix output to include leader membership failure" >&2
+  exit 1
+fi
+if ! grep -q 'overall: FAIL' <<<"${bad_out}"; then
+  echo "expected malformed matrix output to report FAIL status" >&2
+  exit 1
+fi
+
 echo "check-benchmark-evidence-quality test passed"

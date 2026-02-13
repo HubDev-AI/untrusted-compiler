@@ -22,21 +22,27 @@ After adding `wrk` fallback support, local runs can be non-constant-rate. Those 
 
 `check-benchmark-evidence-quality.sh` reads compare-matrix leaders and checks:
 
-1. leader `p99` exists and parses to a numeric value greater than `0`,
-2. leader `constantRate` posture:
+1. endpoint contract integrity:
+   - non-empty `compared` rows,
+   - leader endpoint matches endpoint group,
+   - leader row is present in `compared`,
+2. leader `p99` exists and parses to a numeric value greater than `0`,
+3. leader `constantRate` posture:
    - `true` -> PASS
    - `false` -> WARN (`non-constant-rate run`)
 
 Modes:
 - default: prints PASS/WARN summary and exits `0` even with warnings,
 - `--fail-on-warning`: exits non-zero on warnings for stricter gates.
+- malformed endpoint contract checks are `FAIL` and always exit non-zero (`2`).
 
 ## Tests
 
 `test-check-benchmark-evidence-quality.sh` validates:
 - PASS on canonical cross-impl sample matrix,
 - WARN on non-constant-rate sample matrix,
-- non-zero exit when `--fail-on-warning` is used with warning matrix.
+- non-zero exit when `--fail-on-warning` is used with warning matrix,
+- hard FAIL when leader is not present in compared rows.
 
 Benchmark smoke CI now runs this test.
 Benchmark smoke CI also runs `test-benchmark-workflow-quality-gates.sh` to enforce strict-quality gate presence in live benchmark workflows.

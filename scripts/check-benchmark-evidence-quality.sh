@@ -6,6 +6,8 @@ usage() {
 usage: $0 [--matrix <path>] [--fail-on-warning]
 
 Checks benchmark compare-matrix quality posture:
+- endpoint entries must contain non-empty compared rows and a leader row aligned to endpoint
+- leader row must be present in compared rows
 - leader p99 must be present and > 0
 - leader constantRate=false is flagged as WARN (non-constant-rate evidence)
 
@@ -54,12 +56,37 @@ fi
 
 warn_count=0
 pass_count=0
+fail_count=0
 
 printf '%-10s %-8s %-36s %s\n' "Endpoint" "Status" "Check" "Evidence"
 printf '%-10s %-8s %-36s %s\n' "--------" "------" "------------------------------------" "--------"
 
-while IFS=$'\t' read -r endpoint p99 constant_rate target_rps actual_rps; do
+while IFS=$'\t' read -r endpoint p99 constant_rate target_rps actual_rps compared_count leader_in_compared leader_endpoint; do
   [ -z "${endpoint}" ] && continue
+
+  if awk -v n="${compared_count}" 'BEGIN { exit !(n+0 > 0) }'; then
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "PASS" "compared rows present" "compared=${compared_count}"
+    pass_count=$((pass_count + 1))
+  else
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "FAIL" "missing compared rows" "compared=${compared_count}"
+    fail_count=$((fail_count + 1))
+  fi
+
+  if [ "${leader_endpoint}" = "${endpoint}" ]; then
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "PASS" "leader endpoint aligned" "leader.endpoint=${leader_endpoint}"
+    pass_count=$((pass_count + 1))
+  else
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "FAIL" "leader endpoint mismatch" "leader.endpoint=${leader_endpoint:-<empty>}"
+    fail_count=$((fail_count + 1))
+  fi
+
+  if [ "${leader_in_compared}" = "true" ]; then
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "PASS" "leader row present in compared" "leaderInCompared=true"
+    pass_count=$((pass_count + 1))
+  else
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "FAIL" "leader row missing in compared" "leaderInCompared=false"
+    fail_count=$((fail_count + 1))
+  fi
 
   p99_num="$(awk -v v="${p99}" 'BEGIN { if (match(v, /[0-9]+(\.[0-9]+)?/)) { print substr(v, RSTART, RLENGTH) } }')"
   if [ -n "${p99_num}" ] && awk -v n="${p99_num}" 'BEGIN { exit !(n+0 > 0) }'; then
@@ -84,21 +111,53 @@ while IFS=$'\t' read -r endpoint p99 constant_rate target_rps actual_rps; do
   fi
 done < <(
   jq -r '
+    def normalize_row:
+      . as $row
+      | {
+          impl: ($row.impl // ""),
+          endpoint: ($row.endpoint // ""),
+          targetRps: ($row.targetRps // 0),
+          requestsPerSec: ($row.requestsPerSec // 0),
+          p99: ($row.p99 // ""),
+          loadGenerator: (if ($row | has("loadGenerator")) then $row.loadGenerator else "wrk2" end),
+          constantRate: (if ($row | has("constantRate")) then $row.constantRate else true end)
+        };
+    def row_eq(a; b):
+      a.impl == b.impl
+      and a.endpoint == b.endpoint
+      and a.targetRps == b.targetRps
+      and a.requestsPerSec == b.requestsPerSec
+      and a.p99 == b.p99
+      and a.loadGenerator == b.loadGenerator
+      and a.constantRate == b.constantRate;
     .endpoints[]
     | .endpoint as $ep
-    | (.leader // {}) as $leader
+    | (.leader // {} | normalize_row) as $leader
+    | (.compared // [] | map(normalize_row)) as $compared
+    | (
+        ($compared | type == "array")
+        and any($compared[]; row_eq(.; $leader))
+      ) as $leader_in_compared
     | [
         $ep,
         ($leader.p99 // ""),
         (if ($leader | has("constantRate")) then $leader.constantRate else true end | tostring),
         ($leader.targetRps // 0 | tostring),
-        ($leader.requestsPerSec // 0 | tostring)
+        ($leader.requestsPerSec // 0 | tostring),
+        ($compared | length | tostring),
+        ($leader_in_compared | tostring),
+        ($leader.endpoint // "")
       ]
     | @tsv
   ' "${matrix_path}"
 )
 
 echo
+if [ "${fail_count}" -gt 0 ]; then
+  echo "overall: FAIL (${fail_count} fail check(s), ${warn_count} warning(s), ${pass_count} pass check(s))"
+  exit 2
+fi
+
 if [ "${warn_count}" -eq 0 ]; then
   echo "overall: PASS (quality checks passed)"
   exit 0

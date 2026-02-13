@@ -613,7 +613,8 @@ Historical implementation bullets below are retained as build history; strict ga
   - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + benchmark evidence quality check + strict closure check (`--fail-on-pending`) in one flow,
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
 - Benchmark evidence quality checker is now available:
-  - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix leader quality posture (`p99` validity + `constantRate`),
+  - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
+  - malformed endpoint contract checks (`missing compared rows`, `leader endpoint mismatch`, `leader missing in compared`) now hard-fail with exit code `2`,
   - supports advisory mode and strict mode (`--fail-on-warning`) for promotion-gate tightening,
   - scheduled benchmark trend workflow now runs strict quality mode before regression-threshold checks,
   - cross-impl evidence workflow now runs strict quality mode before publishing artifact evidence,
