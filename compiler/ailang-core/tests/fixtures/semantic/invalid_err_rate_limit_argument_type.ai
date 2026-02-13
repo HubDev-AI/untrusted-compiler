@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  err.rateLimit(1, 2, 3);
+  0
+}

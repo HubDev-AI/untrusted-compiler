@@ -777,6 +777,24 @@ fn bad() -> Int {
 }
 
 #[test]
+fn err_rate_limit_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  err.rateLimit(1, 2, 3);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "err.rateLimit code argument must be `String`")
+        .expect("expected err.rateLimit code argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn allow_annotation_diagnostic_has_security_policy_tags() {
     let source = r#"
 @allow(

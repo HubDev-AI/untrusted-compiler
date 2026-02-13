@@ -617,7 +617,7 @@ fn main() -> Int {
   let auth = err.auth("AUTH.FORBIDDEN", "forbidden", 401);
   let notFound = err.notFound("RESOURCE.NOT_FOUND", "missing");
   let conflict = err.conflict("RESOURCE.CONFLICT", "conflict");
-  let limited = err.rateLimit(1, 2, 3);
+  let limited = err.rateLimit("LIMIT.RATE", "rate limited", 3);
   let internal = err.internal("internal");
   let withPath = err.withPath(base, "$.field");
   let withDetail = err.withDetail(base, "field", 2);
@@ -645,7 +645,7 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_err_auth(\"AUTH.FORBIDDEN\", \"forbidden\", 401);"));
     assert!(c.contains("ailang_rt_err_not_found(\"RESOURCE.NOT_FOUND\", \"missing\");"));
     assert!(c.contains("ailang_rt_err_conflict(\"RESOURCE.CONFLICT\", \"conflict\");"));
-    assert!(c.contains("ailang_rt_err_rate_limit(1, 2, 3);"));
+    assert!(c.contains("ailang_rt_err_rate_limit(\"LIMIT.RATE\", \"rate limited\", 3);"));
     assert!(c.contains("ailang_rt_err_internal(\"internal\");"));
     assert!(c.contains("ailang_rt_err_with_path(base, \"$.field\");"));
     assert!(c.contains("ailang_rt_err_with_detail(base, \"field\", 2);"));

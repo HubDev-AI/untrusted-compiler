@@ -160,3 +160,4 @@
 - Added `err.auth` constructor hardening so auth error code/message are string-typed and status is numeric, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.notFound` constructor hardening so not-found error code/message arguments are string-typed, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.conflict` constructor hardening so conflict error code/message arguments are string-typed, with tagged diagnostics and aligned error-builder integration fixtures.
+- Added `err.rateLimit` constructor hardening so rate-limit code/message are string-typed and retry-after values are numeric, with tagged diagnostics and aligned error-builder integration fixtures.

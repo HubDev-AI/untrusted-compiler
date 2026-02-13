@@ -1261,7 +1261,7 @@ entry = "src/main.ai"
   err.auth("AUTH.FORBIDDEN", "forbidden", 401);
   err.notFound("RESOURCE.NOT_FOUND", "missing");
   err.conflict("RESOURCE.CONFLICT", "conflict");
-  err.rateLimit(1, 2, 3);
+  err.rateLimit("LIMIT.RATE", "rate limited", 3);
   let internal = err.internal("internal");
   err.withPath(base, "$.field");
   err.withDetail(base, "field", 2);
@@ -1289,7 +1289,7 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_err_auth(\"AUTH.FORBIDDEN\", \"forbidden\", 401)"));
     assert!(generated_c.contains("ailang_rt_err_not_found(\"RESOURCE.NOT_FOUND\", \"missing\")"));
     assert!(generated_c.contains("ailang_rt_err_conflict(\"RESOURCE.CONFLICT\", \"conflict\")"));
-    assert!(generated_c.contains("ailang_rt_err_rate_limit(1, 2, 3)"));
+    assert!(generated_c.contains("ailang_rt_err_rate_limit(\"LIMIT.RATE\", \"rate limited\", 3)"));
     assert!(generated_c.contains("ailang_rt_err_internal(\"internal\")"));
     assert!(generated_c.contains("ailang_rt_err_with_path(base, \"$.field\")"));
     assert!(generated_c.contains("ailang_rt_err_with_detail(base, \"field\", 2)"));

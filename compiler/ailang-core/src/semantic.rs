@@ -3488,6 +3488,61 @@ impl Analyzer {
             return;
         }
 
+        if is_err_rate_limit_call(callee_name) {
+            if args.len() != 3 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.rateLimit expects `(code, message, retryAfterMs)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `err.rateLimit(\"CODE\", \"message\", retryAfterMs)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.rateLimit code argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("use stable rate-limit error code strings"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.rateLimit message argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("use safe rate-limit message strings"),
+                );
+            }
+
+            if !arg_types[2].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "err.rateLimit retryAfterMs argument must be numeric",
+                        args[2].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[2].describe()))
+                    .with_note("use `Int`/`Int64` retry-after values"),
+                );
+            }
+            return;
+        }
+
         if is_err_internal_call(callee_name) {
             if args.len() != 1 {
                 self.diagnostics.push(
@@ -4885,6 +4940,10 @@ fn is_err_not_found_call(name: &str) -> bool {
 
 fn is_err_conflict_call(name: &str) -> bool {
     matches!(name, "err_conflict" | "err.conflict")
+}
+
+fn is_err_rate_limit_call(name: &str) -> bool {
+    matches!(name, "err_rate_limit" | "err.rateLimit")
 }
 
 fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
