@@ -249,5 +249,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `282-m11-zed-grammar-pin-validation-gate.md`
 - `283-m11-import-edge-extraction-and-replacement-tests.md`
 - `284-m11-symbol-id-metadata-in-definition-and-references.md`
+- `285-m11-signature-window-aware-effect-quickfix.md`
 
 As milestones progress, chapters will be added and linked from this index.
