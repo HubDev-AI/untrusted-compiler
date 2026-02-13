@@ -193,5 +193,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `226-m10-analysis-integrated-report-publishing.md`
 - `227-m10-c-baseline-service.md`
 - `228-m10-ailang-baseline-service.md`
+- `229-m10-cross-impl-contract-parity-smoke.md`
 
 As milestones progress, chapters will be added and linked from this index.

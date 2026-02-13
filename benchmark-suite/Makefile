@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts
+.PHONY: help db-up db-down db-schema env bench-ping bench-decode bench-users bench-profile bench-matrix bench-matrix-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 BASE_URL ?= http://127.0.0.1:8080
@@ -23,6 +23,7 @@ help:
 	@echo "  analyze-matrix Analyze tail-latency/target-coverage signals from matrix"
 	@echo "  publish-report Build markdown benchmark report from matrix + sec.audit"
 	@echo "  test-scripts Run benchmark helper script tests"
+	@echo "  test-services Run cross-impl service contract smoke checks"
 
 db-up:
 	docker compose -f docker-compose.yml up -d
@@ -81,3 +82,7 @@ test-scripts:
 	scripts/test_analyze_matrix.sh
 	scripts/test_publish_report.sh
 	scripts/test_run_comparison_matrix.sh
+	scripts/test_test_service_contracts.sh
+
+test-services:
+	scripts/test_service_contracts.sh
