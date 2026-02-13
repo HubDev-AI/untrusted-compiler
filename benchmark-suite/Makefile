@@ -79,7 +79,7 @@ compare:
 	scripts/compare_reports.sh results/summaries ping results/summaries/compare-ping.json
 
 compare-matrix:
-	scripts/compare_matrix.sh results/summaries results/summaries/compare-matrix.json
+	scripts/compare_matrix.sh results/summaries results/summaries/compare-matrix.json "$(IMPLS)"
 
 analyze-matrix:
 	scripts/analyze_matrix.sh results/summaries/compare-matrix.json results/summaries/analysis.json

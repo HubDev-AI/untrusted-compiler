@@ -1,15 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -ne 2 ]; then
-  echo "usage: $0 <reports_dir> <out_compare_matrix.json>" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+  echo "usage: $0 <reports_dir> <out_compare_matrix.json> [impls_csv]" >&2
   exit 2
 fi
 
 reports_dir="$1"
 out="$2"
+impls_csv="${3:-}"
 
-mapfile -t report_files < <(find "$reports_dir" -maxdepth 1 -type f -name '*-report.json' | sort)
+if [ -n "$impls_csv" ]; then
+  report_files=()
+  IFS=',' read -r -a impls <<< "$impls_csv"
+  for raw_impl in "${impls[@]}"; do
+    impl="${raw_impl// /}"
+    [ -z "$impl" ] && continue
+    candidate="${reports_dir}/${impl}-report.json"
+    if [ ! -f "$candidate" ]; then
+      echo "missing report file for impl=${impl}: ${candidate}" >&2
+      exit 2
+    fi
+    report_files+=("$candidate")
+  done
+else
+  mapfile -t report_files < <(find "$reports_dir" -maxdepth 1 -type f -name '*-report.json' | sort)
+fi
+
 if [ "${#report_files[@]}" -eq 0 ]; then
   echo "no report files found in ${reports_dir}" >&2
   exit 2

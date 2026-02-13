@@ -38,4 +38,17 @@ if ! jq -e '.endpoints[] | select(.endpoint == "users-post") | .leader.impl == "
   exit 1
 fi
 
+filtered_out="$tmp/compare-matrix-filtered.json"
+"$root_dir/scripts/compare_matrix.sh" "$tmp" "$filtered_out" "node,go" >/dev/null
+
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | (.compared | length) == 2' "$filtered_out" >/dev/null; then
+  echo "compare-matrix filtered run expected 2 compared implementations for ping" >&2
+  exit 1
+fi
+
+if ! jq -e '.endpoints[] | select(.endpoint == "ping") | .leader.impl == "go"' "$filtered_out" >/dev/null; then
+  echo "compare-matrix filtered run expected go to lead ping" >&2
+  exit 1
+fi
+
 echo "compare_matrix test passed"

@@ -274,7 +274,7 @@ analysis_path="${summaries_dir}/analysis.json"
 report_md_path="${results_dir}/benchmark-report.md"
 
 if [ "$dry_run" = "true" ]; then
-  echo "run: ${root_dir}/scripts/compare_matrix.sh ${summaries_dir} ${matrix_path}"
+  echo "run: ${root_dir}/scripts/compare_matrix.sh ${summaries_dir} ${matrix_path} ${impls_csv}"
   echo "run: ${root_dir}/scripts/analyze_matrix.sh ${matrix_path} ${analysis_path}"
   if [ -n "$sec_audit_path" ]; then
     echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path} ${analysis_path}"
@@ -284,7 +284,7 @@ if [ "$dry_run" = "true" ]; then
   exit 0
 fi
 
-"${root_dir}/scripts/compare_matrix.sh" "$summaries_dir" "$matrix_path"
+"${root_dir}/scripts/compare_matrix.sh" "$summaries_dir" "$matrix_path" "$impls_csv"
 "${root_dir}/scripts/analyze_matrix.sh" "$matrix_path" "$analysis_path"
 
 if [ -n "$sec_audit_path" ]; then

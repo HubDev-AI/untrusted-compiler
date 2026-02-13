@@ -38,6 +38,10 @@ if ! grep -q 'compare_matrix.sh' <<<"$out"; then
   echo "missing compare matrix command" >&2
   exit 1
 fi
+if ! grep -q 'compare_matrix.sh .* node,go' <<<"$out"; then
+  echo "missing scoped impl list in compare matrix command" >&2
+  exit 1
+fi
 
 if ! grep -q 'analyze_matrix.sh' <<<"$out"; then
   echo "missing matrix analysis command" >&2

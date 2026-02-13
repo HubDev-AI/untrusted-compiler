@@ -204,5 +204,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `237-m10-report-selected-endpoints-metadata.md`
 - `238-m10-markdown-report-endpoint-scope-header.md`
 - `239-m10-impl-selector-flag-parity-in-contract-smoke-runner.md`
+- `240-m10-implementation-scoped-matrix-comparison.md`
 
 As milestones progress, chapters will be added and linked from this index.
