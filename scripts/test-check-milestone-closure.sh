@@ -101,6 +101,7 @@ jobs:
       - name: Run benchmark script smoke tests
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-benchmark-smoke-closure-gate-guard.sh
           scripts/test-check-milestone-closure.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML
@@ -501,6 +502,7 @@ jobs:
       - name: Run benchmark script smoke tests
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-benchmark-smoke-closure-gate-guard.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML
 
@@ -525,6 +527,7 @@ jobs:
       - name: Run benchmark script smoke tests
         run: |
           scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-benchmark-smoke-closure-gate-guard.sh
           scripts/test-check-milestone-closure.sh
           scripts/check-milestone-closure.sh --fail-on-pending
 YAML

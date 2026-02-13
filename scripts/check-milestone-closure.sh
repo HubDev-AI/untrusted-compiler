@@ -248,6 +248,7 @@ fi
 benchmark_smoke_workflow_path="${repo_root}/.github/workflows/benchmark-smoke.yml"
 if [ -f "${benchmark_smoke_workflow_path}" ] \
   && rg -q 'scripts/test-benchmark-smoke-closure-gate.sh' "${benchmark_smoke_workflow_path}" \
+  && rg -q 'scripts/test-benchmark-smoke-closure-gate-guard.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q 'scripts/test-check-milestone-closure.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q 'scripts/check-milestone-closure.sh' "${benchmark_smoke_workflow_path}" \
   && rg -q -- '--fail-on-pending' "${benchmark_smoke_workflow_path}"; then
@@ -291,7 +292,7 @@ emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + a
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"
-emit_check "M13-D" "benchmark-smoke workflow enforces closure tests + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
+emit_check "M13-D" "benchmark-smoke workflow enforces closure contract + guard + strict closure audit" "${bool_has_benchmark_smoke_closure_contract}" "${benchmark_smoke_workflow_path}"
 
 echo
 if [ "${pending_count}" -eq 0 ]; then

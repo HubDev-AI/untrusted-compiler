@@ -25,6 +25,7 @@ That left a gap where:
 - `scripts/test-benchmark-smoke-closure-gate.sh`
 - Asserts benchmark-smoke workflow keeps:
   - closure gate contract test command (`scripts/test-benchmark-smoke-closure-gate.sh`)
+  - closure gate guard test command (`scripts/test-benchmark-smoke-closure-gate-guard.sh`)
   - closure fixture test command (`scripts/test-check-milestone-closure.sh`)
   - strict closure-audit command (`scripts/check-milestone-closure.sh --fail-on-pending`).
 

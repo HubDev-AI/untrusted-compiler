@@ -40,6 +40,7 @@ jobs:
           scripts/test-check-benchmark-evidence-quality.sh
           scripts/test-benchmark-workflow-quality-gates.sh
           scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-benchmark-smoke-closure-gate-guard.sh
           scripts/test-check-milestone-closure.sh
           scripts/check-milestone-closure.sh --fail-on-pending
           benchmark-suite/scripts/test_run_comparison_matrix.sh
