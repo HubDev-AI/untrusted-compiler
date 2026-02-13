@@ -16,6 +16,8 @@ struct ServerState {
     documents: HashMap<String, String>,
     parsed_programs: HashMap<String, Program>,
     open_document_symbols: HashMap<String, Vec<FunctionSymbol>>,
+    open_document_imports: HashMap<String, HashSet<String>>,
+    reverse_open_document_imports: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Clone)]
@@ -176,6 +178,7 @@ fn handle_message<W: Write>(
                 state.documents.remove(&uri);
                 state.parsed_programs.remove(&uri);
                 state.open_document_symbols.remove(&uri);
+                remove_open_document_import_edges(state, &uri);
                 publish_diagnostics(writer, &uri, Vec::new())?;
             } else if let Some(id) = id {
                 send_error_response(
@@ -1008,6 +1011,9 @@ fn load_document_source(state: &ServerState, uri: &str) -> io::Result<(PathBuf, 
 }
 
 fn refresh_program_cache(state: &mut ServerState, uri: &str, text: &str) {
+    update_open_document_import_edges(state, uri, text);
+    invalidate_open_document_dependents(state, uri);
+
     let Some(path) = uri_to_path(uri) else {
         state.parsed_programs.remove(uri);
         state.open_document_symbols.remove(uri);
@@ -1024,6 +1030,123 @@ fn refresh_program_cache(state: &mut ServerState, uri: &str, text: &str) {
             state.open_document_symbols.remove(uri);
         }
     }
+}
+
+fn update_open_document_import_edges(state: &mut ServerState, uri: &str, text: &str) {
+    remove_open_document_import_edges(state, uri);
+
+    let imports = extract_open_document_import_uris(uri, text);
+    if imports.is_empty() {
+        return;
+    }
+
+    for import_uri in &imports {
+        state
+            .reverse_open_document_imports
+            .entry(import_uri.clone())
+            .or_default()
+            .insert(uri.to_string());
+    }
+    state.open_document_imports.insert(uri.to_string(), imports);
+}
+
+fn remove_open_document_import_edges(state: &mut ServerState, uri: &str) {
+    let Some(previous_imports) = state.open_document_imports.remove(uri) else {
+        return;
+    };
+
+    for import_uri in previous_imports {
+        if let Some(dependents) = state.reverse_open_document_imports.get_mut(&import_uri) {
+            dependents.remove(uri);
+            if dependents.is_empty() {
+                state.reverse_open_document_imports.remove(&import_uri);
+            }
+        }
+    }
+}
+
+fn invalidate_open_document_dependents(state: &mut ServerState, changed_uri: &str) {
+    let mut stack = vec![changed_uri.to_string()];
+    let mut visited = HashSet::from([changed_uri.to_string()]);
+
+    while let Some(current_uri) = stack.pop() {
+        let dependents = state
+            .reverse_open_document_imports
+            .get(&current_uri)
+            .cloned()
+            .unwrap_or_default();
+        for dependent_uri in dependents {
+            if !visited.insert(dependent_uri.clone()) {
+                continue;
+            }
+            state.parsed_programs.remove(&dependent_uri);
+            state.open_document_symbols.remove(&dependent_uri);
+            stack.push(dependent_uri);
+        }
+    }
+}
+
+fn extract_open_document_import_uris(source_uri: &str, text: &str) -> HashSet<String> {
+    let Some(source_path) = uri_to_path(source_uri) else {
+        return HashSet::new();
+    };
+    let Some(base_dir) = source_path.parent() else {
+        return HashSet::new();
+    };
+
+    let mut imports = HashSet::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with("import ") {
+            continue;
+        }
+        let Some(path_literal) = extract_quoted_path_literal(trimmed) else {
+            continue;
+        };
+        if !path_literal.starts_with('.') {
+            continue;
+        }
+
+        let candidate = normalize_joined_path(base_dir, &path_literal);
+        let Ok(candidate_uri) = Url::from_file_path(candidate) else {
+            continue;
+        };
+        imports.insert(candidate_uri.to_string());
+    }
+    imports
+}
+
+fn extract_quoted_path_literal(input: &str) -> Option<String> {
+    for quote in ['"', '\''] {
+        let Some(start) = input.find(quote) else {
+            continue;
+        };
+        let tail = &input[start + 1..];
+        let Some(end) = tail.find(quote) else {
+            continue;
+        };
+        let literal = tail[..end].trim();
+        if literal.is_empty() {
+            continue;
+        }
+        return Some(literal.to_string());
+    }
+    None
+}
+
+fn normalize_joined_path(base_dir: &std::path::Path, relative: &str) -> PathBuf {
+    let joined = base_dir.join(relative);
+    let mut normalized = PathBuf::new();
+    for component in joined.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    normalized
 }
 
 fn load_cached_program(
@@ -1832,7 +1955,8 @@ mod tests {
     use super::{
         collect_function_symbols, collect_identifier_hits_by_name, diagnostics_for_document_with_limits,
         find_identifier_at_position, load_cached_program, parse_env_bool, read_message,
-        refresh_program_cache, run_stdio, RequestDeadline, ServerState,
+        refresh_program_cache, run_stdio, update_open_document_import_edges, RequestDeadline,
+        ServerState,
     };
     use ailang_core::parse_source;
     use serde_json::{json, Value};
@@ -2078,6 +2202,47 @@ mod tests {
         assert_eq!(
             id_one, id_two,
             "symbol ids should be deterministic for equivalent source snapshots",
+        );
+    }
+
+    #[test]
+    fn refresh_program_cache_invalidates_open_document_dependents() {
+        let dependency_uri = "file:///tmp/lsp_dep_a.ai";
+        let dependent_uri = "file:///tmp/lsp_dep_b.ai";
+        let dependency_source = "fn alpha() -> Int {\n  1\n}\n";
+        let dependent_source = "fn beta() -> Int {\n  alpha()\n}\n";
+        let invalid_dependency_source = "fn alpha( -> Int {\n  1\n}\n";
+        let mut state = ServerState::default();
+
+        refresh_program_cache(&mut state, dependency_uri, dependency_source);
+        refresh_program_cache(&mut state, dependent_uri, dependent_source);
+        update_open_document_import_edges(
+            &mut state,
+            dependent_uri,
+            "import \"./lsp_dep_a.ai\"\n",
+        );
+        assert!(
+            state.parsed_programs.contains_key(dependency_uri)
+                && state.parsed_programs.contains_key(dependent_uri),
+            "initial valid refresh should populate both dependency and dependent cache entries",
+        );
+        assert!(
+            state.open_document_symbols.contains_key(dependent_uri),
+            "dependent symbol cache should be populated before dependency invalidation",
+        );
+
+        refresh_program_cache(&mut state, dependency_uri, invalid_dependency_source);
+        assert!(
+            !state.parsed_programs.contains_key(dependency_uri),
+            "invalid dependency refresh should evict dependency parse cache",
+        );
+        assert!(
+            !state.parsed_programs.contains_key(dependent_uri),
+            "dependency refresh should invalidate dependent parse cache entries",
+        );
+        assert!(
+            !state.open_document_symbols.contains_key(dependent_uri),
+            "dependency refresh should invalidate dependent symbol cache entries",
         );
     }
 

@@ -1021,8 +1021,9 @@ Implementation order is intentionally linear to reduce thrash:
   - request deadlines now propagate into semantic traversal (symbol/identifier walks) for preemptive short-circuiting in heavy LSP requests.
   - expired request budgets now short-circuit uncached parse loading paths, preventing late parse work on stale requests.
   - open-document symbol indexing now caches deterministic function symbol metadata (stable IDs) and reuses it in completion/declaration scans.
+  - open-document import graph tracking now invalidates dependent parse/symbol caches on dependency refresh.
 - Remaining:
-  - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
+  - parser-backed dependency graph invalidation for full module syntax + unopened workspace files (open-document import invalidation + semantic caches now in place).
   - parser/analyzer-internal interrupt support for fully preemptive cancellation (semantic + parse-entry cancellation are now covered).
   - callsite-level symbol-ID binding for end-to-end precision across definition/references/rename (declaration IDs + open-document symbol indexing are now in place).
   - AST-aware code-action rewrites for complex signature layouts (beyond current line-oriented multiline effect support).
@@ -1068,6 +1069,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Tree-sitter Grammar Coverage Expansion".
 - Chapter: "M11 Slice: Parse-Stage Short-Circuit on Expired Deadlines".
 - Chapter: "M11 Slice: Open-Document Symbol Index and Stable IDs".
+- Chapter: "M11 Slice: Open-Document Import-Graph Invalidation".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
