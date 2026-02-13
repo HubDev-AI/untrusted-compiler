@@ -31,7 +31,7 @@ cat > "${stubs_path}" <<'JSON'
     "fs": []
   },
   "redaction": {
-    "headers": ["authorization", "cookie"],
+    "headers": ["authorization", "cookie", "set-cookie"],
     "jsonPaths": ["$.password"]
   }
 }
@@ -44,7 +44,7 @@ cat > "${stubs_path}" <<'JSON'
   "version": "0.1",
   "stubs": {},
   "redaction": {
-    "headers": ["authorization", "cookie"],
+    "headers": ["authorization", "cookie", "set-cookie"],
     "jsonPaths": ["$.password"]
   }
 }
@@ -73,7 +73,7 @@ cat > "${stubs_path}" <<'JSON'
     ]
   },
   "redaction": {
-    "headers": ["authorization", "cookie"],
+    "headers": ["authorization", "cookie", "set-cookie"],
     "jsonPaths": ["$.password"]
   }
 }
@@ -81,6 +81,37 @@ JSON
 
 if "${contract_script}" --stubs "${stubs_path}" >/dev/null 2>&1; then
   echo "expected replay stub contract failure when response body payload is missing" >&2
+  exit 1
+fi
+
+cat > "${stubs_path}" <<'JSON'
+{
+  "version": "0.1",
+  "stubs": {
+    "net": [
+      {
+        "request": {
+          "method": "GET",
+          "url": "https://example.com/users/1",
+          "bodySha256": "abc123"
+        },
+        "response": {
+          "status": 200,
+          "bodyBase64": "eyJvayI6dHJ1ZX0=",
+          "truncated": false
+        }
+      }
+    ]
+  },
+  "redaction": {
+    "headers": ["authorization", "cookie"],
+    "jsonPaths": ["$.password"]
+  }
+}
+JSON
+
+if "${contract_script}" --stubs "${stubs_path}" >/dev/null 2>&1; then
+  echo "expected replay stub contract failure when redaction headers are incomplete" >&2
   exit 1
 fi
 
@@ -116,7 +147,7 @@ cat > "${stubs_path}" <<'JSON'
     ]
   },
   "redaction": {
-    "headers": ["authorization", "cookie"],
+    "headers": ["authorization", "cookie", "set-cookie"],
     "jsonPaths": ["$.password"]
   }
 }

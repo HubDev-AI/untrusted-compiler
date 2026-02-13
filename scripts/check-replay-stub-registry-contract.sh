@@ -82,6 +82,16 @@ if ! jq -e '
 fi
 
 if ! jq -e '
+  (.redaction.headers | map(ascii_downcase)) as $headers
+  | ($headers | index("authorization") != null)
+    and ($headers | index("cookie") != null)
+    and ($headers | index("set-cookie") != null)
+' "${stubs_path}" >/dev/null; then
+  echo "replay stub registry contract failed: redaction.headers must include authorization,cookie,set-cookie in ${stubs_path}" >&2
+  exit 1
+fi
+
+if ! jq -e '
   .stubs.net as $entries
   | (
       $entries

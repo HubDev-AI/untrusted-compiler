@@ -1511,6 +1511,7 @@ M13-S1 go/no-go note:
 - Add replay effects-mode guard semantics (`--effects deny|mock|allow`) with deterministic mode-policy checks.
 - Add replay JSON output mode (`--format json`) for machine-readable CI/operator integration.
 - Add replay CLI JSON-contract guard scripts and closure gate enforcement in naming-lock CI.
+- Enforce mandatory replay redaction header baseline (`authorization`, `cookie`, `set-cookie`) in stub-contract validators.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1533,6 +1534,7 @@ M13-S1 go/no-go note:
 - [x] Hardened static `sec4` CLI command contract tests to require replay effects/output field wiring.
 - [x] Extended `sec4 replay` with `--format json` machine-readable success payload output.
 - [x] Added replay CLI json contract + guard scripts and strict closure gate `M14-D`.
+- [x] Enforced required replay redaction headers in shell + CLI stub-contract validators with regression tests.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1547,6 +1549,7 @@ M13-S1 go/no-go note:
 - `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
 - `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning fields.
 - CI fails if replay CLI json contract + guard enforcement is removed from naming-lock workflow.
+- Replay stub-contract validation fails when required redaction headers are incomplete.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1557,6 +1560,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay CLI Effects-Mode Guardrails".
 - Chapter: "M14 Slice: Replay CLI JSON Output Mode".
 - Chapter: "M14 Slice: Replay CLI JSON Contract Closure Gate".
+- Chapter: "M14 Slice: Replay Redaction Header Baseline Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -585,6 +585,28 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
     {
         return Err("stub registry redaction.jsonPaths must be an array".to_string());
     }
+    let redaction_headers = redaction
+        .get("headers")
+        .and_then(serde_json::Value::as_array)
+        .expect("headers array shape already validated");
+    let mut normalized_headers = HashSet::new();
+    for (index, header) in redaction_headers.iter().enumerate() {
+        let normalized = header
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry redaction.headers[{index}] must be a non-empty string value")
+            })?
+            .to_ascii_lowercase();
+        normalized_headers.insert(normalized);
+    }
+    for required in ["authorization", "cookie", "set-cookie"] {
+        if !normalized_headers.contains(required) {
+            return Err(format!(
+                "stub registry redaction.headers must include required header '{required}'"
+            ));
+        }
+    }
 
     let mut signatures = HashSet::new();
     for (index, entry) in net_entries.iter().enumerate() {
