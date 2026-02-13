@@ -44,14 +44,14 @@ The v0 stdlib surface includes explicit JSON helper APIs alongside req/res helpe
 ### Failure modes and diagnostics
 
 - Misspelled helper names can fail semantic/C compile phases.
-- Full schema/value enforcement for generic `json.decode/encode` calls is intentionally deferred to behavior-level runtime/type slices.
+- `json.encode` schema-argument hardening is covered in a later M7 slice (`163-m7-json-encode-schema-argument-hardening.md`).
 
 ### Example usage
 
 ```ailang
-fn main() -> Int {
+fn useJson(schema: Schema<Int>) -> Int {
   json.decode(1, 2, 3);
-  json.encode(2, 3);
+  json.encode(schema, 3);
   0
 }
 ```

@@ -162,3 +162,4 @@
 - Added `err.conflict` constructor hardening so conflict error code/message arguments are string-typed, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.rateLimit` constructor hardening so rate-limit code/message are string-typed and retry-after values are numeric, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added CSP builder signature hardening so `sec.csp` is zero-arg and `sec.cspAdd` enforces `(CspPolicy, String, String)`, with tagged diagnostics and aligned policy-config integration fixtures.
+- Added `json.encode` schema-argument hardening so encoding requires `(schema, value)` with schema-shape validation (and typed value checks when schema is `Schema<T>`), with schema-tagged diagnostics and aligned json-helper fixtures.

@@ -128,5 +128,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `160-m7-err-conflict-constructor-argument-hardening.md`
 - `161-m7-err-rate-limit-constructor-argument-hardening.md`
 - `162-m7-csp-builder-signature-hardening.md`
+- `163-m7-json-encode-schema-argument-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
