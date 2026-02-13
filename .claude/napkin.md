@@ -36,6 +36,7 @@
 | 2026-02-12 | self | Repeated a span move regression by passing `span` by value into a new helper and then reusing it later in the same function. | When adding helper calls inside semantic enforcement, default to `span.clone()` unless the value is consumed as the final use site. |
 | 2026-02-13 | self | Added stricter `db.queryOne` row-schema checks but initially missed updating the CLI `c-bin` db/fs/net integration fixture, which then failed. | When tightening semantic call contracts, immediately audit and update affected CLI integration fixtures (`json_output.rs`) before final validation. |
 | 2026-02-13 | self | Added `res.okMeta` metadata secret/taint checks on top of existing JSON sink checks, creating duplicate diagnostics in semantic goldens. | When adding specialized sink checks, narrow generic sink argument selection first (or suppress overlap) so each misuse emits one primary diagnostic. |
+| 2026-02-13 | self | Inserted a call to a new semantic helper before actually defining that helper, causing a temporary unresolved method regression. | When introducing new enforcement helpers, either add the helper first or keep checks inside the existing function until extraction is complete. |
 
 ## User Preferences
 - Keep strict milestone flow with docs updates and frequent commits (one commit per milestone slice).

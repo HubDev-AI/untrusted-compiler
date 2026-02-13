@@ -1,0 +1,4 @@
+fn bad(event: LogEvent) -> Int {
+  log.withError(event, 1);
+  0
+}

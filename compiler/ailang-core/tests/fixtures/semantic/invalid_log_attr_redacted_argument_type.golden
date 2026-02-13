@@ -1,0 +1,4 @@
+error[E4001]: log.attrRedacted argument must be `String`
+  --> invalid_log_attr_redacted_argument_type.ai:2:20
+  note: found `Int`
+  note: pass a redaction label string

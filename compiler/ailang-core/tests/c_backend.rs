@@ -280,10 +280,11 @@ fn main() -> Int {
   let num = log.i64(1);
   let flag = log.bool(1);
   let secret = log.redacted(1);
-  let attrSecret = log.attrRedacted(1);
-  let withAttr = log.withAttr(event, 1, attrSecret);
-  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
-  let withError = log.withError(withHttp, 1);
+  let attrSecret = log.attrRedacted("token");
+  let withAttr = log.withAttr(event, "token", attrSecret);
+  let withHttp = log.withHttp(withAttr, "POST", "/users", 200, 42);
+  let error = err.internal("boom");
+  let withError = log.withError(withHttp, error);
   event;
   field;
   obj;
@@ -294,6 +295,7 @@ fn main() -> Int {
   attrSecret;
   withAttr;
   withHttp;
+  error;
   withError;
   0
 }
@@ -310,10 +312,11 @@ fn main() -> Int {
     assert!(c.contains("ailang_rt_log_i64(1);"));
     assert!(c.contains("ailang_rt_log_bool(1);"));
     assert!(c.contains("ailang_rt_log_redacted(1);"));
-    assert!(c.contains("ailang_rt_log_attr_redacted(1);"));
-    assert!(c.contains("ailang_rt_log_with_attr(event, 1, attrSecret);"));
-    assert!(c.contains("ailang_rt_log_with_http(withAttr, 1, 2, 200, 42);"));
-    assert!(c.contains("ailang_rt_log_with_error(withHttp, 1);"));
+    assert!(c.contains("ailang_rt_log_attr_redacted(\"token\");"));
+    assert!(c.contains("ailang_rt_log_with_attr(event, \"token\", attrSecret);"));
+    assert!(c.contains("ailang_rt_log_with_http(withAttr, \"POST\", \"/users\", 200, 42);"));
+    assert!(c.contains("ailang_rt_err_internal(\"boom\");"));
+    assert!(c.contains("ailang_rt_log_with_error(withHttp, error);"));
 }
 
 #[test]

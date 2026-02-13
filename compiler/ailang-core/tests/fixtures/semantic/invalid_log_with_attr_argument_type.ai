@@ -1,0 +1,4 @@
+fn bad(event: LogEvent, attr: LogAttr) -> Int {
+  log.withAttr(event, 1, attr);
+  0
+}

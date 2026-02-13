@@ -1,0 +1,4 @@
+fn bad(event: LogEvent) -> Int {
+  log.withHttp(event, 1, "/users", 200, 42);
+  0
+}

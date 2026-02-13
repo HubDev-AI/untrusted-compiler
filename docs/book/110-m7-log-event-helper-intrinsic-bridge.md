@@ -48,16 +48,18 @@ The v0 logging model uses structured events and explicit redaction helpers. With
 
 - Misspelled helper names fail semantic/C compile phases.
 - Strict policy-level checks for log field content (for example secret and untrusted data constraints) remain enforced by existing sink-flow diagnostics; richer log-shape validation is deferred.
+- Signature hardening for helper argument types/call-shapes is covered in a later slice (`179-m7-log-event-helper-signature-hardening.md`).
 
 ### Example usage
 
 ```ailang
 fn main() -> Int {
   let event = log.event(1);
-  let attr = log.attrRedacted(1);
-  let withAttr = log.withAttr(event, 1, attr);
-  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
-  log.withError(withHttp, 1);
+  let attr = log.attrRedacted("token");
+  let withAttr = log.withAttr(event, "token", attr);
+  let withHttp = log.withHttp(withAttr, "POST", "/users", 200, 42);
+  let err = err.internal("boom");
+  log.withError(withHttp, err);
   0
 }
 ```

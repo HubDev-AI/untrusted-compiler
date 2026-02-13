@@ -512,10 +512,11 @@ entry = "src/main.ai"
   let num = log.i64(1);
   let flag = log.bool(1);
   let secret = log.redacted(1);
-  let attrSecret = log.attrRedacted(1);
-  let withAttr = log.withAttr(event, 1, attrSecret);
-  let withHttp = log.withHttp(withAttr, 1, 2, 200, 42);
-  let withError = log.withError(withHttp, 1);
+  let attrSecret = log.attrRedacted("token");
+  let withAttr = log.withAttr(event, "token", attrSecret);
+  let withHttp = log.withHttp(withAttr, "POST", "/users", 200, 42);
+  let error = err.internal("boom");
+  let withError = log.withError(withHttp, error);
   event;
   field;
   obj;
@@ -526,6 +527,7 @@ entry = "src/main.ai"
   attrSecret;
   withAttr;
   withHttp;
+  error;
   withError;
   0
 }
@@ -551,10 +553,11 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_log_i64(1)"));
     assert!(generated_c.contains("ailang_rt_log_bool(1)"));
     assert!(generated_c.contains("ailang_rt_log_redacted(1)"));
-    assert!(generated_c.contains("ailang_rt_log_attr_redacted(1)"));
-    assert!(generated_c.contains("ailang_rt_log_with_attr(event, 1, attrSecret)"));
-    assert!(generated_c.contains("ailang_rt_log_with_http(withAttr, 1, 2, 200, 42)"));
-    assert!(generated_c.contains("ailang_rt_log_with_error(withHttp, 1)"));
+    assert!(generated_c.contains("ailang_rt_log_attr_redacted(\"token\")"));
+    assert!(generated_c.contains("ailang_rt_log_with_attr(event, \"token\", attrSecret)"));
+    assert!(generated_c.contains("ailang_rt_log_with_http(withAttr, \"POST\", \"/users\", 200, 42)"));
+    assert!(generated_c.contains("ailang_rt_err_internal(\"boom\")"));
+    assert!(generated_c.contains("ailang_rt_log_with_error(withHttp, error)"));
 
     let binary_path = project_dir.join("build").join("logbuildersdemo");
     assert!(binary_path.exists(), "compiled binary should exist");

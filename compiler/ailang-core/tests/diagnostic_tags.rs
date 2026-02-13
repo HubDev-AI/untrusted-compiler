@@ -148,6 +148,78 @@ fn bad(meta: Untrusted<String>) effects { net } -> Int {
 }
 
 #[test]
+fn log_attr_redacted_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad() -> Int {
+  log.attrRedacted(1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.attrRedacted argument must be `String`")
+        .expect("expected log.attrRedacted argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_with_attr_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad(event: LogEvent, attr: LogAttr) -> Int {
+  log.withAttr(event, 1, attr);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.withAttr key argument must be `String`")
+        .expect("expected log.withAttr key diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_with_http_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad(event: LogEvent) -> Int {
+  log.withHttp(event, 1, "/users", 200, 42);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.withHttp method argument must be `String`")
+        .expect("expected log.withHttp method diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
+fn log_with_error_argument_diagnostic_has_security_tag() {
+    let source = r#"
+fn bad(event: LogEvent) -> Int {
+  log.withError(event, 1);
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "log.withError error argument must be `StdError`")
+        .expect("expected log.withError error diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+}
+
+#[test]
 fn req_json_schema_gate_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

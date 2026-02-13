@@ -3666,6 +3666,213 @@ impl Analyzer {
         args: &[Expr],
         arg_types: &[Type],
     ) {
+        if is_log_attr_redacted_call(callee_name) {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.attrRedacted expects exactly one argument",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `log.attrRedacted(\"label\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.attrRedacted argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass a redaction label string"),
+                );
+            }
+            return;
+        }
+
+        if is_log_with_attr_call(callee_name) {
+            if args.len() != 3 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withAttr expects `(event, key, value)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `log.withAttr(event, \"key\", value)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("LogEvent") && !arg_types[0].is_named("LogValue") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withAttr event argument must be `LogEvent` or `LogValue`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass a structured event payload"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withAttr key argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass a stable attribute name"),
+                );
+            }
+
+            if !arg_types[2].is_named("LogAttr") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withAttr value argument must be `LogAttr`",
+                        args[2].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[2].describe()))
+                    .with_note("construct values with log attribute builders"),
+                );
+            }
+            return;
+        }
+
+        if is_log_with_http_call(callee_name) {
+            if args.len() != 5 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp expects `(event, method, path, status, latencyMs)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `log.withHttp(event, \"GET\", \"/path\", 200, 12)`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("LogEvent") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp event argument must be `LogEvent`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("chain from `log.withAttr(...)` or another event constructor"),
+                );
+            }
+
+            if !arg_types[1].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp method argument must be `String`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass normalized HTTP method string"),
+                );
+            }
+
+            if !arg_types[2].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp path argument must be `String`",
+                        args[2].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[2].describe()))
+                    .with_note("pass route/path string"),
+                );
+            }
+
+            if !arg_types[3].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp status argument must be numeric",
+                        args[3].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[3].describe()))
+                    .with_note("use `Int`/`Int64` HTTP status values"),
+                );
+            }
+
+            if !arg_types[4].is_numeric() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withHttp latency argument must be numeric",
+                        args[4].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[4].describe()))
+                    .with_note("use `Int`/`Int64` latency values in milliseconds"),
+                );
+            }
+            return;
+        }
+
+        if is_log_with_error_call(callee_name) {
+            if args.len() != 2 {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withError expects `(event, error)` arguments",
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_note("use `log.withError(event, err.internal(\"...\"))`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("LogEvent") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withError event argument must be `LogEvent`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("chain from `log.withHttp(...)` or another event builder"),
+                );
+            }
+
+            if !arg_types[1].is_named("StdError") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.withError error argument must be `StdError`",
+                        args[1].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[1].describe()))
+                    .with_note("pass a typed standard error value"),
+                );
+            }
+            return;
+        }
+
         if is_err_validation_call(callee_name) {
             if args.len() != 2 {
                 self.diagnostics.push(
@@ -5389,6 +5596,22 @@ fn is_err_with_cause_call(name: &str) -> bool {
 
 fn is_err_internal_call(name: &str) -> bool {
     matches!(name, "err_internal" | "err.internal")
+}
+
+fn is_log_attr_redacted_call(name: &str) -> bool {
+    matches!(name, "log_attr_redacted" | "log.attrRedacted")
+}
+
+fn is_log_with_attr_call(name: &str) -> bool {
+    matches!(name, "log_with_attr" | "log.withAttr")
+}
+
+fn is_log_with_http_call(name: &str) -> bool {
+    matches!(name, "log_with_http" | "log.withHttp")
+}
+
+fn is_log_with_error_call(name: &str) -> bool {
+    matches!(name, "log_with_error" | "log.withError")
 }
 
 fn is_err_validation_call(name: &str) -> bool {

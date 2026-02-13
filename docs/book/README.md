@@ -143,5 +143,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `176-m7-req-json-schema-descriptor-narrowing.md`
 - `177-m7-json-response-schema-descriptor-narrowing.md`
 - `178-m7-json-response-meta-secret-taint-hardening.md`
+- `179-m7-log-event-helper-signature-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
