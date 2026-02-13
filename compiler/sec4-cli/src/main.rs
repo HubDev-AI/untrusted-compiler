@@ -288,12 +288,172 @@ fn explain_topic(
                 "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
             );
         }
+        "CORS_ANY_ORIGIN" => {
+            return (
+                "CORS Any-Origin Exposure",
+                "Wildcard origins increase exposure; use explicit allowlists when possible.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "CORS_REFLECT_ORIGIN_ENABLED" => {
+            return (
+                "CORS Reflect-Origin Risk",
+                "Origin reflection should be disabled unless tightly constrained by policy and matching rules.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "CORS_VARY_ORIGIN_MISSING" => {
+            return (
+                "CORS Missing Vary-Origin",
+                "Allowlist-based CORS responses should emit Vary: Origin for correct cache and policy behavior.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "CSP_DISABLED" => {
+            return (
+                "CSP Disabled",
+                "Content-Security-Policy is disabled; enable CSP (report-only first if needed) for stronger browser-side defenses.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "CSP_REPORT_ONLY" => {
+            return (
+                "CSP Report-Only Mode",
+                "CSP is in report-only mode; move to enforcing mode for stronger production posture when ready.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "HSTS_DISABLED_IN_PROD" => {
+            return (
+                "HSTS Disabled in Production",
+                "HSTS is disabled for production HTTPS posture; enable HSTS with explicit max-age and subdomain policy.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "REFERRER_POLICY_WEAK" => {
+            return (
+                "Weak Referrer Policy",
+                "Referrer policy is weaker than recommended defaults and may expose extra cross-origin request context.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "NOSNIFF_DISABLED" => {
+            return (
+                "X-Content-Type-Options Disabled",
+                "The nosniff header is disabled; enable X-Content-Type-Options to reduce content-type confusion risk.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "XFO_DISABLED" => {
+            return (
+                "X-Frame-Options Disabled",
+                "X-Frame-Options is not set to a hardened mode; enable DENY or SAMEORIGIN per security posture.",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "CSRF_REQUIRED_BUT_DISABLED" => {
+            return (
+                "CSRF Required but Disabled",
+                "CSRF protection is required for cookie-auth surfaces and must be enabled or auth mode adjusted.",
+                &POLICY_FIXES,
+                "docs/book/68-auth-policy-keys-and-csrf-coupling.md",
+            );
+        }
+        "CSRF_PROTECTED_METHODS_INCOMPLETE" => {
+            return (
+                "CSRF Protected Methods Incomplete",
+                "CSRF protection method coverage is incomplete; include unsafe methods (POST/PUT/PATCH/DELETE).",
+                &POLICY_FIXES,
+                "docs/book/63-security-middleware-baseline.md",
+            );
+        }
+        "COOKIE_CROSS_SITE_WITHOUT_CORS_CREDS" => {
+            return (
+                "Cookie Cross-Site Without CORS Credentials",
+                "Cross-site cookie auth requires credentialed CORS with explicit origin allowlists.",
+                &POLICY_FIXES,
+                "docs/book/68-auth-policy-keys-and-csrf-coupling.md",
+            );
+        }
+        "COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN" => {
+            return (
+                "Cookie Cross-Site With Wildcard Origin",
+                "Cross-site cookie auth cannot rely on wildcard CORS origins; use explicit origin allowlists.",
+                &POLICY_FIXES,
+                "docs/book/68-auth-policy-keys-and-csrf-coupling.md",
+            );
+        }
+        "COOKIE_SAMESITE_NONE_WITHOUT_SECURE" => {
+            return (
+                "SameSite=None Without Secure Cookie",
+                "SameSite=None cookie posture requires Secure=true to avoid cross-site downgrade risk.",
+                &POLICY_FIXES,
+                "docs/book/68-auth-policy-keys-and-csrf-coupling.md",
+            );
+        }
         "INTERNAL_NET_ENABLED_NO_ALLOWLIST" => {
             return (
                 "Internal Network Enabled Without Allowlist",
                 "Internal network access is enabled without CIDR/domain allowlists and must be constrained.",
                 &POLICY_FIXES,
                 "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "INTERNAL_NET_CALL_ALLOWLISTED" => {
+            return (
+                "Internal Network Call Allowlisted",
+                "An internal-network call is allowlisted; verify ticket/expiry and ensure the allowlist remains narrow.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
+        "PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION" => {
+            return (
+                "Public Redirects Without Revalidation",
+                "Public redirect handling is enabled without per-hop revalidation; disable redirects or enforce hop checks.",
+                &POLICY_FIXES,
+                "docs/book/53-v0-security-baseline.md",
+            );
+        }
+        "DNS_RESOLUTION_DISABLED" => {
+            return (
+                "DNS Resolution Disabled for SSRF Checks",
+                "SSRF hardening is incomplete because DNS resolution checks are disabled for public URL validation.",
+                &POLICY_FIXES,
+                "docs/book/53-v0-security-baseline.md",
+            );
+        }
+        "PUBLIC_EGRESS_NO_DOMAIN_POLICY" => {
+            return (
+                "Public Egress Domain Policy Missing",
+                "Public egress is unconstrained by allowlist/blocklist policy; define domain controls for tighter posture.",
+                &POLICY_FIXES,
+                "docs/book/60-v0-policy-keys-spec.md",
+            );
+        }
+        "FS_ENABLED_NO_BASE_ALLOWLIST" => {
+            return (
+                "Filesystem Enabled Without Base Allowlist",
+                "Filesystem access is enabled without constrained base paths; restrict writable/readable roots.",
+                &POLICY_FIXES,
+                "docs/book/60-v0-policy-keys-spec.md",
+            );
+        }
+        "SYMLINK_POLICY_WEAK" => {
+            return (
+                "Filesystem Symlink Policy Weak",
+                "Filesystem policy allows weak symlink handling; enforce stricter symlink restrictions for path safety.",
+                &POLICY_FIXES,
+                "docs/book/60-v0-policy-keys-spec.md",
             );
         }
         "CAPTURE_REDACTION_INCOMPLETE" => {
@@ -304,12 +464,84 @@ fn explain_topic(
                 "docs/book/59-request-capture-and-deterministic-replay.md",
             );
         }
+        "CAPTURE_ALL_IN_PROD" => {
+            return (
+                "Capture-All Mode in Production",
+                "Capture mode is too broad for production; use errors-only or sampling with strict redaction controls.",
+                &POLICY_FIXES,
+                "docs/book/59-request-capture-and-deterministic-replay.md",
+            );
+        }
+        "REPLAY_EFFECTS_ALLOW" => {
+            return (
+                "Replay Effects Allow Mode",
+                "Replay is configured to allow live effects; prefer deny/mock outside isolated environments.",
+                &POLICY_FIXES,
+                "docs/book/59-request-capture-and-deterministic-replay.md",
+            );
+        }
+        "LOG_STRUCTURED_ONLY_DISABLED" => {
+            return (
+                "Structured Logging Requirement Disabled",
+                "Structured-only logging is disabled; enforce structured logs to reduce injection/leakage risk.",
+                &POLICY_FIXES,
+                "docs/book/58-success-envelope-and-log-event-schema.md",
+            );
+        }
+        "LOG_REMOTE_IP_ENABLED" => {
+            return (
+                "Remote IP Logging Enabled",
+                "Remote IP logging is enabled and can increase privacy exposure; verify explicit policy intent.",
+                &POLICY_FIXES,
+                "docs/book/58-success-envelope-and-log-event-schema.md",
+            );
+        }
+        "LOG_USER_AGENT_ENABLED" => {
+            return (
+                "User-Agent Logging Enabled",
+                "User-Agent logging is enabled and may capture high-cardinality/sensitive client metadata.",
+                &POLICY_FIXES,
+                "docs/book/58-success-envelope-and-log-event-schema.md",
+            );
+        }
+        "SQL_RAW_ALLOWED_BY_POLICY" => {
+            return (
+                "SQL Raw Usage Allowed by Policy",
+                "Policy permits raw SQL paths; tighten policy and prefer typed SqlQuery construction.",
+                &POLICY_FIXES,
+                "docs/book/53-v0-security-baseline.md",
+            );
+        }
+        "SQL_LIMIT_RULE_DISABLED" => {
+            return (
+                "SQL Limit Rule Disabled",
+                "SELECT limit hygiene rule is disabled; enable warn/enforce policy mode for safer query posture.",
+                &POLICY_FIXES,
+                "docs/book/60-v0-policy-keys-spec.md",
+            );
+        }
+        "SQL_SELECT_WITHOUT_LIMIT" => {
+            return (
+                "SQL Select Without Limit",
+                "A SELECT query path lacks LIMIT under current policy expectations.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
+            );
+        }
         "SECRETS_REVEAL_USED" => {
             return (
                 "Secrets Reveal Usage Detected",
                 "Secret reveal paths are present and must be removed or tightly allowlisted with governance metadata.",
                 &POLICY_FIXES,
                 "docs/book/53-v0-security-baseline.md",
+            );
+        }
+        "SECRETS_REVEAL_ALLOWLISTED" => {
+            return (
+                "Secrets Reveal Allowlisted",
+                "Secret reveal usage is allowlisted; review expiry/ticket and minimize scope.",
+                &POLICY_FIXES,
+                "docs/book/66-deterministic-severity-mapping-for-sec-audit.md",
             );
         }
         "ALLOW_COUNT_HIGH" => {

@@ -374,6 +374,59 @@ fn explain_allow_count_high_finding_in_json_mode_is_parseable() {
 }
 
 #[test]
+fn explain_low_frequency_audit_findings_in_json_mode_have_exact_mappings() {
+    let codes = [
+        "HSTS_DISABLED_IN_PROD",
+        "REFERRER_POLICY_WEAK",
+        "NOSNIFF_DISABLED",
+        "XFO_DISABLED",
+        "COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN",
+        "COOKIE_SAMESITE_NONE_WITHOUT_SECURE",
+        "DNS_RESOLUTION_DISABLED",
+        "PUBLIC_EGRESS_NO_DOMAIN_POLICY",
+        "SYMLINK_POLICY_WEAK",
+        "LOG_STRUCTURED_ONLY_DISABLED",
+        "LOG_REMOTE_IP_ENABLED",
+        "LOG_USER_AGENT_ENABLED",
+    ];
+
+    for code in codes {
+        let output = run_cli(&["explain", code, "--format", "json"]);
+        assert!(
+            output.status.success(),
+            "explain json mode should succeed for finding id {code}"
+        );
+
+        let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+        let parsed: Value = serde_json::from_str(&stdout).expect("output should be parseable json");
+
+        assert_eq!(
+            parsed
+                .get("code")
+                .and_then(Value::as_str)
+                .expect("code should be present"),
+            code
+        );
+        assert_ne!(
+            parsed
+                .get("topic")
+                .and_then(Value::as_str)
+                .expect("topic should be present"),
+            "Unknown Diagnostic Family",
+            "finding id should have an exact explain mapping: {code}"
+        );
+        assert_ne!(
+            parsed
+                .get("docsPath")
+                .and_then(Value::as_str)
+                .expect("docsPath should be present"),
+            "docs/05-sec4-master-roadmap.md",
+            "finding id should not route to generic roadmap fallback: {code}"
+        );
+    }
+}
+
+#[test]
 fn sec_audit_json_keeps_stdout_parseable_json() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

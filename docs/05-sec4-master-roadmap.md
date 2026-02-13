@@ -514,7 +514,7 @@ Roadmap impact:
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
-- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy/audit finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`, `ALLOW_COUNT_HIGH`, `ALLOW_EXPIRY_WINDOW_ROLLUP`, `CORS_CREDENTIALS_WITH_WILDCARD`, `INTERNAL_NET_ENABLED_NO_ALLOWLIST`, `CAPTURE_REDACTION_INCOMPLETE`, `SECRETS_REVEAL_USED`) with direct chapter pointers.
+- `sec4 explain` now has expanded exact-code mappings for high-frequency diagnostics (`E1002`, `E1003`, `E2001`, `E2002`, `E2003`, `E4001`, `E4004`, `E5001`, `E6001`) plus policy/audit finding IDs (`ALLOW_EXPIRED`, `ALLOW_EXPIRING_SOON`, `ALLOW_COUNT_HIGH`, `ALLOW_EXPIRY_WINDOW_ROLLUP`, `CORS_CREDENTIALS_WITH_WILDCARD`, `CORS_ANY_ORIGIN`, `CORS_REFLECT_ORIGIN_ENABLED`, `CORS_VARY_ORIGIN_MISSING`, `CSP_DISABLED`, `CSP_REPORT_ONLY`, `HSTS_DISABLED_IN_PROD`, `REFERRER_POLICY_WEAK`, `NOSNIFF_DISABLED`, `XFO_DISABLED`, `CSRF_REQUIRED_BUT_DISABLED`, `CSRF_PROTECTED_METHODS_INCOMPLETE`, `COOKIE_CROSS_SITE_WITHOUT_CORS_CREDS`, `COOKIE_CROSS_SITE_WITH_WILDCARD_ORIGIN`, `COOKIE_SAMESITE_NONE_WITHOUT_SECURE`, `INTERNAL_NET_ENABLED_NO_ALLOWLIST`, `INTERNAL_NET_CALL_ALLOWLISTED`, `PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION`, `DNS_RESOLUTION_DISABLED`, `PUBLIC_EGRESS_NO_DOMAIN_POLICY`, `FS_ENABLED_NO_BASE_ALLOWLIST`, `SYMLINK_POLICY_WEAK`, `CAPTURE_REDACTION_INCOMPLETE`, `CAPTURE_ALL_IN_PROD`, `REPLAY_EFFECTS_ALLOW`, `LOG_STRUCTURED_ONLY_DISABLED`, `LOG_REMOTE_IP_ENABLED`, `LOG_USER_AGENT_ENABLED`, `SQL_RAW_ALLOWED_BY_POLICY`, `SQL_LIMIT_RULE_DISABLED`, `SQL_SELECT_WITHOUT_LIMIT`, `SECRETS_REVEAL_USED`, `SECRETS_REVEAL_ALLOWLISTED`) with direct chapter pointers.
 - `sec4 explain` now supports machine-readable output mode:
   - `sec4 explain <CODE> --format json` emits structured payload (`code`, `topic`, `summary`, `likelyActions`, `relatedCommands`, `docsPath`).
 - Benchmark artifact schema/version contract is now centralized:
@@ -1261,6 +1261,7 @@ Implementation order is intentionally linear to reduce thrash:
   - emit deterministic pass/fail signals for threshold breaches.
 - Extend `sec4 explain` policy/audit finding coverage:
   - map additional finding IDs used by `sec4 audit` severity output.
+  - completed: low-frequency finding IDs used by current `sec4 audit` posture rules now have exact `sec4 explain` mappings and JSON-mode coverage tests.
 
 ### First M13 slice (M13-S1) acceptance criteria
 - A documented promotion playbook exists and references concrete scripts/workflows.
@@ -1380,11 +1381,10 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend `sec4 explain` mapping for remaining lower-frequency audit finding IDs as coverage hardening.
-2. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
-3. Review and tune decode endpoint thresholds after first scheduled trend runs.
-4. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
-5. Add release publish pipeline handoff notes for external tooling integration.
+1. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
+2. Review and tune decode endpoint thresholds after first scheduled trend runs.
+3. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+4. Add release publish pipeline handoff notes for external tooling integration.
 
 ---
 
