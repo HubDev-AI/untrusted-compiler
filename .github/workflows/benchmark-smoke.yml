@@ -40,3 +40,4 @@ jobs:
           benchmark-suite/scripts/test_run_comparison_matrix.sh
           benchmark-suite/scripts/test_run_step_matrix.sh
           benchmark-suite/scripts/test_run_full_benchmark_suite.sh
+          benchmark-suite/scripts/test_makefile_profile_targets.sh

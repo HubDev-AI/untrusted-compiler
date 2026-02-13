@@ -540,6 +540,7 @@ Historical implementation bullets below are retained as build history; strict ga
 - Benchmark harness now supports `wrk` fallback when `wrk2` is unavailable:
   - preflight accepts either `wrk2` (preferred) or `wrk` (fallback),
   - profile runner emits explicit warning when using `wrk` fallback and omits constant-rate `-R` flag.
+  - benchmark Makefile profile targets (`bench-ping`, `bench-decode`, `bench-users`, `bench-users-get`) now route through `run_profile.sh` so fallback behavior is consistent.
   - summary parser now supports both `wrk2` (`50.000%`) and `wrk` (`50%`) percentile formats,
   - compare/trend artifacts now carry `loadGenerator` + `constantRate` metadata and mark coverage/guards as `n/a` for non-constant runs,
   - compare-matrix leader ordering now prefers `constantRate=true` runs over higher-throughput non-constant fallback runs.

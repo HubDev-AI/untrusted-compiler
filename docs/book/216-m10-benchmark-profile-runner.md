@@ -8,8 +8,12 @@ Added:
 - `benchmark-suite/scripts/run_profile.sh`
 - `benchmark-suite/scripts/test_run_profile.sh`
 
-And wired Make target:
-- `make -C benchmark-suite bench-profile IMPL=<impl> ENDPOINT=<ping|decode|users-post>`
+And wired Make targets:
+- `make -C benchmark-suite bench-ping IMPL=<impl>`
+- `make -C benchmark-suite bench-decode IMPL=<impl>`
+- `make -C benchmark-suite bench-users IMPL=<impl>`
+- `make -C benchmark-suite bench-users-get IMPL=<impl>`
+- `make -C benchmark-suite bench-profile IMPL=<impl> ENDPOINT=<ping|decode|users-post|users-get>`
 
 ## Why it exists
 
@@ -33,7 +37,7 @@ Running load tests manually per endpoint is error-prone and inconsistent. The pr
 ## Inputs, outputs, and constraints
 
 - Inputs:
-  - endpoint name (`ping|decode|users-post`),
+  - endpoint name (`ping|decode|users-post|users-get`),
   - implementation label (`IMPL`),
   - base URL (default `http://127.0.0.1:8080`).
 - Outputs:
@@ -67,5 +71,5 @@ make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=decode
 - Tradeoff:
   - fixed profile rates are intentionally static; hardware calibration tuning is a separate step.
 - Next:
-  - add profile runner support for DB read (`get_user`) and optional fanout profile,
+  - add optional fanout profile,
   - add consolidated per-run report bundling across multiple profile outputs.

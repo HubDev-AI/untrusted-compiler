@@ -62,13 +62,13 @@ preflight-dry:
 	scripts/preflight.sh --impls "$(IMPLS)" --dry-run-only
 
 bench-ping:
-	wrk2 --latency -t4 -c64 -d60s -R10000 $(BASE_URL)/ping | tee results/raw/$(IMPL)-ping.txt
+	scripts/run_profile.sh $(IMPL) ping $(BASE_URL)
 
 bench-decode:
-	wrk2 --latency -t4 -c64 -d60s -R2000 -s load/wrk2/post_decode.lua $(BASE_URL) | tee results/raw/$(IMPL)-decode.txt
+	scripts/run_profile.sh $(IMPL) decode $(BASE_URL)
 
 bench-users:
-	wrk2 --latency -t4 -c64 -d60s -R500 -s load/wrk2/post_users.lua $(BASE_URL) | tee results/raw/$(IMPL)-users-post.txt
+	scripts/run_profile.sh $(IMPL) users-post $(BASE_URL)
 
 bench-users-get:
 	scripts/run_profile.sh $(IMPL) users-get $(BASE_URL)
@@ -144,6 +144,7 @@ test-scripts:
 	scripts/test_build_artifact_manifest.sh
 	scripts/test_verify_benchmark_bundle.sh
 	scripts/test_preflight.sh
+	scripts/test_makefile_profile_targets.sh
 	scripts/test_test_service_contracts.sh
 
 test-services:
