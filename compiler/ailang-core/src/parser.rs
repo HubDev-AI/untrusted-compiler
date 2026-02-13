@@ -3,28 +3,55 @@ use crate::ast::{
     Item, ItemKind, MatchArm, Param, Pattern, PatternKind, Program, Stmt, StmtKind, StructDecl,
     TypeExpr, TypeExprKind, UnaryOp, VariantField,
 };
-use crate::diagnostics::{Diagnostic, Span};
+use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::lexer;
 use crate::token::{Keyword, Symbol, Token, TokenKind};
+use crate::{InterruptSignal, NeverInterrupt};
 use std::path::Path;
 
 pub fn parse_source(file: &Path, source: &str) -> Result<Program, Vec<Diagnostic>> {
-    let tokens = lexer::lex(file, source)?;
-    Parser::new(tokens).parse_program()
+    let interrupt = NeverInterrupt;
+    parse_source_with_interrupt(file, source, &interrupt)
 }
 
-struct Parser {
+pub fn parse_source_with_interrupt(
+    file: &Path,
+    source: &str,
+    interrupt: &dyn InterruptSignal,
+) -> Result<Program, Vec<Diagnostic>> {
+    let tokens = lexer::lex(file, source)?;
+    Parser::new(tokens, interrupt).parse_program()
+}
+
+struct Parser<'a> {
     tokens: Vec<Token>,
     index: usize,
     diagnostics: Vec<Diagnostic>,
+    interrupt: &'a dyn InterruptSignal,
 }
 
-impl Parser {
-    fn new(tokens: Vec<Token>) -> Self {
+impl<'a> Parser<'a> {
+    fn new(tokens: Vec<Token>, interrupt: &'a dyn InterruptSignal) -> Self {
         Self {
             tokens,
             index: 0,
             diagnostics: Vec::new(),
+            interrupt,
+        }
+    }
+
+    fn should_interrupt(&self) -> bool {
+        self.interrupt.is_interrupted()
+    }
+
+    fn interruption_diagnostic(&self) -> Diagnostic {
+        Diagnostic {
+            severity: Severity::Info,
+            code: "I9001".to_string(),
+            message: "analysis budget exceeded; parsing stopped early".to_string(),
+            span: self.current().span.clone(),
+            notes: vec!["increase the analysis budget to complete parsing".to_string()],
+            tags: vec!["analysis".to_string()],
         }
     }
 
@@ -33,6 +60,11 @@ impl Parser {
         let mut items = Vec::new();
 
         while !self.is_eof() {
+            if self.should_interrupt() {
+                self.diagnostics.push(self.interruption_diagnostic());
+                break;
+            }
+
             let item_result = if let Some(start) = self.match_keyword(Keyword::Fn) {
                 self.parse_function_item(start)
             } else if let Some(start) = self.match_keyword(Keyword::Struct) {
@@ -52,6 +84,10 @@ impl Parser {
             match item_result {
                 Ok(item) => items.push(item),
                 Err(diagnostic) => {
+                    if diagnostic.code == "I9001" {
+                        self.diagnostics.push(diagnostic);
+                        break;
+                    }
                     self.diagnostics.push(diagnostic);
                     self.synchronize_top_level();
                 }
@@ -73,6 +109,9 @@ impl Parser {
 
     fn synchronize_top_level(&mut self) {
         while !self.is_eof() {
+            if self.should_interrupt() {
+                return;
+            }
             if self.check_keyword(Keyword::Fn)
                 || self.check_keyword(Keyword::Struct)
                 || self.check_keyword(Keyword::Enum)
@@ -91,6 +130,9 @@ impl Parser {
         let mut params = Vec::new();
         if !self.check_symbol(Symbol::RParen) {
             loop {
+                if self.should_interrupt() {
+                    return Err(self.interruption_diagnostic());
+                }
                 let (param_name, param_name_token) =
                     self.expect_identifier("P2004", "expected parameter name")?;
                 self.expect_symbol(Symbol::Colon, "P2005", "expected `:` after parameter name")?;
@@ -118,6 +160,9 @@ impl Parser {
         let mut effects = Vec::new();
         let mut return_type = None;
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             if effects.is_empty() {
                 if let Some(effects_keyword) = self.match_keyword(Keyword::Effects) {
                     effects = self.parse_effects_clause(effects_keyword)?;
@@ -157,6 +202,9 @@ impl Parser {
 
         let mut effects = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let effect = self.parse_effect_path()?;
             effects.push(effect);
 
@@ -202,6 +250,9 @@ impl Parser {
 
         let mut fields = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let (field_name, field_name_token) =
                 self.expect_identifier("P2012", "expected struct field name")?;
             self.expect_symbol(
@@ -243,6 +294,9 @@ impl Parser {
 
         let mut variants = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let (variant_name, variant_name_token) =
                 self.expect_identifier("P2022", "expected enum variant name")?;
             let mut variant_span = variant_name_token.span.clone();
@@ -251,6 +305,9 @@ impl Parser {
             if self.match_symbol(Symbol::LParen).is_some() {
                 if !self.check_symbol(Symbol::RParen) {
                     loop {
+                        if self.should_interrupt() {
+                            return Err(self.interruption_diagnostic());
+                        }
                         let field = self.parse_variant_field()?;
                         variant_span = join_spans(&variant_span, &field.span);
                         payload.push(field);
@@ -342,6 +399,9 @@ impl Parser {
             }
 
             loop {
+                if self.should_interrupt() {
+                    return Err(self.interruption_diagnostic());
+                }
                 let arg = self.parse_type()?;
                 args.push(arg);
 
@@ -382,6 +442,9 @@ impl Parser {
         let mut tail = None;
 
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             if let Some(let_token) = self.match_keyword(Keyword::Let) {
                 let stmt = self.parse_let_statement(false, let_token)?;
                 self.consume_statement_terminator()?;
@@ -504,6 +567,9 @@ impl Parser {
     fn parse_or(&mut self) -> Result<Expr, Diagnostic> {
         let mut expr = self.parse_and()?;
         while self.match_symbol(Symbol::OrOr).is_some() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let right = self.parse_and()?;
             let span = join_spans(&expr.span, &right.span);
             expr = Expr {
@@ -521,6 +587,9 @@ impl Parser {
     fn parse_and(&mut self) -> Result<Expr, Diagnostic> {
         let mut expr = self.parse_equality()?;
         while self.match_symbol(Symbol::AndAnd).is_some() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let right = self.parse_equality()?;
             let span = join_spans(&expr.span, &right.span);
             expr = Expr {
@@ -539,6 +608,9 @@ impl Parser {
         let mut expr = self.parse_comparison()?;
 
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let op = if self.match_symbol(Symbol::EqEq).is_some() {
                 Some(BinaryOp::Eq)
             } else if self.match_symbol(Symbol::BangEq).is_some() {
@@ -570,6 +642,9 @@ impl Parser {
         let mut expr = self.parse_term()?;
 
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let op = if self.match_symbol(Symbol::Lt).is_some() {
                 Some(BinaryOp::Lt)
             } else if self.match_symbol(Symbol::LtEq).is_some() {
@@ -605,6 +680,9 @@ impl Parser {
         let mut expr = self.parse_factor()?;
 
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let op = if self.match_symbol(Symbol::Plus).is_some() {
                 Some(BinaryOp::Add)
             } else if self.match_symbol(Symbol::Minus).is_some() {
@@ -636,6 +714,9 @@ impl Parser {
         let mut expr = self.parse_unary()?;
 
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let op = if self.match_symbol(Symbol::Star).is_some() {
                 Some(BinaryOp::Mul)
             } else if self.match_symbol(Symbol::Slash).is_some() {
@@ -697,6 +778,9 @@ impl Parser {
         let mut expr = self.parse_primary()?;
 
         loop {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             if self.match_symbol(Symbol::Dot).is_some() {
                 let (field, field_token) =
                     self.expect_identifier("P2204", "expected member name after `.`")?;
@@ -715,6 +799,9 @@ impl Parser {
                 let mut args = Vec::new();
                 if !self.check_symbol(Symbol::RParen) {
                     loop {
+                        if self.should_interrupt() {
+                            return Err(self.interruption_diagnostic());
+                        }
                         args.push(self.parse_expr()?);
                         if self.match_symbol(Symbol::Comma).is_some() {
                             continue;
@@ -841,6 +928,9 @@ impl Parser {
 
         let mut arms = Vec::new();
         while !self.check_symbol(Symbol::RBrace) && !self.is_eof() {
+            if self.should_interrupt() {
+                return Err(self.interruption_diagnostic());
+            }
             let pattern = self.parse_pattern()?;
             self.expect_symbol(Symbol::FatArrow, "P2222", "expected `=>` in match arm")?;
             let value = self.parse_expr()?;
@@ -887,6 +977,9 @@ impl Parser {
                     let mut args = Vec::new();
                     if !self.check_symbol(Symbol::RParen) {
                         loop {
+                            if self.should_interrupt() {
+                                return Err(self.interruption_diagnostic());
+                            }
                             args.push(self.parse_pattern()?);
                             if self.match_symbol(Symbol::Comma).is_some() {
                                 continue;

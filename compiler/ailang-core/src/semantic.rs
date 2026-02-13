@@ -2,8 +2,9 @@ use crate::ast::{
     BinaryOp, Block, Expr, ExprKind, FunctionDecl, ItemKind, MatchArm, Pattern, PatternKind,
     Program, Stmt, StmtKind, TypeExpr, TypeExprKind, UnaryOp,
 };
-use crate::diagnostics::{Diagnostic, Span};
+use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::policy::Policy;
+use crate::{InterruptSignal, NeverInterrupt};
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,21 +274,40 @@ impl Catalog {
     }
 }
 
-struct Analyzer {
+struct Analyzer<'a> {
     catalog: Catalog,
     policy: Policy,
     callable_forward_summaries: HashMap<String, String>,
     value_origins: HashMap<String, String>,
     diagnostics: Vec<Diagnostic>,
+    interrupt: &'a dyn InterruptSignal,
+    interrupted: bool,
 }
 
 pub fn analyze_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
-    analyze_program_with_policy(program, &Policy::default())
+    let interrupt = NeverInterrupt;
+    analyze_program_with_policy_and_interrupt(program, &Policy::default(), &interrupt)
+}
+
+pub fn analyze_program_with_interrupt(
+    program: &Program,
+    interrupt: &dyn InterruptSignal,
+) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy_and_interrupt(program, &Policy::default(), interrupt)
 }
 
 pub fn analyze_program_with_policy(
     program: &Program,
     policy: &Policy,
+) -> Result<(), Vec<Diagnostic>> {
+    let interrupt = NeverInterrupt;
+    analyze_program_with_policy_and_interrupt(program, policy, &interrupt)
+}
+
+pub fn analyze_program_with_policy_and_interrupt(
+    program: &Program,
+    policy: &Policy,
+    interrupt: &dyn InterruptSignal,
 ) -> Result<(), Vec<Diagnostic>> {
     let mut analyzer = Analyzer {
         catalog: Catalog::new(),
@@ -295,6 +315,8 @@ pub fn analyze_program_with_policy(
         callable_forward_summaries: HashMap::new(),
         value_origins: HashMap::new(),
         diagnostics: Vec::new(),
+        interrupt,
+        interrupted: false,
     };
 
     analyzer.collect_types(program);
@@ -313,9 +335,35 @@ pub fn analyze_program_with_policy(
     }
 }
 
-impl Analyzer {
+fn interrupted_analysis_diagnostic(span: Span) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Info,
+        code: "I9001".to_string(),
+        message: "analysis budget exceeded; semantic checks stopped early".to_string(),
+        span,
+        notes: vec!["increase the analysis budget to complete semantic checks".to_string()],
+        tags: vec!["analysis".to_string()],
+    }
+}
+
+impl<'a> Analyzer<'a> {
+    fn check_interrupt(&mut self, span: Span) -> bool {
+        if self.interrupted {
+            return true;
+        }
+        if self.interrupt.is_interrupted() {
+            self.interrupted = true;
+            self.diagnostics.push(interrupted_analysis_diagnostic(span));
+            return true;
+        }
+        false
+    }
+
     fn collect_types(&mut self, program: &Program) {
         for item in &program.items {
+            if self.check_interrupt(item.span.clone()) {
+                break;
+            }
             match &item.kind {
                 ItemKind::Struct(decl) => {
                     if self.catalog.structs.contains_key(&decl.name)
@@ -374,6 +422,9 @@ impl Analyzer {
 
     fn collect_functions(&mut self, program: &Program) {
         for item in &program.items {
+            if self.check_interrupt(item.span.clone()) {
+                break;
+            }
             let ItemKind::Function(function) = &item.kind else {
                 continue;
             };
@@ -461,8 +512,14 @@ impl Analyzer {
         let mut summaries = HashMap::new();
         let max_rounds = functions.len().max(1);
         for _ in 0..max_rounds {
+            if self.check_interrupt(program.span.clone()) {
+                break;
+            }
             let mut changed = false;
             for function in &functions {
+                if self.check_interrupt(function.body.span.clone()) {
+                    break;
+                }
                 let next = self.infer_function_callable_forward(function, &summaries);
                 match next {
                     Some(target) => {
@@ -549,6 +606,9 @@ impl Analyzer {
 
     fn check_type_references(&mut self, program: &Program) {
         for item in &program.items {
+            if self.check_interrupt(item.span.clone()) {
+                break;
+            }
             match &item.kind {
                 ItemKind::Struct(decl) => {
                     for field in &decl.fields {
@@ -576,6 +636,9 @@ impl Analyzer {
 
     fn check_function_bodies(&mut self, program: &Program) {
         for item in &program.items {
+            if self.check_interrupt(item.span.clone()) {
+                break;
+            }
             let ItemKind::Function(function) = &item.kind else {
                 continue;
             };
@@ -690,7 +753,14 @@ impl Analyzer {
         let mut scoped_aliases = callable_aliases.clone();
         let outer_value_origins = self.value_origins.clone();
 
+        if self.check_interrupt(block.span.clone()) {
+            return Type::Unknown;
+        }
+
         for stmt in &block.statements {
+            if self.check_interrupt(stmt.span.clone()) {
+                return Type::Unknown;
+            }
             self.analyze_statement(
                 stmt,
                 &mut scoped,
@@ -717,6 +787,9 @@ impl Analyzer {
         used_effects: &mut HashSet<String>,
         callable_aliases: &mut HashMap<String, String>,
     ) {
+        if self.check_interrupt(stmt.span.clone()) {
+            return;
+        }
         match &stmt.kind {
             StmtKind::Let {
                 name, ty, value, ..
@@ -796,6 +869,9 @@ impl Analyzer {
         used_effects: &mut HashSet<String>,
         callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
+        if self.check_interrupt(expr.span.clone()) {
+            return Type::Unknown;
+        }
         match &expr.kind {
             ExprKind::Identifier(name) => {
                 if let Some(ty) = env.get(name) {
@@ -1053,6 +1129,9 @@ impl Analyzer {
         used_effects: &mut HashSet<String>,
         callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
+        if self.check_interrupt(span.clone()) {
+            return Type::Unknown;
+        }
         let Some(name) = resolve_callable_name(callee, callable_aliases) else {
             self.diagnostics.push(
                 Diagnostic::error(
@@ -1291,6 +1370,9 @@ impl Analyzer {
         used_effects: &mut HashSet<String>,
         callable_aliases: &mut HashMap<String, String>,
     ) -> Type {
+        if self.check_interrupt(span.clone()) {
+            return Type::Unknown;
+        }
         let mut seen_bool_true = false;
         let mut seen_bool_false = false;
         let mut seen_variants = HashSet::new();
@@ -1299,6 +1381,9 @@ impl Analyzer {
         let mut arm_result: Option<Type> = None;
 
         for arm in arms {
+            if self.check_interrupt(arm.span.clone()) {
+                return Type::Unknown;
+            }
             let mut arm_env = env.clone();
             let coverage = self.bind_pattern(&arm.pattern, scrutinee_type, &mut arm_env);
             match coverage {
@@ -1848,9 +1933,9 @@ impl Analyzer {
                     )
                     .with_tag("security")
                     .with_tag("schema")
-                        .with_note(format!(
-                            "`{callee_name}` call shape is `{callee_name}(input)`"
-                        )),
+                    .with_note(format!(
+                        "`{callee_name}` call shape is `{callee_name}(input)`"
+                    )),
                 );
                 return;
             }
@@ -1875,13 +1960,9 @@ impl Analyzer {
         if is_path_under_gate(callee_name) {
             if args.len() != 2 {
                 self.diagnostics.push(
-                    Diagnostic::error(
-                        "E4001",
-                        "path gate expects exactly two arguments",
-                        span,
-                    )
-                    .with_tag("security")
-                    .with_tag("schema")
+                    Diagnostic::error("E4001", "path gate expects exactly two arguments", span)
+                        .with_tag("security")
+                        .with_tag("schema")
                         .with_note(format!(
                             "`{callee_name}` call shape is `{callee_name}(base, input)`"
                         )),
@@ -2077,7 +2158,9 @@ impl Analyzer {
                             "policy/bootstrap constructor takes no arguments",
                             span,
                         )
-                        .with_note(format!("`{callee_name}` should be called without arguments")),
+                        .with_note(format!(
+                            "`{callee_name}` should be called without arguments"
+                        )),
                     );
                 }
                 return;
@@ -2220,9 +2303,13 @@ impl Analyzer {
 
         if !arg_types[0].is_numeric() {
             self.diagnostics.push(
-                Diagnostic::error("E4001", "http.serve port must be numeric", args[0].span.clone())
-                    .with_note(format!("found `{}`", arg_types[0].describe()))
-                    .with_note("use `Int`/`Int64` port values such as `8080`"),
+                Diagnostic::error(
+                    "E4001",
+                    "http.serve port must be numeric",
+                    args[0].span.clone(),
+                )
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use `Int`/`Int64` port values such as `8080`"),
             );
         }
 
@@ -2628,9 +2715,13 @@ impl Analyzer {
 
         if !arg_types[0].is_numeric() {
             self.diagnostics.push(
-                Diagnostic::error("E4001", "res.text status must be numeric", args[0].span.clone())
-                    .with_note(format!("found `{}`", arg_types[0].describe()))
-                    .with_note("use `Int`/`Int64` status code values"),
+                Diagnostic::error(
+                    "E4001",
+                    "res.text status must be numeric",
+                    args[0].span.clone(),
+                )
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use `Int`/`Int64` status code values"),
             );
         }
 
@@ -2956,11 +3047,15 @@ impl Analyzer {
 
             if !arg_types[0].is_named("Ctx") {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "req.body first argument must be `Ctx`", args[0].span.clone())
-                        .with_tag("security")
-                        .with_tag("schema")
-                        .with_note(format!("found `{}`", arg_types[0].describe()))
-                        .with_note("pass handler context as the first argument"),
+                    Diagnostic::error(
+                        "E4001",
+                        "req.body first argument must be `Ctx`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass handler context as the first argument"),
                 );
             }
 
@@ -3071,10 +3166,14 @@ impl Analyzer {
 
         if args.len() != 2 {
             self.diagnostics.push(
-                Diagnostic::error("E4001", "sql.q expects `(template, params)` arguments", span)
-                    .with_tag("security")
-                    .with_tag("schema")
-                    .with_note("use `sql.q(\"SELECT ...\", params)`"),
+                Diagnostic::error(
+                    "E4001",
+                    "sql.q expects `(template, params)` arguments",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note("use `sql.q(\"SELECT ...\", params)`"),
             );
             return;
         }
@@ -3150,14 +3249,10 @@ impl Analyzer {
         if !is_target || valid_shape {
         } else {
             self.diagnostics.push(
-                Diagnostic::error(
-                    "E4001",
-                    "db sink call has invalid argument shape",
-                    span,
-                )
-                .with_tag("security")
-                .with_tag("sink")
-                .with_note(note),
+                Diagnostic::error("E4001", "db sink call has invalid argument shape", span)
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(note),
             );
             return;
         }
@@ -3239,7 +3334,9 @@ impl Analyzer {
             .with_tag("security")
             .with_tag("sink")
             .with_note(format!("found `{}`", context_type.describe()))
-            .with_note(format!("use `{usage}` for context-first `{callee_name}` calls")),
+            .with_note(format!(
+                "use `{usage}` for context-first `{callee_name}` calls"
+            )),
         );
         false
     }
@@ -3384,14 +3481,10 @@ impl Analyzer {
 
         if !valid_shape {
             self.diagnostics.push(
-                Diagnostic::error(
-                    "E4001",
-                    "net sink call has invalid argument shape",
-                    span,
-                )
-                .with_tag("security")
-                .with_tag("sink")
-                .with_note(note),
+                Diagnostic::error("E4001", "net sink call has invalid argument shape", span)
+                    .with_tag("security")
+                    .with_tag("sink")
+                    .with_note(note),
             );
             return;
         }
@@ -3504,7 +3597,11 @@ impl Analyzer {
         }
 
         let path_index = if is_fs_read_call(callee_name) {
-            if args.len() == 3 { 2 } else { 1 }
+            if args.len() == 3 {
+                2
+            } else {
+                1
+            }
         } else if args.len() == 4 {
             2
         } else {
@@ -3550,7 +3647,9 @@ impl Analyzer {
                 )
                 .with_tag("security")
                 .with_tag("secret")
-                .with_note("use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`"),
+                .with_note(
+                    "use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`",
+                ),
             );
             return;
         }
@@ -3767,13 +3866,9 @@ impl Analyzer {
         if is_auth_require_call(callee_name) {
             if args.len() != 1 {
                 self.diagnostics.push(
-                    Diagnostic::error(
-                        "E4001",
-                        "auth.require expects exactly one argument",
-                        span,
-                    )
-                    .with_tag("security")
-                    .with_note("use `auth.require(ctx)`"),
+                    Diagnostic::error("E4001", "auth.require expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `auth.require(ctx)`"),
                 );
                 return;
             }
@@ -4712,10 +4807,14 @@ impl Analyzer {
 
             if !arg_types[0].is_named("String") {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "log.str argument must be `String`", args[0].span.clone())
-                        .with_tag("security")
-                        .with_note(format!("found `{}`", arg_types[0].describe()))
-                        .with_note("pass safe string payloads to `log.str`"),
+                    Diagnostic::error(
+                        "E4001",
+                        "log.str argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass safe string payloads to `log.str`"),
                 );
             }
             return;
@@ -4733,10 +4832,14 @@ impl Analyzer {
 
             if !arg_types[0].is_numeric() {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "log.i64 argument must be numeric", args[0].span.clone())
-                        .with_tag("security")
-                        .with_note(format!("found `{}`", arg_types[0].describe()))
-                        .with_note("pass `Int`/`Int64` values to `log.i64`"),
+                    Diagnostic::error(
+                        "E4001",
+                        "log.i64 argument must be numeric",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass `Int`/`Int64` values to `log.i64`"),
                 );
             }
             return;
@@ -4754,10 +4857,14 @@ impl Analyzer {
 
             if !arg_types[0].is_bool() {
                 self.diagnostics.push(
-                    Diagnostic::error("E4001", "log.bool argument must be `Bool`", args[0].span.clone())
-                        .with_tag("security")
-                        .with_note(format!("found `{}`", arg_types[0].describe()))
-                        .with_note("pass boolean values to `log.bool`"),
+                    Diagnostic::error(
+                        "E4001",
+                        "log.bool argument must be `Bool`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass boolean values to `log.bool`"),
                 );
             }
             return;
@@ -5672,7 +5779,8 @@ fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> 
 fn is_intrinsic_namespace(name: &str) -> bool {
     matches!(
         name,
-        "db" | "fs" | "sql"
+        "db" | "fs"
+            | "sql"
             | "http"
             | "httpClient"
             | "json"

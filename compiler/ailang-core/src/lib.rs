@@ -8,15 +8,27 @@ pub mod manifest;
 pub mod mir;
 pub mod parser;
 pub mod policy;
+pub mod sbom;
 pub mod security_map;
 pub mod semantic;
-pub mod sbom;
 pub mod token;
 
+pub trait InterruptSignal {
+    fn is_interrupted(&self) -> bool;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NeverInterrupt;
+
+impl InterruptSignal for NeverInterrupt {
+    fn is_interrupted(&self) -> bool {
+        false
+    }
+}
+
 pub use audit::{
-    render_security_audit_text, run_security_audit, run_security_audit_with_baseline,
-    should_fail, summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity,
-    AuditTrend,
+    render_security_audit_text, run_security_audit, run_security_audit_with_baseline, should_fail,
+    summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity, AuditTrend,
 };
 pub use build_metadata::{
     compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
@@ -25,14 +37,17 @@ pub use c_backend::{emit_c_program, emit_runtime_header, emit_runtime_source};
 pub use diagnostics::{Diagnostic, Severity, Span};
 pub use manifest::{Manifest, ManifestFile, PackageSection};
 pub use mir::{lower_program_to_mir, MirProgram};
-pub use parser::parse_source;
+pub use parser::{parse_source, parse_source_with_interrupt};
 pub use policy::{Policy, PolicyMode, POLICY_FILE_NAME};
+pub use sbom::{SbomDocument, SBOM_FILE_NAME};
 pub use security_map::{
     build_security_map, build_security_map_with_allows, parse_allow_annotations,
     strip_allow_annotations, SecurityAllow, SecurityMap, SECURITY_MAP_FILE_NAME,
 };
-pub use sbom::{SbomDocument, SBOM_FILE_NAME};
-pub use semantic::analyze_program;
+pub use semantic::{
+    analyze_program, analyze_program_with_interrupt, analyze_program_with_policy,
+    analyze_program_with_policy_and_interrupt,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -65,7 +80,10 @@ pub fn write_build_metadata(
     build_metadata::write_build_metadata(project_root, manifest, policy)
 }
 
-pub fn write_sbom(project_root: &Path, build_metadata: &BuildMetadata) -> Result<PathBuf, Diagnostic> {
+pub fn write_sbom(
+    project_root: &Path,
+    build_metadata: &BuildMetadata,
+) -> Result<PathBuf, Diagnostic> {
     sbom::write_sbom(project_root, build_metadata)
 }
 

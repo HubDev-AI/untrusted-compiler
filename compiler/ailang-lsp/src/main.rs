@@ -2,7 +2,11 @@ use ailang_core::ast::{
     Block, Expr, ExprKind, ItemKind, Pattern, PatternKind, Program, Stmt, StmtKind, TypeExpr,
     TypeExprKind,
 };
-use ailang_core::{analyze_program, parse_source, Diagnostic as CoreDiagnostic, Severity as CoreSeverity, Span};
+use ailang_core::{
+    analyze_program_with_interrupt, parse_source, parse_source_with_interrupt,
+    Diagnostic as CoreDiagnostic, InterruptSignal as CoreInterruptSignal, Severity as CoreSeverity,
+    Span,
+};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -59,6 +63,12 @@ impl RequestDeadline {
 
     fn is_expired(&self) -> bool {
         self.started_at.elapsed().as_millis() >= self.budget_ms
+    }
+}
+
+impl CoreInterruptSignal for RequestDeadline {
+    fn is_interrupted(&self) -> bool {
+        self.is_expired()
     }
 }
 
@@ -197,7 +207,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character)) = parse_text_document_position(message) {
                     match definition_at_position(state, &uri, line, character) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -214,7 +226,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character)) = parse_text_document_position(message) {
                     match hover_at_position(state, &uri, line, character) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -253,7 +267,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character)) = parse_text_document_position(message) {
                     match implementation_at_position(state, &uri, line, character) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -270,7 +286,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character)) = parse_text_document_position(message) {
                     match completion_at_position(state, &uri, line, character) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -287,7 +305,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character)) = parse_text_document_position(message) {
                     match prepare_rename_at_position(state, &uri, line, character) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -304,7 +324,9 @@ fn handle_message<W: Write>(
                 if let Some((uri, line, character, new_name)) = parse_rename_request(message) {
                     match rename_at_position(state, &uri, line, character, &new_name) {
                         Ok(result) => send_response(writer, id, result)?,
-                        Err(err) => send_error_response(writer, id, INVALID_REQUEST, err.to_string())?,
+                        Err(err) => {
+                            send_error_response(writer, id, INVALID_REQUEST, err.to_string())?
+                        }
                     }
                 } else {
                     send_error_response(
@@ -365,7 +387,11 @@ fn parse_did_open(message: &Value) -> Option<(String, String)> {
 
 fn parse_did_change(message: &Value) -> Option<(String, String)> {
     let params = message.get("params")?;
-    let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_string();
+    let uri = params
+        .get("textDocument")?
+        .get("uri")?
+        .as_str()?
+        .to_string();
     let changes = params.get("contentChanges")?.as_array()?;
     let text = changes
         .last()
@@ -705,31 +731,29 @@ fn rename_at_position(
 
         let edits =
             collect_identifier_hits_by_name(&doc_program, &doc_path, &target_name, Some(&deadline))
-            .into_iter()
-            .map(|found| {
-                json!({
-                    "range": range_from_span(&found.span),
-                    "newText": new_name,
+                .into_iter()
+                .map(|found| {
+                    json!({
+                        "range": range_from_span(&found.span),
+                        "newText": new_name,
+                    })
                 })
-            })
-            .collect::<Vec<_>>();
+                .collect::<Vec<_>>();
         if !edits.is_empty() {
             edits_by_uri.insert(doc_uri, edits);
         }
     }
 
-    if let Some(decl_span) = function_declaration_name_span(&declaration.symbol, &declaration.source)
+    if let Some(decl_span) =
+        function_declaration_name_span(&declaration.symbol, &declaration.source)
     {
-        edits_by_uri
-            .entry(declaration.uri)
-            .or_default()
-            .insert(
-                0,
-                json!({
-                    "range": range_from_span(&decl_span),
-                    "newText": new_name,
-                }),
-            );
+        edits_by_uri.entry(declaration.uri).or_default().insert(
+            0,
+            json!({
+                "range": range_from_span(&decl_span),
+                "newText": new_name,
+            }),
+        );
     }
 
     let mut changes = serde_json::Map::new();
@@ -802,7 +826,10 @@ fn code_actions_from_diagnostics(
                 if validate_edit.is_some() {
                     (Some("Wrap with validate(...)?"), validate_edit)
                 } else {
-                    (Some("Insert validate/sanitize gate for untrusted value"), None)
+                    (
+                        Some("Insert validate/sanitize gate for untrusted value"),
+                        None,
+                    )
                 }
             }
             "E1003" | "E1004" | "E1005" => {
@@ -984,7 +1011,11 @@ fn build_missing_effect_edit(uri: &str, source: &str, diagnostic: &Value) -> Opt
     }))
 }
 
-fn function_signature_search_window(uri: &str, source: &str, diagnostic_line: usize) -> Option<(usize, usize)> {
+fn function_signature_search_window(
+    uri: &str,
+    source: &str,
+    diagnostic_line: usize,
+) -> Option<(usize, usize)> {
     let path = uri_to_path(uri)?;
     let program = parse_source(&path, source).ok()?;
     let target_line = diagnostic_line.saturating_add(1);
@@ -1206,10 +1237,13 @@ fn load_cached_program(
     if let Some(program) = state.parsed_programs.get(uri) {
         return Some(program.clone());
     }
-    if deadline_exceeded(deadline) {
+    let Some(deadline) = deadline else {
+        return parse_source(path, source).ok();
+    };
+    if deadline.is_expired() {
         return None;
     }
-    parse_source(path, source).ok()
+    parse_source_with_interrupt(path, source, deadline).ok()
 }
 
 fn workspace_document_entries(
@@ -1272,7 +1306,10 @@ fn scan_unopened_workspace_files() -> bool {
 }
 
 fn parse_env_bool(raw: &str) -> bool {
-    !matches!(raw.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off" | "no")
+    !matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "0" | "false" | "off" | "no"
+    )
 }
 
 fn project_root_for_uri(uri: &str) -> Option<PathBuf> {
@@ -1361,7 +1398,10 @@ fn deadline_exceeded(deadline: Option<&RequestDeadline>) -> bool {
     deadline.is_some_and(RequestDeadline::is_expired)
 }
 
-fn collect_function_symbols(program: &Program, deadline: Option<&RequestDeadline>) -> Vec<FunctionSymbol> {
+fn collect_function_symbols(
+    program: &Program,
+    deadline: Option<&RequestDeadline>,
+) -> Vec<FunctionSymbol> {
     let mut symbols = Vec::new();
     for item in &program.items {
         if deadline_exceeded(deadline) {
@@ -1484,14 +1524,9 @@ fn find_identifier_in_block(
             scopes.pop();
             return None;
         }
-        if let Some(hit) = find_identifier_in_statement(
-            statement,
-            file,
-            line,
-            character,
-            scopes,
-            deadline,
-        ) {
+        if let Some(hit) =
+            find_identifier_in_statement(statement, file, line, character, scopes, deadline)
+        {
             scopes.pop();
             return Some(hit);
         }
@@ -1523,10 +1558,12 @@ fn find_identifier_in_statement(
             }
             hit
         }
-        StmtKind::Return { value } => value
-            .as_ref()
-            .and_then(|expr| find_identifier_in_expr(expr, file, line, character, scopes, deadline)),
-        StmtKind::Expr { expr } => find_identifier_in_expr(expr, file, line, character, scopes, deadline),
+        StmtKind::Return { value } => value.as_ref().and_then(|expr| {
+            find_identifier_in_expr(expr, file, line, character, scopes, deadline)
+        }),
+        StmtKind::Expr { expr } => {
+            find_identifier_in_expr(expr, file, line, character, scopes, deadline)
+        }
     }
 }
 
@@ -1543,12 +1580,16 @@ fn find_identifier_in_expr(
     }
     match &expr.kind {
         ExprKind::Identifier(_) => None,
-        ExprKind::Unary { expr, .. } => find_identifier_in_expr(expr, file, line, character, scopes, deadline),
+        ExprKind::Unary { expr, .. } => {
+            find_identifier_in_expr(expr, file, line, character, scopes, deadline)
+        }
         ExprKind::Binary { left, right, .. } => {
             find_identifier_in_expr(left, file, line, character, scopes, deadline)
                 .or_else(|| find_identifier_in_expr(right, file, line, character, scopes, deadline))
         }
-        ExprKind::Member { object, .. } => find_identifier_in_expr(object, file, line, character, scopes, deadline),
+        ExprKind::Member { object, .. } => {
+            find_identifier_in_expr(object, file, line, character, scopes, deadline)
+        }
         ExprKind::Call { callee, args } => {
             if let ExprKind::Identifier(name) = &callee.kind {
                 if span_contains(&callee.span, file, line, character)
@@ -1561,8 +1602,9 @@ fn find_identifier_in_expr(
                 }
             }
             find_identifier_in_expr(callee, file, line, character, scopes, deadline).or_else(|| {
-                args.iter()
-                    .find_map(|arg| find_identifier_in_expr(arg, file, line, character, scopes, deadline))
+                args.iter().find_map(|arg| {
+                    find_identifier_in_expr(arg, file, line, character, scopes, deadline)
+                })
             })
         }
         ExprKind::If {
@@ -1570,31 +1612,30 @@ fn find_identifier_in_expr(
             then_branch,
             else_branch,
         } => find_identifier_in_expr(condition, file, line, character, scopes, deadline)
-            .or_else(|| find_identifier_in_block(then_branch, file, line, character, scopes, deadline))
             .or_else(|| {
-                else_branch
-                    .as_ref()
-                    .and_then(|expr| find_identifier_in_expr(expr, file, line, character, scopes, deadline))
-            }),
-        ExprKind::Match { scrutinee, arms } => {
-            find_identifier_in_expr(scrutinee, file, line, character, scopes, deadline).or_else(|| {
-                arms.iter().find_map(|arm| {
-                    scopes.push(HashSet::new());
-                    collect_pattern_bindings_into_scope(&arm.pattern, scopes);
-                    let hit = find_identifier_in_expr(
-                        &arm.value,
-                        file,
-                        line,
-                        character,
-                        scopes,
-                        deadline,
-                    );
-                    scopes.pop();
-                    hit
-                })
+                find_identifier_in_block(then_branch, file, line, character, scopes, deadline)
             })
+            .or_else(|| {
+                else_branch.as_ref().and_then(|expr| {
+                    find_identifier_in_expr(expr, file, line, character, scopes, deadline)
+                })
+            }),
+        ExprKind::Match { scrutinee, arms } => find_identifier_in_expr(
+            scrutinee, file, line, character, scopes, deadline,
+        )
+        .or_else(|| {
+            arms.iter().find_map(|arm| {
+                scopes.push(HashSet::new());
+                collect_pattern_bindings_into_scope(&arm.pattern, scopes);
+                let hit =
+                    find_identifier_in_expr(&arm.value, file, line, character, scopes, deadline);
+                scopes.pop();
+                hit
+            })
+        }),
+        ExprKind::Block(block) => {
+            find_identifier_in_block(block, file, line, character, scopes, deadline)
         }
-        ExprKind::Block(block) => find_identifier_in_block(block, file, line, character, scopes, deadline),
         ExprKind::Number(_) | ExprKind::String(_) | ExprKind::Bool(_) => None,
     }
 }
@@ -1650,14 +1691,7 @@ fn collect_identifier_hits_in_block(
             scopes.pop();
             return;
         }
-        collect_identifier_hits_in_statement(
-            statement,
-            file,
-            target_name,
-            hits,
-            scopes,
-            deadline,
-        );
+        collect_identifier_hits_in_statement(statement, file, target_name, hits, scopes, deadline);
     }
     if let Some(tail) = &block.tail {
         collect_identifier_hits_in_expr(tail, file, target_name, hits, scopes, deadline);
@@ -1778,10 +1812,7 @@ fn collect_identifier_hits_in_expr(
 }
 
 fn is_name_shadowed_in_scope(scopes: &[HashSet<String>], name: &str) -> bool {
-    scopes
-        .iter()
-        .rev()
-        .any(|scope| scope.contains(name))
+    scopes.iter().rev().any(|scope| scope.contains(name))
 }
 
 fn collect_pattern_bindings_into_scope(pattern: &Pattern, scopes: &mut [HashSet<String>]) {
@@ -1886,7 +1917,6 @@ fn diagnostics_for_document_with_limits(
     analysis_budget_ms: u128,
     max_diagnostics_per_document: usize,
 ) -> Vec<Value> {
-    let started_at = Instant::now();
     let Some(path) = uri_to_path(uri) else {
         return vec![json!({
             "range": {
@@ -1903,17 +1933,12 @@ fn diagnostics_for_document_with_limits(
         return vec![analysis_budget_exceeded_diagnostic(analysis_budget_ms)];
     }
 
-    let diagnostics = match parse_source(&path, text) {
-        Ok(program) => {
-            if started_at.elapsed().as_millis() >= analysis_budget_ms {
-                Vec::new()
-            } else {
-                match analyze_program(&program) {
-                    Ok(()) => Vec::new(),
-                    Err(diags) => diags,
-                }
-            }
-        }
+    let deadline = RequestDeadline::new(analysis_budget_ms);
+    let diagnostics = match parse_source_with_interrupt(&path, text, &deadline) {
+        Ok(program) => match analyze_program_with_interrupt(&program, &deadline) {
+            Ok(()) => Vec::new(),
+            Err(diags) => diags,
+        },
         Err(diags) => diags,
     };
 
@@ -1925,7 +1950,13 @@ fn diagnostics_for_document_with_limits(
     if diagnostics.len() > max_diagnostics_per_document {
         diagnostics.truncate(max_diagnostics_per_document);
     }
-    if started_at.elapsed().as_millis() >= analysis_budget_ms {
+    let has_budget_diagnostic = diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .get("code")
+            .and_then(Value::as_str)
+            .is_some_and(|code| code == "I9001")
+    });
+    if deadline.is_expired() && !has_budget_diagnostic {
         diagnostics.push(analysis_budget_exceeded_diagnostic(analysis_budget_ms));
     }
     diagnostics
@@ -2028,7 +2059,11 @@ fn severity_to_lsp(severity: &CoreSeverity) -> i64 {
     }
 }
 
-fn publish_diagnostics<W: Write>(writer: &mut W, uri: &str, diagnostics: Vec<Value>) -> io::Result<()> {
+fn publish_diagnostics<W: Write>(
+    writer: &mut W,
+    uri: &str,
+    diagnostics: Vec<Value>,
+) -> io::Result<()> {
     send_notification(
         writer,
         "textDocument/publishDiagnostics",
@@ -2145,10 +2180,11 @@ fn read_message<R: BufRead>(reader: &mut R) -> io::Result<Option<Value>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_function_symbols, collect_identifier_hits_by_name, diagnostics_for_document_with_limits,
-        extract_open_document_import_uris, find_identifier_at_position, load_cached_program,
-        parse_env_bool, read_message, refresh_program_cache, run_stdio, update_open_document_import_edges,
-        RequestDeadline, ServerState,
+        collect_function_symbols, collect_identifier_hits_by_name,
+        diagnostics_for_document_with_limits, extract_open_document_import_uris,
+        find_identifier_at_position, load_cached_program, parse_env_bool, read_message,
+        refresh_program_cache, run_stdio, update_open_document_import_edges, RequestDeadline,
+        ServerState,
     };
     use ailang_core::parse_source;
     use serde_json::{json, Value};
@@ -2168,9 +2204,7 @@ mod tests {
     fn collect_messages(output: Vec<u8>) -> Vec<Value> {
         let mut reader = BufReader::new(Cursor::new(output));
         let mut messages = Vec::new();
-        while let Some(message) = read_message(&mut reader)
-            .expect("output message should parse")
-        {
+        while let Some(message) = read_message(&mut reader).expect("output message should parse") {
             messages.push(message);
         }
         messages
@@ -2212,7 +2246,11 @@ mod tests {
         run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
 
         let messages = collect_messages(output);
-        assert_eq!(messages.len(), 2, "initialize + shutdown responses expected");
+        assert_eq!(
+            messages.len(),
+            2,
+            "initialize + shutdown responses expected"
+        );
         assert_eq!(messages[0].get("id"), Some(&json!(1)));
         assert_eq!(
             messages[0]
@@ -2327,7 +2365,10 @@ mod tests {
             .and_then(Value::as_array)
             .map(|diags| diags.len())
             .unwrap_or(0);
-        assert!(diagnostic_count > 0, "expected parser diagnostics for invalid source");
+        assert!(
+            diagnostic_count > 0,
+            "expected parser diagnostics for invalid source"
+        );
     }
 
     #[test]
@@ -2358,9 +2399,7 @@ mod tests {
             "zero-budget analysis should short-circuit with only the budget diagnostic",
         );
         assert_eq!(
-            diagnostics[0]
-                .get("code")
-                .and_then(Value::as_str),
+            diagnostics[0].get("code").and_then(Value::as_str),
             Some("I9001"),
             "zero-budget analysis should return the budget overflow marker",
         );
@@ -2428,11 +2467,7 @@ mod tests {
 
         refresh_program_cache(&mut state, dependency_uri, dependency_source);
         refresh_program_cache(&mut state, dependent_uri, dependent_source);
-        update_open_document_import_edges(
-            &mut state,
-            dependent_uri,
-            "import \"./lsp_dep_a.ai\"\n",
-        );
+        update_open_document_import_edges(&mut state, dependent_uri, "import \"./lsp_dep_a.ai\"\n");
         assert!(
             state.parsed_programs.contains_key(dependency_uri)
                 && state.parsed_programs.contains_key(dependent_uri),
@@ -2565,8 +2600,7 @@ mod tests {
             "function callsite collection should only include callee identifiers",
         );
         assert_eq!(
-            hits[0].span.start_line,
-            10,
+            hits[0].span.start_line, 10,
             "only direct `helper()` callee should be collected",
         );
     }
@@ -2574,7 +2608,10 @@ mod tests {
     #[test]
     fn request_deadline_zero_budget_expires_immediately() {
         let deadline = RequestDeadline::new(0);
-        assert!(deadline.is_expired(), "zero budget should be treated as expired");
+        assert!(
+            deadline.is_expired(),
+            "zero budget should be treated as expired"
+        );
     }
 
     #[test]
@@ -2684,7 +2721,11 @@ mod tests {
             .iter()
             .filter(|msg| msg.get("method") == Some(&json!("textDocument/publishDiagnostics")))
             .collect();
-        assert_eq!(publishes.len(), 2, "expected diagnostics publish for open and change");
+        assert_eq!(
+            publishes.len(),
+            2,
+            "expected diagnostics publish for open and change"
+        );
 
         let first_count = publishes[0]
             .get("params")
@@ -2692,7 +2733,10 @@ mod tests {
             .and_then(Value::as_array)
             .map(|diags| diags.len())
             .unwrap_or(0);
-        assert!(first_count > 0, "open should publish diagnostics for invalid source");
+        assert!(
+            first_count > 0,
+            "open should publish diagnostics for invalid source"
+        );
 
         let second_count = publishes[1]
             .get("params")
@@ -2746,7 +2790,11 @@ mod tests {
             .iter()
             .filter(|msg| msg.get("method") == Some(&json!("textDocument/publishDiagnostics")))
             .collect();
-        assert_eq!(publishes.len(), 2, "expected diagnostics publish for open and close");
+        assert_eq!(
+            publishes.len(),
+            2,
+            "expected diagnostics publish for open and close"
+        );
 
         let close_count = publishes[1]
             .get("params")
@@ -2882,7 +2930,9 @@ mod tests {
             .find(|msg| msg.get("id") == Some(&json!(30)))
             .expect("definition response should exist");
         assert!(
-            definition_response.get("result").is_some_and(Value::is_null),
+            definition_response
+                .get("result")
+                .is_some_and(Value::is_null),
             "definition should be null for shadowed local call targets",
         );
     }
@@ -3539,7 +3589,11 @@ mod tests {
             .get("result")
             .and_then(Value::as_array)
             .expect("implementation result should be an array");
-        assert_eq!(locations.len(), 1, "implementation should resolve to one declaration location");
+        assert_eq!(
+            locations.len(),
+            1,
+            "implementation should resolve to one declaration location"
+        );
         assert_eq!(
             locations[0]
                 .get("range")
@@ -3802,9 +3856,15 @@ mod tests {
             .and_then(|changes| changes.get(uri))
             .and_then(Value::as_array)
             .expect("rename response should include changes for current uri");
-        assert_eq!(edits.len(), 3, "rename should include declaration and both call sites");
+        assert_eq!(
+            edits.len(),
+            3,
+            "rename should include declaration and both call sites"
+        );
         assert!(
-            edits.iter().all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
+            edits
+                .iter()
+                .all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
             "all rename edits should apply the requested new name",
         );
     }
