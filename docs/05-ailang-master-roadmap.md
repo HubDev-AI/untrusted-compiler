@@ -1012,10 +1012,11 @@ Implementation order is intentionally linear to reduce thrash:
   - open-document parse cache integrated into major LSP request paths.
   - request-deadline guardrails applied to multi-document references/rename scans.
   - code actions now support concrete redact auto-edits for secret-leak diagnostics.
+  - references/rename now include unopened workspace `.ai` files discovered from project root.
 - Remaining:
   - dependency-aware incremental analysis (import graph invalidation + semantic cache layers).
   - preemptive cancellation inside heavy parse/semantic stages (beyond cooperative loop guardrails).
-  - full-project (unopened-file) references/rename determinism.
+  - indexed full-project symbol graph with stable symbol-ID-based rename precision.
   - broader code-action auto-fix coverage (`E1002`, `E2001`, and AST-aware multi-line rewrites).
   - production grammar coverage and pinned published grammar revision.
 
@@ -1045,6 +1046,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Open-Document Parse Cache".
 - Chapter: "M11 Slice: Request-Deadline Guardrails".
 - Chapter: "M11 Slice: Code-Action Redact Edit".
+- Chapter: "M11 Slice: Unopened Workspace-File References and Rename".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

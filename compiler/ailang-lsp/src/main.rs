@@ -506,7 +506,7 @@ fn references_at_position(
     let declaration =
         find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
     let mut locations = Vec::new();
-    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
         if deadline.is_expired() {
             break;
         }
@@ -648,7 +648,7 @@ fn rename_at_position(
         find_symbol_declaration_in_workspace(state, &target_name, uri, &source, &deadline);
     let mut edits_by_uri = BTreeMap::<String, Vec<Value>>::new();
 
-    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source) {
+    for (doc_uri, doc_source) in workspace_document_entries(state, uri, &source, &deadline) {
         if deadline.is_expired() {
             break;
         }
@@ -869,6 +869,7 @@ fn workspace_document_entries(
     state: &ServerState,
     primary_uri: &str,
     primary_source: &str,
+    deadline: &RequestDeadline,
 ) -> Vec<(String, String)> {
     let mut entries = state
         .documents
@@ -876,13 +877,75 @@ fn workspace_document_entries(
         .map(|(uri, source)| (uri.clone(), source.clone()))
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut seen_uris = entries
+        .iter()
+        .map(|(uri, _)| uri.clone())
+        .collect::<HashSet<_>>();
 
-    if !entries.iter().any(|(uri, _)| uri == primary_uri) {
+    if !seen_uris.contains(primary_uri) {
         entries.push((primary_uri.to_string(), primary_source.to_string()));
-        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        seen_uris.insert(primary_uri.to_string());
     }
 
+    if let Some(root) = project_root_for_uri(primary_uri) {
+        let mut ai_files = Vec::new();
+        collect_ai_files(&root, &mut ai_files);
+        ai_files.sort();
+
+        for file in ai_files {
+            if deadline.is_expired() {
+                break;
+            }
+            let Ok(file_url) = Url::from_file_path(&file) else {
+                continue;
+            };
+            let file_uri = file_url.to_string();
+            if seen_uris.contains(&file_uri) {
+                continue;
+            }
+            let Ok(file_source) = fs::read_to_string(&file) else {
+                continue;
+            };
+            entries.push((file_uri.clone(), file_source));
+            seen_uris.insert(file_uri);
+        }
+    }
+
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
     entries
+}
+
+fn project_root_for_uri(uri: &str) -> Option<PathBuf> {
+    let path = uri_to_path(uri)?;
+    let mut cursor = path.parent()?.to_path_buf();
+    loop {
+        if cursor.join("ailang.toml").is_file() {
+            return Some(cursor);
+        }
+        if !cursor.pop() {
+            break;
+        }
+    }
+    path.parent().map(|parent| parent.to_path_buf())
+}
+
+fn collect_ai_files(root: &PathBuf, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            collect_ai_files(&path, out);
+            continue;
+        }
+        if file_type.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("ai") {
+            out.push(path);
+        }
+    }
 }
 
 fn find_symbol_declaration_in_workspace(
@@ -892,7 +955,9 @@ fn find_symbol_declaration_in_workspace(
     primary_source: &str,
     deadline: &RequestDeadline,
 ) -> Option<DeclarationMatch> {
-    for (doc_uri, doc_source) in workspace_document_entries(state, primary_uri, primary_source) {
+    for (doc_uri, doc_source) in
+        workspace_document_entries(state, primary_uri, primary_source, deadline)
+    {
         if deadline.is_expired() {
             break;
         }
@@ -1484,7 +1549,11 @@ mod tests {
         RequestDeadline, ServerState,
     };
     use serde_json::{json, Value};
+    use std::fs;
     use std::io::{BufReader, Cursor};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use url::Url;
 
     fn encode_message(value: Value) -> Vec<u8> {
         let body = serde_json::to_vec(&value).expect("payload should serialize");
@@ -1502,6 +1571,17 @@ mod tests {
             messages.push(message);
         }
         messages
+    }
+
+    fn make_temp_workspace(prefix: &str) -> PathBuf {
+        let mut root = std::env::temp_dir();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos();
+        root.push(format!("{prefix}_{}_{}", std::process::id(), stamp));
+        fs::create_dir_all(&root).expect("temp workspace should be created");
+        root
     }
 
     #[test]
@@ -2159,6 +2239,87 @@ mod tests {
     }
 
     #[test]
+    fn references_include_hits_from_unopened_workspace_files() {
+        let root = make_temp_workspace("ailang_lsp_refs_unopened");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn two() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_a = Url::from_file_path(&file_a)
+            .expect("file a uri")
+            .to_string();
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "textDocument/references",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2},
+                "context": {"includeDeclaration": true}
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let references_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(15)))
+            .expect("references response should exist");
+        let references = references_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("references result should be an array");
+        let uris = references
+            .iter()
+            .filter_map(|location| location.get("uri").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert!(
+            uris.contains(&uri_a.as_str()),
+            "references should include hits from unopened workspace file",
+        );
+        assert!(
+            uris.contains(&uri_b.as_str()),
+            "references should include hits from active open file",
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn implementation_returns_declaration_location_for_call_identifier() {
         let uri = "file:///tmp/lsp_implementation.ai";
         let source = "fn helper() -> Int {\n  1\n}\n\nfn main() -> Int {\n  helper()\n}\n";
@@ -2500,6 +2661,83 @@ mod tests {
                 .all(|edit| edit.get("newText").and_then(Value::as_str) == Some("assist")),
             "all workspace rename edits should apply requested name",
         );
+    }
+
+    #[test]
+    fn rename_returns_edits_for_unopened_workspace_files() {
+        let root = make_temp_workspace("ailang_lsp_rename_unopened");
+        let file_a = root.join("a.ai");
+        let file_b = root.join("b.ai");
+        let policy_file = root.join("ailang.toml");
+        let source_a = "fn helper() -> Int {\n  1\n}\n\nfn one() -> Int {\n  helper()\n}\n";
+        let source_b = "fn two() -> Int {\n  helper()\n}\n";
+        fs::write(&policy_file, "name = \"test\"\n").expect("policy marker should be written");
+        fs::write(&file_a, source_a).expect("source a should be written");
+        fs::write(&file_b, source_b).expect("source b should be written");
+        let uri_a = Url::from_file_path(&file_a)
+            .expect("file a uri")
+            .to_string();
+        let uri_b = Url::from_file_path(&file_b)
+            .expect("file b uri")
+            .to_string();
+
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri_b,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source_b
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "textDocument/rename",
+            "params": {
+                "textDocument": {"uri": uri_b},
+                "position": {"line": 1, "character": 2},
+                "newName": "assist"
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let rename_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(16)))
+            .expect("rename response should exist");
+        let changes = rename_response
+            .get("result")
+            .and_then(|result| result.get("changes"))
+            .expect("rename result should include changes object");
+        assert!(
+            changes.get(&uri_a).is_some(),
+            "rename should include edits for unopened workspace file",
+        );
+        assert!(
+            changes.get(&uri_b).is_some(),
+            "rename should include edits for active open file",
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
