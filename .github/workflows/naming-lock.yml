@@ -15,3 +15,6 @@ jobs:
 
       - name: Validate naming lock
         run: scripts/check-naming-lock.sh
+
+      - name: Validate sec4 explain audit coverage
+        run: scripts/check-sec4-explain-audit-coverage.sh

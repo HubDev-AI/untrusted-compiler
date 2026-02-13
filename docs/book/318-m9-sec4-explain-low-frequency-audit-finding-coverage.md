@@ -33,6 +33,9 @@ The test verifies each currently emitted `sec4 audit` finding ID:
 - does not return `"Unknown Diagnostic Family"`,
 - does not use generic roadmap docs fallback path.
 
+Coverage drift is also guarded by:
+- `scripts/check-sec4-explain-audit-coverage.sh` (workflow-level audit-id to explain-map parity check).
+
 ## Inputs, outputs, and constraints
 
 - Input:
