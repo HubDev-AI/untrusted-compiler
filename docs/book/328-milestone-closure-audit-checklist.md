@@ -29,6 +29,8 @@ Implementation progress and milestone closure are not the same. This checklist p
   - `scripts/test-verify-release-promotion-inputs.sh`
   - `scripts/test-generate-release-publish-manifest.sh`
   - `scripts/test-verify-release-publish-manifest.sh`
+- naming-lock CI keeps the release-contract-smoke workflow contract guard:
+  - `scripts/test-release-contract-smoke-workflow-contract.sh`
 
 2. M10 live comparison evidence
 - compare matrix includes implementation IDs per endpoint:

@@ -37,6 +37,22 @@ jobs:
       - name: Verify release publish manifest verifier
         run: scripts/test-verify-release-publish-manifest.sh
 YAML
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate release-contract-smoke workflow contract
+        run: scripts/test-release-contract-smoke-workflow-contract.sh
+YAML
 
 cat > "$tmp/.github/workflows/benchmark-trend.yml" <<'YAML'
 name: Benchmark Trend
@@ -307,6 +323,43 @@ jobs:
         run: scripts/test-generate-release-publish-manifest.sh
       - name: Verify release publish manifest verifier
         run: scripts/test-verify-release-publish-manifest.sh
+YAML
+
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses release-contract-smoke contract test step" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
+name: Naming Lock
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  naming-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate release-contract-smoke workflow contract
+        run: scripts/test-release-contract-smoke-workflow-contract.sh
 YAML
 
 cat > "$tmp/.github/workflows/benchmark-cross-impl-evidence.yml" <<'YAML'
