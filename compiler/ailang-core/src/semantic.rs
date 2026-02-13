@@ -1769,7 +1769,7 @@ impl Analyzer {
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args, arg_types);
-        self.enforce_secret_source_call_shapes(callee_name, span.clone(), args);
+        self.enforce_secret_source_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -2840,25 +2840,44 @@ impl Analyzer {
         }
     }
 
-    fn enforce_secret_source_call_shapes(&mut self, callee_name: &str, span: Span, args: &[Expr]) {
+    fn enforce_secret_source_call_shapes(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
         if !is_secret_get_call(callee_name) {
             return;
         }
 
-        if matches!(args.len(), 2 | 3) {
+        if !matches!(args.len(), 2 | 3) {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "secret source call has invalid argument shape",
+                    span,
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note("use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`"),
+            );
             return;
         }
 
-        self.diagnostics.push(
-            Diagnostic::error(
-                "E4001",
-                "secret source call has invalid argument shape",
-                span,
-            )
-            .with_tag("security")
-            .with_tag("secret")
-            .with_note("use `secrets.get(secretsCap, name)` or `secrets.get(ctx, secretsCap, name)`"),
-        );
+        if args.len() == 3 && !arg_types[0].is_named("Ctx") {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "secret source context argument must be `Ctx`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("secret")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("use `secrets.get(ctx, secretsCap, name)` for context-first calls"),
+            );
+        }
     }
 
     fn enforce_secret_redact_call_shape(&mut self, callee_name: &str, span: Span, args: &[Expr]) {

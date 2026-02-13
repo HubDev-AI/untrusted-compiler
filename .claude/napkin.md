@@ -137,3 +137,4 @@
 - Added DB sink context-first type hardening for `db.exec`, `db.execTx`, and `db.queryOne`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
 - Added net sink context-first type hardening for `httpClient.get` and `httpClient.getInternal`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
 - Added FS sink context-first type hardening for `fs.read` and `fs.write`, so slot-1 context must be `Ctx` in context-first forms, with sink-tagged diagnostics and dedicated semantic fixtures.
+- Added secret-source context-first type hardening for `secrets.get`, so slot-1 context must be `Ctx` in context-first form, with secret-tagged diagnostics and dedicated semantic fixture coverage.

@@ -361,6 +361,22 @@ fn bad(sec: SecretsCap) effects { secrets.read } -> Int {
 }
 
 #[test]
+fn secret_source_context_type_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(sec: SecretsCap) effects { secrets.read } -> Int {
+  secrets.get(1, sec, "API_TOKEN");
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = find_diag(&diagnostics, "E4001");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
 fn secret_redact_shape_diagnostic_has_security_secret_tags() {
     let source = r#"
 fn bad() -> Int {
