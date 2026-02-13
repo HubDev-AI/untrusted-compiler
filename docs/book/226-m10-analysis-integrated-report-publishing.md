@@ -29,7 +29,11 @@ M10 requires explicit tail-latency and failure-mode analysis in final benchmark 
    - `## Matrix Analysis` summary,
    - endpoint-analysis finding snippets,
    - tail-latency section sourced from analysis metrics.
-4. If analysis is omitted, tail-latency falls back to direct matrix-derived spread computation.
+4. Report now always includes `## Evidence Quality` sourced from matrix leader metadata:
+   - run mode,
+   - generator set,
+   - endpoint quality status with warnings for non-constant-rate evidence.
+5. If analysis is omitted, tail-latency falls back to direct matrix-derived spread computation.
 
 ## Inputs, outputs, and constraints
 

@@ -28,6 +28,18 @@ if ! grep -q '^## Endpoint Leaders$' "$out"; then
   echo "missing endpoint leaders section" >&2
   exit 1
 fi
+if ! grep -q '^## Evidence Quality$' "$out"; then
+  echo "missing evidence quality section" >&2
+  exit 1
+fi
+if ! grep -q '^- Run mode: constant-rate$' "$out"; then
+  echo "missing constant-rate evidence mode summary" >&2
+  exit 1
+fi
+if ! grep -q '^- Quality status: PASS$' "$out"; then
+  echo "missing PASS evidence quality status" >&2
+  exit 1
+fi
 
 if ! grep -q '^- Implementations in matrix (4):' "$out"; then
   echo "missing matrix implementation scope header" >&2

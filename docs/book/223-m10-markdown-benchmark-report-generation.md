@@ -13,6 +13,7 @@ Added:
 The script generates a markdown benchmark report from:
 - comparison matrix JSON,
 - optional `sec4 audit` JSON.
+It now also emits benchmark evidence-quality posture from matrix leader metadata.
 
 ## Why it exists
 
@@ -23,9 +24,13 @@ M10 requires public-facing comparative reporting, not only machine artifacts. Th
 1. Validates matrix input and endpoint presence.
 2. Writes report metadata (timestamp and source paths).
 3. Renders endpoint leaders table from matrix `leader` rows.
-4. Renders endpoint ranking lists from matrix `compared` rows.
-5. Computes p99 spread per endpoint from recorded p99 values.
-6. If provided, appends security posture summary from `sec4 audit`:
+4. Renders evidence-quality section:
+   - run mode (`constant-rate`, `non-constant-rate`, or `mixed`),
+   - generator set (`wrk2`/`wrk`),
+   - endpoint-level quality status (`PASS/WARN`) based on `constantRate` and `p99` validity.
+5. Renders endpoint ranking lists from matrix `compared` rows.
+6. Computes p99 spread per endpoint from recorded p99 values.
+7. If provided, appends security posture summary from `sec4 audit`:
    - policy name/hash,
    - finding count,
    - highest severity,
@@ -41,7 +46,8 @@ M10 requires public-facing comparative reporting, not only machine artifacts. Th
   - markdown report (`results/benchmark-report.md` by default).
 - Constraints:
   - matrix must contain at least one endpoint,
-  - p99 parsing extracts numeric component from stored strings (e.g., `4.3ms`).
+  - p99 parsing extracts numeric component from stored strings (e.g., `4.3ms`),
+  - evidence quality is warning-based when leaders are non-constant-rate.
 
 ## Failure modes and diagnostics
 
