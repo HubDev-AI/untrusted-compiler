@@ -18,6 +18,14 @@ if ! grep -q '^## Trend Entry (2026-02-13)$' "$out"; then
   echo "missing trend entry heading" >&2
   exit 1
 fi
+if ! grep -q '^- Run mode: constant-rate$' "$out"; then
+  echo "missing constant-rate run mode line" >&2
+  exit 1
+fi
+if ! grep -q '^- Generators: wrk2$' "$out"; then
+  echo "missing default wrk2 generator summary line" >&2
+  exit 1
+fi
 
 if ! grep -q '| ping | node | 18.20 | 90.00 | pass | pass |' "$out"; then
   echo "missing ping pass row" >&2
@@ -48,6 +56,14 @@ fallback_out="${tmp}/trend-note-wrk.md"
 
 if ! grep -q '| ping | go | 1.75 | n/a | n/a | n/a |' "$fallback_out"; then
   echo "missing non-constant-rate n/a row" >&2
+  exit 1
+fi
+if ! grep -q '^- Run mode: non-constant-rate$' "$fallback_out"; then
+  echo "missing non-constant run mode line" >&2
+  exit 1
+fi
+if ! grep -q '^- Generators: wrk$' "$fallback_out"; then
+  echo "missing wrk generator summary line" >&2
   exit 1
 fi
 

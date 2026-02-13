@@ -77,6 +77,7 @@ benchmark-suite/scripts/update_trend_note_from_ci.sh \
 - Source matrix: `benchmark-suite/results/summaries/compare-matrix.json`
 - Endpoints: `ping,decode`
 - Run mode: local fallback (`wrk`), non-constant-rate
+- Generators: wrk
 
 | Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
 | --- | --- | ---: | ---: | --- | --- |

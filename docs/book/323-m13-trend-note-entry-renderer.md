@@ -20,10 +20,16 @@ Trend-note updates were manual and prone to formatting drift. M13-S2 needs repea
 ## How it works internally
 
 `render_trend_note_entry.sh` reads `compare-matrix.json` leader metrics for selected endpoints and renders markdown:
+- run-mode posture (`constant-rate`, `non-constant-rate`, or `mixed`),
+- leader generator summary (`wrk2`, `wrk`, or mixed set),
 - endpoint leader impl,
 - numeric `p99` and coverage values,
 - absolute-guard pass/fail (`ping` and `decode` defaults),
 - baseline-guard pass/fail when baseline files exist.
+
+Guard behavior for non-constant runs:
+- if leader rows are `constantRate=false`, coverage and guard statuses render as `n/a`,
+- this prevents fallback (`wrk`) runs from being interpreted as target-coverage evidence.
 
 It outputs either:
 - stdout (default), or
@@ -33,7 +39,9 @@ It outputs either:
 
 `test_render_trend_note_entry.sh` validates:
 - heading/date output,
+- run-mode and generator summary lines,
 - per-endpoint rows (pass for `ping`, fail for `decode` fixture),
+- non-constant fixture rendering (`coverage/guards = n/a`),
 - overall absolute/baseline status summaries.
 
 `benchmark-smoke.yml` now runs this test in CI.

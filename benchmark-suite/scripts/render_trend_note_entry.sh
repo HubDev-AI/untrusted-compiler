@@ -99,6 +99,9 @@ abs_fails=0
 base_passes=0
 base_fails=0
 base_na=0
+constant_rate_count=0
+non_constant_rate_count=0
+leader_generators=""
 
 row_lines=()
 
@@ -121,6 +124,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   fi
 
   leader_impl="$(jq -r '.impl // "unknown"' <<<"$leader_json")"
+  leader_generator="$(jq -r 'if has("loadGenerator") then .loadGenerator else "wrk2" end' <<<"$leader_json")"
   p99_ms="$(jq -r '
     (.p99 // "")
     | tostring
@@ -132,6 +136,12 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   target_rps="$(jq -r '.targetRps // 0' <<<"$leader_json")"
   actual_rps="$(jq -r '.requestsPerSec // 0' <<<"$leader_json")"
   constant_rate="$(jq -r 'if has("constantRate") then .constantRate else true end' <<<"$leader_json")"
+  if [ "$constant_rate" = "true" ]; then
+    constant_rate_count=$((constant_rate_count + 1))
+  else
+    non_constant_rate_count=$((non_constant_rate_count + 1))
+  fi
+  leader_generators="${leader_generators}${leader_generator}"$'\n'
   coverage_pct="$(awk -v target="${target_rps}" -v actual="${actual_rps}" 'BEGIN { if (target + 0 > 0) printf "%.2f", (actual / target) * 100; else printf "0.00" }')"
   coverage_display="${coverage_pct}"
   p99_fmt="$(awk -v n="${p99_ms}" 'BEGIN { printf "%.2f", n + 0 }')"
@@ -183,6 +193,17 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   row_lines+=("| ${endpoint} | ${leader_impl} | ${p99_fmt} | ${coverage_display} | ${abs_status} | ${baseline_status} |")
 done
 
+run_mode="mixed"
+if [ "$constant_rate_count" -gt 0 ] && [ "$non_constant_rate_count" -eq 0 ]; then
+  run_mode="constant-rate"
+elif [ "$non_constant_rate_count" -gt 0 ] && [ "$constant_rate_count" -eq 0 ]; then
+  run_mode="non-constant-rate"
+fi
+generators="$(printf "%s" "${leader_generators}" | awk 'NF{print}' | sort -u | paste -sd',' -)"
+if [ -z "$generators" ]; then
+  generators="unknown"
+fi
+
 overall_abs="n/a"
 if [ "$abs_fails" -gt 0 ]; then
   overall_abs="fail"
@@ -204,6 +225,8 @@ fi
   echo
   echo "- Source matrix: \`${matrix_path}\`"
   echo "- Endpoints: \`${endpoints_csv}\`"
+  echo "- Run mode: ${run_mode}"
+  echo "- Generators: ${generators}"
   echo
   echo "| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |"
   echo "| --- | --- | ---: | ---: | --- | --- |"
