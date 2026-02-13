@@ -740,10 +740,27 @@ fn code_actions_from_diagnostics(
         };
 
         let (title, edit) = match code {
-            "E1002" => (
-                Some("Insert validate/sanitize gate for untrusted value"),
-                None,
-            ),
+            "E1002" => {
+                let validate_edit = source.as_ref().and_then(|text| {
+                    extract_range_text_from_diagnostic(diagnostic, text).map(|selected| {
+                        json!({
+                            "changes": {
+                                uri: [
+                                    {
+                                        "range": diagnostic.get("range").cloned().unwrap_or(Value::Null),
+                                        "newText": format!("validate({selected})?"),
+                                    }
+                                ]
+                            }
+                        })
+                    })
+                });
+                if validate_edit.is_some() {
+                    (Some("Wrap with validate(...)?"), validate_edit)
+                } else {
+                    (Some("Insert validate/sanitize gate for untrusted value"), None)
+                }
+            }
             "E1003" | "E1004" | "E1005" => {
                 let redact_edit = source.as_ref().and_then(|text| {
                     extract_range_text_from_diagnostic(diagnostic, text).map(|selected| {
@@ -2801,6 +2818,95 @@ mod tests {
                     .unwrap_or(false)
             }),
             "code actions should include a validate/sanitize quickfix for E1002",
+        );
+    }
+
+    #[test]
+    fn code_action_can_emit_validate_edit_for_untrusted_diagnostic() {
+        let uri = "file:///tmp/lsp_code_action_validate.ai";
+        let source = "fn main() -> Int {\n  input\n}\n";
+        let mut input = Vec::new();
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {},
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "ailang",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": 1, "character": 2},
+                    "end": {"line": 1, "character": 7}
+                },
+                "context": {
+                    "diagnostics": [
+                        {
+                            "code": "E1002",
+                            "message": "Untrusted data cannot flow into sink.",
+                            "range": {
+                                "start": {"line": 1, "character": 2},
+                                "end": {"line": 1, "character": 7}
+                            }
+                        }
+                    ]
+                }
+            }
+        })));
+        input.extend(encode_message(json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+        })));
+
+        let mut reader = BufReader::new(Cursor::new(input));
+        let mut output = Vec::new();
+        run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
+
+        let messages = collect_messages(output);
+        let code_action_response = messages
+            .iter()
+            .find(|msg| msg.get("id") == Some(&json!(17)))
+            .expect("codeAction response should exist");
+        let actions = code_action_response
+            .get("result")
+            .and_then(Value::as_array)
+            .expect("codeAction result should be an array");
+        let validate_action = actions
+            .iter()
+            .find(|action| {
+                action
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(|title| title.contains("validate"))
+                    .unwrap_or(false)
+            })
+            .expect("expected validate quickfix action");
+        assert_eq!(
+            validate_action
+                .get("edit")
+                .and_then(|edit| edit.get("changes"))
+                .and_then(|changes| changes.get(uri))
+                .and_then(Value::as_array)
+                .and_then(|edits| edits.first())
+                .and_then(|edit| edit.get("newText"))
+                .and_then(Value::as_str),
+            Some("validate(input)?"),
+            "validate quickfix should wrap selected diagnostic range text",
         );
     }
 
