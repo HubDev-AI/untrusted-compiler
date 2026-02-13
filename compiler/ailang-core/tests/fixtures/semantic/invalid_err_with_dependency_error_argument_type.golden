@@ -1,0 +1,4 @@
+error[E4001]: err.withDependency error argument must be `StdError`
+  --> invalid_err_with_dependency_error_argument_type.ai:2:22
+  note: found `Int`
+  note: use an error value created via `err.*` constructors

@@ -1,4 +1,5 @@
 fn bad() -> Int {
-  err.withDependency(1, 2, 3, 4);
+  let base = err.validation("VAL.BAD", "bad");
+  err.withDependency(base, 2, 3, 4);
   0
 }

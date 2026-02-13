@@ -349,6 +349,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
     - `name` must be `String` and `max`/`actual` must be numeric.
   - `err.withDependency` argument typing is now hardened:
     - call shape is enforced as `(error, name, operation, retryable)`,
+    - first argument must be `StdError`,
     - dependency/operation are string-typed and retryable is boolean.
   - `err.withCause` argument typing is now hardened:
     - call shape is enforced as `(error, cause)`,
@@ -769,6 +770,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: err.withLimit Argument Hardening".
 - Chapter: "M7 Slice: err.withLimit Error-Argument Hardening".
 - Chapter: "M7 Slice: err.withDependency Argument Hardening".
+- Chapter: "M7 Slice: err.withDependency Error-Argument Hardening".
 - Chapter: "M7 Slice: err.withCause Argument Hardening".
 - Chapter: "M7 Slice: err.internal Message-Argument Hardening".
 - Chapter: "M7 Slice: err.validation Constructor-Argument Hardening".

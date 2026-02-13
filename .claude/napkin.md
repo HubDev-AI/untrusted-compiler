@@ -168,3 +168,4 @@
 - Added `err.withCause` argument hardening so cause chaining enforces `(error, cause)` shape and requires `StdError` for both arguments, with security-tagged diagnostics and dedicated semantic/tag fixtures.
 - Added `err.withPath` base-error argument hardening so the first argument must be `StdError`, with security-tagged diagnostics and dedicated semantic/tag fixture coverage.
 - Added `err.withLimit` base-error argument hardening so the first argument must be `StdError`, with security-tagged diagnostics and dedicated semantic/tag fixture coverage.
+- Added `err.withDependency` base-error argument hardening so the first argument must be `StdError`, with security-tagged diagnostics and dedicated semantic/tag fixture coverage.

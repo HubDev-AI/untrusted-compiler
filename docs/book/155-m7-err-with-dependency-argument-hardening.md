@@ -50,9 +50,8 @@ Example:
 ## Example usage
 
 ```ailang
-fn attach(base: Int) -> Int {
-  err.withDependency(base, "postgres", "query", true);
-  0
+fn attach(base: StdError) -> StdError {
+  err.withDependency(base, "postgres", "query", true)
 }
 ```
 
@@ -60,4 +59,4 @@ fn attach(base: Int) -> Int {
 
 - Tradeoff: placeholder dependency fields accepted in early bridge fixtures are now rejected.
 - Next:
-  - continue strict typing across remaining error-helper constructors (`validation`, `auth`, etc.) if/when bridge signatures are promoted from placeholder-friendly forms.
+  - strict `err.withDependency` error-argument typing is covered in a follow-up slice (`169-m7-err-with-dependency-error-argument-hardening.md`).
