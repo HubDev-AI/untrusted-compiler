@@ -157,3 +157,4 @@
 - Added `err.withDependency` argument hardening so dependency/operation fields are strings and retryable is boolean, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.internal` message hardening so internal-error constructors require a single string message argument, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.validation` constructor hardening so validation error code/message arguments are string-typed, with tagged diagnostics and aligned error-builder integration fixtures.
+- Added `err.auth` constructor hardening so auth error code/message are string-typed and status is numeric, with tagged diagnostics and aligned error-builder integration fixtures.

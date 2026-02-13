@@ -1,0 +1,9 @@
+error[E4001]: err.auth code argument must be `String`
+  --> invalid_err_auth_argument_type.ai:2:12
+  note: found `Int`
+  note: use stable auth error code strings
+
+error[E4001]: err.auth message argument must be `String`
+  --> invalid_err_auth_argument_type.ai:2:15
+  note: found `Int`
+  note: use safe auth message strings

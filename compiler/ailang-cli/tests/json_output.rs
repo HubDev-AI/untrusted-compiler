@@ -1258,7 +1258,7 @@ entry = "src/main.ai"
         project_dir.join("src/main.ai"),
         r#"fn main() -> Int {
   let base = err.validation("VALIDATION.BAD_REQUEST", "invalid input");
-  err.auth(1, 2, 401);
+  err.auth("AUTH.FORBIDDEN", "forbidden", 401);
   err.notFound(1, 2);
   err.conflict(1, 2);
   err.rateLimit(1, 2, 3);
@@ -1286,7 +1286,7 @@ entry = "src/main.ai"
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
     assert!(generated_c.contains("ailang_rt_err_validation(\"VALIDATION.BAD_REQUEST\", \"invalid input\")"));
-    assert!(generated_c.contains("ailang_rt_err_auth(1, 2, 401)"));
+    assert!(generated_c.contains("ailang_rt_err_auth(\"AUTH.FORBIDDEN\", \"forbidden\", 401)"));
     assert!(generated_c.contains("ailang_rt_err_not_found(1, 2)"));
     assert!(generated_c.contains("ailang_rt_err_conflict(1, 2)"));
     assert!(generated_c.contains("ailang_rt_err_rate_limit(1, 2, 3)"));
