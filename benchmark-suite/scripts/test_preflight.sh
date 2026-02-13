@@ -28,4 +28,24 @@ if "$root_dir/scripts/preflight.sh" --impls unknown --dry-run-only >/dev/null 2>
   exit 1
 fi
 
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+for cmd in curl jq wrk cargo cc node go; do
+  cat > "${tmp}/${cmd}" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${tmp}/${cmd}"
+done
+
+fallback_out="$(PATH="${tmp}:/usr/bin:/bin:/usr/sbin:/sbin" "$root_dir/scripts/preflight.sh" --impls sec4,node,go,rust)"
+if ! grep -q '^OK       load generator (wrk fallback) (wrk)$' <<<"$fallback_out"; then
+  echo "preflight missing wrk fallback load-generator check" >&2
+  exit 1
+fi
+if ! grep -q '^preflight passed$' <<<"$fallback_out"; then
+  echo "preflight fallback mode did not pass" >&2
+  exit 1
+fi
+
 echo "preflight test passed"

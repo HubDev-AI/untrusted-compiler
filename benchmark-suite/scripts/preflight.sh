@@ -56,13 +56,26 @@ check_cmd() {
   return 1
 }
 
+check_load_generator() {
+  if command -v wrk2 >/dev/null 2>&1; then
+    echo "OK       load generator (wrk2)"
+    return 0
+  fi
+  if command -v wrk >/dev/null 2>&1; then
+    echo "OK       load generator (wrk fallback) (wrk)"
+    return 0
+  fi
+  echo "MISSING  load generator (wrk2/wrk)"
+  return 1
+}
+
 missing=0
 
 check_cmd "curl" "HTTP probing" || missing=1
 check_cmd "jq" "JSON processing" || missing=1
 
 if [ "$dry_run_only" != "true" ]; then
-  check_cmd "wrk2" "load generator" || missing=1
+  check_load_generator || missing=1
 fi
 
 IFS=',' read -r -a impls <<< "$impls_csv"

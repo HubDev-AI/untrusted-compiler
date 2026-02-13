@@ -54,13 +54,13 @@ Current strict closure result:
 | Gate | Status | Meaning | Evidence |
 | --- | --- | --- | --- |
 | `M9-A/B/C` | PASS | Release gate + CI + promotion verifier chain exist | `scripts/release-alpha-gate.sh`, `.github/workflows/alpha-release-gate.yml`, publish-verifier scripts |
-| `M10-A` | PENDING | No committed live cross-impl matrix evidence for `sec4/go/node/rust` yet | `benchmark-suite/results/summaries/compare-matrix.json` |
-| `M13-A` | PENDING | No live trend-entry block appended in chapter 322 yet | `docs/book/322-m13-first-trend-run-results-note.md` |
+| `M10-A` | PASS | Live cross-impl matrix evidence includes `sec4/go/node/rust` | `benchmark-suite/results/summaries/compare-matrix.json` |
+| `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
 - M9 implementation is functionally complete but release-candidate evidence remains a verification activity.
-- M10 and M13 remain open until live evidence is captured and committed.
+- M10 and M13 closure evidence requirements are now satisfied.
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -537,6 +537,9 @@ Historical implementation bullets below are retained as build history; strict ga
   - naming-lock validation now also enforces benchmark implementation IDs (`sec4`, `go`, `node`, `rust`, `c`) and rejects legacy IDs in benchmark testdata.
 - Benchmark script smoke CI is now in place:
   - `.github/workflows/benchmark-smoke.yml` runs key M10 harness smoke tests (`test_preflight`, `test_compare_matrix`, `test_publish_report`) on pull requests and `main` pushes.
+- Benchmark harness now supports `wrk` fallback when `wrk2` is unavailable:
+  - preflight accepts either `wrk2` (preferred) or `wrk` (fallback),
+  - profile runner emits explicit warning when using `wrk` fallback and omits constant-rate `-R` flag.
 - M10 cross-impl evidence import path is now wired for closure readiness:
   - `.github/workflows/benchmark-cross-impl-evidence.yml` can be manually dispatched to run `sec4/node/go/rust` `ping+decode` and publish artifact `benchmark-cross-impl-evidence`.
   - `benchmark-suite/scripts/update_cross_impl_matrix_from_ci.sh` imports the latest successful artifact (or explicit matrix path), validates required impl coverage (`sec4/go/node/rust`), and updates `benchmark-suite/results/summaries/compare-matrix.json`.

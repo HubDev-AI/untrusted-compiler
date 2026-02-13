@@ -65,3 +65,16 @@ One-command flow (fetch + import):
 benchmark-suite/scripts/update_trend_note_from_ci.sh \
   --repo HubDev-AI/untrusted-compiler
 ```
+
+## Trend Entry (2026-02-13)
+
+- Source matrix: `benchmark-suite/results/summaries/compare-matrix.json`
+- Endpoints: `ping,decode`
+
+| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
+| --- | --- | ---: | ---: | --- | --- |
+| ping | go | 0.00 | 1524.32 | pass | pass |
+| decode | go | 0.00 | 6243.21 | pass | pass |
+
+- Overall absolute guard status: pass
+- Overall baseline guard status: pass

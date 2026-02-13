@@ -13,7 +13,7 @@ And wired Make target:
 
 ## Why it exists
 
-Running wrk2 manually per endpoint is error-prone and inconsistent. The profile runner centralizes target rates, script paths, and output naming so benchmark runs stay reproducible.
+Running load tests manually per endpoint is error-prone and inconsistent. The profile runner centralizes target rates, script paths, and output naming so benchmark runs stay reproducible.
 
 ## How it works internally
 
@@ -21,11 +21,14 @@ Running wrk2 manually per endpoint is error-prone and inconsistent. The profile 
    - `ping` -> `R10000`
    - `decode` -> `R2000`
    - `users-post` -> `R500`
-2. Script executes wrk2 with `--latency`, writes:
+2. Script selects load generator:
+   - prefer `wrk2` (keeps constant-rate `-R` behavior),
+   - fallback to `wrk` when `wrk2` is unavailable (warns and omits `-R`).
+3. Script executes load generator with `--latency`, writes:
    - raw output: `results/raw/<impl>-<endpoint>.txt`
-3. Script then invokes `wrk2_summary.sh` to emit:
+4. Script then invokes `wrk2_summary.sh` to emit:
    - summary output: `results/summaries/<impl>-<endpoint>.json`
-4. `--dry-run` mode prints resolved command/paths without execution.
+5. `--dry-run` mode prints resolved command/paths without execution.
 
 ## Inputs, outputs, and constraints
 
@@ -36,13 +39,13 @@ Running wrk2 manually per endpoint is error-prone and inconsistent. The profile 
 - Outputs:
   - one raw txt + one summary json per profile run.
 - Constraints:
-  - requires wrk2 for real execution.
+  - requires `wrk2` or `wrk` for real execution.
   - service must be running and implement endpoint contract.
 
 ## Failure modes and diagnostics
 
 - unsupported endpoint -> usage error and exit 2.
-- missing wrk2/service connectivity -> command failure from wrk2.
+- missing load generator/service connectivity -> command failure from `wrk2`/`wrk`.
 - summary parse failure -> `wrk2_summary.sh` failure.
 
 ## Example usage

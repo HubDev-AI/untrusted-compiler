@@ -38,31 +38,73 @@ threads="${BENCH_THREADS:-$threads}"
 conns="${BENCH_CONNECTIONS:-$conns}"
 duration="${BENCH_DURATION:-$duration}"
 
+load_bin=""
+load_supports_rate="false"
+
+select_load_generator() {
+  if command -v wrk2 >/dev/null 2>&1; then
+    load_bin="wrk2"
+    load_supports_rate="true"
+    return
+  fi
+  if command -v wrk >/dev/null 2>&1; then
+    load_bin="wrk"
+    load_supports_rate="false"
+    return
+  fi
+  echo "wrk2 or wrk is required but neither was found in PATH" >&2
+  exit 127
+}
+
+select_load_generator
+
+warn_wrk_fallback() {
+  if [ "${load_supports_rate}" != "true" ]; then
+    echo "warning: wrk2 not found; using wrk fallback without constant-rate -R enforcement" >&2
+  fi
+}
+
+build_wrk_cmd() {
+  local script_path="${1:-}"
+  local url="$2"
+  local -a local_cmd
+
+  local_cmd=("${load_bin}" --latency -t"${threads}" -c"${conns}" -d"${duration}")
+  if [ "${load_supports_rate}" = "true" ]; then
+    local_cmd+=(-R"${target}")
+  fi
+  if [ -n "${script_path}" ]; then
+    local_cmd+=(-s "${script_path}")
+  fi
+  local_cmd+=("${url}")
+  cmd=("${local_cmd[@]}")
+}
+
 declare -a cmd
 case "$endpoint" in
   ping)
     target=10000
     target="${BENCH_TARGET_PING:-$target}"
     target="${BENCH_TARGET:-$target}"
-    cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" "${base_url}/ping")
+    build_wrk_cmd "" "${base_url}/ping"
     ;;
   decode)
     target=2000
     target="${BENCH_TARGET_DECODE:-$target}"
     target="${BENCH_TARGET:-$target}"
-    cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/post_decode.lua" "$base_url")
+    build_wrk_cmd "${root_dir}/load/wrk2/post_decode.lua" "${base_url}"
     ;;
   users-post)
     target=500
     target="${BENCH_TARGET_USERS_POST:-$target}"
     target="${BENCH_TARGET:-$target}"
-    cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/post_users.lua" "$base_url")
+    build_wrk_cmd "${root_dir}/load/wrk2/post_users.lua" "${base_url}"
     ;;
   users-get)
     target=2000
     target="${BENCH_TARGET_USERS_GET:-$target}"
     target="${BENCH_TARGET:-$target}"
-    cmd=(wrk2 --latency -t"$threads" -c"$conns" -d"$duration" -R"$target" -s "${root_dir}/load/wrk2/get_user.lua" "$base_url")
+    build_wrk_cmd "${root_dir}/load/wrk2/get_user.lua" "${base_url}"
     ;;
   *)
     echo "unsupported endpoint: $endpoint" >&2
@@ -75,6 +117,7 @@ echo "profile impl=${impl} endpoint=${endpoint} targetRps=${target}"
 echo "command: ${cmd[*]}"
 echo "raw: $raw"
 echo "summary: $summary"
+warn_wrk_fallback
 
 if [ "$dry_run" = "true" ]; then
   if [ "$endpoint" = "users-get" ] && [ -f "$payload_path" ]; then
@@ -84,11 +127,6 @@ if [ "$dry_run" = "true" ]; then
     fi
   fi
   exit 0
-fi
-
-if ! command -v wrk2 >/dev/null 2>&1; then
-  echo "wrk2 is required but was not found in PATH" >&2
-  exit 127
 fi
 
 if [ "$endpoint" = "users-get" ]; then

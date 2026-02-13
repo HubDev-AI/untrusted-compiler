@@ -46,8 +46,8 @@ scripts/test-check-milestone-closure.sh
 ## Current result (2026-02-13)
 
 - M9 gate checks: PASS
-- M10 live cross-impl evidence: PENDING
-- M13 live trend-note evidence: PENDING
+- M10 live cross-impl evidence: PASS
+- M13 live trend-note evidence: PASS
 
 ## Inputs, outputs, and constraints
 
@@ -63,4 +63,4 @@ scripts/test-check-milestone-closure.sh
 - Tradeoff:
   - strict checks intentionally focus on late-stage closure evidence and do not re-audit all early milestones.
 - Next:
-  - capture first live cross-impl matrix artifact and first live trend entry to close M10-A and M13-A.
+  - keep closure evidence refreshed via `scripts/refresh-closure-evidence-from-ci.sh` after new benchmark or trend runs.

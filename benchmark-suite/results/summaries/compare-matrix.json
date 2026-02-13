@@ -1,0 +1,85 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "decode",
+      "compared": [
+        {
+          "impl": "go",
+          "endpoint": "decode",
+          "targetRps": 2000,
+          "requestsPerSec": 124864.23,
+          "p99": ""
+        },
+        {
+          "impl": "rust",
+          "endpoint": "decode",
+          "targetRps": 2000,
+          "requestsPerSec": 89323.38,
+          "p99": ""
+        },
+        {
+          "impl": "node",
+          "endpoint": "decode",
+          "targetRps": 2000,
+          "requestsPerSec": 69374.92,
+          "p99": ""
+        },
+        {
+          "impl": "sec4",
+          "endpoint": "decode",
+          "targetRps": 2000,
+          "requestsPerSec": 33135.75,
+          "p99": ""
+        }
+      ],
+      "leader": {
+        "impl": "go",
+        "endpoint": "decode",
+        "targetRps": 2000,
+        "requestsPerSec": 124864.23,
+        "p99": ""
+      }
+    },
+    {
+      "endpoint": "ping",
+      "compared": [
+        {
+          "impl": "go",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 152431.97,
+          "p99": ""
+        },
+        {
+          "impl": "rust",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 144862.91,
+          "p99": ""
+        },
+        {
+          "impl": "node",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 81435.06,
+          "p99": ""
+        },
+        {
+          "impl": "sec4",
+          "endpoint": "ping",
+          "targetRps": 10000,
+          "requestsPerSec": 33295.78,
+          "p99": ""
+        }
+      ],
+      "leader": {
+        "impl": "go",
+        "endpoint": "ping",
+        "targetRps": 10000,
+        "requestsPerSec": 152431.97,
+        "p99": ""
+      }
+    }
+  ]
+}

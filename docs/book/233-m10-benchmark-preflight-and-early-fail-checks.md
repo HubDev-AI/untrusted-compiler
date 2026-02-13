@@ -13,7 +13,7 @@ Updated:
 - `benchmark-suite/README.md`
 
 Key changes:
-- added a dedicated preflight script for benchmark dependencies (`curl`, `jq`, implementation toolchains, and `wrk2` for real runs),
+- added a dedicated preflight script for benchmark dependencies (`curl`, `jq`, implementation toolchains, and load generator detection for real runs: `wrk2` preferred, `wrk` fallback),
 - integrated preflight into orchestrator startup (`run_comparison_matrix.sh`) before any service/process work,
 - added support for `--impls=...` argument style in preflight/orchestrator,
 - added explicit readiness progress line in orchestrator to improve run visibility,
@@ -21,15 +21,15 @@ Key changes:
 
 ## Why it exists
 
-When tool dependencies were missing (most often `wrk2`), runs could appear stalled while startup/readiness checks were still in progress. This slice makes dependency failures explicit at the beginning of the run and gives immediate operator feedback.
+When tool dependencies were missing (most often `wrk2`), runs could appear stalled while startup/readiness checks were still in progress. This slice makes dependency failures explicit at the beginning of the run, while allowing a controlled fallback to `wrk` where `wrk2` is unavailable.
 
 ## How it works internally
 
 1. `preflight.sh` parses implementation list and checks required commands.
-2. In dry-run-only mode, it skips `wrk2` requirement.
+2. In dry-run-only mode, it skips load-generator requirement.
 3. `run_comparison_matrix.sh` runs preflight first:
    - dry-run: `preflight --dry-run-only`
-   - real run: full preflight (includes `wrk2`)
+   - real run: full preflight (requires `wrk2` or `wrk`)
 4. If preflight fails, orchestrator exits before starting benchmark services.
 5. Orchestrator prints a readiness wait line per implementation (`waiting for readiness ...`) before profile execution.
 
@@ -42,7 +42,9 @@ When tool dependencies were missing (most often `wrk2`), runs could appear stall
   - deterministic preflight pass/fail lines,
   - early exit on missing tools.
 - Constraints:
-  - real benchmark matrix still requires local installation of all selected implementation toolchains plus `wrk2`.
+  - real benchmark matrix requires local installation of all selected implementation toolchains plus:
+    - `wrk2` for constant-rate (`-R`) runs, or
+    - `wrk` fallback (no constant-rate enforcement).
 
 ## Failure modes and diagnostics
 
@@ -78,5 +80,5 @@ make -C benchmark-suite bench-matrix-dry IMPLS=sec4,node
 - Tradeoff:
   - dry-run now checks local toolchains for selected implementations, which may be stricter than command-plan-only workflows.
 - Next:
-  - optionally add per-platform install hints for missing tools (`wrk2`, `go`, `node`, `cargo`),
+  - optionally add per-platform install hints for missing tools (`wrk2`, `wrk`, `go`, `node`, `cargo`),
   - include preflight summary in generated benchmark markdown report metadata.
