@@ -1505,6 +1505,7 @@ M13-S1 go/no-go note:
 - Add replay stub-registry guard regression tests for malformed/missing/duplicate stubs.
 - Wire replay stub-registry contract test into naming-lock CI and closure-audit gate checks.
 - Extend `sec4 replay` command with optional `--stubs` contract validation for deterministic mock-mode bootstrap.
+- Add replay effects-mode guard semantics (`--effects deny|mock|allow`) with deterministic mode-policy checks.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1523,6 +1524,7 @@ M13-S1 go/no-go note:
 - [x] Wired naming-lock CI enforcement for replay stub-registry test.
 - [x] Added strict closure gate `M14-C` for replay stub-registry CI enforcement.
 - [x] Extended `sec4 replay` with optional `--stubs` contract validation and duplicate-signature detection.
+- [x] Extended `sec4 replay` with `--effects deny|mock|allow` mode checks (`mock` requires stubs, `allow` warns).
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1534,6 +1536,7 @@ M13-S1 go/no-go note:
 - Closure audit reports replay-capture gate status alongside existing milestone gates.
 - CLI contract guard fails if top-level `sec4 replay` command wiring is removed.
 - `sec4 replay --stubs <path>` fails deterministically on invalid stub-registry contract payloads.
+- `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1541,6 +1544,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: sec4 Replay CLI Command Contract Hardening".
 - Chapter: "M14 Slice: Replay Stub Registry Contract Bootstrap".
 - Chapter: "M14 Slice: Replay CLI Stub Registry Validation".
+- Chapter: "M14 Slice: Replay CLI Effects-Mode Guardrails".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

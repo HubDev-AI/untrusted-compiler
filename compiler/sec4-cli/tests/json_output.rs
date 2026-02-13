@@ -716,6 +716,80 @@ fn replay_check_fails_on_duplicate_stub_request_signatures() {
 }
 
 #[test]
+fn replay_check_mock_mode_requires_stub_registry() {
+    let dir = temp_dir("sec4-replay-mock-requires-stubs");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--effects",
+        "mock",
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail in mock mode without stubs"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("mock effects mode requires --stubs"),
+        "stderr should include mock-mode stub requirement:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_allow_mode_emits_warning() {
+    let dir = temp_dir("sec4-replay-allow-warning");
+    let capture = dir.join("capture.json");
+    write_capture_file(&capture, "pol_A", "cpl_A", "rt_A");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--effects",
+        "allow",
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        output.status.success(),
+        "replay check should pass in allow mode for contract checks"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("replay effects mode is allow"),
+        "stderr should include allow-mode warning:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn explain_cors_wildcard_finding_prints_targeted_guidance() {
     let output = run_cli(&["explain", "CORS_CREDENTIALS_WITH_WILDCARD"]);
     assert!(

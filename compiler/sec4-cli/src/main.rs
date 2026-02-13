@@ -71,6 +71,8 @@ enum Commands {
         capture: PathBuf,
         #[arg(long)]
         stubs: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = ReplayEffectsMode::Deny)]
+        effects: ReplayEffectsMode,
         #[arg(long)]
         policy_hash: String,
         #[arg(long)]
@@ -133,6 +135,13 @@ enum ExplainOutputFormat {
     Json,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum ReplayEffectsMode {
+    Deny,
+    Mock,
+    Allow,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -166,6 +175,7 @@ fn main() {
         Commands::Replay {
             capture,
             stubs,
+            effects,
             policy_hash,
             compiler_hash,
             runtime_hash,
@@ -176,6 +186,7 @@ fn main() {
             &compiler_hash,
             &runtime_hash,
             allow_policy_mismatch,
+            effects,
             stubs.as_deref(),
         ),
         Commands::Explain { code, format } => cmd_explain(&code, format),
@@ -205,6 +216,7 @@ fn cmd_replay_check(
     expected_compiler_hash: &str,
     expected_runtime_hash: &str,
     allow_policy_mismatch: bool,
+    effects_mode: ReplayEffectsMode,
     stubs_path: Option<&Path>,
 ) -> Result<(), i32> {
     let capture_bytes = match fs::read(capture_path) {
@@ -266,6 +278,17 @@ fn cmd_replay_check(
             );
             return Err(1);
         }
+    }
+
+    if effects_mode == ReplayEffectsMode::Mock && stubs_path.is_none() {
+        eprintln!("replay compatibility failed: mock effects mode requires --stubs <path>");
+        return Err(1);
+    }
+
+    if effects_mode == ReplayEffectsMode::Allow {
+        eprintln!(
+            "warning: replay effects mode is allow; use deny/mock outside isolated environments"
+        );
     }
 
     if let Some(stubs_path) = stubs_path {
