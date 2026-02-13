@@ -70,11 +70,20 @@ Top-level keys:
 
 Each `compared[]` / `leader` row:
 - `impl`
+- `endpoint`
 - `targetRps`
 - `requestsPerSec`
 - `p99`
 - `loadGenerator`
 - `constantRate`
+
+Contract invariants:
+- each row `endpoint` must match its endpoint-group `endpoint`,
+- `leader` must match one row in the same `compared[]` list.
+
+Contract invariants:
+- all row `endpoint` values must match top-level `endpoint`,
+- `leader` must match one row in `compared[]`.
 
 ### `compare-matrix.json`
 

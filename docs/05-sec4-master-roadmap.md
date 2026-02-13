@@ -565,7 +565,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - compare-matrix sample validation now enforces row-level keys (`loadGenerator`, `constantRate`) for both `compared[]` and `leader`.
 - Benchmark schema validation is now runnable as a standalone command:
   - `benchmark-suite/scripts/validate_contract_schema.sh` validates schema assets against benchmark sample artifacts,
-  - standalone validator now checks compare-matrix row shape (`loadGenerator` + `constantRate`) for `compared[]` and `leader`,
+  - standalone validator now checks compare-matrix and compare-report row contracts (`loadGenerator` + `constantRate` + endpoint alignment + leader membership),
   - trend compare-matrix fixtures are now schema-validated with full `compared[]` + `leader` row-shape checks,
   - benchmark smoke now includes `test_compare_reports_contract.sh` to enforce runtime `compare_reports.sh` output shape against compare-report contract expectations,
   - `.github/workflows/benchmark-smoke.yml` now runs `test_validate_contract_schema.sh` before other smoke scripts.

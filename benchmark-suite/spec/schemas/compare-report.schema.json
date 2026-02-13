@@ -22,6 +22,7 @@
       "type": "object",
       "required": [
         "impl",
+        "endpoint",
         "targetRps",
         "requestsPerSec",
         "p99",
@@ -30,6 +31,7 @@
       ],
       "properties": {
         "impl": { "type": "string" },
+        "endpoint": { "type": "string" },
         "targetRps": { "type": "number" },
         "requestsPerSec": { "type": "number" },
         "p99": { "type": "string" },

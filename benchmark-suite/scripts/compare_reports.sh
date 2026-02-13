@@ -36,12 +36,13 @@ for report in "${report_files[@]}"; do
 
   row="$(jq -n \
     --arg impl "$impl" \
+    --arg endpoint "$endpoint" \
     --arg p99 "$p99" \
     --arg load_generator "$load_generator" \
     --argjson constant_rate "$constant_rate" \
     --argjson reqps "$reqps" \
     --argjson target "$target_rps" \
-    '{impl:$impl,targetRps:$target,requestsPerSec:$reqps,p99:$p99,loadGenerator:$load_generator,constantRate:$constant_rate}')"
+    '{impl:$impl,endpoint:$endpoint,targetRps:$target,requestsPerSec:$reqps,p99:$p99,loadGenerator:$load_generator,constantRate:$constant_rate}')"
   rows="$(jq -c --argjson row "$row" '. + [$row]' <<<"$rows")"
 done
 

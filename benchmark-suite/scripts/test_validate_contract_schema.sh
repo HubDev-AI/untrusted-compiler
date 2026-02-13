@@ -61,4 +61,22 @@ if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp3/samples" --schem
   exit 1
 fi
 
+tmp4="$(mktemp -d)"
+cleanup4() {
+  rm -rf "$tmp4"
+}
+trap 'cleanup; cleanup2; cleanup3; cleanup4' EXIT
+
+mkdir -p "$tmp4/samples" "$tmp4/schemas"
+cp "$root_dir"/testdata/sample-*.json "$tmp4/samples/"
+cp "$root_dir"/../spec/schemas/*.schema.json "$tmp4/schemas/"
+
+jq '.leader.impl = "rust"' "$tmp4/samples/sample-compare-report-ping.json" > "$tmp4/samples/sample-compare-report-ping.json.tmp"
+mv "$tmp4/samples/sample-compare-report-ping.json.tmp" "$tmp4/samples/sample-compare-report-ping.json"
+
+if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp4/samples" --schema-dir "$tmp4/schemas" >/dev/null 2>&1; then
+  echo "expected schema validator to fail when compare-report leader is not present in compared rows" >&2
+  exit 1
+fi
+
 echo "validate_contract_schema test passed"

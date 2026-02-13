@@ -24,6 +24,7 @@ M10 requires cross-language comparison outputs, not just isolated per-impl runs.
 2. Extracts the requested endpoint summary from each report.
 3. Builds comparison rows:
    - `impl`
+   - `endpoint` (requested endpoint)
    - `targetRps`
    - `requestsPerSec`
    - `p99`
@@ -34,7 +35,7 @@ M10 requires cross-language comparison outputs, not just isolated per-impl runs.
    - then `requestsPerSec` descending.
 5. Emits:
    - `compared` array,
-   - `leader` row.
+   - `leader` row (must match one `compared` row).
 
 ## Inputs, outputs, and constraints
 

@@ -36,6 +36,14 @@ if ! jq -e '.leader.constantRate == true and .leader.loadGenerator == "wrk2"' "$
   echo "expected default quality metadata on leader row" >&2
   exit 1
 fi
+if ! jq -e '. as $doc | ($doc.compared | all(.[]; .endpoint == "ping")) and ($doc.leader.endpoint == "ping")' "$out" >/dev/null; then
+  echo "expected compare-reports rows to carry requested endpoint" >&2
+  exit 1
+fi
+if ! jq -e '. as $doc | any($doc.compared[]; .impl == $doc.leader.impl and .endpoint == $doc.leader.endpoint and .targetRps == $doc.leader.targetRps and .requestsPerSec == $doc.leader.requestsPerSec and .p99 == $doc.leader.p99 and .loadGenerator == $doc.leader.loadGenerator and .constantRate == $doc.leader.constantRate)' "$out" >/dev/null; then
+  echo "expected leader row to be present in compared rows" >&2
+  exit 1
+fi
 
 quality_dir="$tmp/quality"
 mkdir -p "$quality_dir"

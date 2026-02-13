@@ -102,16 +102,27 @@ validate_compare_matrix_rows() {
       and (.p99 | type == "string")
       and (.loadGenerator | type == "string")
       and (.constantRate | type == "boolean");
+    def row_eq(a; b):
+      a.impl == b.impl
+      and a.endpoint == b.endpoint
+      and a.targetRps == b.targetRps
+      and a.requestsPerSec == b.requestsPerSec
+      and a.p99 == b.p99
+      and a.loadGenerator == b.loadGenerator
+      and a.constantRate == b.constantRate;
 
     (.endpoints | type == "array" and length > 0)
     and all(.endpoints[];
-      (.endpoint | type == "string")
-      and (.compared | type == "array" and length > 0)
-      and (all(.compared[]; row_ok))
-      and (.leader | row_ok)
+      . as $entry
+      | ($entry.endpoint | type == "string")
+      and ($entry.compared | type == "array" and length > 0)
+      and (all($entry.compared[]; row_ok and (.endpoint == $entry.endpoint)))
+      and ($entry.leader | row_ok)
+      and ($entry.leader.endpoint == $entry.endpoint)
+      and (any($entry.compared[]; row_eq(.; $entry.leader)))
     )
   ' "${sample_path}" >/dev/null; then
-    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    echo "error: ${label} row contract mismatch (shape, endpoint alignment, or leader membership): ${sample_path}" >&2
     return 1
   fi
 }
@@ -124,18 +135,30 @@ validate_compare_report_rows() {
     def row_ok:
       (type == "object")
       and (.impl | type == "string")
+      and (.endpoint | type == "string")
       and (.targetRps | type == "number")
       and (.requestsPerSec | type == "number")
       and (.p99 | type == "string")
       and (.loadGenerator | type == "string")
       and (.constantRate | type == "boolean");
+    def row_eq(a; b):
+      a.impl == b.impl
+      and a.endpoint == b.endpoint
+      and a.targetRps == b.targetRps
+      and a.requestsPerSec == b.requestsPerSec
+      and a.p99 == b.p99
+      and a.loadGenerator == b.loadGenerator
+      and a.constantRate == b.constantRate;
 
-    (.endpoint | type == "string")
-    and (.compared | type == "array" and length > 0)
-    and (all(.compared[]; row_ok))
-    and (.leader | row_ok)
+    . as $report
+    | ($report.endpoint | type == "string")
+    and ($report.compared | type == "array" and length > 0)
+    and (all($report.compared[]; row_ok and (.endpoint == $report.endpoint)))
+    and ($report.leader | row_ok)
+    and ($report.leader.endpoint == $report.endpoint)
+    and (any($report.compared[]; row_eq(.; $report.leader)))
   ' "${sample_path}" >/dev/null; then
-    echo "error: ${label} row shape mismatch (requires compared/leader rows with loadGenerator+constantRate): ${sample_path}" >&2
+    echo "error: ${label} row contract mismatch (shape, endpoint alignment, or leader membership): ${sample_path}" >&2
     return 1
   fi
 }
