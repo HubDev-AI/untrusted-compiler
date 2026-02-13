@@ -43,6 +43,18 @@ Current status:
 - pending: trend retention/baseline policy,
 - pending: scoped live workflow expansion to one additional endpoint after stability window.
 
+## Second execution slice (M13-S2 candidate)
+
+Scope:
+- codify first trend-run observations in book docs,
+- document decode-threshold tuning rules tied to trend outcomes,
+- define external publish handoff contract notes for release artifacts.
+
+Acceptance criteria:
+- trend-run results note chapter exists with explicit observations and action items,
+- decode threshold tuning rubric is documented and linked from trend workflow docs,
+- publish handoff notes chapter defines required manifest/artifact bindings for downstream tooling.
+
 ## Exit criteria
 
 M13 is complete when:

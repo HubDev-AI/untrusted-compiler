@@ -542,6 +542,9 @@ Roadmap impact:
   - per-endpoint threshold checks now apply with endpoint-specific baseline policies.
 - M13 promotion workflow documentation now includes a dedicated operator runbook:
   - `docs/book/313-m13-release-promotion-playbook.md` defines release gate, verifier, naming-lock, and evidence capture steps.
+- M13-S2 candidate scope is now locked:
+  - trend-run result codification and threshold tuning workflow documentation,
+  - release publish handoff contract notes for external tooling integration.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1279,6 +1282,19 @@ M13-S1 go/no-go note:
 - Status: `GO` for ongoing scheduled execution and trend collection.
 - Conditions to revisit: recurring threshold failures in two consecutive scheduled runs, or release promotion verifier drift in alpha workflow.
 
+### M13-S2 candidate scope (locked)
+- Trend result codification:
+  - publish first trend-run result note with observed endpoint signals and threshold posture summary.
+- Threshold tuning workflow:
+  - define deterministic rules for when to tune decode threshold/baseline values.
+- External publish handoff contract:
+  - define required release-manifest fields and artifact bindings for downstream publish tooling consumers.
+
+### M13-S2 acceptance criteria
+- Chapter exists with first trend-run result note and explicit observations.
+- Decode threshold tuning rubric is documented and linked from benchmark trend docs.
+- Release publish handoff notes chapter defines required inputs/outputs and operator checklist.
+
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
 - Scheduled benchmark signals are available and trend-comparable over time.
@@ -1290,6 +1306,7 @@ M13-S1 go/no-go note:
 - Chapter: "Release Promotion Playbook".
 - Chapter: "Scheduled Benchmark Trend Workflow".
 - Chapter: "M13 Slice: Benchmark Regression Threshold Guard".
+- Chapter: "M13-S2 Candidate Scope and Delivery Contract".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -1381,10 +1398,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Define M13-S2 candidate scope after first scheduled trend run outcomes are available.
-2. Review and tune decode endpoint thresholds after first scheduled trend runs.
-3. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
-4. Add release publish pipeline handoff notes for external tooling integration.
+1. Review and tune decode endpoint thresholds after first scheduled trend runs.
+2. Add first trend-run results note (observations + threshold tuning decisions) to the M13 chapter set.
+3. Add release publish pipeline handoff notes for external tooling integration.
 
 ---
 
