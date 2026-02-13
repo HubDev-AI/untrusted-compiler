@@ -65,6 +65,8 @@ Current strict closure result:
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M10-C` | PASS | Cross-impl evidence workflow keeps scoped run, strict quality gate, and artifact upload contract | `.github/workflows/benchmark-cross-impl-evidence.yml` |
 | `M10-D` | PASS | Naming-lock CI enforces cross-impl workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M11-A` | PASS | Naming-lock CI enforces Zed grammar pin contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M12-A` | PASS | Naming-lock CI enforces `sec4` CLI command contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
 | `M13-B` | PASS | Trend workflow keeps strict quality + regression guard steps | `.github/workflows/benchmark-trend.yml` |
 | `M13-C` | PASS | Trend workflow uploads benchmark artifacts for trend-note ingestion | `.github/workflows/benchmark-trend.yml` |
@@ -660,6 +662,8 @@ Historical implementation bullets below are retained as build history; strict ga
   - roadmap closure table gate IDs are now CI-aligned to executable closure gates via `scripts/test-roadmap-closure-gate-alignment.sh` (run in `naming-lock.yml`).
   - closure now verifies release-contract smoke wiring (`M9-E`), naming-lock CI enforcement of its contract + guard tests (`M9-F`), alpha-release workflow contract wiring (`M9-G`), and naming-lock CI enforcement of alpha contract + guard tests (`M9-H`).
   - closure now verifies naming-lock CI enforcement of cross-impl workflow contract + guard tests (`M10-D`).
+  - closure now verifies naming-lock CI enforcement of zed grammar pin contract + guard tests (`M11-A`).
+  - closure now verifies naming-lock CI enforcement of sec4 CLI command contract + guard tests (`M12-A`).
   - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure + cross-impl/trend contract guard tests plus strict closure audit wiring (`M13-D`).
@@ -1322,6 +1326,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Symbol-ID Callsite Binding for References and Rename".
 - Chapter: "M11 Slice: Workspace Dependency Invalidation for Cached Unopened Files".
 - Chapter: "M11 Slice: AST-Backed Effect Quickfix Rewrites".
+- Chapter: "M11 Slice: Zed Grammar Pin CI Closure Gate".
 
 ## M12 - Naming Alignment and Ecosystem Lock
 ### Trigger condition

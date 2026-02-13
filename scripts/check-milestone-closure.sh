@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M13).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13).
 USAGE
 }
 
@@ -133,6 +133,8 @@ bool_has_cross_impl_matrix=0
 bool_has_cross_impl_matrix_contract=0
 bool_has_cross_impl_workflow_contract=0
 bool_has_cross_impl_ci_guard=0
+bool_has_zed_grammar_pin_ci_guard=0
+bool_has_cli_command_ci_guard=0
 bool_has_live_trend_entry=0
 bool_has_trend_workflow_guards=0
 bool_has_trend_workflow_artifact_upload=0
@@ -203,6 +205,18 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-benchmark-trend-workflow-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-benchmark-trend-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_trend_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-zed-grammar-pin.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-zed-grammar-pin-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_zed_grammar_pin_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-sec4-cli-command-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-sec4-cli-command-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_cli_command_ci_guard=1
 fi
 
 if [ -f "${matrix_path}" ]; then
@@ -345,6 +359,8 @@ emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoi
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + artifact upload" "${bool_has_cross_impl_workflow_contract}" "${cross_impl_workflow_path}"
 emit_check "M10-D" "naming-lock CI enforces cross-impl workflow contract + guard tests" "${bool_has_cross_impl_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M11-A" "naming-lock CI enforces zed grammar pin contract + guard tests" "${bool_has_zed_grammar_pin_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M12-A" "naming-lock CI enforces sec4 CLI command contract + guard tests" "${bool_has_cli_command_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"

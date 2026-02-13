@@ -9,7 +9,7 @@ Updated:
 - `scripts/test-check-milestone-closure.sh`
 - `docs/05-sec4-master-roadmap.md`
 
-This adds an evidence-based closure checker for the highest-risk late milestones (M9/M10/M13).
+This adds an evidence-based closure checker for the highest-risk late milestones (M9/M10/M11/M12/M13).
 
 ## Why it exists
 
@@ -64,7 +64,15 @@ Implementation progress and milestone closure are not the same. This checklist p
   - `scripts/test-benchmark-cross-impl-workflow-contract.sh`
   - `scripts/test-benchmark-cross-impl-workflow-contract-guard.sh`
 
-3. M13 live trend evidence
+3. M11 and M12 CI guard enforcement
+- naming-lock CI keeps Zed grammar pin contract guard:
+  - `scripts/test-zed-grammar-pin.sh`
+  - `scripts/test-zed-grammar-pin-guard.sh`
+- naming-lock CI keeps sec4 CLI command contract guard:
+  - `scripts/test-sec4-cli-command-contract.sh`
+  - `scripts/test-sec4-cli-command-contract-guard.sh`
+
+4. M13 live trend evidence
 - trend-note chapter contains at least one:
   - `## Trend Entry (YYYY-MM-DD)`
 - scheduled trend workflow keeps hard guards:
@@ -100,6 +108,8 @@ scripts/test-check-milestone-closure.sh
 
 - M9 gate checks: PASS
 - M10 live cross-impl evidence and row-contract alignment: PASS
+- M11 Zed grammar pin CI contract+guard enforcement: PASS
+- M12 sec4 CLI command CI contract+guard enforcement: PASS
 - M13 live trend-note evidence, trend-workflow guards, and artifact-upload contract: PASS
 
 ## Inputs, outputs, and constraints

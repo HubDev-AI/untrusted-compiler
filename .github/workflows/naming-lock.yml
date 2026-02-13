@@ -46,6 +46,12 @@ jobs:
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
 
+      - name: Validate zed grammar pin contract
+        run: scripts/test-zed-grammar-pin.sh
+
+      - name: Validate zed grammar pin guard behavior
+        run: scripts/test-zed-grammar-pin-guard.sh
+
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
 

@@ -5,6 +5,27 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTENSION_TOML="${ROOT_DIR}/zed-extension/extension.toml"
 PLACEHOLDER="TODO_SET_COMMIT_SHA"
 
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --extension)
+      if [ "$#" -lt 2 ]; then
+        echo "missing value for --extension" >&2
+        exit 2
+      fi
+      EXTENSION_TOML="$2"
+      shift 2
+      ;;
+    --extension=*)
+      EXTENSION_TOML="${1#--extension=}"
+      shift
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
 if [[ ! -f "${EXTENSION_TOML}" ]]; then
   echo "error: missing ${EXTENSION_TOML}" >&2
   exit 1
