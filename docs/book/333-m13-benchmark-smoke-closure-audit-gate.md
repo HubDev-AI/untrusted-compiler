@@ -23,7 +23,10 @@ That left a gap where:
 
 2. Added workflow contract test:
 - `scripts/test-benchmark-smoke-closure-gate.sh`
-- Asserts benchmark-smoke workflow keeps closure-audit command with strict flag.
+- Asserts benchmark-smoke workflow keeps:
+  - closure gate contract test command (`scripts/test-benchmark-smoke-closure-gate.sh`)
+  - closure fixture test command (`scripts/test-check-milestone-closure.sh`)
+  - strict closure-audit command (`scripts/check-milestone-closure.sh --fail-on-pending`).
 
 ## Validation
 

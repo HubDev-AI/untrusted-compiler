@@ -59,6 +59,10 @@ Implementation progress and milestone closure are not the same. This checklist p
   - uses `actions/upload-artifact@v4`
   - artifact name follows `benchmark-trend-*`
   - artifact path includes `benchmark-suite/results`
+- benchmark-smoke workflow keeps closure gate contract:
+  - runs `scripts/test-benchmark-smoke-closure-gate.sh`
+  - runs `scripts/test-check-milestone-closure.sh`
+  - runs `scripts/check-milestone-closure.sh --fail-on-pending`
 
 ## Example usage
 

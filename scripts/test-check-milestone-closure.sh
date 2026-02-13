@@ -53,6 +53,25 @@ jobs:
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
 YAML
+cat > "$tmp/.github/workflows/benchmark-smoke.yml" <<'YAML'
+name: Benchmark Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  benchmark-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run benchmark script smoke tests
+        run: |
+          scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-check-milestone-closure.sh
+          scripts/check-milestone-closure.sh --fail-on-pending
+YAML
 
 cat > "$tmp/.github/workflows/benchmark-trend.yml" <<'YAML'
 name: Benchmark Trend
@@ -364,6 +383,50 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate release-contract-smoke workflow contract
         run: scripts/test-release-contract-smoke-workflow-contract.sh
+YAML
+
+cat > "$tmp/.github/workflows/benchmark-smoke.yml" <<'YAML'
+name: Benchmark Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  benchmark-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run benchmark script smoke tests
+        run: |
+          scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/check-milestone-closure.sh --fail-on-pending
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when benchmark-smoke workflow misses closure fixture test coverage" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/benchmark-smoke.yml" <<'YAML'
+name: Benchmark Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  benchmark-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run benchmark script smoke tests
+        run: |
+          scripts/test-benchmark-smoke-closure-gate.sh
+          scripts/test-check-milestone-closure.sh
+          scripts/check-milestone-closure.sh --fail-on-pending
 YAML
 
 cat > "$tmp/.github/workflows/benchmark-cross-impl-evidence.yml" <<'YAML'

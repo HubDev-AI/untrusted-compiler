@@ -9,6 +9,11 @@ if ! grep -q 'scripts/check-milestone-closure.sh' "${workflow_path}"; then
   exit 1
 fi
 
+if ! grep -q 'scripts/test-check-milestone-closure.sh' "${workflow_path}"; then
+  echo "missing closure fixture test command in ${workflow_path}" >&2
+  exit 1
+fi
+
 if ! grep -q -- '--fail-on-pending' "${workflow_path}"; then
   echo "missing strict closure flag (--fail-on-pending) in ${workflow_path}" >&2
   exit 1
