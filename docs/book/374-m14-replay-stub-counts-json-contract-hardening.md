@@ -19,6 +19,7 @@ Updated:
 
 1. Contract test now requires `stubCounts`
 - Replay JSON contract checker now fails if the `stubCounts` key is absent.
+- Checker also keeps core replay payload keys locked (`ok`, `capture`, `stubs`, hash-match flags, `allowPolicyMismatch`, `effectsMode`, `warnings`).
 
 2. Guard fixtures now test `stubCounts` drift
 - Passing fixtures include `stubCounts`.
