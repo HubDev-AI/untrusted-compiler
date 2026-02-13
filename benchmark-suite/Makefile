@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry artifact-manifest summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= ailang
 IMPLS ?= ailang,node,go,rust
@@ -8,6 +8,7 @@ ENDPOINT ?= ping
 STEP_SUMMARY ?= results/summaries/$(IMPL)-$(ENDPOINT)-step.json
 STEP_ANALYSIS ?= results/summaries/$(IMPL)-$(ENDPOINT)-step-analysis.json
 STEP_MATRIX ?= results/summaries/step-matrix.json
+ARTIFACT_MANIFEST ?= results/artifact-manifest.json
 
 help:
 	@echo "Targets:"
@@ -31,6 +32,7 @@ help:
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
+	@echo "  artifact-manifest Build deterministic artifact manifest from results/"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
 	@echo "  report       Bundle summaries + env into one report JSON"
 	@echo "  compare      Build endpoint comparison from report files"
@@ -100,6 +102,9 @@ bench-full:
 bench-full-dry:
 	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
+artifact-manifest:
+	scripts/build_artifact_manifest.sh results "$(ARTIFACT_MANIFEST)"
+
 summarize:
 	scripts/wrk2_summary.sh results/raw/$(IMPL)-ping.txt $(IMPL) ping 10000 results/summaries/$(IMPL)-ping.json
 
@@ -132,6 +137,7 @@ test-scripts:
 	scripts/test_run_step_profile.sh
 	scripts/test_run_step_matrix.sh
 	scripts/test_run_full_benchmark_suite.sh
+	scripts/test_build_artifact_manifest.sh
 	scripts/test_preflight.sh
 	scripts/test_test_service_contracts.sh
 

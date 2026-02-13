@@ -24,6 +24,10 @@ if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*an
   echo "missing combined publish command" >&2
   exit 1
 fi
+if ! grep -q 'build_artifact_manifest.sh .*results .*artifact-manifest.json' <<<"$out"; then
+  echo "missing artifact manifest command" >&2
+  exit 1
+fi
 
 if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls unknown --endpoints ping >/dev/null 2>&1; then
   echo "expected invalid impl to fail via delegated validation" >&2

@@ -76,6 +76,7 @@ matrix_path="${summaries_dir}/compare-matrix.json"
 analysis_path="${summaries_dir}/analysis.json"
 step_matrix_path="${summaries_dir}/step-matrix.json"
 report_md_path="${results_dir}/benchmark-report.md"
+manifest_path="${results_dir}/artifact-manifest.json"
 
 if [ -z "$sec_audit_path" ]; then
   candidate="${root_dir}/../baselines/sec-audit/default-secure-prod.hello.json"
@@ -105,6 +106,7 @@ if [ "$dry_run" = "true" ]; then
   else
     echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} \"\" ${analysis_path} ${step_matrix_path}"
   fi
+  echo "run: ${root_dir}/scripts/build_artifact_manifest.sh ${results_dir} ${manifest_path}"
   exit 0
 fi
 
@@ -114,4 +116,7 @@ else
   "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "" "$analysis_path" "$step_matrix_path"
 fi
 
+"${root_dir}/scripts/build_artifact_manifest.sh" "$results_dir" "$manifest_path"
+
 echo "full benchmark suite report written to ${report_md_path}"
+echo "artifact manifest written to ${manifest_path}"
