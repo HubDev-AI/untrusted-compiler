@@ -1,0 +1,25 @@
+{
+  "version": "0.1",
+  "endpoints": [
+    {
+      "endpoint": "ping",
+      "leader": {
+        "impl": "node",
+        "endpoint": "ping",
+        "targetRps": 10000,
+        "requestsPerSec": 9000,
+        "p99": "18.20ms"
+      }
+    },
+    {
+      "endpoint": "decode",
+      "leader": {
+        "impl": "node",
+        "endpoint": "decode",
+        "targetRps": 2000,
+        "requestsPerSec": 1100,
+        "p99": "92.00ms"
+      }
+    }
+  ]
+}

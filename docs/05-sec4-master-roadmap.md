@@ -552,6 +552,9 @@ Roadmap impact:
   - `docs/book/321-m13-decode-threshold-tuning-rubric.md` defines deterministic keep/tighten/relax rules and bounded update limits.
 - M13 first trend-note scaffold is now added:
   - `docs/book/322-m13-first-trend-run-results-note.md` captures first local readiness observation and explicit live-artifact follow-up steps.
+- M13 trend-note rendering helper is now implemented:
+  - `benchmark-suite/scripts/render_trend_note_entry.sh` renders deterministic markdown entries from `compare-matrix.json`,
+  - benchmark smoke CI now validates renderer behavior via `test_render_trend_note_entry.sh`.
 
 ## 0. Product Direction (Locked Constraints)
 
@@ -1306,6 +1309,7 @@ M13-S1 go/no-go note:
 - [x] Candidate scope locked and documented.
 - [x] Release publish handoff contract notes documented.
 - [x] First trend-note chapter added with local readiness observation and follow-up actions.
+- [x] Trend-note entry renderer added for deterministic artifact-to-markdown conversion.
 - [ ] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 
@@ -1324,6 +1328,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Release Publish Handoff Notes".
 - Chapter: "M13 Slice: Decode Threshold Tuning Rubric".
 - Chapter: "M13 Slice: First Trend-Run Results Note".
+- Chapter: "M13 Slice: Trend Note Entry Renderer".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

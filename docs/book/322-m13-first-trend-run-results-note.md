@@ -38,3 +38,14 @@ When the scheduled workflow (`benchmark-trend.yml`) artifacts are available:
 1. record leader metrics (`p99`, coverage, achieved/target) for `ping` and `decode`,
 2. evaluate against current thresholds and baseline limits,
 3. append decision (`keep`, `tighten`, or `relax`) with rubric justification.
+
+## Note rendering helper
+
+Use the trend-note renderer to create deterministic markdown entries from `compare-matrix.json`:
+
+```bash
+benchmark-suite/scripts/render_trend_note_entry.sh \
+  benchmark-suite/results/summaries/compare-matrix.json \
+  --date 2026-02-13 \
+  --baseline-dir benchmark-suite/baselines
+```

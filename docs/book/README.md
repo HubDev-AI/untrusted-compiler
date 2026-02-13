@@ -287,5 +287,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `320-m13-release-publish-handoff-notes.md`
 - `321-m13-decode-threshold-tuning-rubric.md`
 - `322-m13-first-trend-run-results-note.md`
+- `323-m13-trend-note-entry-renderer.md`
 
 As milestones progress, chapters will be added and linked from this index.
