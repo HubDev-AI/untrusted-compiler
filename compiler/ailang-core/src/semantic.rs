@@ -1807,6 +1807,7 @@ impl Analyzer {
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_auth_helper_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_log_value_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_log_sink_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_error_helper_signatures(callee_name, span.clone(), args, arg_types);
 
@@ -4465,6 +4466,63 @@ impl Analyzer {
                 .with_note(format!("found `{}`", payload_ty.describe()))
                 .with_note("construct payloads via `log.event/field/obj/str/i64/bool/redacted`"),
             );
+        }
+    }
+
+    fn enforce_log_value_builder_signatures(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if matches!(callee_name, "log_event" | "log.event") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.event expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.event(\"event.name\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.event argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass a stable event-name string"),
+                );
+            }
+            return;
+        }
+
+        if matches!(callee_name, "log_redacted" | "log.redacted") {
+            if args.len() != 1 {
+                self.diagnostics.push(
+                    Diagnostic::error("E4001", "log.redacted expects exactly one argument", span)
+                        .with_tag("security")
+                        .with_note("use `log.redacted(\"label\")`"),
+                );
+                return;
+            }
+
+            if !arg_types[0].is_named("String") {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        "log.redacted argument must be `String`",
+                        args[0].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_note(format!("found `{}`", arg_types[0].describe()))
+                    .with_note("pass a redaction label string"),
+                );
+            }
         }
     }
 

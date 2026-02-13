@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  log.redacted(1);
+  0
+}

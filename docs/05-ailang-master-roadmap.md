@@ -132,6 +132,9 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Log sink signatures are now hardened:
     - `log.info`/`log.warn`/`log.error`/`log.emit` require exactly one `LogValue` payload argument.
     - secret/untrusted payloads remain reported via existing sink-flow diagnostics without duplicate signature errors.
+  - Log value-builder label signatures are now hardened:
+    - `log.event(name)` requires `String` event names.
+    - `log.redacted(label)` requires `String` redaction labels.
   - Semantic fixtures now cover both valid and invalid typed schema-value pairing cases.
   - `security_map` call records now include optional `arg_roles` metadata for explainability.
   - Role labels are emitted for core sensitive API calls (for example capability/query/url/schema/value/path).
@@ -778,6 +781,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: JSON Response Meta Secret/Taint Hardening".
 - Chapter: "M7 Slice: Log Event Helper Signature Hardening".
 - Chapter: "M7 Slice: Log Sink Payload Signature Hardening".
+- Chapter: "M7 Slice: Log Value Builder Label Signature Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Argument Hardening".
 - Chapter: "M7 Slice: json.encode Schema-Descriptor Hardening".
 - Chapter: "M7 Slice: json.decode Schema-Argument Hardening".

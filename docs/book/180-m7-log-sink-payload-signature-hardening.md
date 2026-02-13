@@ -50,7 +50,7 @@ Examples:
 
 ```ailang
 fn main() effects { log } -> Int {
-  log.info(log.event(1));
+  log.info(log.event("event"));
   0
 }
 ```

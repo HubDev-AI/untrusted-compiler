@@ -1,0 +1,4 @@
+error[E4001]: log.event argument must be `String`
+  --> invalid_log_event_argument_type.ai:2:13
+  note: found `Int`
+  note: pass a stable event-name string

@@ -257,7 +257,7 @@ fn current() -> Int64 {
 fn c_backend_rewrites_log_intrinsics_to_runtime_symbol() {
     let source = r#"
 fn main() effects { log } -> Int {
-  log.info(log.event(1));
+  log.info(log.event("event"));
   0
 }
 "#;
@@ -266,20 +266,20 @@ fn main() effects { log } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("(void)(ailang_rt_log_any(ailang_rt_log_event(1)));"));
+    assert!(c.contains("(void)(ailang_rt_log_any(ailang_rt_log_event(\"event\")));"));
 }
 
 #[test]
 fn c_backend_rewrites_log_builder_intrinsics_to_runtime_symbols() {
     let source = r#"
 fn main() -> Int {
-  let event = log.event(1);
+  let event = log.event("user.created");
   let field = log.field(1, 2);
   let obj = log.obj(1);
   let text = log.str(1);
   let num = log.i64(1);
   let flag = log.bool(1);
-  let secret = log.redacted(1);
+  let secret = log.redacted("secret");
   let attrSecret = log.attrRedacted("token");
   let withAttr = log.withAttr(event, "token", attrSecret);
   let withHttp = log.withHttp(withAttr, "POST", "/users", 200, 42);
@@ -305,13 +305,13 @@ fn main() -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("ailang_rt_log_event(1);"));
+    assert!(c.contains("ailang_rt_log_event(\"user.created\");"));
     assert!(c.contains("ailang_rt_log_field(1, 2);"));
     assert!(c.contains("ailang_rt_log_obj(1);"));
     assert!(c.contains("ailang_rt_log_str(1);"));
     assert!(c.contains("ailang_rt_log_i64(1);"));
     assert!(c.contains("ailang_rt_log_bool(1);"));
-    assert!(c.contains("ailang_rt_log_redacted(1);"));
+    assert!(c.contains("ailang_rt_log_redacted(\"secret\");"));
     assert!(c.contains("ailang_rt_log_attr_redacted(\"token\");"));
     assert!(c.contains("ailang_rt_log_with_attr(event, \"token\", attrSecret);"));
     assert!(c.contains("ailang_rt_log_with_http(withAttr, \"POST\", \"/users\", 200, 42);"));

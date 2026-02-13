@@ -453,7 +453,7 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn main() effects { log } -> Int {
-  log.info(log.event(1));
+  log.info(log.event("event"));
   0
 }
 "#,
@@ -471,7 +471,7 @@ entry = "src/main.ai"
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_log_any(ailang_rt_log_event(1))"));
+    assert!(generated_c.contains("ailang_rt_log_any(ailang_rt_log_event(\"event\"))"));
 
     let binary_path = project_dir.join("build").join("logdemo");
     assert!(binary_path.exists(), "compiled binary should exist");
@@ -505,13 +505,13 @@ entry = "src/main.ai"
     fs::write(
         project_dir.join("src/main.ai"),
         r#"fn main() -> Int {
-  let event = log.event(1);
+  let event = log.event("user.created");
   let field = log.field(1, 2);
   let obj = log.obj(1);
   let text = log.str(1);
   let num = log.i64(1);
   let flag = log.bool(1);
-  let secret = log.redacted(1);
+  let secret = log.redacted("secret");
   let attrSecret = log.attrRedacted("token");
   let withAttr = log.withAttr(event, "token", attrSecret);
   let withHttp = log.withHttp(withAttr, "POST", "/users", 200, 42);
@@ -546,13 +546,13 @@ entry = "src/main.ai"
 
     let generated_c =
         fs::read_to_string(project_dir.join("build").join("generated.c")).expect("read generated C");
-    assert!(generated_c.contains("ailang_rt_log_event(1)"));
+    assert!(generated_c.contains("ailang_rt_log_event(\"user.created\")"));
     assert!(generated_c.contains("ailang_rt_log_field(1, 2)"));
     assert!(generated_c.contains("ailang_rt_log_obj(1)"));
     assert!(generated_c.contains("ailang_rt_log_str(1)"));
     assert!(generated_c.contains("ailang_rt_log_i64(1)"));
     assert!(generated_c.contains("ailang_rt_log_bool(1)"));
-    assert!(generated_c.contains("ailang_rt_log_redacted(1)"));
+    assert!(generated_c.contains("ailang_rt_log_redacted(\"secret\")"));
     assert!(generated_c.contains("ailang_rt_log_attr_redacted(\"token\")"));
     assert!(generated_c.contains("ailang_rt_log_with_attr(event, \"token\", attrSecret)"));
     assert!(generated_c.contains("ailang_rt_log_with_http(withAttr, \"POST\", \"/users\", 200, 42)"));
