@@ -110,6 +110,44 @@ fn bad(path: PathSafe) effects { net } -> Int {
 }
 
 #[test]
+fn json_response_meta_secret_diagnostic_has_security_secret_tags() {
+    let source = r#"
+fn bad(secret: Secret<String>) effects { net } -> Int {
+  res.okMeta(201, "Schema", 1, secret);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json response meta argument cannot be `Secret<_>`")
+        .expect("expected json response meta secret diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "secret"));
+}
+
+#[test]
+fn json_response_meta_untrusted_diagnostic_has_security_taint_tags() {
+    let source = r#"
+fn bad(meta: Untrusted<String>) effects { net } -> Int {
+  res.okMeta(201, "Schema", 1, meta);
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "json response meta argument cannot be `Untrusted<_>`")
+        .expect("expected json response meta untrusted diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "taint"));
+}
+
+#[test]
 fn req_json_schema_gate_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad() effects { net } -> Int {

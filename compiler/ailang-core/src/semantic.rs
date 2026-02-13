@@ -2388,6 +2388,33 @@ impl Analyzer {
                 );
             }
         }
+
+        if matches!(callee_name, "res_ok_meta" | "res.okMeta") && args.len() == 4 {
+            let meta_ty = &arg_types[3];
+            if meta_ty.contains_secret() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4004",
+                        "json response meta argument cannot be `Secret<_>`",
+                        args[3].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("secret")
+                    .with_note("redact/derive safe values before including envelope metadata"),
+                );
+            } else if meta_ty.contains_untrusted() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4004",
+                        "json response meta argument cannot be `Untrusted<_>`",
+                        args[3].span.clone(),
+                    )
+                    .with_tag("security")
+                    .with_tag("taint")
+                    .with_note("validate metadata inputs before including them in responses"),
+                );
+            }
+        }
     }
 
     fn enforce_json_encode_helper_signature(
@@ -5396,7 +5423,7 @@ fn is_json_data_arg(name: &str, index: usize, arg_len: usize) -> bool {
     match name {
         "res_ok_meta" | "res.okMeta" => {
             if arg_len >= 4 {
-                index == 2 || index == 3
+                index == 2
             } else {
                 index + 1 == arg_len
             }

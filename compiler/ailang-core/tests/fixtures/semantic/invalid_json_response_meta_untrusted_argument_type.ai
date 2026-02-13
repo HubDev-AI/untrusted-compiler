@@ -1,0 +1,4 @@
+fn bad(meta: Untrusted<String>) effects { net } -> Int {
+  res.okMeta(201, "Schema", 1, meta);
+  0
+}

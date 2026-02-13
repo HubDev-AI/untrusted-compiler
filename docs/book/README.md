@@ -142,5 +142,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `174-m7-db-query-one-row-schema-descriptor-hardening.md`
 - `176-m7-req-json-schema-descriptor-narrowing.md`
 - `177-m7-json-response-schema-descriptor-narrowing.md`
+- `178-m7-json-response-meta-secret-taint-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

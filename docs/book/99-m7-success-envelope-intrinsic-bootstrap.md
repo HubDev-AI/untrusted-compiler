@@ -42,6 +42,7 @@ The v0 response surface includes optional success envelopes. This slice keeps th
 - Invalid helper arity or non-numeric status yields `E4004` under strict schema mode.
 - Invalid schema/value pairings still produce schema mismatch diagnostics.
 - Schema descriptors are narrowed in a later slice to `String` or `Schema<_>` (`177-m7-json-response-schema-descriptor-narrowing.md`).
+- Meta payload secret/taint rejection for `res.okMeta` is hardened in a later slice (`178-m7-json-response-meta-secret-taint-hardening.md`).
 - Misspelled helper names can remain unresolved and fail semantic/C compile stages.
 
 ### Example usage
