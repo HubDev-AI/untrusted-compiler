@@ -58,6 +58,7 @@ Current strict closure result:
 | `M10-B` | PASS | Live cross-impl matrix row contract is aligned (`endpoint`, `leader`, `compared`) | `benchmark-suite/results/summaries/compare-matrix.json` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
 | `M13-B` | PASS | Trend workflow keeps strict quality + regression guard steps | `.github/workflows/benchmark-trend.yml` |
+| `M13-C` | PASS | Trend workflow uploads benchmark artifacts for trend-note ingestion | `.github/workflows/benchmark-trend.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -620,7 +621,8 @@ Historical implementation bullets below are retained as build history; strict ga
 - Milestone closure audit gate coverage is now stricter:
   - `scripts/check-milestone-closure.sh` now enforces per-endpoint M10 impl coverage (not union-only),
   - closure now validates compare-matrix row-contract alignment (`endpoint` + leader membership and endpoint consistency),
-  - closure now verifies scheduled trend workflow keeps strict quality + regression guard steps.
+  - closure now verifies scheduled trend workflow keeps strict quality + regression guard steps,
+  - closure now verifies scheduled trend workflow artifact upload contract (`benchmark-trend-*` + `benchmark-suite/results`).
   - benchmark smoke CI now executes strict closure audit against repository evidence (`scripts/check-milestone-closure.sh --fail-on-pending`) and includes a workflow contract test to prevent gate-step drift.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),

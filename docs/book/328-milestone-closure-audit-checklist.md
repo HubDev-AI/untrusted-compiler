@@ -42,6 +42,10 @@ Implementation progress and milestone closure are not the same. This checklist p
 - scheduled trend workflow keeps hard guards:
   - strict quality check (`check-benchmark-evidence-quality.sh --fail-on-warning`)
   - regression threshold checks (`check_regression_thresholds.sh`)
+- scheduled trend workflow uploads artifacts for trend-note ingestion:
+  - uses `actions/upload-artifact@v4`
+  - artifact name follows `benchmark-trend-*`
+  - artifact path includes `benchmark-suite/results`
 
 ## Example usage
 
@@ -55,7 +59,7 @@ scripts/test-check-milestone-closure.sh
 
 - M9 gate checks: PASS
 - M10 live cross-impl evidence and row-contract alignment: PASS
-- M13 live trend-note evidence and trend-workflow guards: PASS
+- M13 live trend-note evidence, trend-workflow guards, and artifact-upload contract: PASS
 
 ## Inputs, outputs, and constraints
 

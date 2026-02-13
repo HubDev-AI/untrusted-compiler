@@ -33,6 +33,11 @@ jobs:
           benchmark-suite/scripts/check_regression_thresholds.sh \
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping
+      - name: Upload benchmark trend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-trend-node-ping
+          path: benchmark-suite/results
 YAML
 
 cat > "$tmp/benchmark-suite/results/summaries/compare-matrix.json" <<'JSON'
@@ -133,6 +138,33 @@ YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
   echo "expected pending failure without strict benchmark trend workflow quality gate" >&2
+  exit 1
+fi
+
+cat > "$tmp/.github/workflows/benchmark-trend.yml" <<'YAML'
+name: Benchmark Trend
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+jobs:
+  scoped-live-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json \
+            --fail-on-warning
+      - name: Check regression thresholds (ping)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint ping
+YAML
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure without benchmark trend artifact upload step" >&2
   exit 1
 fi
 

@@ -90,6 +90,7 @@ bool_has_cross_impl_matrix=0
 bool_has_cross_impl_matrix_contract=0
 bool_has_live_trend_entry=0
 bool_has_trend_workflow_guards=0
+bool_has_trend_workflow_artifact_upload=0
 
 [ -f "${repo_root}/scripts/release-alpha-gate.sh" ] && bool_has_release_gate=1
 [ -f "${repo_root}/.github/workflows/alpha-release-gate.yml" ] && bool_has_release_gate_ci=1
@@ -161,6 +162,13 @@ if [ -f "${trend_workflow_path}" ] \
   bool_has_trend_workflow_guards=1
 fi
 
+if [ -f "${trend_workflow_path}" ] \
+  && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${trend_workflow_path}" \
+  && rg -q 'name:[[:space:]]*benchmark-trend-' "${trend_workflow_path}" \
+  && rg -q 'path:[[:space:]]*benchmark-suite/results' "${trend_workflow_path}"; then
+  bool_has_trend_workflow_artifact_upload=1
+fi
+
 pending_count=0
 
 emit_check() {
@@ -189,6 +197,7 @@ emit_check "M10-A" "cross-impl matrix includes sec4/go/node/rust for each endpoi
 emit_check "M10-B" "cross-impl matrix row contract is aligned" "${bool_has_cross_impl_matrix_contract}" "${matrix_path}"
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
+emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"
 
 echo
 if [ "${pending_count}" -eq 0 ]; then

@@ -34,6 +34,11 @@ This slice closes those gaps with deterministic checks.
 - requires strict quality check invocation with `--fail-on-warning`,
 - requires regression-threshold check step.
 
+4. New trend-artifact upload gate (`M13-C`)
+- requires `actions/upload-artifact@v4` in trend workflow,
+- requires `benchmark-trend-*` artifact naming,
+- requires artifact path coverage for `benchmark-suite/results`.
+
 ## Tests
 
 `test-check-milestone-closure.sh` now covers:
