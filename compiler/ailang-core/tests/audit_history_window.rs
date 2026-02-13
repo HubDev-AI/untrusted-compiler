@@ -1,6 +1,6 @@
 use ailang_core::{
-    build_security_map, parse_source, run_security_audit, summarize_history_window, AuditSeverity,
-    Policy,
+    build_security_map, parse_source, render_security_audit_text, run_security_audit,
+    summarize_history_window, AuditSeverity, Policy,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -85,5 +85,24 @@ fn history_window_summary_computes_rollups_and_latest_deltas() {
         summary.severity_latest_delta.get("MEDIUM").copied(),
         Some(-1),
         "latest delta should capture reductions too"
+    );
+}
+
+#[test]
+fn text_render_includes_history_window_when_present() {
+    let report = base_report();
+    let summary = summarize_history_window(std::slice::from_ref(&report), 1)
+        .expect("single-report history window should be summarized");
+
+    let mut with_history = report.clone();
+    with_history.history_window = Some(summary);
+    let rendered = render_security_audit_text(&with_history);
+    assert!(
+        rendered.contains("HistoryWindow:"),
+        "text audit renderer should include history window section when present"
+    );
+    assert!(
+        rendered.contains("reports=1/1"),
+        "history window line should include report/window counts"
     );
 }

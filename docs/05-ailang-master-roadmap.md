@@ -912,6 +912,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M8 Slice: sec.audit History-Window Output-Mode Validation".
 - Chapter: "M8 Slice: Core History-Window Summary Model".
 - Chapter: "M8 Slice: sec.audit historyWindow Report Embedding".
+- Chapter: "M8 Slice: historyWindow Text Renderer Coverage".
 
 ## M9 - Release Hardening
 ### Build tasks
