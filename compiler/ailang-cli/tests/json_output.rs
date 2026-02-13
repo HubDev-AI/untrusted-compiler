@@ -118,6 +118,46 @@ fn check_diagnostics_json_failure_writes_only_json_on_stdout() {
 }
 
 #[test]
+fn check_failure_stderr_includes_source_snippet_and_tags() {
+    let project_dir = temp_dir("ailang-diagnostic-snippet");
+    fs::create_dir_all(project_dir.join("src")).expect("src dir should be created");
+
+    fs::write(
+        project_dir.join("ailang.toml"),
+        "[package]\nname = \"diag-snippet\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ai"),
+        "fn main() -> Int {\n  let name = req.query(12);\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &path]);
+    assert!(!output.status.success(), "check should fail");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("tags: security, schema"),
+        "stderr should include diagnostic tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("2 |   let name = req.query(12)"),
+        "stderr should include source snippet line:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("|                        ^"),
+        "stderr should include source marker:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn sec_audit_json_keeps_stdout_parseable_json() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

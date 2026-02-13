@@ -169,5 +169,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `202-m8-sec-audit-history-window-report-embedding.md`
 - `203-m8-history-window-text-renderer-coverage.md`
 - `204-m11-language-server-stdio-bootstrap.md`
+- `205-m9-diagnostic-source-snippets-and-tag-context.md`
 
 As milestones progress, chapters will be added and linked from this index.
