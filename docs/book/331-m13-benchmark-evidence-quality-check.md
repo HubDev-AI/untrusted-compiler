@@ -46,6 +46,7 @@ Modes:
 
 Benchmark smoke CI now runs this test.
 Benchmark smoke CI also runs `test-benchmark-workflow-quality-gates.sh` to enforce strict-quality gate presence in live benchmark workflows.
+`refresh-closure-evidence-from-ci.sh` now also runs strict quality mode by default (`--fail-on-warning`) and exposes `--quality-allow-warning` as an explicit local fallback override.
 
 ## Inputs, outputs, and constraints
 

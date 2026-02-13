@@ -31,8 +31,9 @@ Before this slice, each gate had its own updater command. Operators had to run t
 - Local deterministic mode:
   - `--matrix <path>` for M10 matrix source
   - `--entry <path>` for M13 trend-entry source
-- Optional strict evidence-quality mode:
-  - `--quality-fail-on-warning`
+- Strict evidence-quality mode is default:
+  - internally runs `check-benchmark-evidence-quality.sh --fail-on-warning`
+  - use `--quality-allow-warning` only for local fallback/debug scenarios
 - `--dry-run` for command-plan preview.
 
 4. Test coverage:

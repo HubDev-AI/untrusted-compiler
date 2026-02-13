@@ -612,6 +612,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - benchmark smoke CI validates update command composition and local-entry import via `test_update_trend_note_from_ci.sh`.
 - M10+M13 closure refresh now has a single operator command:
   - `scripts/refresh-closure-evidence-from-ci.sh` runs cross-impl matrix import + trend-note update + benchmark evidence quality check + strict closure check (`--fail-on-pending`) in one flow,
+  - closure refresh now enforces benchmark quality warnings as failures by default (`--fail-on-warning`) with explicit local override (`--quality-allow-warning`),
   - supports dry-run and local fixture-backed execution (`--matrix`, `--entry`) for deterministic smoke validation.
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),

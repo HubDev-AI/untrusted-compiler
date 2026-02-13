@@ -48,6 +48,10 @@ if ! grep -q 'check-benchmark-evidence-quality.sh --matrix' <<<"${dry_out}"; the
   echo "dry-run missing evidence quality check command" >&2
   exit 1
 fi
+if ! grep -q 'check-benchmark-evidence-quality.sh --matrix .* --fail-on-warning' <<<"${dry_out}"; then
+  echo "dry-run missing strict evidence quality flag (--fail-on-warning) by default" >&2
+  exit 1
+fi
 
 "${root_dir}/scripts/refresh-closure-evidence-from-ci.sh" \
   --repo HubDev-AI/untrusted-compiler \
@@ -71,14 +75,30 @@ if ! grep -q '^## Trend Entry (2026-02-13)$' "${trend_note}"; then
   exit 1
 fi
 
-warn_matrix="${root_dir}/benchmark-suite/scripts/testdata/sample-trend-compare-matrix-wrk.json"
+warn_matrix="${tmp}/warn-matrix.json"
+jq '
+  .endpoints[0].compared[0].constantRate = false
+  | .endpoints[0].compared[0].loadGenerator = "wrk"
+  | .endpoints[0].leader.constantRate = false
+  | .endpoints[0].leader.loadGenerator = "wrk"
+' "${matrix_src}" > "${warn_matrix}"
+
 if "${root_dir}/scripts/refresh-closure-evidence-from-ci.sh" \
   --matrix "${warn_matrix}" \
   --entry "${entry}" \
   --target-matrix "${matrix_target}" \
+  --trend-note "${trend_note}" >/dev/null 2>&1; then
+  echo "expected default strict quality mode to fail for non-constant-rate matrix" >&2
+  exit 1
+fi
+
+if ! "${root_dir}/scripts/refresh-closure-evidence-from-ci.sh" \
+  --matrix "${warn_matrix}" \
+  --entry "${entry}" \
+  --target-matrix "${matrix_target}" \
   --trend-note "${trend_note}" \
-  --quality-fail-on-warning >/dev/null 2>&1; then
-  echo "expected strict quality mode to fail for non-constant-rate matrix" >&2
+  --quality-allow-warning >/dev/null 2>&1; then
+  echo "expected quality-allow-warning mode to allow non-constant-rate matrix" >&2
   exit 1
 fi
 

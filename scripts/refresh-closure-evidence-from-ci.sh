@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--repo owner/repo] [--matrix <path>] [--entry <path>] [--target-matrix <path>] [--trend-note <path>] [--m10-out-dir <path>] [--m13-out-dir <path>] [--quality-fail-on-warning] [--dry-run]
+usage: $0 [--repo owner/repo] [--matrix <path>] [--entry <path>] [--target-matrix <path>] [--trend-note <path>] [--m10-out-dir <path>] [--m13-out-dir <path>] [--quality-fail-on-warning] [--quality-allow-warning] [--dry-run]
 
 Runs M10 + M13 evidence refresh in sequence:
 1) update cross-impl compare matrix from CI artifact (or --matrix)
@@ -23,7 +23,7 @@ target_matrix="${repo_root}/benchmark-suite/results/summaries/compare-matrix.jso
 trend_note="${repo_root}/docs/book/322-m13-first-trend-run-results-note.md"
 m10_out_dir="${repo_root}/benchmark-suite/results/cross-impl-download"
 m13_out_dir="${repo_root}/benchmark-suite/results/trend-download"
-quality_fail_on_warning="false"
+quality_fail_on_warning="true"
 dry_run="false"
 
 while [ "$#" -gt 0 ]; do
@@ -86,6 +86,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --quality-fail-on-warning)
       quality_fail_on_warning="true"
+      shift
+      ;;
+    --quality-allow-warning)
+      quality_fail_on_warning="false"
       shift
       ;;
     --dry-run)
