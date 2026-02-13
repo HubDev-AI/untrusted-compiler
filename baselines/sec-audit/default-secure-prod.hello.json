@@ -1,0 +1,88 @@
+{
+  "version": "0.1",
+  "policy": {
+    "name": "default-secure-prod",
+    "version": "0.1",
+    "hash": "pol_16dc191e924dfb4a",
+    "mode": "enforce",
+    "env": "prod"
+  },
+  "build": {
+    "compilerHash": "cpl_0_1_0",
+    "runtimeHash": "rt_d17cda122ac2ecb2",
+    "timeMs": 1770970585066
+  },
+  "posture": {
+    "cors": {
+      "enabled": true,
+      "allowCredentials": true,
+      "wildcard": false,
+      "reflectOrigin": false,
+      "origins": [
+        "https://app.example.com"
+      ],
+      "allowRedirects": false
+    },
+    "securityHeaders": {
+      "enabled": true,
+      "hsts": true,
+      "csp": {
+        "enabled": true,
+        "reportOnly": false
+      },
+      "xFrameOptions": "DENY",
+      "nosniff": true,
+      "referrerPolicy": "strict-origin-when-cross-origin"
+    },
+    "csrf": {
+      "enabled": true,
+      "mode": "double_submit",
+      "sameSite": "Lax",
+      "secureCookie": true
+    },
+    "capture": {
+      "mode": "errors",
+      "redactHeaders": [
+        "authorization",
+        "cookie",
+        "set-cookie",
+        "x-api-key",
+        "x-auth-token"
+      ]
+    },
+    "replay": {
+      "effects": "deny"
+    }
+  },
+  "attackSurface": {
+    "sqlRaw": false,
+    "htmlRaw": false,
+    "secretsReveal": false,
+    "internalNet": false,
+    "fsEnabled": false,
+    "publicRedirects": false
+  },
+  "exceptions": [],
+  "findings": [
+    {
+      "id": "CORS_VARY_ORIGIN_MISSING",
+      "severity": "LOW",
+      "category": "cors",
+      "evidence": {
+        "requireVaryOrigin": true,
+        "sampleCalls": []
+      },
+      "suggestion": "Ensure CORS middleware emits Vary: Origin for allowlist origin mode."
+    }
+  ],
+  "summary": {
+    "riskScore": 1,
+    "highestSeverity": "LOW",
+    "findingCounts": {
+      "LOW": 1,
+      "MEDIUM": 0,
+      "HIGH": 0,
+      "CRITICAL": 0
+    }
+  }
+}

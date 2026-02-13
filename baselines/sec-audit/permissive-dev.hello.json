@@ -1,0 +1,193 @@
+{
+  "version": "0.1",
+  "policy": {
+    "name": "permissive-dev",
+    "version": "0.1",
+    "hash": "pol_ad82d40e53baf3a1",
+    "mode": "warn",
+    "env": "dev"
+  },
+  "build": {
+    "compilerHash": "cpl_0_1_0",
+    "runtimeHash": "rt_d17cda122ac2ecb2",
+    "timeMs": 1770970585460
+  },
+  "posture": {
+    "cors": {
+      "enabled": true,
+      "allowCredentials": false,
+      "wildcard": true,
+      "reflectOrigin": false,
+      "origins": [
+        "*"
+      ],
+      "allowRedirects": true
+    },
+    "securityHeaders": {
+      "enabled": true,
+      "hsts": false,
+      "csp": {
+        "enabled": true,
+        "reportOnly": true
+      },
+      "xFrameOptions": "SAMEORIGIN",
+      "nosniff": true,
+      "referrerPolicy": "no-referrer"
+    },
+    "csrf": {
+      "enabled": false,
+      "mode": "off",
+      "sameSite": "Lax",
+      "secureCookie": true
+    },
+    "capture": {
+      "mode": "all",
+      "redactHeaders": [
+        "authorization"
+      ]
+    },
+    "replay": {
+      "effects": "allow"
+    }
+  },
+  "attackSurface": {
+    "sqlRaw": false,
+    "htmlRaw": false,
+    "secretsReveal": false,
+    "internalNet": true,
+    "fsEnabled": true,
+    "publicRedirects": true
+  },
+  "exceptions": [],
+  "findings": [
+    {
+      "id": "INTERNAL_NET_ENABLED_NO_ALLOWLIST",
+      "severity": "CRITICAL",
+      "category": "ssrf",
+      "evidence": {
+        "allowedCidrs": [],
+        "allowedDomains": [],
+        "internalNetEnabled": true,
+        "sampleCalls": []
+      },
+      "suggestion": "Disable internal net or define explicit CIDR/domain allowlists."
+    },
+    {
+      "id": "CAPTURE_REDACTION_INCOMPLETE",
+      "severity": "HIGH",
+      "category": "capture",
+      "evidence": {
+        "redactHeaders": [
+          "authorization"
+        ],
+        "sampleCalls": []
+      },
+      "suggestion": "Capture redaction must include authorization, cookie, and set-cookie headers."
+    },
+    {
+      "id": "FS_ENABLED_NO_BASE_ALLOWLIST",
+      "severity": "HIGH",
+      "category": "fs",
+      "evidence": {
+        "allowedBasePaths": [],
+        "fsEnabled": true,
+        "sampleCalls": []
+      },
+      "suggestion": "Restrict filesystem access to explicit allowed base paths."
+    },
+    {
+      "id": "PUBLIC_REDIRECTS_ENABLED_WITHOUT_REVALIDATION",
+      "severity": "HIGH",
+      "category": "ssrf",
+      "evidence": {
+        "allowRedirects": true,
+        "revalidateRedirects": false,
+        "sampleCalls": []
+      },
+      "suggestion": "Disable redirects or revalidate every redirect hop against SSRF checks."
+    },
+    {
+      "id": "CORS_ANY_ORIGIN",
+      "severity": "MEDIUM",
+      "category": "cors",
+      "evidence": {
+        "allowCredentials": false,
+        "sampleCalls": [],
+        "wildcard": true
+      },
+      "suggestion": "Prefer explicit origin allowlist even when credentials are disabled."
+    },
+    {
+      "id": "REPLAY_EFFECTS_ALLOW",
+      "severity": "MEDIUM",
+      "category": "replay",
+      "evidence": {
+        "effects": "allow",
+        "env": "dev",
+        "sampleCalls": []
+      },
+      "suggestion": "Prefer replay effects=deny or mock outside isolated staging workflows."
+    },
+    {
+      "id": "SQL_LIMIT_RULE_DISABLED",
+      "severity": "MEDIUM",
+      "category": "sql",
+      "evidence": {
+        "requireLimitOnSelect": "off",
+        "sampleCalls": []
+      },
+      "suggestion": "Enable SELECT limit policy (`warn` or `enforce`) to reduce unbounded query risk."
+    },
+    {
+      "id": "SYMLINK_POLICY_WEAK",
+      "severity": "MEDIUM",
+      "category": "fs",
+      "evidence": {
+        "forbidSymlinks": "warn",
+        "sampleCalls": []
+      },
+      "suggestion": "Set fs.forbid_symlinks=\"enforce\" to hard-block symlink traversal paths."
+    },
+    {
+      "id": "CSP_REPORT_ONLY",
+      "severity": "LOW",
+      "category": "headers",
+      "evidence": {
+        "env": "dev",
+        "reportOnly": true,
+        "sampleCalls": []
+      },
+      "suggestion": "Use report-only temporarily, then enforce CSP in production."
+    },
+    {
+      "id": "LOG_USER_AGENT_ENABLED",
+      "severity": "LOW",
+      "category": "logging",
+      "evidence": {
+        "includeUserAgent": true,
+        "sampleCalls": []
+      },
+      "suggestion": "User-Agent logging can increase PII footprint; keep only if operationally required."
+    },
+    {
+      "id": "XFO_DISABLED",
+      "severity": "LOW",
+      "category": "headers",
+      "evidence": {
+        "sampleCalls": [],
+        "xFrameOptions": "SAMEORIGIN"
+      },
+      "suggestion": "Set X-Frame-Options to DENY for strongest clickjacking protection."
+    }
+  ],
+  "summary": {
+    "riskScore": 51,
+    "highestSeverity": "CRITICAL",
+    "findingCounts": {
+      "HIGH": 3,
+      "LOW": 3,
+      "CRITICAL": 1,
+      "MEDIUM": 4
+    }
+  }
+}
