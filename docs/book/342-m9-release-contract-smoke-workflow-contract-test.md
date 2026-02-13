@@ -20,9 +20,11 @@ This slice keeps required test-step wiring explicit and CI-enforced.
 - Validates `.github/workflows/release-contract-smoke.yml` includes:
   - trigger contract (`pull_request` + `push` on `main`),
   - `scripts/test-alpha-release-workflow-contract.sh`
+  - `scripts/test-alpha-release-workflow-contract-guard.sh`
   - `scripts/test-verify-release-promotion-inputs.sh`
   - `scripts/test-generate-release-publish-manifest.sh`
   - `scripts/test-verify-release-publish-manifest.sh`
+  - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`
 
 2. Wired contract test into naming-lock CI
 - `naming-lock.yml` now runs:

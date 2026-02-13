@@ -21,9 +21,11 @@ That left a drift path where M9 could appear closed while release-contract smoke
 1. Added closure gate `M9-E`
 - `check-milestone-closure.sh` now validates `.github/workflows/release-contract-smoke.yml` keeps:
   - `scripts/test-alpha-release-workflow-contract.sh`
+  - `scripts/test-alpha-release-workflow-contract-guard.sh`
   - `scripts/test-verify-release-promotion-inputs.sh`
   - `scripts/test-generate-release-publish-manifest.sh`
   - `scripts/test-verify-release-publish-manifest.sh`
+  - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`
 
 2. Expanded closure fixture coverage
 - `test-check-milestone-closure.sh` now:

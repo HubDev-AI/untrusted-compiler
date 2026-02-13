@@ -57,7 +57,7 @@ Current strict closure result:
 | `M9-B` | PASS | Release gate workflow exists | `.github/workflows/alpha-release-gate.yml` |
 | `M9-C` | PASS | Promotion verifier/manifest chain exists | `scripts/verify-release-promotion-inputs.sh`, publish-manifest scripts |
 | `M9-D` | PASS | Release gate enforces strict milestone closure | `scripts/release-alpha-gate.sh` |
-| `M9-E` | PASS | Release-contract-smoke workflow keeps release verifier/publish checks | `.github/workflows/release-contract-smoke.yml` |
+| `M9-E` | PASS | Release-contract-smoke workflow keeps release verifier/publish + guard checks | `.github/workflows/release-contract-smoke.yml` |
 | `M9-F` | PASS | Naming-lock CI enforces release-contract-smoke contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M9-G` | PASS | Alpha-release workflow keeps release/promotion/publish/upload contract | `.github/workflows/alpha-release-gate.yml` |
 | `M9-H` | PASS | Naming-lock CI enforces alpha-release workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
@@ -557,6 +557,9 @@ Historical implementation bullets below are retained as build history; strict ga
 - Alpha release workflow wiring now has a CI contract test:
   - `scripts/test-alpha-release-workflow-contract.sh` validates required release/promotion/publish steps and artifact upload bindings in `.github/workflows/alpha-release-gate.yml`,
   - `.github/workflows/naming-lock.yml` now runs this contract test on PRs and `main` pushes.
+- Release-contract-smoke workflow contract is now stricter:
+  - `.github/workflows/release-contract-smoke.yml` now executes both workflow guard regression tests (`test-alpha-release-workflow-contract-guard.sh`, `test-release-contract-smoke-workflow-contract-guard.sh`) in addition to release/promotion/publish contract checks,
+  - `scripts/test-release-contract-smoke-workflow-contract.sh` and `M9-E` closure gating now require those guard steps.
 - M12 naming-alignment enforcement has started:
   - legacy nested `sec` security subcommand alias has been removed from CLI/tests in favor of canonical `sec4 audit`,
   - `scripts/check-naming-lock.sh` now enforces locked naming tokens and legacy-pattern absence in tracked source/docs,

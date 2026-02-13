@@ -20,6 +20,8 @@ jobs:
       - name: Run release contract tests
         run: |
           scripts/test-alpha-release-workflow-contract.sh
+          scripts/test-alpha-release-workflow-contract-guard.sh
           scripts/test-verify-release-promotion-inputs.sh
           scripts/test-generate-release-publish-manifest.sh
           scripts/test-verify-release-publish-manifest.sh
+          scripts/test-release-contract-smoke-workflow-contract-guard.sh

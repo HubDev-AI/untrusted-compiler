@@ -26,9 +26,11 @@ Implementation progress and milestone closure are not the same. This checklist p
 - release gate script includes strict closure enforcement (`check-milestone-closure.sh --fail-on-pending`).
 - release-contract-smoke workflow keeps release verifier/publish contract tests:
   - `scripts/test-alpha-release-workflow-contract.sh`
+  - `scripts/test-alpha-release-workflow-contract-guard.sh`
   - `scripts/test-verify-release-promotion-inputs.sh`
   - `scripts/test-generate-release-publish-manifest.sh`
   - `scripts/test-verify-release-publish-manifest.sh`
+  - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`
 - naming-lock CI keeps the release-contract-smoke workflow contract guard:
   - `scripts/test-release-contract-smoke-workflow-contract.sh`
   - `scripts/test-release-contract-smoke-workflow-contract-guard.sh`

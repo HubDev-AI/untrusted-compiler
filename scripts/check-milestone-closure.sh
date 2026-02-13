@@ -172,9 +172,11 @@ fi
 release_contract_smoke_workflow_path="${repo_root}/.github/workflows/release-contract-smoke.yml"
 if [ -f "${release_contract_smoke_workflow_path}" ] \
   && rg -q 'scripts/test-alpha-release-workflow-contract.sh' "${release_contract_smoke_workflow_path}" \
+  && rg -q 'scripts/test-alpha-release-workflow-contract-guard.sh' "${release_contract_smoke_workflow_path}" \
   && rg -q 'scripts/test-verify-release-promotion-inputs.sh' "${release_contract_smoke_workflow_path}" \
   && rg -q 'scripts/test-generate-release-publish-manifest.sh' "${release_contract_smoke_workflow_path}" \
-  && rg -q 'scripts/test-verify-release-publish-manifest.sh' "${release_contract_smoke_workflow_path}"; then
+  && rg -q 'scripts/test-verify-release-publish-manifest.sh' "${release_contract_smoke_workflow_path}" \
+  && rg -q 'scripts/test-release-contract-smoke-workflow-contract-guard.sh' "${release_contract_smoke_workflow_path}"; then
   bool_has_release_contract_smoke_workflow=1
 fi
 
@@ -331,7 +333,7 @@ emit_check "M9-A" "release gate script exists" "${bool_has_release_gate}" "scrip
 emit_check "M9-B" "release gate workflow exists" "${bool_has_release_gate_ci}" ".github/workflows/alpha-release-gate.yml"
 emit_check "M9-C" "promotion verifier/manifest chain exists" "${bool_has_release_verifier_chain}" "scripts/verify-release-promotion-inputs.sh + publish-manifest scripts"
 emit_check "M9-D" "release gate enforces strict milestone closure" "${bool_has_release_gate_closure_enforcement}" "scripts/release-alpha-gate.sh"
-emit_check "M9-E" "release-contract-smoke workflow keeps release verifier/publish tests" "${bool_has_release_contract_smoke_workflow}" "${release_contract_smoke_workflow_path}"
+emit_check "M9-E" "release-contract-smoke workflow keeps release verifier/publish + guard tests" "${bool_has_release_contract_smoke_workflow}" "${release_contract_smoke_workflow_path}"
 emit_check "M9-F" "naming-lock CI enforces release-contract-smoke contract + guard tests" "${bool_has_release_contract_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M9-G" "alpha-release workflow keeps release/promotion/publish/upload contract" "${bool_has_alpha_release_workflow_contract}" "${alpha_release_workflow_path}"
 emit_check "M9-H" "naming-lock CI enforces alpha-release workflow contract + guard tests" "${bool_has_alpha_release_ci_guard}" "${naming_lock_workflow_path}"

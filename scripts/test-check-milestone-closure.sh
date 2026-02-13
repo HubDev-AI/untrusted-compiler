@@ -56,12 +56,16 @@ jobs:
     steps:
       - name: Verify alpha release gate workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify alpha release gate workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
       - name: Verify release promotion input verifier
         run: scripts/test-verify-release-promotion-inputs.sh
       - name: Verify release publish manifest generation
         run: scripts/test-generate-release-publish-manifest.sh
       - name: Verify release publish manifest verifier
         run: scripts/test-verify-release-publish-manifest.sh
+      - name: Verify release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
 YAML
 cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'
 name: Naming Lock
@@ -448,10 +452,14 @@ jobs:
     steps:
       - name: Verify alpha release gate workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify alpha release gate workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
       - name: Verify release promotion input verifier
         run: scripts/test-verify-release-promotion-inputs.sh
       - name: Verify release publish manifest generation
         run: scripts/test-generate-release-publish-manifest.sh
+      - name: Verify release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
 YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
@@ -472,12 +480,16 @@ jobs:
     steps:
       - name: Verify alpha release gate workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
+      - name: Verify alpha release gate workflow guard behavior
+        run: scripts/test-alpha-release-workflow-contract-guard.sh
       - name: Verify release promotion input verifier
         run: scripts/test-verify-release-promotion-inputs.sh
       - name: Verify release publish manifest generation
         run: scripts/test-generate-release-publish-manifest.sh
       - name: Verify release publish manifest verifier
         run: scripts/test-verify-release-publish-manifest.sh
+      - name: Verify release-contract-smoke workflow guard behavior
+        run: scripts/test-release-contract-smoke-workflow-contract-guard.sh
 YAML
 
 cat > "$tmp/.github/workflows/naming-lock.yml" <<'YAML'

@@ -52,8 +52,10 @@ require_regex '^[[:space:]]*branches:[[:space:]]*$'
 require_regex '^[[:space:]]*-[[:space:]]*main[[:space:]]*$'
 
 require_token 'scripts/test-alpha-release-workflow-contract.sh'
+require_token 'scripts/test-alpha-release-workflow-contract-guard.sh'
 require_token 'scripts/test-verify-release-promotion-inputs.sh'
 require_token 'scripts/test-generate-release-publish-manifest.sh'
 require_token 'scripts/test-verify-release-publish-manifest.sh'
+require_token 'scripts/test-release-contract-smoke-workflow-contract-guard.sh'
 
 echo "release-contract-smoke workflow contract test passed"
