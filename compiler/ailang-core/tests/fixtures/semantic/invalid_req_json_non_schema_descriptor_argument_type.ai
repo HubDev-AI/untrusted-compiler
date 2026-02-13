@@ -1,0 +1,4 @@
+fn bad(path: PathSafe) effects { net } -> Int {
+  req.json(path);
+  0
+}

@@ -55,5 +55,6 @@ fn createUser() effects { net } -> Int {
 
 - Tradeoff: accepted schema descriptors are still permissive (`Unknown`/string-style descriptors remain allowed for bridge stage).
 - Next:
+  - narrow accepted descriptors to bridge-name `String` or typed `Schema<_>` only (`176-m7-req-json-schema-descriptor-narrowing.md`),
   - continue tightening req/res call contracts,
   - then align runtime decode behavior and budgets with these semantic guarantees.

@@ -174,3 +174,4 @@
 - Added `json.decode` schema-descriptor hardening so decode schema arguments must be explicit `Schema<_>` values (not placeholders like `String`), with schema-tagged diagnostics and dedicated fixture/tag coverage.
 - Added `sql.q` params value-safety hardening so param payloads cannot be `Secret<_>` or `Untrusted<_>`, with tagged diagnostics and dedicated semantic/tag fixtures.
 - Added `db.queryOne` row-schema descriptor hardening so row schema arguments must be `Schema<_>`; updated capability fixtures/integration samples away from string row names and added schema-tagged diagnostics.
+- Narrowed `req.json` schema descriptor acceptance to `String` (bridge mode) or typed `Schema<_>` only, rejecting unrelated placeholder types with schema-tagged diagnostics.

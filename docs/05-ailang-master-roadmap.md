@@ -251,6 +251,7 @@ It explicitly includes a parallel documentation workflow so `docs/` evolves into
   - Route handler compatibility now also requires numeric return types (`Int`/`Int64`) for the current runtime bridge, with compile-time diagnostics for non-numeric handler returns.
   - `req.json(...)` schema gate now rejects invalid schema argument shapes (numeric/boolean/untrusted/secret) instead of only checking missing arguments, with security/schema tagged diagnostics.
   - `req.json(...)` now also enforces exact call arity (`req.json(schema)` only).
+  - `req.json(...)` now narrows accepted schema descriptors to bridge-name `String` values or typed `Schema<_>` descriptors.
   - `res.text(...)` now enforces bridge signature shape:
     - exactly two arguments,
     - numeric status code,
@@ -798,6 +799,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M7 Slice: Route Handler Compatibility (Zero-Arg Bridge Contract)".
 - Chapter: "M7 Slice: Route Handler Return-Type Bridge Contract".
 - Chapter: "M7 Slice: req.json Schema-Argument Contract Hardening".
+- Chapter: "M7 Slice: req.json Schema-Descriptor Narrowing".
 - Chapter: "M7 Slice: req/res Call-Shape Signature Hardening".
 - Chapter: "M7 Slice: res.html Signature Hardening".
 - Chapter: "M7 Slice: Header/Cookie Sink Signature Hardening".

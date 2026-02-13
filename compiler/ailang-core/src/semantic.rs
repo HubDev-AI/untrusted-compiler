@@ -1748,11 +1748,11 @@ impl Analyzer {
                 }
 
                 let schema_ty = &arg_types[0];
-                if schema_ty.is_numeric()
+                let schema_is_invalid = schema_ty.is_numeric()
                     || schema_ty.is_bool()
                     || schema_ty.contains_secret()
-                    || schema_ty.contains_untrusted()
-                {
+                    || schema_ty.contains_untrusted();
+                if schema_is_invalid {
                     self.diagnostics.push(
                         Diagnostic::error(
                             "E4001",
@@ -1764,6 +1764,25 @@ impl Analyzer {
                         .with_note(format!("found `{}`", schema_ty.describe()))
                         .with_note(
                             "`req.json` expects a schema symbol/descriptor, not numeric/boolean/untrusted/secret data",
+                        ),
+                    );
+                }
+
+                if !schema_is_invalid
+                    && !schema_ty.is_named("String")
+                    && schema_value_type(schema_ty).is_none()
+                {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "req.json schema argument must be `String` or `Schema<_>`",
+                            args[0].span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(format!("found `{}`", schema_ty.describe()))
+                        .with_note(
+                            "pass a schema-name string in bridge mode or a typed `Schema<T>` descriptor",
                         ),
                     );
                 }
