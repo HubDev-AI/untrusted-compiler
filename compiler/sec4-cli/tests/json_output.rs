@@ -158,6 +158,48 @@ fn check_failure_stderr_includes_source_snippet_and_tags() {
 }
 
 #[test]
+fn explain_known_security_code_prints_targeted_guidance() {
+    let output = run_cli(&["explain", "E1002"]);
+    assert!(
+        output.status.success(),
+        "explain should succeed for known code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("E1002 - Trust Boundary and Secret Flow"),
+        "stdout should include mapped explain topic:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("sec4 check --emit diagnostics-json"),
+        "stdout should include follow-up command guidance:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docs/book/53-v0-security-baseline.md"),
+        "stdout should include docs pointer for the code family:\n{stdout}"
+    );
+}
+
+#[test]
+fn explain_unknown_code_prints_generic_guidance() {
+    let output = run_cli(&["explain", "Z9999"]);
+    assert!(
+        output.status.success(),
+        "explain should stay successful for unknown code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("Z9999 - Unknown Diagnostic Family"),
+        "stdout should identify unknown family:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("docs/05-sec4-master-roadmap.md"),
+        "stdout should include generic docs fallback:\n{stdout}"
+    );
+}
+
+#[test]
 fn sec_audit_json_keeps_stdout_parseable_json() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path

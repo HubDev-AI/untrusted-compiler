@@ -178,10 +178,178 @@ fn cmd_audit(args: AuditArgs) -> Result<(), i32> {
 }
 
 fn cmd_explain(code: &str) -> Result<(), i32> {
-    println!(
-        "explain {code}: use diagnostic spans and notes from `sec4 check --emit diagnostics-json` plus the security chapters in docs/book/"
-    );
+    let code = code.trim();
+    if code.is_empty() {
+        eprintln!("explain requires a diagnostic code");
+        return Err(2);
+    }
+
+    let normalized = code.to_ascii_uppercase();
+    let (topic, summary, fixes, docs_path) = explain_topic(&normalized);
+
+    println!("{normalized} - {topic}");
+    println!("{summary}");
+    println!();
+    println!("Likely actions:");
+    for fix in fixes {
+        println!("- {fix}");
+    }
+    println!();
+    println!("Related commands:");
+    println!("- sec4 check --emit diagnostics-json");
+    println!("- sec4 audit --format text");
+    println!("- sec4 gate --fail-on 'risk>=HIGH'");
+    println!("Docs: {docs_path}");
+
     Ok(())
+}
+
+fn explain_topic(
+    code: &str,
+) -> (
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+    &'static str,
+) {
+    const TRUST_FIXES: [&str; 3] = [
+        "introduce an explicit trust gate (schema decode, validate.*, sanitize.*)",
+        "pass typed sink values (SqlQuery/HtmlSafe/PublicUrl/PathSafe/HeaderValue)",
+        "redact or remove Secret<_> values before log/json/formatting",
+    ];
+    const EFFECT_FIXES: [&str; 3] = [
+        "declare all used effects in the function signature",
+        "thread the required capability (DbCap/NetCap/FsCap/SecretsCap)",
+        "check policy forbids/allowlist annotations for restricted effects",
+    ];
+    const TYPE_FIXES: [&str; 3] = [
+        "inspect expected vs actual type at the primary span",
+        "align shape fields and optional handling (Option/Result)",
+        "prefer explicit conversion/gate calls over implicit assumptions",
+    ];
+    const SCHEMA_FIXES: [&str; 3] = [
+        "add explicit schema descriptors where required (req.json/res.json/json.encode/decode)",
+        "ensure schema/value type pairing is valid (Schema<T> with T)",
+        "keep Budget and context arguments wired for decode paths",
+    ];
+    const TEMPLATE_FIXES: [&str; 3] = [
+        "replace raw string interpolation with typed SQL/HTML helpers",
+        "ensure SQL params are trusted non-secret values",
+        "ensure HTML interpolation uses HtmlSafe values only",
+    ];
+    const POLICY_FIXES: [&str; 3] = [
+        "review the effective policy profile for forbidden effects/features",
+        "use narrow allowlist annotations with reason/ticket/expiry only when needed",
+        "re-run sec4 audit and gate on severity thresholds in CI",
+    ];
+    const PARSE_FIXES: [&str; 3] = [
+        "fix syntax around the highlighted token/span first",
+        "re-run sec4 check to surface semantic diagnostics after parse recovery",
+        "use --emit diagnostics-json for machine-readable span details",
+    ];
+    const BUDGET_FIXES: [&str; 3] = [
+        "increase analysis/request budget settings for large files",
+        "reduce file complexity while iterating (split modules, fewer open files)",
+        "retry the same command/editor action after budget adjustment",
+    ];
+    const BUILD_FIXES: [&str; 3] = [
+        "verify sec4.toml/sec4.lock entry path and project layout",
+        "check policy/profile/build artifact paths exist and are readable",
+        "re-run sec4 build with --locked only when lockfile is up to date",
+    ];
+    const UNKNOWN_FIXES: [&str; 3] = [
+        "inspect the diagnostic span, notes, and tags first",
+        "run sec4 check --emit diagnostics-json for full structured details",
+        "search the roadmap/book chapters for the specific code family",
+    ];
+
+    if code == "I9001" {
+        return (
+            "Analysis Budget/Deadline Interruption",
+            "The compiler or language server stopped early because a budget/deadline interrupt fired.",
+            &BUDGET_FIXES,
+            "docs/book/260-m11-diagnostics-analysis-budget-guardrails.md",
+        );
+    }
+
+    if code.starts_with('L') || code.starts_with('P') {
+        return (
+            "Lexing/Parsing Syntax Issue",
+            "Source text could not be parsed into a valid program shape at the highlighted span.",
+            &PARSE_FIXES,
+            "docs/book/31-parser-design-and-ast.md",
+        );
+    }
+
+    if code.starts_with("E1") {
+        return (
+            "Trust Boundary and Secret Flow",
+            "A value crossed a security boundary without the required trusted/safe type or secret handling rule.",
+            &TRUST_FIXES,
+            "docs/book/53-v0-security-baseline.md",
+        );
+    }
+
+    if code.starts_with("E2") {
+        return (
+            "Effects and Capability Contract",
+            "An effect declaration/capability requirement was missing, mismatched, or forbidden by policy.",
+            &EFFECT_FIXES,
+            "docs/book/50-effect-system-and-auditable-side-effects.md",
+        );
+    }
+
+    if code.starts_with("E3") {
+        return (
+            "Type/Shape Compatibility",
+            "The expression or shape does not match the required type contract.",
+            &TYPE_FIXES,
+            "docs/book/41-type-system-v0.1-lite.md",
+        );
+    }
+
+    if code.starts_with("E4") {
+        return (
+            "Schema and Encoding/Decoding Contract",
+            "Schema-gated APIs were called with invalid descriptors, arity, or value pairings.",
+            &SCHEMA_FIXES,
+            "docs/book/54-v0-stdlib-security-surface.md",
+        );
+    }
+
+    if code.starts_with("E5") {
+        return (
+            "SQL/HTML Template Safety",
+            "Template/sink restrictions were violated for SQL or HTML safe construction.",
+            &TEMPLATE_FIXES,
+            "docs/book/55-v0-typing-effects-security-rules.md",
+        );
+    }
+
+    if code.starts_with("E6") {
+        return (
+            "Policy Enforcement Violation",
+            "A policy rule blocked the operation or required additional allowlist constraints.",
+            &POLICY_FIXES,
+            "docs/book/64-sec-audit-spec.md",
+        );
+    }
+
+    if code.starts_with('M') {
+        return (
+            "Manifest/Build/Artifact Contract",
+            "Project manifest, lockfile, or build artifact validation failed.",
+            &BUILD_FIXES,
+            "docs/book/11-cli-and-build-lifecycle.md",
+        );
+    }
+
+    (
+        "Unknown Diagnostic Family",
+        "The code family is not yet mapped by sec4 explain; use structured diagnostics and docs to triage.",
+        &UNKNOWN_FIXES,
+        "docs/05-sec4-master-roadmap.md",
+    )
 }
 
 fn cmd_sec_audit(

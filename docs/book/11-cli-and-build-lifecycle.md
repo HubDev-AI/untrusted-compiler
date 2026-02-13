@@ -18,7 +18,16 @@
 - `build`: run `check` validations + write lockfile stub (`sec4.lock`).
 - `run`/`test`/`fmt`/`lint`: placeholders with deterministic messages and basic validation.
 - `audit`: validates project + semantic checks, emits `build/security_map.json`, then renders deterministic posture findings.
-- `explain`: prints deterministic guidance entrypoint for a diagnostic code.
+- `explain`: maps diagnostic-code families to targeted triage guidance:
+  - `E1xxx`: trust boundary / secret-flow violations
+  - `E2xxx`: effects and capabilities
+  - `E3xxx`: type/shape compatibility
+  - `E4xxx`: schema/encode/decode contracts
+  - `E5xxx`: SQL/HTML template safety
+  - `E6xxx`: policy enforcement
+  - `L*`/`P*`: lexing/parsing syntax issues
+  - `I9001`: budget/deadline interruption guidance
+  - `M*`: manifest/build contract errors
 - `gate`: runs policy/security gate checks (threshold-oriented wrapper over audit flow).
 
 ## Build flow (current)
