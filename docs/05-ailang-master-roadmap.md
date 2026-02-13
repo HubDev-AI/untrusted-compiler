@@ -1054,6 +1054,7 @@ Implementation order is intentionally linear to reduce thrash:
 - Chapter: "M11 Slice: Tree-Sitter Outline/Indent/Textobjects".
 - Chapter: "M11 Slice: Workspace-Aware Definition and Hover".
 - Chapter: "M11 Slice: Ambiguous Declaration Safety Guard".
+- Chapter: "M11 Slice: Language Server Operations Guide".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
