@@ -267,5 +267,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `300-m9-sec4-explain-exact-code-mappings.md`
 - `301-m10-benchmark-artifact-contract-spec.md`
 - `302-m9-release-gate-policy-and-naming-stamps.md`
+- `303-m9-release-gate-compiler-runtime-hash-stamps.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -75,7 +75,10 @@ This script executes the checklist end-to-end against sample projects using the 
 Release gate artifact stamping includes:
 - copied active policy profile file in release artifact directory,
 - policy profile SHA256 in `checksums.txt` and `summary.txt`,
-- explicit `naming lock: PASS` in `summary.txt`.
+- explicit `naming lock: PASS` in `summary.txt`,
+- `sec4` binary SHA256 in `checksums.txt` and `summary.txt`,
+- runtime ABI source/header SHA256 in `checksums.txt` and `summary.txt`,
+- copied runtime ABI files (`sec4_runtime.h`, `sec4_runtime.c`) in release artifacts.
 
 CI wiring:
 - `.github/workflows/alpha-release-gate.yml`

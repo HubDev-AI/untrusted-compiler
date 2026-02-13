@@ -70,6 +70,8 @@ run() {
 
 PROFILE_HASH="$(hash_file "${PROFILE_PATH}")"
 PROFILE_BASENAME="$(basename "${PROFILE_PATH}")"
+RUNTIME_HEADER_PATH="${ROOT_DIR}/runtime/c/sec4_runtime.h"
+RUNTIME_SOURCE_PATH="${ROOT_DIR}/runtime/c/sec4_runtime.c"
 
 SEC4_BIN="${ROOT_DIR}/target/debug/sec4"
 if [[ ! -x "${SEC4_BIN}" ]]; then
@@ -84,6 +86,10 @@ fi
 
 run cargo build -p sec4 --manifest-path "${ROOT_DIR}/Cargo.toml" >/dev/null
 
+SEC4_BIN_HASH="$(hash_file "${SEC4_BIN}")"
+RUNTIME_HEADER_HASH="$(hash_file "${RUNTIME_HEADER_PATH}")"
+RUNTIME_SOURCE_HASH="$(hash_file "${RUNTIME_SOURCE_PATH}")"
+
 mkdir -p "${OUT_DIR}"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sec4-alpha-gate.XXXXXX")"
 trap 'rm -rf "${WORK_DIR}"' EXIT
@@ -91,7 +97,12 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 CHECKSUMS_FILE="${OUT_DIR}/checksums.txt"
 : > "${CHECKSUMS_FILE}"
 run cp "${PROFILE_PATH}" "${OUT_DIR}/${PROFILE_BASENAME}"
+run cp "${RUNTIME_HEADER_PATH}" "${OUT_DIR}/sec4_runtime.h"
+run cp "${RUNTIME_SOURCE_PATH}" "${OUT_DIR}/sec4_runtime.c"
 echo "policy_profile_sha256 ${PROFILE_HASH}" >> "${CHECKSUMS_FILE}"
+echo "sec4_binary_sha256 ${SEC4_BIN_HASH}" >> "${CHECKSUMS_FILE}"
+echo "runtime_header_sha256 ${RUNTIME_HEADER_HASH}" >> "${CHECKSUMS_FILE}"
+echo "runtime_source_sha256 ${RUNTIME_SOURCE_HASH}" >> "${CHECKSUMS_FILE}"
 
 SAMPLES=("hello" "hello-api")
 for sample in "${SAMPLES[@]}"; do
@@ -158,6 +169,9 @@ SUMMARY_PATH="${OUT_DIR}/summary.txt"
   echo "sec4 alpha release gate: PASS"
   echo "policy profile: ${PROFILE_PATH}"
   echo "policy profile sha256: ${PROFILE_HASH}"
+  echo "sec4 binary sha256: ${SEC4_BIN_HASH}"
+  echo "runtime header sha256: ${RUNTIME_HEADER_HASH}"
+  echo "runtime source sha256: ${RUNTIME_SOURCE_HASH}"
   echo "naming lock: PASS"
   echo "samples: ${SAMPLES[*]}"
   echo "artifacts: ${OUT_DIR}"
