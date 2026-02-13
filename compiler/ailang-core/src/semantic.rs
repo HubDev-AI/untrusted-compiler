@@ -2632,6 +2632,7 @@ impl Analyzer {
                 arg_types,
                 "db.exec(ctx, capability, query)",
             );
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
             return;
         }
 
@@ -2642,6 +2643,7 @@ impl Analyzer {
                 arg_types,
                 "db.execTx(ctx, tx, query)",
             );
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
             return;
         }
 
@@ -2652,6 +2654,22 @@ impl Analyzer {
                 arg_types,
                 "db.queryOne(ctx, capability, query, rowSchema)",
             );
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 2);
+            return;
+        }
+
+        if is_db_exec_call(callee_name) && args.len() == 2 {
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 1);
+            return;
+        }
+
+        if is_db_exec_tx_call(callee_name) && args.len() == 2 {
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 1);
+            return;
+        }
+
+        if is_db_query_one_call(callee_name) && args.len() == 3 {
+            self.enforce_db_sink_query_type(callee_name, args, arg_types, 1);
         }
     }
 
@@ -2677,6 +2695,36 @@ impl Analyzer {
             .with_tag("sink")
             .with_note(format!("found `{}`", context_type.describe()))
             .with_note(format!("use `{usage}` for context-first `{callee_name}` calls")),
+        );
+    }
+
+    fn enforce_db_sink_query_type(
+        &mut self,
+        callee_name: &str,
+        args: &[Expr],
+        arg_types: &[Type],
+        query_index: usize,
+    ) {
+        if arg_types[query_index].contains_untrusted() || arg_types[query_index].contains_secret() {
+            return;
+        }
+
+        if arg_types[query_index].is_named("SqlQuery") {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error(
+                "E4001",
+                "db sink query argument must be `SqlQuery`",
+                args[query_index].span.clone(),
+            )
+            .with_tag("security")
+            .with_tag("sink")
+            .with_note(format!("found `{}`", arg_types[query_index].describe()))
+            .with_note(format!(
+                "use typed `SqlQuery` values when calling `{callee_name}`"
+            )),
         );
     }
 

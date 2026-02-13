@@ -1,0 +1,4 @@
+fn bad(db: DbCap) effects { db.write } -> Int {
+  db.exec(db, 1);
+  0
+}

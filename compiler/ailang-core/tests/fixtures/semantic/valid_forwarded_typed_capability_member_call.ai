@@ -2,8 +2,8 @@ fn getExec(repo: DbCap) {
   repo.exec
 }
 
-fn ok(repo: DbCap) effects { db.write } -> Int {
+fn ok(repo: DbCap, query: SqlQuery) effects { db.write } -> Int {
   let exec = getExec(repo);
-  exec(repo, "SELECT id FROM users");
+  exec(repo, query);
   1
 }

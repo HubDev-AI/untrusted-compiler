@@ -2,8 +2,8 @@ fn getExec() {
   db.exec
 }
 
-fn bad(net: NetCap) effects { db.write } -> Int {
+fn bad(net: NetCap, query: SqlQuery) effects { db.write } -> Int {
   let exec = getExec();
-  exec(net, "SELECT id FROM users");
+  exec(net, query);
   1
 }

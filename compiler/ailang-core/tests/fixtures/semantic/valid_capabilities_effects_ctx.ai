@@ -1,6 +1,6 @@
-fn ok(ctx: Ctx, db: DbCap, net: NetCap, internal: InternalNetCap, sec: SecretsCap, fs: FsCap) effects { db.read, db.write, net, secrets.read, fs.read, fs.write } -> Int {
-  db.exec(ctx, db, "SELECT id FROM users");
-  db.queryOne(ctx, db, "SELECT id FROM users LIMIT 1", "Row");
+fn ok(ctx: Ctx, db: DbCap, net: NetCap, internal: InternalNetCap, sec: SecretsCap, fs: FsCap, writeQuery: SqlQuery, readQuery: SqlQuery) effects { db.read, db.write, net, secrets.read, fs.read, fs.write } -> Int {
+  db.exec(ctx, db, writeQuery);
+  db.queryOne(ctx, db, readQuery, "Row");
   httpClient.get(ctx, net, "https://example.com");
   httpClient.getInternal(ctx, internal, "http://internal.local");
   secrets.get(ctx, sec, "TOKEN");
