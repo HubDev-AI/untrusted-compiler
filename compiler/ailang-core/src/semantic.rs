@@ -2801,6 +2801,27 @@ impl Analyzer {
                 }
             }
         }
+
+        if is_headers_name_call(callee_name) {
+            if let ExprKind::String(value) = &args[0].kind {
+                let valid = !value.is_empty()
+                    && value
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-');
+                if !valid {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "headers.name literal contains invalid characters",
+                            args[0].span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("sink")
+                        .with_note("header names should contain ASCII alphanumerics and '-' only"),
+                    );
+                }
+            }
+        }
     }
 
     fn enforce_cookie_build_signature(

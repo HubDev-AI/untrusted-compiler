@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  headers.name("X Bad:Name");
+  0
+}

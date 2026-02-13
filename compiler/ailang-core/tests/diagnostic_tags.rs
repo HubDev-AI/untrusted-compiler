@@ -560,6 +560,25 @@ fn bad() effects { net } -> Int {
 }
 
 #[test]
+fn headers_name_literal_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad() -> Int {
+  headers.name("X Bad:Name");
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "headers.name literal contains invalid characters")
+        .expect("expected headers.name literal diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn headers_value_crlf_diagnostic_has_security_sink_tags() {
     let source = r#"
 fn bad() -> Int {
