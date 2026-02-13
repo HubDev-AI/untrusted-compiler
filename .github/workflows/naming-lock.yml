@@ -17,7 +17,7 @@ jobs:
         run: scripts/check-naming-lock.sh
 
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
 
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh

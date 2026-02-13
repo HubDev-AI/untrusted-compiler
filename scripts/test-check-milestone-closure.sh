@@ -81,7 +81,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -532,7 +532,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate release-contract-smoke workflow contract
@@ -602,7 +602,7 @@ jobs:
 YAML
 
 if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
-  echo "expected pending failure when naming-lock workflow misses sec4-explain coverage checker" >&2
+  echo "expected pending failure when naming-lock workflow misses sec4-explain coverage contract test" >&2
   exit 1
 fi
 
@@ -620,7 +620,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -661,7 +661,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -705,7 +705,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -749,7 +749,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -789,7 +789,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -833,7 +833,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate sec4 explain audit coverage
-        run: scripts/check-sec4-explain-audit-coverage.sh
+        run: scripts/test-check-sec4-explain-audit-coverage.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
