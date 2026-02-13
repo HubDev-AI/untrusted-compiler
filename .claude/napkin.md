@@ -155,3 +155,4 @@
 - Added `err.withPath` path typing hardening so error-path payloads must be strings, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.withLimit` argument hardening so limit names are strings and max/actual values are numeric, with tagged diagnostics and aligned error-builder integration fixtures.
 - Added `err.withDependency` argument hardening so dependency/operation fields are strings and retryable is boolean, with tagged diagnostics and aligned error-builder integration fixtures.
+- Added `err.internal` message hardening so internal-error constructors require a single string message argument, with tagged diagnostics and aligned error-builder integration fixtures.

@@ -62,7 +62,7 @@ The v0 standard runtime error model defines explicit constructor and enrichment 
 ```ailang
 fn main() -> Int {
   let base = err.validation(1, 2);
-  let internal = err.internal(1);
+  let internal = err.internal("internal");
   err.withDetail(base, "field", 2);
   err.withCause(base, internal);
   0

@@ -1262,7 +1262,7 @@ entry = "src/main.ai"
   err.notFound(1, 2);
   err.conflict(1, 2);
   err.rateLimit(1, 2, 3);
-  let internal = err.internal(1);
+  let internal = err.internal("internal");
   err.withPath(base, "$.field");
   err.withDetail(base, "field", 2);
   err.withLimit(base, "limit", 2, 3);
@@ -1290,7 +1290,7 @@ entry = "src/main.ai"
     assert!(generated_c.contains("ailang_rt_err_not_found(1, 2)"));
     assert!(generated_c.contains("ailang_rt_err_conflict(1, 2)"));
     assert!(generated_c.contains("ailang_rt_err_rate_limit(1, 2, 3)"));
-    assert!(generated_c.contains("ailang_rt_err_internal(1)"));
+    assert!(generated_c.contains("ailang_rt_err_internal(\"internal\")"));
     assert!(generated_c.contains("ailang_rt_err_with_path(base, \"$.field\")"));
     assert!(generated_c.contains("ailang_rt_err_with_detail(base, \"field\", 2)"));
     assert!(generated_c.contains("ailang_rt_err_with_limit(base, \"limit\", 2, 3)"));
