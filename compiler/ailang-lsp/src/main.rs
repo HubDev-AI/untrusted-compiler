@@ -1587,14 +1587,7 @@ fn collect_identifier_hits_in_expr(
         return;
     }
     match &expr.kind {
-        ExprKind::Identifier(name) => {
-            if name == target_name && &expr.span.file == file {
-                hits.push(IdentifierHit {
-                    name: name.clone(),
-                    span: expr.span.clone(),
-                });
-            }
-        }
+        ExprKind::Identifier(_) => {}
         ExprKind::Unary { expr, .. } => {
             collect_identifier_hits_in_expr(expr, file, target_name, hits, deadline)
         }
@@ -1606,6 +1599,14 @@ fn collect_identifier_hits_in_expr(
             collect_identifier_hits_in_expr(object, file, target_name, hits, deadline);
         }
         ExprKind::Call { callee, args } => {
+            if let ExprKind::Identifier(name) = &callee.kind {
+                if name == target_name && &callee.span.file == file {
+                    hits.push(IdentifierHit {
+                        name: name.clone(),
+                        span: callee.span.clone(),
+                    });
+                }
+            }
             collect_identifier_hits_in_expr(callee, file, target_name, hits, deadline);
             for arg in args {
                 collect_identifier_hits_in_expr(arg, file, target_name, hits, deadline);
@@ -2243,6 +2244,25 @@ mod tests {
         assert!(
             !state.open_document_symbols.contains_key(dependent_uri),
             "dependency refresh should invalidate dependent symbol cache entries",
+        );
+    }
+
+    #[test]
+    fn callsite_hit_collection_ignores_non_callee_identifiers() {
+        let path = PathBuf::from("/tmp/lsp_callsite_hits.ai");
+        let source = "fn helper() -> Int {\n  1\n}\n\nfn apply(v: Int) -> Int {\n  v\n}\n\nfn one() -> Int {\n  helper();\n  apply(helper)\n}\n";
+        let program = parse_source(&path, source).expect("source should parse");
+
+        let hits = collect_identifier_hits_by_name(&program, &path, "helper", None);
+        assert_eq!(
+            hits.len(),
+            1,
+            "function callsite collection should only include callee identifiers",
+        );
+        assert_eq!(
+            hits[0].span.start_line,
+            10,
+            "only direct `helper()` callee should be collected",
         );
     }
 
@@ -3310,6 +3330,20 @@ mod tests {
         run_stdio(&mut reader, &mut output).expect("stdio loop should succeed");
 
         let messages = collect_messages(output);
+        if let Some(publish) = messages
+            .iter()
+            .find(|msg| msg.get("method") == Some(&json!("textDocument/publishDiagnostics")))
+        {
+            eprintln!(
+                "rename precision diagnostics: {}",
+                publish
+                    .get("params")
+                    .and_then(|params| params.get("diagnostics"))
+                    .and_then(Value::as_array)
+                    .map(|items| items.len())
+                    .unwrap_or(0)
+            );
+        }
         let rename_response = messages
             .iter()
             .find(|msg| msg.get("id") == Some(&json!(10)))
