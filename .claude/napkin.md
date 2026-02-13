@@ -190,3 +190,4 @@
 - For new CLI trend/export flags, enforce explicit flag dependencies early (`history-window` -> `history-dir`, `write-history-summary` -> `history-window`) and pin with integration tests.
 - Avoid silent coercion for CLI security/reporting flags; reject invalid bounds explicitly and pin with integration tests.
 - Window trend summaries are significantly more useful when anchored with oldest/latest policy hash + timestamp; include range metadata in exported payloads.
+- For dual text/json CLI outputs, always add routing tests per mode so auxiliary lines never contaminate JSON stdout contracts.

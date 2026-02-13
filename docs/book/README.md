@@ -164,5 +164,6 @@ This folder is the long-form, chapter-oriented documentation track for AILang.
 - `197-m8-sec-audit-history-summary-export.md`
 - `198-m8-sec-audit-history-window-bounds-validation.md`
 - `199-m8-sec-audit-history-window-range-metadata.md`
+- `200-m8-sec-audit-history-window-output-mode-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.

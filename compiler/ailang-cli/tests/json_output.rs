@@ -286,6 +286,54 @@ fn sec_audit_history_window_summary_is_emitted_on_stderr_in_json_mode() {
 }
 
 #[test]
+fn sec_audit_history_window_summary_is_emitted_on_stdout_in_text_mode() {
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+    let history_dir = temp_dir("ailang-audit-history-window-text");
+    let history = history_dir
+        .to_str()
+        .expect("history path should be valid utf-8");
+
+    let first = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--history-dir",
+        history,
+    ]);
+    assert!(first.status.success(), "first history run should succeed");
+
+    let second = run_cli(&[
+        "sec",
+        "audit",
+        "--path",
+        hello,
+        "--history-dir",
+        history,
+        "--history-window",
+        "2",
+    ]);
+    assert!(second.status.success(), "second history run should succeed");
+
+    let second_stdout = String::from_utf8(second.stdout).expect("stdout should be utf-8");
+    assert!(
+        second_stdout.contains("history window summary:"),
+        "text-mode history-window run should include summary on stdout"
+    );
+
+    let second_stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
+    assert!(
+        second_stderr.trim().is_empty(),
+        "text-mode history-window run should keep stderr empty"
+    );
+
+    fs::remove_dir_all(&history_dir).expect("temp history dir cleanup should succeed");
+}
+
+#[test]
 fn sec_audit_history_window_requires_history_dir() {
     let hello_path = workspace_root().join("examples/hello");
     let hello = hello_path
