@@ -2780,6 +2780,27 @@ impl Analyzer {
                 .with_note(format!("use string input for `{call_name}`")),
             );
         }
+
+        if is_headers_value_call(callee_name) {
+            if let ExprKind::String(value) = &args[0].kind {
+                let contains_crlf = value.contains('\r')
+                    || value.contains('\n')
+                    || value.contains("\\r")
+                    || value.contains("\\n");
+                if contains_crlf {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E4001",
+                            "headers.value literal cannot contain CR/LF",
+                            args[0].span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("sink")
+                        .with_note("header values must not include response-splitting sequences"),
+                    );
+                }
+            }
+        }
     }
 
     fn enforce_cookie_build_signature(

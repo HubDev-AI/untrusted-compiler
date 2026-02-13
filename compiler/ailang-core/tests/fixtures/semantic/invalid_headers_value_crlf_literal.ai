@@ -1,0 +1,4 @@
+fn bad() -> Int {
+  headers.value("\\n");
+  0
+}

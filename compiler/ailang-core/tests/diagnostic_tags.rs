@@ -560,6 +560,25 @@ fn bad() effects { net } -> Int {
 }
 
 #[test]
+fn headers_value_crlf_diagnostic_has_security_sink_tags() {
+    let source = r#"
+fn bad() -> Int {
+  headers.value("\\n");
+  0
+}
+"#;
+
+    let program = parse_source(Path::new("main.ai"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "headers.value literal cannot contain CR/LF")
+        .expect("expected headers.value CRLF diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "sink"));
+}
+
+#[test]
 fn sec_csp_add_signature_diagnostic_has_security_tag() {
     let source = r#"
 fn bad() -> Int {
