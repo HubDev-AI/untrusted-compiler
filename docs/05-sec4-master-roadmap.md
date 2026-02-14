@@ -43,7 +43,8 @@ Roadmap impact:
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
-- M15 runtime replay-stubbing expansion scope is now defined and ready to execute.
+- M15-S1a replay mock execution contract is now implemented:
+  - `sec4 replay --effects mock` now emits deterministic executed-stub counts/traces for net/db/fs in both text and JSON output modes.
 - M16-S1 live HTTP runtime bootstrap is now implemented:
   - runtime router + route registration + socket serve loop are active in `runtime/c/sec4_runtime.c`,
   - `res.text` now materializes real HTTP response payloads for active request handlers,
@@ -1729,9 +1730,32 @@ M13-S1 go/no-go note:
 - [ ] Runtime net stub materialization wired in replay `mock` path.
 - [ ] Runtime DB stub materialization wired in replay `mock` path.
 - [ ] Runtime FS stub materialization wired in replay `mock` path.
-- [ ] Replay runtime execution JSON/text contracts defined and tested.
+- [x] Replay runtime execution JSON/text contracts defined and tested.
 - [ ] Runtime replay guard scripts added and wired into naming-lock CI.
 - [ ] Closure-audit checks expanded with M15 runtime replay enforcement gates.
+
+### M15-S1a follow-up slice (mock execution trace/count contract)
+#### Scope
+- Expose explicit deterministic replay execution evidence in mock mode so replay output can be treated as runtime materialization evidence, not only compatibility precheck output.
+
+#### Build tasks
+- Add mock execution summary counters for net/db/fs replay operations.
+- Add deterministic mock execution traces for net/db/fs:
+  - net trace includes status/truncated/body kind from selected stub,
+  - db/fs traces align with matched dependency-signature ordering.
+- Emit execution summaries/traces in both text and JSON replay output modes.
+- Extend replay CLI integration tests to lock output contract presence and deterministic values.
+
+#### Acceptance criteria
+- `sec4 replay --effects mock` text output includes deterministic execution counters/traces.
+- `sec4 replay --effects mock --format json` includes parseable `mockExecutionCounts` and `mockExecutionTraces`.
+- Existing replay contract suites remain green.
+
+#### Tracking (live status)
+- [x] `mockExecutionCounts` added for net/db/fs in replay JSON output.
+- [x] `mockExecutionTraces` added for net/db/fs in replay JSON output.
+- [x] Replay text output includes deterministic execution counter/trace summaries.
+- [x] Replay integration tests updated for both no-dependency and dependency-backed mock runs.
 
 ### Exit criteria
 - Replay `mock` mode performs deterministic runtime stub execution across net/db/fs paths.
@@ -1746,6 +1770,7 @@ M13-S1 go/no-go note:
 - Chapter: "M15 Slice: Runtime FS Stub Materialization".
 - Chapter: "M15 Slice: Replay Runtime Diagnostics Contract".
 - Chapter: "M15 Slice: Replay Runtime Output Contract Guard".
+- Chapter: "M15 Slice: Replay Mock Execution Trace and Count Contract".
 
 ## M16 - Live HTTP Runtime Bootstrap (`sec4 run` E2E Serving)
 ### Trigger condition

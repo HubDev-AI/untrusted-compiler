@@ -243,6 +243,30 @@ struct ReplayMockDependencyTraces {
     fs: Vec<ReplayMockFsDependencyTrace>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockExecutionCounts {
+    net: usize,
+    db: usize,
+    fs: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockNetExecutionTrace {
+    index: usize,
+    trace_id: String,
+    signature: String,
+    status: i64,
+    truncated: bool,
+    body_kind: &'static str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockExecutionTraces {
+    net: Vec<ReplayMockNetExecutionTrace>,
+    db: Vec<ReplayMockDbDependencyTrace>,
+    fs: Vec<ReplayMockFsDependencyTrace>,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -368,6 +392,8 @@ fn cmd_replay_check(
     let mut mock_dependency_signatures: Option<ReplayMockDependencySignatures> = None;
     let mut mock_dependency_stub_summaries: Option<ReplayMockDependencyStubSummaries> = None;
     let mut mock_dependency_traces: Option<ReplayMockDependencyTraces> = None;
+    let mut mock_execution_counts: Option<ReplayMockExecutionCounts> = None;
+    let mut mock_execution_traces: Option<ReplayMockExecutionTraces> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -459,36 +485,28 @@ fn cmd_replay_check(
         stub_details = match collect_replay_db_fs_stub_details(&stubs_json) {
             Ok(details) => Some(details),
             Err(message) => {
-                eprintln!(
-                    "replay compatibility failed: stub registry contract invalid: {message}"
-                );
+                eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
                 return Err(1);
             }
         };
         net_stubs = match collect_replay_net_stubs(&stubs_json) {
             Ok(entries) => Some(entries),
             Err(message) => {
-                eprintln!(
-                    "replay compatibility failed: stub registry contract invalid: {message}"
-                );
+                eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
                 return Err(1);
             }
         };
         db_stubs = match collect_replay_db_stubs(&stubs_json) {
             Ok(entries) => Some(entries),
             Err(message) => {
-                eprintln!(
-                    "replay compatibility failed: stub registry contract invalid: {message}"
-                );
+                eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
                 return Err(1);
             }
         };
         fs_stubs = match collect_replay_fs_stubs(&stubs_json) {
             Ok(entries) => Some(entries),
             Err(message) => {
-                eprintln!(
-                    "replay compatibility failed: stub registry contract invalid: {message}"
-                );
+                eprintln!("replay compatibility failed: stub registry contract invalid: {message}");
                 return Err(1);
             }
         };
@@ -571,6 +589,16 @@ fn cmd_replay_check(
         }
         let db_match_count = capture_db_signatures.len();
         let fs_match_count = capture_fs_signatures.len();
+        let db_execution_traces = db_trace_entries.clone();
+        let fs_execution_traces = fs_trace_entries.clone();
+        let net_execution_trace = ReplayMockNetExecutionTrace {
+            index: 0,
+            trace_id: "net:0".to_string(),
+            signature: signature.clone(),
+            status: stub_match.status,
+            truncated: stub_match.truncated,
+            body_kind: stub_match.body_kind,
+        };
         mock_request_signature = Some(signature);
         mock_matched_stub = Some(stub_match);
         mock_dependency_signatures = Some(ReplayMockDependencySignatures {
@@ -588,6 +616,16 @@ fn cmd_replay_check(
         mock_dependency_matches = Some(ReplayMockDependencyMatches {
             db: db_match_count,
             fs: fs_match_count,
+        });
+        mock_execution_counts = Some(ReplayMockExecutionCounts {
+            net: 1,
+            db: db_match_count,
+            fs: fs_match_count,
+        });
+        mock_execution_traces = Some(ReplayMockExecutionTraces {
+            net: vec![net_execution_trace],
+            db: db_execution_traces,
+            fs: fs_execution_traces,
         });
     }
 
@@ -695,6 +733,45 @@ fn cmd_replay_check(
                 };
                 println!("replay mock dependency traces: db={db} fs={fs}");
             }
+            if let Some(counts) = &mock_execution_counts {
+                println!(
+                    "replay mock executed stubs: net={} db={} fs={}",
+                    counts.net, counts.db, counts.fs
+                );
+            }
+            if let Some(traces) = &mock_execution_traces {
+                let net = if traces.net.is_empty() {
+                    "-".to_string()
+                } else {
+                    traces
+                        .net
+                        .iter()
+                        .map(|entry| format!("{}({})", entry.trace_id, entry.signature))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                let db = if traces.db.is_empty() {
+                    "-".to_string()
+                } else {
+                    traces
+                        .db
+                        .iter()
+                        .map(|entry| format!("{}({})", entry.trace_id, entry.signature))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                let fs = if traces.fs.is_empty() {
+                    "-".to_string()
+                } else {
+                    traces
+                        .fs
+                        .iter()
+                        .map(|entry| format!("{}({})", entry.trace_id, entry.signature))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                println!("replay mock execution traces: net={net} db={db} fs={fs}");
+            }
         }
         ReplayOutputFormat::Json => {
             let payload = serde_json::json!({
@@ -744,6 +821,36 @@ fn cmd_replay_check(
                     })).collect::<Vec<_>>(),
                 })),
                 "mockDependencyTraces": mock_dependency_traces.as_ref().map(|traces| serde_json::json!({
+                    "db": traces.db.iter().map(|entry| serde_json::json!({
+                        "index": entry.index,
+                        "traceId": entry.trace_id,
+                        "signature": entry.signature,
+                        "rowCount": entry.row_count,
+                        "truncated": entry.truncated,
+                    })).collect::<Vec<_>>(),
+                    "fs": traces.fs.iter().map(|entry| serde_json::json!({
+                        "index": entry.index,
+                        "traceId": entry.trace_id,
+                        "signature": entry.signature,
+                        "ok": entry.ok,
+                        "truncated": entry.truncated,
+                        "bytes": entry.bytes,
+                    })).collect::<Vec<_>>(),
+                })),
+                "mockExecutionCounts": mock_execution_counts.as_ref().map(|counts| serde_json::json!({
+                    "net": counts.net,
+                    "db": counts.db,
+                    "fs": counts.fs,
+                })),
+                "mockExecutionTraces": mock_execution_traces.as_ref().map(|traces| serde_json::json!({
+                    "net": traces.net.iter().map(|entry| serde_json::json!({
+                        "index": entry.index,
+                        "traceId": entry.trace_id,
+                        "signature": entry.signature,
+                        "status": entry.status,
+                        "truncated": entry.truncated,
+                        "bodyKind": entry.body_kind,
+                    })).collect::<Vec<_>>(),
                     "db": traces.db.iter().map(|entry| serde_json::json!({
                         "index": entry.index,
                         "traceId": entry.trace_id,
@@ -926,8 +1033,7 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
                 .is_none()
             {
                 return Err(
-                    "capture.request.body.sha256 must be present for encoding=base64"
-                        .to_string(),
+                    "capture.request.body.sha256 must be present for encoding=base64".to_string(),
                 );
             }
         }
@@ -1036,9 +1142,9 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
             .ok_or_else(|| "capture.dependencies must be an object when present".to_string())?;
 
         if let Some(db_entries) = dependencies_obj.get("db") {
-            let db_entries = db_entries
-                .as_array()
-                .ok_or_else(|| "capture.dependencies.db must be an array when present".to_string())?;
+            let db_entries = db_entries.as_array().ok_or_else(|| {
+                "capture.dependencies.db must be an array when present".to_string()
+            })?;
             let mut db_signatures = HashSet::new();
             for (index, entry) in db_entries.iter().enumerate() {
                 let request = entry
@@ -1084,9 +1190,9 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
         }
 
         if let Some(fs_entries) = dependencies_obj.get("fs") {
-            let fs_entries = fs_entries
-                .as_array()
-                .ok_or_else(|| "capture.dependencies.fs must be an array when present".to_string())?;
+            let fs_entries = fs_entries.as_array().ok_or_else(|| {
+                "capture.dependencies.fs must be an array when present".to_string()
+            })?;
             let mut fs_signatures = HashSet::new();
             for (index, entry) in fs_entries.iter().enumerate() {
                 let request = entry
@@ -1350,9 +1456,7 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
         let response = entry
             .get("response")
             .and_then(serde_json::Value::as_object)
-            .ok_or_else(|| {
-                format!("stub registry stubs.db[{index}].response must be an object")
-            })?;
+            .ok_or_else(|| format!("stub registry stubs.db[{index}].response must be an object"))?;
         let row_count = response
             .get("rowCount")
             .and_then(serde_json::Value::as_i64)
@@ -1408,9 +1512,7 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
         let response = entry
             .get("response")
             .and_then(serde_json::Value::as_object)
-            .ok_or_else(|| {
-                format!("stub registry stubs.fs[{index}].response must be an object")
-            })?;
+            .ok_or_else(|| format!("stub registry stubs.fs[{index}].response must be an object"))?;
         response
             .get("ok")
             .and_then(serde_json::Value::as_bool)
@@ -1593,7 +1695,9 @@ fn collect_capture_db_fs_dependency_signatures(
                 .and_then(serde_json::Value::as_str)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| {
-                    format!("capture.dependencies.fs[{index}].request.op must be a non-empty string")
+                    format!(
+                        "capture.dependencies.fs[{index}].request.op must be a non-empty string"
+                    )
                 })?;
             let path_sha256 = request
                 .get("pathSha256")
@@ -1653,7 +1757,9 @@ fn collect_replay_net_stubs(
         let response = entry
             .get("response")
             .and_then(serde_json::Value::as_object)
-            .ok_or_else(|| format!("stub registry stubs.net[{index}].response must be an object"))?;
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].response must be an object")
+            })?;
         let status = response
             .get("status")
             .and_then(serde_json::Value::as_i64)

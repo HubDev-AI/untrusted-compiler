@@ -379,5 +379,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `412-m16-auth-runtime-gate-enforcement.md`
 - `413-m16-cors-allow-origin-propagation-on-runtime-responses.md`
 - `414-m16-env-configurable-runtime-request-body-cap.md`
+- `415-m15-replay-mock-execution-trace-and-count-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.

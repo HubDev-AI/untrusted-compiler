@@ -2409,6 +2409,16 @@ fn replay_check_mock_mode_text_reports_matched_stub_response_summary() {
         stdout.contains("replay mock dependency traces: db=- fs=-"),
         "stdout should include deterministic empty dependency trace line:\n{stdout}"
     );
+    assert!(
+        stdout.contains("replay mock executed stubs: net=1 db=0 fs=0"),
+        "stdout should include deterministic executed-stub count summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "replay mock execution traces: net=net:0(GET|https://example.com/ping|empty) db=- fs=-"
+        ),
+        "stdout should include deterministic executed-stub trace summary:\n{stdout}"
+    );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
@@ -2473,8 +2483,18 @@ fn replay_check_mock_mode_text_reports_dependency_stub_summaries() {
         "stdout should include deterministic dependency stub summary line:\n{stdout}"
     );
     assert!(
-        stdout.contains("replay mock dependency traces: db=db:0(users.by_id|abc123) fs=fs:0(read|p1)"),
+        stdout.contains(
+            "replay mock dependency traces: db=db:0(users.by_id|abc123) fs=fs:0(read|p1)"
+        ),
         "stdout should include deterministic dependency trace line:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("replay mock executed stubs: net=1 db=1 fs=1"),
+        "stdout should include deterministic executed-stub count summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("replay mock execution traces: net=net:0(GET|https://example.com/ping|empty) db=db:0(users.by_id|abc123) fs=fs:0(read|p1)"),
+        "stdout should include deterministic executed-stub trace summary:\n{stdout}"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
@@ -2746,6 +2766,85 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .expect("mockDependencyTraces.fs[0].signature should be present"),
         "read|p1"
     );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("net"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.net should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("db"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.db should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("fs"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.fs should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("net"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.net[0].traceId should be present"),
+        "net:0"
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("net"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.net[0].signature should be present"),
+        "GET|https://example.com/ping|empty"
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.db[0].signature should be present"),
+        "users.by_id|abc123"
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.fs[0].signature should be present"),
+        "read|p1"
+    );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
 }
@@ -2760,14 +2859,8 @@ fn replay_check_mock_mode_json_reports_dependency_trace_order_for_multiple_entri
         "pol_A",
         "cpl_A",
         "rt_A",
-        &[
-            ("users.by_id", Some("abc123")),
-            ("users.search", None),
-        ],
-        &[
-            ("read", "p1"),
-            ("write", "p2"),
-        ],
+        &[("users.by_id", Some("abc123")), ("users.search", None)],
+        &[("read", "p1"), ("write", "p2")],
     );
     write_stub_registry_with_db_fs_file(&stubs);
 
@@ -3310,6 +3403,77 @@ fn replay_check_json_mode_writes_parseable_payload() {
             .and_then(Value::as_u64)
             .expect("mockDependencyMatches.fs should be present"),
         0
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("net"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.net should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("db"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.db should be present"),
+        0
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionCounts")
+            .and_then(Value::as_object)
+            .and_then(|counts| counts.get("fs"))
+            .and_then(Value::as_u64)
+            .expect("mockExecutionCounts.fs should be present"),
+        0
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("net"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.net[0].traceId should be present"),
+        "net:0"
+    );
+    assert_eq!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("net"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockExecutionTraces.net[0].signature should be present"),
+        "GET|https://example.com/ping|empty"
+    );
+    assert!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockExecutionTraces.db should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockExecutionTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockExecutionTraces.fs should be present and empty when capture has no dependencies"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
@@ -5706,14 +5870,14 @@ fn main() effects {{ net }} -> Int {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime e2e binary exited before request with status: {status}"
-            );
+            panic!("http runtime e2e binary exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -5825,7 +5989,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP security-headers runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpruntimesecurityheaderse2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaderse2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP security-headers runtime e2e fixture"
@@ -5852,7 +6018,9 @@ fn main() effects {{ net }} -> Int {{
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -5968,7 +6136,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP security-headers 404 runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpruntimesecurityheaders404e2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaders404e2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP security-headers 404 runtime e2e fixture"
@@ -5995,7 +6165,9 @@ fn main() effects {{ net }} -> Int {{
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /missing HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /missing HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -6138,7 +6310,9 @@ fn main() effects {{ net }} -> Int {{
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -6407,7 +6581,9 @@ fn main() effects {{ net }} -> Int {{
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /users HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /users HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -6695,7 +6871,9 @@ fn main() effects {{ net }} -> Int {{
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -7101,9 +7279,7 @@ fn main() effects {{ net }} -> Int {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime post/json e2e binary exited before request with status: {status}"
-            );
+            panic!("http runtime post/json e2e binary exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
@@ -7385,9 +7561,7 @@ fn main() effects {{ net }} -> Int {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime okMeta e2e binary exited before request with status: {status}"
-            );
+            panic!("http runtime okMeta e2e binary exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {

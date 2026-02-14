@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Ran `rustfmt` on whole large Rust files during a focused replay slice, creating broad formatting churn outside the new assertions/logic. | For focused slices, avoid whole-file formatting on large test files; keep edits minimal and only format touched blocks when necessary. |
 | 2026-02-14 | self | New HTTP runtime E2E integration test passed in isolation but flaked in full `json_output` suite because oneshot timeout/connect window was too tight under parallel load. | For socket E2E tests, use wider retry windows + longer runtime timeout and check child early-exit in the connect loop before declaring connection failure. |
 | 2026-02-14 | self | Patched JSON fixture incrementally and accidentally introduced duplicate object keys (`\"db\"`) in `captures/sample-replay-stubs.json`. | After editing JSON fixtures with patches, run `jq . <file>` immediately to catch duplicate-key/shape issues before running broader tests. |
 | 2026-02-14 | self | Tried patching roadmap with stale context and got `apply_patch` context mismatch. | Re-read the exact target section (`sed -n`) right before patching long roadmap blocks to avoid drift-based patch failures. |
