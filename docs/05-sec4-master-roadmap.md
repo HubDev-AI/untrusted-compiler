@@ -156,6 +156,9 @@ Roadmap impact:
 - M16-S44 runtime-smoke checker now enforces users trace header/body correlation:
   - `users.headers` must include `X-Trace-Id`.
   - header trace id must match `users.body.traceId`.
+- M16-S45 runtime-smoke checker now enforces health trace-header contract:
+  - `health.headers` must include `X-Trace-Id`.
+  - health trace header value must match `rt-[0-9]+` format.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2886,6 +2889,30 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes missing-header and mismatch fixtures.
 - [x] Real smoke + checker flow remains green after correlation hardening.
 
+### M16-S45 follow-up slice (runtime-smoke health trace-header contract hardening)
+#### Scope
+- Expand runtime-smoke trace-correlation checks to include `/health` response headers.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to require:
+  - `health.headers` includes `X-Trace-Id`
+  - health trace value matches `^rt-[0-9]+$`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with:
+  - missing-health-trace-header fixture
+  - malformed-health-trace-header fixture
+- Re-run checker regression suite and real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker fails when health trace header is missing.
+- Checker fails when health trace header format is malformed.
+- Real smoke artifact flow remains green.
+
+#### Tracking (live status)
+- [x] Checker now requires health `X-Trace-Id` response header.
+- [x] Checker now enforces health trace-header `rt-[0-9]+` format.
+- [x] Regression suite includes missing and malformed health trace-header fixtures.
+- [x] Real smoke + checker flow remains green after health trace hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2932,6 +2959,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Success Envelope timeMs Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Success Envelope traceId Format Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Users Trace Header/Body Correlation Enforcement".
+- Chapter: "M16 Slice: Runtime-Smoke Health Trace-Header Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

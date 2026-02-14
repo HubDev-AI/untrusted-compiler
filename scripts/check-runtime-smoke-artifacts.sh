@@ -70,6 +70,17 @@ if ! rg -Fq 'HTTP/1.1 200 OK' "${artifacts_dir}/health.headers"; then
   exit 1
 fi
 
+if ! rg -iq '^X-Trace-Id:[[:space:]]*.+$' "${artifacts_dir}/health.headers"; then
+  echo "health.headers missing X-Trace-Id header" >&2
+  exit 1
+fi
+
+health_header_trace_id="$(sed -nE 's/^X-Trace-Id:[[:space:]]*//Ip' "${artifacts_dir}/health.headers" | tr -d '\r' | head -n 1)"
+if [[ ! "${health_header_trace_id}" =~ ^rt-[0-9]+$ ]]; then
+  echo "health.headers contains malformed X-Trace-Id value" >&2
+  exit 1
+fi
+
 if ! rg -Fq 'HTTP/1.1 201 Created' "${artifacts_dir}/users.headers"; then
   echo "users.headers missing 201 Created status line" >&2
   exit 1

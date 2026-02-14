@@ -413,5 +413,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `446-m16-runtime-smoke-success-envelope-timems-contract-hardening.md`
 - `447-m16-runtime-smoke-success-envelope-traceid-format-hardening.md`
 - `448-m16-runtime-smoke-users-trace-header-body-correlation-enforcement.md`
+- `449-m16-runtime-smoke-health-trace-header-contract-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

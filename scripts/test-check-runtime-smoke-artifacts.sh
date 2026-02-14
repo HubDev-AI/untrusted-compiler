@@ -22,6 +22,7 @@ TXT
 cat > "${ok_dir}/health.headers" <<'TXT'
 HTTP/1.1 200 OK
 Content-Type: text/plain; charset=utf-8
+X-Trace-Id: rt-1
 TXT
 
 cat > "${ok_dir}/health.body" <<'TXT'
@@ -59,6 +60,41 @@ fi
 
 if ! rg -Fq 'missing runtime-smoke artifact file: users.body' "${tmp_dir}/bad.log"; then
   echo "expected missing-artifact diagnostic for users.body" >&2
+  exit 1
+fi
+
+health_trace_missing_dir="${tmp_dir}/bad-health-trace-missing"
+cp -R "${ok_dir}" "${health_trace_missing_dir}"
+cat > "${health_trace_missing_dir}/health.headers" <<'TXT'
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+TXT
+
+if "${checker}" --artifacts-dir "${health_trace_missing_dir}" >"${tmp_dir}/health-trace-missing.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing health trace header" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'health.headers missing X-Trace-Id header' "${tmp_dir}/health-trace-missing.log"; then
+  echo "expected missing-header diagnostic for health trace id" >&2
+  exit 1
+fi
+
+health_trace_bad_dir="${tmp_dir}/bad-health-trace-format"
+cp -R "${ok_dir}" "${health_trace_bad_dir}"
+cat > "${health_trace_bad_dir}/health.headers" <<'TXT'
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+X-Trace-Id: trace-1
+TXT
+
+if "${checker}" --artifacts-dir "${health_trace_bad_dir}" >"${tmp_dir}/health-trace-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on malformed health trace header" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'health.headers contains malformed X-Trace-Id value' "${tmp_dir}/health-trace-bad.log"; then
+  echo "expected malformed-header diagnostic for health trace id" >&2
   exit 1
 fi
 
