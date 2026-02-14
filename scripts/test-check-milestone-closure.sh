@@ -30,6 +30,7 @@ touch "$tmp/scripts/test-check-m17-operator-handoff-playbook.sh"
 touch "$tmp/scripts/test-run-m17-operator-clean-clone-rehearsal.sh"
 touch "$tmp/scripts/test-generate-m18-kickoff-brief.sh"
 touch "$tmp/scripts/test-build-m18-priority-matrix.sh"
+touch "$tmp/scripts/test-select-m18-next-slice.sh"
 cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -166,6 +167,8 @@ jobs:
         run: scripts/test-generate-m18-kickoff-brief.sh
       - name: Validate M18 priority matrix artifact
         run: scripts/test-build-m18-priority-matrix.sh
+      - name: Validate M18 next-slice selector
+        run: scripts/test-select-m18-next-slice.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -369,7 +372,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E",
-    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B"
+    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -501,6 +504,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M18-A") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M18-B") != null' >/dev/null; then
   echo "expected json closure output to include M18-B gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M18-C") != null' >/dev/null; then
+  echo "expected json closure output to include M18-C gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -755,6 +762,24 @@ if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | j
   and (.gates[] | select(.gate == "M18-B")).status == "PENDING"
 ' >/dev/null; then
   echo "expected M18-B to become pending when naming-lock workflow misses priority matrix artifact step" >&2
+  exit 1
+fi
+
+mv "$tmp/.github/workflows/naming-lock.base.yml" "$tmp/.github/workflows/naming-lock.yml"
+
+cp "$tmp/.github/workflows/naming-lock.yml" "$tmp/.github/workflows/naming-lock.base.yml"
+awk '!/scripts\/test-select-m18-next-slice\.sh/' "$tmp/.github/workflows/naming-lock.base.yml" > "$tmp/.github/workflows/naming-lock.yml"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses M18 next-slice selector step" >&2
+  exit 1
+fi
+
+if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | jq -e '
+  .overall == "PENDING"
+  and (.gates[] | select(.gate == "M18-C")).status == "PENDING"
+' >/dev/null; then
+  echo "expected M18-C to become pending when naming-lock workflow misses next-slice selector step" >&2
   exit 1
 fi
 

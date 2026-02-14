@@ -106,6 +106,9 @@ jobs:
       - name: Validate M18 priority matrix artifact
         run: scripts/test-build-m18-priority-matrix.sh
 
+      - name: Validate M18 next-slice selector
+        run: scripts/test-select-m18-next-slice.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
