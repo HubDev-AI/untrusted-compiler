@@ -101,6 +101,26 @@ if ! rg -Fq 'run-metadata.txt missing sourceProject field' "${tmp_dir}/source-ba
   exit 1
 fi
 
+work_bad_dir="${tmp_dir}/bad-work"
+cp -R "${ok_dir}" "${work_bad_dir}"
+cat > "${work_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${work_bad_dir}" >"${tmp_dir}/work-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing workProject metadata" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt missing workProject field' "${tmp_dir}/work-bad.log"; then
+  echo "expected metadata diagnostic for missing workProject field" >&2
+  exit 1
+fi
+
 runflags_bad_dir="${tmp_dir}/bad-runflags"
 cp -R "${ok_dir}" "${runflags_bad_dir}"
 cat > "${runflags_bad_dir}/run-metadata.txt" <<'TXT'

@@ -135,6 +135,9 @@ Roadmap impact:
 - M16-S37 runtime-smoke metadata checker now validates source/work project fields:
   - checker enforces non-empty `sourceProject` and `workProject` metadata keys.
   - regression coverage includes dedicated missing-sourceProject failure fixture.
+- M16-S38 runtime-smoke checker regression coverage now validates missing workProject metadata:
+  - checker tests include dedicated failing fixture for absent `workProject`.
+  - deterministic missing-workProject diagnostic is now contract-locked.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2720,6 +2723,25 @@ M13-S1 go/no-go note:
 - [x] Checker regression suite includes missing-sourceProject failure fixture.
 - [x] Real smoke + checker flow passes after metadata check expansion.
 
+### M16-S38 follow-up slice (artifact-checker missing workProject regression fixture)
+#### Scope
+- Expand artifact-checker regression coverage to validate deterministic failure when `workProject` metadata is missing.
+
+#### Build tasks
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with a `bad-work` fixture lacking `workProject`.
+- Assert deterministic checker diagnostic:
+  - `run-metadata.txt missing workProject field`
+- Re-run smoke + checker flow to confirm artifact contract remains green.
+
+#### Acceptance criteria
+- Checker regression suite fails deterministically when `workProject` metadata is absent.
+- Real smoke artifact flow still passes after regression expansion.
+
+#### Tracking (live status)
+- [x] Added missing-workProject metadata regression fixture in checker tests.
+- [x] Checker regression test now asserts deterministic workProject-missing diagnostic.
+- [x] Real smoke + checker flow remains green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2759,6 +2781,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Checker runFlags Regression Fixture".
 - Chapter: "M16 Slice: Closure Gate for sec4 run Runtime-Flag CI Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Source/Work Metadata Field Checks".
+- Chapter: "M16 Slice: Runtime-Smoke Checker workProject Regression Fixture".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -406,5 +406,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `439-m16-runtime-smoke-checker-runflags-regression-fixture.md`
 - `440-m16-closure-gate-for-sec4-run-runtime-flag-ci-contracts.md`
 - `441-m16-runtime-smoke-source-work-metadata-field-checks.md`
+- `442-m16-runtime-smoke-checker-workproject-regression-fixture.md`
 
 As milestones progress, chapters will be added and linked from this index.
