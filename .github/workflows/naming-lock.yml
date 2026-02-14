@@ -220,6 +220,9 @@ jobs:
       - name: Validate M23 next-slice selector
         run: scripts/test-select-m23-next-slice.sh
 
+      - name: Validate M23 runtime hardening runner
+        run: scripts/test-run-m23-runtime-hardening.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
