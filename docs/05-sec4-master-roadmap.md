@@ -1565,6 +1565,7 @@ M13-S1 go/no-go note:
 - [x] Enforced optional replay request-query typing contract (`request.query` must be a string when present) in CLI + shell validators with regression coverage.
 - [x] Enforced optional replay request URL-field typing contracts (`request.url`/`request.scheme`/`request.host` must be non-empty strings when present) in CLI + shell validators with regression coverage.
 - [x] Enforced optional replay request-route typing contract (`request.route` must be a non-empty string when present) in CLI + shell validators with regression coverage.
+- [x] Enforced replay body-encoding exclusivity contract (`encoding=none` must not carry `request.body.bytes`) in CLI + shell validators with regression coverage.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1599,6 +1600,7 @@ M13-S1 go/no-go note:
 - Replay capture contract rejects non-string `request.query` values when query is present.
 - Replay capture contract rejects non-string/empty optional URL fields (`request.url`, `request.scheme`, `request.host`) when present.
 - Replay capture contract rejects non-string/empty optional `request.route` values when route is present.
+- Replay capture contract rejects mixed body representation where `encoding=none` still includes `request.body.bytes`.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1628,6 +1630,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Capture Query Type Contract Enforcement".
 - Chapter: "M14 Slice: Replay Capture URL-Field Type Contract Enforcement".
 - Chapter: "M14 Slice: Replay Capture Route Type Contract Enforcement".
+- Chapter: "M14 Slice: Replay Capture Body-Encoding Exclusivity Contract Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

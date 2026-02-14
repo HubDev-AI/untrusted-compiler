@@ -106,6 +106,8 @@ jq -e '
       (.request.body.bytes | type == "string" and length > 0)
       and (.request.body.sha256 | type == "string" and length > 0)
     elif .request.body.encoding == "none" then
+      ((.request.body | has("bytes")) | not)
+      and
       (.request.body.sha256 | type == "string" and length > 0)
     else
       false

@@ -923,6 +923,11 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
             }
         }
         "none" => {
+            if body.get("bytes").is_some() {
+                return Err(
+                    "capture.request.body.bytes must be absent for encoding=none".to_string(),
+                );
+            }
             if body
                 .get("sha256")
                 .and_then(serde_json::Value::as_str)
