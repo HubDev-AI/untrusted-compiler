@@ -81,6 +81,60 @@ jq -e '
   and (.redaction | type == "object")
   and (.redaction.headers | type == "array")
   and (.redaction.jsonPaths | type == "array")
+  and (
+    if has("dependencies") then
+      (.dependencies | type == "object")
+      and (
+        if (.dependencies | has("db")) then
+          (.dependencies.db | type == "array")
+          and all(.dependencies.db[];
+            (.request | type == "object")
+            and (.request.queryTemplateId | type == "string" and length > 0)
+            and (
+              if (.request | has("paramsSha256"))
+              then (.request.paramsSha256 | type == "string" and length > 0)
+              else true
+              end
+            )
+          )
+        else true end
+      )
+      and (
+        if (.dependencies | has("fs")) then
+          (.dependencies.fs | type == "array")
+          and all(.dependencies.fs[];
+            (.request | type == "object")
+            and (.request.op | type == "string" and length > 0)
+            and (.request.pathSha256 | type == "string" and length > 0)
+          )
+        else true end
+      )
+    else true end
+  )
 ' "${capture_path}" >/dev/null
+
+if ! jq -e '
+  if has("dependencies") and (.dependencies | has("db")) then
+    (.dependencies.db | map([.request.queryTemplateId, (.request.paramsSha256 // "-")] | join("|"))) as $keys
+    | ($keys | length) == ($keys | unique | length)
+  else
+    true
+  end
+' "${capture_path}" >/dev/null; then
+  echo "replay capture contract failed: duplicate db dependency request signatures in ${capture_path}" >&2
+  exit 1
+fi
+
+if ! jq -e '
+  if has("dependencies") and (.dependencies | has("fs")) then
+    (.dependencies.fs | map([(.request.op | ascii_downcase), .request.pathSha256] | join("|"))) as $keys
+    | ($keys | length) == ($keys | unique | length)
+  else
+    true
+  end
+' "${capture_path}" >/dev/null; then
+  echo "replay capture contract failed: duplicate fs dependency request signatures in ${capture_path}" >&2
+  exit 1
+fi
 
 echo "replay capture contract check passed"

@@ -339,5 +339,12 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `372-m14-replay-redaction-jsonpath-baseline-enforcement.md`
 - `373-m14-replay-stub-inventory-output.md`
 - `374-m14-replay-stub-counts-json-contract-hardening.md`
+- `375-m14-replay-mock-stub-signature-match.md`
+- `376-m14-replay-mock-stub-response-summary.md`
+- `377-m14-replay-mock-stub-json-contract-lock.md`
+- `378-m14-replay-db-fs-stub-contract-and-summary-ingestion.md`
+- `379-m14-replay-db-fs-stub-signature-uniqueness-enforcement.md`
+- `380-m14-replay-mock-db-fs-dependency-signature-match-and-counts.md`
+- `381-m14-replay-capture-dependency-signature-uniqueness-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

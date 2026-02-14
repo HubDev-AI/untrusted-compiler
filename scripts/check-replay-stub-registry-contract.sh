@@ -68,12 +68,42 @@ if ! jq -e '
     )
     and (.response | type == "object")
     and (.response.status | type == "number")
+    and (.response.status == (.response.status | floor))
     and (.response.status >= 100 and .response.status <= 599)
     and (.response.truncated | type == "boolean")
     and (
       ((.response | has("bodyBase64")) and (.response.bodyBase64 | type == "string" and length > 0))
       or
       ((.response | has("bodySha256")) and (.response.bodySha256 | type == "string" and length > 0))
+    )
+  )
+  and all((.stubs.db // [])[];
+    (.request | type == "object")
+    and (.request.queryTemplateId | type == "string" and length > 0)
+    and (
+      if (.request | has("paramsSha256"))
+      then (.request.paramsSha256 | type == "string" and length > 0)
+      else true
+      end
+    )
+    and (.response | type == "object")
+    and (.response.rowCount | type == "number")
+    and (.response.rowCount == (.response.rowCount | floor))
+    and (.response.rowCount >= 0)
+    and (.response.truncated | type == "boolean")
+  )
+  and all((.stubs.fs // [])[];
+    (.request | type == "object")
+    and (.request.op | type == "string" and length > 0)
+    and (.request.pathSha256 | type == "string" and length > 0)
+    and (.response | type == "object")
+    and (.response.ok | type == "boolean")
+    and (.response.truncated | type == "boolean")
+    and (
+      if (.response | has("bytes"))
+      then ((.response.bytes | type == "number") and (.response.bytes == (.response.bytes | floor)) and (.response.bytes >= 0))
+      else true
+      end
     )
   )
 ' "${stubs_path}" >/dev/null; then
@@ -111,6 +141,30 @@ if ! jq -e '
   | ($keys | length) == ($keys | unique | length)
 ' "${stubs_path}" >/dev/null; then
   echo "replay stub registry contract failed: duplicate net stub request signatures in ${stubs_path}" >&2
+  exit 1
+fi
+
+if ! jq -e '
+  (.stubs.db // []) as $entries
+  | (
+      $entries
+      | map([.request.queryTemplateId, (.request.paramsSha256 // "-")] | join("|"))
+    ) as $keys
+  | ($keys | length) == ($keys | unique | length)
+' "${stubs_path}" >/dev/null; then
+  echo "replay stub registry contract failed: duplicate db stub request signatures in ${stubs_path}" >&2
+  exit 1
+fi
+
+if ! jq -e '
+  (.stubs.fs // []) as $entries
+  | (
+      $entries
+      | map([(.request.op | ascii_downcase), .request.pathSha256] | join("|"))
+    ) as $keys
+  | ($keys | length) == ($keys | unique | length)
+' "${stubs_path}" >/dev/null; then
+  echo "replay stub registry contract failed: duplicate fs stub request signatures in ${stubs_path}" >&2
   exit 1
 fi
 

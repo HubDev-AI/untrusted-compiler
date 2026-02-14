@@ -1513,6 +1513,13 @@ M13-S1 go/no-go note:
 - Add replay CLI JSON-contract guard scripts and closure gate enforcement in naming-lock CI.
 - Enforce mandatory replay redaction baseline (`authorization`, `cookie`, `set-cookie`; `$.password`, `$.token`, `$.secret`, `$.apiKey`) in stub-contract validators.
 - Surface replay stub inventory counts (`net/db/fs`) in CLI text/json outputs for mock-mode observability.
+- Enforce deterministic mock-mode net-stub matching from capture request signatures and fail with `REPLAY.STUB_MISSING` when unmatched.
+- Surface deterministic matched mock net-stub response summary in replay text/json output.
+- Enforce deterministic DB/FS stub entry-shape contracts and surface DB/FS ingestion summary in replay output.
+- Enforce deterministic uniqueness for DB/FS stub request signatures.
+- Enforce deterministic capture DB/FS dependency-signature matching in mock mode with explicit `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` failures.
+- Surface deterministic mock dependency-match counts in replay text/json output (`mockDependencyMatches`).
+- Reject duplicate DB/FS dependency request signatures in capture artifacts to preserve deterministic replay matching.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1537,6 +1544,14 @@ M13-S1 go/no-go note:
 - [x] Added replay CLI json contract + guard scripts and strict closure gate `M14-D`.
 - [x] Enforced required replay redaction headers/jsonPaths in shell + CLI stub-contract validators with regression tests.
 - [x] Added replay stub inventory summary output (`stubCounts` JSON + text summary line).
+- [x] Added deterministic mock-mode capture-signature matching with explicit `REPLAY.STUB_MISSING` failures.
+- [x] Added mock-mode matched net-stub response summary output (`status`, `truncated`, `bodyKind`) for deterministic observability.
+- [x] Locked replay CLI json contract for mock fields (`mockRequestSignature`, `mockMatchedStub`) with guard fixtures.
+- [x] Added DB/FS stub entry-shape validation and deterministic replay summary output (`stubDetails`) for DB template/FS op coverage.
+- [x] Added deterministic duplicate-signature rejection for DB/FS stubs in both CLI and shell contract checks.
+- [x] Added deterministic mock-mode capture dependency-signature matching for DB/FS with explicit `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` diagnostics.
+- [x] Added replay mock dependency-match summary output in text/json (`mockDependencyMatches`) with CLI integration coverage.
+- [x] Added duplicate-signature rejection for capture DB/FS dependency requests in replay contract checks (CLI + shell) with regression coverage.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1550,9 +1565,18 @@ M13-S1 go/no-go note:
 - `sec4 replay --stubs <path>` fails deterministically on invalid stub-registry contract payloads.
 - `sec4 replay --effects mock` fails deterministically without `--stubs`; `--effects allow` emits explicit risk warning.
 - `sec4 replay --format json` emits parseable structured payload with mode/hash-match/warning + stub-count fields.
+- Replay CLI JSON contract tests enforce presence of `mockRequestSignature` and `mockMatchedStub` fields.
+- Replay CLI JSON contract tests enforce presence of `stubDetails` field.
 - CI fails if replay CLI json contract + guard enforcement is removed from naming-lock workflow.
 - Replay stub-contract validation fails when required redaction headers/jsonPaths are incomplete.
 - Replay outputs include deterministic stub inventory counts when `--stubs` is supplied.
+- Replay `mock` mode fails deterministically with `REPLAY.STUB_MISSING` when capture request signatures are not present in `stubs.net`.
+- Replay `mock` mode success outputs include deterministic matched-stub response summary in both text/json formats.
+- Replay stub contracts validate DB/FS entry shapes when present and replay outputs include deterministic `stubDetails` summaries.
+- Replay stub contracts reject duplicate request signatures across net, DB, and FS stub families.
+- Replay `mock` mode fails deterministically with `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` when capture dependency signatures are not present in `stubs.db` / `stubs.fs`.
+- Replay `mock` mode JSON/text outputs include deterministic dependency-match summaries (`mockDependencyMatches`).
+- Replay capture-contract validation rejects duplicate DB/FS dependency request signatures to prevent ambiguous dependency matching.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1566,6 +1590,13 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Redaction Header Baseline Enforcement".
 - Chapter: "M14 Slice: Replay Redaction JSONPath Baseline Enforcement".
 - Chapter: "M14 Slice: Replay Stub Inventory Output".
+- Chapter: "M14 Slice: Replay Mock Stub Signature Match".
+- Chapter: "M14 Slice: Replay Mock Stub Response Summary".
+- Chapter: "M14 Slice: Replay Mock Stub JSON Contract Lock".
+- Chapter: "M14 Slice: Replay DB/FS Stub Contract and Summary Ingestion".
+- Chapter: "M14 Slice: Replay DB/FS Stub Signature Uniqueness Enforcement".
+- Chapter: "M14 Slice: Replay Mock DB/FS Dependency Signature Match and Counts".
+- Chapter: "M14 Slice: Replay Capture Dependency Signature Uniqueness Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

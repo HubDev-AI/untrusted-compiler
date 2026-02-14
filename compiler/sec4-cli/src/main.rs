@@ -6,7 +6,7 @@ use sec4_core::{
     validate_lockfile_stub, write_build_metadata, write_lockfile_stub, write_sbom,
     write_security_map, AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -150,6 +150,33 @@ enum ReplayOutputFormat {
     Json,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockNetStubMatch {
+    status: i64,
+    truncated: bool,
+    body_kind: &'static str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayDbStubDetails {
+    entries: usize,
+    unique_query_template_ids: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayFsStubDetails {
+    entries: usize,
+    read_ops: usize,
+    write_ops: usize,
+    other_ops: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDependencyMatches {
+    db: usize,
+    fs: usize,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -265,6 +292,13 @@ fn cmd_replay_check(
         json_required_str(&capture_json, "runtimeHash").expect("runtimeHash checked by contract");
     let mut warnings = Vec::new();
     let mut stub_counts: Option<(usize, usize, usize)> = None;
+    let mut stub_details: Option<(ReplayDbStubDetails, ReplayFsStubDetails)> = None;
+    let mut net_stubs: Option<HashMap<String, ReplayMockNetStubMatch>> = None;
+    let mut db_stub_signatures: Option<HashSet<String>> = None;
+    let mut fs_stub_signatures: Option<HashSet<String>> = None;
+    let mut mock_request_signature: Option<String> = None;
+    let mut mock_matched_stub: Option<ReplayMockNetStubMatch> = None;
+    let mut mock_dependency_matches: Option<ReplayMockDependencyMatches> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -353,6 +387,93 @@ fn cmd_replay_check(
             .and_then(serde_json::Value::as_array)
             .map_or(0, Vec::len);
         stub_counts = Some((net_count, db_count, fs_count));
+        stub_details = match collect_replay_db_fs_stub_details(&stubs_json) {
+            Ok(details) => Some(details),
+            Err(message) => {
+                eprintln!(
+                    "replay compatibility failed: stub registry contract invalid: {message}"
+                );
+                return Err(1);
+            }
+        };
+        net_stubs = match collect_replay_net_stubs(&stubs_json) {
+            Ok(entries) => Some(entries),
+            Err(message) => {
+                eprintln!(
+                    "replay compatibility failed: stub registry contract invalid: {message}"
+                );
+                return Err(1);
+            }
+        };
+        db_stub_signatures = match collect_replay_db_stub_signatures(&stubs_json) {
+            Ok(entries) => Some(entries),
+            Err(message) => {
+                eprintln!(
+                    "replay compatibility failed: stub registry contract invalid: {message}"
+                );
+                return Err(1);
+            }
+        };
+        fs_stub_signatures = match collect_replay_fs_stub_signatures(&stubs_json) {
+            Ok(entries) => Some(entries),
+            Err(message) => {
+                eprintln!(
+                    "replay compatibility failed: stub registry contract invalid: {message}"
+                );
+                return Err(1);
+            }
+        };
+    }
+
+    if effects_mode == ReplayEffectsMode::Mock {
+        let signature = match capture_net_request_signature(&capture_json) {
+            Ok(signature) => signature,
+            Err(message) => {
+                eprintln!("replay compatibility failed: {message}");
+                return Err(1);
+            }
+        };
+        let stubs = net_stubs
+            .as_ref()
+            .expect("mock mode requires stubs and prevalidated signature extraction");
+        let stub_match = if let Some(entry) = stubs.get(&signature) {
+            entry.clone()
+        } else {
+            eprintln!("replay compatibility failed: REPLAY.STUB_MISSING: {signature}");
+            return Err(1);
+        };
+        let (capture_db_signatures, capture_fs_signatures) =
+            match collect_capture_db_fs_dependency_signatures(&capture_json) {
+                Ok(signatures) => signatures,
+                Err(message) => {
+                    eprintln!("replay compatibility failed: {message}");
+                    return Err(1);
+                }
+            };
+        let db_signatures = db_stub_signatures
+            .as_ref()
+            .expect("mock mode requires db signatures for loaded stubs");
+        for signature in &capture_db_signatures {
+            if !db_signatures.contains(signature) {
+                eprintln!("replay compatibility failed: REPLAY.DB_STUB_MISSING: {signature}");
+                return Err(1);
+            }
+        }
+        let fs_signatures = fs_stub_signatures
+            .as_ref()
+            .expect("mock mode requires fs signatures for loaded stubs");
+        for signature in &capture_fs_signatures {
+            if !fs_signatures.contains(signature) {
+                eprintln!("replay compatibility failed: REPLAY.FS_STUB_MISSING: {signature}");
+                return Err(1);
+            }
+        }
+        mock_request_signature = Some(signature);
+        mock_matched_stub = Some(stub_match);
+        mock_dependency_matches = Some(ReplayMockDependencyMatches {
+            db: capture_db_signatures.len(),
+            fs: capture_fs_signatures.len(),
+        });
     }
 
     match output_format {
@@ -360,6 +481,32 @@ fn cmd_replay_check(
             println!("replay capture compatibility check passed");
             if let Some((net, db, fs)) = stub_counts {
                 println!("replay stubs loaded: net={net} db={db} fs={fs}");
+            }
+            if let Some(signature) = &mock_request_signature {
+                println!("replay mock stub matched: {signature}");
+            }
+            if let Some(stub) = &mock_matched_stub {
+                println!(
+                    "replay mock stub response: status={} truncated={} bodyKind={}",
+                    stub.status, stub.truncated, stub.body_kind
+                );
+            }
+            if let Some((db, fs)) = &stub_details {
+                println!(
+                    "replay stub details: dbEntries={} dbTemplates={} fsEntries={} fsOps(read={},write={},other={})",
+                    db.entries,
+                    db.unique_query_template_ids,
+                    fs.entries,
+                    fs.read_ops,
+                    fs.write_ops,
+                    fs.other_ops
+                );
+            }
+            if let Some(matches) = &mock_dependency_matches {
+                println!(
+                    "replay mock dependency matches: db={} fs={}",
+                    matches.db, matches.fs
+                );
             }
         }
         ReplayOutputFormat::Json => {
@@ -381,6 +528,28 @@ fn cmd_replay_check(
                     "net": net,
                     "db": db,
                     "fs": fs,
+                })),
+                "mockRequestSignature": mock_request_signature,
+                "mockMatchedStub": mock_matched_stub.as_ref().map(|stub| serde_json::json!({
+                    "status": stub.status,
+                    "truncated": stub.truncated,
+                    "bodyKind": stub.body_kind,
+                })),
+                "mockDependencyMatches": mock_dependency_matches.as_ref().map(|matches| serde_json::json!({
+                    "db": matches.db,
+                    "fs": matches.fs,
+                })),
+                "stubDetails": stub_details.as_ref().map(|(db, fs)| serde_json::json!({
+                    "db": {
+                        "entries": db.entries,
+                        "uniqueQueryTemplateIds": db.unique_query_template_ids,
+                    },
+                    "fs": {
+                        "entries": fs.entries,
+                        "readOps": fs.read_ops,
+                        "writeOps": fs.write_ops,
+                        "otherOps": fs.other_ops,
+                    },
                 })),
             });
             println!(
@@ -565,6 +734,104 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
         return Err("capture.redaction.jsonPaths must be an array".to_string());
     }
 
+    if let Some(dependencies) = capture.get("dependencies") {
+        let dependencies_obj = dependencies
+            .as_object()
+            .ok_or_else(|| "capture.dependencies must be an object when present".to_string())?;
+
+        if let Some(db_entries) = dependencies_obj.get("db") {
+            let db_entries = db_entries
+                .as_array()
+                .ok_or_else(|| "capture.dependencies.db must be an array when present".to_string())?;
+            let mut db_signatures = HashSet::new();
+            for (index, entry) in db_entries.iter().enumerate() {
+                let request = entry
+                    .get("request")
+                    .and_then(serde_json::Value::as_object)
+                    .ok_or_else(|| {
+                        format!("capture.dependencies.db[{index}].request must be an object")
+                    })?;
+                request
+                    .get("queryTemplateId")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        format!("capture.dependencies.db[{index}].request.queryTemplateId must be a non-empty string")
+                    })?;
+                if request.get("paramsSha256").is_some() {
+                    request
+                        .get("paramsSha256")
+                        .and_then(serde_json::Value::as_str)
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| {
+                            format!(
+                                "capture.dependencies.db[{index}].request.paramsSha256 must be a non-empty string when present"
+                            )
+                        })?;
+                }
+                let signature = replay_db_request_signature(
+                    request
+                        .get("queryTemplateId")
+                        .and_then(serde_json::Value::as_str)
+                        .expect("queryTemplateId validated as non-empty string"),
+                    request
+                        .get("paramsSha256")
+                        .and_then(serde_json::Value::as_str)
+                        .filter(|value| !value.is_empty()),
+                );
+                if !db_signatures.insert(signature.clone()) {
+                    return Err(format!(
+                        "REPLAY.CAPTURE_DB_DEPENDENCY_DUPLICATE: {signature}"
+                    ));
+                }
+            }
+        }
+
+        if let Some(fs_entries) = dependencies_obj.get("fs") {
+            let fs_entries = fs_entries
+                .as_array()
+                .ok_or_else(|| "capture.dependencies.fs must be an array when present".to_string())?;
+            let mut fs_signatures = HashSet::new();
+            for (index, entry) in fs_entries.iter().enumerate() {
+                let request = entry
+                    .get("request")
+                    .and_then(serde_json::Value::as_object)
+                    .ok_or_else(|| {
+                        format!("capture.dependencies.fs[{index}].request must be an object")
+                    })?;
+                request
+                    .get("op")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        format!("capture.dependencies.fs[{index}].request.op must be a non-empty string")
+                    })?;
+                request
+                    .get("pathSha256")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        format!("capture.dependencies.fs[{index}].request.pathSha256 must be a non-empty string")
+                    })?;
+                let signature = replay_fs_request_signature(
+                    request
+                        .get("op")
+                        .and_then(serde_json::Value::as_str)
+                        .expect("op validated as non-empty string"),
+                    request
+                        .get("pathSha256")
+                        .and_then(serde_json::Value::as_str)
+                        .expect("pathSha256 validated as non-empty string"),
+                );
+                if !fs_signatures.insert(signature.clone()) {
+                    return Err(format!(
+                        "REPLAY.CAPTURE_FS_DEPENDENCY_DUPLICATE: {signature}"
+                    ));
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -583,17 +850,23 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "stub registry stubs.net must be an array".to_string())?;
 
-    if let Some(db) = stubs_obj.get("db") {
-        if !db.is_array() {
-            return Err("stub registry stubs.db must be an array when present".to_string());
-        }
-    }
+    let db_entries = stubs_obj
+        .get("db")
+        .map(|db| {
+            db.as_array()
+                .ok_or_else(|| "stub registry stubs.db must be an array when present".to_string())
+        })
+        .transpose()?
+        .map_or(&[][..], Vec::as_slice);
 
-    if let Some(fs) = stubs_obj.get("fs") {
-        if !fs.is_array() {
-            return Err("stub registry stubs.fs must be an array when present".to_string());
-        }
-    }
+    let fs_entries = stubs_obj
+        .get("fs")
+        .map(|fs| {
+            fs.as_array()
+                .ok_or_else(|| "stub registry stubs.fs must be an array when present".to_string())
+        })
+        .transpose()?
+        .map_or(&[][..], Vec::as_slice);
 
     let redaction = stubs
         .get("redaction")
@@ -739,7 +1012,7 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
             ));
         }
 
-        let signature = format!("{}|{}|{}", method, url, body_sha.unwrap_or("-"));
+        let signature = replay_net_request_signature(method, url, body_sha);
         if !signatures.insert(signature) {
             return Err(format!(
                 "stub registry stubs.net has duplicate request signature at index {index}"
@@ -747,7 +1020,519 @@ fn validate_replay_stub_registry_contract(stubs: &serde_json::Value) -> Result<(
         }
     }
 
+    let mut db_signatures = HashSet::new();
+    for (index, entry) in db_entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.db[{index}].request must be an object"))?;
+        let query_template_id = request
+            .get("queryTemplateId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.db[{index}].request.queryTemplateId must be a non-empty string"
+                )
+            })?;
+        let params_sha = if request.get("paramsSha256").is_some() {
+            Some(
+                request
+                .get("paramsSha256")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    format!(
+                        "stub registry stubs.db[{index}].request.paramsSha256 must be a non-empty string when present"
+                    )
+                })?,
+            )
+        } else {
+            None
+        };
+
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| {
+                format!("stub registry stubs.db[{index}].response must be an object")
+            })?;
+        let row_count = response
+            .get("rowCount")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| {
+                format!("stub registry stubs.db[{index}].response.rowCount must be an integer")
+            })?;
+        if row_count < 0 {
+            return Err(format!(
+                "stub registry stubs.db[{index}].response.rowCount must be >= 0"
+            ));
+        }
+        if response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .is_none()
+        {
+            return Err(format!(
+                "stub registry stubs.db[{index}].response.truncated must be a boolean"
+            ));
+        }
+
+        let signature = replay_db_request_signature(query_template_id, params_sha);
+        if !db_signatures.insert(signature) {
+            return Err(format!(
+                "stub registry stubs.db has duplicate request signature at index {index}"
+            ));
+        }
+    }
+
+    let mut fs_signatures = HashSet::new();
+    for (index, entry) in fs_entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.fs[{index}].request must be an object"))?;
+        let op = request
+            .get("op")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].request.op must be a non-empty string")
+            })?;
+        let path_sha = request
+            .get("pathSha256")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.fs[{index}].request.pathSha256 must be a non-empty string"
+                )
+            })?;
+
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response must be an object")
+            })?;
+        response
+            .get("ok")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response.ok must be a boolean")
+            })?;
+        if response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .is_none()
+        {
+            return Err(format!(
+                "stub registry stubs.fs[{index}].response.truncated must be a boolean"
+            ));
+        }
+        if let Some(bytes) = response.get("bytes") {
+            let size = bytes.as_i64().ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response.bytes must be an integer")
+            })?;
+            if size < 0 {
+                return Err(format!(
+                    "stub registry stubs.fs[{index}].response.bytes must be >= 0"
+                ));
+            }
+        }
+
+        let signature = replay_fs_request_signature(op, path_sha);
+        if !fs_signatures.insert(signature) {
+            return Err(format!(
+                "stub registry stubs.fs has duplicate request signature at index {index}"
+            ));
+        }
+    }
+
     Ok(())
+}
+
+fn replay_net_request_signature(method: &str, url: &str, body_sha256: Option<&str>) -> String {
+    format!(
+        "{}|{}|{}",
+        method.to_ascii_uppercase(),
+        url,
+        body_sha256.unwrap_or("-")
+    )
+}
+
+fn replay_db_request_signature(query_template_id: &str, params_sha256: Option<&str>) -> String {
+    format!("{}|{}", query_template_id, params_sha256.unwrap_or("-"))
+}
+
+fn replay_fs_request_signature(op: &str, path_sha256: &str) -> String {
+    format!("{}|{}", op.to_ascii_lowercase(), path_sha256)
+}
+
+fn capture_net_request_signature(capture: &serde_json::Value) -> Result<String, String> {
+    let request = capture
+        .get("request")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "capture.request must be an object".to_string())?;
+    let method = request
+        .get("method")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "capture.request.method must be a non-empty string".to_string())?;
+    let path = request
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "capture.request.path must be a non-empty string".to_string())?;
+    let url = if let Some(value) = request
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+    {
+        value.to_string()
+    } else {
+        let scheme = request
+            .get("scheme")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "capture.request.url must be present or capture.request.scheme/host must be non-empty strings".to_string()
+            })?;
+        let host = request
+            .get("host")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "capture.request.url must be present or capture.request.scheme/host must be non-empty strings".to_string()
+            })?;
+        let normalized_path = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/{path}")
+        };
+        let mut built = format!("{scheme}://{host}{normalized_path}");
+        if let Some(query) = request
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+        {
+            if query.starts_with('?') {
+                built.push_str(query);
+            } else {
+                built.push('?');
+                built.push_str(query);
+            }
+        }
+        built
+    };
+    let body_sha256 = request
+        .get("body")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|body| body.get("sha256"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty());
+    Ok(replay_net_request_signature(method, &url, body_sha256))
+}
+
+fn collect_capture_db_fs_dependency_signatures(
+    capture: &serde_json::Value,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    let dependencies = if let Some(value) = capture.get("dependencies") {
+        value
+            .as_object()
+            .ok_or_else(|| "capture.dependencies must be an object when present".to_string())?
+    } else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+
+    let mut db_signatures = Vec::new();
+    let mut seen_db_signatures = HashSet::new();
+    if let Some(db_entries) = dependencies.get("db") {
+        let db_entries = db_entries
+            .as_array()
+            .ok_or_else(|| "capture.dependencies.db must be an array when present".to_string())?;
+        for (index, entry) in db_entries.iter().enumerate() {
+            let request = entry
+                .get("request")
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| {
+                    format!("capture.dependencies.db[{index}].request must be an object")
+                })?;
+            let query_template_id = request
+                .get("queryTemplateId")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    format!("capture.dependencies.db[{index}].request.queryTemplateId must be a non-empty string")
+                })?;
+            let params_sha256 = request
+                .get("paramsSha256")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty());
+            let signature = replay_db_request_signature(query_template_id, params_sha256);
+            if !seen_db_signatures.insert(signature.clone()) {
+                return Err(format!(
+                    "REPLAY.CAPTURE_DB_DEPENDENCY_DUPLICATE: {signature}"
+                ));
+            }
+            db_signatures.push(signature);
+        }
+    }
+
+    let mut fs_signatures = Vec::new();
+    let mut seen_fs_signatures = HashSet::new();
+    if let Some(fs_entries) = dependencies.get("fs") {
+        let fs_entries = fs_entries
+            .as_array()
+            .ok_or_else(|| "capture.dependencies.fs must be an array when present".to_string())?;
+        for (index, entry) in fs_entries.iter().enumerate() {
+            let request = entry
+                .get("request")
+                .and_then(serde_json::Value::as_object)
+                .ok_or_else(|| {
+                    format!("capture.dependencies.fs[{index}].request must be an object")
+                })?;
+            let op = request
+                .get("op")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    format!("capture.dependencies.fs[{index}].request.op must be a non-empty string")
+                })?;
+            let path_sha256 = request
+                .get("pathSha256")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    format!("capture.dependencies.fs[{index}].request.pathSha256 must be a non-empty string")
+                })?;
+            let signature = replay_fs_request_signature(op, path_sha256);
+            if !seen_fs_signatures.insert(signature.clone()) {
+                return Err(format!(
+                    "REPLAY.CAPTURE_FS_DEPENDENCY_DUPLICATE: {signature}"
+                ));
+            }
+            fs_signatures.push(signature);
+        }
+    }
+
+    Ok((db_signatures, fs_signatures))
+}
+
+fn collect_replay_net_stubs(
+    stubs: &serde_json::Value,
+) -> Result<HashMap<String, ReplayMockNetStubMatch>, String> {
+    let net_entries = stubs
+        .get("stubs")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|entries| entries.get("net"))
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "stub registry stubs.net must be an array".to_string())?;
+    let mut signatures = HashMap::new();
+    for (index, entry) in net_entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.net[{index}].request must be an object"))?;
+        let method = request
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.net[{index}].request.method must be a non-empty string"
+                )
+            })?;
+        let url = request
+            .get("url")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].request.url must be a non-empty string")
+            })?;
+        let body_sha256 = request
+            .get("bodySha256")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty());
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.net[{index}].response must be an object"))?;
+        let status = response
+            .get("status")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].response.status must be an integer")
+            })?;
+        let truncated = response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| {
+                format!("stub registry stubs.net[{index}].response.truncated must be a boolean")
+            })?;
+        let has_body_base64 = response
+            .get("bodyBase64")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.is_empty());
+        let has_body_sha = response
+            .get("bodySha256")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.is_empty());
+        if !has_body_base64 && !has_body_sha {
+            return Err(format!(
+                "stub registry stubs.net[{index}].response must include bodyBase64 or bodySha256"
+            ));
+        }
+        let body_kind = if has_body_base64 { "base64" } else { "sha256" };
+        let signature = replay_net_request_signature(method, url, body_sha256);
+        if signatures
+            .insert(
+                signature,
+                ReplayMockNetStubMatch {
+                    status,
+                    truncated,
+                    body_kind,
+                },
+            )
+            .is_some()
+        {
+            return Err(format!(
+                "stub registry stubs.net has duplicate request signature at index {index}"
+            ));
+        }
+    }
+    Ok(signatures)
+}
+
+fn collect_replay_db_fs_stub_details(
+    stubs: &serde_json::Value,
+) -> Result<(ReplayDbStubDetails, ReplayFsStubDetails), String> {
+    let stubs_obj = stubs
+        .get("stubs")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "stub registry stubs must be an object".to_string())?;
+    let db_entries = stubs_obj
+        .get("db")
+        .and_then(serde_json::Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let fs_entries = stubs_obj
+        .get("fs")
+        .and_then(serde_json::Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+
+    let mut unique_templates = HashSet::new();
+    for (index, entry) in db_entries.iter().enumerate() {
+        let query_template_id = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|request| request.get("queryTemplateId"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.db[{index}].request.queryTemplateId must be a non-empty string"
+                )
+            })?;
+        unique_templates.insert(query_template_id.to_string());
+    }
+
+    let mut read_ops = 0usize;
+    let mut write_ops = 0usize;
+    let mut other_ops = 0usize;
+    for (index, entry) in fs_entries.iter().enumerate() {
+        let op = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|request| request.get("op"))
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].request.op must be a non-empty string")
+            })?;
+        match op.to_ascii_lowercase().as_str() {
+            "read" => read_ops += 1,
+            "write" => write_ops += 1,
+            _ => other_ops += 1,
+        }
+    }
+
+    Ok((
+        ReplayDbStubDetails {
+            entries: db_entries.len(),
+            unique_query_template_ids: unique_templates.len(),
+        },
+        ReplayFsStubDetails {
+            entries: fs_entries.len(),
+            read_ops,
+            write_ops,
+            other_ops,
+        },
+    ))
+}
+
+fn collect_replay_db_stub_signatures(stubs: &serde_json::Value) -> Result<HashSet<String>, String> {
+    let entries = stubs
+        .get("stubs")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|stubs_obj| stubs_obj.get("db"))
+        .and_then(serde_json::Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let mut signatures = HashSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.db[{index}].request must be an object"))?;
+        let query_template_id = request
+            .get("queryTemplateId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.db[{index}].request.queryTemplateId must be a non-empty string"
+                )
+            })?;
+        let params_sha256 = request
+            .get("paramsSha256")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty());
+        signatures.insert(replay_db_request_signature(query_template_id, params_sha256));
+    }
+    Ok(signatures)
+}
+
+fn collect_replay_fs_stub_signatures(stubs: &serde_json::Value) -> Result<HashSet<String>, String> {
+    let entries = stubs
+        .get("stubs")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|stubs_obj| stubs_obj.get("fs"))
+        .and_then(serde_json::Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let mut signatures = HashSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        let request = entry
+            .get("request")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.fs[{index}].request must be an object"))?;
+        let op = request
+            .get("op")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].request.op must be a non-empty string")
+            })?;
+        let path_sha256 = request
+            .get("pathSha256")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "stub registry stubs.fs[{index}].request.pathSha256 must be a non-empty string"
+                )
+            })?;
+        signatures.insert(replay_fs_request_signature(op, path_sha256));
+    }
+    Ok(signatures)
 }
 
 fn cmd_explain(code: &str, format: ExplainOutputFormat) -> Result<(), i32> {

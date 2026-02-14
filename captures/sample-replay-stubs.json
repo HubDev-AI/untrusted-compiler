@@ -27,8 +27,31 @@
         }
       }
     ],
-    "db": [],
-    "fs": []
+    "db": [
+      {
+        "request": {
+          "queryTemplateId": "users.by_id",
+          "paramsSha256": "3f1941f13cb7f594fd7d8110d7f5f746f708f85f7b2f0e0f0f95da7b6f4f2e70"
+        },
+        "response": {
+          "rowCount": 1,
+          "truncated": false
+        }
+      }
+    ],
+    "fs": [
+      {
+        "request": {
+          "op": "read",
+          "pathSha256": "f96f03b4720f0ac95f5ffcf8f77f3495430f6a64e8e9d6f8f8d1487e8d26ef09"
+        },
+        "response": {
+          "ok": true,
+          "bytes": 64,
+          "truncated": false
+        }
+      }
+    ]
   },
   "redaction": {
     "headers": ["authorization", "cookie", "set-cookie"],
