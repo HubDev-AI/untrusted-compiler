@@ -48,6 +48,8 @@ Roadmap impact:
   - `scripts/test-check-no-local-path-leaks.sh`.
 - M12 local-path leak closure enforcement is active (`M12-B`).
 - M13 operational confidence closure gates are green.
+- M13 trend-note update flow now supports local compare-matrix fallback:
+  - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -1633,6 +1635,7 @@ M13-S1 go/no-go note:
 - [x] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
 - [x] Trend-note chapter refreshed from current compare-matrix via local render+import fallback when remote CI artifact fetch is unavailable.
+- [x] Trend-note updater now supports deterministic local fallback mode (`--prefer-local` + auto fallback on fetch failure).
 
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
@@ -1653,6 +1656,7 @@ M13-S1 go/no-go note:
 - Chapter: "M13 Slice: Trend Note Entry Importer".
 - Chapter: "M13 Slice: Trend Artifact Fetch Helper".
 - Chapter: "M13 Slice: Trend Note Update Command".
+- Chapter: "M13 Slice: Trend Note Update Local Fallback Mode".
 - Chapter: "M13 Slice: Closure Audit Gate Expansion".
 - Chapter: "M13 Slice: Benchmark Smoke Closure Audit Gate".
 - Chapter: "M13 Slice: sec4 Explain-Coverage Closure Gate".
@@ -3331,7 +3335,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add fallback behavior in `benchmark-suite/scripts/update_trend_note_from_ci.sh` for environments where remote workflow fetch is unavailable (render/import from local compare-matrix).
+1. Add aggregated runtime-smoke branch artifact indexing (`default` + `max-body`) and lock it in workflow/checker contracts for easier CI evidence inspection.
 
 ---
 
