@@ -283,6 +283,9 @@ jobs:
       - name: Validate M26 next-slice selector
         run: scripts/test-select-m26-next-slice.sh
 
+      - name: Validate M26 runtime hardening runner
+        run: scripts/test-run-m26-runtime-hardening.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
