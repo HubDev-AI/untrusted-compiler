@@ -374,6 +374,7 @@ Current strict closure result:
 | `M19-D` | PASS | Naming-lock CI enforces M19 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M19-E` | PASS | Naming-lock CI enforces M19 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M19-F` | PASS | Naming-lock CI enforces M19 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M19-G` | PASS | Naming-lock CI enforces M19 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -417,6 +418,7 @@ Strict closure interpretation:
 - M19 runtime hardening runner enforcement is active (`M19-D`).
 - M19 executed-slice convergence summary enforcement is active (`M19-E`).
 - M19 transition handoff packet enforcement is active (`M19-F`).
+- M19 closure report enforcement is active (`M19-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3631,7 +3633,8 @@ M13-S1 go/no-go note:
 - Execute first selected runtime slice via dedicated M19 runtime hardening runner.
 - Build executed-slice convergence summary from selector + runtime execution artifacts.
 - Build transition handoff packet from kickoff/matrix/selector/runtime/convergence artifacts.
-- Lock kickoff/matrix/selector/runtime/convergence/transition contracts in naming-lock CI and closure audit.
+- Build final M19 closure report from strict closure gates + M19 transition packet summary.
+- Lock kickoff/matrix/selector/runtime/convergence/transition/closure contracts in naming-lock CI and closure audit.
 
 ### M19-S1 kickoff acceptance criteria
 - M19 kickoff brief script + contract test exists.
@@ -3686,6 +3689,17 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M19 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M19-F`).
 
+### M19-S7 closure report acceptance criteria
+- M19 closure report script validates strict closure gate JSON and M19 transition packet contract.
+- Report aggregates `M19-A..M19-F` gate statuses plus packet summary into deterministic markdown/json outputs.
+- Closure audit includes dedicated `M19-G` gate.
+
+### M19-S7 tracking (live status)
+- [x] M19 closure report script added.
+- [x] M19 closure report contract test added.
+- [x] Book chapter documenting M19 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M19-G`).
+
 ### Exit criteria
 - M19 kickoff starts from deterministic evidence (`M18` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3696,6 +3710,7 @@ M13-S1 go/no-go note:
 - Chapter: "M19 Runtime Hardening Runner".
 - Chapter: "M19 Executed-Slice Convergence Summary".
 - Chapter: "M19 Transition Handoff Packet".
+- Chapter: "M19 Closure Report".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3787,7 +3802,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M19-S7 closure report from M19 transition packet + strict closure gates and wire its closure gate.
+1. Start M20-S1 kickoff brief from closed M19 packet/report artifacts and wire the next closure gate.
 
 ---
 
