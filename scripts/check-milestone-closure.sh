@@ -185,6 +185,7 @@ bool_has_m20_priority_matrix_ci_guard=0
 bool_has_m20_slice_selector_ci_guard=0
 bool_has_m20_runtime_hardening_runner_ci_guard=0
 bool_has_m20_executed_slice_convergence_summary_ci_guard=0
+bool_has_m20_transition_handoff_packet_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -544,6 +545,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m20_executed_slice_convergence_summary_ci_guard=1
 fi
 
+m20_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m20-transition-handoff-packet.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m20_transition_handoff_packet_test_script}" ] \
+  && rg -q 'scripts/test-build-m20-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m20_transition_handoff_packet_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -782,6 +790,7 @@ emit_check "M20-B" "naming-lock CI enforces M20 priority matrix" "${bool_has_m20
 emit_check "M20-C" "naming-lock CI enforces M20 next-slice selector" "${bool_has_m20_slice_selector_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M20-D" "naming-lock CI enforces M20 runtime hardening runner" "${bool_has_m20_runtime_hardening_runner_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M20-E" "naming-lock CI enforces M20 executed-slice convergence summary" "${bool_has_m20_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M20-F" "naming-lock CI enforces M20 transition handoff packet" "${bool_has_m20_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

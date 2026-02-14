@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Treated `scripts/test-check-milestone-closure.sh` as stuck because it produced no output for long intervals in non-tty mode. | Assume closure harness runs long by design (many negative fixtures); when diagnosing, run once with `bash -x` or check process tree before classifying as a hang. |
 | 2026-02-14 | self | Reused a minimal transition-packet fixture for M20 kickoff auto-generation; `build-m19-closure-report.sh` required additional summary keys (`kickoffPrimaryFocus`, `runtimeStatus`), causing an unexpected contract failure in the test. | When a script auto-calls downstream contract validators, build fixture JSON to satisfy the strictest downstream contract, not only the immediate caller contract. |
 | 2026-02-14 | self | Generated an auto-derived artifact into `output_dir` before ensuring the directory existed, causing immediate `No such file or directory` on first transition-packet test run. | Create packet output directories before any derived artifact redirection that targets paths under that directory. |
 | 2026-02-14 | self | Tried patching `scripts/test-select-m19-next-slice.sh` against stale context and hit an `apply_patch` mismatch. | Re-read the exact target chunk (`sed -n`) immediately before patching recently edited files. |
