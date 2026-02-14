@@ -439,6 +439,7 @@ Current strict closure result:
 | `M28-F` | PASS | Naming-lock CI enforces M28 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M28-G` | PASS | Naming-lock CI enforces M28 closure report | `.github/workflows/naming-lock.yml` |
 | `M29-A` | PASS | Naming-lock CI enforces M29 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M29-B` | PASS | Naming-lock CI enforces M29 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -547,6 +548,7 @@ Strict closure interpretation:
 - M28 transition handoff packet enforcement is active (`M28-F`).
 - M28 closure report enforcement is active (`M28-G`).
 - M29 kickoff brief enforcement is active (`M29-A`).
+- M29 priority matrix enforcement is active (`M29-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4679,13 +4681,24 @@ M13-S1 go/no-go note:
 - Closure audit includes dedicated `M29-B` gate.
 
 ### M29-S2 tracking (live status)
-- [ ] M29 priority matrix script added.
-- [ ] M29 priority matrix contract test added.
-- [ ] Book chapter documenting M29 priority matrix added.
-- [ ] Naming-lock CI and closure gate updated (`M29-B`).
+- [x] M29 priority matrix script added.
+- [x] M29 priority matrix contract test added.
+- [x] Book chapter documenting M29 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M29-B`).
+
+### M29-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M29 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M29-C` gate.
+
+### M29-S3 tracking (live status)
+- [ ] M29 runtime-first de-stub plan script added.
+- [ ] M29 runtime-first de-stub plan contract test added.
+- [ ] Book chapter documenting M29 runtime-first de-stub plan added.
+- [ ] Naming-lock CI and closure gate updated (`M29-C`).
 
 ### Next planned slice
-- M29-S2 priority matrix + closure gate `M29-B`.
+- M29-S3 runtime-first de-stub plan + closure gate `M29-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4777,8 +4790,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M29-S2 priority matrix from M29 kickoff brief and wire `M29-B`.
-2. Start M29 runtime-first de-stub plan for typed sink/runtime intrinsics (db/fs/net/validators/secrets) after `M29-B`.
+1. Implement M29-S3 runtime-first de-stub plan from M29 kickoff + priority matrix artifacts and wire `M29-C`.
+2. Execute first runtime de-stub slice from the plan and capture convergence evidence.
 
 ---
 

@@ -340,6 +340,9 @@ jobs:
       - name: Validate M29 kickoff brief
         run: scripts/test-generate-m29-kickoff-brief.sh
 
+      - name: Validate M29 priority matrix
+        run: scripts/test-build-m29-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
