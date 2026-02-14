@@ -371,5 +371,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `404-m16-runtime-trace-correlation-header-and-error-envelope-sync.md`
 - `405-m16-runtime-standard-success-envelope-alignment.md`
 - `406-m16-res-okmeta-runtime-envelope-coverage.md`
+- `407-m16-http-method-mismatch-405-dispatch-semantics.md`
 
 As milestones progress, chapters will be added and linked from this index.

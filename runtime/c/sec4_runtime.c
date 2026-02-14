@@ -365,6 +365,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Unsupported Media Type";
     case 404:
       return "Not Found";
+    case 405:
+      return "Method Not Allowed";
     case 500:
       return "Internal Server Error";
     default:
@@ -538,15 +540,34 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
 
   sec4_rt_route *match = NULL;
+  sec4_rt_route *method_mismatch = NULL;
   for (size_t i = 0; i < router->route_count; i++) {
     sec4_rt_route *candidate = &router->routes[i];
-    if (strcmp(candidate->method, method) == 0 && strcmp(candidate->path, path) == 0) {
+    if (strcmp(candidate->path, path) != 0) {
+      continue;
+    }
+    if (strcmp(candidate->method, method) == 0) {
       match = candidate;
       break;
+    }
+    if (method_mismatch == NULL) {
+      method_mismatch = candidate;
     }
   }
 
   if (match == NULL) {
+    if (method_mismatch != NULL) {
+      const char *body = "method not allowed";
+      (void) sec4_rt_send_response(
+          socket_fd,
+          405,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body)
+      );
+      return;
+    }
+
     const char *body = "not found";
     (void) sec4_rt_send_response(
         socket_fd,

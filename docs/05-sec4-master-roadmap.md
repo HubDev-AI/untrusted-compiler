@@ -71,6 +71,8 @@ Roadmap impact:
   - runtime JSON success responders now emit deterministic structured success envelopes (`ok/status/traceId/timeMs/data[/meta]`).
 - M16-S11 `res.okMeta` runtime e2e coverage is now implemented:
   - live HTTP runtime path for `res.okMeta(...)` is now validated with deterministic envelope+meta assertions.
+- M16-S12 HTTP method-mismatch semantics are now implemented:
+  - runtime now returns deterministic `405 Method Not Allowed` when path matches but method does not.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2018,6 +2020,27 @@ M13-S1 go/no-go note:
 - [x] `res.okMeta(...)` runtime e2e test added and green.
 - [x] Runtime response assertions include deterministic `meta` envelope checks.
 
+### M16-S12 follow-up slice (HTTP method-mismatch `405` semantics)
+#### Scope
+- Improve runtime HTTP dispatch semantics so method mismatches return `405 Method Not Allowed` rather than `404 Not Found` when a route path exists.
+
+#### Build tasks
+- Update runtime route matching:
+  - detect path matches with different HTTP method,
+  - respond with `405` and deterministic body.
+- Extend status-text mapping with `405 Method Not Allowed`.
+- Add runtime e2e coverage for `GET` request against `POST`-only route.
+
+#### Acceptance criteria
+- Path match + method mismatch yields deterministic `405` response.
+- Not-found path behavior remains unchanged (`404`).
+- Runtime e2e suite remains green.
+
+#### Tracking (live status)
+- [x] Runtime method-mismatch detection added to route dispatch.
+- [x] `405 Method Not Allowed` status mapping emitted by runtime.
+- [x] Runtime e2e coverage added for method-mismatch branch.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2030,6 +2053,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime Trace Correlation Header and Error Envelope Sync".
 - Chapter: "M16 Slice: Runtime Standard Success Envelope Alignment".
 - Chapter: "M16 Slice: res.okMeta Runtime Envelope Coverage".
+- Chapter: "M16 Slice: HTTP Method-Mismatch 405 Dispatch Semantics".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
