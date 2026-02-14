@@ -61,6 +61,22 @@ if ! rg -Fq 'missing runtime-smoke artifact file: users.body' "${tmp_dir}/bad.lo
   exit 1
 fi
 
+envelope_bad_dir="${tmp_dir}/bad-envelope"
+cp -R "${ok_dir}" "${envelope_bad_dir}"
+cat > "${envelope_bad_dir}/users.body" <<'TXT'
+{"ok":true,"status":201,"traceId":"rt-1","data":1}
+TXT
+
+if "${checker}" --artifacts-dir "${envelope_bad_dir}" >"${tmp_dir}/envelope-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on malformed success envelope" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users.body does not match expected std-success envelope contract' "${tmp_dir}/envelope-bad.log"; then
+  echo "expected envelope-contract diagnostic for malformed users.body" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'

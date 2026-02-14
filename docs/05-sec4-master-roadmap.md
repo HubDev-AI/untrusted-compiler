@@ -147,6 +147,9 @@ Roadmap impact:
 - M16-S41 runtime-smoke checker now enforces source/work provenance divergence:
   - checker rejects metadata where `sourceProject` equals `workProject`.
   - regression coverage now pins deterministic divergence diagnostic.
+- M16-S42 runtime-smoke success-envelope checker now enforces `timeMs` field typing:
+  - `users.body` contract now requires numeric `timeMs` alongside `ok/status/traceId/data`.
+  - regression coverage includes malformed-envelope fixture missing `timeMs`.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2813,6 +2816,26 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes identical-source/work failure fixture.
 - [x] Real smoke + checker flow remains green after divergence enforcement.
 
+### M16-S42 follow-up slice (runtime-smoke success-envelope timeMs contract hardening)
+#### Scope
+- Tighten runtime-smoke response contract checks so `users.body` must include numeric `timeMs` in the standard success envelope.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` success-envelope jq contract with:
+  - `(.timeMs | type == "number")`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with malformed `users.body` fixture missing `timeMs`.
+- Assert deterministic envelope-contract diagnostic and rerun real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker rejects `users.body` envelopes missing numeric `timeMs`.
+- Regression suite includes deterministic malformed-envelope failure.
+- Real smoke artifact flow remains green.
+
+#### Tracking (live status)
+- [x] Success-envelope checker now requires numeric `timeMs` in `users.body`.
+- [x] Regression suite includes malformed-envelope fixture missing `timeMs`.
+- [x] Real smoke + checker flow remains green after envelope contract hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2856,6 +2879,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Smoke-Script Source/Work Metadata Token Contract Lock".
 - Chapter: "M16 Slice: Runtime-Smoke Checker Empty Source/Work Metadata Regression Fixtures".
 - Chapter: "M16 Slice: Runtime-Smoke Source/Work Provenance Divergence Enforcement".
+- Chapter: "M16 Slice: Runtime-Smoke Success Envelope timeMs Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -80,7 +80,7 @@ if [ "$(cat "${artifacts_dir}/health.body")" != "ok" ]; then
   exit 1
 fi
 
-if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and length > 0) and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
+if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and length > 0) and (.timeMs | type == "number") and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
   echo "users.body does not match expected std-success envelope contract" >&2
   exit 1
 fi
