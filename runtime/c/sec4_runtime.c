@@ -34,6 +34,7 @@ typedef struct {
   bool cors_enabled;
   bool security_headers_enabled;
   bool csrf_enabled;
+  bool auth_enabled;
   size_t route_count;
   sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
 } sec4_rt_router_state;
@@ -464,6 +465,8 @@ static int64_t sec4_rt_register_route(
 
 static const char *sec4_rt_status_text(int64_t status) {
   switch (status) {
+    case 401:
+      return "Unauthorized";
     case 200:
       return "OK";
     case 201:
@@ -775,6 +778,37 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         final_headers
     );
     return;
+  }
+
+  if (router->auth_enabled && strcmp(method, "OPTIONS") != 0) {
+    char auth_header[256];
+    bool has_auth = sec4_rt_parse_header_value(
+        request,
+        headers_len,
+        "Authorization",
+        auth_header,
+        sizeof(auth_header)
+    );
+    bool valid_auth = has_auth
+        && strncasecmp(auth_header, "Bearer ", 7) == 0
+        && auth_header[7] != '\0';
+    if (!valid_auth) {
+      sec4_rt_store_std_error_response(
+          401,
+          "AUTH.UNAUTHORIZED",
+          "auth",
+          "Authorization header missing or invalid"
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          g_sec4_rt_response.status,
+          g_sec4_rt_response.content_type,
+          g_sec4_rt_response.body,
+          g_sec4_rt_response.body_len,
+          security_headers
+      );
+      return;
+    }
   }
 
   if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(method)) {
@@ -1326,6 +1360,10 @@ int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
 
 int64_t sec4_rt_with_auth(int64_t router, int64_t cfg) {
   (void) cfg;
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot != NULL) {
+    slot->auth_enabled = true;
+  }
   return router;
 }
 

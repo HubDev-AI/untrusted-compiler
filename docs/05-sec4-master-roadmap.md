@@ -81,6 +81,8 @@ Roadmap impact:
   - when `sec.withSecurityHeaders(...)` is active, runtime injects deterministic security headers on both success and not-found error responses.
 - M16-S16 CSRF runtime gate is now implemented:
   - when `csrf.withCsrf(...)` is active, runtime enforces double-submit token checks on protected methods and returns deterministic `403` on missing/mismatched tokens.
+- M16-S17 auth runtime gate is now implemented:
+  - when `auth.withAuth(...)` is active, runtime enforces `Authorization: Bearer ...` checks and returns deterministic `401` for missing/invalid auth headers.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2140,6 +2142,30 @@ M13-S1 go/no-go note:
 - [x] Protected-method CSRF token matching is enforced in request path.
 - [x] Runtime e2e coverage added for reject and allow CSRF branches.
 
+### M16-S17 follow-up slice (auth runtime gate for protected requests)
+#### Scope
+- Activate baseline auth middleware behavior in runtime by enforcing bearer-auth header checks when `auth.withAuth(...)` is enabled.
+
+#### Build tasks
+- Extend router runtime state with auth-enabled flag set by `with_auth`.
+- For non-`OPTIONS` requests on auth-enabled routers:
+  - require `Authorization` header,
+  - require `Bearer <token>` format with non-empty token.
+- Return deterministic structured `401` envelope for missing/invalid auth.
+- Add runtime e2e coverage for:
+  - reject path (missing auth header),
+  - allow path (valid bearer header).
+
+#### Acceptance criteria
+- Auth-enabled routers reject unauthorized requests with deterministic `401`.
+- Valid bearer-auth requests continue through handler path.
+- Runtime integration suites remain green with auth enforcement active.
+
+#### Tracking (live status)
+- [x] Runtime router state tracks auth middleware enablement.
+- [x] Runtime enforces bearer-auth header shape for non-OPTIONS requests.
+- [x] Runtime e2e coverage added for auth reject and allow branches.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2157,6 +2183,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CORS Preflight Runtime Handling".
 - Chapter: "M16 Slice: Security Headers Runtime Injection".
 - Chapter: "M16 Slice: CSRF Runtime Gate Enforcement".
+- Chapter: "M16 Slice: Auth Runtime Gate Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
