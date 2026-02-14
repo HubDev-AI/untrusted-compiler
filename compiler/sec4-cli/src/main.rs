@@ -183,6 +183,40 @@ struct ReplayMockDependencySignatures {
     fs: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDbStubMatch {
+    row_count: i64,
+    truncated: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockFsStubMatch {
+    ok: bool,
+    truncated: bool,
+    bytes: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDbDependencyStubSummary {
+    signature: String,
+    row_count: i64,
+    truncated: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockFsDependencyStubSummary {
+    signature: String,
+    ok: bool,
+    truncated: bool,
+    bytes: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDependencyStubSummaries {
+    db: Vec<ReplayMockDbDependencyStubSummary>,
+    fs: Vec<ReplayMockFsDependencyStubSummary>,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -300,12 +334,13 @@ fn cmd_replay_check(
     let mut stub_counts: Option<(usize, usize, usize)> = None;
     let mut stub_details: Option<(ReplayDbStubDetails, ReplayFsStubDetails)> = None;
     let mut net_stubs: Option<HashMap<String, ReplayMockNetStubMatch>> = None;
-    let mut db_stub_signatures: Option<HashSet<String>> = None;
-    let mut fs_stub_signatures: Option<HashSet<String>> = None;
+    let mut db_stubs: Option<HashMap<String, ReplayMockDbStubMatch>> = None;
+    let mut fs_stubs: Option<HashMap<String, ReplayMockFsStubMatch>> = None;
     let mut mock_request_signature: Option<String> = None;
     let mut mock_matched_stub: Option<ReplayMockNetStubMatch> = None;
     let mut mock_dependency_matches: Option<ReplayMockDependencyMatches> = None;
     let mut mock_dependency_signatures: Option<ReplayMockDependencySignatures> = None;
+    let mut mock_dependency_stub_summaries: Option<ReplayMockDependencyStubSummaries> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -412,7 +447,7 @@ fn cmd_replay_check(
                 return Err(1);
             }
         };
-        db_stub_signatures = match collect_replay_db_stub_signatures(&stubs_json) {
+        db_stubs = match collect_replay_db_stubs(&stubs_json) {
             Ok(entries) => Some(entries),
             Err(message) => {
                 eprintln!(
@@ -421,7 +456,7 @@ fn cmd_replay_check(
                 return Err(1);
             }
         };
-        fs_stub_signatures = match collect_replay_fs_stub_signatures(&stubs_json) {
+        fs_stubs = match collect_replay_fs_stubs(&stubs_json) {
             Ok(entries) => Some(entries),
             Err(message) => {
                 eprintln!(
@@ -457,20 +492,35 @@ fn cmd_replay_check(
                     return Err(1);
                 }
             };
-        let db_signatures = db_stub_signatures
+        let db_signatures = db_stubs
             .as_ref()
-            .expect("mock mode requires db signatures for loaded stubs");
+            .expect("mock mode requires db stubs for loaded stubs");
+        let mut db_summary_entries = Vec::new();
         for signature in &capture_db_signatures {
-            if !db_signatures.contains(signature) {
+            if let Some(stub) = db_signatures.get(signature) {
+                db_summary_entries.push(ReplayMockDbDependencyStubSummary {
+                    signature: signature.clone(),
+                    row_count: stub.row_count,
+                    truncated: stub.truncated,
+                });
+            } else {
                 eprintln!("replay compatibility failed: REPLAY.DB_STUB_MISSING: {signature}");
                 return Err(1);
             }
         }
-        let fs_signatures = fs_stub_signatures
+        let fs_signatures = fs_stubs
             .as_ref()
-            .expect("mock mode requires fs signatures for loaded stubs");
+            .expect("mock mode requires fs stubs for loaded stubs");
+        let mut fs_summary_entries = Vec::new();
         for signature in &capture_fs_signatures {
-            if !fs_signatures.contains(signature) {
+            if let Some(stub) = fs_signatures.get(signature) {
+                fs_summary_entries.push(ReplayMockFsDependencyStubSummary {
+                    signature: signature.clone(),
+                    ok: stub.ok,
+                    truncated: stub.truncated,
+                    bytes: stub.bytes,
+                });
+            } else {
                 eprintln!("replay compatibility failed: REPLAY.FS_STUB_MISSING: {signature}");
                 return Err(1);
             }
@@ -482,6 +532,10 @@ fn cmd_replay_check(
         mock_dependency_signatures = Some(ReplayMockDependencySignatures {
             db: capture_db_signatures,
             fs: capture_fs_signatures,
+        });
+        mock_dependency_stub_summaries = Some(ReplayMockDependencyStubSummaries {
+            db: db_summary_entries,
+            fs: fs_summary_entries,
         });
         mock_dependency_matches = Some(ReplayMockDependencyMatches {
             db: db_match_count,
@@ -534,6 +588,42 @@ fn cmd_replay_check(
                 };
                 println!("replay mock dependency signatures: db={db} fs={fs}");
             }
+            if let Some(summaries) = &mock_dependency_stub_summaries {
+                let db = if summaries.db.is_empty() {
+                    "-".to_string()
+                } else {
+                    summaries
+                        .db
+                        .iter()
+                        .map(|entry| {
+                            format!(
+                                "{}(rowCount={},truncated={})",
+                                entry.signature, entry.row_count, entry.truncated
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                let fs = if summaries.fs.is_empty() {
+                    "-".to_string()
+                } else {
+                    summaries
+                        .fs
+                        .iter()
+                        .map(|entry| {
+                            let bytes = entry
+                                .bytes
+                                .map_or_else(|| "-".to_string(), |value| value.to_string());
+                            format!(
+                                "{}(ok={},truncated={},bytes={})",
+                                entry.signature, entry.ok, entry.truncated, bytes
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                println!("replay mock dependency stub summaries: db={db} fs={fs}");
+            }
         }
         ReplayOutputFormat::Json => {
             let payload = serde_json::json!({
@@ -568,6 +658,19 @@ fn cmd_replay_check(
                 "mockDependencySignatures": mock_dependency_signatures.as_ref().map(|signatures| serde_json::json!({
                     "db": signatures.db,
                     "fs": signatures.fs,
+                })),
+                "mockDependencyStubSummaries": mock_dependency_stub_summaries.as_ref().map(|summaries| serde_json::json!({
+                    "db": summaries.db.iter().map(|entry| serde_json::json!({
+                        "signature": entry.signature,
+                        "rowCount": entry.row_count,
+                        "truncated": entry.truncated,
+                    })).collect::<Vec<_>>(),
+                    "fs": summaries.fs.iter().map(|entry| serde_json::json!({
+                        "signature": entry.signature,
+                        "ok": entry.ok,
+                        "truncated": entry.truncated,
+                        "bytes": entry.bytes,
+                    })).collect::<Vec<_>>(),
                 })),
                 "stubDetails": stub_details.as_ref().map(|(db, fs)| serde_json::json!({
                     "db": {
@@ -1500,14 +1603,16 @@ fn collect_replay_db_fs_stub_details(
     ))
 }
 
-fn collect_replay_db_stub_signatures(stubs: &serde_json::Value) -> Result<HashSet<String>, String> {
+fn collect_replay_db_stubs(
+    stubs: &serde_json::Value,
+) -> Result<HashMap<String, ReplayMockDbStubMatch>, String> {
     let entries = stubs
         .get("stubs")
         .and_then(serde_json::Value::as_object)
         .and_then(|stubs_obj| stubs_obj.get("db"))
         .and_then(serde_json::Value::as_array)
         .map_or(&[][..], Vec::as_slice);
-    let mut signatures = HashSet::new();
+    let mut stubs = HashMap::new();
     for (index, entry) in entries.iter().enumerate() {
         let request = entry
             .get("request")
@@ -1526,19 +1631,49 @@ fn collect_replay_db_stub_signatures(stubs: &serde_json::Value) -> Result<HashSe
             .get("paramsSha256")
             .and_then(serde_json::Value::as_str)
             .filter(|value| !value.is_empty());
-        signatures.insert(replay_db_request_signature(query_template_id, params_sha256));
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.db[{index}].response must be an object"))?;
+        let row_count = response
+            .get("rowCount")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| {
+                format!("stub registry stubs.db[{index}].response.rowCount must be an integer")
+            })?;
+        if row_count < 0 {
+            return Err(format!(
+                "stub registry stubs.db[{index}].response.rowCount must be >= 0"
+            ));
+        }
+        let truncated = response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| {
+                format!("stub registry stubs.db[{index}].response.truncated must be a boolean")
+            })?;
+        let signature = replay_db_request_signature(query_template_id, params_sha256);
+        stubs.insert(
+            signature,
+            ReplayMockDbStubMatch {
+                row_count,
+                truncated,
+            },
+        );
     }
-    Ok(signatures)
+    Ok(stubs)
 }
 
-fn collect_replay_fs_stub_signatures(stubs: &serde_json::Value) -> Result<HashSet<String>, String> {
+fn collect_replay_fs_stubs(
+    stubs: &serde_json::Value,
+) -> Result<HashMap<String, ReplayMockFsStubMatch>, String> {
     let entries = stubs
         .get("stubs")
         .and_then(serde_json::Value::as_object)
         .and_then(|stubs_obj| stubs_obj.get("fs"))
         .and_then(serde_json::Value::as_array)
         .map_or(&[][..], Vec::as_slice);
-    let mut signatures = HashSet::new();
+    let mut stubs = HashMap::new();
     for (index, entry) in entries.iter().enumerate() {
         let request = entry
             .get("request")
@@ -1560,9 +1695,46 @@ fn collect_replay_fs_stub_signatures(stubs: &serde_json::Value) -> Result<HashSe
                     "stub registry stubs.fs[{index}].request.pathSha256 must be a non-empty string"
                 )
             })?;
-        signatures.insert(replay_fs_request_signature(op, path_sha256));
+        let response = entry
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("stub registry stubs.fs[{index}].response must be an object"))?;
+        let ok = response
+            .get("ok")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response.ok must be a boolean")
+            })?;
+        let truncated = response
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response.truncated must be a boolean")
+            })?;
+        let bytes = if let Some(value) = response.get("bytes") {
+            let bytes = value.as_i64().ok_or_else(|| {
+                format!("stub registry stubs.fs[{index}].response.bytes must be an integer")
+            })?;
+            if bytes < 0 {
+                return Err(format!(
+                    "stub registry stubs.fs[{index}].response.bytes must be >= 0"
+                ));
+            }
+            Some(bytes)
+        } else {
+            None
+        };
+        let signature = replay_fs_request_signature(op, path_sha256);
+        stubs.insert(
+            signature,
+            ReplayMockFsStubMatch {
+                ok,
+                truncated,
+                bytes,
+            },
+        );
     }
-    Ok(signatures)
+    Ok(stubs)
 }
 
 fn cmd_explain(code: &str, format: ExplainOutputFormat) -> Result<(), i32> {

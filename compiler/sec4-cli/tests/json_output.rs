@@ -1867,11 +1867,78 @@ fn replay_check_mock_mode_text_reports_matched_stub_response_summary() {
         stdout.contains("replay mock dependency signatures: db=- fs=-"),
         "stdout should include deterministic empty dependency signature summary:\n{stdout}"
     );
+    assert!(
+        stdout.contains("replay mock dependency stub summaries: db=- fs=-"),
+        "stdout should include deterministic empty dependency stub-summary line:\n{stdout}"
+    );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.trim().is_empty(),
         "stderr should be empty for successful mock-mode replay:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_mock_mode_text_reports_dependency_stub_summaries() {
+    let dir = temp_dir("sec4-replay-mock-text-dependency-stub-summaries");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file_with_db_fs_dependencies(
+        &capture,
+        "pol_A",
+        "cpl_A",
+        "rt_A",
+        "users.by_id",
+        Some("abc123"),
+        "read",
+        "p1",
+    );
+    write_stub_registry_with_db_fs_file(&stubs);
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--effects",
+        "mock",
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        output.status.success(),
+        "replay text mode should pass when all dependency signatures are present in stubs"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains(
+            "replay mock dependency stub summaries: db=users.by_id|abc123(rowCount=1,truncated=false) fs=read|p1(ok=true,truncated=false,bytes=64)"
+        ),
+        "stdout should include deterministic dependency stub summary line:\n{stdout}"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.trim().is_empty(),
+        "stderr should be empty:\n{stderr}"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
@@ -1967,6 +2034,97 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_str)
             .expect("mockDependencySignatures.fs[0] should be present"),
         "read|p1"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyStubSummaries.db[0].signature should be present"),
+        "users.by_id|abc123"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("rowCount"))
+            .and_then(Value::as_i64)
+            .expect("mockDependencyStubSummaries.db[0].rowCount should be present"),
+        1
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("truncated"))
+            .and_then(Value::as_bool)
+            .expect("mockDependencyStubSummaries.db[0].truncated should be present"),
+        false
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyStubSummaries.fs[0].signature should be present"),
+        "read|p1"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("ok"))
+            .and_then(Value::as_bool)
+            .expect("mockDependencyStubSummaries.fs[0].ok should be present"),
+        true
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("truncated"))
+            .and_then(Value::as_bool)
+            .expect("mockDependencyStubSummaries.fs[0].truncated should be present"),
+        false
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("bytes"))
+            .and_then(Value::as_i64)
+            .expect("mockDependencyStubSummaries.fs[0].bytes should be present"),
+        64
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
@@ -2304,6 +2462,24 @@ fn replay_check_json_mode_writes_parseable_payload() {
             .and_then(Value::as_array)
             .is_some_and(|items| items.is_empty()),
         "mockDependencySignatures.fs should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("db"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockDependencyStubSummaries.db should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockDependencyStubSummaries")
+            .and_then(Value::as_object)
+            .and_then(|summaries| summaries.get("fs"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockDependencyStubSummaries.fs should be present and empty when capture has no dependencies"
     );
     assert_eq!(
         parsed
