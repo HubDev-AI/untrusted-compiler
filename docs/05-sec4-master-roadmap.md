@@ -67,6 +67,8 @@ Roadmap impact:
   - runtime `req.json(...)` gate failures now return deterministic standard JSON error envelopes with stable error codes.
 - M16-S9 trace-correlation bootstrap is now implemented:
   - runtime now emits deterministic `X-Trace-Id` response header and aligns `req.json(...)` error-envelope `traceId` with request-scoped runtime trace ids.
+- M16-S10 standard success-envelope bootstrap is now implemented:
+  - runtime JSON success responders now emit deterministic structured success envelopes (`ok/status/traceId/timeMs/data[/meta]`).
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1964,6 +1966,34 @@ M13-S1 go/no-go note:
 - [x] Runtime error-envelope trace-id now aligns with request trace id.
 - [x] Runtime e2e assertions added for trace header/error trace id fields.
 
+### M16-S10 follow-up slice (runtime standard success-envelope alignment)
+#### Scope
+- Align runtime JSON success responses with the documented standard success-envelope contract while preserving deterministic bootstrap behavior.
+
+#### Build tasks
+- Add runtime helper for standard JSON success envelopes:
+  - `ok`,
+  - `status`,
+  - `traceId`,
+  - `timeMs`,
+  - `data`,
+  - optional `meta`.
+- Migrate runtime success responders:
+  - `res.json`,
+  - `res.ok`,
+  - `res.okMeta`.
+- Update runtime integration assertions to validate structured envelope fields.
+
+#### Acceptance criteria
+- JSON success responders no longer emit ad-hoc `{"ok":true}` payloads only.
+- Runtime success payloads contain deterministic envelope fields with request trace correlation.
+- Existing HTTP runtime success tests remain green with updated expectations.
+
+#### Tracking (live status)
+- [x] Standard success-envelope runtime helper added.
+- [x] `res.json`, `res.ok`, and `res.okMeta` migrated to structured success payloads.
+- [x] Runtime integration assertions updated for success envelope fields (`status`, `traceId`).
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -1974,6 +2004,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: req.json Request-Size Guard Enforcement".
 - Chapter: "M16 Slice: req.json Standard Error Envelope Alignment".
 - Chapter: "M16 Slice: Runtime Trace Correlation Header and Error Envelope Sync".
+- Chapter: "M16 Slice: Runtime Standard Success Envelope Alignment".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

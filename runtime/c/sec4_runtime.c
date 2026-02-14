@@ -138,6 +138,35 @@ static void sec4_rt_store_std_error_response(
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
 }
 
+static void sec4_rt_store_std_success_response(int64_t status, bool include_meta) {
+  char payload[768];
+  int written = 0;
+  if (include_meta) {
+    written = snprintf(
+        payload,
+        sizeof(payload),
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":{},\"meta\":{}}",
+        (long long) status,
+        sec4_rt_current_trace_id()
+    );
+  } else {
+    written = snprintf(
+        payload,
+        sizeof(payload),
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":{}}",
+        (long long) status,
+        sec4_rt_current_trace_id()
+    );
+  }
+
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    sec4_rt_store_response(status, "application/json; charset=utf-8", "{\"ok\":true}");
+    return;
+  }
+
+  sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
+}
+
 static void sec4_rt_reset_request(void) {
   memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
 }
@@ -692,11 +721,7 @@ int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_response(
-      200,
-      "application/json; charset=utf-8",
-      "{\"ok\":true}"
-  );
+  sec4_rt_store_std_success_response(200, false);
   return 0;
 }
 
@@ -706,11 +731,7 @@ int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value) {
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_response(
-      status > 0 ? status : 201,
-      "application/json; charset=utf-8",
-      "{\"ok\":true}"
-  );
+  sec4_rt_store_std_success_response(status > 0 ? status : 201, false);
   return 0;
 }
 
@@ -721,11 +742,7 @@ int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_response(
-      status > 0 ? status : 201,
-      "application/json; charset=utf-8",
-      "{\"ok\":true,\"meta\":{}}"
-  );
+  sec4_rt_store_std_success_response(status > 0 ? status : 201, true);
   return 0;
 }
 

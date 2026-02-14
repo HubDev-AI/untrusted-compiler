@@ -5907,8 +5907,10 @@ fn main() effects {{ net }} -> Int {{
         "response should include JSON content-type"
     );
     assert!(
-        response.contains("\r\n\r\n{\"ok\":true}"),
-        "response should include JSON success envelope body"
+        response.contains("\"ok\":true")
+            && response.contains("\"status\":201")
+            && response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic std-success envelope body"
     );
 }
 
@@ -6047,8 +6049,10 @@ fn main() effects {{ net }} -> Int {{
         "response should include JSON content-type"
     );
     assert!(
-        response.contains("\r\n\r\n{\"ok\":true}"),
-        "response should include JSON success envelope body"
+        response.contains("\"ok\":true")
+            && response.contains("\"status\":202")
+            && response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic std-success envelope body"
     );
 }
 
@@ -6623,8 +6627,10 @@ fn main() effects {{ net }} -> Int {{
         "response should include JSON content-type"
     );
     assert!(
-        response.contains("\r\n\r\n{\"ok\":true}"),
-        "response should include JSON success envelope body"
+        response.contains("\"ok\":true")
+            && response.contains("\"status\":201")
+            && response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic std-success envelope body"
     );
 }
 
