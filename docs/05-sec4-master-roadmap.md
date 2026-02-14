@@ -391,6 +391,7 @@ Current strict closure result:
 | `M21-G` | PASS | Naming-lock CI enforces M21 closure report | `.github/workflows/naming-lock.yml` |
 | `M22-A` | PASS | Naming-lock CI enforces M22 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M22-B` | PASS | Naming-lock CI enforces M22 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M22-C` | PASS | Naming-lock CI enforces M22 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -451,6 +452,7 @@ Strict closure interpretation:
 - M21 closure report enforcement is active (`M21-G`).
 - M22 kickoff brief enforcement is active (`M22-A`).
 - M22 priority matrix enforcement is active (`M22-B`).
+- M22 next-slice selector enforcement is active (`M22-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3996,8 +3998,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M22 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M22-B`).
 
+### M22-S3 next-slice selector acceptance criteria
+- Selector consumes M22 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M22-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M22-C` gate.
+
+### M22-S3 tracking (live status)
+- [x] M22 next-slice selector script added.
+- [x] M22 next-slice selector contract test added.
+- [x] Book chapter documenting M22 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M22-C`).
+
 ### Next planned slice
-- M22-S3 next-slice selector + closure gate `M22-C`.
+- M22-S4 runtime hardening runner + closure gate `M22-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4089,7 +4102,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M22-S3 next-slice selector from M22 priority matrix and wire `M22-C`.
+1. Implement M22-S4 runtime hardening runner from M22 selector output and wire `M22-D`.
 
 ---
 

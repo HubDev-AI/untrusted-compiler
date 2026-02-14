@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | After copy/replacement for selector tests, the success echo line still referenced the previous milestone (`m21 ... test passed`) even though assertions were updated. | After batch replacements, always scan new files for both prior milestone tokens and end-of-script status messages to avoid stale human-facing output strings. |
 | 2026-02-14 | self | Bulk milestone copy/replacement for new slice files left one stale milestone token in human-facing rationale text (`M21` in an M22 file) while contracts still passed. | After scripted replacements, run a targeted `rg` sweep for prior milestone tokens in newly copied files and manually review user-facing strings before final validation. |
 | 2026-02-14 | self | Added M21 closure-report files and passed local script tests before wiring the new closure gate end-to-end (`M21-G`) into naming-lock + closure-audit fixtures. | For milestone closure slices, complete gate wiring first: naming-lock step, `check-milestone-closure` bool/emit, fixture gate list, and negative-case removal checks, then run the full closure harness. |
 | 2026-02-14 | self | Treated `scripts/test-check-milestone-closure.sh` as stuck because it produced no output for long intervals in non-tty mode. | Assume closure harness runs long by design (many negative fixtures); when diagnosing, run once with `bash -x` or check process tree before classifying as a hang. |

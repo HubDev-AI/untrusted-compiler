@@ -196,6 +196,9 @@ jobs:
       - name: Validate M22 priority matrix
         run: scripts/test-build-m22-priority-matrix.sh
 
+      - name: Validate M22 next-slice selector
+        run: scripts/test-select-m22-next-slice.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
