@@ -97,6 +97,9 @@ jobs:
       - name: Validate M17 final handoff playbook checker
         run: scripts/test-check-m17-operator-handoff-playbook.sh
 
+      - name: Validate M17 clean-clone rehearsal runner
+        run: scripts/test-run-m17-operator-clean-clone-rehearsal.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
