@@ -168,6 +168,9 @@ Roadmap impact:
 - M16-S48 runtime-smoke checker now enforces run-log/metadata timeout correlation:
   - invocation logs must include exact `--serve-timeout-ms <run-metadata serveTimeoutMs>` token.
   - regression coverage includes deterministic timeout-mismatch failure fixture.
+- M16-S49 operator smoke script now supports timeout override:
+  - `scripts/smoke-sec4-run-hello-api.sh` accepts `--serve-timeout-ms <ms>` with default `12000`.
+  - smoke-script contract/guard checks now lock variable-based timeout tokens.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2988,6 +2991,30 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes run-log/metadata timeout mismatch fixture.
 - [x] Real smoke + checker flow remains green after timeout-correlation hardening.
 
+### M16-S49 follow-up slice (operator smoke timeout override + variable-token contract lock)
+#### Scope
+- Extend operator smoke script with timeout override support while preserving deterministic contract checks.
+
+#### Build tasks
+- Extend `scripts/smoke-sec4-run-hello-api.sh`:
+  - add `--serve-timeout-ms <ms>` argument (default `12000`)
+  - validate positive integer input
+  - propagate value into runtime invocation + metadata output
+- Update smoke-script contract/guard tests:
+  - lock variable-based timeout tokens (`${serve_timeout_ms}`) in invocation + metadata emit blocks
+  - add guard fixtures for removed timeout flag token and metadata token
+- Re-run checker regression + real smoke/checker flows for default and override timeout values.
+
+#### Acceptance criteria
+- Smoke script accepts timeout override and continues passing checker validation.
+- Contract/guard tests enforce timeout token presence in both invocation and metadata emit paths.
+- Default timeout behavior remains unchanged.
+
+#### Tracking (live status)
+- [x] Smoke script now accepts `--serve-timeout-ms` with default `12000`.
+- [x] Contract/guard coverage now locks variable-based timeout flag + metadata tokens.
+- [x] Default and override smoke flows both pass checker validation.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3038,6 +3065,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Invocation Flag Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Port/Metadata Correlation Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Timeout/Metadata Correlation Hardening".
+- Chapter: "M16 Slice: Operator Smoke Timeout Override and Variable Token Contracts".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

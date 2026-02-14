@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--project <path>] [--artifacts-dir <path>]
+usage: $0 [--project <path>] [--artifacts-dir <path>] [--serve-timeout-ms <ms>]
 
 Builds and runs a temporary hello-api service via `sec4 run` in oneshot mode,
 then validates GET /health and POST /users end-to-end responses.
@@ -13,6 +13,7 @@ USAGE
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_project="${root_dir}/examples/hello-api"
 artifacts_dir=""
+serve_timeout_ms="12000"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -38,6 +39,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --artifacts-dir=*)
       artifacts_dir="${1#--artifacts-dir=}"
+      shift
+      ;;
+    --serve-timeout-ms)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      serve_timeout_ms="$2"
+      shift 2
+      ;;
+    --serve-timeout-ms=*)
+      serve_timeout_ms="${1#--serve-timeout-ms=}"
       shift
       ;;
     -h|--help)
@@ -67,6 +80,11 @@ require_cmd python3
 
 if [ ! -d "${source_project}" ]; then
   echo "missing project directory: ${source_project}" >&2
+  exit 1
+fi
+
+if ! [[ "${serve_timeout_ms}" =~ ^[0-9]+$ ]] || [ "${serve_timeout_ms}" -le 0 ]; then
+  echo "invalid --serve-timeout-ms value (expected positive integer): ${serve_timeout_ms}" >&2
   exit 1
 fi
 
@@ -108,7 +126,7 @@ sourceProject=${source_project}
 workProject=${work_project}
 port=${port}
 oneshot=true
-serveTimeoutMs=12000
+serveTimeoutMs=${serve_timeout_ms}
 runFlags=--port,--oneshot,--serve-timeout-ms
 META
 
@@ -132,7 +150,7 @@ request_once() {
     "http://127.0.0.1:${port}${path}"
   )
 
-  cargo run -p sec4 -- run --path "${work_project}" --port "${port}" --oneshot --serve-timeout-ms 12000 >"${log_file}" 2>&1 &
+  cargo run -p sec4 -- run --path "${work_project}" --port "${port}" --oneshot --serve-timeout-ms "${serve_timeout_ms}" >"${log_file}" 2>&1 &
   service_pid=$!
 
   local status_code=""

@@ -61,6 +61,40 @@ if ! rg -Fq "missing required smoke-script token: ${missing_work_meta_token}" "$
   exit 1
 fi
 
+timeout_flag_fixture="${tmp_dir}/smoke-timeout-flag.sh"
+cp "${source_script}" "${timeout_flag_fixture}"
+chmod +x "${timeout_flag_fixture}"
+
+missing_timeout_flag_token='--serve-timeout-ms "${serve_timeout_ms}"'
+perl -0pi -e 's/--serve-timeout-ms "\$\{serve_timeout_ms\}"/--serve-timeout-ms removed-timeout/' "${timeout_flag_fixture}"
+
+if "${contract_script}" --script "${timeout_flag_fixture}" >"${tmp_dir}/timeout-flag-guard.log" 2>&1; then
+  echo "expected smoke script contract to fail when serve-timeout flag token is removed" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing required smoke-script token: ${missing_timeout_flag_token}" "${tmp_dir}/timeout-flag-guard.log"; then
+  echo "expected missing-token diagnostic for ${missing_timeout_flag_token}" >&2
+  exit 1
+fi
+
+timeout_meta_fixture="${tmp_dir}/smoke-timeout-meta.sh"
+cp "${source_script}" "${timeout_meta_fixture}"
+chmod +x "${timeout_meta_fixture}"
+
+missing_timeout_meta_token='serveTimeoutMs=${serve_timeout_ms}'
+perl -0pi -e 's/serveTimeoutMs=\$\{serve_timeout_ms\}/serveTimeoutMs=removed-timeout/' "${timeout_meta_fixture}"
+
+if "${contract_script}" --script "${timeout_meta_fixture}" >"${tmp_dir}/timeout-meta-guard.log" 2>&1; then
+  echo "expected smoke script contract to fail when serveTimeoutMs metadata token is removed" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing required smoke-script token: ${missing_timeout_meta_token}" "${tmp_dir}/timeout-meta-guard.log"; then
+  echo "expected missing-token diagnostic for ${missing_timeout_meta_token}" >&2
+  exit 1
+fi
+
 runflags_fixture="${tmp_dir}/smoke-meta-runflags.sh"
 cp "${source_script}" "${runflags_fixture}"
 chmod +x "${runflags_fixture}"
