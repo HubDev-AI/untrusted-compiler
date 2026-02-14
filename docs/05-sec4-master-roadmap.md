@@ -59,6 +59,8 @@ Roadmap impact:
 - M16-S5 content-type gate hardening is now implemented:
   - `req.json(...)` now enforces JSON media type (`application/json` or `application/*+json`),
   - non-JSON request media types deterministically return `415 Unsupported Media Type`.
+- M16-S6 `sec4 run` live-serving e2e coverage is now implemented:
+  - CLI `sec4 run` path is now explicitly validated with a real HTTP POST roundtrip in oneshot mode.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1865,12 +1867,34 @@ M13-S1 go/no-go note:
 - [x] `req.json(...)` enforces JSON media type and returns deterministic `415` otherwise.
 - [x] New non-JSON content-type runtime E2E integration test added and green.
 
+### M16-S6 follow-up slice (`sec4 run` live-serving command-path validation)
+#### Scope
+- Add explicit integration coverage that exercises the full CLI command path (`sec4 run`) while serving a real HTTP request via runtime oneshot mode.
+
+#### Build tasks
+- Add integration test fixture that:
+  - creates a temporary HTTP project with `req.json(...)` + `res.ok(...)`,
+  - launches `sec4 run --path <fixture>` with oneshot runtime env vars,
+  - sends `POST /users`,
+  - asserts deterministic JSON response contract.
+- Ensure test waits deterministically and fails fast if the command exits before request handling.
+
+#### Acceptance criteria
+- `sec4 run` command path is proven to compile and execute a live HTTP runtime service.
+- Request/response roundtrip through `sec4 run` yields deterministic `201` JSON response.
+- Test suite remains stable with no hangs under oneshot mode.
+
+#### Tracking (live status)
+- [x] `sec4 run` command-path HTTP oneshot e2e test added.
+- [x] Deterministic `POST /users` response contract asserted through CLI run path.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
 - Chapter: "M16 Slice: Runtime Status Propagation for Success Responses".
 - Chapter: "M16 Slice: Runtime Request JSON Gate for Invalid Payload Handling".
 - Chapter: "M16 Slice: Runtime req.json Content-Type Gate Enforcement".
+- Chapter: "M16 Slice: sec4 run Live HTTP Command-Path Validation".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

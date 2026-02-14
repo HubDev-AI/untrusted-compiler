@@ -365,5 +365,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `398-m16-runtime-status-propagation-for-success-responses.md`
 - `399-m16-runtime-request-json-gate-for-invalid-payload-handling.md`
 - `400-m16-runtime-req-json-content-type-gate-enforcement.md`
+- `401-m16-sec4-run-live-http-command-path-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.
