@@ -171,14 +171,16 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_log_with_attr()"));
     assert!(source.contains("int64_t sec4_rt_log_with_http()"));
     assert!(source.contains("int64_t sec4_rt_log_with_error()"));
-    assert!(source.contains("int64_t sec4_rt_req_json()"));
-    assert!(source.contains("int64_t sec4_rt_json_decode()"));
-    assert!(source.contains("int64_t sec4_rt_json_encode()"));
+    assert!(source.contains("int64_t sec4_rt_req_json(int64_t schema)"));
+    assert!(source.contains(
+        "int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw)"
+    ));
+    assert!(source.contains("int64_t sec4_rt_json_encode(int64_t schema, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_req_body()"));
     assert!(source.contains("int64_t sec4_rt_req_query()"));
     assert!(source.contains("int64_t sec4_rt_req_path_param()"));
     assert!(source.contains("int64_t sec4_rt_req_header()"));
-    assert!(source.contains("int64_t sec4_rt_res_json()"));
+    assert!(source.contains("int64_t sec4_rt_res_json(int64_t schema, int64_t value)"));
     assert!(source.contains(
         "int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value)"
     ));

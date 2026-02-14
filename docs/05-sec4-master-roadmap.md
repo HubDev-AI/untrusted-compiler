@@ -53,6 +53,9 @@ Roadmap impact:
   - `POST /users` runtime E2E serving is validated in oneshot mode.
 - M16-S3 status-propagation hardening is now implemented:
   - `res.ok(status, ...)` and `res.okMeta(status, ...)` now propagate caller status into runtime HTTP response line.
+- M16-S4 request-body JSON gate bootstrap is now implemented:
+  - `req.json(...)` now validates live request body shape at runtime (bridge-level JSON gate),
+  - invalid JSON requests deterministically return `400 Bad Request` with JSON error payload.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1813,10 +1816,35 @@ M13-S1 go/no-go note:
 - [x] `res.okMeta(status, ...)` propagates caller status.
 - [x] Custom-status (`202`) runtime E2E integration test added and green.
 
+### M16-S4 follow-up slice (runtime request JSON gate bootstrap)
+#### Scope
+- Connect runtime `req.json(...)` to actual inbound request body so handler paths can fail fast on malformed JSON payloads.
+
+#### Build tasks
+- Capture request body in runtime request context during HTTP dispatch.
+- Implement bridge-level JSON shape check in `sec4_rt_req_json(...)`:
+  - accept object/array-shaped JSON text,
+  - reject empty/malformed payloads.
+- Ensure success helpers (`res.ok`, `res.json`, `res.okMeta`) preserve JSON-gate failures and do not overwrite 400 error responses.
+- Add E2E integration coverage for invalid JSON POST payload against `/users`.
+- Keep runtime ABI compatibility for mixed schema token lowering paths (string literals + erased schema locals).
+
+#### Acceptance criteria
+- Invalid JSON request body on a `req.json(...)` route returns deterministic `400 Bad Request` response.
+- Valid JSON body still follows existing success route path.
+- Full `sec4` and `sec4-core` suites remain green after runtime gate integration.
+
+#### Tracking (live status)
+- [x] Runtime request body capture wired for route handlers.
+- [x] `req.json(...)` bridge-level JSON validation implemented.
+- [x] Invalid JSON route path returns deterministic `400` JSON error payload.
+- [x] New invalid-JSON runtime E2E integration test added and green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
 - Chapter: "M16 Slice: Runtime Status Propagation for Success Responses".
+- Chapter: "M16 Slice: Runtime Request JSON Gate for Invalid Payload Handling".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -1,6 +1,7 @@
 #include "sec4_runtime.h"
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@
 #define SEC4_RT_MAX_ROUTES 64
 #define SEC4_RT_MAX_PATH_BYTES 256
 #define SEC4_RT_MAX_RESPONSE_BYTES 4096
+#define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
 
@@ -40,9 +42,20 @@ typedef struct {
   size_t body_len;
 } sec4_rt_response_state;
 
+typedef struct {
+  bool has_request;
+  char method[8];
+  char path[SEC4_RT_MAX_PATH_BYTES];
+  char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
+  size_t body_len;
+  bool json_checked;
+  bool json_valid;
+} sec4_rt_request_state;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
+static sec4_rt_request_state g_sec4_rt_request;
 
 static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.active = false;
@@ -84,6 +97,71 @@ static void sec4_rt_store_response(
   memcpy(g_sec4_rt_response.body, body, body_len);
   g_sec4_rt_response.body[body_len] = '\0';
   g_sec4_rt_response.body_len = body_len;
+}
+
+static void sec4_rt_reset_request(void) {
+  memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+}
+
+static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
+  if (body == NULL || body_len == 0) {
+    return false;
+  }
+
+  size_t start = 0;
+  while (start < body_len && isspace((unsigned char) body[start])) {
+    start += 1;
+  }
+  if (start >= body_len) {
+    return false;
+  }
+
+  size_t end = body_len;
+  while (end > start && isspace((unsigned char) body[end - 1])) {
+    end -= 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  char first = body[start];
+  char last = body[end - 1];
+  return (first == '{' && last == '}') || (first == '[' && last == ']');
+}
+
+static size_t sec4_rt_parse_content_length(const char *request, size_t request_len) {
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if (strncmp(cursor, "Content-Length:", 15) == 0) {
+      const char *value = cursor + 15;
+      while (value < line_end && isspace((unsigned char) *value)) {
+        value += 1;
+      }
+
+      char number[32];
+      size_t number_len = (size_t) (line_end - value);
+      if (number_len == 0 || number_len >= sizeof(number)) {
+        return 0;
+      }
+      memcpy(number, value, number_len);
+      number[number_len] = '\0';
+      return (size_t) strtoull(number, NULL, 10);
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return 0;
 }
 
 static sec4_rt_router_state *sec4_rt_router_slot(int64_t router) {
@@ -219,12 +297,34 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
 }
 
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
+  sec4_rt_reset_request();
+
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
+  size_t total_bytes = 0;
   ssize_t bytes_read = recv(socket_fd, request, sizeof(request) - 1, 0);
   if (bytes_read <= 0) {
     return;
   }
-  request[bytes_read] = '\0';
+  total_bytes = (size_t) bytes_read;
+  request[total_bytes] = '\0';
+
+  char *headers_end = strstr(request, "\r\n\r\n");
+  if (headers_end != NULL) {
+    size_t headers_len = (size_t) (headers_end - request) + 4;
+    size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+    size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+
+    while (content_length > available_body && total_bytes < sizeof(request) - 1) {
+      size_t remaining = (sizeof(request) - 1) - total_bytes;
+      ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+      if (next <= 0) {
+        break;
+      }
+      total_bytes += (size_t) next;
+      request[total_bytes] = '\0';
+      available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+    }
+  }
 
   char method[8] = {0};
   char path[SEC4_RT_MAX_PATH_BYTES] = {0};
@@ -244,6 +344,31 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   if (query_start != NULL) {
     *query_start = '\0';
   }
+
+  headers_end = strstr(request, "\r\n\r\n");
+  if (headers_end != NULL) {
+    size_t headers_len = (size_t) (headers_end - request) + 4;
+    size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+    size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+    size_t body_len = content_length > 0 ? content_length : available_body;
+    if (body_len > available_body) {
+      body_len = available_body;
+    }
+    if (body_len >= sizeof(g_sec4_rt_request.body)) {
+      body_len = sizeof(g_sec4_rt_request.body) - 1;
+    }
+    if (body_len > 0) {
+      memcpy(g_sec4_rt_request.body, request + headers_len, body_len);
+      g_sec4_rt_request.body[body_len] = '\0';
+      g_sec4_rt_request.body_len = body_len;
+    }
+  }
+
+  g_sec4_rt_request.has_request = true;
+  strncpy(g_sec4_rt_request.method, method, sizeof(g_sec4_rt_request.method) - 1);
+  g_sec4_rt_request.method[sizeof(g_sec4_rt_request.method) - 1] = '\0';
+  strncpy(g_sec4_rt_request.path, path, sizeof(g_sec4_rt_request.path) - 1);
+  g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
 
   sec4_rt_route *match = NULL;
   for (size_t i = 0; i < router->route_count; i++) {
@@ -343,18 +468,44 @@ int64_t sec4_rt_log_with_error() {
   return 0;
 }
 
-int64_t sec4_rt_req_json() {
-  /* Bridge-stage placeholder: decode contract is still semantic-first; runtime
-   * currently treats request JSON decode as successful extraction. */
+int64_t sec4_rt_req_json(int64_t schema) {
+  (void) schema;
+  g_sec4_rt_request.json_checked = true;
+
+  if (!g_sec4_rt_request.has_request || g_sec4_rt_request.body_len == 0) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_response(
+        400,
+        "application/json; charset=utf-8",
+        "{\"error\":\"JSON body required\"}"
+    );
+    return 1;
+  }
+
+  if (!sec4_rt_is_likely_json(g_sec4_rt_request.body, g_sec4_rt_request.body_len)) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_response(
+        400,
+        "application/json; charset=utf-8",
+        "{\"error\":\"invalid json body\"}"
+    );
+    return 1;
+  }
+
+  g_sec4_rt_request.json_valid = true;
   return 0;
 }
 
-int64_t sec4_rt_json_decode() {
+int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
+  (void) ctx;
+  (void) schema;
+  (void) raw;
   return 0;
 }
 
-int64_t sec4_rt_json_encode() {
-  return 0;
+int64_t sec4_rt_json_encode(int64_t schema, int64_t value) {
+  (void) schema;
+  return value;
 }
 
 int64_t sec4_rt_req_body() {
@@ -373,7 +524,12 @@ int64_t sec4_rt_req_header() {
   return 0;
 }
 
-int64_t sec4_rt_res_json() {
+int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
+  (void) schema;
+  (void) value;
+  if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
+    return 1;
+  }
   sec4_rt_store_response(
       200,
       "application/json; charset=utf-8",
@@ -385,6 +541,9 @@ int64_t sec4_rt_res_json() {
 int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value) {
   (void) schema;
   (void) value;
+  if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
+    return 1;
+  }
   sec4_rt_store_response(
       status > 0 ? status : 201,
       "application/json; charset=utf-8",
@@ -397,6 +556,9 @@ int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64
   (void) schema;
   (void) value;
   (void) meta;
+  if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
+    return 1;
+  }
   sec4_rt_store_response(
       status > 0 ? status : 201,
       "application/json; charset=utf-8",

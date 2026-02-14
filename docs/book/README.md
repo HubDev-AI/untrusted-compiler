@@ -363,5 +363,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `396-m16-live-http-runtime-serve-bootstrap.md`
 - `397-m16-json-response-materialization-for-runtime-routes.md`
 - `398-m16-runtime-status-propagation-for-success-responses.md`
+- `399-m16-runtime-request-json-gate-for-invalid-payload-handling.md`
 
 As milestones progress, chapters will be added and linked from this index.
