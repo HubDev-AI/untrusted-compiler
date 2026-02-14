@@ -55,6 +55,9 @@ jobs:
       - name: Validate runtime-smoke workflow contract guard behavior
         run: scripts/test-runtime-smoke-workflow-contract-guard.sh
 
+      - name: Validate runtime-smoke artifacts checker
+        run: scripts/test-check-runtime-smoke-artifacts.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

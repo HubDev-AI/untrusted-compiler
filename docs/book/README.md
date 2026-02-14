@@ -394,5 +394,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `427-m16-operator-smoke-script-closure-gate.md`
 - `428-m16-runtime-smoke-workflow-closure-gates.md`
 - `429-m16-end-to-end-quickstart-refresh.md`
+- `430-m16-runtime-smoke-artifact-checker.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -19,6 +19,7 @@ The operator smoke script is useful locally, but production confidence requires 
 1. Added `.github/workflows/runtime-smoke.yml`:
    - triggers on `pull_request` and `push` to `main`,
    - runs checkout + `scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke`,
+   - validates produced artifacts via `scripts/check-runtime-smoke-artifacts.sh`,
    - uploads `runtime-smoke-artifacts` (`build/runtime-smoke`) with `if: always()`.
 2. Added workflow contract scripts:
    - `scripts/test-runtime-smoke-workflow-contract.sh`

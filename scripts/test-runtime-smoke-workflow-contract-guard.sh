@@ -28,6 +28,8 @@ jobs:
 
       - name: Run sec4 hello-api operator smoke
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
+      - name: Validate runtime smoke artifacts
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,12 +61,12 @@ jobs:
 YAML
 
 if "${contract_script}" --workflow "${workflow_path}" >"${tmp_dir}/guard.log" 2>&1; then
-  echo "expected runtime-smoke workflow contract to fail when artifact upload step is missing" >&2
+  echo "expected runtime-smoke workflow contract to fail when artifact validation step is missing" >&2
   exit 1
 fi
 
-if ! rg -Fq 'missing runtime-smoke workflow token: if: always()' "${tmp_dir}/guard.log"; then
-  echo "expected missing-token diagnostic for runtime smoke artifact upload step" >&2
+if ! rg -Fq 'missing runtime-smoke workflow token: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke' "${tmp_dir}/guard.log"; then
+  echo "expected missing-token diagnostic for runtime smoke artifact validation step" >&2
   exit 1
 fi
 

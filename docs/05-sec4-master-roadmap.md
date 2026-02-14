@@ -111,8 +111,8 @@ Roadmap impact:
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
-  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including artifact upload),
-  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests.
+  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including artifact validation + upload),
+  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact-checker contract test.
 
 ## Formal Closure Audit (Strict, 2026-02-14)
 
@@ -154,8 +154,8 @@ Current strict closure result:
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
-| `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
-| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push, validates artifacts, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
+| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact-checker test | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -771,7 +771,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of M16 runtime HTTP coverage contract + guard tests (`M16-A`).
   - closure now verifies naming-lock CI enforcement of sec4 run hello-api smoke script contract + guard tests (`M16-B`).
   - closure now verifies runtime-smoke workflow contract wiring (`M16-C`).
-  - closure now verifies naming-lock CI enforcement of runtime-smoke workflow contract + guard tests (`M16-D`).
+  - closure now verifies naming-lock CI enforcement of runtime-smoke workflow contract + guard tests + artifact-checker test (`M16-D`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
@@ -2429,6 +2429,27 @@ M13-S1 go/no-go note:
 - [x] Script validates `GET /health` and `POST /users` over real `sec4 run` oneshot executions.
 - [x] Script validated locally with passing end-to-end output.
 
+### M16-S26 follow-up slice (runtime-smoke artifact contract hardening)
+#### Scope
+- Harden runtime-smoke CI observability by validating generated smoke artifacts before upload and locking the artifact contract with deterministic tests.
+
+#### Build tasks
+- Add `scripts/check-runtime-smoke-artifacts.sh` to validate required artifact files and response contracts.
+- Add deterministic checker test coverage (`scripts/test-check-runtime-smoke-artifacts.sh`) for pass + fail paths.
+- Wire runtime-smoke workflow to run artifact validation before artifact upload.
+- Extend runtime-smoke workflow contract checks and closure gates (`M16-C`, `M16-D`) to include artifact-validation and artifact-checker enforcement.
+
+#### Acceptance criteria
+- Runtime-smoke workflow fails if required smoke artifacts are missing or malformed.
+- Artifact checker has deterministic local pass/fail tests.
+- Closure audit and naming-lock CI remain green with stricter runtime-smoke contract enforcement.
+
+#### Tracking (live status)
+- [x] Runtime-smoke artifact checker added (`scripts/check-runtime-smoke-artifacts.sh`).
+- [x] Checker test added (`scripts/test-check-runtime-smoke-artifacts.sh`).
+- [x] Runtime-smoke workflow now validates artifacts before upload.
+- [x] Closure + naming-lock enforcement updated for stricter runtime-smoke artifact contract.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2455,6 +2476,8 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Security Headers Coverage on Auth/CSRF Rejection Paths".
 - Chapter: "M16 Slice: Security Headers Coverage on 405 and Preflight Branches".
 - Chapter: "M16 Slice: sec4 run Hello-API Operator Smoke Script".
+- Chapter: "M16 Slice: Runtime-Smoke Workflow Closure Gates".
+- Chapter: "M16 Slice: Runtime-Smoke Artifact Checker".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

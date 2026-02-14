@@ -17,6 +17,9 @@ jobs:
       - name: Run sec4 hello-api operator smoke
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
 
+      - name: Validate runtime smoke artifacts
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke
+
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4

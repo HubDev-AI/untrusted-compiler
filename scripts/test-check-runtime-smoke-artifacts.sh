@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+checker="${root_dir}/scripts/check-runtime-smoke-artifacts.sh"
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "${tmp_dir}"' EXIT
+
+ok_dir="${tmp_dir}/ok"
+mkdir -p "${ok_dir}"
+
+cat > "${ok_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+TXT
+
+cat > "${ok_dir}/health.headers" <<'TXT'
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+TXT
+
+cat > "${ok_dir}/health.body" <<'TXT'
+ok
+TXT
+
+cat > "${ok_dir}/health.run.log" <<'TXT'
+smoke log health
+TXT
+
+cat > "${ok_dir}/users.headers" <<'TXT'
+HTTP/1.1 201 Created
+Content-Type: application/json; charset=utf-8
+TXT
+
+cat > "${ok_dir}/users.body" <<'TXT'
+{"ok":true,"status":201,"traceId":"rt-1","timeMs":1,"data":1}
+TXT
+
+cat > "${ok_dir}/users.run.log" <<'TXT'
+smoke log users
+TXT
+
+"${checker}" --artifacts-dir "${ok_dir}" >/dev/null
+
+bad_dir="${tmp_dir}/bad-missing"
+cp -R "${ok_dir}" "${bad_dir}"
+rm -f "${bad_dir}/users.body"
+
+if "${checker}" --artifacts-dir "${bad_dir}" >"${tmp_dir}/bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing users.body" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'missing runtime-smoke artifact file: users.body' "${tmp_dir}/bad.log"; then
+  echo "expected missing-artifact diagnostic for users.body" >&2
+  exit 1
+fi
+
+echo "runtime-smoke artifacts checker test passed"

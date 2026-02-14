@@ -118,6 +118,8 @@ jobs:
         run: scripts/test-runtime-smoke-workflow-contract.sh
       - name: Validate runtime-smoke workflow contract guard behavior
         run: scripts/test-runtime-smoke-workflow-contract-guard.sh
+      - name: Validate runtime-smoke artifacts checker
+        run: scripts/test-check-runtime-smoke-artifacts.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -238,6 +240,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Run sec4 hello-api operator smoke
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
+      - name: Validate runtime smoke artifacts
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
