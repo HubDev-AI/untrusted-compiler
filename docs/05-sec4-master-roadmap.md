@@ -417,6 +417,7 @@ Current strict closure result:
 | `M25-E` | PASS | Naming-lock CI enforces M25 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M25-F` | PASS | Naming-lock CI enforces M25 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M25-G` | PASS | Naming-lock CI enforces M25 closure report | `.github/workflows/naming-lock.yml` |
+| `M26-A` | PASS | Naming-lock CI enforces M26 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -503,6 +504,7 @@ Strict closure interpretation:
 - M25 executed-slice convergence summary enforcement is active (`M25-E`).
 - M25 transition handoff packet enforcement is active (`M25-F`).
 - M25 closure report enforcement is active (`M25-G`).
+- M26 kickoff brief enforcement is active (`M26-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4273,7 +4275,7 @@ M13-S1 go/no-go note:
 ### Next planned slice
 - M25-S1 kickoff brief + closure gate `M25-A`.
 
-## M25 - Kickoff Loop (In Progress)
+## M25 - Kickoff Loop (Complete)
 
 ### Goal
 - Start M25 from deterministic M24 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M24.
@@ -4357,6 +4359,25 @@ M13-S1 go/no-go note:
 
 ### Next planned slice
 - M26-S1 kickoff brief + closure gate `M26-A`.
+
+## M26 - Kickoff Loop (In Progress)
+
+### Goal
+- Start M26 from deterministic M25 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M25.
+
+### M26-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M25 closure report + M25 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M25 closure report JSON from `build-m25-closure-report.sh`.
+- Closure audit includes dedicated `M26-A` gate.
+
+### M26-S1 tracking (live status)
+- [x] M26 kickoff brief script added.
+- [x] M26 kickoff brief contract test added.
+- [x] Book chapter documenting M26 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M26-A`).
+
+### Next planned slice
+- M26-S2 priority matrix + closure gate `M26-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4448,7 +4469,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M26-S1 kickoff brief from M25 closure report + M25 transition packet artifacts and wire `M26-A`.
+1. Implement M26-S2 priority matrix from M26 kickoff brief output and wire `M26-B`.
 
 ---
 
