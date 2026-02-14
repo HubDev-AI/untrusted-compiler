@@ -103,6 +103,7 @@ touch "$tmp/scripts/test-build-m27-closure-report.sh"
 touch "$tmp/scripts/test-generate-m28-kickoff-brief.sh"
 touch "$tmp/scripts/test-build-m28-priority-matrix.sh"
 touch "$tmp/scripts/test-select-m28-next-slice.sh"
+touch "$tmp/scripts/test-run-m28-runtime-hardening.sh"
 cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -385,6 +386,8 @@ jobs:
         run: scripts/test-build-m28-priority-matrix.sh
       - name: Validate M28 next-slice selector
         run: scripts/test-select-m28-next-slice.sh
+      - name: Validate M28 runtime hardening runner
+        run: scripts/test-run-m28-runtime-hardening.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -588,7 +591,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E",
-    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C"
+    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C","M28-D"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -1012,6 +1015,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M28-B") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M28-C") != null' >/dev/null; then
   echo "expected json closure output to include M28-C gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M28-D") != null' >/dev/null; then
+  echo "expected json closure output to include M28-D gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -2580,6 +2587,24 @@ if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | j
   and (.gates[] | select(.gate == "M28-C")).status == "PENDING"
 ' >/dev/null; then
   echo "expected M28-C to become pending when naming-lock workflow misses next-slice selector step" >&2
+  exit 1
+fi
+
+mv "$tmp/.github/workflows/naming-lock.base.yml" "$tmp/.github/workflows/naming-lock.yml"
+
+cp "$tmp/.github/workflows/naming-lock.yml" "$tmp/.github/workflows/naming-lock.base.yml"
+awk '!/scripts\/test-run-m28-runtime-hardening\.sh/' "$tmp/.github/workflows/naming-lock.base.yml" > "$tmp/.github/workflows/naming-lock.yml"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses M28 runtime hardening runner step" >&2
+  exit 1
+fi
+
+if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | jq -e '
+  .overall == "PENDING"
+  and (.gates[] | select(.gate == "M28-D")).status == "PENDING"
+' >/dev/null; then
+  echo "expected M28-D to become pending when naming-lock workflow misses runtime hardening runner step" >&2
   exit 1
 fi
 
