@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--project <path>]
+usage: $0 [--project <path>] [--artifacts-dir <path>]
 
 Builds and runs a temporary hello-api service via `sec4 run` in oneshot mode,
 then validates GET /health and POST /users end-to-end responses.
@@ -12,6 +12,7 @@ USAGE
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_project="${root_dir}/examples/hello-api"
+artifacts_dir=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -25,6 +26,18 @@ while [ "$#" -gt 0 ]; do
       ;;
     --project=*)
       source_project="${1#--project=}"
+      shift
+      ;;
+    --artifacts-dir)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      artifacts_dir="$2"
+      shift 2
+      ;;
+    --artifacts-dir=*)
+      artifacts_dir="${1#--artifacts-dir=}"
       shift
       ;;
     -h|--help)
@@ -73,6 +86,14 @@ cleanup() {
     kill "${service_pid}" >/dev/null 2>&1 || true
     wait "${service_pid}" >/dev/null 2>&1 || true
   fi
+  if [ -n "${artifacts_dir}" ]; then
+    mkdir -p "${artifacts_dir}"
+    for artifact in run-metadata.txt health.headers health.body health.run.log users.headers users.body users.run.log; do
+      if [ -f "${tmp_dir}/${artifact}" ]; then
+        cp "${tmp_dir}/${artifact}" "${artifacts_dir}/${artifact}"
+      fi
+    done
+  fi
   rm -rf "${tmp_dir}"
 }
 trap cleanup EXIT
@@ -88,6 +109,12 @@ if ! rg -q "http\.serve\(${port}, router\);" "${main_file}"; then
   echo "failed to patch runtime port in ${main_file}" >&2
   exit 1
 fi
+
+cat > "${tmp_dir}/run-metadata.txt" <<META
+sourceProject=${source_project}
+workProject=${work_project}
+port=${port}
+META
 
 request_once() {
   local name="$1"

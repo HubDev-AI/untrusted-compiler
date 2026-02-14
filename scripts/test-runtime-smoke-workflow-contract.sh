@@ -57,6 +57,10 @@ require_token 'branches:'
 require_token '- main'
 require_token 'runs-on: ubuntu-latest'
 require_token 'uses: actions/checkout@v4'
-require_token 'scripts/smoke-sec4-run-hello-api.sh'
+require_token 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke'
+require_token 'if: always()'
+require_token 'uses: actions/upload-artifact@v4'
+require_token 'name: runtime-smoke-artifacts'
+require_token 'path: build/runtime-smoke'
 
 echo "runtime-smoke workflow contract test passed"

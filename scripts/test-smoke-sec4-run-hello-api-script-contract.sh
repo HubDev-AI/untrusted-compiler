@@ -49,6 +49,7 @@ if [ ! -x "${script_path}" ]; then
 fi
 
 required_tokens=(
+  "--artifacts-dir"
   "SEC4_RT_HTTP_SERVE_MODE=oneshot"
   "SEC4_RT_HTTP_SERVE_TIMEOUT_MS=12000"
   "GET"
@@ -63,7 +64,7 @@ required_tokens=(
 )
 
 for token in "${required_tokens[@]}"; do
-  if ! rg -Fq "${token}" "${script_path}"; then
+  if ! rg -Fq -- "${token}" "${script_path}"; then
     echo "missing required smoke-script token: ${token}" >&2
     exit 1
   fi

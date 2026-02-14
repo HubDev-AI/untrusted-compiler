@@ -27,7 +27,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run sec4 hello-api operator smoke
-        run: scripts/smoke-sec4-run-hello-api.sh
+        run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
+      - name: Upload runtime smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-smoke-artifacts
+          path: build/runtime-smoke
 YAML
 
 "${contract_script}" --workflow "${workflow_path}" >/dev/null
@@ -48,15 +54,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Run sec4 hello-api operator smoke
+        run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
 YAML
 
 if "${contract_script}" --workflow "${workflow_path}" >"${tmp_dir}/guard.log" 2>&1; then
-  echo "expected runtime-smoke workflow contract to fail when smoke step is missing" >&2
+  echo "expected runtime-smoke workflow contract to fail when artifact upload step is missing" >&2
   exit 1
 fi
 
-if ! rg -Fq 'missing runtime-smoke workflow token: scripts/smoke-sec4-run-hello-api.sh' "${tmp_dir}/guard.log"; then
-  echo "expected missing-token diagnostic for runtime smoke step" >&2
+if ! rg -Fq 'missing runtime-smoke workflow token: if: always()' "${tmp_dir}/guard.log"; then
+  echo "expected missing-token diagnostic for runtime smoke artifact upload step" >&2
   exit 1
 fi
 

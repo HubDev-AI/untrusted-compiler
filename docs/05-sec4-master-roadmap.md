@@ -111,7 +111,7 @@ Roadmap impact:
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
-  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`),
+  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including artifact upload),
   - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests.
 
 ## Formal Closure Audit (Strict, 2026-02-14)
@@ -154,7 +154,7 @@ Current strict closure result:
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
-| `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push | `.github/workflows/runtime-smoke.yml` |
+| `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
 | `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:

@@ -237,7 +237,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run sec4 hello-api operator smoke
-        run: scripts/smoke-sec4-run-hello-api.sh
+        run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
+      - name: Upload runtime smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-smoke-artifacts
+          path: build/runtime-smoke
 YAML
 
 cat > "$tmp/benchmark-suite/results/summaries/compare-matrix.json" <<'JSON'

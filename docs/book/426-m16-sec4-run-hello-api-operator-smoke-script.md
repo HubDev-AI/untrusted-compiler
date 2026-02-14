@@ -9,6 +9,7 @@ A new executable smoke script:
 - `scripts/smoke-sec4-run-hello-api.sh`
 
 It validates runtime behavior by issuing real HTTP requests against a oneshot `sec4 run` process.
+It also supports optional artifact export via `--artifacts-dir`.
 
 ## Why it exists
 
@@ -27,6 +28,7 @@ Rust integration tests already covered runtime paths, but operators needed one s
 
 - Requires local tools: `cargo`, `curl`, `jq`, `python3`.
 - Defaults to `examples/hello-api`, overrideable via `--project`.
+- Optional: `--artifacts-dir <path>` exports request/response logs for CI/debug analysis.
 - Uses runtime env vars:
   - `SEC4_RT_HTTP_SERVE_MODE=oneshot`
   - `SEC4_RT_HTTP_SERVE_TIMEOUT_MS=12000`

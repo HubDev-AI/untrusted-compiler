@@ -287,7 +287,11 @@ if [ -f "${runtime_smoke_workflow_path}" ] \
   && rg -q -- '- main' "${runtime_smoke_workflow_path}" \
   && rg -q 'runs-on:[[:space:]]*ubuntu-latest' "${runtime_smoke_workflow_path}" \
   && rg -q 'uses:[[:space:]]*actions/checkout@v4' "${runtime_smoke_workflow_path}" \
-  && rg -q 'scripts/smoke-sec4-run-hello-api.sh' "${runtime_smoke_workflow_path}"; then
+  && rg -q 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke' "${runtime_smoke_workflow_path}" \
+  && rg -q 'if:[[:space:]]*always\(\)' "${runtime_smoke_workflow_path}" \
+  && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${runtime_smoke_workflow_path}" \
+  && rg -q 'name:[[:space:]]*runtime-smoke-artifacts' "${runtime_smoke_workflow_path}" \
+  && rg -q 'path:[[:space:]]*build/runtime-smoke' "${runtime_smoke_workflow_path}"; then
   bool_has_m16_runtime_smoke_workflow_contract=1
 fi
 
