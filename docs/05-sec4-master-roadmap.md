@@ -44,6 +44,7 @@ Roadmap impact:
   - `.github/workflows/alpha-release-gate.yml`
 - M11 editor tooling scope has no remaining tasks in this roadmap revision.
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
+- M4 security-foundation scope is complete for this roadmap revision (historical slice bullets retained below).
 - Naming-lock workflow now includes a local-path leak guard test:
   - `scripts/test-check-no-local-path-leaks.sh`.
 - M12 local-path leak closure enforcement is active (`M12-B`).
@@ -284,7 +285,7 @@ Historical implementation bullets below are retained as build history; strict ga
 - Security-first baseline documentation has been expanded and locked as mandatory input for upcoming milestones.
 - Roadmap is now realigned to insert a dedicated security-hardening milestone before MIR/backend work.
 - M0 through M3 implementation is complete.
-- M4 implementation is in progress:
+- M4 security-foundation implementation completed (historical slice record):
   - Policy file loading/parsing is wired into semantic analysis entry flow.
   - Forbidden-effect checks are policy-driven.
   - Capability-required intrinsic calls are enforced with dedicated diagnostics (`E2003`, `E2004`).
