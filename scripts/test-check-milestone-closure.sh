@@ -106,6 +106,10 @@ jobs:
         run: scripts/test-replay-cli-json-contract.sh
       - name: Validate replay CLI json contract guard behavior
         run: scripts/test-replay-cli-json-contract-guard.sh
+      - name: Validate M16 runtime HTTP coverage contract
+        run: scripts/test-m16-runtime-http-coverage.sh
+      - name: Validate M16 runtime HTTP coverage guard behavior
+        run: scripts/test-m16-runtime-http-coverage-guard.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -252,7 +256,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M11-A","M12-A","M12-B",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
-    "M15-A"
+    "M15-A","M16-A"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -308,6 +312,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-D") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M15-A") != null' >/dev/null; then
   echo "expected json closure output to include M15-A gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-A") != null' >/dev/null; then
+  echo "expected json closure output to include M16-A gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then

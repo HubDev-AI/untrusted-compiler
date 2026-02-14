@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16).
 USAGE
 }
 
@@ -147,6 +147,7 @@ bool_has_replay_compat_ci_guard=0
 bool_has_replay_stub_registry_ci_guard=0
 bool_has_replay_json_cli_ci_guard=0
 bool_has_replay_execution_contract_guard=0
+bool_has_m16_runtime_http_coverage_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -238,6 +239,12 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-replay-cli-json-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-replay-cli-json-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_replay_json_cli_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-m16-runtime-http-coverage.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-m16-runtime-http-coverage-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m16_runtime_http_coverage_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -422,6 +429,7 @@ emit_check "M14-B" "naming-lock CI enforces replay capture compatibility test" "
 emit_check "M14-C" "naming-lock CI enforces replay stub registry contract test" "${bool_has_replay_stub_registry_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tests" "${bool_has_replay_json_cli_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M15-A" "replay CLI json contract guards execution fields + missing-key fixtures" "${bool_has_replay_execution_contract_guard}" "scripts/test-replay-cli-json-contract.sh + scripts/test-replay-cli-json-contract-guard.sh"
+emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests" "${bool_has_m16_runtime_http_coverage_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

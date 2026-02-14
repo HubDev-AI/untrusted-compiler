@@ -389,5 +389,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `422-m16-security-headers-coverage-on-405-and-preflight-branches.md`
 - `423-m12-local-path-leak-ci-guard.md`
 - `424-m12-local-path-leak-closure-gate.md`
+- `425-m16-runtime-http-coverage-closure-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.

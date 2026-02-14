@@ -37,6 +37,12 @@ jobs:
       - name: Validate replay CLI json contract guard behavior
         run: scripts/test-replay-cli-json-contract-guard.sh
 
+      - name: Validate M16 runtime HTTP coverage contract
+        run: scripts/test-m16-runtime-http-coverage.sh
+
+      - name: Validate M16 runtime HTTP coverage guard behavior
+        run: scripts/test-m16-runtime-http-coverage-guard.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
