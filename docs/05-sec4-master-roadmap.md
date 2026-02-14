@@ -3367,7 +3367,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Align stale historical status text in `Current Status` (`M4 implementation is in progress`) with current closure truth to reduce roadmap ambiguity.
+1. Add a single runtime-smoke bundle checker command that validates both branch artifacts and branch-index output in one deterministic pass, then migrate workflow/contract checks to it.
 
 ---
 
