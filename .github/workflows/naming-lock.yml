@@ -211,6 +211,9 @@ jobs:
       - name: Validate M22 closure report
         run: scripts/test-build-m22-closure-report.sh
 
+      - name: Validate M23 kickoff brief
+        run: scripts/test-generate-m23-kickoff-brief.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
