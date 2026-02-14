@@ -446,5 +446,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `479-m18-editor-contract-expansion.md`
 - `480-m18-release-publish-integrity-contract-expansion.md`
 - `481-m18-runtime-track-execution-runner.md`
+- `482-m18-track-convergence-summary.md`
 
 As milestones progress, chapters will be added and linked from this index.
