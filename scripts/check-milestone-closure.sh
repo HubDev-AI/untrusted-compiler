@@ -207,6 +207,7 @@ bool_has_m23_slice_selector_ci_guard=0
 bool_has_m23_runtime_hardening_runner_ci_guard=0
 bool_has_m23_executed_slice_convergence_summary_ci_guard=0
 bool_has_m23_transition_handoff_packet_ci_guard=0
+bool_has_m23_closure_report_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -720,6 +721,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m23_transition_handoff_packet_ci_guard=1
 fi
 
+m23_closure_report_test_script="${repo_root}/scripts/test-build-m23-closure-report.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m23_closure_report_test_script}" ] \
+  && rg -q 'scripts/test-build-m23-closure-report.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m23_closure_report_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -980,6 +988,7 @@ emit_check "M23-C" "naming-lock CI enforces M23 next-slice selector" "${bool_has
 emit_check "M23-D" "naming-lock CI enforces M23 runtime hardening runner" "${bool_has_m23_runtime_hardening_runner_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M23-E" "naming-lock CI enforces M23 executed-slice convergence summary" "${bool_has_m23_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M23-F" "naming-lock CI enforces M23 transition handoff packet" "${bool_has_m23_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M23-G" "naming-lock CI enforces M23 closure report" "${bool_has_m23_closure_report_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
