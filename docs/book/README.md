@@ -347,5 +347,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `380-m14-replay-mock-db-fs-dependency-signature-match-and-counts.md`
 - `381-m14-replay-capture-dependency-signature-uniqueness-enforcement.md`
 - `382-m14-replay-mock-dependency-signature-output-contract.md`
+- `383-m14-restart-checkpoint.md`
 
 As milestones progress, chapters will be added and linked from this index.
