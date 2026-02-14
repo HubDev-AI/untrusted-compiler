@@ -427,6 +427,7 @@ Current strict closure result:
 | `M27-A` | PASS | Naming-lock CI enforces M27 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M27-B` | PASS | Naming-lock CI enforces M27 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M27-C` | PASS | Naming-lock CI enforces M27 next-slice selector | `.github/workflows/naming-lock.yml` |
+| `M27-D` | PASS | Naming-lock CI enforces M27 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -523,6 +524,7 @@ Strict closure interpretation:
 - M27 kickoff brief enforcement is active (`M27-A`).
 - M27 priority matrix enforcement is active (`M27-B`).
 - M27 next-slice selector enforcement is active (`M27-C`).
+- M27 runtime hardening runner enforcement is active (`M27-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4501,8 +4503,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M27 next-slice selector added.
 - [x] Naming-lock CI and closure gate updated (`M27-C`).
 
+### M27-S4 runtime hardening runner acceptance criteria
+- Runtime runner consumes M27 selector output and only executes runtime-selected `M27-S4-runtime-*` slices.
+- Dry-run mode emits deterministic command-plan json/text; execution mode runs runtime smoke bundle + closure checks.
+- Closure audit includes dedicated `M27-D` gate.
+
+### M27-S4 tracking (live status)
+- [x] M27 runtime hardening runner script added.
+- [x] M27 runtime hardening runner contract test added.
+- [x] Book chapter documenting M27 runtime hardening runner added.
+- [x] Naming-lock CI and closure gate updated (`M27-D`).
+
 ### Next planned slice
-- M27-S4 runtime hardening runner + closure gate `M27-D`.
+- M27-S5 executed-slice convergence summary + closure gate `M27-E`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4594,7 +4607,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S4 runtime hardening runner from M27 selector output and wire `M27-D`.
+1. Implement M27-S5 executed-slice convergence summary from M27 selector + runtime execution artifacts and wire `M27-E`.
 
 ---
 
