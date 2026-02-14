@@ -172,6 +172,9 @@ jobs:
       - name: Validate M21 kickoff brief
         run: scripts/test-generate-m21-kickoff-brief.sh
 
+      - name: Validate M21 priority matrix
+        run: scripts/test-build-m21-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
