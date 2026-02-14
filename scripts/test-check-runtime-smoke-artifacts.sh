@@ -77,6 +77,22 @@ if ! rg -Fq 'users.body does not match expected std-success envelope contract' "
   exit 1
 fi
 
+trace_bad_dir="${tmp_dir}/bad-trace"
+cp -R "${ok_dir}" "${trace_bad_dir}"
+cat > "${trace_bad_dir}/users.body" <<'TXT'
+{"ok":true,"status":201,"traceId":"trace-1","timeMs":1,"data":1}
+TXT
+
+if "${checker}" --artifacts-dir "${trace_bad_dir}" >"${tmp_dir}/trace-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on malformed traceId" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users.body does not match expected std-success envelope contract' "${tmp_dir}/trace-bad.log"; then
+  echo "expected envelope-contract diagnostic for malformed traceId" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'

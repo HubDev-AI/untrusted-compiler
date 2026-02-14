@@ -150,6 +150,9 @@ Roadmap impact:
 - M16-S42 runtime-smoke success-envelope checker now enforces `timeMs` field typing:
   - `users.body` contract now requires numeric `timeMs` alongside `ok/status/traceId/data`.
   - regression coverage includes malformed-envelope fixture missing `timeMs`.
+- M16-S43 runtime-smoke success-envelope checker now enforces traceId format:
+  - `users.body` contract now requires trace ids matching `rt-[0-9]+`.
+  - regression coverage includes malformed traceId fixture.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2836,6 +2839,26 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes malformed-envelope fixture missing `timeMs`.
 - [x] Real smoke + checker flow remains green after envelope contract hardening.
 
+### M16-S43 follow-up slice (runtime-smoke success-envelope traceId format hardening)
+#### Scope
+- Tighten runtime-smoke success-envelope validation so `traceId` matches deterministic runtime shape.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` jq contract to require:
+  - `traceId` pattern `^rt-[0-9]+$`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with malformed-trace fixture.
+- Assert deterministic envelope-contract failure and re-run real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker rejects success envelopes with malformed traceId format.
+- Regression suite includes deterministic malformed-trace failure.
+- Real smoke artifact flow remains green with runtime trace ids.
+
+#### Tracking (live status)
+- [x] Success-envelope checker now enforces `rt-[0-9]+` traceId format.
+- [x] Regression suite includes malformed traceId fixture.
+- [x] Real smoke + checker flow remains green after traceId contract hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2880,6 +2903,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Checker Empty Source/Work Metadata Regression Fixtures".
 - Chapter: "M16 Slice: Runtime-Smoke Source/Work Provenance Divergence Enforcement".
 - Chapter: "M16 Slice: Runtime-Smoke Success Envelope timeMs Contract Hardening".
+- Chapter: "M16 Slice: Runtime-Smoke Success Envelope traceId Format Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

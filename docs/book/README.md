@@ -411,5 +411,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `444-m16-runtime-smoke-checker-empty-source-work-metadata-regression-fixtures.md`
 - `445-m16-runtime-smoke-source-work-provenance-divergence-enforcement.md`
 - `446-m16-runtime-smoke-success-envelope-timems-contract-hardening.md`
+- `447-m16-runtime-smoke-success-envelope-traceid-format-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
