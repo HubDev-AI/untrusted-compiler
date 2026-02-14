@@ -38,10 +38,33 @@ if ! printf '%s\n' "${selector_json}" | jq -e '
   .version == "0.1"
   and .overall == "PASS"
   and .selectedTrack == "editor"
-  and .recommendation.id == "M18-S3-editor-contract-expansion"
+  and .recommendation.id == "M18-S4-editor-contract-expansion"
   and .recommendation.closureGate == "M18-C"
 ' >/dev/null; then
   echo "expected selector to recommend editor expansion slice for PASS editor-top matrix" >&2
+  exit 1
+fi
+
+matrix_release_pass="${tmp_dir}/matrix-release-pass.json"
+cat > "${matrix_release_pass}" <<'JSON'
+{
+  "version": "0.1",
+  "overall": "PASS",
+  "frictionCount": 0,
+  "tracks": [
+    {"priority":1,"track":"release","score":70},
+    {"priority":2,"track":"editor","score":68}
+  ]
+}
+JSON
+
+release_selector_json="$(${selector_script} --kickoff-json "${kickoff_pass}" --matrix-json "${matrix_release_pass}" --output "${tmp_dir}/selector-release-pass.json" --format json)"
+if ! printf '%s\n' "${release_selector_json}" | jq -e '
+  .overall == "PASS"
+  and .selectedTrack == "release"
+  and .recommendation.id == "M18-S5-release-publish-integrity-contract-expansion"
+' >/dev/null; then
+  echo "expected selector to recommend release publish integrity slice when release is top priority" >&2
   exit 1
 fi
 
@@ -73,7 +96,7 @@ fail_json="$(${selector_script} --kickoff-json "${kickoff_fail}" --matrix-json "
 if ! printf '%s\n' "${fail_json}" | jq -e '
   .overall == "FAIL"
   and .selectedTrack == "runtime"
-  and .recommendation.id == "M18-S3-runtime-remediation-first"
+  and .recommendation.id == "M18-S6-runtime-remediation-first"
 ' >/dev/null; then
   echo "expected selector to force runtime remediation when kickoff is failing" >&2
   exit 1

@@ -42,6 +42,12 @@ Output includes:
 - `recommendation.title`,
 - fixed closure gate `M18-C`.
 
+Current recommendation id mapping:
+
+- `editor` -> `M18-S4-editor-contract-expansion`
+- `release` -> `M18-S5-release-publish-integrity-contract-expansion`
+- `runtime` -> `M18-S6-runtime-confidence-hardening` (or `M18-S6-runtime-remediation-first` when kickoff is not `PASS`).
+
 ## 5) Verification
 
 - `scripts/test-select-m18-next-slice.sh`

@@ -112,6 +112,9 @@ jobs:
       - name: Validate M18 editor contract expansion
         run: scripts/test-m18-editor-contract-expansion.sh
 
+      - name: Validate M18 release publish integrity contract expansion
+        run: scripts/test-m18-release-publish-integrity.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

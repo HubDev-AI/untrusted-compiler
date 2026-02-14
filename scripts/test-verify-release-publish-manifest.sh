@@ -16,6 +16,16 @@ MANIFEST_PATH="${ARTIFACTS_DIR}/publish-manifest.json"
 "${ROOT_DIR}/scripts/generate-release-publish-manifest.sh" --artifacts-dir "${ARTIFACTS_DIR}" --out "${MANIFEST_PATH}" >/dev/null
 "${ROOT_DIR}/scripts/verify-release-publish-manifest.sh" --manifest "${MANIFEST_PATH}" --artifacts-dir "${ARTIFACTS_DIR}" >/dev/null
 
+cp "${ARTIFACTS_DIR}/hello-sbom.json" "${ARTIFACTS_DIR}/hello-sbom.json.bak"
+printf '\n' >> "${ARTIFACTS_DIR}/hello-sbom.json"
+
+if "${ROOT_DIR}/scripts/verify-release-publish-manifest.sh" --manifest "${MANIFEST_PATH}" --artifacts-dir "${ARTIFACTS_DIR}" >/dev/null 2>&1; then
+  echo "expected publish manifest verification to fail for tampered sample sbom artifact" >&2
+  exit 1
+fi
+
+mv "${ARTIFACTS_DIR}/hello-sbom.json.bak" "${ARTIFACTS_DIR}/hello-sbom.json"
+
 jq '.identity.runtimeIdentityHash = "rt_tampered"' "${MANIFEST_PATH}" > "${MANIFEST_PATH}.tmp"
 mv "${MANIFEST_PATH}.tmp" "${MANIFEST_PATH}"
 

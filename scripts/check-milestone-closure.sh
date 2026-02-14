@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17/M18).
 USAGE
 }
 
@@ -168,6 +168,7 @@ bool_has_m18_kickoff_brief_ci_guard=0
 bool_has_m18_priority_matrix_ci_guard=0
 bool_has_m18_slice_selector_ci_guard=0
 bool_has_m18_editor_contract_ci_guard=0
+bool_has_m18_release_publish_integrity_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -408,6 +409,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m18_editor_contract_ci_guard=1
 fi
 
+m18_release_publish_integrity_test_script="${repo_root}/scripts/test-m18-release-publish-integrity.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m18_release_publish_integrity_test_script}" ] \
+  && rg -q 'scripts/test-m18-release-publish-integrity.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m18_release_publish_integrity_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -629,6 +637,7 @@ emit_check "M18-A" "naming-lock CI enforces M18 kickoff brief generator" "${bool
 emit_check "M18-B" "naming-lock CI enforces M18 priority matrix artifact" "${bool_has_m18_priority_matrix_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M18-C" "naming-lock CI enforces M18 next-slice selector" "${bool_has_m18_slice_selector_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M18-D" "naming-lock CI enforces M18 editor contract expansion" "${bool_has_m18_editor_contract_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M18-E" "naming-lock CI enforces M18 release publish integrity contract expansion" "${bool_has_m18_release_publish_integrity_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

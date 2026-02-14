@@ -121,20 +121,20 @@ slice_title=""
 
 if [ "${overall}" != "PASS" ] || [ "${friction_count}" -gt 0 ]; then
   selected_track="runtime"
-  slice_id="M18-S3-runtime-remediation-first"
+  slice_id="M18-S6-runtime-remediation-first"
   slice_title="Resolve runtime/flow friction before expanding editor or release scope"
 else
   case "${top_track}" in
     editor)
-      slice_id="M18-S3-editor-contract-expansion"
+      slice_id="M18-S4-editor-contract-expansion"
       slice_title="Expand editor and tooling contract coverage on stable runtime baseline"
       ;;
     release)
-      slice_id="M18-S3-release-integrity-hardening"
-      slice_title="Advance release/publish integrity checks from stable rehearsal baseline"
+      slice_id="M18-S5-release-publish-integrity-contract-expansion"
+      slice_title="Advance release/publish integrity contract checks from stable rehearsal baseline"
       ;;
     runtime)
-      slice_id="M18-S3-runtime-confidence-hardening"
+      slice_id="M18-S6-runtime-confidence-hardening"
       slice_title="Increase runtime confidence guardrails despite passing baseline"
       ;;
     *)

@@ -55,6 +55,32 @@ require_file() {
   fi
 }
 
+hash_file() {
+  local file_path="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file_path}" | awk '{print $1}'
+    return
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file_path}" | awk '{print $1}'
+    return
+  fi
+  echo "error: no sha256 command found (need shasum or sha256sum)" >&2
+  exit 2
+}
+
+assert_hash_matches() {
+  local file_path="$1"
+  local expected_sha="$2"
+  local label="$3"
+  local actual_sha
+  actual_sha="$(hash_file "${file_path}")"
+  if [[ "${actual_sha}" != "${expected_sha}" ]]; then
+    echo "error: artifact checksum mismatch for ${label}" >&2
+    exit 1
+  fi
+}
+
 read_manifest_field() {
   local filter="$1"
   local value
@@ -139,6 +165,8 @@ checksum_policy_profile_sha="$(read_checksum_value "${checksums_path}" "policy_p
 checksum_policy_identity="$(read_checksum_value "${checksums_path}" "policy_identity_hash")"
 checksum_compiler_identity="$(read_checksum_value "${checksums_path}" "compiler_identity_hash")"
 checksum_runtime_identity="$(read_checksum_value "${checksums_path}" "runtime_identity_hash")"
+checksum_runtime_header_sha="$(read_checksum_value "${checksums_path}" "runtime_header_sha256")"
+checksum_runtime_source_sha="$(read_checksum_value "${checksums_path}" "runtime_source_sha256")"
 summary_naming_lock="$(read_summary_value "${summary_path}" "naming lock")"
 summary_milestone_closure="$(read_summary_value "${summary_path}" "milestone closure")"
 
@@ -175,6 +203,10 @@ if [[ "${manifest_check_milestone_closure}" != "PASS" ]]; then
   exit 1
 fi
 
+assert_hash_matches "${policy_path}" "${checksum_policy_profile_sha}" "policy profile copy"
+assert_hash_matches "${runtime_header_path}" "${checksum_runtime_header_sha}" "runtime header copy"
+assert_hash_matches "${runtime_source_path}" "${checksum_runtime_source_sha}" "runtime source copy"
+
 sample_count="$(jq -r '.artifacts.samples | length' "${MANIFEST_PATH}")"
 if [[ "${sample_count}" -eq 0 ]]; then
   echo "error: manifest contains no sample artifacts" >&2
@@ -198,8 +230,11 @@ for idx in $(seq 0 $((sample_count - 1))); do
   require_file "${ARTIFACTS_DIR}/${audit_file}"
   require_file "${ARTIFACTS_DIR}/${map_file}"
 
-  read_sample_checksum "${checksums_path}" "${sample_name}" "build_metadata_sha256" >/dev/null
-  read_sample_checksum "${checksums_path}" "${sample_name}" "sbom_sha256" >/dev/null
+  expected_build_meta_sha="$(read_sample_checksum "${checksums_path}" "${sample_name}" "build_metadata_sha256")"
+  expected_sbom_sha="$(read_sample_checksum "${checksums_path}" "${sample_name}" "sbom_sha256")"
+
+  assert_hash_matches "${ARTIFACTS_DIR}/${build_meta_file}" "${expected_build_meta_sha}" "sample '${sample_name}' build metadata"
+  assert_hash_matches "${ARTIFACTS_DIR}/${sbom_file}" "${expected_sbom_sha}" "sample '${sample_name}' sbom"
 done
 
 echo "ok: publish manifest verified (${sample_count} samples)"
