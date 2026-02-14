@@ -438,6 +438,7 @@ Current strict closure result:
 | `M28-E` | PASS | Naming-lock CI enforces M28 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M28-F` | PASS | Naming-lock CI enforces M28 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M28-G` | PASS | Naming-lock CI enforces M28 closure report | `.github/workflows/naming-lock.yml` |
+| `M29-A` | PASS | Naming-lock CI enforces M29 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -545,6 +546,7 @@ Strict closure interpretation:
 - M28 executed-slice convergence summary enforcement is active (`M28-E`).
 - M28 transition handoff packet enforcement is active (`M28-F`).
 - M28 closure report enforcement is active (`M28-G`).
+- M29 kickoff brief enforcement is active (`M29-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4655,7 +4657,7 @@ M13-S1 go/no-go note:
 ### Next planned slice
 - M29-S1 kickoff brief + closure gate `M29-A`.
 
-## M29 - Runtime-First Stabilization Loop (Planned)
+## M29 - Runtime-First Stabilization Loop (In Progress)
 
 ### Goal
 - Start M29 from deterministic M28 closure evidence and shift implementation weight toward runtime de-stubbing and real typed sink behavior while preserving compile-time security gates.
@@ -4666,13 +4668,24 @@ M13-S1 go/no-go note:
 - Closure audit includes dedicated `M29-A` gate.
 
 ### M29-S1 tracking (live status)
-- [ ] M29 kickoff brief script added.
-- [ ] M29 kickoff brief contract test added.
-- [ ] Book chapter documenting M29 kickoff brief added.
-- [ ] Naming-lock CI and closure gate updated (`M29-A`).
+- [x] M29 kickoff brief script added.
+- [x] M29 kickoff brief contract test added.
+- [x] Book chapter documenting M29 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M29-A`).
+
+### M29-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M29 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M29-B` gate.
+
+### M29-S2 tracking (live status)
+- [ ] M29 priority matrix script added.
+- [ ] M29 priority matrix contract test added.
+- [ ] Book chapter documenting M29 priority matrix added.
+- [ ] Naming-lock CI and closure gate updated (`M29-B`).
 
 ### Next planned slice
-- M29-S1 kickoff brief + closure gate `M29-A`.
+- M29-S2 priority matrix + closure gate `M29-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4764,8 +4777,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M29-S1 kickoff brief from strict closure + M28 handoff packet and wire `M29-A`.
-2. Start M29 runtime-first de-stub plan for typed sink/runtime intrinsics (db/fs/net/validators/secrets) after `M29-A`.
+1. Implement M29-S2 priority matrix from M29 kickoff brief and wire `M29-B`.
+2. Start M29 runtime-first de-stub plan for typed sink/runtime intrinsics (db/fs/net/validators/secrets) after `M29-B`.
 
 ---
 
