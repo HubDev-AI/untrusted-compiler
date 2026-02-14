@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--project <path>] [--artifacts-dir <path>] [--serve-timeout-ms <ms>]
+usage: $0 [--project <path>] [--artifacts-dir <path>] [--serve-timeout-ms <ms>] [--max-body-bytes <bytes>]
 
 Builds and runs a temporary hello-api service via `sec4 run` in oneshot mode,
 then validates GET /health and POST /users end-to-end responses.
@@ -14,6 +14,7 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_project="${root_dir}/examples/hello-api"
 artifacts_dir=""
 serve_timeout_ms="12000"
+max_body_bytes=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -53,6 +54,18 @@ while [ "$#" -gt 0 ]; do
       serve_timeout_ms="${1#--serve-timeout-ms=}"
       shift
       ;;
+    --max-body-bytes)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      max_body_bytes="$2"
+      shift 2
+      ;;
+    --max-body-bytes=*)
+      max_body_bytes="${1#--max-body-bytes=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -85,6 +98,11 @@ fi
 
 if ! [[ "${serve_timeout_ms}" =~ ^[0-9]+$ ]] || [ "${serve_timeout_ms}" -le 0 ]; then
   echo "invalid --serve-timeout-ms value (expected positive integer): ${serve_timeout_ms}" >&2
+  exit 1
+fi
+
+if [ -n "${max_body_bytes}" ] && { ! [[ "${max_body_bytes}" =~ ^[0-9]+$ ]] || [ "${max_body_bytes}" -le 0 ]; }; then
+  echo "invalid --max-body-bytes value (expected positive integer): ${max_body_bytes}" >&2
   exit 1
 fi
 
@@ -127,6 +145,7 @@ workProject=${work_project}
 port=${port}
 oneshot=true
 serveTimeoutMs=${serve_timeout_ms}
+maxBodyBytes=${max_body_bytes:-unset}
 runFlags=--port,--oneshot,--serve-timeout-ms
 META
 
@@ -150,7 +169,11 @@ request_once() {
     "http://127.0.0.1:${port}${path}"
   )
 
-  cargo run -p sec4 -- run --path "${work_project}" --port "${port}" --oneshot --serve-timeout-ms "${serve_timeout_ms}" >"${log_file}" 2>&1 &
+  run_cmd=(cargo run -p sec4 -- run --path "${work_project}" --port "${port}" --oneshot --serve-timeout-ms "${serve_timeout_ms}")
+  if [ -n "${max_body_bytes}" ]; then
+    run_cmd+=(--max-body-bytes "${max_body_bytes}")
+  fi
+  "${run_cmd[@]}" >"${log_file}" 2>&1 &
   service_pid=$!
 
   local status_code=""

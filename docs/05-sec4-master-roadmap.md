@@ -174,6 +174,9 @@ Roadmap impact:
 - M16-S50 runtime-smoke checker now enforces metadata numeric bounds:
   - metadata `port` must be in range `1..65535`.
   - metadata `serveTimeoutMs` must be positive (`> 0`).
+- M16-S51 operator smoke script now supports max-body override with metadata/log correlation checks:
+  - smoke script accepts `--max-body-bytes <bytes>` and emits `maxBodyBytes` metadata (`unset` or numeric).
+  - checker enforces max-body metadata shape and optional run-log token correlation when set.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -3042,6 +3045,37 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes dedicated port/timeout range fixtures.
 - [x] Default and override smoke flows remain green after metadata bound hardening.
 
+### M16-S51 follow-up slice (operator smoke max-body override + maxBody metadata/log contracts)
+#### Scope
+- Extend operator smoke script with max-body override support and tighten checker contracts around `maxBodyBytes` metadata/log consistency.
+
+#### Build tasks
+- Extend `scripts/smoke-sec4-run-hello-api.sh`:
+  - add `--max-body-bytes <bytes>` argument (optional)
+  - validate positive integer input
+  - emit `maxBodyBytes=${max_body_bytes:-unset}` metadata
+  - append `--max-body-bytes <bytes>` to invocation when set
+- Extend smoke-script contract/guard tests to lock:
+  - `max_body_bytes` variable tokens
+  - max-body invocation and metadata emit tokens
+- Extend checker + checker tests to enforce:
+  - `maxBodyBytes` metadata field presence/shape
+  - positive bound when numeric
+  - run-log token correlation when numeric
+- Re-run default, timeout-override, and max-body-override smoke/checker flows.
+
+#### Acceptance criteria
+- Smoke script supports optional max-body override with deterministic metadata emission.
+- Checker fails for missing/invalid/non-positive `maxBodyBytes` metadata.
+- Checker fails when max-body metadata and run logs diverge.
+- Default and override smoke flows remain green.
+
+#### Tracking (live status)
+- [x] Smoke script now supports `--max-body-bytes` with validated positive integer input.
+- [x] Smoke-script contract/guard checks now lock max-body variable/invocation/metadata tokens.
+- [x] Checker now enforces `maxBodyBytes` metadata shape and optional log-correlation checks.
+- [x] Default, timeout-override, and max-body-override smoke flows remain green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3094,6 +3128,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Timeout/Metadata Correlation Hardening".
 - Chapter: "M16 Slice: Operator Smoke Timeout Override and Variable Token Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Numeric-Bound Contract Hardening".
+- Chapter: "M16 Slice: Operator Smoke max-body Override and maxBody Metadata/Log Contracts".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

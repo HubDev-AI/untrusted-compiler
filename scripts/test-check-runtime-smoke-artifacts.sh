@@ -16,6 +16,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -205,6 +206,7 @@ workProject=/tmp/hello-api
 port=9090
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -226,6 +228,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=9000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -247,6 +250,7 @@ workProject=/tmp/hello-api
 port=0
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -268,6 +272,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=0
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -281,6 +286,71 @@ if ! rg -Fq 'run-metadata.txt serveTimeoutMs must be greater than 0' "${tmp_dir}
   exit 1
 fi
 
+max_body_missing_dir="${tmp_dir}/bad-max-body-missing"
+cp -R "${ok_dir}" "${max_body_missing_dir}"
+cat > "${max_body_missing_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${max_body_missing_dir}" >"${tmp_dir}/max-body-missing.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing maxBodyBytes metadata" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt missing or invalid maxBodyBytes field' "${tmp_dir}/max-body-missing.log"; then
+  echo "expected missing-or-invalid diagnostic for maxBodyBytes metadata" >&2
+  exit 1
+fi
+
+max_body_range_bad_dir="${tmp_dir}/bad-max-body-range"
+cp -R "${ok_dir}" "${max_body_range_bad_dir}"
+cat > "${max_body_range_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=0
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${max_body_range_bad_dir}" >"${tmp_dir}/max-body-range-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on non-positive maxBodyBytes metadata" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt maxBodyBytes must be unset or positive integer' "${tmp_dir}/max-body-range-bad.log"; then
+  echo "expected range diagnostic for maxBodyBytes metadata" >&2
+  exit 1
+fi
+
+max_body_log_mismatch_dir="${tmp_dir}/bad-max-body-log-mismatch"
+cp -R "${ok_dir}" "${max_body_log_mismatch_dir}"
+cat > "${max_body_log_mismatch_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=2048
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${max_body_log_mismatch_dir}" >"${tmp_dir}/max-body-log-mismatch.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail when max-body metadata and run logs diverge" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'health.run.log missing --max-body-bytes 2048 invocation token' "${tmp_dir}/max-body-log-mismatch.log"; then
+  echo "expected max-body correlation diagnostic for health run log" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'
@@ -288,6 +358,7 @@ sourceProject=examples/hello-api
 workProject=/tmp/hello-api
 port=8080
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -308,6 +379,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -329,6 +401,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -349,6 +422,7 @@ sourceProject=examples/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -370,6 +444,7 @@ workProject=
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -391,6 +466,7 @@ workProject=examples/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
@@ -412,6 +488,7 @@ workProject=/tmp/hello-api
 port=8080
 oneshot=true
 serveTimeoutMs=12000
+maxBodyBytes=unset
 TXT
 
 if "${checker}" --artifacts-dir "${runflags_bad_dir}" >"${tmp_dir}/runflags-bad.log" 2>&1; then

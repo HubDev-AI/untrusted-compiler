@@ -95,6 +95,40 @@ if ! rg -Fq "missing required smoke-script token: ${missing_timeout_meta_token}"
   exit 1
 fi
 
+max_body_flag_fixture="${tmp_dir}/smoke-max-body-flag.sh"
+cp "${source_script}" "${max_body_flag_fixture}"
+chmod +x "${max_body_flag_fixture}"
+
+missing_max_body_flag_token='--max-body-bytes "${max_body_bytes}"'
+perl -0pi -e 's/--max-body-bytes "\$\{max_body_bytes\}"/--max-body-bytes removed-max-body/' "${max_body_flag_fixture}"
+
+if "${contract_script}" --script "${max_body_flag_fixture}" >"${tmp_dir}/max-body-flag-guard.log" 2>&1; then
+  echo "expected smoke script contract to fail when max-body flag token is removed" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing required smoke-script token: ${missing_max_body_flag_token}" "${tmp_dir}/max-body-flag-guard.log"; then
+  echo "expected missing-token diagnostic for ${missing_max_body_flag_token}" >&2
+  exit 1
+fi
+
+max_body_meta_fixture="${tmp_dir}/smoke-max-body-meta.sh"
+cp "${source_script}" "${max_body_meta_fixture}"
+chmod +x "${max_body_meta_fixture}"
+
+missing_max_body_meta_token='maxBodyBytes=${max_body_bytes:-unset}'
+perl -0pi -e 's/maxBodyBytes=\$\{max_body_bytes:-unset\}/maxBodyBytes=removed-max-body/' "${max_body_meta_fixture}"
+
+if "${contract_script}" --script "${max_body_meta_fixture}" >"${tmp_dir}/max-body-meta-guard.log" 2>&1; then
+  echo "expected smoke script contract to fail when maxBodyBytes metadata token is removed" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing required smoke-script token: ${missing_max_body_meta_token}" "${tmp_dir}/max-body-meta-guard.log"; then
+  echo "expected missing-token diagnostic for ${missing_max_body_meta_token}" >&2
+  exit 1
+fi
+
 runflags_fixture="${tmp_dir}/smoke-meta-runflags.sh"
 cp "${source_script}" "${runflags_fixture}"
 chmod +x "${runflags_fixture}"

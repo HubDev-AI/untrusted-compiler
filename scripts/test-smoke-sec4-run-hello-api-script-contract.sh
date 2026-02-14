@@ -51,11 +51,14 @@ fi
 required_tokens=(
   "--artifacts-dir"
   'serve_timeout_ms="12000"'
+  'max_body_bytes=""'
   '--port "${port}"'
   "--oneshot"
   '--serve-timeout-ms "${serve_timeout_ms}"'
+  '--max-body-bytes "${max_body_bytes}"'
   "oneshot=true"
   'serveTimeoutMs=${serve_timeout_ms}'
+  'maxBodyBytes=${max_body_bytes:-unset}'
   'sourceProject=${source_project}'
   'workProject=${work_project}'
   "runFlags=--port,--oneshot,--serve-timeout-ms"

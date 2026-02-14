@@ -186,6 +186,30 @@ if ! rg -Fq -- "--serve-timeout-ms ${serve_timeout_ms}" "${artifacts_dir}/users.
   exit 1
 fi
 
+if ! rg -q '^maxBodyBytes=(unset|[0-9]+)$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing or invalid maxBodyBytes field" >&2
+  exit 1
+fi
+
+max_body_bytes="$(sed -n 's/^maxBodyBytes=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+
+if [ "${max_body_bytes}" != "unset" ]; then
+  if [ "${max_body_bytes}" -le 0 ]; then
+    echo "run-metadata.txt maxBodyBytes must be unset or positive integer" >&2
+    exit 1
+  fi
+
+  if ! rg -Fq -- "--max-body-bytes ${max_body_bytes}" "${artifacts_dir}/health.run.log"; then
+    echo "health.run.log missing --max-body-bytes ${max_body_bytes} invocation token" >&2
+    exit 1
+  fi
+
+  if ! rg -Fq -- "--max-body-bytes ${max_body_bytes}" "${artifacts_dir}/users.run.log"; then
+    echo "users.run.log missing --max-body-bytes ${max_body_bytes} invocation token" >&2
+    exit 1
+  fi
+fi
+
 if ! rg -Fq 'runFlags=--port,--oneshot,--serve-timeout-ms' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing deterministic runFlags field" >&2
   exit 1
