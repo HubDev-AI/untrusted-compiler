@@ -120,6 +120,9 @@ Roadmap impact:
 - M16-S30 run-command port override is now implemented:
   - `sec4 run` now supports `--port <N>`, wired through runtime env bridge (`SEC4_RT_HTTP_PORT`).
   - operator smoke script now runs on free ports via `--port` without patching source files.
+- M16-S31 run-command flag contract CI coverage is now implemented:
+  - dedicated contract + guard scripts lock runtime flag bridge surface for `sec4 run`.
+  - naming-lock workflow now executes these scripts on pull requests and main pushes.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2554,6 +2557,27 @@ M13-S1 go/no-go note:
 - [x] Smoke script now uses `--port` and no longer patches source port.
 - [x] Smoke/runtime-smoke contracts and artifact checks remain green.
 
+### M16-S31 follow-up slice (run-command flag contract CI checks)
+#### Scope
+- Add lightweight script-based CI contract checks for `sec4 run` runtime-flag bridge wiring so drift is caught in naming-lock workflow without depending on Rust test execution paths.
+
+#### Build tasks
+- Add `scripts/test-sec4-run-runtime-flag-contract.sh` to enforce source-level run flag bridge patterns.
+- Add `scripts/test-sec4-run-runtime-flag-contract-guard.sh` with deterministic pass/fail fixture coverage.
+- Wire both scripts into `.github/workflows/naming-lock.yml`.
+- Validate local script execution before closure/doc updates.
+
+#### Acceptance criteria
+- Contract script passes against current CLI source and fails on representative drift fixtures.
+- Naming-lock workflow includes both new contract and guard checks.
+- Existing closure/roadmap alignment checks remain green after workflow expansion.
+
+#### Tracking (live status)
+- [x] Added `scripts/test-sec4-run-runtime-flag-contract.sh`.
+- [x] Added `scripts/test-sec4-run-runtime-flag-contract-guard.sh`.
+- [x] Naming-lock workflow executes both run-flag contract scripts.
+- [x] Local contract, guard, and closure-alignment checks pass.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2586,6 +2610,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Operator Smoke Script Migration to sec4 run --oneshot".
 - Chapter: "M16 Slice: sec4 run Serve-Timeout Bridge Flag".
 - Chapter: "M16 Slice: sec4 run Port Override Bridge and Smoke Port Migration".
+- Chapter: "M16 Slice: sec4 run Runtime-Flag Contract and Naming-Lock CI Coverage".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
