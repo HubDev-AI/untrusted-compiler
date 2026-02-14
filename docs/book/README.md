@@ -436,5 +436,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `469-m17-operator-handoff-workflow-contracts.md`
 - `470-m17-operator-handoff-artifact-inspector.md`
 - `471-m17-operator-readiness-summary.md`
+- `472-m17-operator-release-packet-builder.md`
 
 As milestones progress, chapters will be added and linked from this index.
