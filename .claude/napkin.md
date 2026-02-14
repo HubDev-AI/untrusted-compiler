@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Generated an auto-derived artifact into `output_dir` before ensuring the directory existed, causing immediate `No such file or directory` on first transition-packet test run. | Create packet output directories before any derived artifact redirection that targets paths under that directory. |
 | 2026-02-14 | self | Tried patching `scripts/test-select-m19-next-slice.sh` against stale context and hit an `apply_patch` mismatch. | Re-read the exact target chunk (`sed -n`) immediately before patching recently edited files. |
 | 2026-02-14 | self | Wrote a contract checker expecting fully rendered error strings from a helper-based shell script (`artifact checksum mismatch for policy profile copy`) even though only parameterized labels existed in source. | In source-token contract tests, lock helper function tokens plus literal argument labels rather than synthesized runtime message variants. |
 | 2026-02-14 | self | Used backticks inside double-quoted `echo` lines in a shell markdown renderer, which triggered unintended command substitution and broke output generation. | Prefer `printf` with `%s` placeholders for markdown lines containing backticks; avoid embedding raw backticks in double-quoted `echo`. |
