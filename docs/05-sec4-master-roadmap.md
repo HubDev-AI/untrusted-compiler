@@ -99,6 +99,10 @@ Roadmap impact:
 - M17-S12 live clean-clone rehearsal note is now documented:
   - `build/operator-clean-clone-rehearsal-live/rehearsal-report.json` (latest local evidence)
   - `docs/book/475-m17-clean-clone-rehearsal-results-note.md`
+- M18-S1 kickoff brief generator is now implemented:
+  - `scripts/generate-m18-kickoff-brief.sh`
+  - `scripts/test-generate-m18-kickoff-brief.sh`
+  - `docs/book/476-m18-kickoff-brief-generator.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -310,6 +314,7 @@ Current strict closure result:
 | `M17-J` | PASS | Naming-lock CI enforces M17 operator release-packet builder | `.github/workflows/naming-lock.yml` |
 | `M17-K` | PASS | Naming-lock CI enforces M17 final handoff playbook checker | `.github/workflows/naming-lock.yml` |
 | `M17-L` | PASS | Naming-lock CI enforces M17 clean-clone rehearsal runner | `.github/workflows/naming-lock.yml` |
+| `M18-A` | PASS | Naming-lock CI enforces M18 kickoff brief generator | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -338,6 +343,7 @@ Strict closure interpretation:
 - M17 operator release-packet builder enforcement is active (`M17-J`).
 - M17 final handoff playbook checker enforcement is active (`M17-K`).
 - M17 clean-clone rehearsal runner enforcement is active (`M17-L`).
+- M18 kickoff brief generator enforcement is active (`M18-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3444,6 +3450,43 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Clean-Clone Rehearsal".
 - Chapter: "M17 Clean-Clone Rehearsal Results Note".
 
+## M18 - Post-Handoff Prioritization and Transition
+### Trigger condition
+- Start after M17 clean-clone rehearsal evidence is captured with explicit friction reporting.
+
+### Scope decision (M18 kickoff)
+- Primary scope: convert M17 rehearsal evidence into deterministic next-step planning artifacts.
+- Included tracks:
+  - machine-readable kickoff brief from rehearsal output,
+  - stable recommendation surface for the first post-M17 slices,
+  - closure-gated CI lock for kickoff artifact generation.
+- Deferred:
+  - large runtime/editor feature changes before kickoff priorities are explicitly locked,
+  - release automation expansion beyond the current alpha lane.
+
+### Build tasks
+- Generate kickoff summary from rehearsal report (`PASS/FAIL`, failed step, friction count, recommendations).
+- Support both markdown and JSON output for operator + automation consumers.
+- Lock kickoff generator contract in naming-lock CI and closure audit.
+
+### M18-S1 kickoff acceptance criteria
+- Kickoff generator script + contract test exists.
+- Generator validates report shape and fails deterministically on missing/invalid report.
+- Closure audit includes a dedicated M18 kickoff gate.
+
+### M18-S1 tracking (live status)
+- [x] Kickoff brief generator script added.
+- [x] Kickoff brief generator contract test added.
+- [x] Book chapter documenting kickoff generator added.
+- [x] Naming-lock CI and closure gate updated (`M18-A`).
+
+### Exit criteria
+- M18 kickoff has a deterministic, reproducible artifact generated from live rehearsal evidence.
+- Next milestone slices can be selected using explicit summary/recommendation output rather than ad-hoc interpretation.
+
+### Docs/book outputs
+- Chapter: "M18 Kickoff Brief Generator".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -3534,7 +3577,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Draft M18 kickoff scope from remaining runtime/editor/release priorities and lock the next closure-gated first slice.
+1. Implement M18-S2 priority matrix artifact (runtime/editor/release tracks with deterministic ranking) and lock its CI contract gate.
 
 ---
 

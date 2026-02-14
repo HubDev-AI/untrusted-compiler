@@ -100,6 +100,9 @@ jobs:
       - name: Validate M17 clean-clone rehearsal runner
         run: scripts/test-run-m17-operator-clean-clone-rehearsal.sh
 
+      - name: Validate M18 kickoff brief generator
+        run: scripts/test-generate-m18-kickoff-brief.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
