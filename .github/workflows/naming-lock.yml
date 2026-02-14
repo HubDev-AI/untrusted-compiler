@@ -109,6 +109,9 @@ jobs:
       - name: Validate M18 next-slice selector
         run: scripts/test-select-m18-next-slice.sh
 
+      - name: Validate M18 editor contract expansion
+        run: scripts/test-m18-editor-contract-expansion.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

@@ -111,6 +111,10 @@ Roadmap impact:
   - `scripts/select-m18-next-slice.sh`
   - `scripts/test-select-m18-next-slice.sh`
   - `docs/book/478-m18-next-slice-selector.md`
+- M18-S4 editor contract expansion path is now implemented:
+  - `compiler/sec4-lsp/src/main.rs` quickfix actions now emit stable `data.id` values.
+  - `scripts/test-m18-editor-contract-expansion.sh`
+  - `docs/book/479-m18-editor-contract-expansion.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -325,6 +329,7 @@ Current strict closure result:
 | `M18-A` | PASS | Naming-lock CI enforces M18 kickoff brief generator | `.github/workflows/naming-lock.yml` |
 | `M18-B` | PASS | Naming-lock CI enforces M18 priority matrix artifact | `.github/workflows/naming-lock.yml` |
 | `M18-C` | PASS | Naming-lock CI enforces M18 next-slice selector | `.github/workflows/naming-lock.yml` |
+| `M18-D` | PASS | Naming-lock CI enforces M18 editor contract expansion | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -356,6 +361,7 @@ Strict closure interpretation:
 - M18 kickoff brief generator enforcement is active (`M18-A`).
 - M18 priority matrix artifact enforcement is active (`M18-B`).
 - M18 next-slice selector enforcement is active (`M18-C`).
+- M18 editor contract expansion enforcement is active (`M18-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3481,7 +3487,8 @@ M13-S1 go/no-go note:
 - Support both markdown and JSON output for operator + automation consumers.
 - Build deterministic runtime/editor/release priority matrix from rehearsal evidence.
 - Select one closure-gated next slice from kickoff + matrix inputs.
-- Lock kickoff + matrix artifact contracts in naming-lock CI and closure audit.
+- Execute first selected slice on the editor track (stable quickfix action IDs).
+- Lock kickoff/matrix/selector/editor contracts in naming-lock CI and closure audit.
 
 ### M18-S1 kickoff acceptance criteria
 - Kickoff generator script + contract test exists.
@@ -3501,6 +3508,10 @@ M13-S1 go/no-go note:
 - [x] Next-slice selector contract test added.
 - [x] Book chapter documenting next-slice selector added.
 - [x] Naming-lock CI and closure gate updated (`M18-C`).
+- [x] Editor-path quickfix action IDs added in LSP code actions.
+- [x] Editor contract expansion checker added.
+- [x] Book chapter documenting editor-path execution slice added.
+- [x] Naming-lock CI and closure gate updated (`M18-D`).
 
 ### Exit criteria
 - M18 kickoff has a deterministic, reproducible artifact generated from live rehearsal evidence.
@@ -3510,6 +3521,7 @@ M13-S1 go/no-go note:
 - Chapter: "M18 Kickoff Brief Generator".
 - Chapter: "M18 Priority Matrix Artifact".
 - Chapter: "M18 Next-Slice Selector".
+- Chapter: "M18 Editor Contract Expansion".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3601,7 +3613,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M18-S4 first selected execution slice (editor contract expansion path) and wire a dedicated closure gate for it.
+1. Implement M18-S5 release-track execution slice from selector output (publish-integrity contract expansion) and wire its closure gate.
 
 ---
 

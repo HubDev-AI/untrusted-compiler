@@ -443,5 +443,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `476-m18-kickoff-brief-generator.md`
 - `477-m18-priority-matrix-artifact.md`
 - `478-m18-next-slice-selector.md`
+- `479-m18-editor-contract-expansion.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -852,7 +852,7 @@ fn code_actions_from_diagnostics(
             continue;
         };
 
-        let (title, edit) = match code {
+        let (action_id, title, edit) = match code {
             "E1002" => {
                 let validate_edit = source.as_ref().and_then(|text| {
                     extract_range_text_from_diagnostic(diagnostic, text).map(|selected| {
@@ -869,9 +869,14 @@ fn code_actions_from_diagnostics(
                     })
                 });
                 if validate_edit.is_some() {
-                    (Some("Wrap with validate(...)?"), validate_edit)
+                    (
+                        Some("security.insert_validate_gate"),
+                        Some("Wrap with validate(...)?"),
+                        validate_edit,
+                    )
                 } else {
                     (
+                        Some("security.insert_validate_gate"),
                         Some("Insert validate/sanitize gate for untrusted value"),
                         None,
                     )
@@ -892,27 +897,42 @@ fn code_actions_from_diagnostics(
                         })
                     })
                 });
-                (Some("Wrap with redact(...)"), redact_edit)
+                (
+                    Some("security.insert_redact"),
+                    Some("Wrap with redact(...)"),
+                    redact_edit,
+                )
             }
             "E2001" => {
                 let effect_edit = source
                     .as_ref()
                     .and_then(|text| build_missing_effect_edit(uri, text, diagnostic));
                 if let Some(edit) = effect_edit {
-                    (Some("Add missing effect declaration"), Some(edit))
+                    (
+                        Some("effects.insert_missing_declaration"),
+                        Some("Add missing effect declaration"),
+                        Some(edit),
+                    )
                 } else if source.is_none() {
-                    (Some("Declare missing effect in function signature"), None)
+                    (
+                        Some("effects.insert_missing_declaration"),
+                        Some("Declare missing effect in function signature"),
+                        None,
+                    )
                 } else {
-                    (None, None)
+                    (None, None, None)
                 }
             }
-            _ => (None, None),
+            _ => (None, None, None),
         };
 
+        let Some(action_id) = action_id else {
+            continue;
+        };
         let Some(title) = title else {
             continue;
         };
-        if !seen_titles.insert(title.to_string()) {
+        if !seen_titles.insert(action_id.to_string()) {
             continue;
         }
 
@@ -920,6 +940,7 @@ fn code_actions_from_diagnostics(
             "title": title,
             "kind": "quickfix",
             "diagnostics": [diagnostic.clone()],
+            "data": {"id": action_id},
         });
         if let Some(edit) = edit {
             if let Some(action_obj) = action.as_object_mut() {
@@ -4744,6 +4765,14 @@ mod tests {
             Some("validate(input)?"),
             "validate quickfix should wrap selected diagnostic range text",
         );
+        assert_eq!(
+            validate_action
+                .get("data")
+                .and_then(|data| data.get("id"))
+                .and_then(Value::as_str),
+            Some("security.insert_validate_gate"),
+            "validate quickfix should include stable action id",
+        );
     }
 
     #[test]
@@ -4833,6 +4862,14 @@ mod tests {
             Some("redact(token)"),
             "redact quickfix should wrap selected diagnostic range text",
         );
+        assert_eq!(
+            redact_action
+                .get("data")
+                .and_then(|data| data.get("id"))
+                .and_then(Value::as_str),
+            Some("security.insert_redact"),
+            "redact quickfix should include stable action id",
+        );
     }
 
     #[test]
@@ -4921,6 +4958,14 @@ mod tests {
                 .and_then(Value::as_str),
             Some(" effects { net }"),
             "effect quickfix should insert missing effect declaration",
+        );
+        assert_eq!(
+            effect_action
+                .get("data")
+                .and_then(|data| data.get("id"))
+                .and_then(Value::as_str),
+            Some("effects.insert_missing_declaration"),
+            "effect quickfix should include stable action id",
         );
     }
 
