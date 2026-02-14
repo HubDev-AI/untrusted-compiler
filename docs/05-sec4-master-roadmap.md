@@ -430,6 +430,7 @@ Current strict closure result:
 | `M27-D` | PASS | Naming-lock CI enforces M27 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M27-E` | PASS | Naming-lock CI enforces M27 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M27-F` | PASS | Naming-lock CI enforces M27 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M27-G` | PASS | Naming-lock CI enforces M27 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -529,6 +530,7 @@ Strict closure interpretation:
 - M27 runtime hardening runner enforcement is active (`M27-D`).
 - M27 executed-slice convergence summary enforcement is active (`M27-E`).
 - M27 transition handoff packet enforcement is active (`M27-F`).
+- M27 closure report enforcement is active (`M27-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4540,8 +4542,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M27 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M27-F`).
 
+### M27-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M27 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M27-A..M27-F` are validated in one canonical closure artifact (`m27Gates[]`).
+- Closure audit includes dedicated `M27-G` gate.
+
+### M27-S7 tracking (live status)
+- [x] M27 closure report script added.
+- [x] M27 closure report contract test added.
+- [x] Book chapter documenting M27 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M27-G`).
+
 ### Next planned slice
-- M27-S7 closure report + closure gate `M27-G`.
+- M28-S1 kickoff brief + closure gate `M28-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4633,7 +4646,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S7 closure report from strict closure + M27 handoff packet and wire `M27-G`.
+1. Implement M28-S1 kickoff brief from M27 closure + packet artifacts and wire `M28-A`.
 
 ---
 
