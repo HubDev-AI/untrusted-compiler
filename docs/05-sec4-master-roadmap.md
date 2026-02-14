@@ -79,6 +79,8 @@ Roadmap impact:
   - when `cors.withCors(...)` is active, runtime handles `OPTIONS` preflight with deterministic CORS allow headers and `204 No Content`.
 - M16-S15 security-headers runtime path is now implemented:
   - when `sec.withSecurityHeaders(...)` is active, runtime injects deterministic security headers on both success and not-found error responses.
+- M16-S16 CSRF runtime gate is now implemented:
+  - when `csrf.withCsrf(...)` is active, runtime enforces double-submit token checks on protected methods and returns deterministic `403` on missing/mismatched tokens.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2115,6 +2117,29 @@ M13-S1 go/no-go note:
 - [x] Security headers injected into success and `404` responses.
 - [x] Runtime e2e coverage added for both success and not-found branches.
 
+### M16-S16 follow-up slice (CSRF runtime gate for protected methods)
+#### Scope
+- Activate baseline CSRF middleware behavior in runtime with deterministic double-submit checks for protected HTTP methods.
+
+#### Build tasks
+- Extend router runtime state with CSRF-enabled flag set by `with_csrf`.
+- Parse request headers (`X-CSRF-Token`, `Cookie`) and enforce token match for protected methods:
+  - `POST`, `PUT`, `PATCH`, `DELETE`.
+- Return deterministic structured `403` error envelope for missing or mismatched tokens.
+- Add runtime e2e coverage for:
+  - reject path (missing token),
+  - allow path (matching token).
+
+#### Acceptance criteria
+- CSRF-enabled router blocks protected requests without valid double-submit tokens.
+- Valid matching token requests continue through normal handler success path.
+- Runtime integration suite remains green.
+
+#### Tracking (live status)
+- [x] Runtime router state tracks CSRF middleware enablement.
+- [x] Protected-method CSRF token matching is enforced in request path.
+- [x] Runtime e2e coverage added for reject and allow CSRF branches.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2131,6 +2156,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: 405 Allow Header Enrichment".
 - Chapter: "M16 Slice: CORS Preflight Runtime Handling".
 - Chapter: "M16 Slice: Security Headers Runtime Injection".
+- Chapter: "M16 Slice: CSRF Runtime Gate Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

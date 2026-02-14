@@ -33,6 +33,7 @@ typedef struct {
   int64_t handle;
   bool cors_enabled;
   bool security_headers_enabled;
+  bool csrf_enabled;
   size_t route_count;
   sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
 } sec4_rt_router_state;
@@ -314,6 +315,116 @@ static bool sec4_rt_parse_content_type_is_json(
   return false;
 }
 
+static bool sec4_rt_parse_header_value(
+    const char *request,
+    size_t request_len,
+    const char *name,
+    char *value,
+    size_t value_size
+) {
+  if (value == NULL || value_size == 0) {
+    return false;
+  }
+  value[0] = '\0';
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return false;
+  }
+
+  size_t name_len = strlen(name);
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      const char *start = cursor + name_len + 1;
+      while (start < line_end && isspace((unsigned char) *start)) {
+        start += 1;
+      }
+      const char *end = line_end;
+      while (end > start && isspace((unsigned char) *(end - 1))) {
+        end -= 1;
+      }
+      size_t len = (size_t) (end - start);
+      if (len >= value_size) {
+        len = value_size - 1;
+      }
+      memcpy(value, start, len);
+      value[len] = '\0';
+      return true;
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_cookie_value(
+    const char *cookie_header,
+    const char *cookie_name,
+    char *value,
+    size_t value_size
+) {
+  if (value == NULL || value_size == 0) {
+    return false;
+  }
+  value[0] = '\0';
+  if (cookie_header == NULL || cookie_name == NULL || cookie_name[0] == '\0') {
+    return false;
+  }
+
+  size_t name_len = strlen(cookie_name);
+  const char *cursor = cookie_header;
+  while (*cursor != '\0') {
+    while (*cursor == ' ' || *cursor == ';') {
+      cursor += 1;
+    }
+    if (*cursor == '\0') {
+      break;
+    }
+
+    if (strncasecmp(cursor, cookie_name, name_len) == 0 && cursor[name_len] == '=') {
+      const char *start = cursor + name_len + 1;
+      const char *end = start;
+      while (*end != '\0' && *end != ';') {
+        end += 1;
+      }
+      size_t len = (size_t) (end - start);
+      if (len >= value_size) {
+        len = value_size - 1;
+      }
+      memcpy(value, start, len);
+      value[len] = '\0';
+      return len > 0;
+    }
+
+    while (*cursor != '\0' && *cursor != ';') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_is_csrf_protected_method(const char *method) {
+  if (method == NULL) {
+    return false;
+  }
+  return strcmp(method, "POST") == 0
+      || strcmp(method, "PUT") == 0
+      || strcmp(method, "PATCH") == 0
+      || strcmp(method, "DELETE") == 0;
+}
+
 static sec4_rt_router_state *sec4_rt_router_slot(int64_t router) {
   for (size_t i = 0; i < SEC4_RT_MAX_ROUTERS; i++) {
     if (g_sec4_rt_routers[i].active && g_sec4_rt_routers[i].handle == router) {
@@ -361,6 +472,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "No Content";
     case 400:
       return "Bad Request";
+    case 403:
+      return "Forbidden";
     case 413:
       return "Payload Too Large";
     case 415:
@@ -566,8 +679,9 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   request[total_bytes] = '\0';
 
   char *headers_end = strstr(request, "\r\n\r\n");
+  size_t headers_len = 0;
   if (headers_end != NULL) {
-    size_t headers_len = (size_t) (headers_end - request) + 4;
+    headers_len = (size_t) (headers_end - request) + 4;
     size_t content_length = sec4_rt_parse_content_length(request, headers_len);
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
 
@@ -605,7 +719,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   headers_end = strstr(request, "\r\n\r\n");
   if (headers_end != NULL) {
-    size_t headers_len = (size_t) (headers_end - request) + 4;
+    headers_len = (size_t) (headers_end - request) + 4;
     size_t content_length = sec4_rt_parse_content_length(request, headers_len);
     bool has_content_type = false;
     bool content_type_is_json = sec4_rt_parse_content_type_is_json(
@@ -661,6 +775,46 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         final_headers
     );
     return;
+  }
+
+  if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(method)) {
+    char csrf_header[128];
+    char cookie_header[512];
+    char csrf_cookie[128];
+    bool has_csrf_header = sec4_rt_parse_header_value(
+        request,
+        headers_len,
+        "X-CSRF-Token",
+        csrf_header,
+        sizeof(csrf_header)
+    );
+    bool has_cookie_header = sec4_rt_parse_header_value(
+        request,
+        headers_len,
+        "Cookie",
+        cookie_header,
+        sizeof(cookie_header)
+    );
+    bool has_csrf_cookie = has_cookie_header
+        && sec4_rt_parse_cookie_value(cookie_header, "csrf", csrf_cookie, sizeof(csrf_cookie));
+
+    if (!has_csrf_header || !has_csrf_cookie || strcmp(csrf_header, csrf_cookie) != 0) {
+      sec4_rt_store_std_error_response(
+          403,
+          "AUTH.CSRF_TOKEN_INVALID",
+          "auth",
+          "CSRF token missing or invalid"
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          g_sec4_rt_response.status,
+          g_sec4_rt_response.content_type,
+          g_sec4_rt_response.body,
+          g_sec4_rt_response.body_len,
+          security_headers
+      );
+      return;
+    }
   }
 
   sec4_rt_route *match = NULL;
@@ -1163,6 +1317,10 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
 
 int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
   (void) cfg;
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot != NULL) {
+    slot->csrf_enabled = true;
+  }
   return router;
 }
 
