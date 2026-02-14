@@ -75,6 +75,8 @@ Roadmap impact:
   - runtime now returns deterministic `405 Method Not Allowed` when path matches but method does not.
 - M16-S13 `405` Allow-header enrichment is now implemented:
   - runtime `405` responses now include deterministic `Allow` header built from matching route path methods.
+- M16-S14 CORS preflight runtime path is now implemented:
+  - when `cors.withCors(...)` is active, runtime handles `OPTIONS` preflight with deterministic CORS allow headers and `204 No Content`.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2062,6 +2064,30 @@ M13-S1 go/no-go note:
 - [x] Method-mismatch branch emits deterministic `Allow` header.
 - [x] Runtime 405 e2e assertion updated for `Allow` header.
 
+### M16-S14 follow-up slice (CORS preflight runtime path)
+#### Scope
+- Implement minimal runtime CORS preflight behavior for middleware-enabled routers so `OPTIONS` requests are handled deterministically with security-relevant headers.
+
+#### Build tasks
+- Extend router runtime state with CORS-enabled flag set by `with_cors`.
+- Intercept `OPTIONS` requests when CORS is enabled and emit:
+  - `204 No Content`,
+  - `Access-Control-Allow-Origin`,
+  - `Access-Control-Allow-Methods`,
+  - `Access-Control-Allow-Headers`,
+  - `Access-Control-Max-Age`.
+- Add live runtime e2e coverage for CORS preflight path.
+
+#### Acceptance criteria
+- CORS-enabled router handles `OPTIONS` preflight without route-handler execution.
+- Preflight response includes deterministic CORS allow headers.
+- Existing runtime HTTP routes continue to pass integration tests unchanged.
+
+#### Tracking (live status)
+- [x] `with_cors` toggles runtime CORS-enabled router state.
+- [x] Runtime handles `OPTIONS` preflight with deterministic `204` + allow headers.
+- [x] Runtime e2e coverage added for CORS preflight path.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2076,6 +2102,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: res.okMeta Runtime Envelope Coverage".
 - Chapter: "M16 Slice: HTTP Method-Mismatch 405 Dispatch Semantics".
 - Chapter: "M16 Slice: 405 Allow Header Enrichment".
+- Chapter: "M16 Slice: CORS Preflight Runtime Handling".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

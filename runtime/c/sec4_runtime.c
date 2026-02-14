@@ -31,6 +31,7 @@ typedef struct {
 typedef struct {
   bool active;
   int64_t handle;
+  bool cors_enabled;
   size_t route_count;
   sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
 } sec4_rt_router_state;
@@ -599,6 +600,23 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   strncpy(g_sec4_rt_request.path, path, sizeof(g_sec4_rt_request.path) - 1);
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
 
+  if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
+    const char *extra_headers =
+        "Access-Control-Allow-Origin: *\r\n"
+        "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
+        "Access-Control-Allow-Headers: content-type, authorization\r\n"
+        "Access-Control-Max-Age: 600\r\n";
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        204,
+        "text/plain; charset=utf-8",
+        "",
+        0,
+        extra_headers
+    );
+    return;
+  }
+
   sec4_rt_route *match = NULL;
   sec4_rt_route *method_mismatch = NULL;
   for (size_t i = 0; i < router->route_count; i++) {
@@ -1066,6 +1084,10 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
 
 int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
   (void) cfg;
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot != NULL) {
+    slot->cors_enabled = true;
+  }
   return router;
 }
 
