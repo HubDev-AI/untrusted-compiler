@@ -45,6 +45,8 @@ Roadmap impact:
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1a replay mock execution contract is now implemented:
   - `sec4 replay --effects mock` now emits deterministic executed-stub counts/traces for net/db/fs in both text and JSON output modes.
+- M15-S1b replay execution contract guards are now implemented:
+  - replay JSON contract scripts now lock `mockExecutionCounts` and `mockExecutionTraces` presence, including guard-negative cases.
 - M16-S1 live HTTP runtime bootstrap is now implemented:
   - runtime router + route registration + socket serve loop are active in `runtime/c/sec4_runtime.c`,
   - `res.text` now materializes real HTTP response payloads for active request handlers,
@@ -1731,7 +1733,7 @@ M13-S1 go/no-go note:
 - [ ] Runtime DB stub materialization wired in replay `mock` path.
 - [ ] Runtime FS stub materialization wired in replay `mock` path.
 - [x] Replay runtime execution JSON/text contracts defined and tested.
-- [ ] Runtime replay guard scripts added and wired into naming-lock CI.
+- [x] Runtime replay guard scripts added and wired into naming-lock CI.
 - [ ] Closure-audit checks expanded with M15 runtime replay enforcement gates.
 
 ### M15-S1a follow-up slice (mock execution trace/count contract)
@@ -1757,6 +1759,29 @@ M13-S1 go/no-go note:
 - [x] Replay text output includes deterministic execution counter/trace summaries.
 - [x] Replay integration tests updated for both no-dependency and dependency-backed mock runs.
 
+### M15-S1b follow-up slice (replay execution contract guard hardening)
+#### Scope
+- Lock the new replay execution-output fields in script-level contract tests so runtime execution evidence cannot silently drift.
+
+#### Build tasks
+- Extend replay JSON contract checker with required keys:
+  - `mockExecutionCounts`
+  - `mockExecutionTraces`
+- Extend replay JSON guard script with negative fixtures for missing execution keys.
+- Re-run guard scripts to ensure deterministic pass/fail behavior remains stable.
+
+#### Acceptance criteria
+- `scripts/test-replay-cli-json-contract.sh` fails if execution keys are removed.
+- `scripts/test-replay-cli-json-contract-guard.sh` includes explicit missing-key failures for execution fields.
+- Naming-lock workflow still executes replay JSON contract scripts unchanged.
+
+#### Tracking (live status)
+- [x] Replay JSON contract checker requires `mockExecutionCounts`.
+- [x] Replay JSON contract checker requires `mockExecutionTraces`.
+- [x] Guard script includes missing-`mockExecutionCounts` failure case.
+- [x] Guard script includes missing-`mockExecutionTraces` failure case.
+- [x] Replay JSON contract + guard scripts pass locally after hardening.
+
 ### Exit criteria
 - Replay `mock` mode performs deterministic runtime stub execution across net/db/fs paths.
 - Replay outputs expose deterministic executed-stub evidence sufficient for incident/debug workflows.
@@ -1771,6 +1796,7 @@ M13-S1 go/no-go note:
 - Chapter: "M15 Slice: Replay Runtime Diagnostics Contract".
 - Chapter: "M15 Slice: Replay Runtime Output Contract Guard".
 - Chapter: "M15 Slice: Replay Mock Execution Trace and Count Contract".
+- Chapter: "M15 Slice: Replay Execution Contract Guard Hardening".
 
 ## M16 - Live HTTP Runtime Bootstrap (`sec4 run` E2E Serving)
 ### Trigger condition

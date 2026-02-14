@@ -45,7 +45,9 @@ fn render(output_format: ReplayOutputFormat) {
                 "mockDependencyMatches": {"db": 0, "fs": 0},
                 "mockDependencySignatures": {"db": [], "fs": []},
                 "mockDependencyStubSummaries": {"db": [], "fs": []},
-                "mockDependencyTraces": {"db": [], "fs": []}
+                "mockDependencyTraces": {"db": [], "fs": []},
+                "mockExecutionCounts": {"net": 1, "db": 0, "fs": 0},
+                "mockExecutionTraces": {"net": [{"index": 0, "traceId": "net:0", "signature": "GET|https://example.com/ping|empty", "status": 200, "truncated": false, "bodyKind": "base64"}], "db": [], "fs": []}
             });
             println!(
                 "{}",
@@ -94,7 +96,9 @@ fn render(output_format: ReplayOutputFormat) {
                 "mockDependencyMatches": {"db": 0, "fs": 0},
                 "mockDependencySignatures": {"db": [], "fs": []},
                 "mockDependencyStubSummaries": {"db": [], "fs": []},
-                "mockDependencyTraces": {"db": [], "fs": []}
+                "mockDependencyTraces": {"db": [], "fs": []},
+                "mockExecutionCounts": {"net": 1, "db": 0, "fs": 0},
+                "mockExecutionTraces": {"net": [{"index": 0, "traceId": "net:0", "signature": "GET|https://example.com/ping|empty", "status": 200, "truncated": false, "bodyKind": "base64"}], "db": [], "fs": []}
             });
             println!(
                 "{}",
@@ -538,6 +542,112 @@ RS
 
 if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
   echo "expected replay json contract failure when mockDependencyTraces key is missing" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
+enum Commands {
+    Replay {
+        #[arg(long, value_enum, default_value_t = ReplayOutputFormat::Text)]
+        format: ReplayOutputFormat,
+    },
+}
+
+fn render(output_format: ReplayOutputFormat) {
+    match output_format {
+        ReplayOutputFormat::Text => {
+            println!("ok");
+        }
+        ReplayOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "ok": true,
+                "capture": "capture.json",
+                "stubs": "stubs.json",
+                "policyHashMatched": true,
+                "compilerHashMatched": true,
+                "runtimeHashMatched": true,
+                "allowPolicyMismatch": false,
+                "effectsMode": "mock",
+                "warnings": [],
+                "stubCounts": {"net": 1, "db": 0, "fs": 0},
+                "stubDetails": {"db": {"entries": 0, "uniqueQueryTemplateIds": 0}, "fs": {"entries": 0, "readOps": 0, "writeOps": 0, "otherOps": 0}},
+                "mockRequestSignature": "GET|https://example.com/ping|empty",
+                "mockMatchedStub": {"status": 200, "truncated": false, "bodyKind": "base64"},
+                "mockDependencyMatches": {"db": 0, "fs": 0},
+                "mockDependencySignatures": {"db": [], "fs": []},
+                "mockDependencyStubSummaries": {"db": [], "fs": []},
+                "mockDependencyTraces": {"db": [], "fs": []},
+                "mockExecutionTraces": {"net": [{"index": 0, "traceId": "net:0", "signature": "GET|https://example.com/ping|empty", "status": 200, "truncated": false, "bodyKind": "base64"}], "db": [], "fs": []}
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).expect("payload should serialize")
+            );
+        }
+    }
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected replay json contract failure when mockExecutionCounts key is missing" >&2
+  exit 1
+fi
+
+cat > "${cli_path}" <<'RS'
+enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
+enum Commands {
+    Replay {
+        #[arg(long, value_enum, default_value_t = ReplayOutputFormat::Text)]
+        format: ReplayOutputFormat,
+    },
+}
+
+fn render(output_format: ReplayOutputFormat) {
+    match output_format {
+        ReplayOutputFormat::Text => {
+            println!("ok");
+        }
+        ReplayOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "ok": true,
+                "capture": "capture.json",
+                "stubs": "stubs.json",
+                "policyHashMatched": true,
+                "compilerHashMatched": true,
+                "runtimeHashMatched": true,
+                "allowPolicyMismatch": false,
+                "effectsMode": "mock",
+                "warnings": [],
+                "stubCounts": {"net": 1, "db": 0, "fs": 0},
+                "stubDetails": {"db": {"entries": 0, "uniqueQueryTemplateIds": 0}, "fs": {"entries": 0, "readOps": 0, "writeOps": 0, "otherOps": 0}},
+                "mockRequestSignature": "GET|https://example.com/ping|empty",
+                "mockMatchedStub": {"status": 200, "truncated": false, "bodyKind": "base64"},
+                "mockDependencyMatches": {"db": 0, "fs": 0},
+                "mockDependencySignatures": {"db": [], "fs": []},
+                "mockDependencyStubSummaries": {"db": [], "fs": []},
+                "mockDependencyTraces": {"db": [], "fs": []},
+                "mockExecutionCounts": {"net": 1, "db": 0, "fs": 0}
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).expect("payload should serialize")
+            );
+        }
+    }
+}
+RS
+
+if "${contract_script}" --cli "${cli_path}" >/dev/null 2>&1; then
+  echo "expected replay json contract failure when mockExecutionTraces key is missing" >&2
   exit 1
 fi
 
