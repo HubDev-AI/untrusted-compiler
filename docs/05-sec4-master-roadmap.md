@@ -436,6 +436,7 @@ Current strict closure result:
 | `M28-C` | PASS | Naming-lock CI enforces M28 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M28-D` | PASS | Naming-lock CI enforces M28 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M28-E` | PASS | Naming-lock CI enforces M28 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M28-F` | PASS | Naming-lock CI enforces M28 transition handoff packet | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -541,6 +542,7 @@ Strict closure interpretation:
 - M28 next-slice selector enforcement is active (`M28-C`).
 - M28 runtime hardening runner enforcement is active (`M28-D`).
 - M28 executed-slice convergence summary enforcement is active (`M28-E`).
+- M28 transition handoff packet enforcement is active (`M28-F`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4564,7 +4566,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M27-G`).
 
 ### Next planned slice
-- M28-S6 transition handoff packet + closure gate `M28-F`.
+- M28-S7 closure report + closure gate `M28-G`.
 
 ## M28 - Kickoff Loop (In Progress)
 
@@ -4626,8 +4628,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M28 executed-slice convergence summary added.
 - [x] Naming-lock CI and closure gate updated (`M28-E`).
 
+### M28-S6 transition handoff packet acceptance criteria
+- Transition packet script validates kickoff/matrix/selector/runtime/convergence contracts and enforces selector/runtime recommendation alignment.
+- Packet output is deterministic (`handoff-packet.json` + normalized artifact copies) and can auto-generate convergence summary when omitted.
+- Closure audit includes dedicated `M28-F` gate.
+
+### M28-S6 tracking (live status)
+- [x] M28 transition handoff packet script added.
+- [x] M28 transition handoff packet contract test added.
+- [x] Book chapter documenting M28 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M28-F`).
+
 ### Next planned slice
-- M28-S6 transition handoff packet + closure gate `M28-F`.
+- M28-S7 closure report + closure gate `M28-G`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4719,7 +4732,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M28-S6 transition handoff packet from M28 kickoff/matrix/selector/runtime/convergence artifacts and wire `M28-F`.
+1. Implement M28-S7 closure report from strict closure + M28 handoff packet and wire `M28-G`.
 
 ---
 
