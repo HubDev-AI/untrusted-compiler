@@ -435,6 +435,7 @@ Current strict closure result:
 | `M28-B` | PASS | Naming-lock CI enforces M28 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M28-C` | PASS | Naming-lock CI enforces M28 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M28-D` | PASS | Naming-lock CI enforces M28 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M28-E` | PASS | Naming-lock CI enforces M28 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -539,6 +540,7 @@ Strict closure interpretation:
 - M28 priority matrix enforcement is active (`M28-B`).
 - M28 next-slice selector enforcement is active (`M28-C`).
 - M28 runtime hardening runner enforcement is active (`M28-D`).
+- M28 executed-slice convergence summary enforcement is active (`M28-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4562,7 +4564,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M27-G`).
 
 ### Next planned slice
-- M28-S5 executed-slice convergence summary + closure gate `M28-E`.
+- M28-S6 transition handoff packet + closure gate `M28-F`.
 
 ## M28 - Kickoff Loop (In Progress)
 
@@ -4613,8 +4615,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M28 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M28-D`).
 
+### M28-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact alignment and emits deterministic markdown/json outputs.
+- Summary computes `executionPass`, `overall`, and deterministic `nextAction` from runtime execution status.
+- Closure audit includes dedicated `M28-E` gate.
+
+### M28-S5 tracking (live status)
+- [x] M28 executed-slice convergence summary script added.
+- [x] M28 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M28 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M28-E`).
+
 ### Next planned slice
-- M28-S5 executed-slice convergence summary + closure gate `M28-E`.
+- M28-S6 transition handoff packet + closure gate `M28-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4706,7 +4719,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M28-S5 executed-slice convergence summary from M28 selector + runtime execution artifacts and wire `M28-E`.
+1. Implement M28-S6 transition handoff packet from M28 kickoff/matrix/selector/runtime/convergence artifacts and wire `M28-F`.
 
 ---
 

@@ -328,6 +328,9 @@ jobs:
       - name: Validate M28 runtime hardening runner
         run: scripts/test-run-m28-runtime-hardening.sh
 
+      - name: Validate M28 executed-slice convergence summary
+        run: scripts/test-build-m28-executed-slice-convergence-summary.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
