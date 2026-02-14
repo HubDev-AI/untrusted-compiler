@@ -412,6 +412,7 @@ Current strict closure result:
 | `M24-G` | PASS | Naming-lock CI enforces M24 closure report | `.github/workflows/naming-lock.yml` |
 | `M25-A` | PASS | Naming-lock CI enforces M25 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M25-B` | PASS | Naming-lock CI enforces M25 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M25-C` | PASS | Naming-lock CI enforces M25 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -493,6 +494,7 @@ Strict closure interpretation:
 - M24 closure report enforcement is active (`M24-G`).
 - M25 kickoff brief enforcement is active (`M25-A`).
 - M25 priority matrix enforcement is active (`M25-B`).
+- M25 next-slice selector enforcement is active (`M25-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4176,7 +4178,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M25-S3 next-slice selector + closure gate `M25-C`.
+- M25-S4 runtime hardening runner + closure gate `M25-D`.
 
 ## M24 - Kickoff Loop (Complete)
 
@@ -4290,8 +4292,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M25 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M25-B`).
 
+### M25-S3 next-slice selector acceptance criteria
+- Selector consumes M25 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M25-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M25-C` gate.
+
+### M25-S3 tracking (live status)
+- [x] M25 next-slice selector script added.
+- [x] M25 next-slice selector contract test added.
+- [x] Book chapter documenting M25 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M25-C`).
+
 ### Next planned slice
-- M25-S3 next-slice selector + closure gate `M25-C`.
+- M25-S4 runtime hardening runner + closure gate `M25-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4383,7 +4396,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M25-S3 next-slice selector from M25 kickoff + priority matrix artifacts and wire `M25-C`.
+1. Implement M25-S4 runtime hardening runner from M25 selector artifact and wire `M25-D`.
 
 ---
 
