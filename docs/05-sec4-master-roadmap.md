@@ -389,6 +389,7 @@ Current strict closure result:
 | `M21-E` | PASS | Naming-lock CI enforces M21 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M21-F` | PASS | Naming-lock CI enforces M21 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M21-G` | PASS | Naming-lock CI enforces M21 closure report | `.github/workflows/naming-lock.yml` |
+| `M22-A` | PASS | Naming-lock CI enforces M22 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -447,6 +448,7 @@ Strict closure interpretation:
 - M21 executed-slice convergence summary enforcement is active (`M21-E`).
 - M21 transition handoff packet enforcement is active (`M21-F`).
 - M21 closure report enforcement is active (`M21-G`).
+- M22 kickoff brief enforcement is active (`M22-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3965,6 +3967,25 @@ M13-S1 go/no-go note:
 - Chapter: "M21 Transition Handoff Packet".
 - Chapter: "M21 Closure Report".
 
+## M22 - Kickoff Loop (In Progress)
+
+### Goal
+- Start M22 from deterministic M21 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M21.
+
+### M22-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M21 closure report + M21 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M21 closure report JSON from `build-m21-closure-report.sh`.
+- Closure audit includes dedicated `M22-A` gate.
+
+### M22-S1 tracking (live status)
+- [x] M22 kickoff brief script added.
+- [x] M22 kickoff brief contract test added.
+- [x] Book chapter documenting M22 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M22-A`).
+
+### Next planned slice
+- M22-S2 priority matrix + closure gate `M22-B`.
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -4055,7 +4076,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M22-S1 kickoff brief from M21 closure report + transition handoff packet and wire `M22-A`.
+1. Implement M22-S2 priority matrix from M22 kickoff brief and wire `M22-B`.
 
 ---
 
