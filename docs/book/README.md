@@ -484,5 +484,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `517-m23-executed-slice-convergence-summary.md`
 - `518-m23-transition-handoff-packet.md`
 - `519-m23-closure-report.md`
+- `520-m24-kickoff-brief.md`
 
 As milestones progress, chapters will be added and linked from this index.

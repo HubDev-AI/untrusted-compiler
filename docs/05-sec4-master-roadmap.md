@@ -403,6 +403,7 @@ Current strict closure result:
 | `M23-E` | PASS | Naming-lock CI enforces M23 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M23-F` | PASS | Naming-lock CI enforces M23 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M23-G` | PASS | Naming-lock CI enforces M23 closure report | `.github/workflows/naming-lock.yml` |
+| `M24-A` | PASS | Naming-lock CI enforces M24 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -475,6 +476,7 @@ Strict closure interpretation:
 - M23 executed-slice convergence summary enforcement is active (`M23-E`).
 - M23 transition handoff packet enforcement is active (`M23-F`).
 - M23 closure report enforcement is active (`M23-G`).
+- M24 kickoff brief enforcement is active (`M24-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4075,7 +4077,7 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M22 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M22-G`).
 
-## M23 - Kickoff Loop (In Progress)
+## M23 - Kickoff Loop (Complete)
 
 ### Goal
 - Start M23 from deterministic M22 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M22.
@@ -4158,7 +4160,26 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M24-S1 kickoff brief + closure gate `M24-A`.
+- M24-S2 priority matrix + closure gate `M24-B`.
+
+## M24 - Kickoff Loop (In Progress)
+
+### Goal
+- Start M24 from deterministic M23 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M23.
+
+### M24-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M23 closure report + M23 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M23 closure report JSON from `build-m23-closure-report.sh`.
+- Closure audit includes dedicated `M24-A` gate.
+
+### M24-S1 tracking (live status)
+- [x] M24 kickoff brief script added.
+- [x] M24 kickoff brief contract test added.
+- [x] Book chapter documenting M24 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M24-A`).
+
+### Next planned slice
+- M24-S2 priority matrix + closure gate `M24-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4250,7 +4271,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M24-S1 kickoff brief from M23 closure report + M23 handoff packet and wire `M24-A`.
+1. Implement M24-S2 priority matrix from M24 kickoff brief and wire `M24-B`.
 
 ---
 

@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17/M18/M19/M20/M21/M22/M23).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17/M18/M19/M20/M21/M22/M23/M24).
 USAGE
 }
 
@@ -208,6 +208,7 @@ bool_has_m23_runtime_hardening_runner_ci_guard=0
 bool_has_m23_executed_slice_convergence_summary_ci_guard=0
 bool_has_m23_transition_handoff_packet_ci_guard=0
 bool_has_m23_closure_report_ci_guard=0
+bool_has_m24_kickoff_brief_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -728,6 +729,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m23_closure_report_ci_guard=1
 fi
 
+m24_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m24-kickoff-brief.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m24_kickoff_brief_test_script}" ] \
+  && rg -q 'scripts/test-generate-m24-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m24_kickoff_brief_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -989,6 +997,7 @@ emit_check "M23-D" "naming-lock CI enforces M23 runtime hardening runner" "${boo
 emit_check "M23-E" "naming-lock CI enforces M23 executed-slice convergence summary" "${bool_has_m23_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M23-F" "naming-lock CI enforces M23 transition handoff packet" "${bool_has_m23_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M23-G" "naming-lock CI enforces M23 closure report" "${bool_has_m23_closure_report_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M24-A" "naming-lock CI enforces M24 kickoff brief" "${bool_has_m24_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
