@@ -149,6 +149,8 @@ bool_has_replay_json_cli_ci_guard=0
 bool_has_replay_execution_contract_guard=0
 bool_has_m16_runtime_http_coverage_ci_guard=0
 bool_has_m16_operator_smoke_script_ci_guard=0
+bool_has_m16_runtime_smoke_workflow_contract=0
+bool_has_m16_runtime_smoke_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -254,6 +256,12 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m16_operator_smoke_script_ci_guard=1
 fi
 
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-runtime-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-runtime-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m16_runtime_smoke_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -269,6 +277,18 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-zed-grammar-pin.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-zed-grammar-pin-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_zed_grammar_pin_ci_guard=1
+fi
+
+runtime_smoke_workflow_path="${repo_root}/.github/workflows/runtime-smoke.yml"
+if [ -f "${runtime_smoke_workflow_path}" ] \
+  && rg -q 'pull_request:' "${runtime_smoke_workflow_path}" \
+  && rg -q 'push:' "${runtime_smoke_workflow_path}" \
+  && rg -q 'branches:' "${runtime_smoke_workflow_path}" \
+  && rg -q -- '- main' "${runtime_smoke_workflow_path}" \
+  && rg -q 'runs-on:[[:space:]]*ubuntu-latest' "${runtime_smoke_workflow_path}" \
+  && rg -q 'uses:[[:space:]]*actions/checkout@v4' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/smoke-sec4-run-hello-api.sh' "${runtime_smoke_workflow_path}"; then
+  bool_has_m16_runtime_smoke_workflow_contract=1
 fi
 
 if [ -f "${naming_lock_workflow_path}" ] \
@@ -438,6 +458,8 @@ emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tes
 emit_check "M15-A" "replay CLI json contract guards execution fields + missing-key fixtures" "${bool_has_replay_execution_contract_guard}" "scripts/test-replay-cli-json-contract.sh + scripts/test-replay-cli-json-contract-guard.sh"
 emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests" "${bool_has_m16_runtime_http_coverage_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests" "${bool_has_m16_operator_smoke_script_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M16-C" "runtime-smoke workflow executes sec4 run hello-api smoke on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
+emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

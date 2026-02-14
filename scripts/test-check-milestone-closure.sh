@@ -114,6 +114,10 @@ jobs:
         run: scripts/test-smoke-sec4-run-hello-api-script-contract.sh
       - name: Validate sec4 run hello-api smoke script contract guard behavior
         run: scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh
+      - name: Validate runtime-smoke workflow contract
+        run: scripts/test-runtime-smoke-workflow-contract.sh
+      - name: Validate runtime-smoke workflow contract guard behavior
+        run: scripts/test-runtime-smoke-workflow-contract-guard.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -218,6 +222,24 @@ jobs:
           path: benchmark-suite/results
 YAML
 
+cat > "$tmp/.github/workflows/runtime-smoke.yml" <<'YAML'
+name: Runtime Smoke
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run sec4 hello-api operator smoke
+        run: scripts/smoke-sec4-run-hello-api.sh
+YAML
+
 cat > "$tmp/benchmark-suite/results/summaries/compare-matrix.json" <<'JSON'
 {
   "version": "0.1",
@@ -260,7 +282,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M11-A","M12-A","M12-B",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
-    "M15-A","M16-A","M16-B"
+    "M15-A","M16-A","M16-B","M16-C","M16-D"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -324,6 +346,14 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-A") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-B") != null' >/dev/null; then
   echo "expected json closure output to include M16-B gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-C") != null' >/dev/null; then
+  echo "expected json closure output to include M16-C gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-D") != null' >/dev/null; then
+  echo "expected json closure output to include M16-D gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then

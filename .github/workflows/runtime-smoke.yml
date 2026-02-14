@@ -1,0 +1,18 @@
+name: Runtime Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run sec4 hello-api operator smoke
+        run: scripts/smoke-sec4-run-hello-api.sh

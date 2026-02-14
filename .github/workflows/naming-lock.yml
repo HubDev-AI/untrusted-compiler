@@ -49,6 +49,12 @@ jobs:
       - name: Validate sec4 run hello-api smoke script contract guard behavior
         run: scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh
 
+      - name: Validate runtime-smoke workflow contract
+        run: scripts/test-runtime-smoke-workflow-contract.sh
+
+      - name: Validate runtime-smoke workflow contract guard behavior
+        run: scripts/test-runtime-smoke-workflow-contract-guard.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

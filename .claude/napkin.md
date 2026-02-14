@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Used `rg -Fq \"- main\"` in a workflow contract checker; `rg` treated the token as a flag and failed. | For required tokens that may start with `-`, always call `rg` with `--` before the pattern (`rg -Fq -- \"${token}\"`). |
 | 2026-02-14 | self | Added a new naming-lock closure gate but initially updated only real workflow wiring and not the pass fixture in `scripts/test-check-milestone-closure.sh`. | For every new naming-lock closure gate, update both the real workflow and closure test fixture in the same edit before running closure checks. |
 | 2026-02-14 | self | Added a new closure gate with concatenated absolute evidence paths (`pathA + pathB`), which bypassed repo-relative rendering and broke closure output invariants. | For closure evidence strings, use repo-relative literals or a single renderable path; avoid concatenating raw absolute paths in one evidence field. |
 | 2026-02-14 | self | Ran `rustfmt` on whole large Rust files during a focused replay slice, creating broad formatting churn outside the new assertions/logic. | For focused slices, avoid whole-file formatting on large test files; keep edits minimal and only format touched blocks when necessary. |
