@@ -61,6 +61,9 @@ jobs:
       - name: Validate runtime-smoke branch index builder
         run: scripts/test-build-runtime-smoke-branch-index.sh
 
+      - name: Validate runtime-smoke bundle checker
+        run: scripts/test-check-runtime-smoke-bundle.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

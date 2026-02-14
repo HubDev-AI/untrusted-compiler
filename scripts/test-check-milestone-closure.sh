@@ -122,6 +122,8 @@ jobs:
         run: scripts/test-check-runtime-smoke-artifacts.sh
       - name: Validate runtime-smoke branch index builder
         run: scripts/test-build-runtime-smoke-branch-index.sh
+      - name: Validate runtime-smoke bundle checker
+        run: scripts/test-check-runtime-smoke-bundle.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -246,14 +248,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Run sec4 hello-api operator smoke (default)
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default
-      - name: Validate runtime smoke artifacts (default)
-        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default
       - name: Run sec4 hello-api operator smoke (max-body)
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
-      - name: Validate runtime smoke artifacts (max-body)
-        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
-      - name: Build runtime smoke branch index
-        run: scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json
+      - name: Validate runtime smoke bundle
+        run: scripts/check-runtime-smoke-bundle.sh --artifacts-root build/runtime-smoke --index-path build/runtime-smoke/runtime-smoke-branch-index.json
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -196,11 +196,14 @@ Roadmap impact:
 - M16-S56 runtime-smoke artifact bundle now includes aggregated branch indexing:
   - workflow builds `runtime-smoke-branch-index.json` from `default` + `max-body` artifact sets.
   - naming-lock CI and closure fixtures now lock the branch-index builder contract.
+- M16-S57 runtime-smoke workflow now uses one deterministic bundle checker pass:
+  - workflow validates both branch artifacts + index generation via `scripts/check-runtime-smoke-bundle.sh`.
+  - naming-lock CI and closure fixtures now lock bundle-checker workflow contract coverage.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
-  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including dual-branch smoke validation + branch-index generation + artifact upload),
-  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact checker/index tests.
+  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including dual-branch smoke execution + bundle-check validation/index generation + artifact upload),
+  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact checker/index/bundle tests.
 - M16 run-command runtime-flag CI-guard enforcement is active (`M16-E`):
   - validates naming-lock CI enforcement of `sec4 run` runtime-flag contract + guard tests.
 
@@ -245,7 +248,7 @@ Current strict closure result:
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on pull_request + main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
-| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index tests | `.github/workflows/naming-lock.yml` |
+| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests | `.github/workflows/naming-lock.yml` |
 | `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
@@ -3218,6 +3221,32 @@ M13-S1 go/no-go note:
 - [x] Workflow contract/guard + closure fixtures lock index-builder step.
 - [x] Naming-lock CI now runs branch-index regression test.
 
+### M16-S57 follow-up slice (runtime-smoke single-pass bundle checker contract)
+#### Scope
+- Consolidate runtime-smoke validation/indexing into one deterministic command so workflow and operators run one contract-locked checker pass after dual-branch smoke execution.
+
+#### Build tasks
+- Add `scripts/check-runtime-smoke-bundle.sh`:
+  - validates `default` + `max-body` branch directories exist,
+  - runs per-branch artifact checker for each branch,
+  - builds/validates aggregated branch index contract.
+- Add `scripts/test-check-runtime-smoke-bundle.sh` with deterministic pass/failure fixtures.
+- Migrate `.github/workflows/runtime-smoke.yml` to call bundle checker instead of separate per-branch checker/index commands.
+- Update runtime-smoke workflow contract/guard tests and closure fixtures for bundle-check command token.
+- Update naming-lock CI and closure guard expectations to include bundle-checker test.
+
+#### Acceptance criteria
+- Runtime-smoke workflow uses one bundle-check command for branch artifact validation + index generation.
+- Bundle-check regression tests fail deterministically for missing branch and profile-drift cases.
+- Closure and naming-lock checks remain green after workflow contract migration.
+
+#### Tracking (live status)
+- [x] Bundle checker implemented (`scripts/check-runtime-smoke-bundle.sh`).
+- [x] Bundle checker regression suite added and passing.
+- [x] Runtime-smoke workflow now invokes bundle checker step.
+- [x] Workflow contract/guard + closure fixture checks now lock bundle-check token.
+- [x] Naming-lock CI now runs bundle-checker regression test.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3276,6 +3305,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Shape-Aware runFlags Metadata Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Workflow Dual-Branch maxBody Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Aggregated Branch Artifact Index".
+- Chapter: "M16 Slice: Runtime-Smoke Single-Pass Bundle Checker Contract".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3367,7 +3397,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add a single runtime-smoke bundle checker command that validates both branch artifacts and branch-index output in one deterministic pass, then migrate workflow/contract checks to it.
+1. Start first post-M16 planning slice: define M17 kickoff scope for end-to-end server packaging (one command bootstrap, smoke profile matrix, operator handoff checklist).
 
 ---
 

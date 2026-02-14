@@ -426,5 +426,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `459-m16-runtime-smoke-workflow-dual-branch-maxbody-coverage.md`
 - `460-m13-trend-note-update-local-fallback-mode.md`
 - `461-m16-runtime-smoke-aggregated-branch-artifact-index.md`
+- `462-m16-runtime-smoke-single-pass-bundle-checker-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.
