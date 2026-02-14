@@ -30,7 +30,7 @@ ok
 TXT
 
 cat > "${ok_dir}/health.run.log" <<'TXT'
-smoke log health
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000`
 TXT
 
 cat > "${ok_dir}/users.headers" <<'TXT'
@@ -44,7 +44,7 @@ cat > "${ok_dir}/users.body" <<'TXT'
 TXT
 
 cat > "${ok_dir}/users.run.log" <<'TXT'
-smoke log users
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000`
 TXT
 
 "${checker}" --artifacts-dir "${ok_dir}" >/dev/null
@@ -162,6 +162,38 @@ fi
 
 if ! rg -Fq 'users traceId mismatch between headers and body' "${tmp_dir}/trace-mismatch.log"; then
   echo "expected trace-mismatch diagnostic for users header/body trace ids" >&2
+  exit 1
+fi
+
+health_log_bad_dir="${tmp_dir}/bad-health-log"
+cp -R "${ok_dir}" "${health_log_bad_dir}"
+cat > "${health_log_bad_dir}/health.run.log" <<'TXT'
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --serve-timeout-ms 12000`
+TXT
+
+if "${checker}" --artifacts-dir "${health_log_bad_dir}" >"${tmp_dir}/health-log-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing health --oneshot token" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'health.run.log missing --oneshot invocation token' "${tmp_dir}/health-log-bad.log"; then
+  echo "expected missing-token diagnostic for health run log --oneshot" >&2
+  exit 1
+fi
+
+users_log_bad_dir="${tmp_dir}/bad-users-log"
+cp -R "${ok_dir}" "${users_log_bad_dir}"
+cat > "${users_log_bad_dir}/users.run.log" <<'TXT'
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot`
+TXT
+
+if "${checker}" --artifacts-dir "${users_log_bad_dir}" >"${tmp_dir}/users-log-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing users --serve-timeout-ms token" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users.run.log missing --serve-timeout-ms 12000 invocation token' "${tmp_dir}/users-log-bad.log"; then
+  echo "expected missing-token diagnostic for users run log --serve-timeout-ms" >&2
   exit 1
 fi
 

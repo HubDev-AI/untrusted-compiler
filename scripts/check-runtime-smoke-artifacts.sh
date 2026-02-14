@@ -91,6 +91,21 @@ if [ "$(cat "${artifacts_dir}/health.body")" != "ok" ]; then
   exit 1
 fi
 
+if ! rg -Fq -- '--oneshot' "${artifacts_dir}/health.run.log"; then
+  echo "health.run.log missing --oneshot invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/health.run.log"; then
+  echo "health.run.log missing --serve-timeout-ms 12000 invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- '--port ' "${artifacts_dir}/health.run.log"; then
+  echo "health.run.log missing --port invocation token" >&2
+  exit 1
+fi
+
 if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and test("^rt-[0-9]+$")) and (.timeMs | type == "number") and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
   echo "users.body does not match expected std-success envelope contract" >&2
   exit 1
@@ -106,6 +121,21 @@ users_body_trace_id="$(jq -r '.traceId' "${artifacts_dir}/users.body")"
 
 if [ "${users_header_trace_id}" != "${users_body_trace_id}" ]; then
   echo "users traceId mismatch between headers and body" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- '--oneshot' "${artifacts_dir}/users.run.log"; then
+  echo "users.run.log missing --oneshot invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/users.run.log"; then
+  echo "users.run.log missing --serve-timeout-ms 12000 invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- '--port ' "${artifacts_dir}/users.run.log"; then
+  echo "users.run.log missing --port invocation token" >&2
   exit 1
 fi
 

@@ -159,6 +159,9 @@ Roadmap impact:
 - M16-S45 runtime-smoke checker now enforces health trace-header contract:
   - `health.headers` must include `X-Trace-Id`.
   - health trace header value must match `rt-[0-9]+` format.
+- M16-S46 runtime-smoke checker now enforces run-log invocation flag contracts:
+  - `health.run.log` and `users.run.log` must contain `--port`, `--oneshot`, and `--serve-timeout-ms 12000` tokens.
+  - regression coverage includes deterministic missing-token failures for both logs.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2913,6 +2916,30 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes missing and malformed health trace-header fixtures.
 - [x] Real smoke + checker flow remains green after health trace hardening.
 
+### M16-S46 follow-up slice (runtime-smoke run-log invocation flag contract hardening)
+#### Scope
+- Tighten runtime-smoke artifact validation so captured run logs prove expected `sec4 run` flag usage.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to require invocation tokens in both run logs:
+  - `--port`
+  - `--oneshot`
+  - `--serve-timeout-ms 12000`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with:
+  - missing `--oneshot` fixture for `health.run.log`
+  - missing `--serve-timeout-ms 12000` fixture for `users.run.log`
+- Re-run checker regression suite and real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker fails deterministically when required invocation tokens are missing from either run log.
+- Regression suite includes both health/users run-log missing-token scenarios.
+- Real smoke artifact flow remains green with unchanged script invocation.
+
+#### Tracking (live status)
+- [x] Checker now enforces required invocation tokens in both run logs.
+- [x] Regression suite includes deterministic missing-token fixtures for health/users run logs.
+- [x] Real smoke + checker flow remains green after run-log contract hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2960,6 +2987,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Success Envelope traceId Format Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Users Trace Header/Body Correlation Enforcement".
 - Chapter: "M16 Slice: Runtime-Smoke Health Trace-Header Contract Hardening".
+- Chapter: "M16 Slice: Runtime-Smoke Run-Log Invocation Flag Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
