@@ -250,6 +250,9 @@ jobs:
       - name: Validate M24 transition handoff packet
         run: scripts/test-build-m24-transition-handoff-packet.sh
 
+      - name: Validate M24 closure report
+        run: scripts/test-build-m24-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

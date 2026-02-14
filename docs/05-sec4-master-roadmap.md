@@ -409,6 +409,7 @@ Current strict closure result:
 | `M24-D` | PASS | Naming-lock CI enforces M24 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M24-E` | PASS | Naming-lock CI enforces M24 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M24-F` | PASS | Naming-lock CI enforces M24 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M24-G` | PASS | Naming-lock CI enforces M24 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -487,6 +488,7 @@ Strict closure interpretation:
 - M24 runtime hardening runner enforcement is active (`M24-D`).
 - M24 executed-slice convergence summary enforcement is active (`M24-E`).
 - M24 transition handoff packet enforcement is active (`M24-F`).
+- M24 closure report enforcement is active (`M24-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4170,9 +4172,9 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M24-S7 closure report + closure gate `M24-G`.
+- M25-S1 kickoff brief + closure gate `M25-A`.
 
-## M24 - Kickoff Loop (In Progress)
+## M24 - Kickoff Loop (Complete)
 
 ### Goal
 - Start M24 from deterministic M23 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M23.
@@ -4243,8 +4245,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M24 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M24-F`).
 
+### M24-S7 closure report acceptance criteria
+- Closure report script consumes strict closure JSON + M24 transition packet summary and computes deterministic `overall` + `nextAction`.
+- Closure report output includes full required gate snapshot (`M24-A..M24-F`) and packet convergence fields.
+- Closure audit includes dedicated `M24-G` gate.
+
+### M24-S7 tracking (live status)
+- [x] M24 closure report script added.
+- [x] M24 closure report contract test added.
+- [x] Book chapter documenting M24 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M24-G`).
+
 ### Next planned slice
-- M24-S7 closure report + closure gate `M24-G`.
+- M25-S1 kickoff brief + closure gate `M25-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4336,7 +4349,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M24-S7 closure report from strict closure + M24 transition packet artifacts and wire `M24-G`.
+1. Implement M25-S1 kickoff brief from strict closure + M24 transition packet artifacts and wire `M25-A`.
 
 ---
 

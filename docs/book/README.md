@@ -490,5 +490,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `523-m24-runtime-hardening-runner.md`
 - `524-m24-executed-slice-convergence-summary.md`
 - `525-m24-transition-handoff-packet.md`
+- `526-m24-closure-report.md`
 
 As milestones progress, chapters will be added and linked from this index.
