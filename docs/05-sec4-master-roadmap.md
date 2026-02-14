@@ -386,6 +386,7 @@ Current strict closure result:
 | `M21-B` | PASS | Naming-lock CI enforces M21 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M21-C` | PASS | Naming-lock CI enforces M21 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M21-D` | PASS | Naming-lock CI enforces M21 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M21-E` | PASS | Naming-lock CI enforces M21 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -441,6 +442,7 @@ Strict closure interpretation:
 - M21 priority matrix enforcement is active (`M21-B`).
 - M21 next-slice selector enforcement is active (`M21-C`).
 - M21 runtime hardening runner enforcement is active (`M21-D`).
+- M21 executed-slice convergence summary enforcement is active (`M21-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3866,7 +3868,8 @@ M13-S1 go/no-go note:
 - Build deterministic M21 priority matrix from kickoff brief.
 - Select first executable M21 slice from kickoff + matrix inputs.
 - Execute first selected runtime slice via dedicated M21 runtime hardening runner.
-- Lock kickoff-brief/matrix/selector/runtime contracts in naming-lock CI and closure audit.
+- Build executed-slice convergence summary from selector + runtime execution artifacts.
+- Lock kickoff-brief/matrix/selector/runtime/convergence contracts in naming-lock CI and closure audit.
 
 ### M21-S1 kickoff acceptance criteria
 - M21 kickoff brief script + contract test exists.
@@ -3912,6 +3915,17 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M21 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M21-D`).
 
+### M21-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact contracts and recommendation alignment.
+- Summary emits deterministic markdown/json outputs with explicit `overall` and `nextAction`.
+- Closure audit includes dedicated `M21-E` gate.
+
+### M21-S5 tracking (live status)
+- [x] M21 executed-slice convergence summary script added.
+- [x] M21 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M21 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M21-E`).
+
 ### Exit criteria
 - M21 kickoff starts from deterministic evidence (`M20` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3920,6 +3934,7 @@ M13-S1 go/no-go note:
 - Chapter: "M21 Priority Matrix".
 - Chapter: "M21 Next-Slice Selector".
 - Chapter: "M21 Runtime Hardening Runner".
+- Chapter: "M21 Executed-Slice Convergence Summary".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4011,7 +4026,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M21-S5 executed-slice convergence summary from M21 selector/runtime artifacts and wire the next closure gate.
+1. Implement M21-S6 transition handoff packet from kickoff/matrix/selector/runtime/convergence artifacts and wire the next closure gate.
 
 ---
 
