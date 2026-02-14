@@ -110,6 +110,10 @@ jobs:
         run: scripts/test-m16-runtime-http-coverage.sh
       - name: Validate M16 runtime HTTP coverage guard behavior
         run: scripts/test-m16-runtime-http-coverage-guard.sh
+      - name: Validate sec4 run hello-api smoke script contract
+        run: scripts/test-smoke-sec4-run-hello-api-script-contract.sh
+      - name: Validate sec4 run hello-api smoke script contract guard behavior
+        run: scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -256,7 +260,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M11-A","M12-A","M12-B",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
-    "M15-A","M16-A"
+    "M15-A","M16-A","M16-B"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -316,6 +320,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M15-A") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-A") != null' >/dev/null; then
   echo "expected json closure output to include M16-A gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-B") != null' >/dev/null; then
+  echo "expected json closure output to include M16-B gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then

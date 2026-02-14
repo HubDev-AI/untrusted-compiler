@@ -43,6 +43,12 @@ jobs:
       - name: Validate M16 runtime HTTP coverage guard behavior
         run: scripts/test-m16-runtime-http-coverage-guard.sh
 
+      - name: Validate sec4 run hello-api smoke script contract
+        run: scripts/test-smoke-sec4-run-hello-api-script-contract.sh
+
+      - name: Validate sec4 run hello-api smoke script contract guard behavior
+        run: scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

@@ -109,6 +109,7 @@ Roadmap impact:
 - M16-S25 operator smoke coverage is now implemented:
   - `scripts/smoke-sec4-run-hello-api.sh` now validates `sec4 run` end-to-end request handling (`GET /health`, `POST /users`) against a temporary project copy in deterministic oneshot mode.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
+- M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 
 ## Formal Closure Audit (Strict, 2026-02-14)
 
@@ -149,6 +150,7 @@ Current strict closure result:
 | `M14-D` | PASS | Naming-lock CI enforces replay CLI json contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -161,6 +163,7 @@ Strict closure interpretation:
 - M14 replay CLI json contract enforcement is active (`M14-D`).
 - M15 replay execution contract guard enforcement is active (`M15-A`).
 - M16 runtime HTTP coverage closure enforcement is active (`M16-A`).
+- M16 operator smoke-script closure enforcement is active (`M16-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -759,6 +762,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of replay stub registry contract test (`M14-C`).
   - closure now verifies naming-lock CI enforcement of replay CLI json contract + guard tests (`M14-D`).
   - closure now verifies naming-lock CI enforcement of M16 runtime HTTP coverage contract + guard tests (`M16-A`).
+  - closure now verifies naming-lock CI enforcement of sec4 run hello-api smoke script contract + guard tests (`M16-B`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
