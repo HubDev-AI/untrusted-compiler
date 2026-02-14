@@ -398,6 +398,7 @@ Current strict closure result:
 | `M22-G` | PASS | Naming-lock CI enforces M22 closure report | `.github/workflows/naming-lock.yml` |
 | `M23-A` | PASS | Naming-lock CI enforces M23 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M23-B` | PASS | Naming-lock CI enforces M23 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M23-C` | PASS | Naming-lock CI enforces M23 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -465,6 +466,7 @@ Strict closure interpretation:
 - M22 closure report enforcement is active (`M22-G`).
 - M23 kickoff brief enforcement is active (`M23-A`).
 - M23 priority matrix enforcement is active (`M23-B`).
+- M23 next-slice selector enforcement is active (`M23-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4092,8 +4094,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M23 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M23-B`).
 
+### M23-S3 next-slice selector acceptance criteria
+- Selector consumes M23 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M23-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M23-C` gate.
+
+### M23-S3 tracking (live status)
+- [x] M23 next-slice selector script added.
+- [x] M23 next-slice selector contract test added.
+- [x] Book chapter documenting M23 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M23-C`).
+
 ### Next planned slice
-- M23-S3 next-slice selector + closure gate `M23-C`.
+- M23-S4 runtime hardening runner + closure gate `M23-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4185,7 +4198,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M23-S3 next-slice selector from M23 kickoff + priority matrix and wire `M23-C`.
+1. Implement M23-S4 runtime hardening runner from M23 selector output and wire `M23-D`.
 
 ---
 
