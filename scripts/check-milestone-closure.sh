@@ -159,6 +159,7 @@ bool_has_m17_operator_quickstart_ci_guard=0
 bool_has_m17_operator_ci_smoke_ci_guard=0
 bool_has_m17_operator_handoff_workflow_contract=0
 bool_has_m17_operator_handoff_workflow_ci_guard=0
+bool_has_m17_operator_artifact_inspector_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -334,6 +335,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-operator-handoff-workflow-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-operator-handoff-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_m17_operator_handoff_workflow_ci_guard=1
+fi
+
+m17_artifact_inspector_test_script="${repo_root}/scripts/test-inspect-m17-operator-handoff-artifacts.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m17_artifact_inspector_test_script}" ] \
+  && rg -q 'scripts/test-inspect-m17-operator-handoff-artifacts.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m17_operator_artifact_inspector_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -548,6 +556,7 @@ emit_check "M17-D" "naming-lock CI enforces M17 operator handoff quickstart" "${
 emit_check "M17-E" "naming-lock CI enforces M17 operator handoff CI smoke wrapper" "${bool_has_m17_operator_ci_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
 emit_check "M17-G" "naming-lock CI enforces operator-handoff workflow contract + guard tests" "${bool_has_m17_operator_handoff_workflow_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M17-H" "naming-lock CI enforces M17 operator handoff artifact inspector" "${bool_has_m17_operator_artifact_inspector_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

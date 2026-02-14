@@ -85,6 +85,9 @@ jobs:
       - name: Validate operator-handoff workflow contract guard behavior
         run: scripts/test-operator-handoff-workflow-contract-guard.sh
 
+      - name: Validate M17 operator handoff artifact inspector
+        run: scripts/test-inspect-m17-operator-handoff-artifacts.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
