@@ -421,6 +421,7 @@ Current strict closure result:
 | `M26-B` | PASS | Naming-lock CI enforces M26 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M26-C` | PASS | Naming-lock CI enforces M26 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M26-D` | PASS | Naming-lock CI enforces M26 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M26-E` | PASS | Naming-lock CI enforces M26 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -511,6 +512,7 @@ Strict closure interpretation:
 - M26 priority matrix enforcement is active (`M26-B`).
 - M26 next-slice selector enforcement is active (`M26-C`).
 - M26 runtime hardening runner enforcement is active (`M26-D`).
+- M26 executed-slice convergence summary enforcement is active (`M26-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4415,8 +4417,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M26 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M26-D`).
 
+### M26-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact alignment and emits deterministic markdown/json outputs.
+- Summary computes `executionPass`, `overall`, and deterministic `nextAction` from runtime execution status.
+- Closure audit includes dedicated `M26-E` gate.
+
+### M26-S5 tracking (live status)
+- [x] M26 executed-slice convergence summary script added.
+- [x] M26 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M26 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M26-E`).
+
 ### Next planned slice
-- M26-S5 executed-slice convergence summary + closure gate `M26-E`.
+- M26-S6 transition handoff packet + closure gate `M26-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4508,7 +4521,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M26-S5 executed-slice convergence summary from M26 selector + runtime execution artifacts and wire `M26-E`.
+1. Implement M26-S6 transition handoff packet from M26 kickoff/matrix/selector/runtime/convergence artifacts and wire `M26-F`.
 
 ---
 
