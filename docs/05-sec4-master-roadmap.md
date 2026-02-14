@@ -46,6 +46,7 @@ Roadmap impact:
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - Naming-lock workflow now includes a local-path leak guard test:
   - `scripts/test-check-no-local-path-leaks.sh`.
+- M12 local-path leak closure enforcement is active (`M12-B`).
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
@@ -132,6 +133,7 @@ Current strict closure result:
 | `M10-D` | PASS | Naming-lock CI enforces cross-impl workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M11-A` | PASS | Naming-lock CI enforces Zed grammar pin contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M12-A` | PASS | Naming-lock CI enforces `sec4` CLI command contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M12-B` | PASS | Naming-lock CI enforces local path leak guard test | `.github/workflows/naming-lock.yml` |
 | `M13-A` | PASS | Trend note includes live `Trend Entry` block | `docs/book/322-m13-first-trend-run-results-note.md` |
 | `M13-B` | PASS | Trend workflow keeps strict quality + regression guard steps | `.github/workflows/benchmark-trend.yml` |
 | `M13-C` | PASS | Trend workflow uploads benchmark artifacts for trend-note ingestion | `.github/workflows/benchmark-trend.yml` |
@@ -148,6 +150,7 @@ Strict closure interpretation:
 - M11 and M12 are complete for current scope.
 - M9 implementation is functionally complete but release-candidate evidence remains a verification activity.
 - M10 and M13 closure evidence requirements are now satisfied.
+- M12 local-path leak guard enforcement is active (`M12-B`).
 - M14 bootstrap replay-contract enforcement is active (`M14-A`).
 - M14 replay compatibility enforcement is active (`M14-B`).
 - M14 replay stub-registry bootstrap enforcement is active (`M14-C`).
@@ -740,6 +743,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of cross-impl workflow contract + guard tests (`M10-D`).
   - closure now verifies naming-lock CI enforcement of zed grammar pin contract + guard tests (`M11-A`).
   - closure now verifies naming-lock CI enforcement of sec4 CLI command contract + guard tests (`M12-A`).
+  - closure now verifies naming-lock CI enforcement of local path leak guard test (`M12-B`).
   - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure + cross-impl/trend contract guard tests plus strict closure audit wiring (`M13-D`).

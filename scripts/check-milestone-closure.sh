@@ -135,6 +135,7 @@ bool_has_cross_impl_workflow_contract=0
 bool_has_cross_impl_ci_guard=0
 bool_has_zed_grammar_pin_ci_guard=0
 bool_has_cli_command_ci_guard=0
+bool_has_local_path_leak_ci_guard=0
 bool_has_live_trend_entry=0
 bool_has_trend_workflow_guards=0
 bool_has_trend_workflow_artifact_upload=0
@@ -260,6 +261,11 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-sec4-cli-command-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-sec4-cli-command-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_cli_command_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-check-no-local-path-leaks.sh' "${naming_lock_workflow_path}"; then
+  bool_has_local_path_leak_ci_guard=1
 fi
 
 if [ -f "${matrix_path}" ]; then
@@ -404,6 +410,7 @@ emit_check "M10-C" "cross-impl workflow enforces scoped run + strict quality + a
 emit_check "M10-D" "naming-lock CI enforces cross-impl workflow contract + guard tests" "${bool_has_cross_impl_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M11-A" "naming-lock CI enforces zed grammar pin contract + guard tests" "${bool_has_zed_grammar_pin_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M12-A" "naming-lock CI enforces sec4 CLI command contract + guard tests" "${bool_has_cli_command_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M12-B" "naming-lock CI enforces local path leak guard test" "${bool_has_local_path_leak_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M13-A" "trend note contains at least one live Trend Entry block" "${bool_has_live_trend_entry}" "${trend_note_path}"
 emit_check "M13-B" "benchmark trend workflow has strict quality + regression guards" "${bool_has_trend_workflow_guards}" "${trend_workflow_path}"
 emit_check "M13-C" "benchmark trend workflow uploads trend artifacts" "${bool_has_trend_workflow_artifact_upload}" "${trend_workflow_path}"

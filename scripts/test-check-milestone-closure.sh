@@ -122,6 +122,8 @@ jobs:
         run: scripts/test-benchmark-trend-workflow-contract.sh
       - name: Validate benchmark trend workflow guard behavior
         run: scripts/test-benchmark-trend-workflow-contract-guard.sh
+      - name: Validate local path leak guard
+        run: scripts/test-check-no-local-path-leaks.sh
       - name: Validate sec4 CLI command contract
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
@@ -247,7 +249,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
   [.gates[].gate] == [
     "M9-A","M9-B","M9-C","M9-D","M9-E","M9-F","M9-G","M9-H",
     "M10-A","M10-B","M10-C","M10-D",
-    "M11-A","M12-A",
+    "M11-A","M12-A","M12-B",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A"
@@ -270,6 +272,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M11-A") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M12-A") != null' >/dev/null; then
   echo "expected json closure output to include M12-A gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M12-B") != null' >/dev/null; then
+  echo "expected json closure output to include M12-B gate" >&2
   exit 1
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M13-D") != null' >/dev/null; then

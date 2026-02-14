@@ -388,5 +388,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `421-m16-security-headers-coverage-on-auth-csrf-rejection-paths.md`
 - `422-m16-security-headers-coverage-on-405-and-preflight-branches.md`
 - `423-m12-local-path-leak-ci-guard.md`
+- `424-m12-local-path-leak-closure-gate.md`
 
 As milestones progress, chapters will be added and linked from this index.
