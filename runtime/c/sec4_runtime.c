@@ -49,6 +49,7 @@ typedef struct {
   char path[SEC4_RT_MAX_PATH_BYTES];
   char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
   size_t body_len;
+  bool body_limit_exceeded;
   bool has_content_type;
   bool content_type_is_json;
   bool json_checked;
@@ -278,6 +279,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "No Content";
     case 400:
       return "Bad Request";
+    case 413:
+      return "Payload Too Large";
     case 415:
       return "Unsupported Media Type";
     case 404:
@@ -425,12 +428,16 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         &has_content_type
     );
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+    size_t body_cap = sizeof(g_sec4_rt_request.body) - 1;
+    if (content_length > body_cap || available_body > body_cap) {
+      g_sec4_rt_request.body_limit_exceeded = true;
+    }
     size_t body_len = content_length > 0 ? content_length : available_body;
     if (body_len > available_body) {
       body_len = available_body;
     }
-    if (body_len >= sizeof(g_sec4_rt_request.body)) {
-      body_len = sizeof(g_sec4_rt_request.body) - 1;
+    if (body_len > body_cap) {
+      body_len = body_cap;
     }
     if (body_len > 0) {
       memcpy(g_sec4_rt_request.body, request + headers_len, body_len);
@@ -555,6 +562,16 @@ int64_t sec4_rt_req_json(int64_t schema) {
         400,
         "application/json; charset=utf-8",
         "{\"error\":\"JSON body required\"}"
+    );
+    return 1;
+  }
+
+  if (g_sec4_rt_request.body_limit_exceeded) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_response(
+        413,
+        "application/json; charset=utf-8",
+        "{\"error\":\"request body exceeds runtime limit\"}"
     );
     return 1;
   }

@@ -61,6 +61,8 @@ Roadmap impact:
   - non-JSON request media types deterministically return `415 Unsupported Media Type`.
 - M16-S6 `sec4 run` live-serving e2e coverage is now implemented:
   - CLI `sec4 run` path is now explicitly validated with a real HTTP POST roundtrip in oneshot mode.
+- M16-S7 request-size guard hardening is now implemented:
+  - `req.json(...)` now rejects oversized request bodies with deterministic `413 Payload Too Large`.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1888,6 +1890,25 @@ M13-S1 go/no-go note:
 - [x] `sec4 run` command-path HTTP oneshot e2e test added.
 - [x] Deterministic `POST /users` response contract asserted through CLI run path.
 
+### M16-S7 follow-up slice (`req.json` request-size guard)
+#### Scope
+- Add baseline runtime request-body size enforcement for `req.json(...)` so oversized payloads fail deterministically instead of being silently truncated.
+
+#### Build tasks
+- Track request-body limit overflow during HTTP request capture.
+- Extend `req.json(...)` runtime gate to return deterministic `413 Payload Too Large` on overflow.
+- Add integration coverage with oversized JSON request body against `/users`.
+
+#### Acceptance criteria
+- Oversized request body on `req.json(...)` route returns deterministic `413` response.
+- Runtime does not silently treat truncated oversized payload as valid route input.
+- Existing request-gate and success-path tests remain green.
+
+#### Tracking (live status)
+- [x] Runtime request state tracks body-size limit overflow.
+- [x] `req.json(...)` returns deterministic `413` on oversized request body.
+- [x] Oversized-body runtime E2E integration test added and green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -1895,6 +1916,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime Request JSON Gate for Invalid Payload Handling".
 - Chapter: "M16 Slice: Runtime req.json Content-Type Gate Enforcement".
 - Chapter: "M16 Slice: sec4 run Live HTTP Command-Path Validation".
+- Chapter: "M16 Slice: req.json Request-Size Guard Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
