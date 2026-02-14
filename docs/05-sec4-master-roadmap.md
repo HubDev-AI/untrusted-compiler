@@ -437,6 +437,7 @@ Current strict closure result:
 | `M28-D` | PASS | Naming-lock CI enforces M28 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M28-E` | PASS | Naming-lock CI enforces M28 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M28-F` | PASS | Naming-lock CI enforces M28 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M28-G` | PASS | Naming-lock CI enforces M28 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -543,6 +544,7 @@ Strict closure interpretation:
 - M28 runtime hardening runner enforcement is active (`M28-D`).
 - M28 executed-slice convergence summary enforcement is active (`M28-E`).
 - M28 transition handoff packet enforcement is active (`M28-F`).
+- M28 closure report enforcement is active (`M28-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4566,9 +4568,9 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M27-G`).
 
 ### Next planned slice
-- M28-S7 closure report + closure gate `M28-G`.
+- M28-S1 kickoff brief + closure gate `M28-A`.
 
-## M28 - Kickoff Loop (In Progress)
+## M28 - Kickoff Loop (Complete)
 
 ### Goal
 - Start M28 from deterministic M27 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M27.
@@ -4639,8 +4641,38 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M28 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M28-F`).
 
+### M28-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M28 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M28-A..M28-F` are validated in one canonical closure artifact (`m28Gates[]`).
+- Closure audit includes dedicated `M28-G` gate.
+
+### M28-S7 tracking (live status)
+- [x] M28 closure report script added.
+- [x] M28 closure report contract test added.
+- [x] Book chapter documenting M28 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M28-G`).
+
 ### Next planned slice
-- M28-S7 closure report + closure gate `M28-G`.
+- M29-S1 kickoff brief + closure gate `M29-A`.
+
+## M29 - Runtime-First Stabilization Loop (Planned)
+
+### Goal
+- Start M29 from deterministic M28 closure evidence and shift implementation weight toward runtime de-stubbing and real typed sink behavior while preserving compile-time security gates.
+
+### M29-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M28 closure report + M28 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M28 closure report JSON from `build-m28-closure-report.sh`.
+- Closure audit includes dedicated `M29-A` gate.
+
+### M29-S1 tracking (live status)
+- [ ] M29 kickoff brief script added.
+- [ ] M29 kickoff brief contract test added.
+- [ ] Book chapter documenting M29 kickoff brief added.
+- [ ] Naming-lock CI and closure gate updated (`M29-A`).
+
+### Next planned slice
+- M29-S1 kickoff brief + closure gate `M29-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4732,7 +4764,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M28-S7 closure report from strict closure + M28 handoff packet and wire `M28-G`.
+1. Implement M29-S1 kickoff brief from strict closure + M28 handoff packet and wire `M29-A`.
+2. Start M29 runtime-first de-stub plan for typed sink/runtime intrinsics (db/fs/net/validators/secrets) after `M29-A`.
 
 ---
 

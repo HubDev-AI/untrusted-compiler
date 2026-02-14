@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17/M18/M19/M20/M21/M22/M23/M24/M25/M26).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17/M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28).
 USAGE
 }
 
@@ -242,6 +242,7 @@ bool_has_m28_slice_selector_ci_guard=0
 bool_has_m28_runtime_hardening_runner_ci_guard=0
 bool_has_m28_executed_slice_convergence_summary_ci_guard=0
 bool_has_m28_transition_handoff_packet_ci_guard=0
+bool_has_m28_closure_report_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -1000,6 +1001,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m28_transition_handoff_packet_ci_guard=1
 fi
 
+m28_closure_report_test_script="${repo_root}/scripts/test-build-m28-closure-report.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m28_closure_report_test_script}" ] \
+  && rg -q 'scripts/test-build-m28-closure-report.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m28_closure_report_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -1295,6 +1303,7 @@ emit_check "M28-C" "naming-lock CI enforces M28 next-slice selector" "${bool_has
 emit_check "M28-D" "naming-lock CI enforces M28 runtime hardening runner" "${bool_has_m28_runtime_hardening_runner_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M28-E" "naming-lock CI enforces M28 executed-slice convergence summary" "${bool_has_m28_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M28-F" "naming-lock CI enforces M28 transition handoff packet" "${bool_has_m28_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M28-G" "naming-lock CI enforces M28 closure report" "${bool_has_m28_closure_report_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
