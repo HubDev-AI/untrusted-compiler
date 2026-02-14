@@ -377,6 +377,7 @@ Current strict closure result:
 | `M19-G` | PASS | Naming-lock CI enforces M19 closure report | `.github/workflows/naming-lock.yml` |
 | `M20-A` | PASS | Naming-lock CI enforces M20 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M20-B` | PASS | Naming-lock CI enforces M20 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M20-C` | PASS | Naming-lock CI enforces M20 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -423,6 +424,7 @@ Strict closure interpretation:
 - M19 closure report enforcement is active (`M19-G`).
 - M20 kickoff brief enforcement is active (`M20-A`).
 - M20 priority matrix enforcement is active (`M20-B`).
+- M20 next-slice selector enforcement is active (`M20-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3733,7 +3735,8 @@ M13-S1 go/no-go note:
 - Support markdown and JSON output for operator + automation consumers.
 - Auto-generate M19 closure json when absent but packet is available.
 - Build deterministic M20 priority matrix from kickoff brief.
-- Lock kickoff-brief/matrix contracts in naming-lock CI and closure audit.
+- Select first executable M20 slice from kickoff + matrix inputs.
+- Lock kickoff-brief/matrix/selector contracts in naming-lock CI and closure audit.
 
 ### M20-S1 kickoff acceptance criteria
 - M20 kickoff brief script + contract test exists.
@@ -3757,12 +3760,24 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M20 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M20-B`).
 
+### M20-S3 next-slice selector acceptance criteria
+- M20 selector validates kickoff + matrix contracts and emits one deterministic recommendation.
+- Selector recommendations use `M20-S4-*` IDs for runtime/release/editor/stabilization tracks.
+- Closure audit includes dedicated `M20-C` gate.
+
+### M20-S3 tracking (live status)
+- [x] M20 next-slice selector script added.
+- [x] M20 next-slice selector contract test added.
+- [x] Book chapter documenting M20 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M20-C`).
+
 ### Exit criteria
 - M20 kickoff starts from deterministic evidence (`M19` closure + handoff packet), not ad-hoc operator judgment.
 
 ### Docs/book outputs
 - Chapter: "M20 Kickoff Brief".
 - Chapter: "M20 Priority Matrix".
+- Chapter: "M20 Next-Slice Selector".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3854,7 +3869,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M20-S3 next-slice selector from M20 kickoff + matrix artifacts and wire its closure gate.
+1. Implement M20-S4 first executed M20 slice from selector output and wire its closure gate.
 
 ---
 

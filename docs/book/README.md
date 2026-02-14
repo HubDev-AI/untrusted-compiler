@@ -458,5 +458,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `491-m19-closure-report.md`
 - `492-m20-kickoff-brief.md`
 - `493-m20-priority-matrix.md`
+- `494-m20-next-slice-selector.md`
 
 As milestones progress, chapters will be added and linked from this index.

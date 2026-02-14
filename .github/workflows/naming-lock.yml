@@ -154,6 +154,9 @@ jobs:
       - name: Validate M20 priority matrix
         run: scripts/test-build-m20-priority-matrix.sh
 
+      - name: Validate M20 next-slice selector
+        run: scripts/test-select-m20-next-slice.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
