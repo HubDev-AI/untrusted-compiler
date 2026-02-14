@@ -468,5 +468,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `501-m21-next-slice-selector.md`
 - `502-m21-runtime-hardening-runner.md`
 - `503-m21-executed-slice-convergence-summary.md`
+- `504-m21-transition-handoff-packet.md`
 
 As milestones progress, chapters will be added and linked from this index.

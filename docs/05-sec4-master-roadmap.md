@@ -387,6 +387,7 @@ Current strict closure result:
 | `M21-C` | PASS | Naming-lock CI enforces M21 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M21-D` | PASS | Naming-lock CI enforces M21 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M21-E` | PASS | Naming-lock CI enforces M21 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M21-F` | PASS | Naming-lock CI enforces M21 transition handoff packet | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -443,6 +444,7 @@ Strict closure interpretation:
 - M21 next-slice selector enforcement is active (`M21-C`).
 - M21 runtime hardening runner enforcement is active (`M21-D`).
 - M21 executed-slice convergence summary enforcement is active (`M21-E`).
+- M21 transition handoff packet enforcement is active (`M21-F`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3869,7 +3871,8 @@ M13-S1 go/no-go note:
 - Select first executable M21 slice from kickoff + matrix inputs.
 - Execute first selected runtime slice via dedicated M21 runtime hardening runner.
 - Build executed-slice convergence summary from selector + runtime execution artifacts.
-- Lock kickoff-brief/matrix/selector/runtime/convergence contracts in naming-lock CI and closure audit.
+- Build transition handoff packet from kickoff/matrix/selector/runtime/convergence artifacts.
+- Lock kickoff-brief/matrix/selector/runtime/convergence/transition contracts in naming-lock CI and closure audit.
 
 ### M21-S1 kickoff acceptance criteria
 - M21 kickoff brief script + contract test exists.
@@ -3926,6 +3929,17 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M21 executed-slice convergence summary added.
 - [x] Naming-lock CI and closure gate updated (`M21-E`).
 
+### M21-S6 transition handoff packet acceptance criteria
+- Transition packet script validates kickoff/matrix/selector/runtime/convergence contracts and selector/runtime alignment.
+- Transition packet copies normalized artifacts into deterministic output directory and emits packet manifest summary.
+- Closure audit includes dedicated `M21-F` gate.
+
+### M21-S6 tracking (live status)
+- [x] M21 transition handoff packet script added.
+- [x] M21 transition handoff packet contract test added.
+- [x] Book chapter documenting M21 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M21-F`).
+
 ### Exit criteria
 - M21 kickoff starts from deterministic evidence (`M20` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3935,6 +3949,7 @@ M13-S1 go/no-go note:
 - Chapter: "M21 Next-Slice Selector".
 - Chapter: "M21 Runtime Hardening Runner".
 - Chapter: "M21 Executed-Slice Convergence Summary".
+- Chapter: "M21 Transition Handoff Packet".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4026,7 +4041,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M21-S6 transition handoff packet from kickoff/matrix/selector/runtime/convergence artifacts and wire the next closure gate.
+1. Implement M21-S7 closure report from M21 transition packet + strict closure gates and wire the next closure gate.
 
 ---
 
