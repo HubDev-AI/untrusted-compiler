@@ -77,6 +77,8 @@ Roadmap impact:
   - runtime `405` responses now include deterministic `Allow` header built from matching route path methods.
 - M16-S14 CORS preflight runtime path is now implemented:
   - when `cors.withCors(...)` is active, runtime handles `OPTIONS` preflight with deterministic CORS allow headers and `204 No Content`.
+- M16-S15 security-headers runtime path is now implemented:
+  - when `sec.withSecurityHeaders(...)` is active, runtime injects deterministic security headers on both success and not-found error responses.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2088,6 +2090,31 @@ M13-S1 go/no-go note:
 - [x] Runtime handles `OPTIONS` preflight with deterministic `204` + allow headers.
 - [x] Runtime e2e coverage added for CORS preflight path.
 
+### M16-S15 follow-up slice (security headers runtime injection)
+#### Scope
+- Activate baseline runtime behavior for `sec.withSecurityHeaders(...)` so security headers are emitted in live HTTP responses.
+
+#### Build tasks
+- Extend router runtime state with security-headers enabled flag.
+- Wire `sec4_rt_with_security_headers(...)` to enable header injection for routed responses.
+- Inject deterministic security headers:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+- Add e2e coverage for:
+  - successful response path (`200`),
+  - not-found response path (`404`).
+
+#### Acceptance criteria
+- Security-header middleware invocation changes live runtime HTTP headers.
+- Security headers appear on both success and error routes.
+- Existing runtime integration suites remain green.
+
+#### Tracking (live status)
+- [x] Runtime router state tracks security-header middleware enablement.
+- [x] Security headers injected into success and `404` responses.
+- [x] Runtime e2e coverage added for both success and not-found branches.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2103,6 +2130,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: HTTP Method-Mismatch 405 Dispatch Semantics".
 - Chapter: "M16 Slice: 405 Allow Header Enrichment".
 - Chapter: "M16 Slice: CORS Preflight Runtime Handling".
+- Chapter: "M16 Slice: Security Headers Runtime Injection".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

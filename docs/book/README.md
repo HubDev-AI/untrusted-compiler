@@ -374,5 +374,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `407-m16-http-method-mismatch-405-dispatch-semantics.md`
 - `408-m16-405-allow-header-enrichment.md`
 - `409-m16-cors-preflight-runtime-handling.md`
+- `410-m16-security-headers-runtime-injection.md`
 
 As milestones progress, chapters will be added and linked from this index.

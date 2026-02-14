@@ -32,6 +32,7 @@ typedef struct {
   bool active;
   int64_t handle;
   bool cors_enabled;
+  bool security_headers_enabled;
   size_t route_count;
   sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
 } sec4_rt_router_state;
@@ -487,6 +488,42 @@ static void sec4_rt_collect_allow_methods(
   }
 }
 
+static const char *sec4_rt_security_headers_block(sec4_rt_router_state *router) {
+  if (router == NULL || !router->security_headers_enabled) {
+    return NULL;
+  }
+  return
+      "X-Content-Type-Options: nosniff\r\n"
+      "X-Frame-Options: DENY\r\n"
+      "Referrer-Policy: strict-origin-when-cross-origin\r\n";
+}
+
+static const char *sec4_rt_merge_extra_headers(
+    const char *primary,
+    const char *secondary,
+    char *buffer,
+    size_t buffer_size
+) {
+  if ((primary == NULL || primary[0] == '\0') && (secondary == NULL || secondary[0] == '\0')) {
+    return NULL;
+  }
+  if (primary == NULL || primary[0] == '\0') {
+    return secondary;
+  }
+  if (secondary == NULL || secondary[0] == '\0') {
+    return primary;
+  }
+  if (buffer == NULL || buffer_size == 0) {
+    return primary;
+  }
+
+  int written = snprintf(buffer, buffer_size, "%s%s", primary, secondary);
+  if (written <= 0 || (size_t) written >= buffer_size) {
+    return primary;
+  }
+  return buffer;
+}
+
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
   const char *raw = getenv(name);
   if (raw == NULL || raw[0] == '\0') {
@@ -516,6 +553,8 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
+  const char *security_headers = sec4_rt_security_headers_block(router);
+  char merged_headers[320];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
@@ -548,12 +587,13 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   char path[SEC4_RT_MAX_PATH_BYTES] = {0};
   if (sscanf(request, "%7s %255s", method, path) != 2) {
     const char *body = "bad request";
-    (void) sec4_rt_send_response(
+    (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         400,
         "text/plain; charset=utf-8",
         body,
-        strlen(body)
+        strlen(body),
+        security_headers
     );
     return;
   }
@@ -606,13 +646,19 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
         "Access-Control-Allow-Headers: content-type, authorization\r\n"
         "Access-Control-Max-Age: 600\r\n";
+    const char *final_headers = sec4_rt_merge_extra_headers(
+        extra_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
     (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         204,
         "text/plain; charset=utf-8",
         "",
         0,
-        extra_headers
+        final_headers
     );
     return;
   }
@@ -638,14 +684,20 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       const char *body = "method not allowed";
       char allow_methods[64];
       char extra_headers[96];
-      const char *extra = NULL;
+      const char *allow_headers = NULL;
       sec4_rt_collect_allow_methods(router, path, allow_methods, sizeof(allow_methods));
       if (allow_methods[0] != '\0') {
         int extra_len = snprintf(extra_headers, sizeof(extra_headers), "Allow: %s\r\n", allow_methods);
         if (extra_len > 0 && (size_t) extra_len < sizeof(extra_headers)) {
-          extra = extra_headers;
+          allow_headers = extra_headers;
         }
       }
+      const char *final_headers = sec4_rt_merge_extra_headers(
+          allow_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
 
       (void) sec4_rt_send_response_with_extra_headers(
           socket_fd,
@@ -653,18 +705,19 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
           "text/plain; charset=utf-8",
           body,
           strlen(body),
-          extra
+          final_headers
       );
       return;
     }
 
     const char *body = "not found";
-    (void) sec4_rt_send_response(
+    (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         404,
         "text/plain; charset=utf-8",
         body,
-        strlen(body)
+        strlen(body),
+        security_headers
     );
     return;
   }
@@ -674,16 +727,24 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   if (!g_sec4_rt_response.active) {
     const char *body = "";
-    (void) sec4_rt_send_response(socket_fd, 204, "text/plain; charset=utf-8", body, 0);
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        204,
+        "text/plain; charset=utf-8",
+        body,
+        0,
+        security_headers
+    );
     return;
   }
 
-  (void) sec4_rt_send_response(
+  (void) sec4_rt_send_response_with_extra_headers(
       socket_fd,
       g_sec4_rt_response.status,
       g_sec4_rt_response.content_type,
       g_sec4_rt_response.body,
-      g_sec4_rt_response.body_len
+      g_sec4_rt_response.body_len,
+      security_headers
   );
 }
 
@@ -1093,6 +1154,10 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
 
 int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
   (void) cfg;
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot != NULL) {
+    slot->security_headers_enabled = true;
+  }
   return router;
 }
 
