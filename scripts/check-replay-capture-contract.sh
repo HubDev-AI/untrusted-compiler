@@ -56,6 +56,27 @@ jq -e '
   and (.request.method | type == "string" and length > 0)
   and (.request.path | type == "string" and length > 0)
   and (
+    if (.request | has("url")) then
+      (.request.url | type == "string" and length > 0)
+    else
+      true
+    end
+  )
+  and (
+    if (.request | has("scheme")) then
+      (.request.scheme | type == "string" and length > 0)
+    else
+      true
+    end
+  )
+  and (
+    if (.request | has("host")) then
+      (.request.host | type == "string" and length > 0)
+    else
+      true
+    end
+  )
+  and (
     ((.request.url? | type) == "string" and (.request.url | length > 0))
     or (
       (.request.scheme | type == "string" and length > 0)
