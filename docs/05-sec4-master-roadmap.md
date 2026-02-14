@@ -73,6 +73,8 @@ Roadmap impact:
   - live HTTP runtime path for `res.okMeta(...)` is now validated with deterministic envelope+meta assertions.
 - M16-S12 HTTP method-mismatch semantics are now implemented:
   - runtime now returns deterministic `405 Method Not Allowed` when path matches but method does not.
+- M16-S13 `405` Allow-header enrichment is now implemented:
+  - runtime `405` responses now include deterministic `Allow` header built from matching route path methods.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2041,6 +2043,25 @@ M13-S1 go/no-go note:
 - [x] `405 Method Not Allowed` status mapping emitted by runtime.
 - [x] Runtime e2e coverage added for method-mismatch branch.
 
+### M16-S13 follow-up slice (`405` Allow-header enrichment)
+#### Scope
+- Improve `405` runtime response usefulness by emitting a deterministic `Allow` header listing methods registered for the matched path.
+
+#### Build tasks
+- Extend runtime response writer to accept optional extra headers.
+- Collect route methods for matched path and synthesize `Allow: <methods>` on method-mismatch branch.
+- Extend `405` runtime e2e test assertions to validate `Allow` header.
+
+#### Acceptance criteria
+- `405` responses include `Allow` header when path exists.
+- Existing trace/content-type/dispatch behavior remains intact.
+- Runtime e2e suite remains green.
+
+#### Tracking (live status)
+- [x] Runtime response writer supports optional extra headers.
+- [x] Method-mismatch branch emits deterministic `Allow` header.
+- [x] Runtime 405 e2e assertion updated for `Allow` header.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2054,6 +2075,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime Standard Success Envelope Alignment".
 - Chapter: "M16 Slice: res.okMeta Runtime Envelope Coverage".
 - Chapter: "M16 Slice: HTTP Method-Mismatch 405 Dispatch Semantics".
+- Chapter: "M16 Slice: 405 Allow Header Enrichment".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

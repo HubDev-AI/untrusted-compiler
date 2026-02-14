@@ -5902,6 +5902,10 @@ fn main() effects {{ net }} -> Int {{
         "response should include deterministic runtime trace header"
     );
     assert!(
+        response.contains("Allow: POST"),
+        "response should include Allow header for method mismatch route"
+    );
+    assert!(
         response.contains("\r\n\r\nmethod not allowed"),
         "response should include method-not-allowed body"
     );

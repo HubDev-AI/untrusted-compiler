@@ -386,18 +386,23 @@ static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size) {
   return 0;
 }
 
-static int sec4_rt_send_response(
+static int sec4_rt_send_response_with_extra_headers(
     int socket_fd,
     int64_t status,
     const char *content_type,
     const char *body,
-    size_t body_len
+    size_t body_len,
+    const char *extra_headers
 ) {
   if (content_type == NULL || content_type[0] == '\0') {
     content_type = "text/plain; charset=utf-8";
   }
 
-  char header[512];
+  if (extra_headers == NULL) {
+    extra_headers = "";
+  }
+
+  char header[640];
   int header_len = snprintf(
       header,
       sizeof(header),
@@ -405,13 +410,15 @@ static int sec4_rt_send_response(
       "Content-Type: %s\r\n"
       "Content-Length: %zu\r\n"
       "X-Trace-Id: %s\r\n"
+      "%s"
       "Connection: close\r\n"
       "\r\n",
       (long long) status,
       sec4_rt_status_text(status),
       content_type,
       body_len,
-      sec4_rt_current_trace_id()
+      sec4_rt_current_trace_id(),
+      extra_headers
   );
   if (header_len < 0 || (size_t) header_len >= sizeof(header)) {
     return -1;
@@ -424,6 +431,59 @@ static int sec4_rt_send_response(
     return -1;
   }
   return 0;
+}
+
+static int sec4_rt_send_response(
+    int socket_fd,
+    int64_t status,
+    const char *content_type,
+    const char *body,
+    size_t body_len
+) {
+  return sec4_rt_send_response_with_extra_headers(
+      socket_fd,
+      status,
+      content_type,
+      body,
+      body_len,
+      NULL
+  );
+}
+
+static void sec4_rt_collect_allow_methods(
+    sec4_rt_router_state *router,
+    const char *path,
+    char *allow,
+    size_t allow_size
+) {
+  if (allow_size == 0) {
+    return;
+  }
+  allow[0] = '\0';
+
+  size_t used = 0;
+  for (size_t i = 0; i < router->route_count; i++) {
+    sec4_rt_route *candidate = &router->routes[i];
+    if (strcmp(candidate->path, path) != 0) {
+      continue;
+    }
+    if (strstr(allow, candidate->method) != NULL) {
+      continue;
+    }
+
+    const char *prefix = used == 0 ? "" : ", ";
+    int written = snprintf(
+        allow + used,
+        allow_size - used,
+        "%s%s",
+        prefix,
+        candidate->method
+    );
+    if (written <= 0 || (size_t) written >= allow_size - used) {
+      break;
+    }
+    used += (size_t) written;
+  }
 }
 
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
@@ -558,12 +618,24 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   if (match == NULL) {
     if (method_mismatch != NULL) {
       const char *body = "method not allowed";
-      (void) sec4_rt_send_response(
+      char allow_methods[64];
+      char extra_headers[96];
+      const char *extra = NULL;
+      sec4_rt_collect_allow_methods(router, path, allow_methods, sizeof(allow_methods));
+      if (allow_methods[0] != '\0') {
+        int extra_len = snprintf(extra_headers, sizeof(extra_headers), "Allow: %s\r\n", allow_methods);
+        if (extra_len > 0 && (size_t) extra_len < sizeof(extra_headers)) {
+          extra = extra_headers;
+        }
+      }
+
+      (void) sec4_rt_send_response_with_extra_headers(
           socket_fd,
           405,
           "text/plain; charset=utf-8",
           body,
-          strlen(body)
+          strlen(body),
+          extra
       );
       return;
     }
