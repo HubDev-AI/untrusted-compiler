@@ -86,3 +86,18 @@ benchmark-suite/scripts/update_trend_note_from_ci.sh \
 
 - Overall absolute guard status: n/a
 - Overall baseline guard status: n/a
+
+## Trend Entry (2026-02-14)
+
+- Source matrix: `benchmark-suite/results/summaries/compare-matrix.json`
+- Endpoints: `ping,decode`
+- Run mode: non-constant-rate
+- Generators: wrk
+
+| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |
+| --- | --- | ---: | ---: | --- | --- |
+| ping | go | 1.75 | n/a | n/a | n/a |
+| decode | go | 2.04 | n/a | n/a | n/a |
+
+- Overall absolute guard status: n/a
+- Overall baseline guard status: n/a

@@ -138,6 +138,10 @@ work_project="${tmp_dir}/hello-api"
 cp -R "${source_project}" "${work_project}"
 
 port="$(pick_free_port)"
+run_flags="--port,--oneshot,--serve-timeout-ms"
+if [ -n "${max_body_bytes}" ]; then
+  run_flags="${run_flags},--max-body-bytes"
+fi
 
 cat > "${tmp_dir}/run-metadata.txt" <<META
 sourceProject=${source_project}
@@ -146,7 +150,7 @@ port=${port}
 oneshot=true
 serveTimeoutMs=${serve_timeout_ms}
 maxBodyBytes=${max_body_bytes:-unset}
-runFlags=--port,--oneshot,--serve-timeout-ms
+runFlags=${run_flags}
 META
 
 request_once() {

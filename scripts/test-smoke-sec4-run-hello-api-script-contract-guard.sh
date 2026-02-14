@@ -133,8 +133,8 @@ runflags_fixture="${tmp_dir}/smoke-meta-runflags.sh"
 cp "${source_script}" "${runflags_fixture}"
 chmod +x "${runflags_fixture}"
 
-missing_meta_token='runFlags=--port,--oneshot,--serve-timeout-ms'
-perl -0pi -e 's/runFlags=--port,--oneshot,--serve-timeout-ms/runFlags=removed-flags/' "${runflags_fixture}"
+missing_meta_token='runFlags=${run_flags}'
+perl -0pi -e 's/runFlags=\$\{run_flags\}/runFlags=removed-flags/' "${runflags_fixture}"
 
 if "${contract_script}" --script "${runflags_fixture}" >"${tmp_dir}/meta-guard.log" 2>&1; then
   echo "expected smoke script contract to fail when metadata token is removed" >&2

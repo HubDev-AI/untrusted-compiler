@@ -210,8 +210,19 @@ if [ "${max_body_bytes}" != "unset" ]; then
   fi
 fi
 
-if ! rg -Fq 'runFlags=--port,--oneshot,--serve-timeout-ms' "${artifacts_dir}/run-metadata.txt"; then
+if ! rg -q '^runFlags=.+$' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing deterministic runFlags field" >&2
+  exit 1
+fi
+
+run_flags_value="$(sed -n 's/^runFlags=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+expected_run_flags="--port,--oneshot,--serve-timeout-ms"
+if [ "${max_body_bytes}" != "unset" ]; then
+  expected_run_flags="${expected_run_flags},--max-body-bytes"
+fi
+
+if [ "${run_flags_value}" != "${expected_run_flags}" ]; then
+  echo "run-metadata.txt runFlags field does not match expected runtime flag shape" >&2
   exit 1
 fi
 

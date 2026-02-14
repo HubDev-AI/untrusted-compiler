@@ -38,7 +38,7 @@ Roadmap impact:
 
 ## Current Status (2026-02-14)
 
-- Milestone progression reached M14 bootstrap slices with active enforcement.
+- Milestone progression reached M16 follow-up slices with active enforcement.
 - M9 release hardening gate is operational both locally and in CI:
   - `scripts/release-alpha-gate.sh`
   - `.github/workflows/alpha-release-gate.yml`
@@ -183,6 +183,10 @@ Roadmap impact:
 - M16-S53 runtime-smoke checker regression coverage now includes invalid-shape maxBody metadata:
   - dedicated fixture asserts failure for `maxBodyBytes=abc`.
   - deterministic invalid-shape diagnostic is contract-locked.
+- M16-S54 runtime-smoke metadata now enforces shape-aware `runFlags` for optional max-body wiring:
+  - smoke script emits `runFlags` with `--max-body-bytes` only when `maxBodyBytes` is set.
+  - checker enforces deterministic `runFlags` shape against the max-body metadata branch.
+  - regression coverage now includes both unset/set max-body `runFlags` shape-drift fixtures.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -1625,6 +1629,7 @@ M13-S1 go/no-go note:
 - [x] Trend-note one-command updater added for fetch+import operator flow.
 - [x] First live trend-run endpoint metrics captured and appended to trend note.
 - [x] Decode threshold tuning rubric documented with deterministic decision rules.
+- [x] Trend-note chapter refreshed from current compare-matrix via local render+import fallback when remote CI artifact fetch is unavailable.
 
 ### Exit criteria
 - Promotion flow is documented and executable without manual interpretation gaps.
@@ -3124,6 +3129,33 @@ M13-S1 go/no-go note:
 - [x] Regression suite now asserts deterministic invalid-shape diagnostic.
 - [x] Checker regression suite remains green after invalid-shape coverage expansion.
 
+### M16-S54 follow-up slice (runtime-smoke shape-aware runFlags metadata contract)
+#### Scope
+- Make `runFlags` metadata branch-aware so optional `--max-body-bytes` appears only when `maxBodyBytes` is configured, and enforce that shape in checker contracts.
+
+#### Build tasks
+- Update `scripts/smoke-sec4-run-hello-api.sh` to emit `runFlags` from a computed variable:
+  - baseline: `--port,--oneshot,--serve-timeout-ms`
+  - append `,--max-body-bytes` when `--max-body-bytes` is set.
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to validate:
+  - `runFlags` field exists,
+  - value equals expected shape for the current `maxBodyBytes` branch (`unset` vs numeric).
+- Expand checker regression fixtures for both branch-shape drifts:
+  - `maxBodyBytes=unset` with extra max-body flag in `runFlags` (must fail),
+  - `maxBodyBytes=<N>` without max-body flag in `runFlags` (must fail).
+- Keep existing max-body log-correlation fixtures aligned with new shape contract.
+
+#### Acceptance criteria
+- Smoke metadata emits deterministic `runFlags` shape matching optional max-body usage.
+- Checker fails deterministically on both branch-shape drift fixtures with a stable diagnostic.
+- Existing smoke/checker contract suites remain green.
+
+#### Tracking (live status)
+- [x] Smoke script now emits computed shape-aware `runFlags` metadata.
+- [x] Checker now enforces deterministic `runFlags` shape by max-body metadata branch.
+- [x] Regression matrix now covers unset/set max-body runFlags-shape drift fixtures.
+- [x] Existing contract and smoke suites remain green after shape-aware contract hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3179,6 +3211,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Operator Smoke max-body Override and maxBody Metadata/Log Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Users-Branch max-body Correlation Regression Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Invalid-Shape maxBody Metadata Regression Coverage".
+- Chapter: "M16 Slice: Runtime-Smoke Shape-Aware runFlags Metadata Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3270,7 +3303,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add first live trend-run endpoint metrics + threshold decision updates to `docs/book/322-m13-first-trend-run-results-note.md` using `benchmark-suite/scripts/update_trend_note_from_ci.sh`.
+1. Extend runtime-smoke CI coverage with a second smoke invocation that sets `--max-body-bytes`, and validate artifact contracts for both metadata-shape branches.
 
 ---
 

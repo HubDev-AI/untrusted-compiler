@@ -351,6 +351,56 @@ if ! rg -Fq 'run-metadata.txt maxBodyBytes must be unset or positive integer' "$
   exit 1
 fi
 
+runflags_unset_shape_bad_dir="${tmp_dir}/bad-runflags-unset-shape"
+cp -R "${ok_dir}" "${runflags_unset_shape_bad_dir}"
+cat > "${runflags_unset_shape_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=unset
+runFlags=--port,--oneshot,--serve-timeout-ms,--max-body-bytes
+TXT
+
+if "${checker}" --artifacts-dir "${runflags_unset_shape_bad_dir}" >"${tmp_dir}/runflags-unset-shape.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on unset max-body runFlags shape drift" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt runFlags field does not match expected runtime flag shape' "${tmp_dir}/runflags-unset-shape.log"; then
+  echo "expected runFlags-shape diagnostic for unset maxBody metadata" >&2
+  exit 1
+fi
+
+runflags_set_shape_bad_dir="${tmp_dir}/bad-runflags-set-shape"
+cp -R "${ok_dir}" "${runflags_set_shape_bad_dir}"
+cat > "${runflags_set_shape_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=2048
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+cat > "${runflags_set_shape_bad_dir}/health.run.log" <<'TXT'
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000 --max-body-bytes 2048`
+TXT
+cat > "${runflags_set_shape_bad_dir}/users.run.log" <<'TXT'
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000 --max-body-bytes 2048`
+TXT
+
+if "${checker}" --artifacts-dir "${runflags_set_shape_bad_dir}" >"${tmp_dir}/runflags-set-shape.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on set max-body runFlags shape drift" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt runFlags field does not match expected runtime flag shape' "${tmp_dir}/runflags-set-shape.log"; then
+  echo "expected runFlags-shape diagnostic for set maxBody metadata" >&2
+  exit 1
+fi
+
 max_body_log_mismatch_dir="${tmp_dir}/bad-max-body-log-mismatch"
 cp -R "${ok_dir}" "${max_body_log_mismatch_dir}"
 cat > "${max_body_log_mismatch_dir}/run-metadata.txt" <<'TXT'
@@ -360,7 +410,7 @@ port=8080
 oneshot=true
 serveTimeoutMs=12000
 maxBodyBytes=2048
-runFlags=--port,--oneshot,--serve-timeout-ms
+runFlags=--port,--oneshot,--serve-timeout-ms,--max-body-bytes
 TXT
 
 if "${checker}" --artifacts-dir "${max_body_log_mismatch_dir}" >"${tmp_dir}/max-body-log-mismatch.log" 2>&1; then
@@ -382,7 +432,7 @@ port=8080
 oneshot=true
 serveTimeoutMs=12000
 maxBodyBytes=2048
-runFlags=--port,--oneshot,--serve-timeout-ms
+runFlags=--port,--oneshot,--serve-timeout-ms,--max-body-bytes
 TXT
 cat > "${max_body_users_log_mismatch_dir}/health.run.log" <<'TXT'
 Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000 --max-body-bytes 2048`

@@ -56,12 +56,14 @@ required_tokens=(
   "--oneshot"
   '--serve-timeout-ms "${serve_timeout_ms}"'
   '--max-body-bytes "${max_body_bytes}"'
+  'run_flags="--port,--oneshot,--serve-timeout-ms"'
+  'run_flags="${run_flags},--max-body-bytes"'
   "oneshot=true"
   'serveTimeoutMs=${serve_timeout_ms}'
   'maxBodyBytes=${max_body_bytes:-unset}'
   'sourceProject=${source_project}'
   'workProject=${work_project}'
-  "runFlags=--port,--oneshot,--serve-timeout-ms"
+  'runFlags=${run_flags}'
   "GET"
   "/health"
   "POST"
