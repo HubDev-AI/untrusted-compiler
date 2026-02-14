@@ -381,5 +381,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `414-m16-env-configurable-runtime-request-body-cap.md`
 - `415-m15-replay-mock-execution-trace-and-count-contract.md`
 - `416-m15-replay-execution-contract-guard-hardening.md`
+- `417-m15-replay-execution-closure-gate-integration.md`
 
 As milestones progress, chapters will be added and linked from this index.

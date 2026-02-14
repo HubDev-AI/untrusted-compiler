@@ -43,10 +43,10 @@ Roadmap impact:
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
-- M15-S1a replay mock execution contract is now implemented:
-  - `sec4 replay --effects mock` now emits deterministic executed-stub counts/traces for net/db/fs in both text and JSON output modes.
-- M15-S1b replay execution contract guards are now implemented:
-  - replay JSON contract scripts now lock `mockExecutionCounts` and `mockExecutionTraces` presence, including guard-negative cases.
+- M15-S1 replay runtime stubbing bootstrap is now implemented:
+  - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
+  - replay JSON contract scripts lock execution fields and missing-key guard cases,
+  - closure audit now tracks replay execution-contract enforcement via `M15-A`.
 - M16-S1 live HTTP runtime bootstrap is now implemented:
   - runtime router + route registration + socket serve loop are active in `runtime/c/sec4_runtime.c`,
   - `res.text` now materializes real HTTP response payloads for active request handlers,
@@ -127,6 +127,7 @@ Current strict closure result:
 | `M14-B` | PASS | Naming-lock CI enforces replay capture compatibility test | `.github/workflows/naming-lock.yml` |
 | `M14-C` | PASS | Naming-lock CI enforces replay stub registry contract test | `.github/workflows/naming-lock.yml` |
 | `M14-D` | PASS | Naming-lock CI enforces replay CLI json contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -136,6 +137,7 @@ Strict closure interpretation:
 - M14 replay compatibility enforcement is active (`M14-B`).
 - M14 replay stub-registry bootstrap enforcement is active (`M14-C`).
 - M14 replay CLI json contract enforcement is active (`M14-D`).
+- M15 replay execution contract guard enforcement is active (`M15-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -1728,13 +1730,13 @@ M13-S1 go/no-go note:
 - CI guards fail deterministically if runtime replay execution contracts are removed or drift.
 
 ### M15-S1 tracking (live status)
-- [ ] Scope locked and documented.
-- [ ] Runtime net stub materialization wired in replay `mock` path.
-- [ ] Runtime DB stub materialization wired in replay `mock` path.
-- [ ] Runtime FS stub materialization wired in replay `mock` path.
+- [x] Scope locked and documented.
+- [x] Runtime net stub materialization wired in replay `mock` path.
+- [x] Runtime DB stub materialization wired in replay `mock` path.
+- [x] Runtime FS stub materialization wired in replay `mock` path.
 - [x] Replay runtime execution JSON/text contracts defined and tested.
 - [x] Runtime replay guard scripts added and wired into naming-lock CI.
-- [ ] Closure-audit checks expanded with M15 runtime replay enforcement gates.
+- [x] Closure-audit checks expanded with M15 runtime replay enforcement gates.
 
 ### M15-S1a follow-up slice (mock execution trace/count contract)
 #### Scope

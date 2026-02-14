@@ -16,6 +16,20 @@ chmod +x "$tmp/scripts/release-alpha-gate.sh"
 touch "$tmp/scripts/verify-release-promotion-inputs.sh"
 touch "$tmp/scripts/generate-release-publish-manifest.sh"
 touch "$tmp/scripts/verify-release-publish-manifest.sh"
+cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo '"mockExecutionCounts"'
+echo '"mockExecutionTraces"'
+SH
+chmod +x "$tmp/scripts/test-replay-cli-json-contract.sh"
+cat > "$tmp/scripts/test-replay-cli-json-contract-guard.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "expected replay json contract failure when mockExecutionCounts key is missing"
+echo "expected replay json contract failure when mockExecutionTraces key is missing"
+SH
+chmod +x "$tmp/scripts/test-replay-cli-json-contract-guard.sh"
 cat > "$tmp/.github/workflows/alpha-release-gate.yml" <<'YAML'
 name: Alpha Release Gate
 on:
@@ -235,7 +249,8 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M10-A","M10-B","M10-C","M10-D",
     "M11-A","M12-A",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
-    "M14-A","M14-B","M14-C","M14-D"
+    "M14-A","M14-B","M14-C","M14-D",
+    "M15-A"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -283,6 +298,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-C") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M14-D") != null' >/dev/null; then
   echo "expected json closure output to include M14-D gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M15-A") != null' >/dev/null; then
+  echo "expected json closure output to include M15-A gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then

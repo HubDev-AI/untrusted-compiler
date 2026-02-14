@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Added a new closure gate with concatenated absolute evidence paths (`pathA + pathB`), which bypassed repo-relative rendering and broke closure output invariants. | For closure evidence strings, use repo-relative literals or a single renderable path; avoid concatenating raw absolute paths in one evidence field. |
 | 2026-02-14 | self | Ran `rustfmt` on whole large Rust files during a focused replay slice, creating broad formatting churn outside the new assertions/logic. | For focused slices, avoid whole-file formatting on large test files; keep edits minimal and only format touched blocks when necessary. |
 | 2026-02-14 | self | New HTTP runtime E2E integration test passed in isolation but flaked in full `json_output` suite because oneshot timeout/connect window was too tight under parallel load. | For socket E2E tests, use wider retry windows + longer runtime timeout and check child early-exit in the connect loop before declaring connection failure. |
 | 2026-02-14 | self | Patched JSON fixture incrementally and accidentally introduced duplicate object keys (`\"db\"`) in `captures/sample-replay-stubs.json`. | After editing JSON fixtures with patches, run `jq . <file>` immediately to catch duplicate-key/shape issues before running broader tests. |
