@@ -431,6 +431,7 @@ Current strict closure result:
 | `M27-E` | PASS | Naming-lock CI enforces M27 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M27-F` | PASS | Naming-lock CI enforces M27 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M27-G` | PASS | Naming-lock CI enforces M27 closure report | `.github/workflows/naming-lock.yml` |
+| `M28-A` | PASS | Naming-lock CI enforces M28 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -531,6 +532,7 @@ Strict closure interpretation:
 - M27 executed-slice convergence summary enforcement is active (`M27-E`).
 - M27 transition handoff packet enforcement is active (`M27-F`).
 - M27 closure report enforcement is active (`M27-G`).
+- M28 kickoff brief enforcement is active (`M28-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4554,7 +4556,26 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M27-G`).
 
 ### Next planned slice
-- M28-S1 kickoff brief + closure gate `M28-A`.
+- M28-S2 priority matrix + closure gate `M28-B`.
+
+## M28 - Kickoff Loop (In Progress)
+
+### Goal
+- Start M28 from deterministic M27 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M27.
+
+### M28-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M27 closure report + M27 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M27 closure report JSON from `build-m27-closure-report.sh`.
+- Closure audit includes dedicated `M28-A` gate.
+
+### M28-S1 tracking (live status)
+- [x] M28 kickoff brief script added.
+- [x] M28 kickoff brief contract test added.
+- [x] Book chapter documenting M28 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M28-A`).
+
+### Next planned slice
+- M28-S2 priority matrix + closure gate `M28-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4646,7 +4667,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M28-S1 kickoff brief from M27 closure + packet artifacts and wire `M28-A`.
+1. Implement M28-S2 priority matrix from M28 kickoff brief and wire `M28-B`.
 
 ---
 
