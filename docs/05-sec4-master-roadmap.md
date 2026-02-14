@@ -405,6 +405,7 @@ Current strict closure result:
 | `M23-G` | PASS | Naming-lock CI enforces M23 closure report | `.github/workflows/naming-lock.yml` |
 | `M24-A` | PASS | Naming-lock CI enforces M24 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M24-B` | PASS | Naming-lock CI enforces M24 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M24-C` | PASS | Naming-lock CI enforces M24 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -479,6 +480,7 @@ Strict closure interpretation:
 - M23 closure report enforcement is active (`M23-G`).
 - M24 kickoff brief enforcement is active (`M24-A`).
 - M24 priority matrix enforcement is active (`M24-B`).
+- M24 next-slice selector enforcement is active (`M24-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4162,7 +4164,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M24-S2 priority matrix + closure gate `M24-B`.
+- M24-S4 runtime hardening runner + closure gate `M24-D`.
 
 ## M24 - Kickoff Loop (In Progress)
 
@@ -4191,8 +4193,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M24 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M24-B`).
 
+### M24-S3 next-slice selector acceptance criteria
+- Selector consumes M24 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M24-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M24-C` gate.
+
+### M24-S3 tracking (live status)
+- [x] M24 next-slice selector script added.
+- [x] M24 next-slice selector contract test added.
+- [x] Book chapter documenting M24 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M24-C`).
+
 ### Next planned slice
-- M24-S3 next-slice selector + closure gate `M24-C`.
+- M24-S4 runtime hardening runner + closure gate `M24-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4284,7 +4297,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M24-S3 next-slice selector from M24 kickoff + M24 priority matrix and wire `M24-C`.
+1. Implement M24-S4 runtime hardening runner from M24 selector output and wire `M24-D`.
 
 ---
 
