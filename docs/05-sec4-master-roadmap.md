@@ -51,6 +51,7 @@ Roadmap impact:
 - M13 operational confidence closure gates are green.
 - M13 trend-note update flow now supports local compare-matrix fallback:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
+- M17 kickoff planning scope is now defined for post-M16 end-to-end server packaging and operator handoff.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -3307,6 +3308,46 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Aggregated Branch Artifact Index".
 - Chapter: "M16 Slice: Runtime-Smoke Single-Pass Bundle Checker Contract".
 
+## M17 - End-to-End Server Packaging and Operator Handoff
+### Trigger condition
+- Start after M16 closure gates remain stable across at least one full CI cycle with dual-branch runtime-smoke coverage.
+
+### Scope decision (M17 kickoff)
+- Primary scope: package the working runtime/server flow into a clear operator handoff track with deterministic bootstrap and verification commands.
+- Included tracks:
+  - one-command service bootstrap profile definitions,
+  - operator smoke profile matrix (`default`, `max-body`, timeout override),
+  - handoff checklist for local + CI verification and artifact inspection.
+- Deferred:
+  - broader productization/release channel automation beyond alpha hardening,
+  - non-essential runtime feature expansion unrelated to operator bootstrap reliability.
+
+### Build tasks
+- Define canonical operator bootstrap commands and expected outputs for:
+  - `sec4 run` oneshot profile,
+  - dual-branch runtime-smoke bundle profile,
+  - trend-note local fallback update profile.
+- Add a deterministic operator handoff checklist artifact (docs + script references).
+- Align docs/book quickstart paths with current runtime-smoke bundle workflow contracts.
+- Add a small readiness script or checklist verifier that confirms all required scripts/workflows exist for handoff.
+
+### M17-S1 kickoff acceptance criteria
+- M17 kickoff scope and first-slice contract are documented in roadmap + book chapter.
+- Operator handoff checklist includes exact commands and expected artifact outputs.
+- No existing closure gates regress while adding planning artifacts.
+
+### M17-S1 tracking (live status)
+- [x] Kickoff scope defined in roadmap.
+- [x] Kickoff chapter stub added to docs/book.
+
+### Exit criteria
+- Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
+- Handoff checklist is aligned with current closure gates and CI contracts.
+- M17 kickoff artifacts remain naming-lock and closure-gate compatible.
+
+### Docs/book outputs
+- Chapter: "M17 Kickoff: End-to-End Server Packaging and Handoff Scope".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -3397,7 +3438,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Start first post-M16 planning slice: define M17 kickoff scope for end-to-end server packaging (one command bootstrap, smoke profile matrix, operator handoff checklist).
+1. Implement M17-S1 operator handoff checklist chapter with exact command matrix and expected runtime-smoke/trend artifacts.
 
 ---
 
