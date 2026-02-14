@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Added M21 closure-report files and passed local script tests before wiring the new closure gate end-to-end (`M21-G`) into naming-lock + closure-audit fixtures. | For milestone closure slices, complete gate wiring first: naming-lock step, `check-milestone-closure` bool/emit, fixture gate list, and negative-case removal checks, then run the full closure harness. |
 | 2026-02-14 | self | Treated `scripts/test-check-milestone-closure.sh` as stuck because it produced no output for long intervals in non-tty mode. | Assume closure harness runs long by design (many negative fixtures); when diagnosing, run once with `bash -x` or check process tree before classifying as a hang. |
 | 2026-02-14 | self | Reused a minimal transition-packet fixture for M20 kickoff auto-generation; `build-m19-closure-report.sh` required additional summary keys (`kickoffPrimaryFocus`, `runtimeStatus`), causing an unexpected contract failure in the test. | When a script auto-calls downstream contract validators, build fixture JSON to satisfy the strictest downstream contract, not only the immediate caller contract. |
 | 2026-02-14 | self | Generated an auto-derived artifact into `output_dir` before ensuring the directory existed, causing immediate `No such file or directory` on first transition-packet test run. | Create packet output directories before any derived artifact redirection that targets paths under that directory. |

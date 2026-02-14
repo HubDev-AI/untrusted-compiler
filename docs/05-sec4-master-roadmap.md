@@ -388,6 +388,7 @@ Current strict closure result:
 | `M21-D` | PASS | Naming-lock CI enforces M21 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M21-E` | PASS | Naming-lock CI enforces M21 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M21-F` | PASS | Naming-lock CI enforces M21 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M21-G` | PASS | Naming-lock CI enforces M21 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -445,6 +446,7 @@ Strict closure interpretation:
 - M21 runtime hardening runner enforcement is active (`M21-D`).
 - M21 executed-slice convergence summary enforcement is active (`M21-E`).
 - M21 transition handoff packet enforcement is active (`M21-F`).
+- M21 closure report enforcement is active (`M21-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3940,6 +3942,17 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M21 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M21-F`).
 
+### M21-S7 closure report acceptance criteria
+- Closure report script validates strict closure gates plus transition packet summary and emits deterministic markdown/json outputs.
+- PASS `nextAction` advances to M22 kickoff; non-pass states remain pending with explicit remediation guidance.
+- Closure audit includes dedicated `M21-G` gate.
+
+### M21-S7 tracking (live status)
+- [x] M21 closure report script added.
+- [x] M21 closure report contract test added.
+- [x] Book chapter documenting M21 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M21-G`).
+
 ### Exit criteria
 - M21 kickoff starts from deterministic evidence (`M20` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3950,6 +3963,7 @@ M13-S1 go/no-go note:
 - Chapter: "M21 Runtime Hardening Runner".
 - Chapter: "M21 Executed-Slice Convergence Summary".
 - Chapter: "M21 Transition Handoff Packet".
+- Chapter: "M21 Closure Report".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4041,7 +4055,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M21-S7 closure report from M21 transition packet + strict closure gates and wire the next closure gate.
+1. Implement M22-S1 kickoff brief from M21 closure report + transition handoff packet and wire `M22-A`.
 
 ---
 
