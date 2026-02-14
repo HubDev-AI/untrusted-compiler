@@ -187,6 +187,9 @@ Roadmap impact:
   - smoke script emits `runFlags` with `--max-body-bytes` only when `maxBodyBytes` is set.
   - checker enforces deterministic `runFlags` shape against the max-body metadata branch.
   - regression coverage now includes both unset/set max-body `runFlags` shape-drift fixtures.
+- M16-S55 runtime-smoke CI now exercises both metadata-shape branches:
+  - workflow runs smoke+checker for default branch and `--max-body-bytes` branch.
+  - workflow contract/guard + closure fixtures now lock both branch invocations.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -3156,6 +3159,30 @@ M13-S1 go/no-go note:
 - [x] Regression matrix now covers unset/set max-body runFlags-shape drift fixtures.
 - [x] Existing contract and smoke suites remain green after shape-aware contract hardening.
 
+### M16-S55 follow-up slice (runtime-smoke workflow dual-branch maxBody coverage)
+#### Scope
+- Ensure CI continuously executes and validates both runtime-smoke metadata branches:
+  - default run (`maxBodyBytes=unset`)
+  - explicit max-body run (`--max-body-bytes 2048`)
+
+#### Build tasks
+- Update `.github/workflows/runtime-smoke.yml` to run:
+  - smoke + checker on `build/runtime-smoke/default`
+  - smoke + checker on `build/runtime-smoke/max-body` with `--max-body-bytes 2048`
+- Update workflow contract + guard scripts to lock both branch commands.
+- Update closure-audit workflow fixture/contract checks to require both branch commands.
+
+#### Acceptance criteria
+- Runtime-smoke workflow contract fails if either branch run/check step is removed.
+- Closure audit remains `PASS` with stricter dual-branch workflow contract.
+- Naming-lock CI and closure fixture tests remain green.
+
+#### Tracking (live status)
+- [x] Runtime-smoke workflow now executes default and max-body smoke/check branches.
+- [x] Workflow contract + guard tests now lock both branch command tokens.
+- [x] Closure audit fixture/contracts now include both branch command tokens.
+- [x] Naming-lock + closure checks remain green with stricter workflow contract.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3212,6 +3239,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Users-Branch max-body Correlation Regression Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Invalid-Shape maxBody Metadata Regression Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Shape-Aware runFlags Metadata Contract Hardening".
+- Chapter: "M16 Slice: Runtime-Smoke Workflow Dual-Branch maxBody Coverage".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3303,7 +3331,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Extend runtime-smoke CI coverage with a second smoke invocation that sets `--max-body-bytes`, and validate artifact contracts for both metadata-shape branches.
+1. Add fallback behavior in `benchmark-suite/scripts/update_trend_note_from_ci.sh` for environments where remote workflow fetch is unavailable (render/import from local compare-matrix).
 
 ---
 

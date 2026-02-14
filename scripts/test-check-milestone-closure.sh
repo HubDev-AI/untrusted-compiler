@@ -242,10 +242,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run sec4 hello-api operator smoke
-        run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke
-      - name: Validate runtime smoke artifacts
-        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke
+      - name: Run sec4 hello-api operator smoke (default)
+        run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default
+      - name: Validate runtime smoke artifacts (default)
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default
+      - name: Run sec4 hello-api operator smoke (max-body)
+        run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
+      - name: Validate runtime smoke artifacts (max-body)
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4

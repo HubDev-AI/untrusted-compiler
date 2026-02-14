@@ -295,8 +295,10 @@ if [ -f "${runtime_smoke_workflow_path}" ] \
   && rg -q -- '- main' "${runtime_smoke_workflow_path}" \
   && rg -q 'runs-on:[[:space:]]*ubuntu-latest' "${runtime_smoke_workflow_path}" \
   && rg -q 'uses:[[:space:]]*actions/checkout@v4' "${runtime_smoke_workflow_path}" \
-  && rg -q 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke' "${runtime_smoke_workflow_path}" \
-  && rg -q 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body' "${runtime_smoke_workflow_path}" \
   && rg -q 'if:[[:space:]]*always\(\)' "${runtime_smoke_workflow_path}" \
   && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${runtime_smoke_workflow_path}" \
   && rg -q 'name:[[:space:]]*runtime-smoke-artifacts' "${runtime_smoke_workflow_path}" \
