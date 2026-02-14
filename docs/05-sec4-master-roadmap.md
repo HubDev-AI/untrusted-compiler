@@ -411,6 +411,7 @@ Current strict closure result:
 | `M24-F` | PASS | Naming-lock CI enforces M24 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M24-G` | PASS | Naming-lock CI enforces M24 closure report | `.github/workflows/naming-lock.yml` |
 | `M25-A` | PASS | Naming-lock CI enforces M25 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M25-B` | PASS | Naming-lock CI enforces M25 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -491,6 +492,7 @@ Strict closure interpretation:
 - M24 transition handoff packet enforcement is active (`M24-F`).
 - M24 closure report enforcement is active (`M24-G`).
 - M25 kickoff brief enforcement is active (`M25-A`).
+- M25 priority matrix enforcement is active (`M25-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4174,7 +4176,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M25-S2 priority matrix + closure gate `M25-B`.
+- M25-S3 next-slice selector + closure gate `M25-C`.
 
 ## M24 - Kickoff Loop (Complete)
 
@@ -4277,8 +4279,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M25 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M25-A`).
 
+### M25-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M25 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M25-B` gate.
+
+### M25-S2 tracking (live status)
+- [x] M25 priority matrix script added.
+- [x] M25 priority matrix contract test added.
+- [x] Book chapter documenting M25 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M25-B`).
+
 ### Next planned slice
-- M25-S2 priority matrix + closure gate `M25-B`.
+- M25-S3 next-slice selector + closure gate `M25-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4370,7 +4383,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M25-S2 priority matrix from M25 kickoff brief artifacts and wire `M25-B`.
+1. Implement M25-S3 next-slice selector from M25 kickoff + priority matrix artifacts and wire `M25-C`.
 
 ---
 

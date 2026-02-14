@@ -256,6 +256,9 @@ jobs:
       - name: Validate M25 kickoff brief
         run: scripts/test-generate-m25-kickoff-brief.sh
 
+      - name: Validate M25 priority matrix
+        run: scripts/test-build-m25-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
