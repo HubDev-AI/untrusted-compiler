@@ -295,6 +295,9 @@ jobs:
       - name: Validate M26 closure report
         run: scripts/test-build-m26-closure-report.sh
 
+      - name: Validate M27 kickoff brief
+        run: scripts/test-generate-m27-kickoff-brief.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

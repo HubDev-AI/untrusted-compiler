@@ -424,6 +424,7 @@ Current strict closure result:
 | `M26-E` | PASS | Naming-lock CI enforces M26 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M26-F` | PASS | Naming-lock CI enforces M26 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M26-G` | PASS | Naming-lock CI enforces M26 closure report | `.github/workflows/naming-lock.yml` |
+| `M27-A` | PASS | Naming-lock CI enforces M27 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -517,6 +518,7 @@ Strict closure interpretation:
 - M26 executed-slice convergence summary enforcement is active (`M26-E`).
 - M26 transition handoff packet enforcement is active (`M26-F`).
 - M26 closure report enforcement is active (`M26-G`).
+- M27 kickoff brief enforcement is active (`M27-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4457,6 +4459,25 @@ M13-S1 go/no-go note:
 ### Next planned slice
 - M27-S1 kickoff brief + closure gate `M27-A`.
 
+## M27 - Kickoff Loop (In Progress)
+
+### Goal
+- Start M27 from deterministic M26 closure evidence, then continue the same gated slice progression (`S1..S7`) used for M18-M26.
+
+### M27-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M26 closure report + M26 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M26 closure report JSON from `build-m26-closure-report.sh`.
+- Closure audit includes dedicated `M27-A` gate.
+
+### M27-S1 tracking (live status)
+- [x] M27 kickoff brief script added.
+- [x] M27 kickoff brief contract test added.
+- [x] Book chapter documenting M27 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M27-A`).
+
+### Next planned slice
+- M27-S2 priority matrix + closure gate `M27-B`.
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -4547,7 +4568,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S1 kickoff brief from M26 closure report + M26 transition packet artifacts and wire `M27-A`.
+1. Implement M27-S2 priority matrix from M27 kickoff output and wire `M27-B`.
 
 ---
 
