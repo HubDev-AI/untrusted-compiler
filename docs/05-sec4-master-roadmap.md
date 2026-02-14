@@ -406,6 +406,7 @@ Current strict closure result:
 | `M24-A` | PASS | Naming-lock CI enforces M24 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M24-B` | PASS | Naming-lock CI enforces M24 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M24-C` | PASS | Naming-lock CI enforces M24 next-slice selector | `.github/workflows/naming-lock.yml` |
+| `M24-D` | PASS | Naming-lock CI enforces M24 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -481,6 +482,7 @@ Strict closure interpretation:
 - M24 kickoff brief enforcement is active (`M24-A`).
 - M24 priority matrix enforcement is active (`M24-B`).
 - M24 next-slice selector enforcement is active (`M24-C`).
+- M24 runtime hardening runner enforcement is active (`M24-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4164,7 +4166,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M24-S4 runtime hardening runner + closure gate `M24-D`.
+- M24-S5 executed-slice convergence summary + closure gate `M24-E`.
 
 ## M24 - Kickoff Loop (In Progress)
 
@@ -4204,8 +4206,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M24 next-slice selector added.
 - [x] Naming-lock CI and closure gate updated (`M24-C`).
 
+### M24-S4 runtime hardening runner acceptance criteria
+- Runtime runner consumes M24 selector output and only executes runtime-selected `M24-S4-runtime-*` slices.
+- Dry-run mode emits deterministic command-plan json/text; execution mode runs runtime smoke bundle + closure checks.
+- Closure audit includes dedicated `M24-D` gate.
+
+### M24-S4 tracking (live status)
+- [x] M24 runtime hardening runner script added.
+- [x] M24 runtime hardening runner contract test added.
+- [x] Book chapter documenting M24 runtime hardening runner added.
+- [x] Naming-lock CI and closure gate updated (`M24-D`).
+
 ### Next planned slice
-- M24-S4 runtime hardening runner + closure gate `M24-D`.
+- M24-S5 executed-slice convergence summary + closure gate `M24-E`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4297,7 +4310,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M24-S4 runtime hardening runner from M24 selector output and wire `M24-D`.
+1. Implement M24-S5 executed-slice convergence summary from M24 selector/runtime outputs and wire `M24-E`.
 
 ---
 
