@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -48,6 +49,8 @@ typedef struct {
   char path[SEC4_RT_MAX_PATH_BYTES];
   char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
   size_t body_len;
+  bool has_content_type;
+  bool content_type_is_json;
   bool json_checked;
   bool json_valid;
 } sec4_rt_request_state;
@@ -164,6 +167,70 @@ static size_t sec4_rt_parse_content_length(const char *request, size_t request_l
   return 0;
 }
 
+static bool sec4_rt_has_json_media_type(const char *value, size_t value_len) {
+  size_t start = 0;
+  while (start < value_len && isspace((unsigned char) value[start])) {
+    start += 1;
+  }
+  if (start >= value_len) {
+    return false;
+  }
+
+  size_t end = start;
+  while (end < value_len && value[end] != ';' && !isspace((unsigned char) value[end])) {
+    end += 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  size_t token_len = end - start;
+  const char *token = value + start;
+  if (token_len == 16 && strncasecmp(token, "application/json", 16) == 0) {
+    return true;
+  }
+
+  if (token_len > 5 && strncasecmp(token + token_len - 5, "+json", 5) == 0) {
+    for (size_t i = 0; i < token_len; i++) {
+      if (token[i] == '/') {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_content_type_is_json(
+    const char *request,
+    size_t request_len,
+    bool *has_content_type
+) {
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+  *has_content_type = false;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) >= 13 && strncasecmp(cursor, "Content-Type:", 13) == 0) {
+      const char *value = cursor + 13;
+      *has_content_type = true;
+      return sec4_rt_has_json_media_type(value, (size_t) (line_end - value));
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return false;
+}
+
 static sec4_rt_router_state *sec4_rt_router_slot(int64_t router) {
   for (size_t i = 0; i < SEC4_RT_MAX_ROUTERS; i++) {
     if (g_sec4_rt_routers[i].active && g_sec4_rt_routers[i].handle == router) {
@@ -211,6 +278,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "No Content";
     case 400:
       return "Bad Request";
+    case 415:
+      return "Unsupported Media Type";
     case 404:
       return "Not Found";
     case 500:
@@ -349,6 +418,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   if (headers_end != NULL) {
     size_t headers_len = (size_t) (headers_end - request) + 4;
     size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+    bool has_content_type = false;
+    bool content_type_is_json = sec4_rt_parse_content_type_is_json(
+        request,
+        headers_len,
+        &has_content_type
+    );
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
     size_t body_len = content_length > 0 ? content_length : available_body;
     if (body_len > available_body) {
@@ -362,6 +437,8 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       g_sec4_rt_request.body[body_len] = '\0';
       g_sec4_rt_request.body_len = body_len;
     }
+    g_sec4_rt_request.has_content_type = has_content_type;
+    g_sec4_rt_request.content_type_is_json = content_type_is_json;
   }
 
   g_sec4_rt_request.has_request = true;
@@ -478,6 +555,16 @@ int64_t sec4_rt_req_json(int64_t schema) {
         400,
         "application/json; charset=utf-8",
         "{\"error\":\"JSON body required\"}"
+    );
+    return 1;
+  }
+
+  if (!g_sec4_rt_request.has_content_type || !g_sec4_rt_request.content_type_is_json) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_response(
+        415,
+        "application/json; charset=utf-8",
+        "{\"error\":\"content-type must be application/json\"}"
     );
     return 1;
   }

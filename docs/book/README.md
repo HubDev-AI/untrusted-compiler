@@ -364,5 +364,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `397-m16-json-response-materialization-for-runtime-routes.md`
 - `398-m16-runtime-status-propagation-for-success-responses.md`
 - `399-m16-runtime-request-json-gate-for-invalid-payload-handling.md`
+- `400-m16-runtime-req-json-content-type-gate-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

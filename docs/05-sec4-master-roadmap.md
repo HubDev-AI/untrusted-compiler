@@ -56,6 +56,9 @@ Roadmap impact:
 - M16-S4 request-body JSON gate bootstrap is now implemented:
   - `req.json(...)` now validates live request body shape at runtime (bridge-level JSON gate),
   - invalid JSON requests deterministically return `400 Bad Request` with JSON error payload.
+- M16-S5 content-type gate hardening is now implemented:
+  - `req.json(...)` now enforces JSON media type (`application/json` or `application/*+json`),
+  - non-JSON request media types deterministically return `415 Unsupported Media Type`.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1840,11 +1843,34 @@ M13-S1 go/no-go note:
 - [x] Invalid JSON route path returns deterministic `400` JSON error payload.
 - [x] New invalid-JSON runtime E2E integration test added and green.
 
+### M16-S5 follow-up slice (runtime `req.json` content-type enforcement)
+#### Scope
+- Enforce request media type constraints for `req.json(...)` so runtime JSON gate rejects non-JSON payload declarations before handler success paths run.
+
+#### Build tasks
+- Extend runtime request capture with parsed content-type classification.
+- Accept only JSON media types for `req.json(...)`:
+  - `application/json`,
+  - `application/*+json`.
+- Return deterministic `415 Unsupported Media Type` response when `req.json(...)` is invoked with missing/non-JSON content-type.
+- Add E2E integration coverage for `POST /users` with `Content-Type: text/plain`.
+
+#### Acceptance criteria
+- Requests routed through `req.json(...)` fail with deterministic `415` on non-JSON content-type.
+- Existing valid JSON route paths remain green.
+- `sec4` and `sec4-core` suites remain green after content-type gate integration.
+
+#### Tracking (live status)
+- [x] Runtime content-type parsing is wired into request context.
+- [x] `req.json(...)` enforces JSON media type and returns deterministic `415` otherwise.
+- [x] New non-JSON content-type runtime E2E integration test added and green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
 - Chapter: "M16 Slice: Runtime Status Propagation for Success Responses".
 - Chapter: "M16 Slice: Runtime Request JSON Gate for Invalid Payload Handling".
+- Chapter: "M16 Slice: Runtime req.json Content-Type Gate Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
