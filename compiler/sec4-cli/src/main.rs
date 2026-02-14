@@ -39,6 +39,10 @@ enum Commands {
     Run {
         #[arg(long, default_value = ".")]
         path: PathBuf,
+        #[arg(long, default_value_t = false)]
+        oneshot: bool,
+        #[arg(long)]
+        max_body_bytes: Option<u64>,
     },
     Check {
         #[arg(long, default_value = ".")]
@@ -278,7 +282,11 @@ fn main() {
             sbom,
         } => cmd_build(&path, emit, locked, sbom),
         Commands::Check { path, emit } => cmd_check(&path, emit),
-        Commands::Run { path } => cmd_run(&path),
+        Commands::Run {
+            path,
+            oneshot,
+            max_body_bytes,
+        } => cmd_run(&path, oneshot, max_body_bytes),
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
@@ -3223,7 +3231,7 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
     }
 }
 
-fn cmd_run(path: &Path) -> Result<(), i32> {
+fn cmd_run(path: &Path, oneshot: bool, max_body_bytes: Option<u64>) -> Result<(), i32> {
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
         Err(diagnostics) => {
@@ -3235,7 +3243,15 @@ fn cmd_run(path: &Path) -> Result<(), i32> {
     cmd_build(path, Some(BuildEmitTarget::CBin), false, false)?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
-    let status = match Command::new(&binary_path).status() {
+    let mut cmd = Command::new(&binary_path);
+    if oneshot {
+        cmd.env("SEC4_RT_HTTP_SERVE_MODE", "oneshot");
+    }
+    if let Some(bytes) = max_body_bytes {
+        cmd.env("SEC4_RT_HTTP_MAX_BODY_BYTES", bytes.to_string());
+    }
+
+    let status = match cmd.status() {
         Ok(status) => status,
         Err(err) => {
             eprintln!(

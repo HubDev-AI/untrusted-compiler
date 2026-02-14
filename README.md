@@ -77,6 +77,18 @@ Manual live run:
 cargo run -p sec4 -- run --path examples/hello-api
 ```
 
+Deterministic one-request run (helpful for scripted checks):
+
+```bash
+cargo run -p sec4 -- run --path examples/hello-api --oneshot
+```
+
+Optional runtime body-cap override:
+
+```bash
+cargo run -p sec4 -- run --path examples/hello-api --oneshot --max-body-bytes 16384
+```
+
 Then in another terminal:
 
 ```bash

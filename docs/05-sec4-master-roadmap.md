@@ -108,6 +108,9 @@ Roadmap impact:
   - runtime e2e now locks security-header injection on `405` method-mismatch and CORS preflight (`204`) responses.
 - M16-S25 operator smoke coverage is now implemented:
   - `scripts/smoke-sec4-run-hello-api.sh` now validates `sec4 run` end-to-end request handling (`GET /health`, `POST /users`) against a temporary project copy in deterministic oneshot mode.
+- M16-S27 run-command runtime bridge flags are now implemented:
+  - `sec4 run` now supports `--oneshot` and `--max-body-bytes <N>` as explicit operator flags instead of requiring direct environment setup.
+  - runtime e2e coverage now validates oneshot serving and body-limit enforcement through these CLI flags.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2450,6 +2453,31 @@ M13-S1 go/no-go note:
 - [x] Runtime-smoke workflow now validates artifacts before upload.
 - [x] Closure + naming-lock enforcement updated for stricter runtime-smoke artifact contract.
 
+### M16-S27 follow-up slice (`sec4 run` runtime bridge flags)
+#### Scope
+- Improve operator ergonomics for runtime test execution by exposing common runtime serve/body-limit toggles directly on `sec4 run`.
+
+#### Build tasks
+- Extend `sec4 run` CLI shape with:
+  - `--oneshot` (bridges to `SEC4_RT_HTTP_SERVE_MODE=oneshot`)
+  - `--max-body-bytes <N>` (bridges to `SEC4_RT_HTTP_MAX_BODY_BYTES=<N>`)
+- Keep backward compatibility for existing env-based workflows.
+- Add CLI integration coverage:
+  - `run --help` includes both runtime bridge flags.
+  - run-command HTTP oneshot e2e path uses the new `--oneshot` flag.
+  - run-command oversized request path enforces deterministic `413` using `--max-body-bytes`.
+
+#### Acceptance criteria
+- Operators can run oneshot runtime flows without setting `SEC4_RT_HTTP_SERVE_MODE` manually.
+- Operators can enforce runtime request-body cap through `sec4 run --max-body-bytes`.
+- Existing run-command flows remain green and backward compatible.
+
+#### Tracking (live status)
+- [x] `sec4 run` now accepts `--oneshot` and `--max-body-bytes`.
+- [x] `run --help` integration coverage asserts both flags are exposed.
+- [x] Run-command oneshot/runtime e2e coverage now exercises `--oneshot`.
+- [x] Run-command body-limit e2e coverage now exercises `--max-body-bytes` with deterministic `413`.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2478,6 +2506,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Hello-API Operator Smoke Script".
 - Chapter: "M16 Slice: Runtime-Smoke Workflow Closure Gates".
 - Chapter: "M16 Slice: Runtime-Smoke Artifact Checker".
+- Chapter: "M16 Slice: sec4 run Runtime Bridge Flags".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
