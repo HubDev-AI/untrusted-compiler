@@ -104,6 +104,8 @@ jq -e '
   and (
     if .request.body.encoding == "base64" then
       (.request.body.bytes | type == "string" and length > 0)
+      and (.request.body.bytes | test("^[A-Za-z0-9+/]+={0,2}$"))
+      and ((.request.body.bytes | length) % 4 == 0)
       and (.request.body.sha256 | type == "string" and length > 0)
     elif .request.body.encoding == "none" then
       ((.request.body | has("bytes")) | not)

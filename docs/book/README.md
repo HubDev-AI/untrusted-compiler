@@ -357,5 +357,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `390-m14-replay-capture-url-field-type-contract-enforcement.md`
 - `391-m14-replay-capture-route-type-contract-enforcement.md`
 - `392-m14-replay-capture-body-encoding-exclusivity-contract-enforcement.md`
+- `393-m14-replay-capture-base64-syntax-contract-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

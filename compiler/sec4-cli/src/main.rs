@@ -1,3 +1,4 @@
+use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
@@ -900,14 +901,20 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
     }
     match encoding {
         "base64" => {
-            if body
+            let bytes = body
                 .get("bytes")
                 .and_then(serde_json::Value::as_str)
                 .filter(|entry| !entry.is_empty())
-                .is_none()
+                .ok_or_else(|| {
+                    "capture.request.body.bytes must be present for encoding=base64".to_string()
+                })?;
+            if base64::engine::general_purpose::STANDARD
+                .decode(bytes)
+                .is_err()
             {
                 return Err(
-                    "capture.request.body.bytes must be present for encoding=base64".to_string(),
+                    "capture.request.body.bytes must be valid base64 for encoding=base64"
+                        .to_string(),
                 );
             }
             if body
