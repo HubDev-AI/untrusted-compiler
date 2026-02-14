@@ -425,5 +425,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `458-m16-runtime-smoke-shape-aware-runflags-metadata-contract-hardening.md`
 - `459-m16-runtime-smoke-workflow-dual-branch-maxbody-coverage.md`
 - `460-m13-trend-note-update-local-fallback-mode.md`
+- `461-m16-runtime-smoke-aggregated-branch-artifact-index.md`
 
 As milestones progress, chapters will be added and linked from this index.

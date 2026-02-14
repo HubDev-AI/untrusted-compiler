@@ -34,6 +34,8 @@ jobs:
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
       - name: Validate runtime smoke artifacts (max-body)
         run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
+      - name: Build runtime smoke branch index
+        run: scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,15 +68,17 @@ jobs:
         run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default
       - name: Run sec4 hello-api operator smoke (max-body)
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
+      - name: Validate runtime smoke artifacts (max-body)
+        run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
 YAML
 
 if "${contract_script}" --workflow "${workflow_path}" >"${tmp_dir}/guard.log" 2>&1; then
-  echo "expected runtime-smoke workflow contract to fail when max-body artifact validation step is missing" >&2
+  echo "expected runtime-smoke workflow contract to fail when branch-index step is missing" >&2
   exit 1
 fi
 
-if ! rg -Fq 'missing runtime-smoke workflow token: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body' "${tmp_dir}/guard.log"; then
-  echo "expected missing-token diagnostic for max-body runtime smoke artifact validation step" >&2
+if ! rg -Fq 'missing runtime-smoke workflow token: scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json' "${tmp_dir}/guard.log"; then
+  echo "expected missing-token diagnostic for runtime smoke branch-index step" >&2
   exit 1
 fi
 

@@ -120,6 +120,8 @@ jobs:
         run: scripts/test-runtime-smoke-workflow-contract-guard.sh
       - name: Validate runtime-smoke artifacts checker
         run: scripts/test-check-runtime-smoke-artifacts.sh
+      - name: Validate runtime-smoke branch index builder
+        run: scripts/test-build-runtime-smoke-branch-index.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -250,6 +252,8 @@ jobs:
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
       - name: Validate runtime smoke artifacts (max-body)
         run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
+      - name: Build runtime smoke branch index
+        run: scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4

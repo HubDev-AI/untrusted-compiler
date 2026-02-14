@@ -192,11 +192,14 @@ Roadmap impact:
 - M16-S55 runtime-smoke CI now exercises both metadata-shape branches:
   - workflow runs smoke+checker for default branch and `--max-body-bytes` branch.
   - workflow contract/guard + closure fixtures now lock both branch invocations.
+- M16-S56 runtime-smoke artifact bundle now includes aggregated branch indexing:
+  - workflow builds `runtime-smoke-branch-index.json` from `default` + `max-body` artifact sets.
+  - naming-lock CI and closure fixtures now lock the branch-index builder contract.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
-  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including artifact validation + upload),
-  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact-checker contract test.
+  - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including dual-branch smoke validation + branch-index generation + artifact upload),
+  - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact checker/index tests.
 - M16 run-command runtime-flag CI-guard enforcement is active (`M16-E`):
   - validates naming-lock CI enforcement of `sec4 run` runtime-flag contract + guard tests.
 
@@ -240,8 +243,8 @@ Current strict closure result:
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
-| `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push, validates artifacts, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
-| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact-checker test | `.github/workflows/naming-lock.yml` |
+| `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on pull_request + main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
+| `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index tests | `.github/workflows/naming-lock.yml` |
 | `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
@@ -859,7 +862,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of M16 runtime HTTP coverage contract + guard tests (`M16-A`).
   - closure now verifies naming-lock CI enforcement of sec4 run hello-api smoke script contract + guard tests (`M16-B`).
   - closure now verifies runtime-smoke workflow contract wiring (`M16-C`).
-  - closure now verifies naming-lock CI enforcement of runtime-smoke workflow contract + guard tests + artifact-checker test (`M16-D`).
+  - closure now verifies naming-lock CI enforcement of runtime-smoke workflow contract + guard tests + artifact checker/index tests (`M16-D`).
   - closure now verifies naming-lock CI enforcement of sec4 run runtime-flag contract + guard tests (`M16-E`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
@@ -3187,6 +3190,33 @@ M13-S1 go/no-go note:
 - [x] Closure audit fixture/contracts now include both branch command tokens.
 - [x] Naming-lock + closure checks remain green with stricter workflow contract.
 
+### M16-S56 follow-up slice (runtime-smoke aggregated branch artifact index)
+#### Scope
+- Add deterministic aggregated indexing for runtime-smoke artifacts so CI evidence consumers can inspect both branch outputs (`default`, `max-body`) from one machine-readable file.
+
+#### Build tasks
+- Add `scripts/build-runtime-smoke-branch-index.sh`:
+  - consumes `build/runtime-smoke/{default,max-body}` artifacts,
+  - validates branch profile invariants (`maxBodyBytes` + `runFlags` shape),
+  - emits `build/runtime-smoke/runtime-smoke-branch-index.json`.
+- Add deterministic regression coverage:
+  - `scripts/test-build-runtime-smoke-branch-index.sh` with pass + branch-shape/missing-branch failures.
+- Update `runtime-smoke` workflow to build branch index before artifact upload.
+- Update workflow contract/guard + closure fixture checks to require index-builder step.
+- Update naming-lock CI to execute branch-index builder regression test.
+
+#### Acceptance criteria
+- Runtime-smoke artifact bundle includes machine-readable branch index for both profiles.
+- Contract tests fail deterministically when index step is missing or branch profiles drift.
+- Closure audit remains green with stricter runtime-smoke evidence contract.
+
+#### Tracking (live status)
+- [x] Branch-index builder script implemented with deterministic profile validations.
+- [x] Branch-index regression suite added and passing.
+- [x] Runtime-smoke workflow now emits `runtime-smoke-branch-index.json`.
+- [x] Workflow contract/guard + closure fixtures lock index-builder step.
+- [x] Naming-lock CI now runs branch-index regression test.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3244,6 +3274,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Invalid-Shape maxBody Metadata Regression Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Shape-Aware runFlags Metadata Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Workflow Dual-Branch maxBody Coverage".
+- Chapter: "M16 Slice: Runtime-Smoke Aggregated Branch Artifact Index".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3335,7 +3366,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add aggregated runtime-smoke branch artifact indexing (`default` + `max-body`) and lock it in workflow/checker contracts for easier CI evidence inspection.
+1. Align stale historical status text in `Current Status` (`M4 implementation is in progress`) with current closure truth to reduce roadmap ambiguity.
 
 ---
 

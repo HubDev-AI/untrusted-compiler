@@ -61,6 +61,7 @@ require_token 'scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime
 require_token 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default'
 require_token 'scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body'
 require_token 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body'
+require_token 'scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json'
 require_token 'if: always()'
 require_token 'uses: actions/upload-artifact@v4'
 require_token 'name: runtime-smoke-artifacts'

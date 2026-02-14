@@ -260,7 +260,8 @@ fi
 if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-runtime-smoke-workflow-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-runtime-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}" \
-  && rg -q 'scripts/test-check-runtime-smoke-artifacts.sh' "${naming_lock_workflow_path}"; then
+  && rg -q 'scripts/test-check-runtime-smoke-artifacts.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-build-runtime-smoke-branch-index.sh' "${naming_lock_workflow_path}"; then
   bool_has_m16_runtime_smoke_ci_guard=1
 fi
 
@@ -299,6 +300,7 @@ if [ -f "${runtime_smoke_workflow_path}" ] \
   && rg -q 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/default' "${runtime_smoke_workflow_path}" \
   && rg -q 'scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body' "${runtime_smoke_workflow_path}" \
   && rg -q 'scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body' "${runtime_smoke_workflow_path}" \
+  && rg -q 'scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json' "${runtime_smoke_workflow_path}" \
   && rg -q 'if:[[:space:]]*always\(\)' "${runtime_smoke_workflow_path}" \
   && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${runtime_smoke_workflow_path}" \
   && rg -q 'name:[[:space:]]*runtime-smoke-artifacts' "${runtime_smoke_workflow_path}" \
@@ -473,8 +475,8 @@ emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tes
 emit_check "M15-A" "replay CLI json contract guards execution fields + missing-key fixtures" "${bool_has_replay_execution_contract_guard}" "scripts/test-replay-cli-json-contract.sh + scripts/test-replay-cli-json-contract-guard.sh"
 emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests" "${bool_has_m16_runtime_http_coverage_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests" "${bool_has_m16_operator_smoke_script_ci_guard}" "${naming_lock_workflow_path}"
-emit_check "M16-C" "runtime-smoke workflow executes sec4 run hello-api smoke + artifact validation/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
-emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker test" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke + artifact validation/index/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
+emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then

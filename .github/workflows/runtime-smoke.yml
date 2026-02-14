@@ -26,6 +26,9 @@ jobs:
       - name: Validate runtime smoke artifacts (max-body)
         run: scripts/check-runtime-smoke-artifacts.sh --artifacts-dir build/runtime-smoke/max-body
 
+      - name: Build runtime smoke branch index
+        run: scripts/build-runtime-smoke-branch-index.sh --artifacts-root build/runtime-smoke --out build/runtime-smoke/runtime-smoke-branch-index.json
+
       - name: Upload runtime smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
