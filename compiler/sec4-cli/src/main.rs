@@ -839,6 +839,14 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
     {
         return Err("capture.request.headers must be an object".to_string());
     }
+    if request.get("query").is_some()
+        && request
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
+    {
+        return Err("capture.request.query must be a string when present".to_string());
+    }
 
     let body = request
         .get("body")

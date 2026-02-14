@@ -1562,6 +1562,7 @@ M13-S1 go/no-go note:
 - [x] Added numeric dependency trace indices (`index`) and multi-entry ordering coverage for `mockDependencyTraces` in replay JSON tests.
 - [x] Enforced replay capture URL-derivation contract (`request.url` or non-empty `request.scheme`+`request.host`, with non-empty `request.path`) in CLI + shell validators with regression coverage.
 - [x] Enforced replay base64 body integrity contract (`request.body.sha256`) for capture validation in CLI + shell validators with regression coverage.
+- [x] Enforced optional replay request-query typing contract (`request.query` must be a string when present) in CLI + shell validators with regression coverage.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1593,6 +1594,7 @@ M13-S1 go/no-go note:
 - Replay dependency traces include deterministic per-family numeric `index` fields and preserve capture dependency order.
 - Replay capture contract rejects requests that cannot derive deterministic net signatures (`request.url` or `request.scheme`/`request.host` + non-empty path required).
 - Replay capture contract requires non-empty `request.body.sha256` for `encoding=base64` and `encoding=none`.
+- Replay capture contract rejects non-string `request.query` values when query is present.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1619,6 +1621,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Mock Dependency Trace Index and Ordering Contract".
 - Chapter: "M14 Slice: Replay Capture URL-Derivation Contract Enforcement".
 - Chapter: "M14 Slice: Replay Capture Base64 Body Hash Contract Enforcement".
+- Chapter: "M14 Slice: Replay Capture Query Type Contract Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

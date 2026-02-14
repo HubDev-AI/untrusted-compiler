@@ -63,6 +63,13 @@ jq -e '
     )
   )
   and (.request.headers | type == "object")
+  and (
+    if (.request | has("query")) then
+      (.request.query | type == "string")
+    else
+      true
+    end
+  )
   and (.request.body | type == "object")
   and (.request.body.encoding | type == "string")
   and ((.request.body.truncated | type) == "boolean")

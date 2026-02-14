@@ -353,5 +353,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `386-m14-replay-mock-dependency-trace-index-and-ordering-contract.md`
 - `387-m14-replay-capture-url-derivation-contract-enforcement.md`
 - `388-m14-replay-capture-base64-body-hash-contract-enforcement.md`
+- `389-m14-replay-capture-query-type-contract-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
