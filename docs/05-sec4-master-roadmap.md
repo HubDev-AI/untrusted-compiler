@@ -88,6 +88,10 @@ Roadmap impact:
   - `scripts/build-m17-operator-release-packet.sh`
   - `scripts/test-build-m17-operator-release-packet.sh`
   - `docs/book/472-m17-operator-release-packet-builder.md`
+- M17-S10 final operator handoff playbook chapter checker is now implemented:
+  - `scripts/check-m17-operator-handoff-playbook.sh`
+  - `scripts/test-check-m17-operator-handoff-playbook.sh`
+  - `docs/book/473-m17-operator-handoff-final-playbook.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -297,6 +301,7 @@ Current strict closure result:
 | `M17-H` | PASS | Naming-lock CI enforces M17 operator handoff artifact inspector | `.github/workflows/naming-lock.yml` |
 | `M17-I` | PASS | Naming-lock CI enforces M17 operator handoff readiness summary | `.github/workflows/naming-lock.yml` |
 | `M17-J` | PASS | Naming-lock CI enforces M17 operator release-packet builder | `.github/workflows/naming-lock.yml` |
+| `M17-K` | PASS | Naming-lock CI enforces M17 final handoff playbook checker | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -323,6 +328,7 @@ Strict closure interpretation:
 - M17 operator handoff artifact-inspector enforcement is active (`M17-H`).
 - M17 operator handoff readiness-summary enforcement is active (`M17-I`).
 - M17 operator release-packet builder enforcement is active (`M17-J`).
+- M17 final handoff playbook checker enforcement is active (`M17-K`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3405,6 +3411,7 @@ M13-S1 go/no-go note:
 - [x] Operator handoff artifact inspector script added and wired into naming-lock CI.
 - [x] Operator handoff readiness summary script added and wired into naming-lock CI.
 - [x] Operator release-packet builder script added and wired into naming-lock CI.
+- [x] Final handoff playbook checker script + chapter added and wired into naming-lock CI.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3422,6 +3429,7 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Handoff Artifact Inspector".
 - Chapter: "M17 Operator Readiness Summary".
 - Chapter: "M17 Operator Release Packet Builder".
+- Chapter: "M17 Operator Handoff Final Playbook".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3513,7 +3521,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M17-S10 final handoff playbook chapter with ordered command bundles for local/CI/release packet flows.
+1. Run one clean-clone M17 operator handoff rehearsal using the final playbook and capture any remaining operator friction before M17 closeout.
 
 ---
 

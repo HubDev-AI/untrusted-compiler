@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Added a token-based chapter contract checker but wrote numbered section headings (`## 3) ...`) that did not match the required literal bundle heading tokens, causing the checker to fail. | When introducing doc-token contract checks, align chapter headings with exact required literals first (or loosen checker tokens intentionally) before running full validation. |
 | 2026-02-14 | self | Parsed HTTP status lines from captured headers without removing CRLF, which leaked `\r` characters into text summaries. | When reading curl header lines for reports/summaries, strip carriage returns (`tr -d '\r'`) before rendering. |
 | 2026-02-14 | self | Used `rg -Eq` in a shell test assuming grep-style `-E`; ripgrep interpreted `-E` as encoding and failed with `unknown encoding`. | Use `rg -q` (or `rg -P` when truly needed) for regex checks; do not port grep flags directly. |
 | 2026-02-14 | self | Added a new shell checker script via patch but forgot to set the executable bit, causing immediate `Permission denied` in its contract test. | After adding any new script under `scripts/`, run `chmod +x` before executing related tests. |

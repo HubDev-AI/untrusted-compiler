@@ -162,6 +162,7 @@ bool_has_m17_operator_handoff_workflow_ci_guard=0
 bool_has_m17_operator_artifact_inspector_ci_guard=0
 bool_has_m17_operator_summary_ci_guard=0
 bool_has_m17_operator_release_packet_ci_guard=0
+bool_has_m17_operator_playbook_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -358,6 +359,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_release_packet_test_script}" ] \
   && rg -q 'scripts/test-build-m17-operator-release-packet.sh' "${naming_lock_workflow_path}"; then
   bool_has_m17_operator_release_packet_ci_guard=1
+fi
+
+m17_playbook_test_script="${repo_root}/scripts/test-check-m17-operator-handoff-playbook.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m17_playbook_test_script}" ] \
+  && rg -q 'scripts/test-check-m17-operator-handoff-playbook.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m17_operator_playbook_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -575,6 +583,7 @@ emit_check "M17-G" "naming-lock CI enforces operator-handoff workflow contract +
 emit_check "M17-H" "naming-lock CI enforces M17 operator handoff artifact inspector" "${bool_has_m17_operator_artifact_inspector_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-I" "naming-lock CI enforces M17 operator handoff readiness summary" "${bool_has_m17_operator_summary_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-J" "naming-lock CI enforces M17 operator release packet builder" "${bool_has_m17_operator_release_packet_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M17-K" "naming-lock CI enforces M17 final handoff playbook checker" "${bool_has_m17_operator_playbook_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

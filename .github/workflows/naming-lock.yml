@@ -94,6 +94,9 @@ jobs:
       - name: Validate M17 operator release packet builder
         run: scripts/test-build-m17-operator-release-packet.sh
 
+      - name: Validate M17 final handoff playbook checker
+        run: scripts/test-check-m17-operator-handoff-playbook.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

@@ -437,5 +437,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `470-m17-operator-handoff-artifact-inspector.md`
 - `471-m17-operator-readiness-summary.md`
 - `472-m17-operator-release-packet-builder.md`
+- `473-m17-operator-handoff-final-playbook.md`
 
 As milestones progress, chapters will be added and linked from this index.
