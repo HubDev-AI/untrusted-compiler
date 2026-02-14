@@ -384,6 +384,7 @@ Current strict closure result:
 | `M20-G` | PASS | Naming-lock CI enforces M20 closure report | `.github/workflows/naming-lock.yml` |
 | `M21-A` | PASS | Naming-lock CI enforces M21 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M21-B` | PASS | Naming-lock CI enforces M21 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M21-C` | PASS | Naming-lock CI enforces M21 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -437,6 +438,7 @@ Strict closure interpretation:
 - M20 closure report enforcement is active (`M20-G`).
 - M21 kickoff brief enforcement is active (`M21-A`).
 - M21 priority matrix enforcement is active (`M21-B`).
+- M21 next-slice selector enforcement is active (`M21-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3860,7 +3862,8 @@ M13-S1 go/no-go note:
 - Support markdown and JSON output for operator + automation consumers.
 - Auto-generate M20 closure json when absent but packet is available.
 - Build deterministic M21 priority matrix from kickoff brief.
-- Lock kickoff-brief/matrix contracts in naming-lock CI and closure audit.
+- Select first executable M21 slice from kickoff + matrix inputs.
+- Lock kickoff-brief/matrix/selector contracts in naming-lock CI and closure audit.
 
 ### M21-S1 kickoff acceptance criteria
 - M21 kickoff brief script + contract test exists.
@@ -3884,12 +3887,24 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M21 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M21-B`).
 
+### M21-S3 next-slice selector acceptance criteria
+- M21 selector validates kickoff + matrix contracts and emits one deterministic recommendation.
+- Selector recommendations use `M21-S4-*` IDs for runtime/release/editor/stabilization tracks.
+- Closure audit includes dedicated `M21-C` gate.
+
+### M21-S3 tracking (live status)
+- [x] M21 next-slice selector script added.
+- [x] M21 next-slice selector contract test added.
+- [x] Book chapter documenting M21 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M21-C`).
+
 ### Exit criteria
 - M21 kickoff starts from deterministic evidence (`M20` closure + handoff packet), not ad-hoc operator judgment.
 
 ### Docs/book outputs
 - Chapter: "M21 Kickoff Brief".
 - Chapter: "M21 Priority Matrix".
+- Chapter: "M21 Next-Slice Selector".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3981,7 +3996,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M21-S3 next-slice selector from M21 kickoff + matrix and wire the next closure gate.
+1. Implement M21-S4 runtime hardening runner from M21 selector recommendation and wire the next closure gate.
 
 ---
 
