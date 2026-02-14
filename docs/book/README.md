@@ -386,5 +386,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `419-m16-cors-allow-origin-coverage-on-404-405-error-branches.md`
 - `420-m16-cors-preflight-interoperability-with-auth-csrf-middleware.md`
 - `421-m16-security-headers-coverage-on-auth-csrf-rejection-paths.md`
+- `422-m16-security-headers-coverage-on-405-and-preflight-branches.md`
 
 As milestones progress, chapters will be added and linked from this index.

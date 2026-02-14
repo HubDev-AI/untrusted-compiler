@@ -98,6 +98,8 @@ Roadmap impact:
   - runtime e2e now locks that CORS `OPTIONS` preflight remains `204` and bypasses auth/csrf rejection branches when `cors + auth + csrf` middleware are composed.
 - M16-S23 security-header coverage is now expanded for middleware rejection branches:
   - runtime e2e now locks security-header injection on auth (`401`) and csrf (`403`) rejection responses when `sec.withSecurityHeaders(...)` is enabled.
+- M16-S24 security-header coverage is now expanded for dispatch/preflight branches:
+  - runtime e2e now locks security-header injection on `405` method-mismatch and CORS preflight (`204`) responses.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2356,6 +2358,26 @@ M13-S1 go/no-go note:
 - [x] Runtime e2e coverage added for security-headers + csrf rejection (`403`) path.
 - [x] Runtime integration suites remain green after rejection-branch coverage expansion.
 
+### M16-S24 follow-up slice (security headers on 405 + preflight branches)
+#### Scope
+- Ensure security-header middleware behavior remains consistent for dispatch (`405`) and preflight (`204`) branches, not only success/not-found/middleware-reject paths.
+
+#### Build tasks
+- Add runtime e2e test for security-headers middleware on `405` response path.
+- Add runtime e2e test for composed security-headers + CORS middleware on preflight `OPTIONS` path.
+- Assert deterministic security headers across both branches.
+- Keep full runtime suite green after branch coverage expansion.
+
+#### Acceptance criteria
+- `405` responses include deterministic security headers when security middleware is enabled.
+- CORS preflight `204` responses include deterministic security headers when security middleware is enabled.
+- Existing security-header coverage remains green across previous branches.
+
+#### Tracking (live status)
+- [x] Runtime e2e coverage added for security-headers + `405` branch.
+- [x] Runtime e2e coverage added for security-headers + preflight `204` branch.
+- [x] Runtime integration suites remain green after dispatch/preflight coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2380,6 +2402,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on 404/405 Error Branches".
 - Chapter: "M16 Slice: CORS Preflight Interoperability with Auth + CSRF Middleware".
 - Chapter: "M16 Slice: Security Headers Coverage on Auth/CSRF Rejection Paths".
+- Chapter: "M16 Slice: Security Headers Coverage on 405 and Preflight Branches".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
