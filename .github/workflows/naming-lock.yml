@@ -148,6 +148,9 @@ jobs:
       - name: Validate M19 closure report
         run: scripts/test-build-m19-closure-report.sh
 
+      - name: Validate M20 kickoff brief
+        run: scripts/test-generate-m20-kickoff-brief.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
