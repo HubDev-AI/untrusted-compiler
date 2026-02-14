@@ -1,8 +1,11 @@
 use serde_json::Value;
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Command, Output};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -21,6 +24,15 @@ fn run_cli(args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("sec4 CLI should run")
+}
+
+fn run_cli_with_env(args: &[&str], envs: &[(&str, &str)]) -> Output {
+    let mut cmd = Command::new(cli_bin());
+    cmd.args(args);
+    for (key, value) in envs {
+        cmd.env(key, value);
+    }
+    cmd.output().expect("sec4 CLI should run")
 }
 
 fn clang_available() -> bool {
@@ -43,6 +55,14 @@ fn temp_dir(prefix: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("{prefix}-{}", unique_suffix()));
     fs::create_dir_all(&path).expect("temp directory should be created");
     path
+}
+
+fn find_available_tcp_port() -> u16 {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("ephemeral tcp bind should work");
+    listener
+        .local_addr()
+        .expect("listener local address should resolve")
+        .port()
 }
 
 fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
@@ -5568,7 +5588,13 @@ fn run_command_executes_compiled_binary_when_clang_available() {
         .to_str()
         .expect("example path should be valid utf-8");
 
-    let output = run_cli(&["run", "--path", hello]);
+    let output = run_cli_with_env(
+        &["run", "--path", hello],
+        &[
+            ("SEC4_RT_HTTP_SERVE_MODE", "oneshot"),
+            ("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "100"),
+        ],
+    );
     assert!(output.status.success(), "run command should succeed");
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
@@ -5610,6 +5636,139 @@ fn build_emit_c_bin_compiles_hello_api_example_when_clang_available() {
 }
 
 #[test]
+fn c_bin_http_runtime_serves_health_route_in_oneshot_mode_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimee2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve({}, router);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpruntimee2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include text body from res.text"
+    );
+}
+
+#[test]
 fn run_command_executes_hello_api_example_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping hello-api run integration test: clang not available");
@@ -5621,7 +5780,13 @@ fn run_command_executes_hello_api_example_when_clang_available() {
         .to_str()
         .expect("hello-api path should be valid utf-8");
 
-    let output = run_cli(&["run", "--path", hello_api]);
+    let output = run_cli_with_env(
+        &["run", "--path", hello_api],
+        &[
+            ("SEC4_RT_HTTP_SERVE_MODE", "oneshot"),
+            ("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "150"),
+        ],
+    );
     assert!(
         output.status.success(),
         "run command should succeed for hello-api example"

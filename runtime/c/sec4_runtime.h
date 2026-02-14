@@ -30,7 +30,7 @@ int64_t sec4_rt_res_json();
 int64_t sec4_rt_res_ok();
 int64_t sec4_rt_res_ok_meta();
 int64_t sec4_rt_res_html();
-int64_t sec4_rt_res_text();
+int64_t sec4_rt_res_text(int64_t status, const char *body);
 int64_t sec4_rt_set_header();
 int64_t sec4_rt_cookie_build();
 int64_t sec4_rt_set_cookie();
@@ -59,14 +59,22 @@ int64_t sec4_rt_path_under();
 int64_t sec4_rt_path_base();
 int64_t sec4_rt_headers_name();
 int64_t sec4_rt_headers_value();
-int64_t sec4_rt_http_router();
-int64_t sec4_rt_http_route_get();
-int64_t sec4_rt_http_route_post();
-int64_t sec4_rt_http_serve();
-int64_t sec4_rt_with_cors();
-int64_t sec4_rt_with_security_headers();
-int64_t sec4_rt_with_csrf();
-int64_t sec4_rt_with_auth();
+int64_t sec4_rt_http_router(void);
+int64_t sec4_rt_http_route_get(
+    int64_t router,
+    const char *path,
+    int64_t (*handler)(void)
+);
+int64_t sec4_rt_http_route_post(
+    int64_t router,
+    const char *path,
+    int64_t (*handler)(void)
+);
+int64_t sec4_rt_http_serve(int64_t port, int64_t router);
+int64_t sec4_rt_with_cors(int64_t router, int64_t cfg);
+int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg);
+int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg);
+int64_t sec4_rt_with_auth(int64_t router, int64_t cfg);
 int64_t sec4_rt_sec_default_headers();
 int64_t sec4_rt_sec_csp();
 int64_t sec4_rt_sec_csp_add();

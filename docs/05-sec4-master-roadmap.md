@@ -33,7 +33,7 @@ Roadmap impact:
   - editor tooling (LSP + Zed + tree-sitter)
   - runtime ABI/docs
 
-## Current Status (2026-02-13)
+## Current Status (2026-02-14)
 
 - Milestone progression reached M14 bootstrap slices with active enforcement.
 - M9 release hardening gate is operational both locally and in CI:
@@ -44,6 +44,10 @@ Roadmap impact:
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15 runtime replay-stubbing expansion scope is now defined and ready to execute.
+- M16-S1 live HTTP runtime bootstrap is now implemented:
+  - runtime router + route registration + socket serve loop are active in `runtime/c/sec4_runtime.c`,
+  - `res.text` now materializes real HTTP response payloads for active request handlers,
+  - `SEC4_RT_HTTP_SERVE_MODE=oneshot` is available for deterministic non-blocking test execution.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1703,6 +1707,62 @@ M13-S1 go/no-go note:
 - Chapter: "M15 Slice: Runtime FS Stub Materialization".
 - Chapter: "M15 Slice: Replay Runtime Diagnostics Contract".
 - Chapter: "M15 Slice: Replay Runtime Output Contract Guard".
+
+## M16 - Live HTTP Runtime Bootstrap (`sec4 run` E2E Serving)
+### Trigger condition
+- Start after compile-path HTTP bridge slices are stable (`http.router/get/post/serve`, middleware routing chain, and handler bridge contracts already green in `c-bin` tests).
+
+### Scope decision (M16-S1)
+- Primary scope: replace no-op HTTP runtime stubs with a minimal executable HTTP server path so emitted binaries can serve real traffic.
+- Included in M16-S1:
+  - typed runtime ABI for HTTP route/serve/middleware pass-through and `res.text`,
+  - in-process router table with deterministic exact method/path matching (`GET`/`POST`),
+  - socket-based HTTP request loop with real response writes and deterministic 404/400 fallbacks,
+  - deterministic `oneshot` runtime mode for test harnesses.
+- Deferred out of M16-S1:
+  - full typed request decoding/body plumbing for handler inputs,
+  - JSON/HTML response materialization parity,
+  - middleware-enforced security behavior beyond pass-through chaining.
+
+### Build tasks
+- Update runtime ABI signatures in `runtime/c/sec4_runtime.h`:
+  - `sec4_rt_res_text(int64_t status, const char *body)`,
+  - typed `sec4_rt_http_route_get/post`, `sec4_rt_http_serve`, and middleware pass-through functions.
+- Implement minimal runtime HTTP engine in `runtime/c/sec4_runtime.c`:
+  - router allocation and route registration,
+  - request-line parsing + route dispatch,
+  - response assembly and write (`HTTP/1.1`, `Content-Length`, `Connection: close`),
+  - deterministic fallback responses (`400` bad request, `404` not found).
+- Add deterministic serve mode switch for tests:
+  - default loop mode for real `sec4 run` behavior,
+  - `SEC4_RT_HTTP_SERVE_MODE=oneshot` with configurable timeout (`SEC4_RT_HTTP_SERVE_TIMEOUT_MS`) for CI/tests.
+- Expand test coverage:
+  - `sec4-core` runtime ABI assertion updates for new typed signatures,
+  - CLI integration test that compiles and runs a temp HTTP project, executes `GET /health`, and validates `200 OK` + `ok` body.
+- Keep existing `sec4 run` integration tests deterministic by running them with explicit oneshot env mode.
+
+### M16-S1 acceptance criteria
+- `sec4 run --path examples/hello-api` executes compiled binary against a live HTTP runtime path (no-op stubs removed for router/serve path).
+- In default mode, runtime enters serving loop and can process requests.
+- In oneshot mode, runtime accepts one request (or timeout) and exits deterministically.
+- A compiled Untrusted<T> service can answer `GET /health` with `HTTP/1.1 200 OK` and body `ok`.
+- Existing compile/run integration suites remain green.
+
+### M16-S1 tracking (live status)
+- [x] Typed runtime ABI introduced for route/serve/middleware + `res.text`.
+- [x] Minimal HTTP router and serve loop implemented in C runtime.
+- [x] Deterministic oneshot test mode implemented (`SEC4_RT_HTTP_SERVE_MODE=oneshot`).
+- [x] `sec4-core` runtime ABI assertions aligned to typed signatures.
+- [x] CLI integration coverage added for real `/health` request/response execution.
+- [x] Existing `sec4 run` integration tests updated to use oneshot mode for deterministic completion.
+
+### Exit criteria
+- Runtime no longer treats HTTP routing/serving as placeholders for the core `hello-api` flow.
+- Developers can run compiled services and observe end-to-end request handling behavior.
+- Test harnesses can exercise HTTP runtime deterministically without hanging.
+
+### Docs/book outputs
+- Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

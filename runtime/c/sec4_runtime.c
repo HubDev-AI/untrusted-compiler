@@ -1,5 +1,255 @@
 #include "sec4_runtime.h"
 
+#include <arpa/inet.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#define SEC4_RT_MAX_ROUTERS 16
+#define SEC4_RT_MAX_ROUTES 64
+#define SEC4_RT_MAX_PATH_BYTES 256
+#define SEC4_RT_MAX_RESPONSE_BYTES 4096
+#define SEC4_RT_REQUEST_BUFFER_BYTES 8192
+#define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
+
+typedef int64_t (*sec4_rt_handler_fn)(void);
+
+typedef struct {
+  char method[8];
+  char path[SEC4_RT_MAX_PATH_BYTES];
+  sec4_rt_handler_fn handler;
+} sec4_rt_route;
+
+typedef struct {
+  bool active;
+  int64_t handle;
+  size_t route_count;
+  sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
+} sec4_rt_router_state;
+
+typedef struct {
+  bool active;
+  int64_t status;
+  char content_type[64];
+  char body[SEC4_RT_MAX_RESPONSE_BYTES];
+  size_t body_len;
+} sec4_rt_response_state;
+
+static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
+static int64_t g_sec4_rt_next_router_handle = 1;
+static sec4_rt_response_state g_sec4_rt_response;
+
+static void sec4_rt_reset_response(void) {
+  g_sec4_rt_response.active = false;
+  g_sec4_rt_response.status = 204;
+  g_sec4_rt_response.content_type[0] = '\0';
+  g_sec4_rt_response.body[0] = '\0';
+  g_sec4_rt_response.body_len = 0;
+}
+
+static sec4_rt_router_state *sec4_rt_router_slot(int64_t router) {
+  for (size_t i = 0; i < SEC4_RT_MAX_ROUTERS; i++) {
+    if (g_sec4_rt_routers[i].active && g_sec4_rt_routers[i].handle == router) {
+      return &g_sec4_rt_routers[i];
+    }
+  }
+  return NULL;
+}
+
+static int64_t sec4_rt_register_route(
+    int64_t router,
+    const char *method,
+    const char *path,
+    sec4_rt_handler_fn handler
+) {
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot == NULL || method == NULL || path == NULL || handler == NULL) {
+    return 1;
+  }
+
+  if (slot->route_count >= SEC4_RT_MAX_ROUTES) {
+    return 1;
+  }
+
+  sec4_rt_route *route = &slot->routes[slot->route_count];
+  memset(route, 0, sizeof(*route));
+
+  strncpy(route->method, method, sizeof(route->method) - 1);
+  route->method[sizeof(route->method) - 1] = '\0';
+  strncpy(route->path, path, sizeof(route->path) - 1);
+  route->path[sizeof(route->path) - 1] = '\0';
+  route->handler = handler;
+
+  slot->route_count += 1;
+  return 0;
+}
+
+static const char *sec4_rt_status_text(int64_t status) {
+  switch (status) {
+    case 200:
+      return "OK";
+    case 201:
+      return "Created";
+    case 204:
+      return "No Content";
+    case 400:
+      return "Bad Request";
+    case 404:
+      return "Not Found";
+    case 500:
+      return "Internal Server Error";
+    default:
+      return "OK";
+  }
+}
+
+static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size) {
+  size_t written = 0;
+  while (written < size) {
+    ssize_t rc = send(socket_fd, buffer + written, size - written, 0);
+    if (rc <= 0) {
+      return -1;
+    }
+    written += (size_t) rc;
+  }
+  return 0;
+}
+
+static int sec4_rt_send_response(
+    int socket_fd,
+    int64_t status,
+    const char *content_type,
+    const char *body,
+    size_t body_len
+) {
+  if (content_type == NULL || content_type[0] == '\0') {
+    content_type = "text/plain; charset=utf-8";
+  }
+
+  char header[512];
+  int header_len = snprintf(
+      header,
+      sizeof(header),
+      "HTTP/1.1 %lld %s\r\n"
+      "Content-Type: %s\r\n"
+      "Content-Length: %zu\r\n"
+      "Connection: close\r\n"
+      "\r\n",
+      (long long) status,
+      sec4_rt_status_text(status),
+      content_type,
+      body_len
+  );
+  if (header_len < 0 || (size_t) header_len >= sizeof(header)) {
+    return -1;
+  }
+
+  if (sec4_rt_write_all(socket_fd, header, (size_t) header_len) != 0) {
+    return -1;
+  }
+  if (body_len > 0 && sec4_rt_write_all(socket_fd, body, body_len) != 0) {
+    return -1;
+  }
+  return 0;
+}
+
+static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
+  const char *raw = getenv(name);
+  if (raw == NULL || raw[0] == '\0') {
+    return fallback;
+  }
+
+  char *end = NULL;
+  long long value = strtoll(raw, &end, 10);
+  if (end == raw || (end != NULL && *end != '\0')) {
+    return fallback;
+  }
+  if (value < 0) {
+    return fallback;
+  }
+  return (int64_t) value;
+}
+
+static bool sec4_rt_oneshot_mode_enabled(void) {
+  const char *mode = getenv("SEC4_RT_HTTP_SERVE_MODE");
+  if (mode != NULL && strcmp(mode, "oneshot") == 0) {
+    return true;
+  }
+  const char *flag = getenv("SEC4_RT_HTTP_SERVE_ONCE");
+  return flag != NULL && strcmp(flag, "0") != 0;
+}
+
+static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
+  char request[SEC4_RT_REQUEST_BUFFER_BYTES];
+  ssize_t bytes_read = recv(socket_fd, request, sizeof(request) - 1, 0);
+  if (bytes_read <= 0) {
+    return;
+  }
+  request[bytes_read] = '\0';
+
+  char method[8] = {0};
+  char path[SEC4_RT_MAX_PATH_BYTES] = {0};
+  if (sscanf(request, "%7s %255s", method, path) != 2) {
+    const char *body = "bad request";
+    (void) sec4_rt_send_response(
+        socket_fd,
+        400,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body)
+    );
+    return;
+  }
+
+  char *query_start = strchr(path, '?');
+  if (query_start != NULL) {
+    *query_start = '\0';
+  }
+
+  sec4_rt_route *match = NULL;
+  for (size_t i = 0; i < router->route_count; i++) {
+    sec4_rt_route *candidate = &router->routes[i];
+    if (strcmp(candidate->method, method) == 0 && strcmp(candidate->path, path) == 0) {
+      match = candidate;
+      break;
+    }
+  }
+
+  if (match == NULL) {
+    const char *body = "not found";
+    (void) sec4_rt_send_response(
+        socket_fd,
+        404,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body)
+    );
+    return;
+  }
+
+  sec4_rt_reset_response();
+  (void) match->handler();
+
+  if (!g_sec4_rt_response.active) {
+    const char *body = "";
+    (void) sec4_rt_send_response(socket_fd, 204, "text/plain; charset=utf-8", body, 0);
+    return;
+  }
+
+  (void) sec4_rt_send_response(
+      socket_fd,
+      g_sec4_rt_response.status,
+      g_sec4_rt_response.content_type,
+      g_sec4_rt_response.body,
+      g_sec4_rt_response.body_len
+  );
+}
+
 int64_t sec4_rt_identity_i64(int64_t value) {
   return value;
 }
@@ -103,7 +353,30 @@ int64_t sec4_rt_res_html() {
   return 0;
 }
 
-int64_t sec4_rt_res_text() {
+int64_t sec4_rt_res_text(int64_t status, const char *body) {
+  sec4_rt_reset_response();
+  g_sec4_rt_response.active = true;
+  g_sec4_rt_response.status = status > 0 ? status : 200;
+  strncpy(
+      g_sec4_rt_response.content_type,
+      "text/plain; charset=utf-8",
+      sizeof(g_sec4_rt_response.content_type) - 1
+  );
+  g_sec4_rt_response.content_type[sizeof(g_sec4_rt_response.content_type) - 1] = '\0';
+
+  if (body == NULL) {
+    g_sec4_rt_response.body[0] = '\0';
+    g_sec4_rt_response.body_len = 0;
+    return 0;
+  }
+
+  size_t body_len = strlen(body);
+  if (body_len >= sizeof(g_sec4_rt_response.body)) {
+    body_len = sizeof(g_sec4_rt_response.body) - 1;
+  }
+  memcpy(g_sec4_rt_response.body, body, body_len);
+  g_sec4_rt_response.body[body_len] = '\0';
+  g_sec4_rt_response.body_len = body_len;
   return 0;
 }
 
@@ -219,36 +492,127 @@ int64_t sec4_rt_headers_value() {
   return 0;
 }
 
-int64_t sec4_rt_http_router() {
+int64_t sec4_rt_http_router(void) {
+  for (size_t i = 0; i < SEC4_RT_MAX_ROUTERS; i++) {
+    if (!g_sec4_rt_routers[i].active) {
+      memset(&g_sec4_rt_routers[i], 0, sizeof(g_sec4_rt_routers[i]));
+      g_sec4_rt_routers[i].active = true;
+      g_sec4_rt_routers[i].handle = g_sec4_rt_next_router_handle++;
+      return g_sec4_rt_routers[i].handle;
+    }
+  }
   return 0;
 }
 
-int64_t sec4_rt_http_route_get() {
+int64_t sec4_rt_http_route_get(
+    int64_t router,
+    const char *path,
+    int64_t (*handler)(void)
+) {
+  return sec4_rt_register_route(router, "GET", path, handler);
+}
+
+int64_t sec4_rt_http_route_post(
+    int64_t router,
+    const char *path,
+    int64_t (*handler)(void)
+) {
+  return sec4_rt_register_route(router, "POST", path, handler);
+}
+
+int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot == NULL || port <= 0 || port > 65535) {
+    return 1;
+  }
+
+  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_fd < 0) {
+    return 1;
+  }
+
+  int opt = 1;
+  (void) setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  addr.sin_port = htons((uint16_t) port);
+
+  if (bind(server_fd, (struct sockaddr *) &addr, sizeof(addr)) != 0) {
+    close(server_fd);
+    return 1;
+  }
+
+  if (listen(server_fd, 16) != 0) {
+    close(server_fd);
+    return 1;
+  }
+
+  bool oneshot = sec4_rt_oneshot_mode_enabled();
+  int64_t timeout_ms = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_SERVE_TIMEOUT_MS",
+      SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS
+  );
+  if (timeout_ms < 0) {
+    timeout_ms = SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS;
+  }
+
+  for (;;) {
+    if (oneshot) {
+      fd_set fds;
+      FD_ZERO(&fds);
+      FD_SET(server_fd, &fds);
+
+      struct timeval timeout;
+      timeout.tv_sec = (time_t) (timeout_ms / 1000);
+      timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+
+      int select_rc = select(server_fd + 1, &fds, NULL, NULL, &timeout);
+      if (select_rc <= 0) {
+        break;
+      }
+    }
+
+    int client_fd = accept(server_fd, NULL, NULL);
+    if (client_fd < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+
+    sec4_rt_handle_client(client_fd, slot);
+    close(client_fd);
+
+    if (oneshot) {
+      break;
+    }
+  }
+
+  close(server_fd);
   return 0;
 }
 
-int64_t sec4_rt_http_route_post() {
-  return 0;
+int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
+  (void) cfg;
+  return router;
 }
 
-int64_t sec4_rt_http_serve() {
-  return 0;
+int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
+  (void) cfg;
+  return router;
 }
 
-int64_t sec4_rt_with_cors() {
-  return 0;
+int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
+  (void) cfg;
+  return router;
 }
 
-int64_t sec4_rt_with_security_headers() {
-  return 0;
-}
-
-int64_t sec4_rt_with_csrf() {
-  return 0;
-}
-
-int64_t sec4_rt_with_auth() {
-  return 0;
+int64_t sec4_rt_with_auth(int64_t router, int64_t cfg) {
+  (void) cfg;
+  return router;
 }
 
 int64_t sec4_rt_sec_default_headers() {

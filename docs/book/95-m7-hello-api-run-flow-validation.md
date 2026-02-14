@@ -2,6 +2,8 @@
 
 This chapter documents the next M7 slice: pinning `sec4 run` behavior for the new `hello-api` sample.
 
+Historical note: this chapter captures the compile-path guardrail stage. Live HTTP serving moved to M16 (`docs/book/396-m16-live-http-runtime-serve-bootstrap.md`).
+
 ## Run-Path Coverage for `examples/hello-api`
 
 ### What it is
@@ -42,8 +44,8 @@ cargo run -p sec4 -- run --path examples/hello-api
 
 ### Tradeoffs and next steps
 
-- Current runtime behavior is still stubbed; success means pipeline correctness, not real HTTP serving.
-- This test gives a stable guardrail while we replace stubs with real M7 runtime behavior.
+- At this M7 point runtime behavior was still stubbed; success meant pipeline correctness, not real HTTP serving.
+- The live serve replacement is now implemented in M16 while this run test remains as a compile/run pipeline guardrail.
 
 ## Tests updated
 

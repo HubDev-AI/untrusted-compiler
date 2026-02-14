@@ -94,7 +94,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_res_ok();"));
     assert!(header.contains("int64_t sec4_rt_res_ok_meta();"));
     assert!(header.contains("int64_t sec4_rt_res_html();"));
-    assert!(header.contains("int64_t sec4_rt_res_text();"));
+    assert!(header.contains("int64_t sec4_rt_res_text(int64_t status, const char *body);"));
     assert!(header.contains("int64_t sec4_rt_set_header();"));
     assert!(header.contains("int64_t sec4_rt_cookie_build();"));
     assert!(header.contains("int64_t sec4_rt_set_cookie();"));
@@ -123,14 +123,16 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_path_base();"));
     assert!(header.contains("int64_t sec4_rt_headers_name();"));
     assert!(header.contains("int64_t sec4_rt_headers_value();"));
-    assert!(header.contains("int64_t sec4_rt_http_router();"));
-    assert!(header.contains("int64_t sec4_rt_http_route_get();"));
-    assert!(header.contains("int64_t sec4_rt_http_route_post();"));
-    assert!(header.contains("int64_t sec4_rt_http_serve();"));
-    assert!(header.contains("int64_t sec4_rt_with_cors();"));
-    assert!(header.contains("int64_t sec4_rt_with_security_headers();"));
-    assert!(header.contains("int64_t sec4_rt_with_csrf();"));
-    assert!(header.contains("int64_t sec4_rt_with_auth();"));
+    assert!(header.contains("int64_t sec4_rt_http_router(void);"));
+    assert!(header.contains("int64_t sec4_rt_http_route_get("));
+    assert!(header.contains("int64_t sec4_rt_http_route_post("));
+    assert!(header.contains("int64_t sec4_rt_http_serve(int64_t port, int64_t router);"));
+    assert!(header.contains("int64_t sec4_rt_with_cors(int64_t router, int64_t cfg);"));
+    assert!(header.contains(
+        "int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg);"
+    ));
+    assert!(header.contains("int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg);"));
+    assert!(header.contains("int64_t sec4_rt_with_auth(int64_t router, int64_t cfg);"));
     assert!(header.contains("int64_t sec4_rt_sec_default_headers();"));
     assert!(header.contains("int64_t sec4_rt_sec_csp();"));
     assert!(header.contains("int64_t sec4_rt_sec_csp_add();"));
@@ -180,7 +182,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_res_ok()"));
     assert!(source.contains("int64_t sec4_rt_res_ok_meta()"));
     assert!(source.contains("int64_t sec4_rt_res_html()"));
-    assert!(source.contains("int64_t sec4_rt_res_text()"));
+    assert!(source.contains("int64_t sec4_rt_res_text(int64_t status, const char *body)"));
     assert!(source.contains("int64_t sec4_rt_set_header()"));
     assert!(source.contains("int64_t sec4_rt_cookie_build()"));
     assert!(source.contains("int64_t sec4_rt_set_cookie()"));
@@ -209,14 +211,16 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_path_base()"));
     assert!(source.contains("int64_t sec4_rt_headers_name()"));
     assert!(source.contains("int64_t sec4_rt_headers_value()"));
-    assert!(source.contains("int64_t sec4_rt_http_router()"));
-    assert!(source.contains("int64_t sec4_rt_http_route_get()"));
-    assert!(source.contains("int64_t sec4_rt_http_route_post()"));
-    assert!(source.contains("int64_t sec4_rt_http_serve()"));
-    assert!(source.contains("int64_t sec4_rt_with_cors()"));
-    assert!(source.contains("int64_t sec4_rt_with_security_headers()"));
-    assert!(source.contains("int64_t sec4_rt_with_csrf()"));
-    assert!(source.contains("int64_t sec4_rt_with_auth()"));
+    assert!(source.contains("int64_t sec4_rt_http_router(void)"));
+    assert!(source.contains("int64_t sec4_rt_http_route_get("));
+    assert!(source.contains("int64_t sec4_rt_http_route_post("));
+    assert!(source.contains("int64_t sec4_rt_http_serve(int64_t port, int64_t router)"));
+    assert!(source.contains("int64_t sec4_rt_with_cors(int64_t router, int64_t cfg)"));
+    assert!(source.contains(
+        "int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg)"
+    ));
+    assert!(source.contains("int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg)"));
+    assert!(source.contains("int64_t sec4_rt_with_auth(int64_t router, int64_t cfg)"));
     assert!(source.contains("int64_t sec4_rt_sec_default_headers()"));
     assert!(source.contains("int64_t sec4_rt_sec_csp()"));
     assert!(source.contains("int64_t sec4_rt_sec_csp_add()"));
