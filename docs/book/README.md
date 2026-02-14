@@ -382,5 +382,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `415-m15-replay-mock-execution-trace-and-count-contract.md`
 - `416-m15-replay-execution-contract-guard-hardening.md`
 - `417-m15-replay-execution-closure-gate-integration.md`
+- `418-m16-cors-allow-origin-coverage-on-middleware-rejection-paths.md`
 
 As milestones progress, chapters will be added and linked from this index.

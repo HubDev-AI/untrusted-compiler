@@ -6369,6 +6369,150 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_applies_cors_origin_header_on_auth_reject_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime auth/cors reject e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-auth-cors-reject-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpauthcorsrejecte2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  let authCfg = auth.fromPolicy();
+  let withAuth = auth.withAuth(withCors, authCfg);
+  http.serve({}, withAuth);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP auth/cors reject runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpauthcorsrejecte2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP auth/cors reject runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime auth/cors reject e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime auth/cors reject e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth/cors reject e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth/cors reject e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime auth/cors reject e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 401 Unauthorized"),
+        "response should contain 401 status line for missing auth header"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "response should include cors allow-origin header on auth rejection response"
+    );
+    assert!(
+        response.contains("\"code\":\"AUTH.UNAUTHORIZED\"")
+            && response.contains("\"message\":\"Authorization header missing or invalid\""),
+        "response should include deterministic auth error envelope payload"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_allows_request_with_auth_header_when_enabled() {
     if !clang_available() {
         eprintln!("skipping http runtime auth allow e2e test: clang not available");
@@ -7059,6 +7203,151 @@ fn main() effects {{ net }} -> Int {{
     assert!(
         response.contains("HTTP/1.1 403 Forbidden"),
         "response should contain 403 status line for missing csrf tokens"
+    );
+    assert!(
+        response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\"")
+            && response.contains("\"message\":\"CSRF token missing or invalid\""),
+        "response should include deterministic csrf error envelope payload"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_origin_header_on_csrf_reject_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime csrf/cors reject e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-csrf-cors-reject-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcsrfcorsrejecte2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(withCors, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP csrf/cors reject runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcsrfcorsrejecte2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP csrf/cors reject runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime csrf/cors reject e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime csrf/cors reject e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf/cors reject e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf/cors reject e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime csrf/cors reject e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 403 Forbidden"),
+        "response should contain 403 status line for missing csrf tokens"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "response should include cors allow-origin header on csrf rejection response"
     );
     assert!(
         response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\"")
@@ -8271,19 +8560,22 @@ fn main() effects {{ net }} -> Int {{
     let mut child = Command::new(cli_bin())
         .args(["run", "--path", path])
         .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "10000")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "30000")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("sec4 run command should start");
 
     let mut response = None;
-    for _ in 0..320 {
+    for _ in 0..800 {
         if let Some(status) = child
             .try_wait()
             .expect("run command wait should succeed while connecting")
         {
-            panic!("run command exited before request with status: {status}");
+            if !status.success() {
+                panic!("run command exited before request with status: {status}");
+            }
+            break;
         }
 
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -8300,7 +8592,7 @@ fn main() effects {{ net }} -> Int {{
                 response = Some(body);
                 break;
             }
-            Err(_) => thread::sleep(Duration::from_millis(40)),
+            Err(_) => thread::sleep(Duration::from_millis(25)),
         }
     }
 

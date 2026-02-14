@@ -90,6 +90,8 @@ Roadmap impact:
   - when `cors.withCors(...)` is active, runtime injects `Access-Control-Allow-Origin: *` into non-preflight responses.
 - M16-S19 runtime request-body limit configurability is now implemented:
   - `req.json(...)` body-size guard now honors `SEC4_RT_HTTP_MAX_BODY_BYTES` for stricter deployment-time limits.
+- M16-S20 CORS error-path propagation coverage is now implemented:
+  - runtime e2e now locks `Access-Control-Allow-Origin` propagation on auth (`401`) and csrf (`403`) middleware rejection responses.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2263,6 +2265,27 @@ M13-S1 go/no-go note:
 - [x] Limit overflow behavior remains deterministic (`LIMIT.BODY_BYTES`).
 - [x] Runtime e2e coverage added for env-configured body-cap enforcement.
 
+### M16-S20 follow-up slice (CORS allow-origin on middleware rejection paths)
+#### Scope
+- Lock CORS header behavior on middleware-generated rejection responses so security middleware does not accidentally drop allow-origin propagation on `401`/`403` error branches.
+
+#### Build tasks
+- Add runtime e2e coverage combining CORS middleware with auth rejection path:
+  - missing auth header (`401`) should still include `Access-Control-Allow-Origin: *`.
+- Add runtime e2e coverage combining CORS middleware with csrf rejection path:
+  - missing csrf tokens (`403`) should still include `Access-Control-Allow-Origin: *`.
+- Stabilize run-command HTTP oneshot integration timing to reduce suite-level flake under heavy test load.
+
+#### Acceptance criteria
+- Auth rejection responses under CORS middleware include deterministic allow-origin header.
+- CSRF rejection responses under CORS middleware include deterministic allow-origin header.
+- Full `json_output` suite remains green without run-command oneshot flake regressions.
+
+#### Tracking (live status)
+- [x] Auth reject (`401`) + CORS allow-origin runtime e2e coverage added and green.
+- [x] CSRF reject (`403`) + CORS allow-origin runtime e2e coverage added and green.
+- [x] Run-command HTTP oneshot e2e retry/timeout window widened for suite stability.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2283,6 +2306,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Auth Runtime Gate Enforcement".
 - Chapter: "M16 Slice: CORS Allow-Origin Propagation on Runtime Responses".
 - Chapter: "M16 Slice: Env-Configurable Runtime Request Body Cap".
+- Chapter: "M16 Slice: CORS Allow-Origin Coverage on Middleware Rejection Paths".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
