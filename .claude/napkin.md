@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Used `rg -Eq` in a shell test assuming grep-style `-E`; ripgrep interpreted `-E` as encoding and failed with `unknown encoding`. | Use `rg -q` (or `rg -P` when truly needed) for regex checks; do not port grep flags directly. |
 | 2026-02-14 | self | Added a new shell checker script via patch but forgot to set the executable bit, causing immediate `Permission denied` in its contract test. | After adding any new script under `scripts/`, run `chmod +x` before executing related tests. |
 | 2026-02-14 | self | Adding a new closure gate (`M16-E`) initially looked like a one-file change, but closure fixture coverage in `scripts/test-check-milestone-closure.sh` required synchronized updates across many embedded naming-lock YAML blocks. | For closure-gate additions, update gate logic + deterministic gate list + all embedded fixture workflow blocks in one pass (bulk replace where safe), then run closure harness immediately. |
 | 2026-02-14 | self | Repeated accidental web-tool invocations during local-only slices even after prior reminder. | Keep hands on `functions.exec_command`/`apply_patch` only during local implementation; treat web tools as opt-in external-research path with explicit intent check first. |
