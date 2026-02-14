@@ -52,11 +52,48 @@ If it cannot, it is mostly convention.
 
 ## Current implementation status
 
-- M0 completed: workspace + CLI skeleton + diagnostics + manifest/lockfile basics.
-- M1 completed: lexer/parser/AST + `check --emit ast` + parser golden tests.
-- M2 completed: name resolution + minimal type checker + semantic golden tests.
-- M3 effects slice completed: parsed `effects { ... }` declarations + compile-time effect usage enforcement.
-- Security-first M4 planning/spec is now locked in docs (capabilities, policy-as-code, typed sink expansion, strict baseline).
+- Core compiler/runtime path is live end-to-end:
+  - parser/type/effects/security checks,
+  - MIR -> C emission,
+  - `clang` build/run path via `sec4`.
+- Replay/capture bootstrap and runtime mock execution contracts are implemented and closure-gated (`M14`/`M15`).
+- Live HTTP runtime serving is implemented with deterministic e2e coverage (`M16`), including:
+  - JSON request gate + standard error/success envelopes,
+  - trace correlation,
+  - CORS/security-headers/CSRF/auth middleware behavior.
+- CI closure audit currently enforces milestone gates through `M16`.
+
+## Run End-to-End Now
+
+Fast deterministic smoke check:
+
+```bash
+scripts/smoke-sec4-run-hello-api.sh
+```
+
+Manual live run:
+
+```bash
+cargo run -p sec4 -- run --path examples/hello-api
+```
+
+Then in another terminal:
+
+```bash
+curl -i \\
+  -H 'Authorization: Bearer token123' \\
+  http://127.0.0.1:8080/health
+```
+
+```bash
+curl -i -X POST \\
+  -H 'Authorization: Bearer token123' \\
+  -H 'Content-Type: application/json' \\
+  -H 'X-CSRF-Token: token123' \\
+  -H 'Cookie: csrf=token123' \\
+  --data '{}' \\
+  http://127.0.0.1:8080/users
+```
 
 Roadmap: `docs/05-sec4-master-roadmap.md`
 Book docs: `docs/book/README.md`
