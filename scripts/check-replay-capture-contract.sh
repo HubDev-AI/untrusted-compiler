@@ -54,7 +54,14 @@ jq -e '
   and (.runtimeHash | type == "string" and length > 0)
   and (.request | type == "object")
   and (.request.method | type == "string" and length > 0)
-  and (.request.path | type == "string")
+  and (.request.path | type == "string" and length > 0)
+  and (
+    ((.request.url? | type) == "string" and (.request.url | length > 0))
+    or (
+      (.request.scheme | type == "string" and length > 0)
+      and (.request.host | type == "string" and length > 0)
+    )
+  )
   and (.request.headers | type == "object")
   and (.request.body | type == "object")
   and (.request.body.encoding | type == "string")

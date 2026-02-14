@@ -1469,10 +1469,9 @@ fn replay_check_mock_mode_fails_when_capture_signature_has_no_matching_stub() {
 }
 
 #[test]
-fn replay_check_mock_mode_fails_when_capture_has_no_url_derivation_fields() {
-    let dir = temp_dir("sec4-replay-mock-missing-url");
+fn replay_check_fails_when_capture_has_no_url_derivation_fields() {
+    let dir = temp_dir("sec4-replay-missing-url");
     let capture = dir.join("capture.json");
-    let stubs = dir.join("stubs.json");
     fs::write(
         &capture,
         r#"{
@@ -1499,25 +1498,16 @@ fn replay_check_mock_mode_fails_when_capture_has_no_url_derivation_fields() {
         }"#,
     )
     .expect("capture payload should be written");
-    write_stub_registry_file(&stubs);
 
     let capture_path = capture
         .to_str()
         .expect("capture path should be valid utf-8")
-        .to_string();
-    let stubs_path = stubs
-        .to_str()
-        .expect("stubs path should be valid utf-8")
         .to_string();
 
     let output = run_cli(&[
         "replay",
         "--capture",
         &capture_path,
-        "--stubs",
-        &stubs_path,
-        "--effects",
-        "mock",
         "--policy-hash",
         "pol_A",
         "--compiler-hash",
@@ -1527,7 +1517,7 @@ fn replay_check_mock_mode_fails_when_capture_has_no_url_derivation_fields() {
     ]);
     assert!(
         !output.status.success(),
-        "replay check should fail when mock signature URL cannot be derived"
+        "replay check should fail when request signature URL cannot be derived"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");

@@ -20,6 +20,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_A",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {

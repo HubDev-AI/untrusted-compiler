@@ -20,6 +20,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -56,6 +58,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -99,6 +103,48 @@ cat > "${capture_path}" <<'JSON'
     "path": "/ping",
     "headers": {},
     "body": {
+      "encoding": "base64",
+      "bytes": "e30=",
+      "truncated": false
+    }
+  },
+  "env": {"timezone": "UTC", "locale": "en-US"},
+  "determinism": {
+    "seed": 1,
+    "time": {"mode": "frozen", "nowMs": 1760000000000},
+    "uuid": {"mode": "seeded"},
+    "budget": {
+      "maxBodyBytes": 1,
+      "maxJsonBytes": 1,
+      "maxJsonDepth": 1,
+      "deadlineMs": 1
+    }
+  },
+  "redaction": {"headers": [], "jsonPaths": []}
+}
+JSON
+
+if "${check_script}" --capture "${capture_path}" >/dev/null 2>&1; then
+  echo "expected failure when request has no url derivation fields" >&2
+  exit 1
+fi
+
+cat > "${capture_path}" <<'JSON'
+{
+  "version": "0.1",
+  "captureId": "cap_01",
+  "traceId": "tr_01",
+  "timeMs": 1760000000000,
+  "policyHash": "pol_abc",
+  "compilerHash": "cpl_abc",
+  "runtimeHash": "rt_abc",
+  "request": {
+    "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
+    "path": "/ping",
+    "headers": {},
+    "body": {
       "encoding": "none",
       "truncated": true
     }
@@ -135,6 +181,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -175,6 +223,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -230,6 +280,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -279,6 +331,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {
@@ -335,6 +389,8 @@ cat > "${capture_path}" <<'JSON'
   "runtimeHash": "rt_abc",
   "request": {
     "method": "GET",
+    "scheme": "https",
+    "host": "example.com",
     "path": "/ping",
     "headers": {},
     "body": {

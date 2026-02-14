@@ -827,9 +827,10 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
     if request
         .get("path")
         .and_then(serde_json::Value::as_str)
+        .filter(|entry| !entry.is_empty())
         .is_none()
     {
-        return Err("capture.request.path must be a string".to_string());
+        return Err("capture.request.path must be a non-empty string".to_string());
     }
     if request
         .get("headers")
@@ -881,6 +882,10 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
                 "capture.request.body.encoding must be base64|none (got {encoding})"
             ))
         }
+    }
+
+    if let Err(message) = capture_net_request_signature(capture) {
+        return Err(message);
     }
 
     let determinism = capture
