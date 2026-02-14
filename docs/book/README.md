@@ -390,5 +390,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `423-m12-local-path-leak-ci-guard.md`
 - `424-m12-local-path-leak-closure-gate.md`
 - `425-m16-runtime-http-coverage-closure-gate.md`
+- `426-m16-sec4-run-hello-api-operator-smoke-script.md`
 
 As milestones progress, chapters will be added and linked from this index.

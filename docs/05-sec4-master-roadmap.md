@@ -106,6 +106,8 @@ Roadmap impact:
   - runtime e2e now locks security-header injection on auth (`401`) and csrf (`403`) rejection responses when `sec.withSecurityHeaders(...)` is enabled.
 - M16-S24 security-header coverage is now expanded for dispatch/preflight branches:
   - runtime e2e now locks security-header injection on `405` method-mismatch and CORS preflight (`204`) responses.
+- M16-S25 operator smoke coverage is now implemented:
+  - `scripts/smoke-sec4-run-hello-api.sh` now validates `sec4 run` end-to-end request handling (`GET /health`, `POST /users`) against a temporary project copy in deterministic oneshot mode.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 
 ## Formal Closure Audit (Strict, 2026-02-14)
@@ -2391,6 +2393,29 @@ M13-S1 go/no-go note:
 - [x] Runtime e2e coverage added for security-headers + preflight `204` branch.
 - [x] Runtime integration suites remain green after dispatch/preflight coverage expansion.
 
+### M16-S25 follow-up slice (operator end-to-end smoke script)
+#### Scope
+- Add an operator-facing smoke script that proves `sec4 run` can serve a real Untrusted<T> HTTP service end-to-end outside Rust test harnesses.
+
+#### Build tasks
+- Add a standalone script that:
+  - clones `examples/hello-api` into a temporary workspace,
+  - patches `http.serve(...)` to a free port for conflict-free local execution,
+  - runs `sec4 run` in oneshot mode and validates `GET /health` with auth,
+  - runs `sec4 run` in oneshot mode and validates `POST /users` with auth + CSRF headers and JSON envelope output.
+- Keep the script deterministic and self-cleaning (`mktemp` + trap).
+- Validate the script locally against real runtime execution.
+
+#### Acceptance criteria
+- `scripts/smoke-sec4-run-hello-api.sh` exits successfully when runtime execution path is healthy.
+- Script fails with actionable diagnostics if runtime exits early or response contracts drift.
+- No repository state is mutated by the smoke run (temporary workspace only).
+
+#### Tracking (live status)
+- [x] Operator smoke script added (`scripts/smoke-sec4-run-hello-api.sh`).
+- [x] Script validates `GET /health` and `POST /users` over real `sec4 run` oneshot executions.
+- [x] Script validated locally with passing end-to-end output.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2416,6 +2441,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CORS Preflight Interoperability with Auth + CSRF Middleware".
 - Chapter: "M16 Slice: Security Headers Coverage on Auth/CSRF Rejection Paths".
 - Chapter: "M16 Slice: Security Headers Coverage on 405 and Preflight Branches".
+- Chapter: "M16 Slice: sec4 run Hello-API Operator Smoke Script".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
