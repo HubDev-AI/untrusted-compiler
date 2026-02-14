@@ -429,6 +429,7 @@ Current strict closure result:
 | `M27-C` | PASS | Naming-lock CI enforces M27 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M27-D` | PASS | Naming-lock CI enforces M27 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M27-E` | PASS | Naming-lock CI enforces M27 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M27-F` | PASS | Naming-lock CI enforces M27 transition handoff packet | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -527,6 +528,7 @@ Strict closure interpretation:
 - M27 next-slice selector enforcement is active (`M27-C`).
 - M27 runtime hardening runner enforcement is active (`M27-D`).
 - M27 executed-slice convergence summary enforcement is active (`M27-E`).
+- M27 transition handoff packet enforcement is active (`M27-F`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4527,8 +4529,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M27 executed-slice convergence summary added.
 - [x] Naming-lock CI and closure gate updated (`M27-E`).
 
+### M27-S6 transition handoff packet acceptance criteria
+- Transition packet script validates kickoff/matrix/selector/runtime/convergence contracts and enforces selector/runtime recommendation alignment.
+- Packet output is deterministic (`handoff-packet.json` + normalized artifact copies) and can auto-generate convergence summary when omitted.
+- Closure audit includes dedicated `M27-F` gate.
+
+### M27-S6 tracking (live status)
+- [x] M27 transition handoff packet script added.
+- [x] M27 transition handoff packet contract test added.
+- [x] Book chapter documenting M27 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M27-F`).
+
 ### Next planned slice
-- M27-S6 transition handoff packet + closure gate `M27-F`.
+- M27-S7 closure report + closure gate `M27-G`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4620,7 +4633,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S6 transition handoff packet from M27 kickoff/matrix/selector/runtime/convergence artifacts and wire `M27-F`.
+1. Implement M27-S7 closure report from strict closure + M27 handoff packet and wire `M27-G`.
 
 ---
 
