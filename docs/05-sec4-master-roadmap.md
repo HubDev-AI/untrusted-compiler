@@ -425,6 +425,7 @@ Current strict closure result:
 | `M26-F` | PASS | Naming-lock CI enforces M26 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M26-G` | PASS | Naming-lock CI enforces M26 closure report | `.github/workflows/naming-lock.yml` |
 | `M27-A` | PASS | Naming-lock CI enforces M27 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M27-B` | PASS | Naming-lock CI enforces M27 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -519,6 +520,7 @@ Strict closure interpretation:
 - M26 transition handoff packet enforcement is active (`M26-F`).
 - M26 closure report enforcement is active (`M26-G`).
 - M27 kickoff brief enforcement is active (`M27-A`).
+- M27 priority matrix enforcement is active (`M27-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4475,8 +4477,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M27 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M27-A`).
 
+### M27-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M27 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M27-B` gate.
+
+### M27-S2 tracking (live status)
+- [x] M27 priority matrix script added.
+- [x] M27 priority matrix contract test added.
+- [x] Book chapter documenting M27 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M27-B`).
+
 ### Next planned slice
-- M27-S2 priority matrix + closure gate `M27-B`.
+- M27-S3 next-slice selector + closure gate `M27-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4568,7 +4581,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S2 priority matrix from M27 kickoff output and wire `M27-B`.
+1. Implement M27-S3 next-slice selector from M27 kickoff + priority matrix outputs and wire `M27-C`.
 
 ---
 
