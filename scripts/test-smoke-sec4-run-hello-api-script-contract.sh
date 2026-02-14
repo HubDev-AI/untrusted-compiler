@@ -53,6 +53,9 @@ required_tokens=(
   '--port "${port}"'
   "--oneshot"
   "--serve-timeout-ms 12000"
+  "oneshot=true"
+  "serveTimeoutMs=12000"
+  "runFlags=--port,--oneshot,--serve-timeout-ms"
   "GET"
   "/health"
   "POST"

@@ -126,6 +126,8 @@ Roadmap impact:
 - M16-S32 runtime-smoke metadata contract is now expanded:
   - smoke artifacts now include deterministic run-flag metadata (`oneshot`, `serveTimeoutMs`, `runFlags`).
   - artifact checker and checker tests now enforce this metadata shape.
+- M16-S33 smoke-script surface contract now locks metadata emit tokens:
+  - smoke script contract checks now require deterministic metadata fields emitted by `run-metadata.txt` generation block.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2605,6 +2607,26 @@ M13-S1 go/no-go note:
 - [x] Checker regression suite includes missing-oneshot metadata failure case.
 - [x] Real smoke artifact generation passes with expanded metadata contract.
 
+### M16-S33 follow-up slice (smoke metadata token contract lock)
+#### Scope
+- Lock metadata emission surface directly in smoke-script contract checks so run-metadata field drift is caught before artifact-checker execution.
+
+#### Build tasks
+- Extend `scripts/test-smoke-sec4-run-hello-api-script-contract.sh` required tokens with:
+  - `oneshot=true`
+  - `serveTimeoutMs=12000`
+  - `runFlags=--port,--oneshot,--serve-timeout-ms`
+- Re-run smoke-script contract + guard tests and real smoke+artifact checker flow.
+
+#### Acceptance criteria
+- Smoke-script contract fails when deterministic metadata emit tokens are removed.
+- Existing smoke + checker runtime flow remains green.
+
+#### Tracking (live status)
+- [x] Smoke-script contract now requires deterministic metadata emit tokens.
+- [x] Smoke-script contract and guard tests pass after token expansion.
+- [x] Real smoke + checker flow remains green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2639,6 +2661,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Port Override Bridge and Smoke Port Migration".
 - Chapter: "M16 Slice: sec4 run Runtime-Flag Contract and Naming-Lock CI Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Contract Expansion".
+- Chapter: "M16 Slice: Smoke-Script Metadata Token Contract Lock".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
