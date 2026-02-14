@@ -402,5 +402,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `435-m16-sec4-run-runtime-flag-contract-and-naming-lock-ci-coverage.md`
 - `436-m16-runtime-smoke-metadata-contract-expansion.md`
 - `437-m16-smoke-script-metadata-token-contract-lock.md`
+- `438-m16-smoke-script-metadata-guard-coverage-expansion.md`
 
 As milestones progress, chapters will be added and linked from this index.

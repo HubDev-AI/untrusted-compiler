@@ -27,4 +27,21 @@ if ! rg -Fq "missing required smoke-script token: ${missing_token}" "${tmp_dir}/
   exit 1
 fi
 
+meta_fixture="${tmp_dir}/smoke-meta.sh"
+cp "${source_script}" "${meta_fixture}"
+chmod +x "${meta_fixture}"
+
+missing_meta_token='runFlags=--port,--oneshot,--serve-timeout-ms'
+perl -0pi -e 's/runFlags=--port,--oneshot,--serve-timeout-ms/runFlags=removed-flags/' "${meta_fixture}"
+
+if "${contract_script}" --script "${meta_fixture}" >"${tmp_dir}/meta-guard.log" 2>&1; then
+  echo "expected smoke script contract to fail when metadata token is removed" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing required smoke-script token: ${missing_meta_token}" "${tmp_dir}/meta-guard.log"; then
+  echo "expected missing-token diagnostic for ${missing_meta_token}" >&2
+  exit 1
+fi
+
 echo "sec4 run hello-api smoke script contract guard test passed"

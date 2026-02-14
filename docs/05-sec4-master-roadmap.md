@@ -128,6 +128,8 @@ Roadmap impact:
   - artifact checker and checker tests now enforce this metadata shape.
 - M16-S33 smoke-script surface contract now locks metadata emit tokens:
   - smoke script contract checks now require deterministic metadata fields emitted by `run-metadata.txt` generation block.
+- M16-S34 smoke-script guard coverage now includes metadata token drift:
+  - guard script now verifies contract failure for removed `runFlags` metadata token in addition to request-token drift.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2627,6 +2629,25 @@ M13-S1 go/no-go note:
 - [x] Smoke-script contract and guard tests pass after token expansion.
 - [x] Real smoke + checker flow remains green.
 
+### M16-S34 follow-up slice (smoke metadata guard coverage expansion)
+#### Scope
+- Ensure smoke-script guard behavior explicitly covers metadata token regressions, not only HTTP-request token regressions.
+
+#### Build tasks
+- Extend `scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh` with a dedicated metadata drift scenario:
+  - mutate `runFlags=--port,--oneshot,--serve-timeout-ms`
+  - assert deterministic missing-token diagnostic.
+- Keep existing CSRF-token guard scenario intact.
+
+#### Acceptance criteria
+- Guard script fails when metadata token is removed from smoke script fixture.
+- Guard script reports deterministic missing-token message for metadata drift.
+
+#### Tracking (live status)
+- [x] Added metadata-token drift scenario to smoke contract guard script.
+- [x] Guard script now validates both request-token and metadata-token drift.
+- [x] Smoke contract + guard tests pass after guard expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2662,6 +2683,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Runtime-Flag Contract and Naming-Lock CI Coverage".
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Contract Expansion".
 - Chapter: "M16 Slice: Smoke-Script Metadata Token Contract Lock".
+- Chapter: "M16 Slice: Smoke-Script Metadata Guard Coverage Expansion".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
