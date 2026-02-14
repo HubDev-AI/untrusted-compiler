@@ -372,6 +372,7 @@ Current strict closure result:
 | `M19-B` | PASS | Naming-lock CI enforces M19 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M19-C` | PASS | Naming-lock CI enforces M19 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M19-D` | PASS | Naming-lock CI enforces M19 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M19-E` | PASS | Naming-lock CI enforces M19 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -413,6 +414,7 @@ Strict closure interpretation:
 - M19 priority matrix enforcement is active (`M19-B`).
 - M19 next-slice selector enforcement is active (`M19-C`).
 - M19 runtime hardening runner enforcement is active (`M19-D`).
+- M19 executed-slice convergence summary enforcement is active (`M19-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3625,7 +3627,8 @@ M13-S1 go/no-go note:
 - Build deterministic M19 priority matrix from kickoff brief.
 - Select first executable M19 slice from kickoff + matrix inputs.
 - Execute first selected runtime slice via dedicated M19 runtime hardening runner.
-- Lock kickoff/matrix/selector/runtime contracts in naming-lock CI and closure audit.
+- Build executed-slice convergence summary from selector + runtime execution artifacts.
+- Lock kickoff/matrix/selector/runtime/convergence contracts in naming-lock CI and closure audit.
 
 ### M19-S1 kickoff acceptance criteria
 - M19 kickoff brief script + contract test exists.
@@ -3658,6 +3661,17 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M19 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M19-D`).
 
+### M19-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact contracts and recommendation alignment.
+- Summary emits deterministic markdown/json outputs with explicit `overall` and `nextAction`.
+- Closure audit includes dedicated `M19-E` gate.
+
+### M19-S5 tracking (live status)
+- [x] M19 executed-slice convergence summary script added.
+- [x] M19 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M19 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M19-E`).
+
 ### Exit criteria
 - M19 kickoff starts from deterministic evidence (`M18` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3666,6 +3680,7 @@ M13-S1 go/no-go note:
 - Chapter: "M19 Priority Matrix".
 - Chapter: "M19 Next-Slice Selector".
 - Chapter: "M19 Runtime Hardening Runner".
+- Chapter: "M19 Executed-Slice Convergence Summary".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3757,7 +3772,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M19-S5 executed-slice convergence summary for M19 and wire its closure gate.
+1. Implement M19-S6 transition packet for M19 executed-slice artifacts and wire its closure gate.
 
 ---
 

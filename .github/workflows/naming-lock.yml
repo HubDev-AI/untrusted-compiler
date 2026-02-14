@@ -139,6 +139,9 @@ jobs:
       - name: Validate M19 runtime hardening runner
         run: scripts/test-run-m19-runtime-hardening.sh
 
+      - name: Validate M19 executed-slice convergence summary
+        run: scripts/test-build-m19-executed-slice-convergence-summary.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
