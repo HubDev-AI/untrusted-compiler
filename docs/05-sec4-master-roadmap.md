@@ -423,6 +423,7 @@ Current strict closure result:
 | `M26-D` | PASS | Naming-lock CI enforces M26 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 | `M26-E` | PASS | Naming-lock CI enforces M26 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M26-F` | PASS | Naming-lock CI enforces M26 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M26-G` | PASS | Naming-lock CI enforces M26 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -515,6 +516,7 @@ Strict closure interpretation:
 - M26 runtime hardening runner enforcement is active (`M26-D`).
 - M26 executed-slice convergence summary enforcement is active (`M26-E`).
 - M26 transition handoff packet enforcement is active (`M26-F`).
+- M26 closure report enforcement is active (`M26-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4441,8 +4443,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M26 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M26-F`).
 
+### M26-S7 closure report acceptance criteria
+- Closure report script consumes strict closure JSON + M26 transition packet summary and computes deterministic `overall` + `nextAction`.
+- Closure report output includes full required gate snapshot (`M26-A..M26-F`) and packet convergence fields.
+- Closure audit includes dedicated `M26-G` gate.
+
+### M26-S7 tracking (live status)
+- [x] M26 closure report script added.
+- [x] M26 closure report contract test added.
+- [x] Book chapter documenting M26 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M26-G`).
+
 ### Next planned slice
-- M26-S7 closure report + closure gate `M26-G`.
+- M27-S1 kickoff brief + closure gate `M27-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4534,7 +4547,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M26-S7 closure report from strict closure output + M26 transition packet summary and wire `M26-G`.
+1. Implement M27-S1 kickoff brief from M26 closure report + M26 transition packet artifacts and wire `M27-A`.
 
 ---
 

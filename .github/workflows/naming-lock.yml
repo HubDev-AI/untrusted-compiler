@@ -292,6 +292,9 @@ jobs:
       - name: Validate M26 transition handoff packet
         run: scripts/test-build-m26-transition-handoff-packet.sh
 
+      - name: Validate M26 closure report
+        run: scripts/test-build-m26-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
