@@ -419,6 +419,7 @@ Current strict closure result:
 | `M25-G` | PASS | Naming-lock CI enforces M25 closure report | `.github/workflows/naming-lock.yml` |
 | `M26-A` | PASS | Naming-lock CI enforces M26 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M26-B` | PASS | Naming-lock CI enforces M26 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M26-C` | PASS | Naming-lock CI enforces M26 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -507,6 +508,7 @@ Strict closure interpretation:
 - M25 closure report enforcement is active (`M25-G`).
 - M26 kickoff brief enforcement is active (`M26-A`).
 - M26 priority matrix enforcement is active (`M26-B`).
+- M26 next-slice selector enforcement is active (`M26-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4389,8 +4391,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M26 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M26-B`).
 
+### M26-S3 next-slice selector acceptance criteria
+- Selector consumes M26 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M26-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M26-C` gate.
+
+### M26-S3 tracking (live status)
+- [x] M26 next-slice selector script added.
+- [x] M26 next-slice selector contract test added.
+- [x] Book chapter documenting M26 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M26-C`).
+
 ### Next planned slice
-- M26-S3 next-slice selector + closure gate `M26-C`.
+- M26-S4 runtime hardening runner + closure gate `M26-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4482,7 +4495,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M26-S3 next-slice selector from M26 kickoff + priority matrix outputs and wire `M26-C`.
+1. Implement M26-S4 runtime hardening runner from M26 selector output and wire `M26-D`.
 
 ---
 

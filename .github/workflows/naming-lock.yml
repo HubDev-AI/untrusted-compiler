@@ -280,6 +280,9 @@ jobs:
       - name: Validate M26 priority matrix
         run: scripts/test-build-m26-priority-matrix.sh
 
+      - name: Validate M26 next-slice selector
+        run: scripts/test-select-m26-next-slice.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
