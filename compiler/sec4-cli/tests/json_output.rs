@@ -5763,6 +5763,10 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 200 status line"
     );
     assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic runtime trace header"
+    );
+    assert!(
         response.contains("\r\n\r\nok"),
         "response should include text body from res.text"
     );
@@ -6180,7 +6184,8 @@ fn main() effects {{ net }} -> Int {{
     );
     assert!(
         response.contains("\"code\":\"JSON.INVALID_BODY\"")
-            && response.contains("\"message\":\"invalid json body\""),
+            && response.contains("\"message\":\"invalid json body\"")
+            && response.contains("\"traceId\":\"rt-1\""),
         "response should include deterministic std-error invalid-json payload"
     );
 }

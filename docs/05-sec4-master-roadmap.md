@@ -65,6 +65,8 @@ Roadmap impact:
   - `req.json(...)` now rejects oversized request bodies with deterministic `413 Payload Too Large`.
 - M16-S8 std-error envelope alignment is now implemented:
   - runtime `req.json(...)` gate failures now return deterministic standard JSON error envelopes with stable error codes.
+- M16-S9 trace-correlation bootstrap is now implemented:
+  - runtime now emits deterministic `X-Trace-Id` response header and aligns `req.json(...)` error-envelope `traceId` with request-scoped runtime trace ids.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1939,6 +1941,29 @@ M13-S1 go/no-go note:
 - [x] `req.json(...)` gate failure paths migrated to stable error codes.
 - [x] Runtime e2e tests updated to assert structured error-code payloads.
 
+### M16-S9 follow-up slice (runtime trace-correlation bootstrap)
+#### Scope
+- Introduce deterministic request-scoped trace IDs in the runtime response path so HTTP responses and structured runtime errors share the same trace correlation signal.
+
+#### Build tasks
+- Add runtime request trace-id assignment per handled request.
+- Emit `X-Trace-Id` response header on runtime responses.
+- Wire `sec4_rt_store_std_error_response(...)` to use current request trace-id in error payload.
+- Add integration assertions for:
+  - trace header on success response,
+  - trace id field on runtime gate error payload.
+
+#### Acceptance criteria
+- Runtime responses include deterministic `X-Trace-Id`.
+- Runtime `req.json(...)` error envelope `traceId` matches request trace id.
+- Existing runtime HTTP tests remain stable and green.
+
+#### Tracking (live status)
+- [x] Runtime request-scoped trace-id assignment added.
+- [x] Response header includes deterministic `X-Trace-Id`.
+- [x] Runtime error-envelope trace-id now aligns with request trace id.
+- [x] Runtime e2e assertions added for trace header/error trace id fields.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -1948,6 +1973,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Live HTTP Command-Path Validation".
 - Chapter: "M16 Slice: req.json Request-Size Guard Enforcement".
 - Chapter: "M16 Slice: req.json Standard Error Envelope Alignment".
+- Chapter: "M16 Slice: Runtime Trace Correlation Header and Error Envelope Sync".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

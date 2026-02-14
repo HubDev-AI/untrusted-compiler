@@ -45,6 +45,7 @@ typedef struct {
 
 typedef struct {
   bool has_request;
+  char trace_id[32];
   char method[8];
   char path[SEC4_RT_MAX_PATH_BYTES];
   char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
@@ -60,6 +61,10 @@ static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
 static sec4_rt_request_state g_sec4_rt_request;
+static uint64_t g_sec4_rt_next_trace_id = 1;
+
+static const char *sec4_rt_current_trace_id(void);
+static void sec4_rt_assign_trace_id(void);
 
 static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.active = false;
@@ -113,18 +118,19 @@ static void sec4_rt_store_std_error_response(
   int written = snprintf(
       payload,
       sizeof(payload),
-      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"rt_trace\",\"timeMs\":0}}",
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0}}",
       code != NULL ? code : "INTERNAL.ERROR",
       kind != NULL ? kind : "internal",
       message != NULL ? message : "internal error",
-      (long long) status
+      (long long) status,
+      sec4_rt_current_trace_id()
   );
 
   if (written <= 0 || (size_t) written >= sizeof(payload)) {
     sec4_rt_store_response(
         status,
         "application/json; charset=utf-8",
-        "{\"error\":{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"error\",\"status\":500,\"traceId\":\"rt_trace\",\"timeMs\":0}}"
+        "{\"error\":{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"error\",\"status\":500,\"traceId\":\"rt-0\",\"timeMs\":0}}"
     );
     return;
   }
@@ -134,6 +140,22 @@ static void sec4_rt_store_std_error_response(
 
 static void sec4_rt_reset_request(void) {
   memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+}
+
+static const char *sec4_rt_current_trace_id(void) {
+  if (g_sec4_rt_request.trace_id[0] == '\0') {
+    return "rt-0";
+  }
+  return g_sec4_rt_request.trace_id;
+}
+
+static void sec4_rt_assign_trace_id(void) {
+  unsigned long long trace = (unsigned long long) g_sec4_rt_next_trace_id;
+  g_sec4_rt_next_trace_id += 1;
+  if (g_sec4_rt_next_trace_id == 0) {
+    g_sec4_rt_next_trace_id = 1;
+  }
+  (void) snprintf(g_sec4_rt_request.trace_id, sizeof(g_sec4_rt_request.trace_id), "rt-%llu", trace);
 }
 
 static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
@@ -351,12 +373,14 @@ static int sec4_rt_send_response(
       "HTTP/1.1 %lld %s\r\n"
       "Content-Type: %s\r\n"
       "Content-Length: %zu\r\n"
+      "X-Trace-Id: %s\r\n"
       "Connection: close\r\n"
       "\r\n",
       (long long) status,
       sec4_rt_status_text(status),
       content_type,
-      body_len
+      body_len,
+      sec4_rt_current_trace_id()
   );
   if (header_len < 0 || (size_t) header_len >= sizeof(header)) {
     return -1;
@@ -399,6 +423,7 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
 
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
+  sec4_rt_assign_trace_id();
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
