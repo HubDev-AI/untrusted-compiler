@@ -361,5 +361,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `394-m14-replay-capture-http-method-shape-contract-enforcement.md`
 - `395-m15-runtime-replay-stubbing-scope-and-plan.md`
 - `396-m16-live-http-runtime-serve-bootstrap.md`
+- `397-m16-json-response-materialization-for-runtime-routes.md`
 
 As milestones progress, chapters will be added and linked from this index.

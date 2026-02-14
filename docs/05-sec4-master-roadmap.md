@@ -48,6 +48,9 @@ Roadmap impact:
   - runtime router + route registration + socket serve loop are active in `runtime/c/sec4_runtime.c`,
   - `res.text` now materializes real HTTP response payloads for active request handlers,
   - `SEC4_RT_HTTP_SERVE_MODE=oneshot` is available for deterministic non-blocking test execution.
+- M16-S2 JSON response materialization bootstrap is now implemented:
+  - `res.ok`/`res.json` runtime paths materialize JSON HTTP responses,
+  - `POST /users` runtime E2E serving is validated in oneshot mode.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1761,8 +1764,35 @@ M13-S1 go/no-go note:
 - Developers can run compiled services and observe end-to-end request handling behavior.
 - Test harnesses can exercise HTTP runtime deterministically without hanging.
 
+### M16-S2 follow-up slice (JSON response materialization)
+#### Scope
+- Bootstrap response materialization for JSON-oriented response intrinsics so API routes can return structured payloads, not only plain text.
+
+#### Build tasks
+- Implement minimal runtime JSON response wiring:
+  - `sec4_rt_res_ok` returns deterministic `201` JSON payload,
+  - `sec4_rt_res_json` returns deterministic `200` JSON payload,
+  - `sec4_rt_res_ok_meta` returns deterministic JSON envelope with meta field.
+- Keep `req.json` as bridge-stage decode placeholder while preserving successful handler flow.
+- Add runtime E2E integration coverage for `POST /users`:
+  - compile a temp fixture with `req.json + res.ok`,
+  - send HTTP POST request,
+  - assert `201 Created`, JSON content-type, and JSON response body.
+
+#### Acceptance criteria
+- Runtime can serve at least one JSON response route end-to-end (`POST /users`).
+- Response status + content-type + body are deterministic across runs in oneshot mode.
+- Existing `json_output` integration suite remains green.
+
+#### Tracking (live status)
+- [x] `res.ok` runtime materialization returns JSON `201` response.
+- [x] `res.json` runtime materialization returns JSON `200` response.
+- [x] `res.okMeta` runtime materialization returns JSON response with `meta`.
+- [x] `POST /users` runtime E2E integration test added and green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
+- Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

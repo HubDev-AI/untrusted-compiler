@@ -52,6 +52,40 @@ static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.body_len = 0;
 }
 
+static void sec4_rt_store_response(
+    int64_t status,
+    const char *content_type,
+    const char *body
+) {
+  sec4_rt_reset_response();
+  g_sec4_rt_response.active = true;
+  g_sec4_rt_response.status = status > 0 ? status : 200;
+
+  if (content_type == NULL || content_type[0] == '\0') {
+    content_type = "text/plain; charset=utf-8";
+  }
+  strncpy(
+      g_sec4_rt_response.content_type,
+      content_type,
+      sizeof(g_sec4_rt_response.content_type) - 1
+  );
+  g_sec4_rt_response.content_type[sizeof(g_sec4_rt_response.content_type) - 1] = '\0';
+
+  if (body == NULL) {
+    g_sec4_rt_response.body[0] = '\0';
+    g_sec4_rt_response.body_len = 0;
+    return;
+  }
+
+  size_t body_len = strlen(body);
+  if (body_len >= sizeof(g_sec4_rt_response.body)) {
+    body_len = sizeof(g_sec4_rt_response.body) - 1;
+  }
+  memcpy(g_sec4_rt_response.body, body, body_len);
+  g_sec4_rt_response.body[body_len] = '\0';
+  g_sec4_rt_response.body_len = body_len;
+}
+
 static sec4_rt_router_state *sec4_rt_router_slot(int64_t router) {
   for (size_t i = 0; i < SEC4_RT_MAX_ROUTERS; i++) {
     if (g_sec4_rt_routers[i].active && g_sec4_rt_routers[i].handle == router) {
@@ -310,6 +344,8 @@ int64_t sec4_rt_log_with_error() {
 }
 
 int64_t sec4_rt_req_json() {
+  /* Bridge-stage placeholder: decode contract is still semantic-first; runtime
+   * currently treats request JSON decode as successful extraction. */
   return 0;
 }
 
@@ -338,45 +374,39 @@ int64_t sec4_rt_req_header() {
 }
 
 int64_t sec4_rt_res_json() {
+  sec4_rt_store_response(
+      200,
+      "application/json; charset=utf-8",
+      "{\"ok\":true}"
+  );
   return 0;
 }
 
 int64_t sec4_rt_res_ok() {
+  sec4_rt_store_response(
+      201,
+      "application/json; charset=utf-8",
+      "{\"ok\":true}"
+  );
   return 0;
 }
 
 int64_t sec4_rt_res_ok_meta() {
+  sec4_rt_store_response(
+      201,
+      "application/json; charset=utf-8",
+      "{\"ok\":true,\"meta\":{}}"
+  );
   return 0;
 }
 
 int64_t sec4_rt_res_html() {
+  sec4_rt_store_response(200, "text/html; charset=utf-8", "<html></html>");
   return 0;
 }
 
 int64_t sec4_rt_res_text(int64_t status, const char *body) {
-  sec4_rt_reset_response();
-  g_sec4_rt_response.active = true;
-  g_sec4_rt_response.status = status > 0 ? status : 200;
-  strncpy(
-      g_sec4_rt_response.content_type,
-      "text/plain; charset=utf-8",
-      sizeof(g_sec4_rt_response.content_type) - 1
-  );
-  g_sec4_rt_response.content_type[sizeof(g_sec4_rt_response.content_type) - 1] = '\0';
-
-  if (body == NULL) {
-    g_sec4_rt_response.body[0] = '\0';
-    g_sec4_rt_response.body_len = 0;
-    return 0;
-  }
-
-  size_t body_len = strlen(body);
-  if (body_len >= sizeof(g_sec4_rt_response.body)) {
-    body_len = sizeof(g_sec4_rt_response.body) - 1;
-  }
-  memcpy(g_sec4_rt_response.body, body, body_len);
-  g_sec4_rt_response.body[body_len] = '\0';
-  g_sec4_rt_response.body_len = body_len;
+  sec4_rt_store_response(status, "text/plain; charset=utf-8", body);
   return 0;
 }
 
