@@ -51,7 +51,10 @@ Roadmap impact:
 - M13 operational confidence closure gates are green.
 - M13 trend-note update flow now supports local compare-matrix fallback:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
-- M17 kickoff planning scope is now defined for post-M16 end-to-end server packaging and operator handoff.
+- M17-S1 operator handoff checklist + readiness verifier is now implemented:
+  - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
+  - `scripts/check-m17-operator-handoff-readiness.sh`
+  - `scripts/test-check-m17-operator-handoff-readiness.sh`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -251,6 +254,7 @@ Current strict closure result:
 | `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on pull_request + main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
 | `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests | `.github/workflows/naming-lock.yml` |
 | `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
+| `M17-A` | PASS | Naming-lock CI enforces M17 operator handoff readiness checker | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -267,6 +271,7 @@ Strict closure interpretation:
 - M16 runtime-smoke workflow contract enforcement is active (`M16-C`).
 - M16 runtime-smoke CI-guard enforcement is active (`M16-D`).
 - M16 run-command runtime-flag CI-guard enforcement is active (`M16-E`).
+- M17 operator handoff readiness checker enforcement is active (`M17-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3339,6 +3344,8 @@ M13-S1 go/no-go note:
 ### M17-S1 tracking (live status)
 - [x] Kickoff scope defined in roadmap.
 - [x] Kickoff chapter stub added to docs/book.
+- [x] Operator handoff checklist chapter added with canonical command matrix and expected outputs.
+- [x] M17 readiness verifier script + test added and wired into naming-lock CI.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3347,6 +3354,7 @@ M13-S1 go/no-go note:
 
 ### Docs/book outputs
 - Chapter: "M17 Kickoff: End-to-End Server Packaging and Handoff Scope".
+- Chapter: "M17 Operator Handoff Checklist and Readiness Verifier".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3438,7 +3446,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M17-S1 operator handoff checklist chapter with exact command matrix and expected runtime-smoke/trend artifacts.
+1. Implement M17-S2 operator bootstrap profile helper that runs default+max-body smoke and bundle verification in one deterministic command.
 
 ---
 

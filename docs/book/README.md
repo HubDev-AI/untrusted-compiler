@@ -428,5 +428,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `461-m16-runtime-smoke-aggregated-branch-artifact-index.md`
 - `462-m16-runtime-smoke-single-pass-bundle-checker-contract.md`
 - `463-m17-kickoff-end-to-end-server-packaging-and-handoff-scope.md`
+- `464-m17-operator-handoff-checklist-and-readiness-verifier.md`
 
 As milestones progress, chapters will be added and linked from this index.

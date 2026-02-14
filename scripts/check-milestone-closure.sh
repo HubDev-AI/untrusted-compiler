@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<USAGE
 usage: $0 [--repo-root <path>] [--matrix <path>] [--trend-note <path>] [--format <text|json>] [--fail-on-pending]
 
-Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16).
+Checks strict closure evidence for milestone status gates (M9/M10/M11/M12/M13/M14/M15/M16/M17).
 USAGE
 }
 
@@ -152,6 +152,7 @@ bool_has_m16_operator_smoke_script_ci_guard=0
 bool_has_m16_runtime_smoke_workflow_contract=0
 bool_has_m16_runtime_smoke_ci_guard=0
 bool_has_m16_run_runtime_flag_ci_guard=0
+bool_has_m17_operator_handoff_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -270,6 +271,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-sec4-run-runtime-flag-contract.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-sec4-run-runtime-flag-contract-guard.sh' "${naming_lock_workflow_path}"; then
   bool_has_m16_run_runtime_flag_ci_guard=1
+fi
+
+m17_handoff_test_script="${repo_root}/scripts/test-check-m17-operator-handoff-readiness.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m17_handoff_test_script}" ] \
+  && rg -q 'scripts/test-check-m17-operator-handoff-readiness.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m17_operator_handoff_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -477,6 +485,7 @@ emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script cont
 emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke + artifact validation/index/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
 emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M17-A" "naming-lock CI enforces M17 operator handoff readiness checker" "${bool_has_m17_operator_handoff_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

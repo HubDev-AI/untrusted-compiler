@@ -64,6 +64,9 @@ jobs:
       - name: Validate runtime-smoke bundle checker
         run: scripts/test-check-runtime-smoke-bundle.sh
 
+      - name: Validate M17 operator handoff readiness checker
+        run: scripts/test-check-m17-operator-handoff-readiness.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
