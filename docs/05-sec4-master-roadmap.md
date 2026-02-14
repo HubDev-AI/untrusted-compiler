@@ -418,6 +418,7 @@ Current strict closure result:
 | `M25-F` | PASS | Naming-lock CI enforces M25 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M25-G` | PASS | Naming-lock CI enforces M25 closure report | `.github/workflows/naming-lock.yml` |
 | `M26-A` | PASS | Naming-lock CI enforces M26 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M26-B` | PASS | Naming-lock CI enforces M26 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -505,6 +506,7 @@ Strict closure interpretation:
 - M25 transition handoff packet enforcement is active (`M25-F`).
 - M25 closure report enforcement is active (`M25-G`).
 - M26 kickoff brief enforcement is active (`M26-A`).
+- M26 priority matrix enforcement is active (`M26-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4376,8 +4378,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M26 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M26-A`).
 
+### M26-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M26 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M26-B` gate.
+
+### M26-S2 tracking (live status)
+- [x] M26 priority matrix script added.
+- [x] M26 priority matrix contract test added.
+- [x] Book chapter documenting M26 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M26-B`).
+
 ### Next planned slice
-- M26-S2 priority matrix + closure gate `M26-B`.
+- M26-S3 next-slice selector + closure gate `M26-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4469,7 +4482,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M26-S2 priority matrix from M26 kickoff brief output and wire `M26-B`.
+1. Implement M26-S3 next-slice selector from M26 kickoff + priority matrix outputs and wire `M26-C`.
 
 ---
 
