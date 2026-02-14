@@ -1322,7 +1322,12 @@ int64_t sec4_rt_http_route_post(
 
 int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
   sec4_rt_router_state *slot = sec4_rt_router_slot(router);
-  if (slot == NULL || port <= 0 || port > 65535) {
+  if (slot == NULL) {
+    return 1;
+  }
+
+  port = sec4_rt_parse_env_i64("SEC4_RT_HTTP_PORT", port);
+  if (port <= 0 || port > 65535) {
     return 1;
   }
 

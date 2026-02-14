@@ -95,6 +95,12 @@ Optional oneshot serve-timeout override:
 cargo run -p sec4 -- run --path examples/hello-api --oneshot --serve-timeout-ms 12000
 ```
 
+Optional runtime port override (useful for parallel local runs):
+
+```bash
+cargo run -p sec4 -- run --path examples/hello-api --port 18080
+```
+
 Then in another terminal:
 
 ```bash

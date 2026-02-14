@@ -117,6 +117,9 @@ Roadmap impact:
 - M16-S29 run-command timeout bridge flag is now implemented:
   - `sec4 run` now supports `--serve-timeout-ms <N>` for deterministic oneshot runtime windows without direct timeout env setup.
   - run-command and operator smoke coverage now exercise this flag path.
+- M16-S30 run-command port override is now implemented:
+  - `sec4 run` now supports `--port <N>`, wired through runtime env bridge (`SEC4_RT_HTTP_PORT`).
+  - operator smoke script now runs on free ports via `--port` without patching source files.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2528,6 +2531,29 @@ M13-S1 go/no-go note:
 - [x] Smoke script now launches `sec4 run` with `--serve-timeout-ms 12000`.
 - [x] Smoke/runtime-smoke contract suites remain green after migration.
 
+### M16-S30 follow-up slice (`sec4 run --port`)
+#### Scope
+- Remove operator dependence on source-level port patching by exposing runtime port override on `sec4 run`.
+
+#### Build tasks
+- Extend `sec4 run` with `--port <N>` and bridge to `SEC4_RT_HTTP_PORT`.
+- Update runtime HTTP serve path to honor `SEC4_RT_HTTP_PORT` when present.
+- Add run-command e2e coverage proving `--port` overrides source `http.serve(...)` port.
+- Migrate smoke script to pass `--port \"${port}\"` and remove source patching logic.
+- Update smoke-script contract tokens to lock `--port` usage.
+
+#### Acceptance criteria
+- `sec4 run --help` exposes `--port`.
+- Runtime serves on override port provided by run-command flag.
+- Smoke script passes on random free ports without mutating source files.
+
+#### Tracking (live status)
+- [x] `sec4 run` now accepts `--port`.
+- [x] Runtime `http.serve` now honors `SEC4_RT_HTTP_PORT` override.
+- [x] Run-command port-override e2e test added and green.
+- [x] Smoke script now uses `--port` and no longer patches source port.
+- [x] Smoke/runtime-smoke contracts and artifact checks remain green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2559,6 +2585,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Runtime Bridge Flags".
 - Chapter: "M16 Slice: Operator Smoke Script Migration to sec4 run --oneshot".
 - Chapter: "M16 Slice: sec4 run Serve-Timeout Bridge Flag".
+- Chapter: "M16 Slice: sec4 run Port Override Bridge and Smoke Port Migration".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

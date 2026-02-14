@@ -50,6 +50,7 @@ fi
 
 required_tokens=(
   "--artifacts-dir"
+  '--port "${port}"'
   "--oneshot"
   "--serve-timeout-ms 12000"
   "GET"

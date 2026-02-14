@@ -102,13 +102,6 @@ work_project="${tmp_dir}/hello-api"
 cp -R "${source_project}" "${work_project}"
 
 port="$(pick_free_port)"
-main_file="${work_project}/src/main.ut"
-perl -0pi -e "s/http\\.serve\\(8080, router\\);/http.serve(${port}, router);/" "${main_file}"
-
-if ! rg -q "http\.serve\(${port}, router\);" "${main_file}"; then
-  echo "failed to patch runtime port in ${main_file}" >&2
-  exit 1
-fi
 
 cat > "${tmp_dir}/run-metadata.txt" <<META
 sourceProject=${source_project}
@@ -136,7 +129,7 @@ request_once() {
     "http://127.0.0.1:${port}${path}"
   )
 
-  cargo run -p sec4 -- run --path "${work_project}" --oneshot --serve-timeout-ms 12000 >"${log_file}" 2>&1 &
+  cargo run -p sec4 -- run --path "${work_project}" --port "${port}" --oneshot --serve-timeout-ms 12000 >"${log_file}" 2>&1 &
   service_pid=$!
 
   local status_code=""

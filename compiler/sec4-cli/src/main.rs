@@ -39,6 +39,8 @@ enum Commands {
     Run {
         #[arg(long, default_value = ".")]
         path: PathBuf,
+        #[arg(long)]
+        port: Option<u16>,
         #[arg(long, default_value_t = false)]
         oneshot: bool,
         #[arg(long)]
@@ -286,10 +288,11 @@ fn main() {
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run {
             path,
+            port,
             oneshot,
             max_body_bytes,
             serve_timeout_ms,
-        } => cmd_run(&path, oneshot, max_body_bytes, serve_timeout_ms),
+        } => cmd_run(&path, port, oneshot, max_body_bytes, serve_timeout_ms),
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
@@ -3236,6 +3239,7 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
 
 fn cmd_run(
     path: &Path,
+    port: Option<u16>,
     oneshot: bool,
     max_body_bytes: Option<u64>,
     serve_timeout_ms: Option<u64>,
@@ -3252,6 +3256,9 @@ fn cmd_run(
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let mut cmd = Command::new(&binary_path);
+    if let Some(port) = port {
+        cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
+    }
     if oneshot {
         cmd.env("SEC4_RT_HTTP_SERVE_MODE", "oneshot");
     }

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Added a required-token string with `\"${port}\"` in a `set -u` guard script, which expanded an undefined shell variable and failed early. | When asserting literal template tokens in shell tests, use single-quoted literals (for example `'--port \"${port}\"'`) to prevent unintended variable expansion. |
 | 2026-02-14 | self | Ran an `rg` command with mismatched shell quoting and hit `zsh: unmatched \"`. | For complex multi-token `rg` patterns, use single-quoted shell strings and avoid mixing unescaped inner quotes. |
 | 2026-02-14 | self | Accidentally invoked external web/time tool calls while doing purely local repo implementation work. | For local compiler/runtime/docs slices, stay on shell + apply_patch only; reserve web tools strictly for external information retrieval. |
 | 2026-02-14 | self | Added new `sec4` CLI contract-token requirements without updating the synthetic guard fixture, which caused immediate guard failure. | When tightening command-contract regex checks, update `scripts/test-*-guard.sh` pass fixture in the same edit or lock behavior via integration tests instead of brittle source-pattern assertions. |
