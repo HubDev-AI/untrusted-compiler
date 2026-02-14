@@ -371,6 +371,7 @@ Current strict closure result:
 | `M19-A` | PASS | Naming-lock CI enforces M19 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M19-B` | PASS | Naming-lock CI enforces M19 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M19-C` | PASS | Naming-lock CI enforces M19 next-slice selector | `.github/workflows/naming-lock.yml` |
+| `M19-D` | PASS | Naming-lock CI enforces M19 runtime hardening runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -411,6 +412,7 @@ Strict closure interpretation:
 - M19 kickoff brief enforcement is active (`M19-A`).
 - M19 priority matrix enforcement is active (`M19-B`).
 - M19 next-slice selector enforcement is active (`M19-C`).
+- M19 runtime hardening runner enforcement is active (`M19-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3622,7 +3624,8 @@ M13-S1 go/no-go note:
 - Auto-generate M18 closure json when absent but packet is available.
 - Build deterministic M19 priority matrix from kickoff brief.
 - Select first executable M19 slice from kickoff + matrix inputs.
-- Lock kickoff/matrix/selector contracts in naming-lock CI and closure audit.
+- Execute first selected runtime slice via dedicated M19 runtime hardening runner.
+- Lock kickoff/matrix/selector/runtime contracts in naming-lock CI and closure audit.
 
 ### M19-S1 kickoff acceptance criteria
 - M19 kickoff brief script + contract test exists.
@@ -3643,6 +3646,18 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M19 next-slice selector added.
 - [x] Naming-lock CI and closure gate updated (`M19-C`).
 
+### M19-S4 first executed slice acceptance criteria
+- Selector recommendations use `M19-S4-*` IDs for runtime/release/editor/stabilization tracks.
+- Runtime hardening runner enforces runtime-selected `M19-S4-runtime-*` recommendations and supports dry-run/json outputs.
+- Closure audit includes dedicated `M19-D` gate.
+
+### M19-S4 tracking (live status)
+- [x] M19 selector recommendations aligned to `M19-S4-*` IDs.
+- [x] M19 runtime hardening runner script added.
+- [x] M19 runtime hardening runner contract test added.
+- [x] Book chapter documenting M19 runtime hardening runner added.
+- [x] Naming-lock CI and closure gate updated (`M19-D`).
+
 ### Exit criteria
 - M19 kickoff starts from deterministic evidence (`M18` closure + handoff packet), not ad-hoc operator judgment.
 
@@ -3650,6 +3665,7 @@ M13-S1 go/no-go note:
 - Chapter: "M19 Kickoff Brief".
 - Chapter: "M19 Priority Matrix".
 - Chapter: "M19 Next-Slice Selector".
+- Chapter: "M19 Runtime Hardening Runner".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3741,7 +3757,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M19-S4 first executed M19 slice from selector output and wire its closure gate.
+1. Implement M19-S5 executed-slice convergence summary for M19 and wire its closure gate.
 
 ---
 

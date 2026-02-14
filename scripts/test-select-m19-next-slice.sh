@@ -36,7 +36,7 @@ if ! printf '%s\n' "${pass_json}" | jq -e '
   and .primaryFocus == "release"
   and .pendingGateCount == 0
   and .selectedTrack == "release"
-  and .recommendation.id == "M19-S2-release-hardening"
+  and .recommendation.id == "M19-S4-release-hardening"
   and .recommendation.closureGate == "M19-C"
 ' >/dev/null; then
   echo "expected selector to recommend release slice for PASS release-focused M19 inputs" >&2
@@ -70,7 +70,7 @@ if ! printf '%s\n' "${stabilization_json}" | jq -e '
   and .primaryFocus == "stabilization"
   and .pendingGateCount == 1
   and .selectedTrack == "runtime"
-  and .recommendation.id == "M19-S2-stabilization-remediation"
+  and .recommendation.id == "M19-S4-stabilization-remediation"
 ' >/dev/null; then
   echo "expected selector to force stabilization remediation when kickoff is not fully clean" >&2
   exit 1

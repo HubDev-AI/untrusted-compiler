@@ -17,11 +17,11 @@ M19 planning artifacts become actionable only when they produce one explicit nex
 
 - Validates kickoff + matrix contracts.
 - If kickoff is not clean (`m18Overall != PASS`, `primaryFocus == stabilization`, or `pendingGates > 0`):
-  - forces `M19-S2-stabilization-remediation`.
+  - forces `M19-S4-stabilization-remediation`.
 - Otherwise maps top matrix track to:
-  - `M19-S2-runtime-hardening`
-  - `M19-S2-release-hardening`
-  - `M19-S2-editor-expansion`
+  - `M19-S4-runtime-hardening`
+  - `M19-S4-release-hardening`
+  - `M19-S4-editor-expansion`
 - Emits `closureGate: M19-C`.
 
 ## 4) Verification

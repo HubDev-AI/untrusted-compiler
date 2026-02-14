@@ -121,20 +121,20 @@ slice_title=""
 
 if [ "${m18_overall}" != "PASS" ] || [ "${primary_focus}" = "stabilization" ] || [ "${pending_gate_count}" -gt 0 ]; then
   selected_track="runtime"
-  slice_id="M19-S2-stabilization-remediation"
+  slice_id="M19-S4-stabilization-remediation"
   slice_title="Resolve M18 carry-over risk before broad M19 expansion"
 else
   case "${top_track}" in
     runtime)
-      slice_id="M19-S2-runtime-hardening"
+      slice_id="M19-S4-runtime-hardening"
       slice_title="Advance runtime reliability and smoke confidence in M19"
       ;;
     release)
-      slice_id="M19-S2-release-hardening"
+      slice_id="M19-S4-release-hardening"
       slice_title="Advance release/publish integrity for M19"
       ;;
     editor)
-      slice_id="M19-S2-editor-expansion"
+      slice_id="M19-S4-editor-expansion"
       slice_title="Advance editor productivity contracts in M19"
       ;;
     *)

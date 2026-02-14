@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Tried patching `scripts/test-select-m19-next-slice.sh` against stale context and hit an `apply_patch` mismatch. | Re-read the exact target chunk (`sed -n`) immediately before patching recently edited files. |
 | 2026-02-14 | self | Wrote a contract checker expecting fully rendered error strings from a helper-based shell script (`artifact checksum mismatch for policy profile copy`) even though only parameterized labels existed in source. | In source-token contract tests, lock helper function tokens plus literal argument labels rather than synthesized runtime message variants. |
 | 2026-02-14 | self | Used backticks inside double-quoted `echo` lines in a shell markdown renderer, which triggered unintended command substitution and broke output generation. | Prefer `printf` with `%s` placeholders for markdown lines containing backticks; avoid embedding raw backticks in double-quoted `echo`. |
 | 2026-02-14 | self | Added a token-based chapter contract checker but wrote numbered section headings (`## 3) ...`) that did not match the required literal bundle heading tokens, causing the checker to fail. | When introducing doc-token contract checks, align chapter headings with exact required literals first (or loosen checker tokens intentionally) before running full validation. |

@@ -452,5 +452,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `485-m19-kickoff-brief.md`
 - `486-m19-priority-matrix.md`
 - `487-m19-next-slice-selector.md`
+- `488-m19-runtime-hardening-runner.md`
 
 As milestones progress, chapters will be added and linked from this index.

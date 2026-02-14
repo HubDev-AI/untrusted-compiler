@@ -136,6 +136,9 @@ jobs:
       - name: Validate M19 next-slice selector
         run: scripts/test-select-m19-next-slice.sh
 
+      - name: Validate M19 runtime hardening runner
+        run: scripts/test-run-m19-runtime-hardening.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
