@@ -866,6 +866,15 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
     {
         return Err("capture.request.host must be a non-empty string when present".to_string());
     }
+    if request.get("route").is_some()
+        && request
+            .get("route")
+            .and_then(serde_json::Value::as_str)
+            .filter(|entry| !entry.is_empty())
+            .is_none()
+    {
+        return Err("capture.request.route must be a non-empty string when present".to_string());
+    }
     if request.get("query").is_some()
         && request
             .get("query")

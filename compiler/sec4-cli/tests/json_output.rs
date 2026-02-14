@@ -1721,6 +1721,70 @@ fn replay_check_fails_when_capture_url_is_not_a_string() {
 }
 
 #[test]
+fn replay_check_fails_when_capture_route_is_not_a_string() {
+    let dir = temp_dir("sec4-replay-invalid-route-type");
+    let capture = dir.join("capture.json");
+    fs::write(
+        &capture,
+        r#"{
+          "version":"0.1",
+          "captureId":"cap_01",
+          "traceId":"tr_01",
+          "timeMs":1760000000000,
+          "policyHash":"pol_A",
+          "compilerHash":"cpl_A",
+          "runtimeHash":"rt_A",
+          "request":{
+            "method":"GET",
+            "scheme":"https",
+            "host":"example.com",
+            "path":"/ping",
+            "route":5,
+            "headers":{},
+            "body":{"encoding":"base64","bytes":"e30=","sha256":"body_sha256","truncated":false}
+          },
+          "determinism":{
+            "seed":1,
+            "time":{"mode":"frozen","nowMs":1760000000000},
+            "uuid":{"mode":"seeded"},
+            "budget":{"maxBodyBytes":1,"maxJsonBytes":1,"maxJsonDepth":1,"deadlineMs":1}
+          },
+          "redaction":{"headers":[],"jsonPaths":[]}
+        }"#,
+    )
+    .expect("capture payload should be written");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail when request.route is not a string"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("capture.request.route must be a non-empty string when present"),
+        "stderr should include request.route contract failure:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn replay_check_mock_mode_fails_when_capture_db_dependency_signature_has_no_matching_stub() {
     let dir = temp_dir("sec4-replay-mock-db-dependency-stub-missing");
     let capture = dir.join("capture.json");

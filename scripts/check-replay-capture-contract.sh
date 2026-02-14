@@ -77,6 +77,13 @@ jq -e '
     end
   )
   and (
+    if (.request | has("route")) then
+      (.request.route | type == "string" and length > 0)
+    else
+      true
+    end
+  )
+  and (
     ((.request.url? | type) == "string" and (.request.url | length > 0))
     or (
       (.request.scheme | type == "string" and length > 0)
