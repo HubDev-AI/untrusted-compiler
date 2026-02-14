@@ -123,6 +123,9 @@ Roadmap impact:
 - M16-S31 run-command flag contract CI coverage is now implemented:
   - dedicated contract + guard scripts lock runtime flag bridge surface for `sec4 run`.
   - naming-lock workflow now executes these scripts on pull requests and main pushes.
+- M16-S32 runtime-smoke metadata contract is now expanded:
+  - smoke artifacts now include deterministic run-flag metadata (`oneshot`, `serveTimeoutMs`, `runFlags`).
+  - artifact checker and checker tests now enforce this metadata shape.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2578,6 +2581,30 @@ M13-S1 go/no-go note:
 - [x] Naming-lock workflow executes both run-flag contract scripts.
 - [x] Local contract, guard, and closure-alignment checks pass.
 
+### M16-S32 follow-up slice (runtime-smoke metadata contract expansion)
+#### Scope
+- Strengthen runtime-smoke artifact metadata so operator/debug context captures which run-command profile produced the artifact set.
+
+#### Build tasks
+- Extend `run-metadata.txt` emitted by smoke script with deterministic fields:
+  - `oneshot=true`
+  - `serveTimeoutMs=12000`
+  - `runFlags=--port,--oneshot,--serve-timeout-ms`
+- Extend artifact checker to require those fields.
+- Extend checker regression test with a failing metadata fixture.
+- Re-run smoke + checker flow to validate real artifact output.
+
+#### Acceptance criteria
+- Generated runtime-smoke metadata includes deterministic run-profile fields.
+- Checker fails on missing required metadata fields.
+- Smoke/checker and workflow contract suites remain green.
+
+#### Tracking (live status)
+- [x] Smoke script now writes deterministic run-profile metadata fields.
+- [x] Artifact checker now validates oneshot/timeout/runFlags metadata fields.
+- [x] Checker regression suite includes missing-oneshot metadata failure case.
+- [x] Real smoke artifact generation passes with expanded metadata contract.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2611,6 +2638,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: sec4 run Serve-Timeout Bridge Flag".
 - Chapter: "M16 Slice: sec4 run Port Override Bridge and Smoke Port Migration".
 - Chapter: "M16 Slice: sec4 run Runtime-Flag Contract and Naming-Lock CI Coverage".
+- Chapter: "M16 Slice: Runtime-Smoke Metadata Contract Expansion".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

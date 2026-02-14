@@ -14,6 +14,9 @@ cat > "${ok_dir}/run-metadata.txt" <<'TXT'
 sourceProject=examples/hello-api
 workProject=/tmp/hello-api
 port=8080
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
 TXT
 
 cat > "${ok_dir}/health.headers" <<'TXT'
@@ -55,6 +58,26 @@ fi
 
 if ! rg -Fq 'missing runtime-smoke artifact file: users.body' "${tmp_dir}/bad.log"; then
   echo "expected missing-artifact diagnostic for users.body" >&2
+  exit 1
+fi
+
+meta_bad_dir="${tmp_dir}/bad-metadata"
+cp -R "${ok_dir}" "${meta_bad_dir}"
+cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${meta_bad_dir}" >"${tmp_dir}/meta-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing oneshot metadata" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt missing oneshot=true field' "${tmp_dir}/meta-bad.log"; then
+  echo "expected metadata diagnostic for missing oneshot field" >&2
   exit 1
 fi
 

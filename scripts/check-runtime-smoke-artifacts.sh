@@ -90,4 +90,19 @@ if ! rg -q '^port=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
   exit 1
 fi
 
+if ! rg -q '^oneshot=true$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing oneshot=true field" >&2
+  exit 1
+fi
+
+if ! rg -q '^serveTimeoutMs=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing numeric serveTimeoutMs field" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'runFlags=--port,--oneshot,--serve-timeout-ms' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing deterministic runFlags field" >&2
+  exit 1
+fi
+
 echo "runtime-smoke artifacts check passed"

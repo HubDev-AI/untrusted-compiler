@@ -107,6 +107,9 @@ cat > "${tmp_dir}/run-metadata.txt" <<META
 sourceProject=${source_project}
 workProject=${work_project}
 port=${port}
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
 META
 
 request_once() {

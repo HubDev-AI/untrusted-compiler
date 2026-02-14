@@ -400,5 +400,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `433-m16-sec4-run-serve-timeout-bridge-flag.md`
 - `434-m16-sec4-run-port-override-bridge-and-smoke-port-migration.md`
 - `435-m16-sec4-run-runtime-flag-contract-and-naming-lock-ci-coverage.md`
+- `436-m16-runtime-smoke-metadata-contract-expansion.md`
 
 As milestones progress, chapters will be added and linked from this index.
