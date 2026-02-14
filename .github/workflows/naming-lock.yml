@@ -67,6 +67,9 @@ jobs:
       - name: Validate M17 operator handoff readiness checker
         run: scripts/test-check-m17-operator-handoff-readiness.sh
 
+      - name: Validate M17 operator bootstrap profile helper
+        run: scripts/test-run-m17-operator-bootstrap.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

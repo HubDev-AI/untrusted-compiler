@@ -429,5 +429,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `462-m16-runtime-smoke-single-pass-bundle-checker-contract.md`
 - `463-m17-kickoff-end-to-end-server-packaging-and-handoff-scope.md`
 - `464-m17-operator-handoff-checklist-and-readiness-verifier.md`
+- `465-m17-operator-bootstrap-profile-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.

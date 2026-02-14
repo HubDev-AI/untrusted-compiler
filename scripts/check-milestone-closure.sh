@@ -153,6 +153,7 @@ bool_has_m16_runtime_smoke_workflow_contract=0
 bool_has_m16_runtime_smoke_ci_guard=0
 bool_has_m16_run_runtime_flag_ci_guard=0
 bool_has_m17_operator_handoff_ci_guard=0
+bool_has_m17_operator_bootstrap_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -278,6 +279,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_handoff_test_script}" ] \
   && rg -q 'scripts/test-check-m17-operator-handoff-readiness.sh' "${naming_lock_workflow_path}"; then
   bool_has_m17_operator_handoff_ci_guard=1
+fi
+
+m17_bootstrap_test_script="${repo_root}/scripts/test-run-m17-operator-bootstrap.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m17_bootstrap_test_script}" ] \
+  && rg -q 'scripts/test-run-m17-operator-bootstrap.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m17_operator_bootstrap_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -486,6 +494,7 @@ emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke +
 emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-A" "naming-lock CI enforces M17 operator handoff readiness checker" "${bool_has_m17_operator_handoff_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M17-B" "naming-lock CI enforces M17 operator bootstrap profile helper" "${bool_has_m17_operator_bootstrap_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
