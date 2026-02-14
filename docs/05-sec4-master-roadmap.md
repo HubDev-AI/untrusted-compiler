@@ -83,6 +83,8 @@ Roadmap impact:
   - when `csrf.withCsrf(...)` is active, runtime enforces double-submit token checks on protected methods and returns deterministic `403` on missing/mismatched tokens.
 - M16-S17 auth runtime gate is now implemented:
   - when `auth.withAuth(...)` is active, runtime enforces `Authorization: Bearer ...` checks and returns deterministic `401` for missing/invalid auth headers.
+- M16-S18 CORS response-header propagation is now implemented:
+  - when `cors.withCors(...)` is active, runtime injects `Access-Control-Allow-Origin: *` into non-preflight responses.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2166,6 +2168,25 @@ M13-S1 go/no-go note:
 - [x] Runtime enforces bearer-auth header shape for non-OPTIONS requests.
 - [x] Runtime e2e coverage added for auth reject and allow branches.
 
+### M16-S18 follow-up slice (CORS allow-origin propagation on normal responses)
+#### Scope
+- Extend CORS runtime behavior beyond preflight by applying allow-origin header to normal routed responses when CORS middleware is enabled.
+
+#### Build tasks
+- Add CORS allow-origin header composition into standard response path (`success` and error branches).
+- Keep preflight path deterministic and unchanged.
+- Add e2e coverage for non-preflight success response with CORS middleware enabled.
+
+#### Acceptance criteria
+- CORS-enabled routers emit `Access-Control-Allow-Origin: *` on normal responses.
+- Preflight behavior remains correct (`204` + allow headers).
+- Runtime suite remains green with expanded CORS coverage.
+
+#### Tracking (live status)
+- [x] Runtime response header composition includes CORS allow-origin for normal responses.
+- [x] CORS preflight path remains intact after propagation changes.
+- [x] Runtime e2e coverage added for non-preflight CORS response header path.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2184,6 +2205,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Security Headers Runtime Injection".
 - Chapter: "M16 Slice: CSRF Runtime Gate Enforcement".
 - Chapter: "M16 Slice: Auth Runtime Gate Enforcement".
+- Chapter: "M16 Slice: CORS Allow-Origin Propagation on Runtime Responses".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

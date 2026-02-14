@@ -377,5 +377,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `410-m16-security-headers-runtime-injection.md`
 - `411-m16-csrf-runtime-gate-enforcement.md`
 - `412-m16-auth-runtime-gate-enforcement.md`
+- `413-m16-cors-allow-origin-propagation-on-runtime-responses.md`
 
 As milestones progress, chapters will be added and linked from this index.

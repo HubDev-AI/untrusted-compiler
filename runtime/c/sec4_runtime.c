@@ -614,28 +614,38 @@ static const char *sec4_rt_security_headers_block(sec4_rt_router_state *router) 
       "Referrer-Policy: strict-origin-when-cross-origin\r\n";
 }
 
-static const char *sec4_rt_merge_extra_headers(
-    const char *primary,
-    const char *secondary,
+static const char *sec4_rt_merge_three_headers(
+    const char *first,
+    const char *second,
+    const char *third,
     char *buffer,
     size_t buffer_size
 ) {
-  if ((primary == NULL || primary[0] == '\0') && (secondary == NULL || secondary[0] == '\0')) {
+  const char *a = first != NULL ? first : "";
+  const char *b = second != NULL ? second : "";
+  const char *c = third != NULL ? third : "";
+  if (a[0] == '\0' && b[0] == '\0' && c[0] == '\0') {
     return NULL;
   }
-  if (primary == NULL || primary[0] == '\0') {
-    return secondary;
-  }
-  if (secondary == NULL || secondary[0] == '\0') {
-    return primary;
-  }
   if (buffer == NULL || buffer_size == 0) {
-    return primary;
+    if (a[0] != '\0') {
+      return a;
+    }
+    if (b[0] != '\0') {
+      return b;
+    }
+    return c;
   }
 
-  int written = snprintf(buffer, buffer_size, "%s%s", primary, secondary);
+  int written = snprintf(buffer, buffer_size, "%s%s%s", a, b, c);
   if (written <= 0 || (size_t) written >= buffer_size) {
-    return primary;
+    if (a[0] != '\0') {
+      return a;
+    }
+    if (b[0] != '\0') {
+      return b;
+    }
+    return c;
   }
   return buffer;
 }
@@ -670,6 +680,9 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
   const char *security_headers = sec4_rt_security_headers_block(router);
+  const char *cors_headers = router != NULL && router->cors_enabled
+      ? "Access-Control-Allow-Origin: *\r\n"
+      : NULL;
   char merged_headers[320];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
@@ -704,13 +717,20 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   char path[SEC4_RT_MAX_PATH_BYTES] = {0};
   if (sscanf(request, "%7s %255s", method, path) != 2) {
     const char *body = "bad request";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
     (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         400,
         "text/plain; charset=utf-8",
         body,
         strlen(body),
-        security_headers
+        final_headers
     );
     return;
   }
@@ -763,8 +783,9 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
         "Access-Control-Allow-Headers: content-type, authorization\r\n"
         "Access-Control-Max-Age: 600\r\n";
-    const char *final_headers = sec4_rt_merge_extra_headers(
+    const char *final_headers = sec4_rt_merge_three_headers(
         extra_headers,
+        NULL,
         security_headers,
         merged_headers,
         sizeof(merged_headers)
@@ -799,13 +820,20 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
           "auth",
           "Authorization header missing or invalid"
       );
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
       (void) sec4_rt_send_response_with_extra_headers(
           socket_fd,
           g_sec4_rt_response.status,
           g_sec4_rt_response.content_type,
           g_sec4_rt_response.body,
           g_sec4_rt_response.body_len,
-          security_headers
+          final_headers
       );
       return;
     }
@@ -839,13 +867,20 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
           "auth",
           "CSRF token missing or invalid"
       );
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
       (void) sec4_rt_send_response_with_extra_headers(
           socket_fd,
           g_sec4_rt_response.status,
           g_sec4_rt_response.content_type,
           g_sec4_rt_response.body,
           g_sec4_rt_response.body_len,
-          security_headers
+          final_headers
       );
       return;
     }
@@ -880,8 +915,9 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
           allow_headers = extra_headers;
         }
       }
-      const char *final_headers = sec4_rt_merge_extra_headers(
+      const char *final_headers = sec4_rt_merge_three_headers(
           allow_headers,
+          cors_headers,
           security_headers,
           merged_headers,
           sizeof(merged_headers)
@@ -899,13 +935,20 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     }
 
     const char *body = "not found";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
     (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         404,
         "text/plain; charset=utf-8",
         body,
         strlen(body),
-        security_headers
+        final_headers
     );
     return;
   }
@@ -915,24 +958,38 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   if (!g_sec4_rt_response.active) {
     const char *body = "";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
     (void) sec4_rt_send_response_with_extra_headers(
         socket_fd,
         204,
         "text/plain; charset=utf-8",
         body,
         0,
-        security_headers
+        final_headers
     );
     return;
   }
 
+  const char *final_headers = sec4_rt_merge_three_headers(
+      NULL,
+      cors_headers,
+      security_headers,
+      merged_headers,
+      sizeof(merged_headers)
+  );
   (void) sec4_rt_send_response_with_extra_headers(
       socket_fd,
       g_sec4_rt_response.status,
       g_sec4_rt_response.content_type,
       g_sec4_rt_response.body,
       g_sec4_rt_response.body_len,
-      security_headers
+      final_headers
   );
 }
 
