@@ -69,6 +69,8 @@ Roadmap impact:
   - runtime now emits deterministic `X-Trace-Id` response header and aligns `req.json(...)` error-envelope `traceId` with request-scoped runtime trace ids.
 - M16-S10 standard success-envelope bootstrap is now implemented:
   - runtime JSON success responders now emit deterministic structured success envelopes (`ok/status/traceId/timeMs/data[/meta]`).
+- M16-S11 `res.okMeta` runtime e2e coverage is now implemented:
+  - live HTTP runtime path for `res.okMeta(...)` is now validated with deterministic envelope+meta assertions.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1994,6 +1996,28 @@ M13-S1 go/no-go note:
 - [x] `res.json`, `res.ok`, and `res.okMeta` migrated to structured success payloads.
 - [x] Runtime integration assertions updated for success envelope fields (`status`, `traceId`).
 
+### M16-S11 follow-up slice (`res.okMeta` live runtime coverage)
+#### Scope
+- Add explicit runtime e2e validation for `res.okMeta(...)` so the structured success envelope `meta` branch is exercised by real HTTP request handling.
+
+#### Build tasks
+- Add integration fixture route using:
+  - `req.json(...)`,
+  - `res.okMeta(...)`.
+- Assert deterministic runtime response contract for:
+  - status line,
+  - JSON content-type,
+  - envelope fields including `meta`.
+
+#### Acceptance criteria
+- Runtime `res.okMeta(...)` path is covered by end-to-end HTTP integration test.
+- Envelope response for `res.okMeta(...)` includes deterministic `meta` field.
+- Existing runtime JSON output suite remains green.
+
+#### Tracking (live status)
+- [x] `res.okMeta(...)` runtime e2e test added and green.
+- [x] Runtime response assertions include deterministic `meta` envelope checks.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2005,6 +2029,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: req.json Standard Error Envelope Alignment".
 - Chapter: "M16 Slice: Runtime Trace Correlation Header and Error Envelope Sync".
 - Chapter: "M16 Slice: Runtime Standard Success Envelope Alignment".
+- Chapter: "M16 Slice: res.okMeta Runtime Envelope Coverage".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
