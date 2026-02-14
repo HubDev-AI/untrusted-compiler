@@ -151,6 +151,9 @@ jobs:
       - name: Validate M20 kickoff brief
         run: scripts/test-generate-m20-kickoff-brief.sh
 
+      - name: Validate M20 priority matrix
+        run: scripts/test-build-m20-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
