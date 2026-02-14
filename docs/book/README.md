@@ -383,5 +383,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `416-m15-replay-execution-contract-guard-hardening.md`
 - `417-m15-replay-execution-closure-gate-integration.md`
 - `418-m16-cors-allow-origin-coverage-on-middleware-rejection-paths.md`
+- `419-m16-cors-allow-origin-coverage-on-404-405-error-branches.md`
 
 As milestones progress, chapters will be added and linked from this index.

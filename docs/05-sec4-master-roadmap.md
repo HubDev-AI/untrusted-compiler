@@ -92,6 +92,8 @@ Roadmap impact:
   - `req.json(...)` body-size guard now honors `SEC4_RT_HTTP_MAX_BODY_BYTES` for stricter deployment-time limits.
 - M16-S20 CORS error-path propagation coverage is now implemented:
   - runtime e2e now locks `Access-Control-Allow-Origin` propagation on auth (`401`) and csrf (`403`) middleware rejection responses.
+- M16-S21 CORS header coverage is now expanded for generic error branches:
+  - runtime e2e now locks `Access-Control-Allow-Origin` propagation on `404` not-found and `405` method-mismatch responses when CORS middleware is enabled.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2286,6 +2288,25 @@ M13-S1 go/no-go note:
 - [x] CSRF reject (`403`) + CORS allow-origin runtime e2e coverage added and green.
 - [x] Run-command HTTP oneshot e2e retry/timeout window widened for suite stability.
 
+### M16-S21 follow-up slice (CORS allow-origin on 404/405 branches)
+#### Scope
+- Extend CORS response-header coverage to all deterministic runtime error branches, not only middleware rejections and success/preflight paths.
+
+#### Build tasks
+- Add runtime e2e test for CORS-enabled router returning `404` on missing route and assert allow-origin header.
+- Add runtime e2e test for CORS-enabled router returning `405` on method mismatch and assert allow-origin + `Allow` header.
+- Keep full runtime integration suite stable after branch coverage expansion.
+
+#### Acceptance criteria
+- CORS-enabled `404` responses include deterministic `Access-Control-Allow-Origin: *`.
+- CORS-enabled `405` responses include deterministic `Access-Control-Allow-Origin: *`.
+- Existing preflight/success/middleware CORS tests remain green.
+
+#### Tracking (live status)
+- [x] Runtime e2e coverage added for CORS-enabled `404` branch.
+- [x] Runtime e2e coverage added for CORS-enabled `405` branch.
+- [x] Full runtime integration suite remains green after branch-coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2307,6 +2328,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CORS Allow-Origin Propagation on Runtime Responses".
 - Chapter: "M16 Slice: Env-Configurable Runtime Request Body Cap".
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on Middleware Rejection Paths".
+- Chapter: "M16 Slice: CORS Allow-Origin Coverage on 404/405 Error Branches".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
