@@ -433,5 +433,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `466-m17-operator-troubleshooting-matrix.md`
 - `467-m17-operator-handoff-quickstart.md`
 - `468-m17-operator-handoff-ci-smoke-wrapper.md`
+- `469-m17-operator-handoff-workflow-contracts.md`
 
 As milestones progress, chapters will be added and linked from this index.

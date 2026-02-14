@@ -79,6 +79,12 @@ jobs:
       - name: Validate M17 operator handoff CI smoke wrapper
         run: scripts/test-run-m17-operator-handoff-ci-smoke.sh
 
+      - name: Validate operator-handoff workflow contract
+        run: scripts/test-operator-handoff-workflow-contract.sh
+
+      - name: Validate operator-handoff workflow contract guard behavior
+        run: scripts/test-operator-handoff-workflow-contract-guard.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

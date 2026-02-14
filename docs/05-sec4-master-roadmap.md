@@ -71,6 +71,11 @@ Roadmap impact:
   - `scripts/run-m17-operator-handoff-ci-smoke.sh`
   - `scripts/test-run-m17-operator-handoff-ci-smoke.sh`
   - `docs/book/468-m17-operator-handoff-ci-smoke-wrapper.md`
+- M17-S6 operator-handoff workflow contract + CI wiring is now implemented:
+  - `.github/workflows/operator-handoff-smoke.yml`
+  - `scripts/test-operator-handoff-workflow-contract.sh`
+  - `scripts/test-operator-handoff-workflow-contract-guard.sh`
+  - `docs/book/469-m17-operator-handoff-workflow-contracts.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -275,6 +280,8 @@ Current strict closure result:
 | `M17-C` | PASS | Naming-lock CI enforces M17 operator troubleshooting matrix | `.github/workflows/naming-lock.yml` |
 | `M17-D` | PASS | Naming-lock CI enforces M17 operator handoff quickstart | `.github/workflows/naming-lock.yml` |
 | `M17-E` | PASS | Naming-lock CI enforces M17 operator handoff CI smoke wrapper | `.github/workflows/naming-lock.yml` |
+| `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push | `.github/workflows/operator-handoff-smoke.yml` |
+| `M17-G` | PASS | Naming-lock CI enforces operator-handoff workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -296,6 +303,8 @@ Strict closure interpretation:
 - M17 operator troubleshooting matrix enforcement is active (`M17-C`).
 - M17 operator handoff quickstart enforcement is active (`M17-D`).
 - M17 operator handoff CI smoke wrapper enforcement is active (`M17-E`).
+- M17 operator-handoff workflow contract enforcement is active (`M17-F`).
+- M17 operator-handoff workflow CI-guard enforcement is active (`M17-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3374,6 +3383,7 @@ M13-S1 go/no-go note:
 - [x] Operator troubleshooting matrix script added and wired into naming-lock CI.
 - [x] Operator handoff quickstart script added and wired into naming-lock CI.
 - [x] Operator handoff CI smoke wrapper script added and wired into naming-lock CI.
+- [x] Operator-handoff workflow contract + guard tests added and wired into naming-lock CI.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3387,6 +3397,7 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Troubleshooting Matrix".
 - Chapter: "M17 Operator Handoff Quickstart".
 - Chapter: "M17 Operator Handoff CI Smoke Wrapper".
+- Chapter: "M17 Operator Handoff Workflow Contracts".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3478,7 +3489,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M17-S6 dedicated operator-handoff workflow contract checks and CI wiring.
+1. Implement M17-S7 operator handoff artifact-inspection helper over `build/operator-handoff-smoke`.
 
 ---
 

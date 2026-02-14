@@ -157,6 +157,8 @@ bool_has_m17_operator_bootstrap_ci_guard=0
 bool_has_m17_operator_troubleshooting_ci_guard=0
 bool_has_m17_operator_quickstart_ci_guard=0
 bool_has_m17_operator_ci_smoke_ci_guard=0
+bool_has_m17_operator_handoff_workflow_contract=0
+bool_has_m17_operator_handoff_workflow_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -310,6 +312,28 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m17_ci_smoke_test_script}" ] \
   && rg -q 'scripts/test-run-m17-operator-handoff-ci-smoke.sh' "${naming_lock_workflow_path}"; then
   bool_has_m17_operator_ci_smoke_ci_guard=1
+fi
+
+operator_handoff_workflow_path="${repo_root}/.github/workflows/operator-handoff-smoke.yml"
+if [ -f "${operator_handoff_workflow_path}" ] \
+  && rg -q 'pull_request:' "${operator_handoff_workflow_path}" \
+  && rg -q 'push:' "${operator_handoff_workflow_path}" \
+  && rg -q 'branches:' "${operator_handoff_workflow_path}" \
+  && rg -q -- '- main' "${operator_handoff_workflow_path}" \
+  && rg -q 'runs-on:[[:space:]]*ubuntu-latest' "${operator_handoff_workflow_path}" \
+  && rg -q 'uses:[[:space:]]*actions/checkout@v4' "${operator_handoff_workflow_path}" \
+  && rg -q 'scripts/run-m17-operator-handoff-ci-smoke.sh --artifacts-root build/operator-handoff-smoke' "${operator_handoff_workflow_path}" \
+  && rg -q 'if:[[:space:]]*always\(\)' "${operator_handoff_workflow_path}" \
+  && rg -q 'uses:[[:space:]]*actions/upload-artifact@v4' "${operator_handoff_workflow_path}" \
+  && rg -q 'name:[[:space:]]*operator-handoff-smoke-artifacts' "${operator_handoff_workflow_path}" \
+  && rg -q 'path:[[:space:]]*build/operator-handoff-smoke' "${operator_handoff_workflow_path}"; then
+  bool_has_m17_operator_handoff_workflow_contract=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-operator-handoff-workflow-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-operator-handoff-workflow-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m17_operator_handoff_workflow_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -522,6 +546,8 @@ emit_check "M17-B" "naming-lock CI enforces M17 operator bootstrap profile helpe
 emit_check "M17-C" "naming-lock CI enforces M17 operator troubleshooting matrix" "${bool_has_m17_operator_troubleshooting_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-D" "naming-lock CI enforces M17 operator handoff quickstart" "${bool_has_m17_operator_quickstart_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-E" "naming-lock CI enforces M17 operator handoff CI smoke wrapper" "${bool_has_m17_operator_ci_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
+emit_check "M17-G" "naming-lock CI enforces operator-handoff workflow contract + guard tests" "${bool_has_m17_operator_handoff_workflow_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

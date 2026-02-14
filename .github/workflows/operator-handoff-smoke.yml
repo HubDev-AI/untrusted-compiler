@@ -1,0 +1,25 @@
+name: Operator Handoff Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  operator-handoff-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run M17 operator handoff CI smoke wrapper
+        run: scripts/run-m17-operator-handoff-ci-smoke.sh --artifacts-root build/operator-handoff-smoke
+
+      - name: Upload operator handoff smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-handoff-smoke-artifacts
+          path: build/operator-handoff-smoke
