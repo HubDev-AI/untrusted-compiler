@@ -404,6 +404,7 @@ Current strict closure result:
 | `M23-F` | PASS | Naming-lock CI enforces M23 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M23-G` | PASS | Naming-lock CI enforces M23 closure report | `.github/workflows/naming-lock.yml` |
 | `M24-A` | PASS | Naming-lock CI enforces M24 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M24-B` | PASS | Naming-lock CI enforces M24 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -477,6 +478,7 @@ Strict closure interpretation:
 - M23 transition handoff packet enforcement is active (`M23-F`).
 - M23 closure report enforcement is active (`M23-G`).
 - M24 kickoff brief enforcement is active (`M24-A`).
+- M24 priority matrix enforcement is active (`M24-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4178,8 +4180,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M24 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M24-A`).
 
+### M24-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M24 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M24-B` gate.
+
+### M24-S2 tracking (live status)
+- [x] M24 priority matrix script added.
+- [x] M24 priority matrix contract test added.
+- [x] Book chapter documenting M24 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M24-B`).
+
 ### Next planned slice
-- M24-S2 priority matrix + closure gate `M24-B`.
+- M24-S3 next-slice selector + closure gate `M24-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4271,7 +4284,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M24-S2 priority matrix from M24 kickoff brief and wire `M24-B`.
+1. Implement M24-S3 next-slice selector from M24 kickoff + M24 priority matrix and wire `M24-C`.
 
 ---
 
