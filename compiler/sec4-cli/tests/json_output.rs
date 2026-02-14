@@ -6179,8 +6179,9 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 400 status line for invalid req.json body"
     );
     assert!(
-        response.contains("\r\n\r\n{\"error\":\"invalid json body\"}"),
-        "response should include deterministic invalid-json error payload"
+        response.contains("\"code\":\"JSON.INVALID_BODY\"")
+            && response.contains("\"message\":\"invalid json body\""),
+        "response should include deterministic std-error invalid-json payload"
     );
 }
 
@@ -6315,8 +6316,9 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 415 status line for non-json content-type"
     );
     assert!(
-        response.contains("\r\n\r\n{\"error\":\"content-type must be application/json\"}"),
-        "response should include deterministic content-type gate error payload"
+        response.contains("\"code\":\"HTTP.CONTENT_TYPE_INVALID\"")
+            && response.contains("\"message\":\"content-type must be application/json\""),
+        "response should include deterministic std-error content-type gate payload"
     );
 }
 
@@ -6456,8 +6458,9 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 413 status line for oversized req.json body"
     );
     assert!(
-        response.contains("\r\n\r\n{\"error\":\"request body exceeds runtime limit\"}"),
-        "response should include deterministic oversized-body error payload"
+        response.contains("\"code\":\"LIMIT.BODY_BYTES\"")
+            && response.contains("\"message\":\"request body exceeds runtime limit\""),
+        "response should include deterministic std-error oversized-body payload"
     );
 }
 

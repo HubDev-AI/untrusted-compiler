@@ -367,5 +367,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `400-m16-runtime-req-json-content-type-gate-enforcement.md`
 - `401-m16-sec4-run-live-http-command-path-validation.md`
 - `402-m16-req-json-request-size-guard-enforcement.md`
+- `403-m16-req-json-standard-error-envelope-alignment.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -63,6 +63,8 @@ Roadmap impact:
   - CLI `sec4 run` path is now explicitly validated with a real HTTP POST roundtrip in oneshot mode.
 - M16-S7 request-size guard hardening is now implemented:
   - `req.json(...)` now rejects oversized request bodies with deterministic `413 Payload Too Large`.
+- M16-S8 std-error envelope alignment is now implemented:
+  - runtime `req.json(...)` gate failures now return deterministic standard JSON error envelopes with stable error codes.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1909,6 +1911,34 @@ M13-S1 go/no-go note:
 - [x] `req.json(...)` returns deterministic `413` on oversized request body.
 - [x] Oversized-body runtime E2E integration test added and green.
 
+### M16-S8 follow-up slice (`req.json` standard error envelope alignment)
+#### Scope
+- Align runtime `req.json(...)` gate failures with the standard error envelope shape so runtime failures match security/debuggability expectations.
+
+#### Build tasks
+- Add runtime helper to emit structured JSON error envelope:
+  - `error.code`,
+  - `error.kind`,
+  - `error.message`,
+  - `error.status`,
+  - deterministic `traceId` and `timeMs`.
+- Replace ad-hoc gate payloads for:
+  - missing body (`400`),
+  - invalid body (`400`),
+  - non-JSON content-type (`415`),
+  - oversized body (`413`).
+- Update integration assertions to validate stable error codes and messages.
+
+#### Acceptance criteria
+- All `req.json(...)` runtime gate failures return structured standard error envelopes.
+- Error payloads remain deterministic and parseable.
+- Existing runtime e2e gate tests remain green with updated assertions.
+
+#### Tracking (live status)
+- [x] Runtime standard error-envelope helper implemented for gate failures.
+- [x] `req.json(...)` gate failure paths migrated to stable error codes.
+- [x] Runtime e2e tests updated to assert structured error-code payloads.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -1917,6 +1947,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime req.json Content-Type Gate Enforcement".
 - Chapter: "M16 Slice: sec4 run Live HTTP Command-Path Validation".
 - Chapter: "M16 Slice: req.json Request-Size Guard Enforcement".
+- Chapter: "M16 Slice: req.json Standard Error Envelope Alignment".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

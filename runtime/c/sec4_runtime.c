@@ -103,6 +103,35 @@ static void sec4_rt_store_response(
   g_sec4_rt_response.body_len = body_len;
 }
 
+static void sec4_rt_store_std_error_response(
+    int64_t status,
+    const char *code,
+    const char *kind,
+    const char *message
+) {
+  char payload[768];
+  int written = snprintf(
+      payload,
+      sizeof(payload),
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"rt_trace\",\"timeMs\":0}}",
+      code != NULL ? code : "INTERNAL.ERROR",
+      kind != NULL ? kind : "internal",
+      message != NULL ? message : "internal error",
+      (long long) status
+  );
+
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    sec4_rt_store_response(
+        status,
+        "application/json; charset=utf-8",
+        "{\"error\":{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"error\",\"status\":500,\"traceId\":\"rt_trace\",\"timeMs\":0}}"
+    );
+    return;
+  }
+
+  sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
+}
+
 static void sec4_rt_reset_request(void) {
   memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
 }
@@ -558,40 +587,44 @@ int64_t sec4_rt_req_json(int64_t schema) {
 
   if (!g_sec4_rt_request.has_request || g_sec4_rt_request.body_len == 0) {
     g_sec4_rt_request.json_valid = false;
-    sec4_rt_store_response(
+    sec4_rt_store_std_error_response(
         400,
-        "application/json; charset=utf-8",
-        "{\"error\":\"JSON body required\"}"
+        "JSON.BODY_REQUIRED",
+        "validation",
+        "JSON body required"
     );
     return 1;
   }
 
   if (g_sec4_rt_request.body_limit_exceeded) {
     g_sec4_rt_request.json_valid = false;
-    sec4_rt_store_response(
+    sec4_rt_store_std_error_response(
         413,
-        "application/json; charset=utf-8",
-        "{\"error\":\"request body exceeds runtime limit\"}"
+        "LIMIT.BODY_BYTES",
+        "resource_limit",
+        "request body exceeds runtime limit"
     );
     return 1;
   }
 
   if (!g_sec4_rt_request.has_content_type || !g_sec4_rt_request.content_type_is_json) {
     g_sec4_rt_request.json_valid = false;
-    sec4_rt_store_response(
+    sec4_rt_store_std_error_response(
         415,
-        "application/json; charset=utf-8",
-        "{\"error\":\"content-type must be application/json\"}"
+        "HTTP.CONTENT_TYPE_INVALID",
+        "validation",
+        "content-type must be application/json"
     );
     return 1;
   }
 
   if (!sec4_rt_is_likely_json(g_sec4_rt_request.body, g_sec4_rt_request.body_len)) {
     g_sec4_rt_request.json_valid = false;
-    sec4_rt_store_response(
+    sec4_rt_store_std_error_response(
         400,
-        "application/json; charset=utf-8",
-        "{\"error\":\"invalid json body\"}"
+        "JSON.INVALID_BODY",
+        "validation",
+        "invalid json body"
     );
     return 1;
   }
