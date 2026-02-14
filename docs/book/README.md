@@ -495,5 +495,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `528-m25-priority-matrix.md`
 - `529-m25-next-slice-selector.md`
 - `530-m25-runtime-hardening-runner.md`
+- `531-m25-executed-slice-convergence-summary.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -414,6 +414,7 @@ Current strict closure result:
 | `M25-B` | PASS | Naming-lock CI enforces M25 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M25-C` | PASS | Naming-lock CI enforces M25 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M25-D` | PASS | Naming-lock CI enforces M25 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M25-E` | PASS | Naming-lock CI enforces M25 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -497,6 +498,7 @@ Strict closure interpretation:
 - M25 priority matrix enforcement is active (`M25-B`).
 - M25 next-slice selector enforcement is active (`M25-C`).
 - M25 runtime hardening runner enforcement is active (`M25-D`).
+- M25 executed-slice convergence summary enforcement is active (`M25-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4180,7 +4182,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M23-G`).
 
 ### Next planned slice
-- M25-S5 executed-slice convergence summary + closure gate `M25-E`.
+- M25-S6 transition handoff packet + closure gate `M25-F`.
 
 ## M24 - Kickoff Loop (Complete)
 
@@ -4316,8 +4318,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M25 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M25-D`).
 
+### M25-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact alignment and emits deterministic markdown/json outputs.
+- Summary computes `executionPass`, `overall`, and deterministic `nextAction` from runtime execution status.
+- Closure audit includes dedicated `M25-E` gate.
+
+### M25-S5 tracking (live status)
+- [x] M25 executed-slice convergence summary script added.
+- [x] M25 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M25 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M25-E`).
+
 ### Next planned slice
-- M25-S5 executed-slice convergence summary + closure gate `M25-E`.
+- M25-S6 transition handoff packet + closure gate `M25-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4409,7 +4422,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M25-S5 executed-slice convergence summary from selector + runtime execution artifacts and wire `M25-E`.
+1. Implement M25-S6 transition handoff packet from M25 kickoff/matrix/selector/runtime/convergence artifacts and wire `M25-F`.
 
 ---
 
