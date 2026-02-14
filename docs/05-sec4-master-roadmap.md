@@ -382,6 +382,7 @@ Current strict closure result:
 | `M20-E` | PASS | Naming-lock CI enforces M20 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M20-F` | PASS | Naming-lock CI enforces M20 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M20-G` | PASS | Naming-lock CI enforces M20 closure report | `.github/workflows/naming-lock.yml` |
+| `M21-A` | PASS | Naming-lock CI enforces M21 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -433,6 +434,7 @@ Strict closure interpretation:
 - M20 executed-slice convergence summary enforcement is active (`M20-E`).
 - M20 transition handoff packet enforcement is active (`M20-F`).
 - M20 closure report enforcement is active (`M20-G`).
+- M21 kickoff brief enforcement is active (`M21-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3839,6 +3841,41 @@ M13-S1 go/no-go note:
 - Chapter: "M20 Transition Handoff Packet".
 - Chapter: "M20 Closure Report".
 
+## M21 - Kickoff from Closed M20 Baseline
+### Trigger condition
+- Start after M20 closure report (`M20-G`) is PASS and M20 transition packet is available.
+
+### Scope decision (M21 kickoff)
+- Primary scope: use finalized M20 closure + handoff packet to define deterministic M21 start priorities.
+- Included tracks:
+  - M21 kickoff brief generation from M20 closure/packet artifacts,
+  - closure-gated naming-lock contract for M21 kickoff brief.
+- Deferred:
+  - deeper M21 implementation slices until kickoff brief is stable.
+
+### Build tasks
+- Generate M21 kickoff brief from M20 closure report + transition packet.
+- Support markdown and JSON output for operator + automation consumers.
+- Auto-generate M20 closure json when absent but packet is available.
+- Lock kickoff-brief contract in naming-lock CI and closure audit.
+
+### M21-S1 kickoff acceptance criteria
+- M21 kickoff brief script + contract test exists.
+- Script validates M20 packet/closure contract and handles missing M20 closure artifact deterministically.
+- Closure audit includes dedicated `M21-A` gate.
+
+### M21-S1 tracking (live status)
+- [x] M21 kickoff brief script added.
+- [x] M21 kickoff brief contract test added.
+- [x] Book chapter documenting M21 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M21-A`).
+
+### Exit criteria
+- M21 kickoff starts from deterministic evidence (`M20` closure + handoff packet), not ad-hoc operator judgment.
+
+### Docs/book outputs
+- Chapter: "M21 Kickoff Brief".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -3929,7 +3966,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Start M21-S1 kickoff brief from closed M20 baseline (`M20-G`) and wire the next closure gate.
+1. Implement M21-S2 priority matrix from M21 kickoff brief and wire the next closure gate.
 
 ---
 
