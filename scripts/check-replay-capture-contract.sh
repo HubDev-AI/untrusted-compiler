@@ -53,7 +53,7 @@ jq -e '
   and (.compilerHash | type == "string" and length > 0)
   and (.runtimeHash | type == "string" and length > 0)
   and (.request | type == "object")
-  and (.request.method | type == "string" and length > 0)
+  and (.request.method | type == "string" and length > 0 and test("^[A-Z]+$"))
   and (.request.path | type == "string" and length > 0)
   and (
     if (.request | has("url")) then

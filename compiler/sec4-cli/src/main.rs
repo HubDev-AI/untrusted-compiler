@@ -821,9 +821,11 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
     if request
         .get("method")
         .and_then(serde_json::Value::as_str)
+        .filter(|entry| !entry.is_empty())
+        .filter(|entry| entry.chars().all(|ch| ch.is_ascii_uppercase()))
         .is_none()
     {
-        return Err("capture.request.method must be a string".to_string());
+        return Err("capture.request.method must be a non-empty uppercase string".to_string());
     }
     if request
         .get("path")
