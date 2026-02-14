@@ -43,6 +43,7 @@ Roadmap impact:
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
+- M15 runtime replay-stubbing expansion scope is now defined and ready to execute.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1637,6 +1638,71 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Capture Body-Encoding Exclusivity Contract Enforcement".
 - Chapter: "M14 Slice: Replay Capture Base64 Syntax Contract Enforcement".
 - Chapter: "M14 Slice: Replay Capture HTTP-Method Shape Contract Enforcement".
+
+## M15 - Replay Runtime Stubbing and Deterministic Re-Execution
+### Trigger condition
+- Start after M14 bootstrap contract gates (`M14-A`/`M14-B`/`M14-C`/`M14-D`) are consistently green in CI.
+
+### Scope decision (M15)
+- Primary scope: move replay from contract-validation-only bootstrap into deterministic runtime execution paths for `mock` mode.
+- Included tracks:
+  - deterministic stub selection and response materialization for net/db/fs replay operations,
+  - replay diagnostics and output contracts for runtime stub misses/mismatches/truncation behavior,
+  - deterministic replay summary/auditability output that can be consumed by CI and incident workflows.
+- Deferred out of M15:
+  - full capture-time dependency recording expansion beyond current contract shape,
+  - production-grade distributed replay orchestration,
+  - cross-service multi-capture replay scheduling.
+
+### Build tasks
+- Implement deterministic runtime net stub resolution in replay execution path:
+  - map request signature -> selected net stub response,
+  - preserve deterministic selection behavior across duplicate-safe registries.
+- Implement deterministic runtime DB stub materialization:
+  - map DB dependency signature -> row payload summary/result surface,
+  - expose deterministic row-count/truncation behavior to replay outputs.
+- Implement deterministic runtime FS stub materialization:
+  - map FS dependency signature -> operation result (`ok`, `bytes`, error surface when modeled),
+  - preserve deterministic ordering when multiple FS dependencies are replayed.
+- Add explicit replay runtime diagnostics contract:
+  - runtime stub-miss diagnostics for net/db/fs with stable codes and signature evidence,
+  - mismatch diagnostics when stub payloads violate expected runtime shapes.
+- Expand replay JSON/text outputs:
+  - include deterministic executed-stub traces (net/db/fs),
+  - include deterministic replay execution summary fields suitable for CI contract checks.
+- Add regression and contract tests:
+  - CLI integration tests for runtime stub execution in `--effects mock`,
+  - shell contract tests for output-field presence and deterministic execution invariants.
+- Wire naming-lock CI + closure audit for new replay-runtime guard scripts.
+
+### M15-S1 acceptance criteria
+- `sec4 replay --effects mock --stubs <file>` executes deterministic net/db/fs stub materialization paths, not only contract prechecks.
+- Runtime replay outputs include deterministic executed-stub summaries/traces in both text and JSON formats.
+- Runtime replay failure diagnostics for unresolved/malformed stub execution are deterministic and signature-backed.
+- CI guards fail deterministically if runtime replay execution contracts are removed or drift.
+
+### M15-S1 tracking (live status)
+- [ ] Scope locked and documented.
+- [ ] Runtime net stub materialization wired in replay `mock` path.
+- [ ] Runtime DB stub materialization wired in replay `mock` path.
+- [ ] Runtime FS stub materialization wired in replay `mock` path.
+- [ ] Replay runtime execution JSON/text contracts defined and tested.
+- [ ] Runtime replay guard scripts added and wired into naming-lock CI.
+- [ ] Closure-audit checks expanded with M15 runtime replay enforcement gates.
+
+### Exit criteria
+- Replay `mock` mode performs deterministic runtime stub execution across net/db/fs paths.
+- Replay outputs expose deterministic executed-stub evidence sufficient for incident/debug workflows.
+- Runtime replay guard scripts and CI wiring prevent silent contract regressions.
+- Closure audit reports M15 replay-runtime gate status alongside existing milestone gates.
+
+### Docs/book outputs
+- Chapter: "M15 Runtime Replay Stubbing Scope and Plan".
+- Chapter: "M15 Slice: Runtime Net Stub Materialization".
+- Chapter: "M15 Slice: Runtime DB Stub Materialization".
+- Chapter: "M15 Slice: Runtime FS Stub Materialization".
+- Chapter: "M15 Slice: Replay Runtime Diagnostics Contract".
+- Chapter: "M15 Slice: Replay Runtime Output Contract Guard".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
