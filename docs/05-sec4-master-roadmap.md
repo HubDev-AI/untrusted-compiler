@@ -162,6 +162,9 @@ Roadmap impact:
 - M16-S46 runtime-smoke checker now enforces run-log invocation flag contracts:
   - `health.run.log` and `users.run.log` must contain `--port`, `--oneshot`, and `--serve-timeout-ms 12000` tokens.
   - regression coverage includes deterministic missing-token failures for both logs.
+- M16-S47 runtime-smoke checker now enforces run-log/metadata port correlation:
+  - invocation logs must include exact `--port <run-metadata port>` token.
+  - regression coverage includes deterministic port-mismatch failure fixture.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2940,6 +2943,27 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes deterministic missing-token fixtures for health/users run logs.
 - [x] Real smoke + checker flow remains green after run-log contract hardening.
 
+### M16-S47 follow-up slice (runtime-smoke run-log port/metadata correlation hardening)
+#### Scope
+- Tighten run-log validation so `--port` token values are correlated with `run-metadata.txt` port value.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to:
+  - parse `port` from `run-metadata.txt`
+  - require exact `--port <port>` token in both `health.run.log` and `users.run.log`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with a metadata/log port mismatch fixture.
+- Re-run checker regression suite and real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker fails when run logs contain a different `--port` value than metadata port.
+- Regression suite includes deterministic mismatch diagnostic.
+- Real smoke artifact flow remains green.
+
+#### Tracking (live status)
+- [x] Checker now enforces exact metadata-correlated `--port` token in both run logs.
+- [x] Regression suite includes run-log/metadata port mismatch fixture.
+- [x] Real smoke + checker flow remains green after port-correlation hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2988,6 +3012,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Users Trace Header/Body Correlation Enforcement".
 - Chapter: "M16 Slice: Runtime-Smoke Health Trace-Header Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Invocation Flag Contract Hardening".
+- Chapter: "M16 Slice: Runtime-Smoke Run-Log Port/Metadata Correlation Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

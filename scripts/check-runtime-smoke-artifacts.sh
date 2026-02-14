@@ -101,11 +101,6 @@ if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/health.run.log"; the
   exit 1
 fi
 
-if ! rg -Fq -- '--port ' "${artifacts_dir}/health.run.log"; then
-  echo "health.run.log missing --port invocation token" >&2
-  exit 1
-fi
-
 if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and test("^rt-[0-9]+$")) and (.timeMs | type == "number") and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
   echo "users.body does not match expected std-success envelope contract" >&2
   exit 1
@@ -134,13 +129,20 @@ if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/users.run.log"; then
   exit 1
 fi
 
-if ! rg -Fq -- '--port ' "${artifacts_dir}/users.run.log"; then
-  echo "users.run.log missing --port invocation token" >&2
+if ! rg -q '^port=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing numeric port field" >&2
   exit 1
 fi
 
-if ! rg -q '^port=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
-  echo "run-metadata.txt missing numeric port field" >&2
+port_value="$(sed -n 's/^port=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+
+if ! rg -Fq -- "--port ${port_value}" "${artifacts_dir}/health.run.log"; then
+  echo "health.run.log missing --port ${port_value} invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- "--port ${port_value}" "${artifacts_dir}/users.run.log"; then
+  echo "users.run.log missing --port ${port_value} invocation token" >&2
   exit 1
 fi
 
