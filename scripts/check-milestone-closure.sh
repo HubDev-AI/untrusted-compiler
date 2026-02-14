@@ -174,6 +174,8 @@ bool_has_m18_track_convergence_summary_ci_guard=0
 bool_has_m18_transition_handoff_packet_ci_guard=0
 bool_has_m18_closure_report_ci_guard=0
 bool_has_m19_kickoff_brief_ci_guard=0
+bool_has_m19_priority_matrix_ci_guard=0
+bool_has_m19_slice_selector_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -456,6 +458,20 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m19_kickoff_brief_ci_guard=1
 fi
 
+m19_priority_matrix_test_script="${repo_root}/scripts/test-build-m19-priority-matrix.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m19_priority_matrix_test_script}" ] \
+  && rg -q 'scripts/test-build-m19-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m19_priority_matrix_ci_guard=1
+fi
+
+m19_slice_selector_test_script="${repo_root}/scripts/test-select-m19-next-slice.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m19_slice_selector_test_script}" ] \
+  && rg -q 'scripts/test-select-m19-next-slice.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m19_slice_selector_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -683,6 +699,8 @@ emit_check "M18-G" "naming-lock CI enforces M18 track convergence summary" "${bo
 emit_check "M18-H" "naming-lock CI enforces M18 transition handoff packet" "${bool_has_m18_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M18-I" "naming-lock CI enforces M18 closure report" "${bool_has_m18_closure_report_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M19-A" "naming-lock CI enforces M19 kickoff brief" "${bool_has_m19_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M19-B" "naming-lock CI enforces M19 priority matrix" "${bool_has_m19_priority_matrix_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M19-C" "naming-lock CI enforces M19 next-slice selector" "${bool_has_m19_slice_selector_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

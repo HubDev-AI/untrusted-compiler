@@ -140,6 +140,14 @@ Roadmap impact:
   - `scripts/generate-m19-kickoff-brief.sh`
   - `scripts/test-generate-m19-kickoff-brief.sh`
   - `docs/book/485-m19-kickoff-brief.md`
+- M19-S2 priority matrix is now implemented:
+  - `scripts/build-m19-priority-matrix.sh`
+  - `scripts/test-build-m19-priority-matrix.sh`
+  - `docs/book/486-m19-priority-matrix.md`
+- M19-S3 next-slice selector is now implemented:
+  - `scripts/select-m19-next-slice.sh`
+  - `scripts/test-select-m19-next-slice.sh`
+  - `docs/book/487-m19-next-slice-selector.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -361,6 +369,8 @@ Current strict closure result:
 | `M18-H` | PASS | Naming-lock CI enforces M18 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M18-I` | PASS | Naming-lock CI enforces M18 closure report | `.github/workflows/naming-lock.yml` |
 | `M19-A` | PASS | Naming-lock CI enforces M19 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M19-B` | PASS | Naming-lock CI enforces M19 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M19-C` | PASS | Naming-lock CI enforces M19 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -399,6 +409,8 @@ Strict closure interpretation:
 - M18 transition handoff packet enforcement is active (`M18-H`).
 - M18 closure report enforcement is active (`M18-I`).
 - M19 kickoff brief enforcement is active (`M19-A`).
+- M19 priority matrix enforcement is active (`M19-B`).
+- M19 next-slice selector enforcement is active (`M19-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3608,7 +3620,9 @@ M13-S1 go/no-go note:
 - Generate M19 kickoff brief from M18 closure report + transition packet.
 - Support markdown and JSON output for operator + automation consumers.
 - Auto-generate M18 closure json when absent but packet is available.
-- Lock kickoff brief contract in naming-lock CI and closure audit.
+- Build deterministic M19 priority matrix from kickoff brief.
+- Select first executable M19 slice from kickoff + matrix inputs.
+- Lock kickoff/matrix/selector contracts in naming-lock CI and closure audit.
 
 ### M19-S1 kickoff acceptance criteria
 - M19 kickoff brief script + contract test exists.
@@ -3620,12 +3634,22 @@ M13-S1 go/no-go note:
 - [x] M19 kickoff brief contract test added.
 - [x] Book chapter documenting M19 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M19-A`).
+- [x] M19 priority matrix script added.
+- [x] M19 priority matrix contract test added.
+- [x] Book chapter documenting M19 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M19-B`).
+- [x] M19 next-slice selector script added.
+- [x] M19 next-slice selector contract test added.
+- [x] Book chapter documenting M19 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M19-C`).
 
 ### Exit criteria
 - M19 kickoff starts from deterministic evidence (`M18` closure + handoff packet), not ad-hoc operator judgment.
 
 ### Docs/book outputs
 - Chapter: "M19 Kickoff Brief".
+- Chapter: "M19 Priority Matrix".
+- Chapter: "M19 Next-Slice Selector".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3717,7 +3741,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M19-S2 priority matrix and first executable M19 slice selector from the kickoff brief.
+1. Implement M19-S4 first executed M19 slice from selector output and wire its closure gate.
 
 ---
 
