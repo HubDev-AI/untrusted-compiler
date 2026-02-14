@@ -138,6 +138,9 @@ Roadmap impact:
 - M16-S38 runtime-smoke checker regression coverage now validates missing workProject metadata:
   - checker tests include dedicated failing fixture for absent `workProject`.
   - deterministic missing-workProject diagnostic is now contract-locked.
+- M16-S39 smoke-script contract now locks source/work metadata emit tokens:
+  - smoke-script contract checker now requires `sourceProject=${source_project}` and `workProject=${work_project}` tokens.
+  - guard coverage now validates deterministic missing-token diagnostics for both metadata tokens.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2742,6 +2745,27 @@ M13-S1 go/no-go note:
 - [x] Checker regression test now asserts deterministic workProject-missing diagnostic.
 - [x] Real smoke + checker flow remains green.
 
+### M16-S39 follow-up slice (smoke-script source/work metadata token contract lock)
+#### Scope
+- Expand smoke-script static contract coverage so metadata emit tokens for source/work provenance are contract-locked in CI guard tests.
+
+#### Build tasks
+- Extend `scripts/test-smoke-sec4-run-hello-api-script-contract.sh` required token list with:
+  - `sourceProject=${source_project}`
+  - `workProject=${work_project}`
+- Extend `scripts/test-smoke-sec4-run-hello-api-script-contract-guard.sh` with dedicated negative fixtures for missing source/work metadata tokens.
+- Re-run smoke-script contract + guard tests and keep broader runtime-smoke validation green.
+
+#### Acceptance criteria
+- Smoke-script contract fails when either source/work metadata token is removed.
+- Guard script asserts deterministic missing-token diagnostics for both source/work metadata tokens.
+- Existing runFlags metadata guard scenario remains green.
+
+#### Tracking (live status)
+- [x] Smoke-script contract now requires source/work metadata emit tokens.
+- [x] Guard coverage includes deterministic missing-token scenarios for both metadata tokens.
+- [x] Smoke-script contract + guard tests pass after provenance-token lock expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2782,6 +2806,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Closure Gate for sec4 run Runtime-Flag CI Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Source/Work Metadata Field Checks".
 - Chapter: "M16 Slice: Runtime-Smoke Checker workProject Regression Fixture".
+- Chapter: "M16 Slice: Smoke-Script Source/Work Metadata Token Contract Lock".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

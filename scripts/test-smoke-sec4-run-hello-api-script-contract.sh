@@ -55,6 +55,8 @@ required_tokens=(
   "--serve-timeout-ms 12000"
   "oneshot=true"
   "serveTimeoutMs=12000"
+  'sourceProject=${source_project}'
+  'workProject=${work_project}'
   "runFlags=--port,--oneshot,--serve-timeout-ms"
   "GET"
   "/health"
