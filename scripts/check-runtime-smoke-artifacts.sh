@@ -85,6 +85,19 @@ if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and 
   exit 1
 fi
 
+if ! rg -iq '^X-Trace-Id:[[:space:]]*.+$' "${artifacts_dir}/users.headers"; then
+  echo "users.headers missing X-Trace-Id header" >&2
+  exit 1
+fi
+
+users_header_trace_id="$(sed -nE 's/^X-Trace-Id:[[:space:]]*//Ip' "${artifacts_dir}/users.headers" | tr -d '\r' | head -n 1)"
+users_body_trace_id="$(jq -r '.traceId' "${artifacts_dir}/users.body")"
+
+if [ "${users_header_trace_id}" != "${users_body_trace_id}" ]; then
+  echo "users traceId mismatch between headers and body" >&2
+  exit 1
+fi
+
 if ! rg -q '^port=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing numeric port field" >&2
   exit 1

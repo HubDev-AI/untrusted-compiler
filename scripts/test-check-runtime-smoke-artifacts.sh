@@ -35,6 +35,7 @@ TXT
 cat > "${ok_dir}/users.headers" <<'TXT'
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
+X-Trace-Id: rt-1
 TXT
 
 cat > "${ok_dir}/users.body" <<'TXT'
@@ -90,6 +91,41 @@ fi
 
 if ! rg -Fq 'users.body does not match expected std-success envelope contract' "${tmp_dir}/trace-bad.log"; then
   echo "expected envelope-contract diagnostic for malformed traceId" >&2
+  exit 1
+fi
+
+trace_header_missing_dir="${tmp_dir}/bad-trace-header-missing"
+cp -R "${ok_dir}" "${trace_header_missing_dir}"
+cat > "${trace_header_missing_dir}/users.headers" <<'TXT'
+HTTP/1.1 201 Created
+Content-Type: application/json; charset=utf-8
+TXT
+
+if "${checker}" --artifacts-dir "${trace_header_missing_dir}" >"${tmp_dir}/trace-header-missing.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on missing users trace header" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users.headers missing X-Trace-Id header' "${tmp_dir}/trace-header-missing.log"; then
+  echo "expected missing-header diagnostic for users trace id" >&2
+  exit 1
+fi
+
+trace_mismatch_dir="${tmp_dir}/bad-trace-mismatch"
+cp -R "${ok_dir}" "${trace_mismatch_dir}"
+cat > "${trace_mismatch_dir}/users.headers" <<'TXT'
+HTTP/1.1 201 Created
+Content-Type: application/json; charset=utf-8
+X-Trace-Id: rt-999
+TXT
+
+if "${checker}" --artifacts-dir "${trace_mismatch_dir}" >"${tmp_dir}/trace-mismatch.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on header/body trace mismatch" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users traceId mismatch between headers and body' "${tmp_dir}/trace-mismatch.log"; then
+  echo "expected trace-mismatch diagnostic for users header/body trace ids" >&2
   exit 1
 fi
 
