@@ -223,6 +223,9 @@ jobs:
       - name: Validate M23 runtime hardening runner
         run: scripts/test-run-m23-runtime-hardening.sh
 
+      - name: Validate M23 executed-slice convergence summary
+        run: scripts/test-build-m23-executed-slice-convergence-summary.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

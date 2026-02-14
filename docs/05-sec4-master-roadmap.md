@@ -400,6 +400,7 @@ Current strict closure result:
 | `M23-B` | PASS | Naming-lock CI enforces M23 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M23-C` | PASS | Naming-lock CI enforces M23 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M23-D` | PASS | Naming-lock CI enforces M23 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M23-E` | PASS | Naming-lock CI enforces M23 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -469,6 +470,7 @@ Strict closure interpretation:
 - M23 priority matrix enforcement is active (`M23-B`).
 - M23 next-slice selector enforcement is active (`M23-C`).
 - M23 runtime hardening runner enforcement is active (`M23-D`).
+- M23 executed-slice convergence summary enforcement is active (`M23-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4118,8 +4120,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M23 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M23-D`).
 
+### M23-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact alignment and emits deterministic markdown/json outputs.
+- Summary computes `executionPass`, `overall`, and deterministic `nextAction` from runtime execution status.
+- Closure audit includes dedicated `M23-E` gate.
+
+### M23-S5 tracking (live status)
+- [x] M23 executed-slice convergence summary script added.
+- [x] M23 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M23 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M23-E`).
+
 ### Next planned slice
-- M23-S5 executed-slice convergence summary + closure gate `M23-E`.
+- M23-S6 transition handoff packet + closure gate `M23-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4211,7 +4224,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M23-S5 executed-slice convergence summary from M23 selector/runtime execution and wire `M23-E`.
+1. Implement M23-S6 transition handoff packet from M23 kickoff/matrix/selector/runtime/convergence artifacts and wire `M23-F`.
 
 ---
 
