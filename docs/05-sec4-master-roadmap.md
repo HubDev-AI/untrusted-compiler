@@ -114,6 +114,9 @@ Roadmap impact:
 - M16-S28 operator smoke script now uses run-command flags:
   - `scripts/smoke-sec4-run-hello-api.sh` now launches `sec4 run` with `--oneshot` directly.
   - smoke-script contract tests and runtime-smoke artifact checks remain green after migration.
+- M16-S29 run-command timeout bridge flag is now implemented:
+  - `sec4 run` now supports `--serve-timeout-ms <N>` for deterministic oneshot runtime windows without direct timeout env setup.
+  - run-command and operator smoke coverage now exercise this flag path.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2503,6 +2506,28 @@ M13-S1 go/no-go note:
 - [x] Smoke + artifact checker flow passes locally after migration.
 - [x] Runtime-smoke workflow contract and guard tests remain green.
 
+### M16-S29 follow-up slice (`sec4 run --serve-timeout-ms`)
+#### Scope
+- Expose runtime serve-timeout control as a first-class `sec4 run` flag and migrate operator flows to use it instead of `SEC4_RT_HTTP_SERVE_TIMEOUT_MS`.
+
+#### Build tasks
+- Extend `sec4 run` CLI shape with `--serve-timeout-ms <N>` bridging to `SEC4_RT_HTTP_SERVE_TIMEOUT_MS`.
+- Update run-command integration tests to exercise timeout behavior via CLI flag.
+- Update operator smoke script launch path to use `--serve-timeout-ms 12000`.
+- Update smoke-script contract tokens to require timeout flag usage.
+
+#### Acceptance criteria
+- `sec4 run --help` exposes timeout bridge flag.
+- Run-command e2e tests pass using `--serve-timeout-ms`.
+- Smoke and runtime-smoke contract paths stay green after timeout-flag migration.
+
+#### Tracking (live status)
+- [x] `sec4 run` now accepts `--serve-timeout-ms`.
+- [x] `run --help` integration coverage asserts timeout flag exposure.
+- [x] Run-command oneshot/body-limit e2e tests now pass timeout through `--serve-timeout-ms`.
+- [x] Smoke script now launches `sec4 run` with `--serve-timeout-ms 12000`.
+- [x] Smoke/runtime-smoke contract suites remain green after migration.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2533,6 +2558,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Artifact Checker".
 - Chapter: "M16 Slice: sec4 run Runtime Bridge Flags".
 - Chapter: "M16 Slice: Operator Smoke Script Migration to sec4 run --oneshot".
+- Chapter: "M16 Slice: sec4 run Serve-Timeout Bridge Flag".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

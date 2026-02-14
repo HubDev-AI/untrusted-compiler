@@ -89,6 +89,12 @@ Optional runtime body-cap override:
 cargo run -p sec4 -- run --path examples/hello-api --oneshot --max-body-bytes 16384
 ```
 
+Optional oneshot serve-timeout override:
+
+```bash
+cargo run -p sec4 -- run --path examples/hello-api --oneshot --serve-timeout-ms 12000
+```
+
 Then in another terminal:
 
 ```bash

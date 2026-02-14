@@ -26,15 +26,6 @@ fn run_cli(args: &[&str]) -> Output {
         .expect("sec4 CLI should run")
 }
 
-fn run_cli_with_env(args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut cmd = Command::new(cli_bin());
-    cmd.args(args);
-    for (key, value) in envs {
-        cmd.env(key, value);
-    }
-    cmd.output().expect("sec4 CLI should run")
-}
-
 fn clang_available() -> bool {
     Command::new("clang")
         .arg("--version")
@@ -5752,13 +5743,14 @@ fn run_command_executes_compiled_binary_when_clang_available() {
         .to_str()
         .expect("example path should be valid utf-8");
 
-    let output = run_cli_with_env(
-        &["run", "--path", hello],
-        &[
-            ("SEC4_RT_HTTP_SERVE_MODE", "oneshot"),
-            ("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "100"),
-        ],
-    );
+    let output = run_cli(&[
+        "run",
+        "--path",
+        hello,
+        "--oneshot",
+        "--serve-timeout-ms",
+        "100",
+    ]);
     assert!(output.status.success(), "run command should succeed");
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
@@ -9526,13 +9518,14 @@ fn run_command_executes_hello_api_example_when_clang_available() {
         .to_str()
         .expect("hello-api path should be valid utf-8");
 
-    let output = run_cli_with_env(
-        &["run", "--path", hello_api],
-        &[
-            ("SEC4_RT_HTTP_SERVE_MODE", "oneshot"),
-            ("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "150"),
-        ],
-    );
+    let output = run_cli(&[
+        "run",
+        "--path",
+        hello_api,
+        "--oneshot",
+        "--serve-timeout-ms",
+        "150",
+    ]);
     assert!(
         output.status.success(),
         "run command should succeed for hello-api example"
@@ -9561,6 +9554,10 @@ fn run_command_help_lists_runtime_bridge_flags() {
     assert!(
         stdout.contains("--max-body-bytes <MAX_BODY_BYTES>"),
         "run --help should list --max-body-bytes runtime bridge flag"
+    );
+    assert!(
+        stdout.contains("--serve-timeout-ms <SERVE_TIMEOUT_MS>"),
+        "run --help should list --serve-timeout-ms runtime bridge flag"
     );
 }
 
@@ -9611,8 +9608,14 @@ fn main() effects {{ net }} -> Int {{
         .expect("project path should be valid utf-8");
 
     let mut child = Command::new(cli_bin())
-        .args(["run", "--path", path, "--oneshot"])
-        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "30000")
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--serve-timeout-ms",
+            "30000",
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -9756,8 +9759,9 @@ fn main() effects {{ net }} -> Int {{
             "--oneshot",
             "--max-body-bytes",
             "16",
+            "--serve-timeout-ms",
+            "30000",
         ])
-        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "30000")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

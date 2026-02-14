@@ -43,6 +43,8 @@ enum Commands {
         oneshot: bool,
         #[arg(long)]
         max_body_bytes: Option<u64>,
+        #[arg(long)]
+        serve_timeout_ms: Option<u64>,
     },
     Check {
         #[arg(long, default_value = ".")]
@@ -286,7 +288,8 @@ fn main() {
             path,
             oneshot,
             max_body_bytes,
-        } => cmd_run(&path, oneshot, max_body_bytes),
+            serve_timeout_ms,
+        } => cmd_run(&path, oneshot, max_body_bytes, serve_timeout_ms),
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
@@ -3231,7 +3234,12 @@ fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
     }
 }
 
-fn cmd_run(path: &Path, oneshot: bool, max_body_bytes: Option<u64>) -> Result<(), i32> {
+fn cmd_run(
+    path: &Path,
+    oneshot: bool,
+    max_body_bytes: Option<u64>,
+    serve_timeout_ms: Option<u64>,
+) -> Result<(), i32> {
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
         Err(diagnostics) => {
@@ -3249,6 +3257,9 @@ fn cmd_run(path: &Path, oneshot: bool, max_body_bytes: Option<u64>) -> Result<()
     }
     if let Some(bytes) = max_body_bytes {
         cmd.env("SEC4_RT_HTTP_MAX_BODY_BYTES", bytes.to_string());
+    }
+    if let Some(timeout_ms) = serve_timeout_ms {
+        cmd.env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", timeout_ms.to_string());
     }
 
     let status = match cmd.status() {

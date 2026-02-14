@@ -397,5 +397,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `430-m16-runtime-smoke-artifact-checker.md`
 - `431-m16-sec4-run-runtime-bridge-flags.md`
 - `432-m16-operator-smoke-script-migration-to-sec4-run-oneshot.md`
+- `433-m16-sec4-run-serve-timeout-bridge-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.
