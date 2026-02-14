@@ -226,6 +226,9 @@ jobs:
       - name: Validate M23 executed-slice convergence summary
         run: scripts/test-build-m23-executed-slice-convergence-summary.sh
 
+      - name: Validate M23 transition handoff packet
+        run: scripts/test-build-m23-transition-handoff-packet.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
