@@ -418,5 +418,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `451-m16-runtime-smoke-run-log-port-metadata-correlation-hardening.md`
 - `452-m16-runtime-smoke-run-log-timeout-metadata-correlation-hardening.md`
 - `453-m16-operator-smoke-timeout-override-and-variable-token-contracts.md`
+- `454-m16-runtime-smoke-metadata-numeric-bound-contract-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

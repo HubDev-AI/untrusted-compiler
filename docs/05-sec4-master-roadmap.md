@@ -171,6 +171,9 @@ Roadmap impact:
 - M16-S49 operator smoke script now supports timeout override:
   - `scripts/smoke-sec4-run-hello-api.sh` accepts `--serve-timeout-ms <ms>` with default `12000`.
   - smoke-script contract/guard checks now lock variable-based timeout tokens.
+- M16-S50 runtime-smoke checker now enforces metadata numeric bounds:
+  - metadata `port` must be in range `1..65535`.
+  - metadata `serveTimeoutMs` must be positive (`> 0`).
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -3015,6 +3018,30 @@ M13-S1 go/no-go note:
 - [x] Contract/guard coverage now locks variable-based timeout flag + metadata tokens.
 - [x] Default and override smoke flows both pass checker validation.
 
+### M16-S50 follow-up slice (runtime-smoke metadata numeric-bound contract hardening)
+#### Scope
+- Tighten runtime-smoke metadata validation by enforcing numeric bounds on port and timeout fields.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to enforce:
+  - `port` range `1..65535`
+  - `serveTimeoutMs > 0`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with:
+  - out-of-range port fixture (`port=0`)
+  - non-positive timeout fixture (`serveTimeoutMs=0`)
+- Re-run checker regression suite and real smoke/checker flows.
+
+#### Acceptance criteria
+- Checker fails deterministically for out-of-range metadata port values.
+- Checker fails deterministically for non-positive metadata timeout values.
+- Default and timeout-override smoke flows remain green.
+
+#### Tracking (live status)
+- [x] Checker now enforces port range bounds (`1..65535`).
+- [x] Checker now enforces positive timeout bounds (`serveTimeoutMs > 0`).
+- [x] Regression suite includes dedicated port/timeout range fixtures.
+- [x] Default and override smoke flows remain green after metadata bound hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3066,6 +3093,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Port/Metadata Correlation Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Timeout/Metadata Correlation Hardening".
 - Chapter: "M16 Slice: Operator Smoke Timeout Override and Variable Token Contracts".
+- Chapter: "M16 Slice: Runtime-Smoke Metadata Numeric-Bound Contract Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -126,6 +126,11 @@ fi
 
 port_value="$(sed -n 's/^port=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
 
+if [ "${port_value}" -lt 1 ] || [ "${port_value}" -gt 65535 ]; then
+  echo "run-metadata.txt port must be between 1 and 65535" >&2
+  exit 1
+fi
+
 if ! rg -Fq -- "--port ${port_value}" "${artifacts_dir}/health.run.log"; then
   echo "health.run.log missing --port ${port_value} invocation token" >&2
   exit 1
@@ -165,6 +170,11 @@ if ! rg -q '^serveTimeoutMs=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
 fi
 
 serve_timeout_ms="$(sed -n 's/^serveTimeoutMs=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+
+if [ "${serve_timeout_ms}" -le 0 ]; then
+  echo "run-metadata.txt serveTimeoutMs must be greater than 0" >&2
+  exit 1
+fi
 
 if ! rg -Fq -- "--serve-timeout-ms ${serve_timeout_ms}" "${artifacts_dir}/health.run.log"; then
   echo "health.run.log missing --serve-timeout-ms ${serve_timeout_ms} invocation token" >&2

@@ -239,6 +239,48 @@ if ! rg -Fq 'health.run.log missing --serve-timeout-ms 9000 invocation token' "$
   exit 1
 fi
 
+port_range_bad_dir="${tmp_dir}/bad-port-range"
+cp -R "${ok_dir}" "${port_range_bad_dir}"
+cat > "${port_range_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=0
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${port_range_bad_dir}" >"${tmp_dir}/port-range-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on out-of-range metadata port" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt port must be between 1 and 65535' "${tmp_dir}/port-range-bad.log"; then
+  echo "expected metadata-range diagnostic for metadata port" >&2
+  exit 1
+fi
+
+timeout_range_bad_dir="${tmp_dir}/bad-timeout-range"
+cp -R "${ok_dir}" "${timeout_range_bad_dir}"
+cat > "${timeout_range_bad_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=0
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${timeout_range_bad_dir}" >"${tmp_dir}/timeout-range-bad.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on non-positive metadata timeout" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt serveTimeoutMs must be greater than 0' "${tmp_dir}/timeout-range-bad.log"; then
+  echo "expected metadata-range diagnostic for metadata timeout" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'
