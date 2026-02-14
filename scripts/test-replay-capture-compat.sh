@@ -27,6 +27,7 @@ cat > "${capture_path}" <<'JSON'
     "body": {
       "encoding": "base64",
       "bytes": "e30=",
+      "sha256": "body_sha256",
       "truncated": false
     }
   },

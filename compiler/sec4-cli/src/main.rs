@@ -859,10 +859,22 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
             if body
                 .get("bytes")
                 .and_then(serde_json::Value::as_str)
+                .filter(|entry| !entry.is_empty())
                 .is_none()
             {
                 return Err(
                     "capture.request.body.bytes must be present for encoding=base64".to_string(),
+                );
+            }
+            if body
+                .get("sha256")
+                .and_then(serde_json::Value::as_str)
+                .filter(|entry| !entry.is_empty())
+                .is_none()
+            {
+                return Err(
+                    "capture.request.body.sha256 must be present for encoding=base64"
+                        .to_string(),
                 );
             }
         }
@@ -870,6 +882,7 @@ fn validate_replay_capture_contract(capture: &serde_json::Value) -> Result<(), S
             if body
                 .get("sha256")
                 .and_then(serde_json::Value::as_str)
+                .filter(|entry| !entry.is_empty())
                 .is_none()
             {
                 return Err(

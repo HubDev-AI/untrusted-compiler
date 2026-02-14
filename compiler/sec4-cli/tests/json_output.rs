@@ -1530,6 +1530,69 @@ fn replay_check_fails_when_capture_has_no_url_derivation_fields() {
 }
 
 #[test]
+fn replay_check_fails_when_base64_capture_body_lacks_sha256() {
+    let dir = temp_dir("sec4-replay-missing-base64-sha256");
+    let capture = dir.join("capture.json");
+    fs::write(
+        &capture,
+        r#"{
+          "version":"0.1",
+          "captureId":"cap_01",
+          "traceId":"tr_01",
+          "timeMs":1760000000000,
+          "policyHash":"pol_A",
+          "compilerHash":"cpl_A",
+          "runtimeHash":"rt_A",
+          "request":{
+            "method":"GET",
+            "scheme":"https",
+            "host":"example.com",
+            "path":"/ping",
+            "headers":{},
+            "body":{"encoding":"base64","bytes":"e30=","truncated":false}
+          },
+          "determinism":{
+            "seed":1,
+            "time":{"mode":"frozen","nowMs":1760000000000},
+            "uuid":{"mode":"seeded"},
+            "budget":{"maxBodyBytes":1,"maxJsonBytes":1,"maxJsonDepth":1,"deadlineMs":1}
+          },
+          "redaction":{"headers":[],"jsonPaths":[]}
+        }"#,
+    )
+    .expect("capture payload should be written");
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        !output.status.success(),
+        "replay check should fail when base64 body sha256 is missing"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("capture.request.body.sha256 must be present for encoding=base64"),
+        "stderr should include base64 body sha256 contract failure:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn replay_check_mock_mode_fails_when_capture_db_dependency_signature_has_no_matching_stub() {
     let dir = temp_dir("sec4-replay-mock-db-dependency-stub-missing");
     let capture = dir.join("capture.json");

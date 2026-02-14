@@ -69,6 +69,7 @@ jq -e '
   and (
     if .request.body.encoding == "base64" then
       (.request.body.bytes | type == "string" and length > 0)
+      and (.request.body.sha256 | type == "string" and length > 0)
     elif .request.body.encoding == "none" then
       (.request.body.sha256 | type == "string" and length > 0)
     else
