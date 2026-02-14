@@ -16,6 +16,9 @@ jobs:
       - name: Validate naming lock
         run: scripts/check-naming-lock.sh
 
+      - name: Validate local path leak guard
+        run: scripts/test-check-no-local-path-leaks.sh
+
       - name: Validate sec4 explain audit coverage
         run: scripts/test-check-sec4-explain-audit-coverage.sh
 

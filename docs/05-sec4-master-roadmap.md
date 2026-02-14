@@ -22,6 +22,9 @@ The naming and packaging surface is now locked and must be treated as a compatib
   - `ut/std`
   - `ut/http`
   - `ut/sec`
+- Repository hygiene lock:
+  - forbid leaking local absolute workspace prefix tokens (for example the local `/Users/.../src/ai/` root) in tracked files,
+  - enforced via CI guard script (`scripts/check-no-local-path-leaks.sh` + naming-lock workflow test).
 
 Roadmap impact:
 
@@ -41,6 +44,8 @@ Roadmap impact:
   - `.github/workflows/alpha-release-gate.yml`
 - M11 editor tooling scope has no remaining tasks in this roadmap revision.
 - M12 naming alignment scope has no remaining tasks in this roadmap revision.
+- Naming-lock workflow now includes a local-path leak guard test:
+  - `scripts/test-check-no-local-path-leaks.sh`.
 - M13 operational confidence closure gates are green.
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:

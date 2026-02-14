@@ -387,5 +387,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `420-m16-cors-preflight-interoperability-with-auth-csrf-middleware.md`
 - `421-m16-security-headers-coverage-on-auth-csrf-rejection-paths.md`
 - `422-m16-security-headers-coverage-on-405-and-preflight-branches.md`
+- `423-m12-local-path-leak-ci-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.
