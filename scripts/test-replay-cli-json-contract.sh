@@ -69,5 +69,6 @@ require_literal '"mockMatchedStub"' 'json payload mock matched stub key'
 require_literal '"mockDependencyMatches"' 'json payload mock dependency matches key'
 require_literal '"mockDependencySignatures"' 'json payload mock dependency signatures key'
 require_literal '"mockDependencyStubSummaries"' 'json payload mock dependency stub summaries key'
+require_literal '"mockDependencyTraces"' 'json payload mock dependency traces key'
 
 echo "replay cli json contract test passed"

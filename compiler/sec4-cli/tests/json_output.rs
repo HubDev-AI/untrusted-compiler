@@ -1871,6 +1871,10 @@ fn replay_check_mock_mode_text_reports_matched_stub_response_summary() {
         stdout.contains("replay mock dependency stub summaries: db=- fs=-"),
         "stdout should include deterministic empty dependency stub-summary line:\n{stdout}"
     );
+    assert!(
+        stdout.contains("replay mock dependency traces: db=- fs=-"),
+        "stdout should include deterministic empty dependency trace line:\n{stdout}"
+    );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
@@ -1933,6 +1937,10 @@ fn replay_check_mock_mode_text_reports_dependency_stub_summaries() {
             "replay mock dependency stub summaries: db=users.by_id|abc123(rowCount=1,truncated=false) fs=read|p1(ok=true,truncated=false,bytes=64)"
         ),
         "stdout should include deterministic dependency stub summary line:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("replay mock dependency traces: db=db:0(users.by_id|abc123) fs=fs:0(read|p1)"),
+        "stdout should include deterministic dependency trace line:\n{stdout}"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
@@ -2125,6 +2133,58 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_i64)
             .expect("mockDependencyStubSummaries.fs[0].bytes should be present"),
         64
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyTraces.db[0].traceId should be present"),
+        "db:0"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyTraces.db[0].signature should be present"),
+        "users.by_id|abc123"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyTraces.fs[0].traceId should be present"),
+        "fs:0"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("mockDependencyTraces.fs[0].signature should be present"),
+        "read|p1"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
@@ -2480,6 +2540,24 @@ fn replay_check_json_mode_writes_parseable_payload() {
             .and_then(Value::as_array)
             .is_some_and(|entries| entries.is_empty()),
         "mockDependencyStubSummaries.fs should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockDependencyTraces.db should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .is_some_and(|entries| entries.is_empty()),
+        "mockDependencyTraces.fs should be present and empty when capture has no dependencies"
     );
     assert_eq!(
         parsed

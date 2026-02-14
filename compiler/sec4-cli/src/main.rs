@@ -217,6 +217,29 @@ struct ReplayMockDependencyStubSummaries {
     fs: Vec<ReplayMockFsDependencyStubSummary>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDbDependencyTrace {
+    trace_id: String,
+    signature: String,
+    row_count: i64,
+    truncated: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockFsDependencyTrace {
+    trace_id: String,
+    signature: String,
+    ok: bool,
+    truncated: bool,
+    bytes: Option<i64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDependencyTraces {
+    db: Vec<ReplayMockDbDependencyTrace>,
+    fs: Vec<ReplayMockFsDependencyTrace>,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -341,6 +364,7 @@ fn cmd_replay_check(
     let mut mock_dependency_matches: Option<ReplayMockDependencyMatches> = None;
     let mut mock_dependency_signatures: Option<ReplayMockDependencySignatures> = None;
     let mut mock_dependency_stub_summaries: Option<ReplayMockDependencyStubSummaries> = None;
+    let mut mock_dependency_traces: Option<ReplayMockDependencyTraces> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -496,9 +520,16 @@ fn cmd_replay_check(
             .as_ref()
             .expect("mock mode requires db stubs for loaded stubs");
         let mut db_summary_entries = Vec::new();
-        for signature in &capture_db_signatures {
+        let mut db_trace_entries = Vec::new();
+        for (index, signature) in capture_db_signatures.iter().enumerate() {
             if let Some(stub) = db_signatures.get(signature) {
                 db_summary_entries.push(ReplayMockDbDependencyStubSummary {
+                    signature: signature.clone(),
+                    row_count: stub.row_count,
+                    truncated: stub.truncated,
+                });
+                db_trace_entries.push(ReplayMockDbDependencyTrace {
+                    trace_id: format!("db:{index}"),
                     signature: signature.clone(),
                     row_count: stub.row_count,
                     truncated: stub.truncated,
@@ -512,9 +543,17 @@ fn cmd_replay_check(
             .as_ref()
             .expect("mock mode requires fs stubs for loaded stubs");
         let mut fs_summary_entries = Vec::new();
-        for signature in &capture_fs_signatures {
+        let mut fs_trace_entries = Vec::new();
+        for (index, signature) in capture_fs_signatures.iter().enumerate() {
             if let Some(stub) = fs_signatures.get(signature) {
                 fs_summary_entries.push(ReplayMockFsDependencyStubSummary {
+                    signature: signature.clone(),
+                    ok: stub.ok,
+                    truncated: stub.truncated,
+                    bytes: stub.bytes,
+                });
+                fs_trace_entries.push(ReplayMockFsDependencyTrace {
+                    trace_id: format!("fs:{index}"),
                     signature: signature.clone(),
                     ok: stub.ok,
                     truncated: stub.truncated,
@@ -536,6 +575,10 @@ fn cmd_replay_check(
         mock_dependency_stub_summaries = Some(ReplayMockDependencyStubSummaries {
             db: db_summary_entries,
             fs: fs_summary_entries,
+        });
+        mock_dependency_traces = Some(ReplayMockDependencyTraces {
+            db: db_trace_entries,
+            fs: fs_trace_entries,
         });
         mock_dependency_matches = Some(ReplayMockDependencyMatches {
             db: db_match_count,
@@ -624,6 +667,29 @@ fn cmd_replay_check(
                 };
                 println!("replay mock dependency stub summaries: db={db} fs={fs}");
             }
+            if let Some(traces) = &mock_dependency_traces {
+                let db = if traces.db.is_empty() {
+                    "-".to_string()
+                } else {
+                    traces
+                        .db
+                        .iter()
+                        .map(|entry| format!("{}({})", entry.trace_id, entry.signature))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                let fs = if traces.fs.is_empty() {
+                    "-".to_string()
+                } else {
+                    traces
+                        .fs
+                        .iter()
+                        .map(|entry| format!("{}({})", entry.trace_id, entry.signature))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+                println!("replay mock dependency traces: db={db} fs={fs}");
+            }
         }
         ReplayOutputFormat::Json => {
             let payload = serde_json::json!({
@@ -666,6 +732,21 @@ fn cmd_replay_check(
                         "truncated": entry.truncated,
                     })).collect::<Vec<_>>(),
                     "fs": summaries.fs.iter().map(|entry| serde_json::json!({
+                        "signature": entry.signature,
+                        "ok": entry.ok,
+                        "truncated": entry.truncated,
+                        "bytes": entry.bytes,
+                    })).collect::<Vec<_>>(),
+                })),
+                "mockDependencyTraces": mock_dependency_traces.as_ref().map(|traces| serde_json::json!({
+                    "db": traces.db.iter().map(|entry| serde_json::json!({
+                        "traceId": entry.trace_id,
+                        "signature": entry.signature,
+                        "rowCount": entry.row_count,
+                        "truncated": entry.truncated,
+                    })).collect::<Vec<_>>(),
+                    "fs": traces.fs.iter().map(|entry| serde_json::json!({
+                        "traceId": entry.trace_id,
                         "signature": entry.signature,
                         "ok": entry.ok,
                         "truncated": entry.truncated,
