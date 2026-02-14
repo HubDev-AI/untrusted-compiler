@@ -190,6 +190,7 @@ bool_has_m20_closure_report_ci_guard=0
 bool_has_m21_kickoff_brief_ci_guard=0
 bool_has_m21_priority_matrix_ci_guard=0
 bool_has_m21_slice_selector_ci_guard=0
+bool_has_m21_runtime_hardening_runner_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -584,6 +585,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m21_slice_selector_ci_guard=1
 fi
 
+m21_runtime_hardening_runner_test_script="${repo_root}/scripts/test-run-m21-runtime-hardening.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m21_runtime_hardening_runner_test_script}" ] \
+  && rg -q 'scripts/test-run-m21-runtime-hardening.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m21_runtime_hardening_runner_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -827,6 +835,7 @@ emit_check "M20-G" "naming-lock CI enforces M20 closure report" "${bool_has_m20_
 emit_check "M21-A" "naming-lock CI enforces M21 kickoff brief" "${bool_has_m21_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M21-B" "naming-lock CI enforces M21 priority matrix" "${bool_has_m21_priority_matrix_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M21-C" "naming-lock CI enforces M21 next-slice selector" "${bool_has_m21_slice_selector_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M21-D" "naming-lock CI enforces M21 runtime hardening runner" "${bool_has_m21_runtime_hardening_runner_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
