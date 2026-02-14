@@ -428,6 +428,7 @@ Current strict closure result:
 | `M27-B` | PASS | Naming-lock CI enforces M27 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M27-C` | PASS | Naming-lock CI enforces M27 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M27-D` | PASS | Naming-lock CI enforces M27 runtime hardening runner | `.github/workflows/naming-lock.yml` |
+| `M27-E` | PASS | Naming-lock CI enforces M27 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -525,6 +526,7 @@ Strict closure interpretation:
 - M27 priority matrix enforcement is active (`M27-B`).
 - M27 next-slice selector enforcement is active (`M27-C`).
 - M27 runtime hardening runner enforcement is active (`M27-D`).
+- M27 executed-slice convergence summary enforcement is active (`M27-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4514,8 +4516,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M27 runtime hardening runner added.
 - [x] Naming-lock CI and closure gate updated (`M27-D`).
 
+### M27-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary script validates selector/runtime execution artifact alignment and emits deterministic markdown/json outputs.
+- Summary computes `executionPass`, `overall`, and deterministic `nextAction` from runtime execution status.
+- Closure audit includes dedicated `M27-E` gate.
+
+### M27-S5 tracking (live status)
+- [x] M27 executed-slice convergence summary script added.
+- [x] M27 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M27 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M27-E`).
+
 ### Next planned slice
-- M27-S5 executed-slice convergence summary + closure gate `M27-E`.
+- M27-S6 transition handoff packet + closure gate `M27-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4607,7 +4620,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M27-S5 executed-slice convergence summary from M27 selector + runtime execution artifacts and wire `M27-E`.
+1. Implement M27-S6 transition handoff packet from M27 kickoff/matrix/selector/runtime/convergence artifacts and wire `M27-F`.
 
 ---
 
