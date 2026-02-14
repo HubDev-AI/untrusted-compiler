@@ -408,5 +408,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `441-m16-runtime-smoke-source-work-metadata-field-checks.md`
 - `442-m16-runtime-smoke-checker-workproject-regression-fixture.md`
 - `443-m16-smoke-script-source-work-metadata-token-contract-lock.md`
+- `444-m16-runtime-smoke-checker-empty-source-work-metadata-regression-fixtures.md`
 
 As milestones progress, chapters will be added and linked from this index.

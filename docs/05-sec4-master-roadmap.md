@@ -141,6 +141,9 @@ Roadmap impact:
 - M16-S39 smoke-script contract now locks source/work metadata emit tokens:
   - smoke-script contract checker now requires `sourceProject=${source_project}` and `workProject=${work_project}` tokens.
   - guard coverage now validates deterministic missing-token diagnostics for both metadata tokens.
+- M16-S40 runtime-smoke checker regression coverage now validates empty source/work metadata values:
+  - checker tests include dedicated fixtures for `sourceProject=` and `workProject=` empty-value failures.
+  - deterministic diagnostics remain identical to missing-field branches.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2766,6 +2769,27 @@ M13-S1 go/no-go note:
 - [x] Guard coverage includes deterministic missing-token scenarios for both metadata tokens.
 - [x] Smoke-script contract + guard tests pass after provenance-token lock expansion.
 
+### M16-S40 follow-up slice (artifact-checker empty source/work metadata regression fixtures)
+#### Scope
+- Expand runtime-smoke checker regression coverage to lock non-empty enforcement for `sourceProject` and `workProject` metadata values.
+
+#### Build tasks
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with:
+  - `bad-source-empty` fixture (`sourceProject=`)
+  - `bad-work-empty` fixture (`workProject=`)
+- Assert deterministic checker diagnostics for both empty-value failures.
+- Re-run checker regression suite plus real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker regression suite fails deterministically for empty `sourceProject` and empty `workProject` values.
+- Deterministic diagnostics match existing missing-field message contracts.
+- Real smoke artifact flow still passes unchanged.
+
+#### Tracking (live status)
+- [x] Added empty-source and empty-work metadata regression fixtures in checker tests.
+- [x] Checker regression test now asserts deterministic diagnostics for both empty-value cases.
+- [x] Real smoke + checker flow remains green after non-empty regression expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2807,6 +2831,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Source/Work Metadata Field Checks".
 - Chapter: "M16 Slice: Runtime-Smoke Checker workProject Regression Fixture".
 - Chapter: "M16 Slice: Smoke-Script Source/Work Metadata Token Contract Lock".
+- Chapter: "M16 Slice: Runtime-Smoke Checker Empty Source/Work Metadata Regression Fixtures".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
