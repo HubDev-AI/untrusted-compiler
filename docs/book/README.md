@@ -448,5 +448,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `481-m18-runtime-track-execution-runner.md`
 - `482-m18-track-convergence-summary.md`
 - `483-m18-transition-handoff-packet.md`
+- `484-m18-closure-report.md`
 
 As milestones progress, chapters will be added and linked from this index.

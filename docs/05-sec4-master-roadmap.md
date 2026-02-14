@@ -132,6 +132,10 @@ Roadmap impact:
   - `scripts/build-m18-transition-handoff-packet.sh`
   - `scripts/test-build-m18-transition-handoff-packet.sh`
   - `docs/book/483-m18-transition-handoff-packet.md`
+- M18-S9 closure report is now implemented:
+  - `scripts/build-m18-closure-report.sh`
+  - `scripts/test-build-m18-closure-report.sh`
+  - `docs/book/484-m18-closure-report.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -351,6 +355,7 @@ Current strict closure result:
 | `M18-F` | PASS | Naming-lock CI enforces M18 runtime-track execution runner | `.github/workflows/naming-lock.yml` |
 | `M18-G` | PASS | Naming-lock CI enforces M18 track-convergence summary | `.github/workflows/naming-lock.yml` |
 | `M18-H` | PASS | Naming-lock CI enforces M18 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M18-I` | PASS | Naming-lock CI enforces M18 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -387,6 +392,7 @@ Strict closure interpretation:
 - M18 runtime-track execution runner enforcement is active (`M18-F`).
 - M18 track-convergence summary enforcement is active (`M18-G`).
 - M18 transition handoff packet enforcement is active (`M18-H`).
+- M18 closure report enforcement is active (`M18-I`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3517,7 +3523,8 @@ M13-S1 go/no-go note:
 - Execute runtime-track slice via selector-driven runtime-runner contract.
 - Build convergence summary across editor/release/runtime track outputs.
 - Build deterministic transition handoff packet from kickoff/matrix/selector/convergence artifacts.
-- Lock kickoff/matrix/selector/editor/release/runtime/convergence/handoff contracts in naming-lock CI and closure audit.
+- Build final M18 closure report from `M18-A..H` + transition packet summary.
+- Lock kickoff/matrix/selector/editor/release/runtime/convergence/handoff/closure-report contracts in naming-lock CI and closure audit.
 
 ### M18-S1 kickoff acceptance criteria
 - Kickoff generator script + contract test exists.
@@ -3559,6 +3566,10 @@ M13-S1 go/no-go note:
 - [x] Transition handoff packet contract test added.
 - [x] Book chapter documenting transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M18-H`).
+- [x] M18 closure report script added (`markdown/json` output contracts).
+- [x] M18 closure report contract test added.
+- [x] Book chapter documenting M18 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M18-I`).
 
 ### Exit criteria
 - M18 kickoff has a deterministic, reproducible artifact generated from live rehearsal evidence.
@@ -3573,6 +3584,7 @@ M13-S1 go/no-go note:
 - Chapter: "M18 Runtime-Track Execution Runner".
 - Chapter: "M18 Track-Convergence Summary".
 - Chapter: "M18 Transition Handoff Packet".
+- Chapter: "M18 Closure Report".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3664,7 +3676,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M18-S9 post-M18 closure report slice and wire its closure gate.
+1. Start M19 kickoff scope definition from the finalized M18 closure report and handoff packet.
 
 ---
 
