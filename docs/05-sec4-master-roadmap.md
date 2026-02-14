@@ -94,6 +94,8 @@ Roadmap impact:
   - runtime e2e now locks `Access-Control-Allow-Origin` propagation on auth (`401`) and csrf (`403`) middleware rejection responses.
 - M16-S21 CORS header coverage is now expanded for generic error branches:
   - runtime e2e now locks `Access-Control-Allow-Origin` propagation on `404` not-found and `405` method-mismatch responses when CORS middleware is enabled.
+- M16-S22 combined-middleware preflight interoperability is now implemented:
+  - runtime e2e now locks that CORS `OPTIONS` preflight remains `204` and bypasses auth/csrf rejection branches when `cors + auth + csrf` middleware are composed.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2307,6 +2309,28 @@ M13-S1 go/no-go note:
 - [x] Runtime e2e coverage added for CORS-enabled `405` branch.
 - [x] Full runtime integration suite remains green after branch-coverage expansion.
 
+### M16-S22 follow-up slice (CORS preflight with auth/csrf composition)
+#### Scope
+- Guarantee CORS preflight interoperability when security middleware is composed, so `OPTIONS` requests are not blocked by auth/csrf gates.
+
+#### Build tasks
+- Add runtime e2e test for composed middleware chain:
+  - `cors.withCors`,
+  - `csrf.withCsrf`,
+  - `auth.withAuth`.
+- Send preflight `OPTIONS` request without auth/csrf tokens and assert deterministic CORS preflight response contract.
+- Keep runtime suite green and deterministic after composition coverage is added.
+
+#### Acceptance criteria
+- Composed `cors + auth + csrf` router returns deterministic `204` preflight response.
+- Response preserves required CORS allow headers.
+- No auth/csrf rejection envelope appears on preflight path.
+
+#### Tracking (live status)
+- [x] Runtime e2e coverage added for composed `cors + auth + csrf` preflight path.
+- [x] Preflight request remains deterministic `204` with expected CORS allow headers.
+- [x] Runtime integration suite remains green after middleware-composition coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2329,6 +2353,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Env-Configurable Runtime Request Body Cap".
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on Middleware Rejection Paths".
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on 404/405 Error Branches".
+- Chapter: "M16 Slice: CORS Preflight Interoperability with Auth + CSRF Middleware".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
