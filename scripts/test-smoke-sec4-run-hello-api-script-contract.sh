@@ -50,8 +50,8 @@ fi
 
 required_tokens=(
   "--artifacts-dir"
-  "SEC4_RT_HTTP_SERVE_MODE=oneshot"
   "SEC4_RT_HTTP_SERVE_TIMEOUT_MS=12000"
+  "--oneshot"
   "GET"
   "/health"
   "POST"

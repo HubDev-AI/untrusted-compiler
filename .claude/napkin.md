@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Accidentally invoked external web/time tool calls while doing purely local repo implementation work. | For local compiler/runtime/docs slices, stay on shell + apply_patch only; reserve web tools strictly for external information retrieval. |
 | 2026-02-14 | self | Added new `sec4` CLI contract-token requirements without updating the synthetic guard fixture, which caused immediate guard failure. | When tightening command-contract regex checks, update `scripts/test-*-guard.sh` pass fixture in the same edit or lock behavior via integration tests instead of brittle source-pattern assertions. |
 | 2026-02-14 | self | Added an absolute workspace path in a new doc chapter while describing workflow location, which immediately broke naming/path hygiene checks. | In docs, always reference repo files with workspace-relative paths (for example `.github/workflows/...`), never absolute machine paths. |
 | 2026-02-14 | self | Repeated the same `rg` pattern-parsing failure with a token starting `--` in smoke-script contract checks. | Treat all fixed-string contract-token checks as `rg -Fq -- \"${token}\"` by default; never omit `--` in token-based workflow/script contracts. |

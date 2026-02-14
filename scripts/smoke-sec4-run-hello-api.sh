@@ -136,9 +136,8 @@ request_once() {
     "http://127.0.0.1:${port}${path}"
   )
 
-  SEC4_RT_HTTP_SERVE_MODE=oneshot \
   SEC4_RT_HTTP_SERVE_TIMEOUT_MS=12000 \
-  cargo run -p sec4 -- run --path "${work_project}" >"${log_file}" 2>&1 &
+  cargo run -p sec4 -- run --path "${work_project}" --oneshot >"${log_file}" 2>&1 &
   service_pid=$!
 
   local status_code=""

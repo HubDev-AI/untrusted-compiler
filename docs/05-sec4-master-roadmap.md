@@ -111,6 +111,9 @@ Roadmap impact:
 - M16-S27 run-command runtime bridge flags are now implemented:
   - `sec4 run` now supports `--oneshot` and `--max-body-bytes <N>` as explicit operator flags instead of requiring direct environment setup.
   - runtime e2e coverage now validates oneshot serving and body-limit enforcement through these CLI flags.
+- M16-S28 operator smoke script now uses run-command flags:
+  - `scripts/smoke-sec4-run-hello-api.sh` now launches `sec4 run` with `--oneshot` directly.
+  - smoke-script contract tests and runtime-smoke artifact checks remain green after migration.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2478,6 +2481,28 @@ M13-S1 go/no-go note:
 - [x] Run-command oneshot/runtime e2e coverage now exercises `--oneshot`.
 - [x] Run-command body-limit e2e coverage now exercises `--max-body-bytes` with deterministic `413`.
 
+### M16-S28 follow-up slice (operator smoke uses `sec4 run --oneshot`)
+#### Scope
+- Align operator smoke and CI runtime-smoke execution with the new explicit `sec4 run` oneshot flag to reduce env-only coupling.
+
+#### Build tasks
+- Update `scripts/smoke-sec4-run-hello-api.sh` to launch:
+  - `cargo run -p sec4 -- run --path <project> --oneshot`
+  while keeping timeout behavior (`SEC4_RT_HTTP_SERVE_TIMEOUT_MS`) unchanged.
+- Update smoke-script contract expectations so `--oneshot` is required.
+- Re-run smoke + artifact-validation flow and workflow contract tests.
+
+#### Acceptance criteria
+- Operator smoke passes with run-command oneshot flag flow.
+- Smoke-script contract + guard tests pass with updated token set.
+- Runtime-smoke workflow contract tests remain green after smoke-script migration.
+
+#### Tracking (live status)
+- [x] Smoke script now launches `sec4 run` with `--oneshot`.
+- [x] Smoke-script contract now requires `--oneshot` token.
+- [x] Smoke + artifact checker flow passes locally after migration.
+- [x] Runtime-smoke workflow contract and guard tests remain green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2507,6 +2532,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Workflow Closure Gates".
 - Chapter: "M16 Slice: Runtime-Smoke Artifact Checker".
 - Chapter: "M16 Slice: sec4 run Runtime Bridge Flags".
+- Chapter: "M16 Slice: Operator Smoke Script Migration to sec4 run --oneshot".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
