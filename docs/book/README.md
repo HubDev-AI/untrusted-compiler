@@ -439,5 +439,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `472-m17-operator-release-packet-builder.md`
 - `473-m17-operator-handoff-final-playbook.md`
 - `474-m17-operator-clean-clone-rehearsal.md`
+- `475-m17-clean-clone-rehearsal-results-note.md`
 
 As milestones progress, chapters will be added and linked from this index.

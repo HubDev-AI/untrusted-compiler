@@ -96,6 +96,9 @@ Roadmap impact:
   - `scripts/run-m17-operator-clean-clone-rehearsal.sh`
   - `scripts/test-run-m17-operator-clean-clone-rehearsal.sh`
   - `docs/book/474-m17-operator-clean-clone-rehearsal.md`
+- M17-S12 live clean-clone rehearsal note is now documented:
+  - `build/operator-clean-clone-rehearsal-live/rehearsal-report.json` (latest local evidence)
+  - `docs/book/475-m17-clean-clone-rehearsal-results-note.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -3419,6 +3422,7 @@ M13-S1 go/no-go note:
 - [x] Operator release-packet builder script added and wired into naming-lock CI.
 - [x] Final handoff playbook checker script + chapter added and wired into naming-lock CI.
 - [x] Clean-clone rehearsal runner script + chapter added and wired into naming-lock CI.
+- [x] Live clean-clone rehearsal executed and friction note recorded.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3438,6 +3442,7 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Release Packet Builder".
 - Chapter: "M17 Operator Handoff Final Playbook".
 - Chapter: "M17 Operator Clean-Clone Rehearsal".
+- Chapter: "M17 Clean-Clone Rehearsal Results Note".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3529,7 +3534,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Run one full real-repo M17 clean-clone rehearsal artifact capture (without `--skip-clone`) and append any friction notes to close out M17.
+1. Draft M18 kickoff scope from remaining runtime/editor/release priorities and lock the next closure-gated first slice.
 
 ---
 
