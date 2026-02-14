@@ -63,6 +63,10 @@ Roadmap impact:
   - `scripts/print-m17-operator-troubleshooting-matrix.sh`
   - `scripts/test-print-m17-operator-troubleshooting-matrix.sh`
   - `docs/book/466-m17-operator-troubleshooting-matrix.md`
+- M17-S4 operator handoff quickstart orchestrator is now implemented:
+  - `scripts/run-m17-operator-handoff-quickstart.sh`
+  - `scripts/test-run-m17-operator-handoff-quickstart.sh`
+  - `docs/book/467-m17-operator-handoff-quickstart.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -265,6 +269,7 @@ Current strict closure result:
 | `M17-A` | PASS | Naming-lock CI enforces M17 operator handoff readiness checker | `.github/workflows/naming-lock.yml` |
 | `M17-B` | PASS | Naming-lock CI enforces M17 operator bootstrap profile helper | `.github/workflows/naming-lock.yml` |
 | `M17-C` | PASS | Naming-lock CI enforces M17 operator troubleshooting matrix | `.github/workflows/naming-lock.yml` |
+| `M17-D` | PASS | Naming-lock CI enforces M17 operator handoff quickstart | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -284,6 +289,7 @@ Strict closure interpretation:
 - M17 operator handoff readiness checker enforcement is active (`M17-A`).
 - M17 operator bootstrap profile helper enforcement is active (`M17-B`).
 - M17 operator troubleshooting matrix enforcement is active (`M17-C`).
+- M17 operator handoff quickstart enforcement is active (`M17-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3360,6 +3366,7 @@ M13-S1 go/no-go note:
 - [x] M17 readiness verifier script + test added and wired into naming-lock CI.
 - [x] Operator bootstrap profile helper script added and wired into naming-lock CI.
 - [x] Operator troubleshooting matrix script added and wired into naming-lock CI.
+- [x] Operator handoff quickstart script added and wired into naming-lock CI.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3371,6 +3378,7 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Handoff Checklist and Readiness Verifier".
 - Chapter: "M17 Operator Bootstrap Profile Helper".
 - Chapter: "M17 Operator Troubleshooting Matrix".
+- Chapter: "M17 Operator Handoff Quickstart".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3462,7 +3470,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M17-S4 operator handoff quickstart section that chains readiness + bootstrap + closure verification in one ordered command flow.
+1. Implement M17-S5 operator handoff CI smoke wrapper that runs quickstart in deterministic CI-safe mode.
 
 ---
 

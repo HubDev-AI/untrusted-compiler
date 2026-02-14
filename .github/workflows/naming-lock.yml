@@ -73,6 +73,9 @@ jobs:
       - name: Validate M17 operator troubleshooting matrix
         run: scripts/test-print-m17-operator-troubleshooting-matrix.sh
 
+      - name: Validate M17 operator handoff quickstart
+        run: scripts/test-run-m17-operator-handoff-quickstart.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

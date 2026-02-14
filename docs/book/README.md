@@ -431,5 +431,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `464-m17-operator-handoff-checklist-and-readiness-verifier.md`
 - `465-m17-operator-bootstrap-profile-helper.md`
 - `466-m17-operator-troubleshooting-matrix.md`
+- `467-m17-operator-handoff-quickstart.md`
 
 As milestones progress, chapters will be added and linked from this index.
