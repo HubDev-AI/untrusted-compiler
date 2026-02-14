@@ -193,6 +193,9 @@ jobs:
       - name: Validate M22 kickoff brief
         run: scripts/test-generate-m22-kickoff-brief.sh
 
+      - name: Validate M22 priority matrix
+        run: scripts/test-build-m22-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
