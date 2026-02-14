@@ -449,5 +449,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `482-m18-track-convergence-summary.md`
 - `483-m18-transition-handoff-packet.md`
 - `484-m18-closure-report.md`
+- `485-m19-kickoff-brief.md`
 
 As milestones progress, chapters will be added and linked from this index.

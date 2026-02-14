@@ -136,6 +136,10 @@ Roadmap impact:
   - `scripts/build-m18-closure-report.sh`
   - `scripts/test-build-m18-closure-report.sh`
   - `docs/book/484-m18-closure-report.md`
+- M19-S1 kickoff brief is now implemented:
+  - `scripts/generate-m19-kickoff-brief.sh`
+  - `scripts/test-generate-m19-kickoff-brief.sh`
+  - `docs/book/485-m19-kickoff-brief.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -356,6 +360,7 @@ Current strict closure result:
 | `M18-G` | PASS | Naming-lock CI enforces M18 track-convergence summary | `.github/workflows/naming-lock.yml` |
 | `M18-H` | PASS | Naming-lock CI enforces M18 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M18-I` | PASS | Naming-lock CI enforces M18 closure report | `.github/workflows/naming-lock.yml` |
+| `M19-A` | PASS | Naming-lock CI enforces M19 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -393,6 +398,7 @@ Strict closure interpretation:
 - M18 track-convergence summary enforcement is active (`M18-G`).
 - M18 transition handoff packet enforcement is active (`M18-H`).
 - M18 closure report enforcement is active (`M18-I`).
+- M19 kickoff brief enforcement is active (`M19-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3586,6 +3592,41 @@ M13-S1 go/no-go note:
 - Chapter: "M18 Transition Handoff Packet".
 - Chapter: "M18 Closure Report".
 
+## M19 - Kickoff from Closed M18 Baseline
+### Trigger condition
+- Start after M18 closure report (`M18-I`) is PASS and transition packet is available.
+
+### Scope decision (M19 kickoff)
+- Primary scope: use finalized M18 closure + handoff packet to define deterministic M19 start priorities.
+- Included tracks:
+  - M19 kickoff brief generation from M18 closure/packet artifacts,
+  - closure-gated naming-lock contract for kickoff brief.
+- Deferred:
+  - deeper M19 implementation slices until kickoff brief is stable.
+
+### Build tasks
+- Generate M19 kickoff brief from M18 closure report + transition packet.
+- Support markdown and JSON output for operator + automation consumers.
+- Auto-generate M18 closure json when absent but packet is available.
+- Lock kickoff brief contract in naming-lock CI and closure audit.
+
+### M19-S1 kickoff acceptance criteria
+- M19 kickoff brief script + contract test exists.
+- Script validates packet/closure contract and handles missing M18 closure artifact deterministically.
+- Closure audit includes dedicated `M19-A` gate.
+
+### M19-S1 tracking (live status)
+- [x] M19 kickoff brief script added.
+- [x] M19 kickoff brief contract test added.
+- [x] Book chapter documenting M19 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M19-A`).
+
+### Exit criteria
+- M19 kickoff starts from deterministic evidence (`M18` closure + handoff packet), not ad-hoc operator judgment.
+
+### Docs/book outputs
+- Chapter: "M19 Kickoff Brief".
+
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
 `docs/` should evolve into book structure, not ad-hoc notes.
@@ -3676,7 +3717,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Start M19 kickoff scope definition from the finalized M18 closure report and handoff packet.
+1. Implement M19-S2 priority matrix and first executable M19 slice selector from the kickoff brief.
 
 ---
 
