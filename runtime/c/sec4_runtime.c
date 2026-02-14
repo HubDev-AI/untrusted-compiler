@@ -752,6 +752,13 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
     size_t body_cap = sizeof(g_sec4_rt_request.body) - 1;
+    int64_t configured_body_cap = sec4_rt_parse_env_i64(
+        "SEC4_RT_HTTP_MAX_BODY_BYTES",
+        (int64_t) body_cap
+    );
+    if (configured_body_cap > 0 && (size_t) configured_body_cap < body_cap) {
+      body_cap = (size_t) configured_body_cap;
+    }
     if (content_length > body_cap || available_body > body_cap) {
       g_sec4_rt_request.body_limit_exceeded = true;
     }

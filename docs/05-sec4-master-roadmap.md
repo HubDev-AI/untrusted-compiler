@@ -85,6 +85,8 @@ Roadmap impact:
   - when `auth.withAuth(...)` is active, runtime enforces `Authorization: Bearer ...` checks and returns deterministic `401` for missing/invalid auth headers.
 - M16-S18 CORS response-header propagation is now implemented:
   - when `cors.withCors(...)` is active, runtime injects `Access-Control-Allow-Origin: *` into non-preflight responses.
+- M16-S19 runtime request-body limit configurability is now implemented:
+  - `req.json(...)` body-size guard now honors `SEC4_RT_HTTP_MAX_BODY_BYTES` for stricter deployment-time limits.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2187,6 +2189,27 @@ M13-S1 go/no-go note:
 - [x] CORS preflight path remains intact after propagation changes.
 - [x] Runtime e2e coverage added for non-preflight CORS response header path.
 
+### M16-S19 follow-up slice (env-configurable request body cap)
+#### Scope
+- Make runtime request-body cap configurable by environment so deployments can tighten limits without recompiling runtime.
+
+#### Build tasks
+- Introduce runtime body-cap env override:
+  - `SEC4_RT_HTTP_MAX_BODY_BYTES`.
+- Clamp runtime request-body capture cap with configured value when lower than compiled buffer ceiling.
+- Keep deterministic `LIMIT.BODY_BYTES` error behavior on overflow.
+- Add runtime e2e coverage validating env override enforcement.
+
+#### Acceptance criteria
+- Runtime honors env-configured body cap when set.
+- Requests exceeding configured cap fail with deterministic `413` and standard error envelope.
+- Existing runtime request-gate behavior remains green.
+
+#### Tracking (live status)
+- [x] Runtime request-body cap now reads `SEC4_RT_HTTP_MAX_BODY_BYTES`.
+- [x] Limit overflow behavior remains deterministic (`LIMIT.BODY_BYTES`).
+- [x] Runtime e2e coverage added for env-configured body-cap enforcement.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2206,6 +2229,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CSRF Runtime Gate Enforcement".
 - Chapter: "M16 Slice: Auth Runtime Gate Enforcement".
 - Chapter: "M16 Slice: CORS Allow-Origin Propagation on Runtime Responses".
+- Chapter: "M16 Slice: Env-Configurable Runtime Request Body Cap".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
