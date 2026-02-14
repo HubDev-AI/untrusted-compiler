@@ -433,6 +433,7 @@ Current strict closure result:
 | `M27-G` | PASS | Naming-lock CI enforces M27 closure report | `.github/workflows/naming-lock.yml` |
 | `M28-A` | PASS | Naming-lock CI enforces M28 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M28-B` | PASS | Naming-lock CI enforces M28 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M28-C` | PASS | Naming-lock CI enforces M28 next-slice selector | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -535,6 +536,7 @@ Strict closure interpretation:
 - M27 closure report enforcement is active (`M27-G`).
 - M28 kickoff brief enforcement is active (`M28-A`).
 - M28 priority matrix enforcement is active (`M28-B`).
+- M28 next-slice selector enforcement is active (`M28-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4558,7 +4560,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M27-G`).
 
 ### Next planned slice
-- M28-S3 next-slice selector + closure gate `M28-C`.
+- M28-S4 runtime hardening runner + closure gate `M28-D`.
 
 ## M28 - Kickoff Loop (In Progress)
 
@@ -4587,8 +4589,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M28 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M28-B`).
 
+### M28-S3 next-slice selector acceptance criteria
+- Selector consumes M28 kickoff + priority matrix artifacts and emits one deterministic executable recommendation with stabilization fallback.
+- Recommended IDs map to `M28-S4-*` tracks and include explicit closure gate metadata.
+- Closure audit includes dedicated `M28-C` gate.
+
+### M28-S3 tracking (live status)
+- [x] M28 next-slice selector script added.
+- [x] M28 next-slice selector contract test added.
+- [x] Book chapter documenting M28 next-slice selector added.
+- [x] Naming-lock CI and closure gate updated (`M28-C`).
+
 ### Next planned slice
-- M28-S3 next-slice selector + closure gate `M28-C`.
+- M28-S4 runtime hardening runner + closure gate `M28-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4680,7 +4693,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M28-S3 next-slice selector from M28 kickoff + priority matrix artifacts and wire `M28-C`.
+1. Implement M28-S4 runtime hardening runner from M28 selector output and wire `M28-D`.
 
 ---
 

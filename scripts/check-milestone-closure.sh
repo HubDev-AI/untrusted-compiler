@@ -238,6 +238,7 @@ bool_has_m27_transition_handoff_packet_ci_guard=0
 bool_has_m27_closure_report_ci_guard=0
 bool_has_m28_kickoff_brief_ci_guard=0
 bool_has_m28_priority_matrix_ci_guard=0
+bool_has_m28_slice_selector_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -968,6 +969,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m28_priority_matrix_ci_guard=1
 fi
 
+m28_slice_selector_test_script="${repo_root}/scripts/test-select-m28-next-slice.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m28_slice_selector_test_script}" ] \
+  && rg -q 'scripts/test-select-m28-next-slice.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m28_slice_selector_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -1259,6 +1267,7 @@ emit_check "M27-F" "naming-lock CI enforces M27 transition handoff packet" "${bo
 emit_check "M27-G" "naming-lock CI enforces M27 closure report" "${bool_has_m27_closure_report_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M28-A" "naming-lock CI enforces M28 kickoff brief" "${bool_has_m28_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M28-B" "naming-lock CI enforces M28 priority matrix" "${bool_has_m28_priority_matrix_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M28-C" "naming-lock CI enforces M28 next-slice selector" "${bool_has_m28_slice_selector_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
