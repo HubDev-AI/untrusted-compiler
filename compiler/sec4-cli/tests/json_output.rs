@@ -192,6 +192,86 @@ fn write_capture_file_with_db_fs_dependencies(
     fs::write(path, rendered).expect("capture file should be written");
 }
 
+fn write_capture_file_with_multiple_db_fs_dependencies(
+    path: &PathBuf,
+    policy_hash: &str,
+    compiler_hash: &str,
+    runtime_hash: &str,
+    db_requests: &[(&str, Option<&str>)],
+    fs_requests: &[(&str, &str)],
+) {
+    let db_entries = db_requests
+        .iter()
+        .map(|(query_template_id, params_sha256)| {
+            let mut db_request = serde_json::Map::new();
+            db_request.insert(
+                "queryTemplateId".to_string(),
+                Value::String((*query_template_id).to_string()),
+            );
+            if let Some(params_sha256) = params_sha256 {
+                db_request.insert(
+                    "paramsSha256".to_string(),
+                    Value::String((*params_sha256).to_string()),
+                );
+            }
+            serde_json::json!({ "request": Value::Object(db_request) })
+        })
+        .collect::<Vec<_>>();
+    let fs_entries = fs_requests
+        .iter()
+        .map(|(op, path_sha256)| {
+            serde_json::json!({
+                "request": {
+                    "op": op,
+                    "pathSha256": path_sha256
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let payload = serde_json::json!({
+        "version": "0.1",
+        "captureId": "cap_01",
+        "traceId": "tr_01",
+        "timeMs": 1760000000000_i64,
+        "policyHash": policy_hash,
+        "compilerHash": compiler_hash,
+        "runtimeHash": runtime_hash,
+        "request": {
+            "method": "GET",
+            "scheme": "https",
+            "host": "example.com",
+            "path": "/ping",
+            "headers": {},
+            "body": {
+                "encoding": "none",
+                "sha256": "empty",
+                "truncated": false
+            }
+        },
+        "determinism": {
+            "seed": 1_i64,
+            "time": {"mode": "frozen", "nowMs": 1760000000000_i64},
+            "uuid": {"mode": "seeded"},
+            "budget": {
+                "maxBodyBytes": 1_i64,
+                "maxJsonBytes": 1_i64,
+                "maxJsonDepth": 1_i64,
+                "deadlineMs": 1_i64
+            }
+        },
+        "redaction": {"headers": [], "jsonPaths": []},
+        "dependencies": {
+            "db": db_entries,
+            "fs": fs_entries
+        }
+    });
+
+    let rendered =
+        serde_json::to_string_pretty(&payload).expect("capture payload should serialize to json");
+    fs::write(path, rendered).expect("capture file should be written");
+}
+
 fn write_stub_registry_file(path: &PathBuf) {
     let payload = serde_json::json!({
         "version": "0.1",
@@ -2142,6 +2222,19 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_array)
             .and_then(|entries| entries.first())
             .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("mockDependencyTraces.db[0].index should be present"),
+        0
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
             .and_then(|entry| entry.get("traceId"))
             .and_then(Value::as_str)
             .expect("mockDependencyTraces.db[0].traceId should be present"),
@@ -2168,6 +2261,19 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_array)
             .and_then(|entries| entries.first())
             .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("mockDependencyTraces.fs[0].index should be present"),
+        0
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencyTraces")
+            .and_then(Value::as_object)
+            .and_then(|traces| traces.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|entries| entries.first())
+            .and_then(Value::as_object)
             .and_then(|entry| entry.get("traceId"))
             .and_then(Value::as_str)
             .expect("mockDependencyTraces.fs[0].traceId should be present"),
@@ -2185,6 +2291,189 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_str)
             .expect("mockDependencyTraces.fs[0].signature should be present"),
         "read|p1"
+    );
+
+    fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn replay_check_mock_mode_json_reports_dependency_trace_order_for_multiple_entries() {
+    let dir = temp_dir("sec4-replay-mock-json-dependency-trace-order");
+    let capture = dir.join("capture.json");
+    let stubs = dir.join("stubs.json");
+    write_capture_file_with_multiple_db_fs_dependencies(
+        &capture,
+        "pol_A",
+        "cpl_A",
+        "rt_A",
+        &[
+            ("users.by_id", Some("abc123")),
+            ("users.search", None),
+        ],
+        &[
+            ("read", "p1"),
+            ("write", "p2"),
+        ],
+    );
+    write_stub_registry_with_db_fs_file(&stubs);
+
+    let capture_path = capture
+        .to_str()
+        .expect("capture path should be valid utf-8")
+        .to_string();
+    let stubs_path = stubs
+        .to_str()
+        .expect("stubs path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "replay",
+        "--capture",
+        &capture_path,
+        "--stubs",
+        &stubs_path,
+        "--effects",
+        "mock",
+        "--format",
+        "json",
+        "--policy-hash",
+        "pol_A",
+        "--compiler-hash",
+        "cpl_A",
+        "--runtime-hash",
+        "rt_A",
+    ]);
+    assert!(
+        output.status.success(),
+        "replay json mode should pass with multiple dependency entries"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: Value =
+        serde_json::from_str(&stdout).expect("replay --format json should output parseable json");
+
+    let db_trace_entries = parsed
+        .get("mockDependencyTraces")
+        .and_then(Value::as_object)
+        .and_then(|traces| traces.get("db"))
+        .and_then(Value::as_array)
+        .expect("mockDependencyTraces.db should be present");
+    assert_eq!(db_trace_entries.len(), 2, "expected two db trace entries");
+    assert_eq!(
+        db_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("first db trace index should be present"),
+        0
+    );
+    assert_eq!(
+        db_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("first db trace id should be present"),
+        "db:0"
+    );
+    assert_eq!(
+        db_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("first db trace signature should be present"),
+        "users.by_id|abc123"
+    );
+    assert_eq!(
+        db_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("second db trace index should be present"),
+        1
+    );
+    assert_eq!(
+        db_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("second db trace id should be present"),
+        "db:1"
+    );
+    assert_eq!(
+        db_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("second db trace signature should be present"),
+        "users.search|-"
+    );
+
+    let fs_trace_entries = parsed
+        .get("mockDependencyTraces")
+        .and_then(Value::as_object)
+        .and_then(|traces| traces.get("fs"))
+        .and_then(Value::as_array)
+        .expect("mockDependencyTraces.fs should be present");
+    assert_eq!(fs_trace_entries.len(), 2, "expected two fs trace entries");
+    assert_eq!(
+        fs_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("first fs trace index should be present"),
+        0
+    );
+    assert_eq!(
+        fs_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("first fs trace id should be present"),
+        "fs:0"
+    );
+    assert_eq!(
+        fs_trace_entries
+            .first()
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("first fs trace signature should be present"),
+        "read|p1"
+    );
+    assert_eq!(
+        fs_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("index"))
+            .and_then(Value::as_u64)
+            .expect("second fs trace index should be present"),
+        1
+    );
+    assert_eq!(
+        fs_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("traceId"))
+            .and_then(Value::as_str)
+            .expect("second fs trace id should be present"),
+        "fs:1"
+    );
+    assert_eq!(
+        fs_trace_entries
+            .get(1)
+            .and_then(Value::as_object)
+            .and_then(|entry| entry.get("signature"))
+            .and_then(Value::as_str)
+            .expect("second fs trace signature should be present"),
+        "write|p2"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");

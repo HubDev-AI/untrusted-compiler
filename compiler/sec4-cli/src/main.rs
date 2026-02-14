@@ -219,6 +219,7 @@ struct ReplayMockDependencyStubSummaries {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ReplayMockDbDependencyTrace {
+    index: usize,
     trace_id: String,
     signature: String,
     row_count: i64,
@@ -227,6 +228,7 @@ struct ReplayMockDbDependencyTrace {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ReplayMockFsDependencyTrace {
+    index: usize,
     trace_id: String,
     signature: String,
     ok: bool,
@@ -529,6 +531,7 @@ fn cmd_replay_check(
                     truncated: stub.truncated,
                 });
                 db_trace_entries.push(ReplayMockDbDependencyTrace {
+                    index,
                     trace_id: format!("db:{index}"),
                     signature: signature.clone(),
                     row_count: stub.row_count,
@@ -553,6 +556,7 @@ fn cmd_replay_check(
                     bytes: stub.bytes,
                 });
                 fs_trace_entries.push(ReplayMockFsDependencyTrace {
+                    index,
                     trace_id: format!("fs:{index}"),
                     signature: signature.clone(),
                     ok: stub.ok,
@@ -740,12 +744,14 @@ fn cmd_replay_check(
                 })),
                 "mockDependencyTraces": mock_dependency_traces.as_ref().map(|traces| serde_json::json!({
                     "db": traces.db.iter().map(|entry| serde_json::json!({
+                        "index": entry.index,
                         "traceId": entry.trace_id,
                         "signature": entry.signature,
                         "rowCount": entry.row_count,
                         "truncated": entry.truncated,
                     })).collect::<Vec<_>>(),
                     "fs": traces.fs.iter().map(|entry| serde_json::json!({
+                        "index": entry.index,
                         "traceId": entry.trace_id,
                         "signature": entry.signature,
                         "ok": entry.ok,

@@ -1523,6 +1523,7 @@ M13-S1 go/no-go note:
 - Surface deterministic matched DB/FS dependency-signature lists in replay text/json output (`mockDependencySignatures`) and lock contract presence.
 - Surface deterministic matched DB/FS dependency response summaries in replay text/json output (`mockDependencyStubSummaries`) and lock contract presence.
 - Surface deterministic per-dependency replay trace entries in replay text/json output (`mockDependencyTraces`) and lock contract presence.
+- Include numeric per-family trace indices in replay dependency traces to make machine-order assertions deterministic.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1558,6 +1559,7 @@ M13-S1 go/no-go note:
 - [x] Added replay mock dependency-signature summary output (`mockDependencySignatures`) and locked JSON contract coverage in replay guard scripts/tests.
 - [x] Added replay mock dependency response-summary output (`mockDependencyStubSummaries`) and locked JSON contract coverage with text/json replay assertions.
 - [x] Added replay mock dependency trace output (`mockDependencyTraces`) with deterministic `traceId` sequencing and JSON/text contract coverage.
+- [x] Added numeric dependency trace indices (`index`) and multi-entry ordering coverage for `mockDependencyTraces` in replay JSON tests.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1586,6 +1588,7 @@ M13-S1 go/no-go note:
 - Replay `mock` mode JSON/text outputs include deterministic dependency-signature lists (`mockDependencySignatures`) for matched DB/FS capture dependencies.
 - Replay `mock` mode JSON/text outputs include deterministic dependency response summaries (`mockDependencyStubSummaries`) for matched DB/FS capture dependencies.
 - Replay `mock` mode JSON/text outputs include deterministic per-dependency trace entries (`mockDependencyTraces`) for matched DB/FS capture dependencies.
+- Replay dependency traces include deterministic per-family numeric `index` fields and preserve capture dependency order.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1609,6 +1612,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay Mock Dependency Signature Output Contract".
 - Chapter: "M14 Slice: Replay Mock Dependency Stub Summary Output Contract".
 - Chapter: "M14 Slice: Replay Mock Dependency Trace Output Contract".
+- Chapter: "M14 Slice: Replay Mock Dependency Trace Index and Ordering Contract".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
