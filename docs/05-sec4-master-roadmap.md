@@ -103,6 +103,10 @@ Roadmap impact:
   - `scripts/generate-m18-kickoff-brief.sh`
   - `scripts/test-generate-m18-kickoff-brief.sh`
   - `docs/book/476-m18-kickoff-brief-generator.md`
+- M18-S2 priority matrix artifact is now implemented:
+  - `scripts/build-m18-priority-matrix.sh`
+  - `scripts/test-build-m18-priority-matrix.sh`
+  - `docs/book/477-m18-priority-matrix-artifact.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -315,6 +319,7 @@ Current strict closure result:
 | `M17-K` | PASS | Naming-lock CI enforces M17 final handoff playbook checker | `.github/workflows/naming-lock.yml` |
 | `M17-L` | PASS | Naming-lock CI enforces M17 clean-clone rehearsal runner | `.github/workflows/naming-lock.yml` |
 | `M18-A` | PASS | Naming-lock CI enforces M18 kickoff brief generator | `.github/workflows/naming-lock.yml` |
+| `M18-B` | PASS | Naming-lock CI enforces M18 priority matrix artifact | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -344,6 +349,7 @@ Strict closure interpretation:
 - M17 final handoff playbook checker enforcement is active (`M17-K`).
 - M17 clean-clone rehearsal runner enforcement is active (`M17-L`).
 - M18 kickoff brief generator enforcement is active (`M18-A`).
+- M18 priority matrix artifact enforcement is active (`M18-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3467,7 +3473,8 @@ M13-S1 go/no-go note:
 ### Build tasks
 - Generate kickoff summary from rehearsal report (`PASS/FAIL`, failed step, friction count, recommendations).
 - Support both markdown and JSON output for operator + automation consumers.
-- Lock kickoff generator contract in naming-lock CI and closure audit.
+- Build deterministic runtime/editor/release priority matrix from rehearsal evidence.
+- Lock kickoff + matrix artifact contracts in naming-lock CI and closure audit.
 
 ### M18-S1 kickoff acceptance criteria
 - Kickoff generator script + contract test exists.
@@ -3479,13 +3486,18 @@ M13-S1 go/no-go note:
 - [x] Kickoff brief generator contract test added.
 - [x] Book chapter documenting kickoff generator added.
 - [x] Naming-lock CI and closure gate updated (`M18-A`).
+- [x] Priority matrix artifact script added.
+- [x] Priority matrix contract test added.
+- [x] Book chapter documenting priority matrix artifact added.
+- [x] Naming-lock CI and closure gate updated (`M18-B`).
 
 ### Exit criteria
 - M18 kickoff has a deterministic, reproducible artifact generated from live rehearsal evidence.
-- Next milestone slices can be selected using explicit summary/recommendation output rather than ad-hoc interpretation.
+- Next milestone slices can be selected using explicit kickoff summary + ranked priority matrix output rather than ad-hoc interpretation.
 
 ### Docs/book outputs
 - Chapter: "M18 Kickoff Brief Generator".
+- Chapter: "M18 Priority Matrix Artifact".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3577,7 +3589,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M18-S2 priority matrix artifact (runtime/editor/release tracks with deterministic ranking) and lock its CI contract gate.
+1. Implement M18-S3 roadmap-slice selector that consumes kickoff summary + priority matrix and emits the next closure-gated slice recommendation.
 
 ---
 

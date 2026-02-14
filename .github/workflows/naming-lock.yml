@@ -103,6 +103,9 @@ jobs:
       - name: Validate M18 kickoff brief generator
         run: scripts/test-generate-m18-kickoff-brief.sh
 
+      - name: Validate M18 priority matrix artifact
+        run: scripts/test-build-m18-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

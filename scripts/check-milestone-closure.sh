@@ -165,6 +165,7 @@ bool_has_m17_operator_release_packet_ci_guard=0
 bool_has_m17_operator_playbook_ci_guard=0
 bool_has_m17_operator_clean_clone_ci_guard=0
 bool_has_m18_kickoff_brief_ci_guard=0
+bool_has_m18_priority_matrix_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -382,6 +383,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && [ -f "${m18_kickoff_brief_test_script}" ] \
   && rg -q 'scripts/test-generate-m18-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
   bool_has_m18_kickoff_brief_ci_guard=1
+fi
+
+m18_priority_matrix_test_script="${repo_root}/scripts/test-build-m18-priority-matrix.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m18_priority_matrix_test_script}" ] \
+  && rg -q 'scripts/test-build-m18-priority-matrix.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m18_priority_matrix_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -602,6 +610,7 @@ emit_check "M17-J" "naming-lock CI enforces M17 operator release packet builder"
 emit_check "M17-K" "naming-lock CI enforces M17 final handoff playbook checker" "${bool_has_m17_operator_playbook_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-L" "naming-lock CI enforces M17 clean-clone rehearsal runner" "${bool_has_m17_operator_clean_clone_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M18-A" "naming-lock CI enforces M18 kickoff brief generator" "${bool_has_m18_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M18-B" "naming-lock CI enforces M18 priority matrix artifact" "${bool_has_m18_priority_matrix_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
