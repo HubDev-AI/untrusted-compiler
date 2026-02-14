@@ -180,6 +180,9 @@ Roadmap impact:
 - M16-S52 runtime-smoke checker regression coverage now pins users-branch max-body correlation failures:
   - dedicated fixture ensures health log passes max-body correlation while users log fails.
   - deterministic users-branch max-body mismatch diagnostic is contract-locked.
+- M16-S53 runtime-smoke checker regression coverage now includes invalid-shape maxBody metadata:
+  - dedicated fixture asserts failure for `maxBodyBytes=abc`.
+  - deterministic invalid-shape diagnostic is contract-locked.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -3101,6 +3104,26 @@ M13-S1 go/no-go note:
 - [x] Regression suite now asserts deterministic users-branch mismatch diagnostic.
 - [x] Checker regression suite remains green after coverage expansion.
 
+### M16-S53 follow-up slice (runtime-smoke invalid-shape maxBody metadata regression fixture)
+#### Scope
+- Expand maxBody regression matrix to include explicit invalid-shape metadata values (`abc`), not only missing/range/log-correlation cases.
+
+#### Build tasks
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with `maxBodyBytes=abc` fixture.
+- Assert deterministic checker diagnostic:
+  - `run-metadata.txt missing or invalid maxBodyBytes field`
+- Re-run checker regression suite.
+
+#### Acceptance criteria
+- Checker regression suite fails deterministically for invalid-shape `maxBodyBytes` metadata.
+- Deterministic invalid-shape diagnostic is pinned.
+- Existing smoke/checker flows remain green.
+
+#### Tracking (live status)
+- [x] Added invalid-shape `maxBodyBytes=abc` regression fixture.
+- [x] Regression suite now asserts deterministic invalid-shape diagnostic.
+- [x] Checker regression suite remains green after invalid-shape coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3155,6 +3178,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Numeric-Bound Contract Hardening".
 - Chapter: "M16 Slice: Operator Smoke max-body Override and maxBody Metadata/Log Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Users-Branch max-body Correlation Regression Coverage".
+- Chapter: "M16 Slice: Runtime-Smoke Invalid-Shape maxBody Metadata Regression Coverage".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

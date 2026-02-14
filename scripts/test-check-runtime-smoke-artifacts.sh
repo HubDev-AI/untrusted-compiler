@@ -307,6 +307,28 @@ if ! rg -Fq 'run-metadata.txt missing or invalid maxBodyBytes field' "${tmp_dir}
   exit 1
 fi
 
+max_body_invalid_dir="${tmp_dir}/bad-max-body-invalid"
+cp -R "${ok_dir}" "${max_body_invalid_dir}"
+cat > "${max_body_invalid_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=abc
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${max_body_invalid_dir}" >"${tmp_dir}/max-body-invalid.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail on invalid maxBodyBytes metadata" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt missing or invalid maxBodyBytes field' "${tmp_dir}/max-body-invalid.log"; then
+  echo "expected invalid-shape diagnostic for maxBodyBytes metadata" >&2
+  exit 1
+fi
+
 max_body_range_bad_dir="${tmp_dir}/bad-max-body-range"
 cp -R "${ok_dir}" "${max_body_range_bad_dir}"
 cat > "${max_body_range_bad_dir}/run-metadata.txt" <<'TXT'

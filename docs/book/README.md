@@ -421,5 +421,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `454-m16-runtime-smoke-metadata-numeric-bound-contract-hardening.md`
 - `455-m16-operator-smoke-max-body-override-and-maxbody-contracts.md`
 - `456-m16-runtime-smoke-users-branch-max-body-correlation-regression-coverage.md`
+- `457-m16-runtime-smoke-invalid-shape-maxbody-metadata-regression-coverage.md`
 
 As milestones progress, chapters will be added and linked from this index.
