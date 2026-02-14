@@ -144,6 +144,9 @@ Roadmap impact:
 - M16-S40 runtime-smoke checker regression coverage now validates empty source/work metadata values:
   - checker tests include dedicated fixtures for `sourceProject=` and `workProject=` empty-value failures.
   - deterministic diagnostics remain identical to missing-field branches.
+- M16-S41 runtime-smoke checker now enforces source/work provenance divergence:
+  - checker rejects metadata where `sourceProject` equals `workProject`.
+  - regression coverage now pins deterministic divergence diagnostic.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2790,6 +2793,26 @@ M13-S1 go/no-go note:
 - [x] Checker regression test now asserts deterministic diagnostics for both empty-value cases.
 - [x] Real smoke + checker flow remains green after non-empty regression expansion.
 
+### M16-S41 follow-up slice (artifact-checker source/work divergence enforcement)
+#### Scope
+- Harden runtime-smoke metadata validation so provenance keys cannot collapse into a single path value.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to assert:
+  - `sourceProject != workProject`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with `bad-same-project` fixture where source/work values are identical.
+- Assert deterministic checker failure diagnostic for identical provenance values.
+
+#### Acceptance criteria
+- Checker fails when `sourceProject` and `workProject` values are identical.
+- Regression suite asserts deterministic divergence diagnostic.
+- Real smoke artifact flow continues passing with distinct source/work values.
+
+#### Tracking (live status)
+- [x] Checker now enforces non-identical source/work metadata values.
+- [x] Regression suite includes identical-source/work failure fixture.
+- [x] Real smoke + checker flow remains green after divergence enforcement.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2832,6 +2855,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Checker workProject Regression Fixture".
 - Chapter: "M16 Slice: Smoke-Script Source/Work Metadata Token Contract Lock".
 - Chapter: "M16 Slice: Runtime-Smoke Checker Empty Source/Work Metadata Regression Fixtures".
+- Chapter: "M16 Slice: Runtime-Smoke Source/Work Provenance Divergence Enforcement".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

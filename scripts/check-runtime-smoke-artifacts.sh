@@ -100,6 +100,14 @@ if ! rg -q '^workProject=.+$' "${artifacts_dir}/run-metadata.txt"; then
   exit 1
 fi
 
+source_project="$(sed -n 's/^sourceProject=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+work_project="$(sed -n 's/^workProject=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+
+if [ "${source_project}" = "${work_project}" ]; then
+  echo "run-metadata.txt sourceProject and workProject must differ" >&2
+  exit 1
+fi
+
 if ! rg -q '^oneshot=true$' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing oneshot=true field" >&2
   exit 1

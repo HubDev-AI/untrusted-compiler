@@ -163,6 +163,27 @@ if ! rg -Fq 'run-metadata.txt missing workProject field' "${tmp_dir}/work-empty.
   exit 1
 fi
 
+same_project_dir="${tmp_dir}/bad-same-project"
+cp -R "${ok_dir}" "${same_project_dir}"
+cat > "${same_project_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=examples/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${same_project_dir}" >"${tmp_dir}/same-project.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail when source/work metadata are identical" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'run-metadata.txt sourceProject and workProject must differ' "${tmp_dir}/same-project.log"; then
+  echo "expected metadata diagnostic when source/work metadata values are identical" >&2
+  exit 1
+fi
+
 runflags_bad_dir="${tmp_dir}/bad-runflags"
 cp -R "${ok_dir}" "${runflags_bad_dir}"
 cat > "${runflags_bad_dir}/run-metadata.txt" <<'TXT'
