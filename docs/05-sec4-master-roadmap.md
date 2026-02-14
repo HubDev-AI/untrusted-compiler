@@ -177,6 +177,9 @@ Roadmap impact:
 - M16-S51 operator smoke script now supports max-body override with metadata/log correlation checks:
   - smoke script accepts `--max-body-bytes <bytes>` and emits `maxBodyBytes` metadata (`unset` or numeric).
   - checker enforces max-body metadata shape and optional run-log token correlation when set.
+- M16-S52 runtime-smoke checker regression coverage now pins users-branch max-body correlation failures:
+  - dedicated fixture ensures health log passes max-body correlation while users log fails.
+  - deterministic users-branch max-body mismatch diagnostic is contract-locked.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -3076,6 +3079,28 @@ M13-S1 go/no-go note:
 - [x] Checker now enforces `maxBodyBytes` metadata shape and optional log-correlation checks.
 - [x] Default, timeout-override, and max-body-override smoke flows remain green.
 
+### M16-S52 follow-up slice (runtime-smoke users-branch max-body correlation regression fixture)
+#### Scope
+- Expand checker regression coverage so max-body correlation checks are exercised on both health and users run-log branches.
+
+#### Build tasks
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with fixture that:
+  - sets `maxBodyBytes=2048`,
+  - gives `health.run.log` a matching max-body token,
+  - keeps `users.run.log` without max-body token.
+- Assert deterministic failure:
+  - `users.run.log missing --max-body-bytes 2048 invocation token`
+
+#### Acceptance criteria
+- Regression suite explicitly validates users-branch max-body mismatch behavior.
+- Deterministic users-branch mismatch diagnostic is pinned.
+- Existing checker + smoke flows remain green.
+
+#### Tracking (live status)
+- [x] Added dedicated users-branch max-body mismatch fixture.
+- [x] Regression suite now asserts deterministic users-branch mismatch diagnostic.
+- [x] Checker regression suite remains green after coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3129,6 +3154,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Operator Smoke Timeout Override and Variable Token Contracts".
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Numeric-Bound Contract Hardening".
 - Chapter: "M16 Slice: Operator Smoke max-body Override and maxBody Metadata/Log Contracts".
+- Chapter: "M16 Slice: Runtime-Smoke Users-Branch max-body Correlation Regression Coverage".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

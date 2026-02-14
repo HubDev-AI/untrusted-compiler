@@ -351,6 +351,31 @@ if ! rg -Fq 'health.run.log missing --max-body-bytes 2048 invocation token' "${t
   exit 1
 fi
 
+max_body_users_log_mismatch_dir="${tmp_dir}/bad-max-body-users-log-mismatch"
+cp -R "${ok_dir}" "${max_body_users_log_mismatch_dir}"
+cat > "${max_body_users_log_mismatch_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=12000
+maxBodyBytes=2048
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+cat > "${max_body_users_log_mismatch_dir}/health.run.log" <<'TXT'
+Running `target/debug/sec4 run --path /tmp/hello-api --port 8080 --oneshot --serve-timeout-ms 12000 --max-body-bytes 2048`
+TXT
+
+if "${checker}" --artifacts-dir "${max_body_users_log_mismatch_dir}" >"${tmp_dir}/max-body-users-log-mismatch.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail when users run log misses max-body token" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'users.run.log missing --max-body-bytes 2048 invocation token' "${tmp_dir}/max-body-users-log-mismatch.log"; then
+  echo "expected max-body correlation diagnostic for users run log" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'
