@@ -51,6 +51,8 @@ Roadmap impact:
 - M16-S2 JSON response materialization bootstrap is now implemented:
   - `res.ok`/`res.json` runtime paths materialize JSON HTTP responses,
   - `POST /users` runtime E2E serving is validated in oneshot mode.
+- M16-S3 status-propagation hardening is now implemented:
+  - `res.ok(status, ...)` and `res.okMeta(status, ...)` now propagate caller status into runtime HTTP response line.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -1790,9 +1792,31 @@ M13-S1 go/no-go note:
 - [x] `res.okMeta` runtime materialization returns JSON response with `meta`.
 - [x] `POST /users` runtime E2E integration test added and green.
 
+### M16-S3 follow-up slice (status propagation hardening)
+#### Scope
+- Ensure runtime JSON success helpers honor explicit status values from compiled handler calls.
+
+#### Build tasks
+- Update runtime helpers:
+  - `sec4_rt_res_ok(status, ...)` uses provided status when positive.
+  - `sec4_rt_res_ok_meta(status, ...)` uses provided status when positive.
+- Preserve stable JSON body/content-type behavior from M16-S2.
+- Add E2E integration coverage for custom status behavior (`202`) on `res.ok`.
+
+#### Acceptance criteria
+- Runtime response line reflects caller-provided status for `res.ok`.
+- Existing response materialization behavior remains deterministic.
+- Full `sec4` and `sec4-core` test suites remain green.
+
+#### Tracking (live status)
+- [x] `res.ok(status, ...)` propagates caller status.
+- [x] `res.okMeta(status, ...)` propagates caller status.
+- [x] Custom-status (`202`) runtime E2E integration test added and green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
+- Chapter: "M16 Slice: Runtime Status Propagation for Success Responses".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

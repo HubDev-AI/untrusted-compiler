@@ -179,8 +179,12 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_req_path_param()"));
     assert!(source.contains("int64_t sec4_rt_req_header()"));
     assert!(source.contains("int64_t sec4_rt_res_json()"));
-    assert!(source.contains("int64_t sec4_rt_res_ok()"));
-    assert!(source.contains("int64_t sec4_rt_res_ok_meta()"));
+    assert!(source.contains(
+        "int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value)"
+    ));
+    assert!(source.contains(
+        "int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta)"
+    ));
     assert!(source.contains("int64_t sec4_rt_res_html()"));
     assert!(source.contains("int64_t sec4_rt_res_text(int64_t status, const char *body)"));
     assert!(source.contains("int64_t sec4_rt_set_header()"));

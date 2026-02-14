@@ -382,18 +382,23 @@ int64_t sec4_rt_res_json() {
   return 0;
 }
 
-int64_t sec4_rt_res_ok() {
+int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value) {
+  (void) schema;
+  (void) value;
   sec4_rt_store_response(
-      201,
+      status > 0 ? status : 201,
       "application/json; charset=utf-8",
       "{\"ok\":true}"
   );
   return 0;
 }
 
-int64_t sec4_rt_res_ok_meta() {
+int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta) {
+  (void) schema;
+  (void) value;
+  (void) meta;
   sec4_rt_store_response(
-      201,
+      status > 0 ? status : 201,
       "application/json; charset=utf-8",
       "{\"ok\":true,\"meta\":{}}"
   );
