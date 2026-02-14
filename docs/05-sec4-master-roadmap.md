@@ -120,6 +120,10 @@ Roadmap impact:
   - `scripts/test-verify-release-publish-manifest.sh` now includes tampered-sbom regression coverage.
   - `scripts/test-m18-release-publish-integrity.sh`
   - `docs/book/480-m18-release-publish-integrity-contract-expansion.md`
+- M18-S6 runtime-track execution runner is now implemented:
+  - `scripts/run-m18-runtime-track.sh`
+  - `scripts/test-run-m18-runtime-track.sh`
+  - `docs/book/481-m18-runtime-track-execution-runner.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -336,6 +340,7 @@ Current strict closure result:
 | `M18-C` | PASS | Naming-lock CI enforces M18 next-slice selector | `.github/workflows/naming-lock.yml` |
 | `M18-D` | PASS | Naming-lock CI enforces M18 editor contract expansion | `.github/workflows/naming-lock.yml` |
 | `M18-E` | PASS | Naming-lock CI enforces M18 release publish-integrity contract expansion | `.github/workflows/naming-lock.yml` |
+| `M18-F` | PASS | Naming-lock CI enforces M18 runtime-track execution runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -369,6 +374,7 @@ Strict closure interpretation:
 - M18 next-slice selector enforcement is active (`M18-C`).
 - M18 editor contract expansion enforcement is active (`M18-D`).
 - M18 release publish-integrity contract expansion enforcement is active (`M18-E`).
+- M18 runtime-track execution runner enforcement is active (`M18-F`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3496,7 +3502,8 @@ M13-S1 go/no-go note:
 - Select one closure-gated next slice from kickoff + matrix inputs.
 - Execute first selected slice on the editor track (stable quickfix action IDs).
 - Execute next selected release-track slice on publish-integrity contract expansion.
-- Lock kickoff/matrix/selector/editor/release contracts in naming-lock CI and closure audit.
+- Execute runtime-track slice via selector-driven runtime-runner contract.
+- Lock kickoff/matrix/selector/editor/release/runtime contracts in naming-lock CI and closure audit.
 
 ### M18-S1 kickoff acceptance criteria
 - Kickoff generator script + contract test exists.
@@ -3526,6 +3533,10 @@ M13-S1 go/no-go note:
 - [x] M18 release publish-integrity contract checker added.
 - [x] Book chapter documenting release publish-integrity contract expansion added.
 - [x] Naming-lock CI and closure gate updated (`M18-E`).
+- [x] Runtime-track execution runner script added (`--dry-run`, `text/json` output contracts).
+- [x] Runtime-track execution runner contract test added.
+- [x] Book chapter documenting runtime-track execution runner added.
+- [x] Naming-lock CI and closure gate updated (`M18-F`).
 
 ### Exit criteria
 - M18 kickoff has a deterministic, reproducible artifact generated from live rehearsal evidence.
@@ -3537,6 +3548,7 @@ M13-S1 go/no-go note:
 - Chapter: "M18 Next-Slice Selector".
 - Chapter: "M18 Editor Contract Expansion".
 - Chapter: "M18 Release Publish-Integrity Contract Expansion".
+- Chapter: "M18 Runtime-Track Execution Runner".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3628,7 +3640,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M18-S6 runtime-track execution slice from selector output and wire its closure gate.
+1. Implement M18-S7 convergence summary slice (editor+release+runtime track outcomes) and wire its closure gate.
 
 ---
 
