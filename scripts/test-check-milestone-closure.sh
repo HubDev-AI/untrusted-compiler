@@ -142,6 +142,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -292,7 +296,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M11-A","M12-A","M12-B",
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
-    "M15-A","M16-A","M16-B","M16-C","M16-D"
+    "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -364,6 +368,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-C") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-D") != null' >/dev/null; then
   echo "expected json closure output to include M16-D gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M16-E") != null' >/dev/null; then
+  echo "expected json closure output to include M16-E gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -672,6 +680,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -716,6 +728,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -762,6 +778,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -810,6 +830,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -860,6 +884,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -912,6 +940,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -966,6 +998,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -1020,6 +1056,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior
@@ -1126,6 +1166,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
 YAML
@@ -1180,6 +1224,10 @@ jobs:
         run: scripts/test-sec4-cli-command-contract.sh
       - name: Validate sec4 CLI command contract guard behavior
         run: scripts/test-sec4-cli-command-contract-guard.sh
+      - name: Validate sec4 run runtime-flag contract
+        run: scripts/test-sec4-run-runtime-flag-contract.sh
+      - name: Validate sec4 run runtime-flag contract guard behavior
+        run: scripts/test-sec4-run-runtime-flag-contract-guard.sh
       - name: Validate zed grammar pin contract
         run: scripts/test-zed-grammar-pin.sh
       - name: Validate zed grammar pin guard behavior

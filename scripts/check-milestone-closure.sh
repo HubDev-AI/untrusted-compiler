@@ -151,6 +151,7 @@ bool_has_m16_runtime_http_coverage_ci_guard=0
 bool_has_m16_operator_smoke_script_ci_guard=0
 bool_has_m16_runtime_smoke_workflow_contract=0
 bool_has_m16_runtime_smoke_ci_guard=0
+bool_has_m16_run_runtime_flag_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -261,6 +262,12 @@ if [ -f "${naming_lock_workflow_path}" ] \
   && rg -q 'scripts/test-runtime-smoke-workflow-contract-guard.sh' "${naming_lock_workflow_path}" \
   && rg -q 'scripts/test-check-runtime-smoke-artifacts.sh' "${naming_lock_workflow_path}"; then
   bool_has_m16_runtime_smoke_ci_guard=1
+fi
+
+if [ -f "${naming_lock_workflow_path}" ] \
+  && rg -q 'scripts/test-sec4-run-runtime-flag-contract.sh' "${naming_lock_workflow_path}" \
+  && rg -q 'scripts/test-sec4-run-runtime-flag-contract-guard.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m16_run_runtime_flag_ci_guard=1
 fi
 
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
@@ -466,6 +473,7 @@ emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract +
 emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests" "${bool_has_m16_operator_smoke_script_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-C" "runtime-smoke workflow executes sec4 run hello-api smoke + artifact validation/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
 emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker test" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

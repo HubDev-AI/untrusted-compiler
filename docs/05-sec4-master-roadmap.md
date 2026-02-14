@@ -137,6 +137,8 @@ Roadmap impact:
 - M16 runtime-smoke workflow closure enforcement is active:
   - `M16-C` validates workflow contract (`.github/workflows/runtime-smoke.yml`, including artifact validation + upload),
   - `M16-D` validates naming-lock CI enforcement of runtime-smoke contract + guard tests + artifact-checker contract test.
+- M16 run-command runtime-flag CI-guard enforcement is active (`M16-E`):
+  - validates naming-lock CI enforcement of `sec4 run` runtime-flag contract + guard tests.
 
 ## Formal Closure Audit (Strict, 2026-02-14)
 
@@ -180,6 +182,7 @@ Current strict closure result:
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-C` | PASS | Runtime-smoke workflow runs sec4 run hello-api smoke on pull_request + main push, validates artifacts, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
 | `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact-checker test | `.github/workflows/naming-lock.yml` |
+| `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -195,6 +198,7 @@ Strict closure interpretation:
 - M16 operator smoke-script closure enforcement is active (`M16-B`).
 - M16 runtime-smoke workflow contract enforcement is active (`M16-C`).
 - M16 runtime-smoke CI-guard enforcement is active (`M16-D`).
+- M16 run-command runtime-flag CI-guard enforcement is active (`M16-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -796,6 +800,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of sec4 run hello-api smoke script contract + guard tests (`M16-B`).
   - closure now verifies runtime-smoke workflow contract wiring (`M16-C`).
   - closure now verifies naming-lock CI enforcement of runtime-smoke workflow contract + guard tests + artifact-checker test (`M16-D`).
+  - closure now verifies naming-lock CI enforcement of sec4 run runtime-flag contract + guard tests (`M16-E`).
   - closure audit now supports machine-readable output (`--format json`) with stable gate rows (`gate`, `status`, `check`, `evidence`) and deterministic `overall`/`pendingCount` fields (including `PENDING` + non-zero count on strict-fail paths).
 - Benchmark evidence quality checker is now available:
   - `scripts/check-benchmark-evidence-quality.sh` audits compare-matrix endpoint/leader integrity plus leader quality posture (`p99` validity + `constantRate`),
@@ -2668,6 +2673,29 @@ M13-S1 go/no-go note:
 - [x] Checker regression test now asserts deterministic runFlags-missing diagnostic.
 - [x] Real smoke + checker flow remains green.
 
+### M16-S36 follow-up slice (closure gate for run-flag CI contracts)
+#### Scope
+- Promote run-command runtime-flag CI contract enforcement into strict closure auditing so milestone status reflects the new naming-lock guardrail.
+
+#### Build tasks
+- Extend `scripts/check-milestone-closure.sh` with gate `M16-E`:
+  - detect naming-lock workflow wiring for:
+    - `scripts/test-sec4-run-runtime-flag-contract.sh`
+    - `scripts/test-sec4-run-runtime-flag-contract-guard.sh`
+- Update `scripts/test-check-milestone-closure.sh` fixtures + expected gate ordering for `M16-E`.
+- Update roadmap strict-closure table/interpreation to include `M16-E`.
+
+#### Acceptance criteria
+- Strict closure audit passes with `M16-E` on current repo state.
+- Closure harness tests pass with deterministic `M16-E` gate ordering.
+- Roadmap closure-gate alignment test remains green.
+
+#### Tracking (live status)
+- [x] Added `M16-E` gate checks to closure-audit script.
+- [x] Updated closure test harness fixtures + expected ordering with `M16-E`.
+- [x] Roadmap strict-closure table/interpreation now includes `M16-E`.
+- [x] Closure + alignment + naming/path guards remain green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2705,6 +2733,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Smoke-Script Metadata Token Contract Lock".
 - Chapter: "M16 Slice: Smoke-Script Metadata Guard Coverage Expansion".
 - Chapter: "M16 Slice: Runtime-Smoke Checker runFlags Regression Fixture".
+- Chapter: "M16 Slice: Closure Gate for sec4 run Runtime-Flag CI Contracts".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

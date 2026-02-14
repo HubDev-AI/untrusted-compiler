@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-14 | self | Adding a new closure gate (`M16-E`) initially looked like a one-file change, but closure fixture coverage in `scripts/test-check-milestone-closure.sh` required synchronized updates across many embedded naming-lock YAML blocks. | For closure-gate additions, update gate logic + deterministic gate list + all embedded fixture workflow blocks in one pass (bulk replace where safe), then run closure harness immediately. |
 | 2026-02-14 | self | Repeated accidental web-tool invocations during local-only slices even after prior reminder. | Keep hands on `functions.exec_command`/`apply_patch` only during local implementation; treat web tools as opt-in external-research path with explicit intent check first. |
 | 2026-02-14 | self | Added a required-token string with `\"${port}\"` in a `set -u` guard script, which expanded an undefined shell variable and failed early. | When asserting literal template tokens in shell tests, use single-quoted literals (for example `'--port \"${port}\"'`) to prevent unintended variable expansion. |
 | 2026-02-14 | self | Ran an `rg` command with mismatched shell quoting and hit `zsh: unmatched \"`. | For complex multi-token `rg` patterns, use single-quoted shell strings and avoid mixing unescaped inner quotes. |
