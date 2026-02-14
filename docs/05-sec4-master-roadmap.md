@@ -96,6 +96,8 @@ Roadmap impact:
   - runtime e2e now locks `Access-Control-Allow-Origin` propagation on `404` not-found and `405` method-mismatch responses when CORS middleware is enabled.
 - M16-S22 combined-middleware preflight interoperability is now implemented:
   - runtime e2e now locks that CORS `OPTIONS` preflight remains `204` and bypasses auth/csrf rejection branches when `cors + auth + csrf` middleware are composed.
+- M16-S23 security-header coverage is now expanded for middleware rejection branches:
+  - runtime e2e now locks security-header injection on auth (`401`) and csrf (`403`) rejection responses when `sec.withSecurityHeaders(...)` is enabled.
 
 ## Formal Closure Audit (Strict, 2026-02-13)
 
@@ -2331,6 +2333,29 @@ M13-S1 go/no-go note:
 - [x] Preflight request remains deterministic `204` with expected CORS allow headers.
 - [x] Runtime integration suite remains green after middleware-composition coverage expansion.
 
+### M16-S23 follow-up slice (security headers on auth/csrf rejection paths)
+#### Scope
+- Extend security-header guarantees from success/not-found branches to middleware rejection branches so sensitive errors keep the same baseline hardening headers.
+
+#### Build tasks
+- Add runtime e2e for auth rejection with security headers enabled (`401`).
+- Add runtime e2e for csrf rejection with security headers enabled (`403`).
+- Assert deterministic presence of:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+- Keep runtime suites green after coverage expansion.
+
+#### Acceptance criteria
+- Auth rejection responses include deterministic security headers.
+- CSRF rejection responses include deterministic security headers.
+- Existing security-header success/not-found coverage remains green.
+
+#### Tracking (live status)
+- [x] Runtime e2e coverage added for security-headers + auth rejection (`401`) path.
+- [x] Runtime e2e coverage added for security-headers + csrf rejection (`403`) path.
+- [x] Runtime integration suites remain green after rejection-branch coverage expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2354,6 +2379,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on Middleware Rejection Paths".
 - Chapter: "M16 Slice: CORS Allow-Origin Coverage on 404/405 Error Branches".
 - Chapter: "M16 Slice: CORS Preflight Interoperability with Auth + CSRF Middleware".
+- Chapter: "M16 Slice: Security Headers Coverage on Auth/CSRF Rejection Paths".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
