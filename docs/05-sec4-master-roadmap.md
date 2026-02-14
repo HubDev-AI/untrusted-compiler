@@ -130,6 +130,8 @@ Roadmap impact:
   - smoke script contract checks now require deterministic metadata fields emitted by `run-metadata.txt` generation block.
 - M16-S34 smoke-script guard coverage now includes metadata token drift:
   - guard script now verifies contract failure for removed `runFlags` metadata token in addition to request-token drift.
+- M16-S35 runtime-smoke checker regression coverage now includes missing runFlags metadata:
+  - checker test now has dedicated failing fixture for absent `runFlags` key.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2648,6 +2650,24 @@ M13-S1 go/no-go note:
 - [x] Guard script now validates both request-token and metadata-token drift.
 - [x] Smoke contract + guard tests pass after guard expansion.
 
+### M16-S35 follow-up slice (artifact-checker runFlags regression fixture)
+#### Scope
+- Expand artifact-checker regression coverage to explicitly validate missing `runFlags` metadata failures.
+
+#### Build tasks
+- Add `bad-runflags` fixture path in `scripts/test-check-runtime-smoke-artifacts.sh`.
+- Assert deterministic checker failure message for missing runFlags metadata.
+- Re-run real smoke + checker flow to keep end-to-end artifact contract green.
+
+#### Acceptance criteria
+- Checker regression script fails deterministically when runFlags metadata is absent.
+- Real smoke artifact flow still passes expanded checker contract.
+
+#### Tracking (live status)
+- [x] Added missing-runFlags metadata regression fixture in checker test.
+- [x] Checker regression test now asserts deterministic runFlags-missing diagnostic.
+- [x] Real smoke + checker flow remains green.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2684,6 +2704,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Metadata Contract Expansion".
 - Chapter: "M16 Slice: Smoke-Script Metadata Token Contract Lock".
 - Chapter: "M16 Slice: Smoke-Script Metadata Guard Coverage Expansion".
+- Chapter: "M16 Slice: Runtime-Smoke Checker runFlags Regression Fixture".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
