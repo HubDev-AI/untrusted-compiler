@@ -70,6 +70,9 @@ jobs:
       - name: Validate M17 operator bootstrap profile helper
         run: scripts/test-run-m17-operator-bootstrap.sh
 
+      - name: Validate M17 operator troubleshooting matrix
+        run: scripts/test-print-m17-operator-troubleshooting-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
