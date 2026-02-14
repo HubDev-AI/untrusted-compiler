@@ -80,6 +80,10 @@ Roadmap impact:
   - `scripts/inspect-m17-operator-handoff-artifacts.sh`
   - `scripts/test-inspect-m17-operator-handoff-artifacts.sh`
   - `docs/book/470-m17-operator-handoff-artifact-inspector.md`
+- M17-S8 operator readiness summary script is now implemented:
+  - `scripts/summarize-m17-operator-handoff-readiness.sh`
+  - `scripts/test-summarize-m17-operator-handoff-readiness.sh`
+  - `docs/book/471-m17-operator-readiness-summary.md`
 - M14 replay bootstrap is active with closure gating (`M14-A`, `M14-B`, `M14-C`, `M14-D`).
 - M15-S1 replay runtime stubbing bootstrap is now implemented:
   - `sec4 replay --effects mock` emits deterministic executed-stub counts/traces for net/db/fs in text and JSON output modes,
@@ -287,6 +291,7 @@ Current strict closure result:
 | `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push | `.github/workflows/operator-handoff-smoke.yml` |
 | `M17-G` | PASS | Naming-lock CI enforces operator-handoff workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M17-H` | PASS | Naming-lock CI enforces M17 operator handoff artifact inspector | `.github/workflows/naming-lock.yml` |
+| `M17-I` | PASS | Naming-lock CI enforces M17 operator handoff readiness summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -311,6 +316,7 @@ Strict closure interpretation:
 - M17 operator-handoff workflow contract enforcement is active (`M17-F`).
 - M17 operator-handoff workflow CI-guard enforcement is active (`M17-G`).
 - M17 operator handoff artifact-inspector enforcement is active (`M17-H`).
+- M17 operator handoff readiness-summary enforcement is active (`M17-I`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -3391,6 +3397,7 @@ M13-S1 go/no-go note:
 - [x] Operator handoff CI smoke wrapper script added and wired into naming-lock CI.
 - [x] Operator-handoff workflow contract + guard tests added and wired into naming-lock CI.
 - [x] Operator handoff artifact inspector script added and wired into naming-lock CI.
+- [x] Operator handoff readiness summary script added and wired into naming-lock CI.
 
 ### Exit criteria
 - Operator can follow a deterministic checklist and run end-to-end server/bootstrap validation without implicit tribal knowledge.
@@ -3406,6 +3413,7 @@ M13-S1 go/no-go note:
 - Chapter: "M17 Operator Handoff CI Smoke Wrapper".
 - Chapter: "M17 Operator Handoff Workflow Contracts".
 - Chapter: "M17 Operator Handoff Artifact Inspector".
+- Chapter: "M17 Operator Readiness Summary".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -3497,7 +3505,7 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M17-S8 operator handoff release-readiness summary script (quickstart + CI smoke + artifact inspector synthesis).
+1. Implement M17-S9 operator handoff release packet builder (summary + artifact manifest + gate snapshot).
 
 ---
 

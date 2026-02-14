@@ -24,6 +24,7 @@ touch "$tmp/scripts/test-run-m17-operator-handoff-ci-smoke.sh"
 touch "$tmp/scripts/test-operator-handoff-workflow-contract.sh"
 touch "$tmp/scripts/test-operator-handoff-workflow-contract-guard.sh"
 touch "$tmp/scripts/test-inspect-m17-operator-handoff-artifacts.sh"
+touch "$tmp/scripts/test-summarize-m17-operator-handoff-readiness.sh"
 cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -148,6 +149,8 @@ jobs:
         run: scripts/test-operator-handoff-workflow-contract-guard.sh
       - name: Validate M17 operator handoff artifact inspector
         run: scripts/test-inspect-m17-operator-handoff-artifacts.sh
+      - name: Validate M17 operator handoff readiness summary
+        run: scripts/test-summarize-m17-operator-handoff-readiness.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -351,7 +354,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E",
-    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H"
+    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -459,6 +462,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M17-G") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M17-H") != null' >/dev/null; then
   echo "expected json closure output to include M17-H gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M17-I") != null' >/dev/null; then
+  echo "expected json closure output to include M17-I gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -605,6 +612,24 @@ if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | j
   and (.gates[] | select(.gate == "M17-H")).status == "PENDING"
 ' >/dev/null; then
   echo "expected M17-H to become pending when naming-lock workflow misses artifact inspector step" >&2
+  exit 1
+fi
+
+mv "$tmp/.github/workflows/naming-lock.base.yml" "$tmp/.github/workflows/naming-lock.yml"
+
+cp "$tmp/.github/workflows/naming-lock.yml" "$tmp/.github/workflows/naming-lock.base.yml"
+awk '!/scripts\/test-summarize-m17-operator-handoff-readiness\.sh/' "$tmp/.github/workflows/naming-lock.base.yml" > "$tmp/.github/workflows/naming-lock.yml"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses M17 operator handoff readiness summary step" >&2
+  exit 1
+fi
+
+if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | jq -e '
+  .overall == "PENDING"
+  and (.gates[] | select(.gate == "M17-I")).status == "PENDING"
+' >/dev/null; then
+  echo "expected M17-I to become pending when naming-lock workflow misses readiness summary step" >&2
   exit 1
 fi
 
