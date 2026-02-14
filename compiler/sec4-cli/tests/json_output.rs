@@ -1863,6 +1863,10 @@ fn replay_check_mock_mode_text_reports_matched_stub_response_summary() {
         stdout.contains("replay mock stub response: status=200 truncated=false bodyKind=base64"),
         "stdout should include matched mock response summary:\n{stdout}"
     );
+    assert!(
+        stdout.contains("replay mock dependency signatures: db=- fs=-"),
+        "stdout should include deterministic empty dependency signature summary:\n{stdout}"
+    );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
@@ -1941,6 +1945,28 @@ fn replay_check_mock_mode_json_reports_dependency_match_counts() {
             .and_then(Value::as_u64)
             .expect("mockDependencyMatches.fs should be present"),
         1
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencySignatures")
+            .and_then(Value::as_object)
+            .and_then(|signatures| signatures.get("db"))
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(Value::as_str)
+            .expect("mockDependencySignatures.db[0] should be present"),
+        "users.by_id|abc123"
+    );
+    assert_eq!(
+        parsed
+            .get("mockDependencySignatures")
+            .and_then(Value::as_object)
+            .and_then(|signatures| signatures.get("fs"))
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(Value::as_str)
+            .expect("mockDependencySignatures.fs[0] should be present"),
+        "read|p1"
     );
 
     fs::remove_dir_all(&dir).expect("temp project cleanup should succeed");
@@ -2260,6 +2286,24 @@ fn replay_check_json_mode_writes_parseable_payload() {
             .and_then(Value::as_u64)
             .expect("mockDependencyMatches.db should be present"),
         0
+    );
+    assert!(
+        parsed
+            .get("mockDependencySignatures")
+            .and_then(Value::as_object)
+            .and_then(|signatures| signatures.get("db"))
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.is_empty()),
+        "mockDependencySignatures.db should be present and empty when capture has no dependencies"
+    );
+    assert!(
+        parsed
+            .get("mockDependencySignatures")
+            .and_then(Value::as_object)
+            .and_then(|signatures| signatures.get("fs"))
+            .and_then(Value::as_array)
+            .is_some_and(|items| items.is_empty()),
+        "mockDependencySignatures.fs should be present and empty when capture has no dependencies"
     );
     assert_eq!(
         parsed

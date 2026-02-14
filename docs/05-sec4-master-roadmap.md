@@ -1520,6 +1520,7 @@ M13-S1 go/no-go note:
 - Enforce deterministic capture DB/FS dependency-signature matching in mock mode with explicit `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` failures.
 - Surface deterministic mock dependency-match counts in replay text/json output (`mockDependencyMatches`).
 - Reject duplicate DB/FS dependency request signatures in capture artifacts to preserve deterministic replay matching.
+- Surface deterministic matched DB/FS dependency-signature lists in replay text/json output (`mockDependencySignatures`) and lock contract presence.
 
 ### M14-S1 tracking (live status)
 - [x] Added replay-capture sample fixture (`captures/sample-capture.json`).
@@ -1552,6 +1553,7 @@ M13-S1 go/no-go note:
 - [x] Added deterministic mock-mode capture dependency-signature matching for DB/FS with explicit `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` diagnostics.
 - [x] Added replay mock dependency-match summary output in text/json (`mockDependencyMatches`) with CLI integration coverage.
 - [x] Added duplicate-signature rejection for capture DB/FS dependency requests in replay contract checks (CLI + shell) with regression coverage.
+- [x] Added replay mock dependency-signature summary output (`mockDependencySignatures`) and locked JSON contract coverage in replay guard scripts/tests.
 
 ### Exit criteria
 - Replay-capture contract checker is deterministic and fixture-tested.
@@ -1577,6 +1579,7 @@ M13-S1 go/no-go note:
 - Replay `mock` mode fails deterministically with `REPLAY.DB_STUB_MISSING` / `REPLAY.FS_STUB_MISSING` when capture dependency signatures are not present in `stubs.db` / `stubs.fs`.
 - Replay `mock` mode JSON/text outputs include deterministic dependency-match summaries (`mockDependencyMatches`).
 - Replay capture-contract validation rejects duplicate DB/FS dependency request signatures to prevent ambiguous dependency matching.
+- Replay `mock` mode JSON/text outputs include deterministic dependency-signature lists (`mockDependencySignatures`) for matched DB/FS capture dependencies.
 
 ### Docs/book outputs
 - Chapter: "M14 Slice: Replay Capture Contract Test Harness".
@@ -1597,6 +1600,7 @@ M13-S1 go/no-go note:
 - Chapter: "M14 Slice: Replay DB/FS Stub Signature Uniqueness Enforcement".
 - Chapter: "M14 Slice: Replay Mock DB/FS Dependency Signature Match and Counts".
 - Chapter: "M14 Slice: Replay Capture Dependency Signature Uniqueness Enforcement".
+- Chapter: "M14 Slice: Replay Mock Dependency Signature Output Contract".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

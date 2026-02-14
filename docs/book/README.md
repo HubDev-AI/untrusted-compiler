@@ -346,5 +346,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `379-m14-replay-db-fs-stub-signature-uniqueness-enforcement.md`
 - `380-m14-replay-mock-db-fs-dependency-signature-match-and-counts.md`
 - `381-m14-replay-capture-dependency-signature-uniqueness-enforcement.md`
+- `382-m14-replay-mock-dependency-signature-output-contract.md`
 
 As milestones progress, chapters will be added and linked from this index.

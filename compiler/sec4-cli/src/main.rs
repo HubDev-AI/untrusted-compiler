@@ -177,6 +177,12 @@ struct ReplayMockDependencyMatches {
     fs: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ReplayMockDependencySignatures {
+    db: Vec<String>,
+    fs: Vec<String>,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -299,6 +305,7 @@ fn cmd_replay_check(
     let mut mock_request_signature: Option<String> = None;
     let mut mock_matched_stub: Option<ReplayMockNetStubMatch> = None;
     let mut mock_dependency_matches: Option<ReplayMockDependencyMatches> = None;
+    let mut mock_dependency_signatures: Option<ReplayMockDependencySignatures> = None;
 
     if capture_compiler_hash != expected_compiler_hash {
         eprintln!(
@@ -468,11 +475,17 @@ fn cmd_replay_check(
                 return Err(1);
             }
         }
+        let db_match_count = capture_db_signatures.len();
+        let fs_match_count = capture_fs_signatures.len();
         mock_request_signature = Some(signature);
         mock_matched_stub = Some(stub_match);
+        mock_dependency_signatures = Some(ReplayMockDependencySignatures {
+            db: capture_db_signatures,
+            fs: capture_fs_signatures,
+        });
         mock_dependency_matches = Some(ReplayMockDependencyMatches {
-            db: capture_db_signatures.len(),
-            fs: capture_fs_signatures.len(),
+            db: db_match_count,
+            fs: fs_match_count,
         });
     }
 
@@ -508,6 +521,19 @@ fn cmd_replay_check(
                     matches.db, matches.fs
                 );
             }
+            if let Some(signatures) = &mock_dependency_signatures {
+                let db = if signatures.db.is_empty() {
+                    "-".to_string()
+                } else {
+                    signatures.db.join(",")
+                };
+                let fs = if signatures.fs.is_empty() {
+                    "-".to_string()
+                } else {
+                    signatures.fs.join(",")
+                };
+                println!("replay mock dependency signatures: db={db} fs={fs}");
+            }
         }
         ReplayOutputFormat::Json => {
             let payload = serde_json::json!({
@@ -538,6 +564,10 @@ fn cmd_replay_check(
                 "mockDependencyMatches": mock_dependency_matches.as_ref().map(|matches| serde_json::json!({
                     "db": matches.db,
                     "fs": matches.fs,
+                })),
+                "mockDependencySignatures": mock_dependency_signatures.as_ref().map(|signatures| serde_json::json!({
+                    "db": signatures.db,
+                    "fs": signatures.fs,
                 })),
                 "stubDetails": stub_details.as_ref().map(|(db, fs)| serde_json::json!({
                     "db": {
