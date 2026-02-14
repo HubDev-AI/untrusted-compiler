@@ -165,6 +165,9 @@ Roadmap impact:
 - M16-S47 runtime-smoke checker now enforces run-log/metadata port correlation:
   - invocation logs must include exact `--port <run-metadata port>` token.
   - regression coverage includes deterministic port-mismatch failure fixture.
+- M16-S48 runtime-smoke checker now enforces run-log/metadata timeout correlation:
+  - invocation logs must include exact `--serve-timeout-ms <run-metadata serveTimeoutMs>` token.
+  - regression coverage includes deterministic timeout-mismatch failure fixture.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2964,6 +2967,27 @@ M13-S1 go/no-go note:
 - [x] Regression suite includes run-log/metadata port mismatch fixture.
 - [x] Real smoke + checker flow remains green after port-correlation hardening.
 
+### M16-S48 follow-up slice (runtime-smoke run-log timeout/metadata correlation hardening)
+#### Scope
+- Tighten run-log validation so timeout invocation tokens are correlated with metadata timeout values.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to:
+  - parse `serveTimeoutMs` from metadata
+  - require exact `--serve-timeout-ms <serveTimeoutMs>` token in both run logs
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with metadata/log timeout mismatch fixture.
+- Re-run checker regression suite and real smoke/checker flow.
+
+#### Acceptance criteria
+- Checker fails when run logs contain a timeout value different from metadata `serveTimeoutMs`.
+- Regression suite includes deterministic mismatch diagnostic.
+- Real smoke artifact flow remains green.
+
+#### Tracking (live status)
+- [x] Checker now enforces exact metadata-correlated timeout token in both run logs.
+- [x] Regression suite includes run-log/metadata timeout mismatch fixture.
+- [x] Real smoke + checker flow remains green after timeout-correlation hardening.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -3013,6 +3037,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Runtime-Smoke Health Trace-Header Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Invocation Flag Contract Hardening".
 - Chapter: "M16 Slice: Runtime-Smoke Run-Log Port/Metadata Correlation Hardening".
+- Chapter: "M16 Slice: Runtime-Smoke Run-Log Timeout/Metadata Correlation Hardening".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

@@ -96,11 +96,6 @@ if ! rg -Fq -- '--oneshot' "${artifacts_dir}/health.run.log"; then
   exit 1
 fi
 
-if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/health.run.log"; then
-  echo "health.run.log missing --serve-timeout-ms 12000 invocation token" >&2
-  exit 1
-fi
-
 if ! jq -e '.ok == true and .status == 201 and (.traceId | type == "string" and test("^rt-[0-9]+$")) and (.timeMs | type == "number") and has("data")' "${artifacts_dir}/users.body" >/dev/null; then
   echo "users.body does not match expected std-success envelope contract" >&2
   exit 1
@@ -121,11 +116,6 @@ fi
 
 if ! rg -Fq -- '--oneshot' "${artifacts_dir}/users.run.log"; then
   echo "users.run.log missing --oneshot invocation token" >&2
-  exit 1
-fi
-
-if ! rg -Fq -- '--serve-timeout-ms 12000' "${artifacts_dir}/users.run.log"; then
-  echo "users.run.log missing --serve-timeout-ms 12000 invocation token" >&2
   exit 1
 fi
 
@@ -171,6 +161,18 @@ fi
 
 if ! rg -q '^serveTimeoutMs=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing numeric serveTimeoutMs field" >&2
+  exit 1
+fi
+
+serve_timeout_ms="$(sed -n 's/^serveTimeoutMs=//p' "${artifacts_dir}/run-metadata.txt" | head -n 1)"
+
+if ! rg -Fq -- "--serve-timeout-ms ${serve_timeout_ms}" "${artifacts_dir}/health.run.log"; then
+  echo "health.run.log missing --serve-timeout-ms ${serve_timeout_ms} invocation token" >&2
+  exit 1
+fi
+
+if ! rg -Fq -- "--serve-timeout-ms ${serve_timeout_ms}" "${artifacts_dir}/users.run.log"; then
+  echo "users.run.log missing --serve-timeout-ms ${serve_timeout_ms} invocation token" >&2
   exit 1
 fi
 

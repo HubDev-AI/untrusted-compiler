@@ -218,6 +218,27 @@ if ! rg -Fq 'health.run.log missing --port 9090 invocation token' "${tmp_dir}/po
   exit 1
 fi
 
+timeout_mismatch_dir="${tmp_dir}/bad-log-timeout-mismatch"
+cp -R "${ok_dir}" "${timeout_mismatch_dir}"
+cat > "${timeout_mismatch_dir}/run-metadata.txt" <<'TXT'
+sourceProject=examples/hello-api
+workProject=/tmp/hello-api
+port=8080
+oneshot=true
+serveTimeoutMs=9000
+runFlags=--port,--oneshot,--serve-timeout-ms
+TXT
+
+if "${checker}" --artifacts-dir "${timeout_mismatch_dir}" >"${tmp_dir}/timeout-mismatch.log" 2>&1; then
+  echo "expected runtime-smoke artifacts checker to fail when run-log timeout and metadata timeout diverge" >&2
+  exit 1
+fi
+
+if ! rg -Fq 'health.run.log missing --serve-timeout-ms 9000 invocation token' "${tmp_dir}/timeout-mismatch.log"; then
+  echo "expected missing-token diagnostic for health run log metadata-correlated timeout" >&2
+  exit 1
+fi
+
 meta_bad_dir="${tmp_dir}/bad-metadata"
 cp -R "${ok_dir}" "${meta_bad_dir}"
 cat > "${meta_bad_dir}/run-metadata.txt" <<'TXT'
