@@ -132,6 +132,9 @@ Roadmap impact:
   - guard script now verifies contract failure for removed `runFlags` metadata token in addition to request-token drift.
 - M16-S35 runtime-smoke checker regression coverage now includes missing runFlags metadata:
   - checker test now has dedicated failing fixture for absent `runFlags` key.
+- M16-S37 runtime-smoke metadata checker now validates source/work project fields:
+  - checker enforces non-empty `sourceProject` and `workProject` metadata keys.
+  - regression coverage includes dedicated missing-sourceProject failure fixture.
 - M16 closure enforcement is active (`M16-A`) for runtime HTTP coverage contract + guard tests in naming-lock CI.
 - M16 operator smoke-script closure enforcement is active (`M16-B`) for naming-lock CI contract + guard checks.
 - M16 runtime-smoke workflow closure enforcement is active:
@@ -2696,6 +2699,27 @@ M13-S1 go/no-go note:
 - [x] Roadmap strict-closure table/interpreation now includes `M16-E`.
 - [x] Closure + alignment + naming/path guards remain green.
 
+### M16-S37 follow-up slice (source/work metadata checker fields)
+#### Scope
+- Expand runtime-smoke metadata validation to require source/work project provenance keys in `run-metadata.txt`.
+
+#### Build tasks
+- Extend `scripts/check-runtime-smoke-artifacts.sh` to require:
+  - `sourceProject=...`
+  - `workProject=...`
+- Extend `scripts/test-check-runtime-smoke-artifacts.sh` with a missing-sourceProject regression fixture and deterministic diagnostic assertion.
+- Re-run smoke + checker flow against real generated artifacts.
+
+#### Acceptance criteria
+- Checker fails when `sourceProject` metadata is missing.
+- Checker enforces `workProject` field presence.
+- Real smoke artifact flow remains green with expanded metadata checks.
+
+#### Tracking (live status)
+- [x] Checker now validates `sourceProject` and `workProject` metadata fields.
+- [x] Checker regression suite includes missing-sourceProject failure fixture.
+- [x] Real smoke + checker flow passes after metadata check expansion.
+
 ### Docs/book outputs
 - Chapter: "M16 Slice: Live HTTP Runtime Serve Bootstrap".
 - Chapter: "M16 Slice: JSON Response Materialization for Runtime Routes".
@@ -2734,6 +2758,7 @@ M13-S1 go/no-go note:
 - Chapter: "M16 Slice: Smoke-Script Metadata Guard Coverage Expansion".
 - Chapter: "M16 Slice: Runtime-Smoke Checker runFlags Regression Fixture".
 - Chapter: "M16 Slice: Closure Gate for sec4 run Runtime-Flag CI Contracts".
+- Chapter: "M16 Slice: Runtime-Smoke Source/Work Metadata Field Checks".
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

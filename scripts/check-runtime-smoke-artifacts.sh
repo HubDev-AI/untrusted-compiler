@@ -90,6 +90,16 @@ if ! rg -q '^port=[0-9]+$' "${artifacts_dir}/run-metadata.txt"; then
   exit 1
 fi
 
+if ! rg -q '^sourceProject=.+$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing sourceProject field" >&2
+  exit 1
+fi
+
+if ! rg -q '^workProject=.+$' "${artifacts_dir}/run-metadata.txt"; then
+  echo "run-metadata.txt missing workProject field" >&2
+  exit 1
+fi
+
 if ! rg -q '^oneshot=true$' "${artifacts_dir}/run-metadata.txt"; then
   echo "run-metadata.txt missing oneshot=true field" >&2
   exit 1
