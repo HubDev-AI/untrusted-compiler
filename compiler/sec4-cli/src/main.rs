@@ -3472,11 +3472,26 @@ fn cmd_run(
             return Err(1);
         }
     };
+    let policy = match sec4_core::policy::load_policy(path) {
+        Ok(policy) => policy,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
 
     cmd_build(path, Some(BuildEmitTarget::CBin), false, false, tls_backend)?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let mut cmd = Command::new(&binary_path);
+    cmd.env(
+        "SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS",
+        policy.net_public.allowed_domains.join(","),
+    );
+    cmd.env(
+        "SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS",
+        policy.net_public.blocked_domains.join(","),
+    );
     if let Some(port) = port {
         cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
     }

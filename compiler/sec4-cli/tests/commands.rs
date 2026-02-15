@@ -1193,6 +1193,144 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_applies_net_public_policy_env() {
+    if !clang_available() {
+        eprintln!("skipping run-command net.public policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-net-public-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runnetpublicpolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[net.public]
+allowed_schemes = ["https"]
+blocked_domains = ["blocked.example"]
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  let raw = req.query("https://blocked.example/resource");
+  url.public(raw);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command net.public policy test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command net.public policy process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command net.public policy process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"NET.URL_PUBLIC_INVALID\""),
+        "response should include deterministic URL policy code:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_fails_for_invalid_runtime_port() {
     if !clang_available() {
         eprintln!("skipping run-command invalid-port test: clang not available");

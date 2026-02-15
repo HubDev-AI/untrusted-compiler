@@ -670,6 +670,71 @@ static bool sec4_rt_host_ends_with(const char *host, size_t host_len, const char
   return strncasecmp(host + (host_len - suffix_len), suffix, suffix_len) == 0;
 }
 
+static void sec4_rt_trim_csv_token(const char **token_start, const char **token_end) {
+  while (*token_start < *token_end && isspace((unsigned char) **token_start)) {
+    *token_start += 1;
+  }
+  while (*token_end > *token_start && isspace((unsigned char) *(*token_end - 1))) {
+    *token_end -= 1;
+  }
+}
+
+static bool sec4_rt_csv_has_any_token(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+    if (token_end > token_start) {
+      return true;
+    }
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_csv_contains_token_ci(
+    const char *csv,
+    const char *candidate,
+    size_t candidate_len
+) {
+  if (csv == NULL || candidate == NULL || candidate_len == 0) {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == candidate_len
+        && strncasecmp(token_start, candidate, candidate_len) == 0) {
+      return true;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
 static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
   int octets[4] = {0, 0, 0, 0};
   int idx = 0;
@@ -1667,6 +1732,25 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   if (sec4_rt_host_is_internal(host, host_len)) {
     return false;
   }
+
+  const char *scheme = is_https ? "https" : "http";
+  const char *allowed_schemes = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES");
+  if (sec4_rt_csv_has_any_token(allowed_schemes)
+      && !sec4_rt_csv_contains_token_ci(allowed_schemes, scheme, strlen(scheme))) {
+    return false;
+  }
+
+  const char *blocked_domains = getenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS");
+  if (sec4_rt_csv_contains_token_ci(blocked_domains, host, host_len)) {
+    return false;
+  }
+
+  const char *allowed_domains = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS");
+  if (sec4_rt_csv_has_any_token(allowed_domains)
+      && !sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -4818,24 +4902,68 @@ int64_t sec4_rt_sanitize_html(int64_t input) {
 
 int64_t sec4_rt_url_public(int64_t input) {
   const char *url = sec4_rt_lookup_tracked_value(input);
-  if (url == NULL) {
-    return sec4_rt_gate_handle_from_input(input, UINT64_C(0xA0A0A));
-  }
-  if (!sec4_rt_is_public_url_valid(url)) {
+  if (url == NULL || url[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_INVALID",
+        "validation",
+        "url.public requires tracked URL input"
+    );
     return 0;
   }
-  return sec4_rt_track_string_value(url, UINT64_C(0xA0A0A));
+  if (!sec4_rt_is_public_url_valid(url)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_INVALID",
+        "validation",
+        "url.public value failed runtime public-url policy checks"
+    );
+    return 0;
+  }
+  int64_t handle = sec4_rt_track_string_value(url, UINT64_C(0xA0A0A));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.URL_PUBLIC_INTERNAL",
+        "internal",
+        "url.public runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_url_internal(int64_t input) {
   const char *url = sec4_rt_lookup_tracked_value(input);
-  if (url == NULL) {
-    return sec4_rt_gate_handle_from_input(input, UINT64_C(0xB0B0B));
-  }
-  if (!sec4_rt_is_internal_url_valid(url)) {
+  if (url == NULL || url[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_INVALID",
+        "validation",
+        "url.internal requires tracked URL input"
+    );
     return 0;
   }
-  return sec4_rt_track_string_value(url, UINT64_C(0xB0B0B));
+  if (!sec4_rt_is_internal_url_valid(url)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_INVALID",
+        "validation",
+        "url.internal value failed runtime internal-url policy checks"
+    );
+    return 0;
+  }
+  int64_t handle = sec4_rt_track_string_value(url, UINT64_C(0xB0B0B));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.URL_INTERNAL_INTERNAL",
+        "internal",
+        "url.internal runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_path_under(int64_t base, int64_t input) {
