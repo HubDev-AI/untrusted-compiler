@@ -5244,6 +5244,70 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn c_bin_runtime_path_and_header_guards_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime path/header guard test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-path-header-guards");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-path-header-guards");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  if (sec4_rt_headers_name("X-Test") == 0) { return 11; }
+  if (sec4_rt_headers_name("") != 0) { return 12; }
+  if (sec4_rt_headers_value("ok") == 0) { return 13; }
+  if (sec4_rt_headers_value("") != 0) { return 14; }
+  if (sec4_rt_path_base("/tmp/base") == 0) { return 15; }
+  if (sec4_rt_path_base("tmp/base") != 0) { return 16; }
+  if (sec4_rt_path_base("/tmp/../base") != 0) { return 17; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime path/header guard harness should exit successfully"
+    );
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");

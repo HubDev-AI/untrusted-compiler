@@ -229,6 +229,49 @@ static int64_t sec4_rt_gate_handle_from_string(const char *input, uint64_t salt)
   return sec4_rt_hash_token(token, salt);
 }
 
+static bool sec4_rt_is_header_name_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  while (*value != '\0') {
+    unsigned char ch = (unsigned char) *value;
+    if (!(isalnum(ch) || ch == '-')) {
+      return false;
+    }
+    value += 1;
+  }
+  return true;
+}
+
+static bool sec4_rt_is_header_value_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  while (*value != '\0') {
+    if (*value == '\r' || *value == '\n') {
+      return false;
+    }
+    value += 1;
+  }
+  return true;
+}
+
+static bool sec4_rt_is_path_base_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  if (value[0] != '/') {
+    return false;
+  }
+  if (strstr(value, "..") != NULL) {
+    return false;
+  }
+  if (strchr(value, '\r') != NULL || strchr(value, '\n') != NULL) {
+    return false;
+  }
+  return true;
+}
+
 static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
   if (body == NULL || body_len == 0) {
     return false;
@@ -1322,14 +1365,23 @@ int64_t sec4_rt_path_under(int64_t base, int64_t input) {
 }
 
 int64_t sec4_rt_path_base(const char *input) {
+  if (!sec4_rt_is_path_base_valid(input)) {
+    return 0;
+  }
   return sec4_rt_gate_handle_from_string(input, UINT64_C(0xD0D0D));
 }
 
 int64_t sec4_rt_headers_name(const char *input) {
+  if (!sec4_rt_is_header_name_valid(input)) {
+    return 0;
+  }
   return sec4_rt_gate_handle_from_string(input, UINT64_C(0xE0E0E));
 }
 
 int64_t sec4_rt_headers_value(const char *input) {
+  if (!sec4_rt_is_header_value_valid(input)) {
+    return 0;
+  }
   return sec4_rt_gate_handle_from_string(input, UINT64_C(0xF0F0F));
 }
 

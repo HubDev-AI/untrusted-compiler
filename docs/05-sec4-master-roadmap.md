@@ -5050,7 +5050,8 @@ M13-S1 go/no-go note:
 ### M32 post-closure runtime slices (execution log)
 - [x] `M32-R1`: runtime gate handle de-stub across request/gate helpers + `c-bin` runtime behavior test (`65b8001`).
 - [x] `M32-R2`: runtime ABI prototype alignment for req/json/res signatures in `sec4_runtime.h` with synchronized C backend runtime-asset expectations.
-- [ ] `M32-R3`: real content-level runtime validation for headers/paths/URLs (beyond token handles) with deterministic fixture coverage.
+- [x] `M32-R3`: content-level runtime guards for `headers.name`, `headers.value`, and `path.base` with deterministic C harness coverage.
+- [ ] `M32-R4`: URL content-level runtime validation (`url.public`/`url.internal`) once runtime payload model carries inspectable URL strings.
 
 ### Next planned slice
 - M33-S1 kickoff brief + closure gate `M33-A`.
