@@ -490,6 +490,9 @@ jobs:
       - name: Validate M36 priority matrix
         run: scripts/test-build-m36-priority-matrix.sh
 
+      - name: Validate M36 runtime de-stub planner
+        run: scripts/test-plan-m36-runtime-destub.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

@@ -489,6 +489,7 @@ Current strict closure result:
 | `M35-G` | PASS | Naming-lock CI enforces M35 closure report | `.github/workflows/naming-lock.yml` |
 | `M36-A` | PASS | Naming-lock CI enforces M36 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M36-B` | PASS | Naming-lock CI enforces M36 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M36-C` | PASS | Naming-lock CI enforces M36 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -647,6 +648,7 @@ Strict closure interpretation:
 - M35 closure report enforcement is active (`M35-G`).
 - M36 kickoff brief enforcement is active (`M36-A`).
 - M36 priority matrix enforcement is active (`M36-B`).
+- M36 runtime de-stub planner enforcement is active (`M36-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5443,8 +5445,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M36-S3 runtime-first de-stub plan from kickoff + priority matrix and wire `M36-C`.
-2. Run full strict closure audit and publish M36-S3 status after `M36-C`.
+1. Implement M36-S4 runtime-first de-stub execution runner from the finalized plan and wire `M36-D`.
+2. Run full strict closure audit and publish M36-S4 status after `M36-D`.
 
 ---
 
