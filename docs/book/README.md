@@ -531,5 +531,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `564-m30-runtime-destub-plan.md`
 - `565-m30-runtime-destub-runner.md`
 - `566-m30-executed-slice-convergence-summary.md`
+- `567-m30-transition-handoff-packet.md`
 
 As milestones progress, chapters will be added and linked from this index.
