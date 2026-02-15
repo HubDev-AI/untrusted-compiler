@@ -735,7 +735,11 @@ static bool sec4_rt_csv_contains_token_ci(
   return false;
 }
 
-static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
+static bool sec4_rt_parse_ipv4_octets(const char *host, size_t host_len, uint8_t out[4]) {
+  if (host == NULL || out == NULL || host_len == 0) {
+    return false;
+  }
+
   int octets[4] = {0, 0, 0, 0};
   int idx = 0;
   int value = 0;
@@ -765,8 +769,122 @@ static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
   }
   octets[3] = value;
 
-  int a = octets[0];
-  int b = octets[1];
+  for (size_t i = 0; i < 4; i++) {
+    out[i] = (uint8_t) octets[i];
+  }
+  return true;
+}
+
+static uint32_t sec4_rt_ipv4_octets_to_u32(const uint8_t octets[4]) {
+  return ((uint32_t) octets[0] << 24)
+      | ((uint32_t) octets[1] << 16)
+      | ((uint32_t) octets[2] << 8)
+      | ((uint32_t) octets[3]);
+}
+
+static bool sec4_rt_parse_ipv4_cidr_token(
+    const char *token_start,
+    const char *token_end,
+    uint32_t *network_out,
+    uint32_t *mask_out
+) {
+  if (token_start == NULL || token_end == NULL || token_end <= token_start
+      || network_out == NULL || mask_out == NULL) {
+    return false;
+  }
+
+  const char *slash = NULL;
+  for (const char *cursor = token_start; cursor < token_end; cursor++) {
+    if (*cursor == '/') {
+      if (slash != NULL) {
+        return false;
+      }
+      slash = cursor;
+    }
+  }
+  if (slash == NULL || slash == token_start || slash + 1 >= token_end) {
+    return false;
+  }
+
+  uint8_t cidr_octets[4];
+  if (!sec4_rt_parse_ipv4_octets(token_start, (size_t) (slash - token_start), cidr_octets)) {
+    return false;
+  }
+
+  uint32_t prefix = 0;
+  for (const char *cursor = slash + 1; cursor < token_end; cursor++) {
+    if (!isdigit((unsigned char) *cursor)) {
+      return false;
+    }
+    prefix = (prefix * 10U) + (uint32_t) (*cursor - '0');
+    if (prefix > 32U) {
+      return false;
+    }
+  }
+
+  uint32_t mask = 0;
+  if (prefix == 0U) {
+    mask = 0U;
+  } else if (prefix == 32U) {
+    mask = UINT32_MAX;
+  } else {
+    mask = UINT32_MAX << (32U - prefix);
+  }
+
+  *mask_out = mask;
+  *network_out = sec4_rt_ipv4_octets_to_u32(cidr_octets) & mask;
+  return true;
+}
+
+static bool sec4_rt_csv_contains_ipv4_cidr_match(
+    const char *csv,
+    const char *host,
+    size_t host_len
+) {
+  if (csv == NULL || host == NULL || host_len == 0) {
+    return false;
+  }
+
+  uint8_t host_octets[4];
+  if (!sec4_rt_parse_ipv4_octets(host, host_len, host_octets)) {
+    return false;
+  }
+  uint32_t host_ip = sec4_rt_ipv4_octets_to_u32(host_octets);
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end > token_start) {
+      uint32_t network = 0;
+      uint32_t mask = 0;
+      if (sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask)
+          && ((host_ip & mask) == network)) {
+        return true;
+      }
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
+  uint8_t octets[4];
+  if (!sec4_rt_parse_ipv4_octets(host, host_len, octets)) {
+    return false;
+  }
+
+  int a = (int) octets[0];
+  int b = (int) octets[1];
   if (a == 10 || a == 127) {
     return true;
   }
@@ -1770,8 +1888,14 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
   }
 
   const char *allowed_domains = getenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS");
-  if (sec4_rt_csv_has_any_token(allowed_domains)
-      && !sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len)) {
+  const char *allowed_cidrs = getenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS");
+  bool has_allowed_domains = sec4_rt_csv_has_any_token(allowed_domains);
+  bool has_allowed_cidrs = sec4_rt_csv_has_any_token(allowed_cidrs);
+  bool domains_match =
+      has_allowed_domains && sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len);
+  bool cidrs_match = has_allowed_cidrs
+      && sec4_rt_csv_contains_ipv4_cidr_match(allowed_cidrs, host, host_len);
+  if ((has_allowed_domains || has_allowed_cidrs) && !(domains_match || cidrs_match)) {
     return false;
   }
 

@@ -5880,6 +5880,76 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal cidr test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-cidr-policy");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-cidr-policy");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "internal.service", 1);
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8", 1);
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service")) == 0) { return 11; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://10.0.0.5/service")) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_INVALID\"") == NULL) { return 13; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://internal.service/path")) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_INVALID\"") == NULL) { return 15; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal cidr harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal cidr harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");

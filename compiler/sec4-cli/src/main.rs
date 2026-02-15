@@ -3504,6 +3504,10 @@ fn cmd_run(
         "SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS",
         policy.net_internal.allowed_domains.join(","),
     );
+    cmd.env(
+        "SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS",
+        policy.net_internal.allowed_cidrs.join(","),
+    );
     if let Some(port) = port {
         cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
     }
