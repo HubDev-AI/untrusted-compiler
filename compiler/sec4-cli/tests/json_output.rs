@@ -5401,6 +5401,8 @@ fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_availa
     let project_dir = temp_dir("sec4-runtime-c-db-fs-net-handles");
     let harness_path = project_dir.join("harness.c");
     let binary_path = project_dir.join("runtime-db-fs-net-handles");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
 
     let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -5441,25 +5443,31 @@ int main(void) {
   if (row_a == row_b) { return 22; }
   if (sec4_rt_db_query_one(0, query_a, 501) != 0) { return 23; }
 
-  int64_t fs_read_a = sec4_rt_fs_read(7, 2001);
-  int64_t fs_read_b = sec4_rt_fs_read(7, 2002);
-  if (fs_read_a == 0 || fs_read_b == 0) { return 24; }
-  if (fs_read_a == fs_read_b) { return 25; }
-  if (sec4_rt_fs_read(0, 2001) != 0) { return 26; }
+  int64_t fs_path_a = sec4_rt_req_query("db-fs-net/a.txt");
+  int64_t fs_path_b = sec4_rt_req_query("db-fs-net/b.txt");
+  int64_t fs_value_a = sec4_rt_req_query("alpha");
+  int64_t fs_value_b = sec4_rt_req_query("beta");
+  if (fs_path_a == 0 || fs_path_b == 0 || fs_value_a == 0 || fs_value_b == 0) { return 24; }
 
-  int64_t fs_write_a = sec4_rt_fs_write(7, 2001, 1);
-  int64_t fs_write_b = sec4_rt_fs_write(7, 2001, 2);
-  if (fs_write_a == 0 || fs_write_b == 0) { return 27; }
-  if (fs_write_a == fs_write_b) { return 28; }
-  if (sec4_rt_fs_write(0, 2001, 1) != 0) { return 29; }
+  int64_t fs_write_a = sec4_rt_fs_write(7, fs_path_a, fs_value_a);
+  int64_t fs_write_b = sec4_rt_fs_write(7, fs_path_b, fs_value_b);
+  if (fs_write_a == 0 || fs_write_b == 0) { return 25; }
+  if (fs_write_a == fs_write_b) { return 26; }
+
+  int64_t fs_read_a = sec4_rt_fs_read(7, fs_path_a);
+  int64_t fs_read_b = sec4_rt_fs_read(7, fs_path_b);
+  if (fs_read_a == 0 || fs_read_b == 0) { return 27; }
+  if (fs_read_a == fs_read_b) { return 28; }
+  if (sec4_rt_fs_read(0, fs_path_a) != 0) { return 29; }
+  if (sec4_rt_fs_read(7, 2001) != 0) { return 30; }
 
   int64_t public_url_a = sec4_rt_req_query("https://public-a.example/path");
   int64_t public_url_b = sec4_rt_req_query("https://public-b.example/path");
   int64_t net_a = sec4_rt_http_get(3, public_url_a);
   int64_t net_b = sec4_rt_http_get(3, public_url_b);
-  if (net_a == 0 || net_b == 0) { return 30; }
-  if (net_a == net_b) { return 31; }
-  if (sec4_rt_http_get(0, public_url_a) != 0) { return 32; }
+  if (net_a == 0 || net_b == 0) { return 31; }
+  if (net_a == net_b) { return 32; }
+  if (sec4_rt_http_get(0, public_url_a) != 0) { return 33; }
 
   return 0;
 }
@@ -5486,11 +5494,197 @@ int main(void) {
     assert!(binary_path.exists(), "compiled binary should exist");
 
     let run = Command::new(&binary_path)
+        .env("SEC4_RT_FS_BASE", &fs_base)
         .output()
         .expect("compiled binary should run");
     assert!(
         run.status.success(),
         "runtime db/fs/net harness should exit successfully"
+    );
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("db-fs-net").join("a.txt"))
+            .expect("first fs file should be readable"),
+        "alpha"
+    );
+    assert_eq!(
+        fs::read_to_string(fs_base.join("db-fs-net").join("b.txt"))
+            .expect("second fs file should be readable"),
+        "beta"
+    );
+}
+
+#[test]
+fn c_bin_runtime_fs_write_read_roundtrip_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime fs roundtrip test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-fs-roundtrip");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-fs-roundtrip");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t path = sec4_rt_req_query("nested/roundtrip.txt");
+  int64_t mirror = sec4_rt_req_query("nested/mirror.txt");
+  int64_t value = sec4_rt_req_query("hello-runtime-fs");
+  if (path == 0 || mirror == 0 || value == 0) { return 11; }
+
+  if (sec4_rt_fs_write(7, path, value) == 0) { return 12; }
+  int64_t read_handle = sec4_rt_fs_read(7, path);
+  if (read_handle == 0) { return 13; }
+  if (sec4_rt_fs_write(7, mirror, read_handle) == 0) { return 14; }
+  int64_t mirror_handle = sec4_rt_fs_read(7, mirror);
+  if (mirror_handle == 0) { return 15; }
+  if (mirror_handle != read_handle) { return 16; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime fs roundtrip harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime fs roundtrip harness should exit successfully"
+    );
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("nested").join("roundtrip.txt"))
+            .expect("roundtrip file should be readable"),
+        "hello-runtime-fs"
+    );
+    assert_eq!(
+        fs::read_to_string(fs_base.join("nested").join("mirror.txt"))
+            .expect("mirror file should be readable"),
+        "hello-runtime-fs"
+    );
+}
+
+#[test]
+fn c_bin_runtime_fs_traversal_and_out_of_base_are_denied_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime fs deny test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-fs-deny");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-fs-deny");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+    let outside_path = project_dir.join("outside-target.txt");
+    let outside_path_rendered = outside_path.to_string_lossy();
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    let harness_source = format!(
+        r#"#include "sec4_runtime.h"
+
+int main(void) {{
+  int64_t traversal = sec4_rt_req_query("../escape.txt");
+  int64_t outside = sec4_rt_req_query("{outside_path}");
+  int64_t safe = sec4_rt_req_query("safe/inside.txt");
+  int64_t value = sec4_rt_req_query("deny-check");
+  if (traversal == 0 || outside == 0 || safe == 0 || value == 0) {{ return 11; }}
+
+  if (sec4_rt_fs_write(7, safe, value) == 0) {{ return 12; }}
+  if (sec4_rt_fs_read(7, safe) == 0) {{ return 13; }}
+
+  if (sec4_rt_fs_write(7, traversal, value) != 0) {{ return 14; }}
+  if (sec4_rt_fs_read(7, traversal) != 0) {{ return 15; }}
+  if (sec4_rt_fs_write(7, outside, value) != 0) {{ return 16; }}
+  if (sec4_rt_fs_read(7, outside) != 0) {{ return 17; }}
+
+  return 0;
+}}
+"#,
+        outside_path = outside_path_rendered
+    );
+    fs::write(&harness_path, harness_source).expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime fs deny harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime fs deny harness should exit successfully"
+    );
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("safe").join("inside.txt"))
+            .expect("safe file should be readable"),
+        "deny-check"
+    );
+    assert!(
+        !outside_path.exists(),
+        "outside file should not be written outside fs base"
+    );
+    assert!(
+        !project_dir.join("escape.txt").exists(),
+        "traversal path should not materialize outside fs base"
     );
 }
 

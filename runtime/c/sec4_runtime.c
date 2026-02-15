@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -19,6 +20,7 @@
 #define SEC4_RT_MAX_PATH_BYTES 256
 #define SEC4_RT_MAX_TRACKED_VALUES 256
 #define SEC4_RT_MAX_TRACKED_VALUE_BYTES 1024
+#define SEC4_RT_MAX_FS_PATH_BYTES 4096
 #define SEC4_RT_MAX_RESPONSE_BYTES 4096
 #define SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES 2048
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
@@ -77,6 +79,13 @@ typedef struct {
   int64_t handle;
   char value[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
 } sec4_rt_tracked_value;
+
+typedef enum {
+  SEC4_RT_FS_RESULT_OK = 0,
+  SEC4_RT_FS_RESULT_INVALID = 1,
+  SEC4_RT_FS_RESULT_OUT_OF_BASE = 2,
+  SEC4_RT_FS_RESULT_IO = 3
+} sec4_rt_fs_result;
 
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
@@ -257,12 +266,23 @@ static int64_t sec4_rt_gate_handle_from_string(const char *input, uint64_t salt)
   return sec4_rt_hash_token(token, salt);
 }
 
-static int64_t sec4_rt_track_string_value(const char *value, uint64_t salt) {
-  if (value == NULL || value[0] == '\0') {
+static int64_t sec4_rt_track_sized_value(
+    const char *value,
+    size_t value_len,
+    uint64_t salt
+) {
+  if (value == NULL || value_len >= SEC4_RT_MAX_TRACKED_VALUE_BYTES) {
     return 0;
   }
 
-  int64_t handle = sec4_rt_gate_handle_from_string(value, salt);
+  uint64_t token = UINT64_C(1469598103934665603);
+  for (size_t i = 0; i < value_len; i++) {
+    token ^= (uint64_t) (unsigned char) value[i];
+    token *= UINT64_C(1099511628211);
+  }
+  token ^= (uint64_t) value_len;
+
+  int64_t handle = sec4_rt_hash_token(token, salt);
   if (handle == 0) {
     return 0;
   }
@@ -277,7 +297,9 @@ static int64_t sec4_rt_track_string_value(const char *value, uint64_t salt) {
       continue;
     }
 
-    if (slot->handle == handle && strcmp(slot->value, value) == 0) {
+    if (slot->handle == handle
+        && strlen(slot->value) == value_len
+        && memcmp(slot->value, value, value_len) == 0) {
       return handle;
     }
   }
@@ -288,9 +310,19 @@ static int64_t sec4_rt_track_string_value(const char *value, uint64_t salt) {
   sec4_rt_tracked_value *slot = &g_sec4_rt_tracked_values[target];
   slot->active = true;
   slot->handle = handle;
-  strncpy(slot->value, value, sizeof(slot->value) - 1);
-  slot->value[sizeof(slot->value) - 1] = '\0';
+  if (value_len > 0) {
+    memcpy(slot->value, value, value_len);
+  }
+  slot->value[value_len] = '\0';
   return handle;
+}
+
+static int64_t sec4_rt_track_string_value(const char *value, uint64_t salt) {
+  if (value == NULL || value[0] == '\0') {
+    return 0;
+  }
+
+  return sec4_rt_track_sized_value(value, strlen(value), salt);
 }
 
 static const char *sec4_rt_lookup_tracked_value(int64_t handle) {
@@ -2044,6 +2076,220 @@ int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema) {
   return sec4_rt_handle_from_three(db, query, row_schema, UINT64_C(0x18186));
 }
 
+static bool sec4_rt_fs_path_has_traversal(const char *path) {
+  if (path == NULL) {
+    return false;
+  }
+  const char *cursor = path;
+  while (*cursor != '\0') {
+    if (cursor[0] == '.'
+        && cursor[1] == '.'
+        && (cursor == path || cursor[-1] == '/')
+        && (cursor[2] == '\0' || cursor[2] == '/')) {
+      return true;
+    }
+    cursor += 1;
+  }
+  return false;
+}
+
+static bool sec4_rt_fs_path_within_base(const char *base_root, const char *path) {
+  if (base_root == NULL || path == NULL || base_root[0] == '\0' || path[0] == '\0') {
+    return false;
+  }
+  if (strcmp(base_root, "/") == 0) {
+    return path[0] == '/';
+  }
+
+  size_t base_len = strlen(base_root);
+  if (strncmp(base_root, path, base_len) != 0) {
+    return false;
+  }
+  return path[base_len] == '\0' || path[base_len] == '/';
+}
+
+static bool sec4_rt_fs_mkdirs(const char *path) {
+  if (path == NULL || path[0] == '\0') {
+    return false;
+  }
+
+  if (strcmp(path, "/") == 0) {
+    return true;
+  }
+
+  char mutable_path[SEC4_RT_MAX_FS_PATH_BYTES];
+  strncpy(mutable_path, path, sizeof(mutable_path) - 1);
+  mutable_path[sizeof(mutable_path) - 1] = '\0';
+  if (mutable_path[0] == '\0') {
+    return false;
+  }
+
+  for (char *cursor = mutable_path + 1; *cursor != '\0'; cursor++) {
+    if (*cursor != '/') {
+      continue;
+    }
+    *cursor = '\0';
+    if (mutable_path[0] != '\0' && mkdir(mutable_path, 0755) != 0 && errno != EEXIST) {
+      return false;
+    }
+    *cursor = '/';
+  }
+
+  if (mkdir(mutable_path, 0755) != 0 && errno != EEXIST) {
+    return false;
+  }
+  return true;
+}
+
+static sec4_rt_fs_result sec4_rt_fs_resolve_base_root(
+    char *base_root,
+    size_t base_root_size,
+    bool allow_create
+) {
+  if (base_root == NULL || base_root_size == 0) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+
+  char configured[SEC4_RT_MAX_FS_PATH_BYTES];
+  const char *raw_base = getenv("SEC4_RT_FS_BASE");
+  if (raw_base == NULL || raw_base[0] == '\0') {
+    if (getcwd(configured, sizeof(configured)) == NULL) {
+      return SEC4_RT_FS_RESULT_IO;
+    }
+  } else if (raw_base[0] == '/') {
+    if (strlen(raw_base) >= sizeof(configured)) {
+      return SEC4_RT_FS_RESULT_INVALID;
+    }
+    strncpy(configured, raw_base, sizeof(configured) - 1);
+    configured[sizeof(configured) - 1] = '\0';
+  } else {
+    char cwd[SEC4_RT_MAX_FS_PATH_BYTES];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+      return SEC4_RT_FS_RESULT_IO;
+    }
+    int written = snprintf(configured, sizeof(configured), "%s/%s", cwd, raw_base);
+    if (written <= 0 || (size_t) written >= sizeof(configured)) {
+      return SEC4_RT_FS_RESULT_INVALID;
+    }
+  }
+
+  if (strchr(configured, '\r') != NULL || strchr(configured, '\n') != NULL) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+
+  char resolved[SEC4_RT_MAX_FS_PATH_BYTES];
+  if (realpath(configured, resolved) == NULL) {
+    if (allow_create && errno == ENOENT) {
+      if (!sec4_rt_fs_mkdirs(configured)) {
+        return SEC4_RT_FS_RESULT_IO;
+      }
+      if (realpath(configured, resolved) == NULL) {
+        return SEC4_RT_FS_RESULT_IO;
+      }
+    } else {
+      return SEC4_RT_FS_RESULT_IO;
+    }
+  }
+
+  if (resolved[0] != '/') {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+
+  strncpy(base_root, resolved, base_root_size - 1);
+  base_root[base_root_size - 1] = '\0';
+  return SEC4_RT_FS_RESULT_OK;
+}
+
+static sec4_rt_fs_result sec4_rt_fs_resolve_target_path(
+    const char *base_root,
+    const char *raw_path,
+    bool for_write,
+    char *resolved_path,
+    size_t resolved_path_size
+) {
+  if (base_root == NULL || raw_path == NULL || resolved_path == NULL || resolved_path_size == 0) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+  if (raw_path[0] == '\0' || strchr(raw_path, '\r') != NULL || strchr(raw_path, '\n') != NULL) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+  if (sec4_rt_fs_path_has_traversal(raw_path)) {
+    return SEC4_RT_FS_RESULT_OUT_OF_BASE;
+  }
+
+  char candidate[SEC4_RT_MAX_FS_PATH_BYTES];
+  if (raw_path[0] == '/') {
+    if (!sec4_rt_fs_path_within_base(base_root, raw_path)) {
+      return SEC4_RT_FS_RESULT_OUT_OF_BASE;
+    }
+    if (strlen(raw_path) >= sizeof(candidate)) {
+      return SEC4_RT_FS_RESULT_INVALID;
+    }
+    strncpy(candidate, raw_path, sizeof(candidate) - 1);
+    candidate[sizeof(candidate) - 1] = '\0';
+  } else {
+    int written = snprintf(candidate, sizeof(candidate), "%s/%s", base_root, raw_path);
+    if (written <= 0 || (size_t) written >= sizeof(candidate)) {
+      return SEC4_RT_FS_RESULT_INVALID;
+    }
+  }
+
+  if (!for_write) {
+    if (realpath(candidate, resolved_path) == NULL) {
+      return SEC4_RT_FS_RESULT_IO;
+    }
+    if (!sec4_rt_fs_path_within_base(base_root, resolved_path)) {
+      return SEC4_RT_FS_RESULT_OUT_OF_BASE;
+    }
+    return SEC4_RT_FS_RESULT_OK;
+  }
+
+  char parent_candidate[SEC4_RT_MAX_FS_PATH_BYTES];
+  strncpy(parent_candidate, candidate, sizeof(parent_candidate) - 1);
+  parent_candidate[sizeof(parent_candidate) - 1] = '\0';
+  char *slash = strrchr(parent_candidate, '/');
+  if (slash == NULL) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+
+  const char *leaf = slash + 1;
+  if (leaf[0] == '\0' || strcmp(leaf, ".") == 0 || strcmp(leaf, "..") == 0) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+
+  if (slash == parent_candidate) {
+    parent_candidate[1] = '\0';
+  } else {
+    *slash = '\0';
+  }
+
+  if (!sec4_rt_fs_path_within_base(base_root, parent_candidate)) {
+    return SEC4_RT_FS_RESULT_OUT_OF_BASE;
+  }
+  if (!sec4_rt_fs_mkdirs(parent_candidate)) {
+    return SEC4_RT_FS_RESULT_IO;
+  }
+
+  char resolved_parent[SEC4_RT_MAX_FS_PATH_BYTES];
+  if (realpath(parent_candidate, resolved_parent) == NULL) {
+    return SEC4_RT_FS_RESULT_IO;
+  }
+  if (!sec4_rt_fs_path_within_base(base_root, resolved_parent)) {
+    return SEC4_RT_FS_RESULT_OUT_OF_BASE;
+  }
+
+  int written = 0;
+  if (strcmp(resolved_parent, "/") == 0) {
+    written = snprintf(resolved_path, resolved_path_size, "/%s", leaf);
+  } else {
+    written = snprintf(resolved_path, resolved_path_size, "%s/%s", resolved_parent, leaf);
+  }
+  if (written <= 0 || (size_t) written >= resolved_path_size) {
+    return SEC4_RT_FS_RESULT_INVALID;
+  }
+  return SEC4_RT_FS_RESULT_OK;
+}
+
 int64_t sec4_rt_fs_read(int64_t fs, int64_t path) {
   if (fs == 0 || path == 0) {
     sec4_rt_store_std_error_response(
@@ -2055,16 +2301,254 @@ int64_t sec4_rt_fs_read(int64_t fs, int64_t path) {
     return 0;
   }
 
-  return sec4_rt_handle_from_two(fs, path, UINT64_C(0x18187));
+  const char *path_value = sec4_rt_lookup_tracked_value(path);
+  if (path_value == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.READ_PATH_INVALID",
+        "validation",
+        "fs.read path handle must be tracked"
+    );
+    return 0;
+  }
+
+  char base_root[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_fs_result base_result =
+      sec4_rt_fs_resolve_base_root(base_root, sizeof(base_root), false);
+  if (base_result == SEC4_RT_FS_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.READ_BASE_INVALID",
+        "validation",
+        "fs.read runtime base path is invalid"
+    );
+    return 0;
+  }
+  if (base_result == SEC4_RT_FS_RESULT_IO) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.READ_IO",
+        "internal",
+        "fs.read runtime io failure"
+    );
+    return 0;
+  }
+
+  char resolved_path[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_fs_result path_result = sec4_rt_fs_resolve_target_path(
+      base_root,
+      path_value,
+      false,
+      resolved_path,
+      sizeof(resolved_path)
+  );
+  if (path_result == SEC4_RT_FS_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.READ_PATH_INVALID",
+        "validation",
+        "fs.read path is invalid"
+    );
+    return 0;
+  }
+  if (path_result == SEC4_RT_FS_RESULT_OUT_OF_BASE) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.READ_PATH_DENIED",
+        "validation",
+        "fs.read path is outside runtime base"
+    );
+    return 0;
+  }
+  if (path_result == SEC4_RT_FS_RESULT_IO) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.READ_IO",
+        "internal",
+        "fs.read runtime io failure"
+    );
+    return 0;
+  }
+
+  FILE *file = fopen(resolved_path, "rb");
+  if (file == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.READ_IO",
+        "internal",
+        "fs.read runtime io failure"
+    );
+    return 0;
+  }
+
+  char buffer[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t total_read = 0;
+  while (total_read < sizeof(buffer) - 1) {
+    size_t chunk_size = (sizeof(buffer) - 1) - total_read;
+    size_t bytes = fread(buffer + total_read, 1, chunk_size, file);
+    total_read += bytes;
+    if (bytes == 0) {
+      break;
+    }
+  }
+
+  bool io_failed = ferror(file) != 0;
+  bool too_large = false;
+  if (!io_failed && !feof(file)) {
+    int extra = fgetc(file);
+    if (extra != EOF) {
+      too_large = true;
+    }
+  }
+
+  if (fclose(file) != 0) {
+    io_failed = true;
+  }
+
+  if (io_failed || too_large) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.READ_IO",
+        "internal",
+        "fs.read runtime io failure"
+    );
+    return 0;
+  }
+
+  buffer[total_read] = '\0';
+  int64_t value_handle = sec4_rt_track_sized_value(buffer, total_read, UINT64_C(0x18187));
+  if (value_handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.READ_IO",
+        "internal",
+        "fs.read runtime io failure"
+    );
+    return 0;
+  }
+
+  return value_handle;
 }
 
 int64_t sec4_rt_fs_write(int64_t fs, int64_t path, int64_t value) {
-  if (fs == 0 || path == 0) {
+  if (fs == 0 || path == 0 || value == 0) {
     sec4_rt_store_std_error_response(
         400,
         "FS.WRITE_INVALID",
         "validation",
-        "fs.write requires fs capability and path handles"
+        "fs.write requires fs capability, path handle, and value handle"
+    );
+    return 0;
+  }
+
+  const char *path_value = sec4_rt_lookup_tracked_value(path);
+  if (path_value == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_PATH_INVALID",
+        "validation",
+        "fs.write path handle must be tracked"
+    );
+    return 0;
+  }
+
+  const char *value_bytes = sec4_rt_lookup_tracked_value(value);
+  if (value_bytes == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_VALUE_INVALID",
+        "validation",
+        "fs.write value handle must be tracked"
+    );
+    return 0;
+  }
+
+  char base_root[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_fs_result base_result =
+      sec4_rt_fs_resolve_base_root(base_root, sizeof(base_root), true);
+  if (base_result == SEC4_RT_FS_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_BASE_INVALID",
+        "validation",
+        "fs.write runtime base path is invalid"
+    );
+    return 0;
+  }
+  if (base_result == SEC4_RT_FS_RESULT_IO) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.WRITE_IO",
+        "internal",
+        "fs.write runtime io failure"
+    );
+    return 0;
+  }
+
+  char resolved_path[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_fs_result path_result = sec4_rt_fs_resolve_target_path(
+      base_root,
+      path_value,
+      true,
+      resolved_path,
+      sizeof(resolved_path)
+  );
+  if (path_result == SEC4_RT_FS_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_PATH_INVALID",
+        "validation",
+        "fs.write path is invalid"
+    );
+    return 0;
+  }
+  if (path_result == SEC4_RT_FS_RESULT_OUT_OF_BASE) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_PATH_DENIED",
+        "validation",
+        "fs.write path is outside runtime base"
+    );
+    return 0;
+  }
+  if (path_result == SEC4_RT_FS_RESULT_IO) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.WRITE_IO",
+        "internal",
+        "fs.write runtime io failure"
+    );
+    return 0;
+  }
+
+  FILE *file = fopen(resolved_path, "wb");
+  if (file == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.WRITE_IO",
+        "internal",
+        "fs.write runtime io failure"
+    );
+    return 0;
+  }
+
+  size_t value_len = strlen(value_bytes);
+  bool io_failed = false;
+  if (value_len > 0) {
+    size_t bytes_written = fwrite(value_bytes, 1, value_len, file);
+    if (bytes_written != value_len) {
+      io_failed = true;
+    }
+  }
+  if (fclose(file) != 0) {
+    io_failed = true;
+  }
+  if (io_failed) {
+    sec4_rt_store_std_error_response(
+        500,
+        "FS.WRITE_IO",
+        "internal",
+        "fs.write runtime io failure"
     );
     return 0;
   }
