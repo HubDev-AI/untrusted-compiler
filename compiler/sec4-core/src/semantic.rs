@@ -1911,6 +1911,7 @@ impl<'a> Analyzer<'a> {
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_net_internal_policy_gate(callee_name, span.clone());
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_fs_policy_gate(callee_name, span.clone());
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_reveal_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -3644,6 +3645,22 @@ impl<'a> Analyzer<'a> {
                 )),
             );
         }
+    }
+
+    fn enforce_fs_policy_gate(&mut self, callee_name: &str, span: Span) {
+        if !is_fs_sink(callee_name) || self.policy.fs.enabled {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("E2002", "filesystem is disabled by active policy", span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(
+                    "filesystem calls are blocked because `[fs].enabled` is `false` in the active policy",
+                )
+                .with_note("enable filesystem in `sec4.policy`:\n[fs]\nenabled = true"),
+        );
     }
 
     fn enforce_secret_source_call_shapes(
