@@ -366,6 +366,210 @@ fn main() -> Int {
 }
 
 #[test]
+fn check_fails_when_public_url_literal_scheme_is_disallowed_by_policy() {
+    let root = temp_dir("sec4-check-public-url-scheme-disallowed");
+    let project_dir = root.join("policy-disallowed-scheme-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = []
+blocked_domains = []
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  url.public("http://api.example.com/users");
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when public URL scheme is blocked by policy"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("E2002") && stderr.contains("public URL literal violates active policy"),
+        "failure should include deterministic E2002 policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("scheme `http` is not allowed by `[net.public].allowed_schemes`"),
+        "failure should explain disallowed scheme:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[net.public]") && stderr.contains("sec4.policy"),
+        "failure should include fix guidance pointing to [net.public] in sec4.policy:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_public_url_literal_host_is_blocked_by_policy() {
+    let root = temp_dir("sec4-check-public-url-blocked-domain");
+    let project_dir = root.join("policy-blocked-domain-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = []
+blocked_domains = ["blocked.example.com"]
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  url.public("https://blocked.example.com/private");
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when host is blocked by net.public policy"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("E2002") && stderr.contains("public URL literal violates active policy"),
+        "failure should include deterministic E2002 policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("host `blocked.example.com` is blocked by `[net.public].blocked_domains`"),
+        "failure should explain blocked host:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[net.public]") && stderr.contains("sec4.policy"),
+        "failure should include fix guidance pointing to [net.public] in sec4.policy:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_public_url_literal_host_is_outside_allowlist() {
+    let root = temp_dir("sec4-check-public-url-allowlist");
+    let project_dir = root.join("policy-allowlist-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = ["allowed.example.com"]
+blocked_domains = []
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  url.public("https://outside.example.com/private");
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when literal host is outside allowed_domains"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("E2002") && stderr.contains("public URL literal violates active policy"),
+        "failure should include deterministic E2002 policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("host `outside.example.com` is outside `[net.public].allowed_domains`"),
+        "failure should explain allowlist mismatch:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[net.public]") && stderr.contains("sec4.policy"),
+        "failure should include fix guidance pointing to [net.public] in sec4.policy:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_for_allowed_public_url_policy_usage() {
+    let root = temp_dir("sec4-check-public-url-policy-allowed");
+    let project_dir = root.join("policy-allowed-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = ["allowed.example.com"]
+blocked_domains = ["blocked.example.com"]
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn use_public(raw: Untrusted<String>) effects { net } -> Int {
+  url.public(raw);
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when public URL policy is configured and usage remains valid"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("check succeeded"),
+        "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn init_then_run_oneshot_serves_request_and_exits() {
     if !clang_available() {
         eprintln!("skipping init run-command oneshot integration test: clang not available");

@@ -6,6 +6,8 @@ use crate::diagnostics::{Diagnostic, Severity, Span};
 use crate::policy::Policy;
 use crate::{InterruptSignal, NeverInterrupt};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Type {
@@ -1925,6 +1927,8 @@ impl<'a> Analyzer<'a> {
             self.enforce_json_encode_signature(callee_name, span.clone(), args, arg_types);
         }
 
+        self.enforce_public_url_literal_policy(callee_name, args);
+
         if is_untrusted_string_gate(callee_name) {
             if args.len() != 1 {
                 self.diagnostics.push(
@@ -2002,6 +2006,82 @@ impl<'a> Analyzer<'a> {
                 );
             }
         }
+    }
+
+    fn enforce_public_url_literal_policy(&mut self, callee_name: &str, args: &[Expr]) {
+        if !is_url_public_gate(callee_name) || args.len() != 1 {
+            return;
+        }
+
+        let ExprKind::String(literal) = &args[0].kind else {
+            return;
+        };
+        let Some((scheme, host)) = parse_url_literal_scheme_host(literal) else {
+            return;
+        };
+
+        let allowed_schemes = resolve_net_public_allowed_schemes(&args[0].span.file);
+        if !allowed_schemes.iter().any(|allowed| allowed == &scheme) {
+            self.push_public_url_policy_diagnostic(
+                args[0].span.clone(),
+                literal,
+                format!(
+                    "scheme `{scheme}` is not allowed by `[net.public].allowed_schemes` (allowed: {})",
+                    allowed_schemes.join(", ")
+                ),
+            );
+            return;
+        }
+
+        let blocked_domains = self
+            .policy
+            .net_public
+            .blocked_domains
+            .iter()
+            .map(|domain| normalize_policy_domain(domain))
+            .collect::<Vec<_>>();
+        if blocked_domains.iter().any(|domain| domain == &host) {
+            self.push_public_url_policy_diagnostic(
+                args[0].span.clone(),
+                literal,
+                format!(
+                    "host `{host}` is blocked by `[net.public].blocked_domains` ({})",
+                    self.policy.net_public.blocked_domains.join(", ")
+                ),
+            );
+            return;
+        }
+
+        let allowed_domains = self
+            .policy
+            .net_public
+            .allowed_domains
+            .iter()
+            .map(|domain| normalize_policy_domain(domain))
+            .collect::<Vec<_>>();
+        if !allowed_domains.is_empty() && !allowed_domains.iter().any(|domain| domain == &host) {
+            self.push_public_url_policy_diagnostic(
+                args[0].span.clone(),
+                literal,
+                format!(
+                    "host `{host}` is outside `[net.public].allowed_domains` ({})",
+                    self.policy.net_public.allowed_domains.join(", ")
+                ),
+            );
+        }
+    }
+
+    fn push_public_url_policy_diagnostic(&mut self, span: Span, literal: &str, reason: String) {
+        self.diagnostics.push(
+            Diagnostic::error("E2002", "public URL literal violates active policy", span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(reason)
+                .with_note(format!("literal URL: `{literal}`"))
+                .with_note(
+                    "update `[net.public]` in `sec4.policy` (allowed_schemes/allowed_domains/blocked_domains) to permit this URL literal",
+                ),
+        );
     }
 
     fn enforce_http_route_requirements(
@@ -6261,6 +6341,107 @@ fn is_path_under_gate(name: &str) -> bool {
         name,
         "path_under" | "path.under" | "validate_path_under" | "validate.pathUnder"
     )
+}
+
+fn is_url_public_gate(name: &str) -> bool {
+    matches!(name, "url_public" | "url.public")
+}
+
+fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
+    let scheme_end = value.find("://")?;
+    if scheme_end == 0 {
+        return None;
+    }
+
+    let scheme = value[..scheme_end].trim().to_ascii_lowercase();
+    if scheme.is_empty() {
+        return None;
+    }
+
+    let rest = &value[(scheme_end + 3)..];
+    if rest.is_empty() {
+        return None;
+    }
+
+    let authority_end = rest
+        .find(|ch| ['/', '?', '#'].contains(&ch))
+        .unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    if authority.is_empty() {
+        return None;
+    }
+
+    let host_port = authority
+        .rsplit_once('@')
+        .map(|(_, tail)| tail)
+        .unwrap_or(authority);
+    let host = if host_port.starts_with('[') {
+        let close = host_port.find(']')?;
+        &host_port[1..close]
+    } else {
+        host_port.split(':').next().unwrap_or("")
+    };
+
+    let normalized_host = normalize_policy_domain(host);
+    if normalized_host.is_empty() {
+        return None;
+    }
+
+    Some((scheme, normalized_host))
+}
+
+fn normalize_policy_domain(domain: &str) -> String {
+    domain.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
+fn resolve_net_public_allowed_schemes(source_file: &Path) -> Vec<String> {
+    let default_allowed = vec!["https".to_string()];
+    let Some(policy_path) = find_policy_path(source_file) else {
+        return default_allowed;
+    };
+    let Ok(policy_source) = fs::read_to_string(policy_path) else {
+        return default_allowed;
+    };
+    let Ok(policy_value) = policy_source.parse::<toml::Value>() else {
+        return default_allowed;
+    };
+    let Some(schemes) = extract_allowed_schemes(&policy_value) else {
+        return default_allowed;
+    };
+    if schemes.is_empty() {
+        return default_allowed;
+    }
+    schemes
+}
+
+fn extract_allowed_schemes(policy_value: &toml::Value) -> Option<Vec<String>> {
+    let schemes_node = policy_value
+        .get("net")
+        .and_then(|net| net.get("public"))
+        .and_then(|public| public.get("allowed_schemes"))
+        .or_else(|| {
+            policy_value
+                .get("net_public")
+                .and_then(|public| public.get("allowed_schemes"))
+        })?;
+
+    let raw_schemes = schemes_node.as_array()?;
+    raw_schemes
+        .iter()
+        .map(|item| item.as_str().map(|value| value.trim().to_ascii_lowercase()))
+        .collect()
+}
+
+fn find_policy_path(source_file: &Path) -> Option<PathBuf> {
+    let mut current = source_file.parent();
+    while let Some(dir) = current {
+        let candidate = dir.join("sec4.policy");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        current = dir.parent();
+    }
+    None
 }
 
 fn flow_origin_note(
