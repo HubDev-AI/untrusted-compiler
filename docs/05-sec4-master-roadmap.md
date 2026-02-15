@@ -467,6 +467,7 @@ Current strict closure result:
 | `M32-F` | PASS | Naming-lock CI enforces M32 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M32-G` | PASS | Naming-lock CI enforces M32 closure report | `.github/workflows/naming-lock.yml` |
 | `M33-A` | PASS | Naming-lock CI enforces M33 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M33-B` | PASS | Naming-lock CI enforces M33 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -603,6 +604,7 @@ Strict closure interpretation:
 - M32 transition handoff packet enforcement is active (`M32-F`).
 - M32 closure report enforcement is active (`M32-G`).
 - M33 kickoff brief enforcement is active (`M33-A`).
+- M33 priority matrix enforcement is active (`M33-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5073,8 +5075,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M33 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M33-A`).
 
+### M33-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M33 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M33-B` gate.
+
+### M33-S2 tracking (live status)
+- [x] M33 priority matrix script added.
+- [x] M33 priority matrix contract test added.
+- [x] Book chapter documenting M33 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M33-B`).
+
 ### Next planned slice
-- M33-S2 priority matrix + closure gate `M33-B`.
+- M33-S3 runtime-first de-stub plan + closure gate `M33-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5166,8 +5179,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M33-S2 priority matrix from M33 kickoff artifact and wire `M33-B`.
-2. Run full strict closure audit and publish M33 handoff status after `M33-B`.
+1. Implement M33-S3 runtime-first de-stub plan from M33 kickoff + priority matrix artifacts and wire `M33-C`.
+2. Run full strict closure audit and publish M33 handoff status after `M33-C`.
 
 ---
 
