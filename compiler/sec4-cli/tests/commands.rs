@@ -352,6 +352,82 @@ enabled = true
 }
 
 #[test]
+fn check_fails_when_sql_select_has_no_limit_under_enforce_policy() {
+    let root = temp_dir("sec4-check-sql-limit-enforce");
+    let project_dir = root.join("sql-limit-enforce-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[sql]
+require_limit_on_select = "enforce"
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() -> Int {
+  sql.q("SELECT id FROM users", 1);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when enforce policy requires LIMIT on SELECT"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("SELECT query without LIMIT violates active SQL policy"),
+        "failure should include SQL LIMIT policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_when_sql_limit_policy_is_off() {
+    let root = temp_dir("sec4-check-sql-limit-off");
+    let project_dir = root.join("sql-limit-off-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[sql]
+require_limit_on_select = "off"
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() -> Int {
+  sql.q("SELECT id FROM users", 1);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when SQL LIMIT policy is off"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_fails_when_fs_is_disabled_by_policy() {
     let root = temp_dir("sec4-check-fs-disabled");
     let project_dir = root.join("policy-disabled-project");

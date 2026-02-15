@@ -3298,6 +3298,42 @@ impl<'a> Analyzer<'a> {
                 .with_note("validate untrusted values before building SQL parameters"),
             );
         }
+
+        self.enforce_sql_select_limit_policy(args);
+    }
+
+    fn enforce_sql_select_limit_policy(&mut self, args: &[Expr]) {
+        if self.policy.sql.require_limit_on_select == "off" || args.len() != 2 {
+            return;
+        }
+
+        let ExprKind::String(template) = &args[0].kind else {
+            return;
+        };
+        if !sql_is_select_without_limit(template) {
+            return;
+        }
+
+        let mut diagnostic = Diagnostic::error(
+            "E2002",
+            "SELECT query without LIMIT violates active SQL policy",
+            args[0].span.clone(),
+        )
+        .with_tag("security")
+        .with_tag("policy")
+        .with_note(format!(
+            "query: `{}`",
+            template.replace('\n', " ").trim()
+        ))
+        .with_note(
+            "add `LIMIT ...` to the SELECT statement or set `[sql].require_limit_on_select = \"off\"` when intentional",
+        );
+
+        if self.policy.sql.require_limit_on_select == "warn" {
+            diagnostic.severity = Severity::Warning;
+        }
+
+        self.diagnostics.push(diagnostic);
     }
 
     fn enforce_db_query_call_shapes(
@@ -6368,6 +6404,22 @@ fn is_url_public_gate(name: &str) -> bool {
 
 fn is_url_internal_gate(name: &str) -> bool {
     matches!(name, "url_internal" | "url.internal")
+}
+
+fn sql_is_select_without_limit(sql: &str) -> bool {
+    let mut tokens = sql
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_ascii_lowercase());
+
+    let Some(first) = tokens.next() else {
+        return false;
+    };
+    if first != "select" {
+        return false;
+    }
+
+    !tokens.any(|token| token == "limit")
 }
 
 fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
