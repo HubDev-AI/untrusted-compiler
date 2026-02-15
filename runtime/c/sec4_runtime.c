@@ -737,6 +737,51 @@ static bool sec4_rt_csv_contains_token_ci(
   return false;
 }
 
+static bool sec4_rt_csv_contains_port(const char *csv, uint16_t candidate_port) {
+  if (csv == NULL || candidate_port == 0) {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end > token_start) {
+      unsigned long parsed_port = 0;
+      bool token_valid = true;
+      const char *digit = token_start;
+      while (digit < token_end) {
+        if (!isdigit((unsigned char) *digit)) {
+          token_valid = false;
+          break;
+        }
+        parsed_port = (parsed_port * 10UL) + (unsigned long) (*digit - '0');
+        if (parsed_port > 65535UL) {
+          token_valid = false;
+          break;
+        }
+        digit += 1;
+      }
+      if (token_valid
+          && parsed_port != 0UL
+          && parsed_port == (unsigned long) candidate_port) {
+        return true;
+      }
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
 static bool sec4_rt_parse_ipv4_octets(const char *host, size_t host_len, uint8_t out[4]) {
   if (host == NULL || out == NULL || host_len == 0) {
     return false;
@@ -946,6 +991,45 @@ static bool sec4_rt_parse_url_host(
 
   *host_start = host;
   *host_len = len;
+  return true;
+}
+
+static bool sec4_rt_resolve_url_port(
+    const char *host_start,
+    size_t host_len,
+    bool is_https,
+    uint16_t *port_out
+) {
+  if (host_start == NULL || host_len == 0 || port_out == NULL) {
+    return false;
+  }
+
+  const char *cursor = host_start + host_len;
+  uint16_t resolved_port = is_https ? 443 : 80;
+  if (*cursor == ':') {
+    cursor += 1;
+    if (!isdigit((unsigned char) *cursor)) {
+      return false;
+    }
+    unsigned long port_value = 0;
+    while (isdigit((unsigned char) *cursor)) {
+      port_value = (port_value * 10UL) + (unsigned long) (*cursor - '0');
+      if (port_value > 65535UL) {
+        return false;
+      }
+      cursor += 1;
+    }
+    if (port_value == 0UL) {
+      return false;
+    }
+    resolved_port = (uint16_t) port_value;
+  }
+
+  if (*cursor != '\0' && *cursor != '/' && *cursor != '?') {
+    return false;
+  }
+
+  *port_out = resolved_port;
   return true;
 }
 
@@ -1858,6 +1942,15 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   if (sec4_rt_csv_has_any_token(allowed_schemes)
       && !sec4_rt_csv_contains_token_ci(allowed_schemes, scheme, strlen(scheme))) {
     return false;
+  }
+
+  const char *allowed_ports = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS");
+  if (sec4_rt_csv_has_any_token(allowed_ports)) {
+    uint16_t resolved_port = 0;
+    if (!sec4_rt_resolve_url_port(host, host_len, is_https, &resolved_port)
+        || !sec4_rt_csv_contains_port(allowed_ports, resolved_port)) {
+      return false;
+    }
   }
 
   const char *blocked_domains = getenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS");

@@ -5851,6 +5851,7 @@ int main(void) {
   setenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES", "https", 1);
   setenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS", "", 1);
   setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "", 1);
 
   sec4_rt_reset_response();
   if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/path")) != 0) { return 11; }
@@ -5901,6 +5902,83 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime url policy-list harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_url_public_enforces_allowed_ports_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime url public port policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-url-public-port-policy");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-url-public-port-policy");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES", "https,http", 1);
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "443, 8080", 1);
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example:8443/path")) != 0) { return 11; }
+  if (!g_sec4_rt_response.active) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_INVALID\"") == NULL) { return 13; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/path")) != 0) { return 14; }
+  if (!g_sec4_rt_response.active) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_INVALID\"") == NULL) { return 16; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example/path")) == 0) { return 17; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example:8080/path")) == 0) { return 18; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime url public port-policy harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime url public port-policy harness should exit successfully"
     );
 }
 
