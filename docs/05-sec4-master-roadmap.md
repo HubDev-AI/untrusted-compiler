@@ -474,6 +474,12 @@ Current strict closure result:
 | `M33-F` | PASS | Naming-lock CI enforces M33 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M33-G` | PASS | Naming-lock CI enforces M33 closure report | `.github/workflows/naming-lock.yml` |
 | `M34-A` | PASS | Naming-lock CI enforces M34 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M34-B` | PASS | Naming-lock CI enforces M34 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M34-C` | PASS | Naming-lock CI enforces M34 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
+| `M34-D` | PASS | Naming-lock CI enforces M34 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
+| `M34-E` | PASS | Naming-lock CI enforces M34 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M34-F` | PASS | Naming-lock CI enforces M34 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M34-G` | PASS | Naming-lock CI enforces M34 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -617,6 +623,12 @@ Strict closure interpretation:
 - M33 transition handoff packet enforcement is active (`M33-F`).
 - M33 closure report enforcement is active (`M33-G`).
 - M34 kickoff brief enforcement is active (`M34-A`).
+- M34 priority matrix enforcement is active (`M34-B`).
+- M34 runtime de-stub planner enforcement is active (`M34-C`).
+- M34 runtime de-stub runner enforcement is active (`M34-D`).
+- M34 executed-slice convergence summary enforcement is active (`M34-E`).
+- M34 transition handoff packet enforcement is active (`M34-F`).
+- M34 closure report enforcement is active (`M34-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5169,8 +5181,74 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M34 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M34-A`).
 
+### M34-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M34 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M34-B` gate.
+
+### M34-S2 tracking (live status)
+- [x] M34 priority matrix script added.
+- [x] M34 priority matrix contract test added.
+- [x] Book chapter documenting M34 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M34-B`).
+
+### M34-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M34 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M34-C` gate.
+
+### M34-S3 tracking (live status)
+- [x] M34 runtime-first de-stub plan script added.
+- [x] M34 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M34 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M34-C`).
+
+### M34-S4 runtime de-stub execution runner acceptance criteria
+- Runtime execution runner consumes M34 de-stub plan and executes only the selected first runtime slice with deterministic dry-run + execute modes.
+- Runner emits execution-status artifacts with selected slice/domain metadata and closure gate annotations.
+- Closure audit includes dedicated `M34-D` gate.
+
+### M34-S4 tracking (live status)
+- [x] M34 runtime de-stub execution runner script added.
+- [x] M34 runtime de-stub execution runner contract test added.
+- [x] Book chapter documenting M34 runtime de-stub execution runner added.
+- [x] Naming-lock CI and closure gate updated (`M34-D`).
+
+### M34-S5 executed-slice convergence summary acceptance criteria
+- Executed-slice convergence summary consumes M34 plan + runtime execution artifacts and verifies selected track/slice alignment.
+- Summary emits deterministic markdown/json output with explicit convergence status and chosen follow-up action.
+- Closure audit includes dedicated `M34-E` gate.
+
+### M34-S5 tracking (live status)
+- [x] M34 executed-slice convergence summary script added.
+- [x] M34 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M34 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M34-E`).
+
+### M34-S6 transition handoff packet acceptance criteria
+- Transition packet consumes M34 kickoff/matrix/plan/runtime/convergence artifacts and enforces deterministic selected-track/slice alignment.
+- Packet summary exposes kickoff focus, selected track/slice, runtime status, and convergence outcome.
+- Closure audit includes dedicated `M34-F` gate.
+
+### M34-S6 tracking (live status)
+- [x] M34 transition handoff packet script added.
+- [x] M34 transition handoff packet contract test added.
+- [x] Book chapter documenting M34 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M34-F`).
+
+### M34-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M34 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M34-A..M34-F` are validated in one canonical closure artifact (`m34Gates[]`).
+- Closure audit includes dedicated `M34-G` gate.
+
+### M34-S7 tracking (live status)
+- [x] M34 closure report script added.
+- [x] M34 closure report contract test added.
+- [x] Book chapter documenting M34 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M34-G`).
+
 ### Next planned slice
-- M34-S2 priority matrix + closure gate `M34-B`.
+- M35-S1 kickoff brief + closure gate `M35-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5262,8 +5340,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M34-S2 priority matrix from M34 kickoff artifact and wire `M34-B`.
-2. Run full strict closure audit and publish M34 handoff status after `M34-B`.
+1. Implement M35-S1 kickoff brief from M34 closure report + transition packet and wire `M35-A`.
+2. Run full strict closure audit and publish M35 kickoff handoff status after `M35-A`.
 
 ---
 
