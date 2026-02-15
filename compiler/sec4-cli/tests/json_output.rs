@@ -5,7 +5,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -54,6 +54,66 @@ fn find_available_tcp_port() -> u16 {
         .local_addr()
         .expect("listener local address should resolve")
         .port()
+}
+
+fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("oneshot server local address should resolve")
+        .port();
+    let payload = body.as_bytes().to_vec();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        let response_head = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            payload.len()
+        );
+        stream
+            .write_all(response_head.as_bytes())
+            .expect("oneshot server response headers should write");
+        if !payload.is_empty() {
+            stream
+                .write_all(&payload)
+                .expect("oneshot server response body should write");
+        }
+        stream
+            .flush()
+            .expect("oneshot server response flush should succeed");
+    });
+    (port, handle)
 }
 
 fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
@@ -5415,8 +5475,13 @@ fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_availa
     fs::write(
         &harness_path,
         r#"#include "sec4_runtime.h"
+#include <stdlib.h>
 
 int main(void) {
+  const char *internal_url_a_raw = getenv("SEC4_RT_TEST_INTERNAL_URL_A");
+  const char *internal_url_b_raw = getenv("SEC4_RT_TEST_INTERNAL_URL_B");
+  if (internal_url_a_raw == NULL || internal_url_b_raw == NULL) { return 10; }
+
   int64_t query_a = sec4_rt_sql_q("SELECT 1", 11);
   int64_t query_b = sec4_rt_sql_q("SELECT 2", 11);
   if (query_a == 0 || query_b == 0) { return 11; }
@@ -5461,13 +5526,14 @@ int main(void) {
   if (sec4_rt_fs_read(0, fs_path_a) != 0) { return 29; }
   if (sec4_rt_fs_read(7, 2001) != 0) { return 30; }
 
-  int64_t public_url_a = sec4_rt_req_query("https://public-a.example/path");
-  int64_t public_url_b = sec4_rt_req_query("https://public-b.example/path");
-  int64_t net_a = sec4_rt_http_get(3, public_url_a);
-  int64_t net_b = sec4_rt_http_get(3, public_url_b);
+  int64_t internal_url_a = sec4_rt_req_query(internal_url_a_raw);
+  int64_t internal_url_b = sec4_rt_req_query(internal_url_b_raw);
+  int64_t net_a = sec4_rt_http_get_internal(3, internal_url_a);
+  int64_t net_b = sec4_rt_http_get_internal(3, internal_url_b);
   if (net_a == 0 || net_b == 0) { return 31; }
   if (net_a == net_b) { return 32; }
-  if (sec4_rt_http_get(0, public_url_a) != 0) { return 33; }
+  if (sec4_rt_http_get_internal(0, internal_url_a) != 0) { return 33; }
+  if (sec4_rt_http_get_internal(3, 2001) != 0) { return 34; }
 
   return 0;
 }
@@ -5493,14 +5559,28 @@ int main(void) {
 
     assert!(binary_path.exists(), "compiled binary should exist");
 
+    let (internal_port_a, server_a) = spawn_one_shot_http_server("net-body-a");
+    let (internal_port_b, server_b) = spawn_one_shot_http_server("net-body-b");
+    let internal_url_a = format!("http://127.0.0.1:{internal_port_a}/db-fs-net-a");
+    let internal_url_b = format!("http://127.0.0.1:{internal_port_b}/db-fs-net-b");
+
     let run = Command::new(&binary_path)
         .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL_A", &internal_url_a)
+        .env("SEC4_RT_TEST_INTERNAL_URL_B", &internal_url_b)
         .output()
         .expect("compiled binary should run");
     assert!(
         run.status.success(),
         "runtime db/fs/net harness should exit successfully"
     );
+    server_a
+        .join()
+        .expect("first runtime net test server should exit cleanly");
+    server_b
+        .join()
+        .expect("second runtime net test server should exit cleanly");
 
     assert_eq!(
         fs::read_to_string(fs_base.join("db-fs-net").join("a.txt"))
@@ -5749,15 +5829,17 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_net_allowed_with_env_override_when_clang_available() {
+fn c_bin_runtime_internal_get_roundtrip_succeeds_with_env_override_when_clang_available() {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime internal-net allow test: clang not available");
+        eprintln!("skipping c-bin runtime internal-net roundtrip test: clang not available");
         return;
     }
 
-    let project_dir = temp_dir("sec4-runtime-c-internal-net-allow");
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-roundtrip");
     let harness_path = project_dir.join("harness.c");
-    let binary_path = project_dir.join("runtime-internal-net-allow");
+    let binary_path = project_dir.join("runtime-internal-net-roundtrip");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
 
     let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -5770,17 +5852,20 @@ fn c_bin_runtime_internal_net_allowed_with_env_override_when_clang_available() {
     fs::write(
         &harness_path,
         r#"#include "sec4_runtime.h"
+#include <stdlib.h>
 
 int main(void) {
-  int64_t internal_url_a = sec4_rt_req_query("http://127.0.0.1/service-a");
-  int64_t internal_url_b = sec4_rt_req_query("http://10.0.0.8/service-b");
-  if (internal_url_a == 0 || internal_url_b == 0) { return 11; }
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
 
-  int64_t handle_a = sec4_rt_http_get_internal(1, internal_url_a);
-  int64_t handle_b = sec4_rt_http_get_internal(1, internal_url_b);
-  if (handle_a == 0 || handle_b == 0) { return 12; }
-  if (handle_a == handle_b) { return 13; }
-  if (sec4_rt_http_get_internal(0, internal_url_a) != 0) { return 14; }
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (internal_url == 0 || body == 0) { return 11; }
+  if (sec4_rt_http_get_internal(0, internal_url) != 0) { return 12; }
+
+  int64_t output_path = sec4_rt_req_query("internal-net/body.txt");
+  if (output_path == 0) { return 13; }
+  if (sec4_rt_fs_write(5, output_path, body) == 0) { return 14; }
 
   return 0;
 }
@@ -5801,7 +5886,89 @@ int main(void) {
         .expect("clang should execute for runtime harness");
     assert!(
         output.status.success(),
-        "runtime internal-net allow harness should compile successfully"
+        "runtime internal-net roundtrip harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) = spawn_one_shot_http_server("internal-roundtrip-body");
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-service");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net roundtrip harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net roundtrip server should exit cleanly");
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("internal-net").join("body.txt"))
+            .expect("internal-net response body should be written"),
+        "internal-roundtrip-body"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_rejects_invalid_url_or_untracked_handles_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net invalid-url test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-invalid");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-invalid");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t invalid_scheme = sec4_rt_req_query("ftp://127.0.0.1/not-http");
+  int64_t unsupported_tls = sec4_rt_req_query("https://127.0.0.1/notls");
+  if (invalid_scheme == 0 || unsupported_tls == 0) { return 11; }
+
+  if (sec4_rt_http_get(1, invalid_scheme) != 0) { return 12; }
+  if (sec4_rt_http_get_internal(1, invalid_scheme) != 0) { return 13; }
+  if (sec4_rt_http_get_internal(1, unsupported_tls) != 0) { return 14; }
+  if (sec4_rt_http_get(1, 2999) != 0) { return 15; }
+  if (sec4_rt_http_get_internal(1, 3999) != 0) { return 16; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net invalid-url harness should compile successfully"
     );
 
     assert!(binary_path.exists(), "compiled binary should exist");
@@ -5812,7 +5979,7 @@ int main(void) {
         .expect("compiled binary should run");
     assert!(
         run.status.success(),
-        "runtime internal-net allow harness should exit successfully"
+        "runtime internal-net invalid-url harness should exit successfully"
     );
 }
 

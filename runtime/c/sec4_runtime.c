@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -25,6 +26,9 @@
 #define SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES 2048
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
+#define SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES 2048
+#define SEC4_RT_MAX_OUTBOUND_HTTP_RESPONSE_BYTES 16384
+#define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
 
 typedef int64_t (*sec4_rt_handler_fn)(void);
@@ -104,6 +108,7 @@ static bool sec4_rt_parse_header_value(
     char *value,
     size_t value_size
 );
+static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
 
 static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.active = false;
@@ -724,6 +729,348 @@ static bool sec4_rt_parse_url_host(
   return true;
 }
 
+static bool sec4_rt_parse_outbound_http_url(
+    const char *url,
+    char *host,
+    size_t host_size,
+    uint16_t *port,
+    const char **target_start,
+    size_t *target_len,
+    bool *is_http,
+    bool *is_https
+) {
+  if (url == NULL || host == NULL || host_size < 2 || port == NULL || target_start == NULL
+      || target_len == NULL || is_http == NULL || is_https == NULL) {
+    return false;
+  }
+
+  const char *scheme_sep = strstr(url, "://");
+  if (scheme_sep == NULL) {
+    return false;
+  }
+  size_t scheme_len = (size_t) (scheme_sep - url);
+  *is_http = scheme_len == 4 && strncasecmp(url, "http", 4) == 0;
+  *is_https = scheme_len == 5 && strncasecmp(url, "https", 5) == 0;
+  if (!(*is_http || *is_https)) {
+    return false;
+  }
+
+  const char *cursor = scheme_sep + 3;
+  const char *host_begin = cursor;
+  while (*cursor != '\0' && *cursor != ':' && *cursor != '/' && *cursor != '?') {
+    if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+      return false;
+    }
+    cursor += 1;
+  }
+
+  size_t host_len = (size_t) (cursor - host_begin);
+  if (host_len == 0 || host_len >= host_size) {
+    return false;
+  }
+  memcpy(host, host_begin, host_len);
+  host[host_len] = '\0';
+
+  uint16_t resolved_port = *is_https ? 443 : 80;
+  if (*cursor == ':') {
+    cursor += 1;
+    if (!isdigit((unsigned char) *cursor)) {
+      return false;
+    }
+    unsigned long port_value = 0;
+    const char *port_start = cursor;
+    while (isdigit((unsigned char) *cursor)) {
+      port_value = (port_value * 10UL) + (unsigned long) (*cursor - '0');
+      if (port_value > 65535UL) {
+        return false;
+      }
+      cursor += 1;
+    }
+    if (cursor == port_start || port_value == 0UL) {
+      return false;
+    }
+    resolved_port = (uint16_t) port_value;
+  }
+
+  const char *target = "/";
+  size_t parsed_target_len = 1;
+  if (*cursor != '\0') {
+    if (*cursor != '/' && *cursor != '?') {
+      return false;
+    }
+    const char *target_end = cursor;
+    while (*target_end != '\0') {
+      if (*target_end == '#' || *target_end == '\r' || *target_end == '\n') {
+        return false;
+      }
+      target_end += 1;
+    }
+    parsed_target_len = (size_t) (target_end - cursor);
+    if (parsed_target_len == 0) {
+      parsed_target_len = 1;
+    } else {
+      target = cursor;
+    }
+  }
+
+  *port = resolved_port;
+  *target_start = target;
+  *target_len = parsed_target_len;
+  return true;
+}
+
+static int sec4_rt_open_outbound_tcp_socket(const char *host, uint16_t port) {
+  if (host == NULL || host[0] == '\0' || port == 0) {
+    return -1;
+  }
+
+  char port_text[8];
+  int rendered = snprintf(port_text, sizeof(port_text), "%u", (unsigned int) port);
+  if (rendered <= 0 || (size_t) rendered >= sizeof(port_text)) {
+    return -1;
+  }
+
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_protocol = IPPROTO_TCP;
+
+  struct addrinfo *addresses = NULL;
+  if (getaddrinfo(host, port_text, &hints, &addresses) != 0 || addresses == NULL) {
+    return -1;
+  }
+
+  int socket_fd = -1;
+  for (struct addrinfo *current = addresses; current != NULL; current = current->ai_next) {
+    socket_fd = socket(current->ai_family, current->ai_socktype, current->ai_protocol);
+    if (socket_fd < 0) {
+      continue;
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    (void) setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    (void) setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+    if (connect(socket_fd, current->ai_addr, current->ai_addrlen) == 0) {
+      break;
+    }
+
+    close(socket_fd);
+    socket_fd = -1;
+  }
+
+  freeaddrinfo(addresses);
+  return socket_fd;
+}
+
+static int sec4_rt_read_outbound_http_body(
+    int socket_fd,
+    char *body,
+    size_t body_size,
+    size_t *body_len
+) {
+  if (socket_fd < 0 || body == NULL || body_size == 0 || body_len == NULL) {
+    return -1;
+  }
+  body[0] = '\0';
+  *body_len = 0;
+
+  char response[SEC4_RT_MAX_OUTBOUND_HTTP_RESPONSE_BYTES];
+  size_t total = 0;
+  while (total < sizeof(response) - 1) {
+    ssize_t bytes_read = recv(socket_fd, response + total, sizeof(response) - 1 - total, 0);
+    if (bytes_read < 0) {
+      return -1;
+    }
+    if (bytes_read == 0) {
+      break;
+    }
+    total += (size_t) bytes_read;
+  }
+
+  if (total == sizeof(response) - 1) {
+    return -2;
+  }
+
+  response[total] = '\0';
+  if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
+    return -3;
+  }
+
+  char *headers_end = strstr(response, "\r\n\r\n");
+  if (headers_end == NULL) {
+    return -3;
+  }
+
+  size_t header_bytes = (size_t) (headers_end - response) + 4;
+  if (header_bytes > total) {
+    return -3;
+  }
+
+  size_t payload_bytes = total - header_bytes;
+  if (payload_bytes >= body_size) {
+    return -2;
+  }
+
+  if (payload_bytes > 0) {
+    memcpy(body, response + header_bytes, payload_bytes);
+  }
+  body[payload_bytes] = '\0';
+  *body_len = payload_bytes;
+  return 0;
+}
+
+static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t salt) {
+  if (url_value == NULL || url_value[0] == '\0') {
+    return 0;
+  }
+
+  char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  uint16_t port = 0;
+  const char *target = NULL;
+  size_t target_len = 0;
+  bool is_http = false;
+  bool is_https = false;
+  if (!sec4_rt_parse_outbound_http_url(
+          url_value,
+          host,
+          sizeof(host),
+          &port,
+          &target,
+          &target_len,
+          &is_http,
+          &is_https
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INVALID",
+        "validation",
+        "invalid outbound http url"
+    );
+    return 0;
+  }
+
+  if (is_https) {
+    sec4_rt_store_std_error_response(
+        501,
+        "NET.TLS_UNSUPPORTED",
+        "runtime",
+        "https outbound transport is not supported by this runtime"
+    );
+    return 0;
+  }
+  if (!is_http) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_SCHEME_INVALID",
+        "validation",
+        "http outbound transport requires http scheme"
+    );
+    return 0;
+  }
+
+  char host_header[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES + 8];
+  int host_header_len = 0;
+  if (port == 80) {
+    host_header_len = snprintf(host_header, sizeof(host_header), "%s", host);
+  } else {
+    host_header_len = snprintf(host_header, sizeof(host_header), "%s:%u", host, (unsigned int) port);
+  }
+  if (host_header_len <= 0 || (size_t) host_header_len >= sizeof(host_header)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.REQUEST_BUILD_FAILED",
+        "internal",
+        "failed to construct outbound request host header"
+    );
+    return 0;
+  }
+
+  int socket_fd = sec4_rt_open_outbound_tcp_socket(host, port);
+  if (socket_fd < 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.CONNECT_FAILED",
+        "internal",
+        "failed to connect outbound http socket"
+    );
+    return 0;
+  }
+
+  char request[SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES];
+  int request_len = snprintf(
+      request,
+      sizeof(request),
+      "GET %.*s HTTP/1.1\r\n"
+      "Host: %s\r\n"
+      "Connection: close\r\n"
+      "Accept: */*\r\n"
+      "\r\n",
+      (int) target_len,
+      target,
+      host_header
+  );
+  if (request_len <= 0 || (size_t) request_len >= sizeof(request)) {
+    close(socket_fd);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.REQUEST_BUILD_FAILED",
+        "internal",
+        "failed to construct outbound request payload"
+    );
+    return 0;
+  }
+
+  if (sec4_rt_write_all(socket_fd, request, (size_t) request_len) != 0) {
+    close(socket_fd);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.REQUEST_IO_FAILED",
+        "internal",
+        "failed to send outbound request"
+    );
+    return 0;
+  }
+
+  char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t body_len = 0;
+  int read_status = sec4_rt_read_outbound_http_body(socket_fd, body, sizeof(body), &body_len);
+  close(socket_fd);
+  if (read_status == -2) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TOO_LARGE",
+        "internal",
+        "outbound http response exceeds runtime buffer limits"
+    );
+    return 0;
+  }
+  if (read_status != 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_INVALID",
+        "internal",
+        "failed to read outbound http response"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_sized_value(body, body_len, salt);
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TRACK_FAILED",
+        "internal",
+        "failed to track outbound http response body"
+    );
+    return 0;
+  }
+  return handle;
+}
+
 static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
   if (sec4_rt_host_equals(host, host_len, "localhost")) {
     return true;
@@ -746,7 +1093,7 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   if (!sec4_rt_parse_url_host(url, &host, &host_len, &is_http, &is_https)) {
     return false;
   }
-  if (!is_https) {
+  if (!(is_http || is_https)) {
     return false;
   }
   if (sec4_rt_host_is_internal(host, host_len)) {
@@ -1142,6 +1489,10 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Conflict";
     case 429:
       return "Too Many Requests";
+    case 501:
+      return "Not Implemented";
+    case 502:
+      return "Bad Gateway";
     case 500:
       return "Internal Server Error";
     default:
@@ -2568,7 +2919,7 @@ int64_t sec4_rt_http_get(int64_t net, int64_t url) {
   }
 
   const char *url_value = sec4_rt_lookup_tracked_value(url);
-  if (url_value != NULL && !sec4_rt_is_public_url_valid(url_value)) {
+  if (url_value == NULL || url_value[0] == '\0' || !sec4_rt_is_public_url_valid(url_value)) {
     sec4_rt_store_std_error_response(
         400,
         "NET.URL_PUBLIC_INVALID",
@@ -2578,7 +2929,8 @@ int64_t sec4_rt_http_get(int64_t net, int64_t url) {
     return 0;
   }
 
-  return sec4_rt_handle_from_two(net, url, UINT64_C(0x18189));
+  (void) net;
+  return sec4_rt_outbound_http_get_handle(url_value, UINT64_C(0x18189));
 }
 
 int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
@@ -2603,7 +2955,7 @@ int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
   }
 
   const char *url_value = sec4_rt_lookup_tracked_value(url);
-  if (url_value != NULL && !sec4_rt_is_internal_url_valid(url_value)) {
+  if (url_value == NULL || url_value[0] == '\0' || !sec4_rt_is_internal_url_valid(url_value)) {
     sec4_rt_store_std_error_response(
         400,
         "NET.URL_INTERNAL_INVALID",
@@ -2613,7 +2965,8 @@ int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
     return 0;
   }
 
-  return sec4_rt_handle_from_two(net, url, UINT64_C(0x1818A));
+  (void) net;
+  return sec4_rt_outbound_http_get_handle(url_value, UINT64_C(0x1818A));
 }
 
 int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name) {
