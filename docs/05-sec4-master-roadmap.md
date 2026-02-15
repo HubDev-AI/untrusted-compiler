@@ -445,6 +445,7 @@ Current strict closure result:
 | `M29-E` | PASS | Naming-lock CI enforces M29 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M29-F` | PASS | Naming-lock CI enforces M29 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M29-G` | PASS | Naming-lock CI enforces M29 closure report | `.github/workflows/naming-lock.yml` |
+| `M30-A` | PASS | Naming-lock CI enforces M30 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -559,6 +560,7 @@ Strict closure interpretation:
 - M29 executed-slice convergence summary enforcement is active (`M29-E`).
 - M29 transition handoff packet enforcement is active (`M29-F`).
 - M29 closure report enforcement is active (`M29-G`).
+- M30 kickoff brief enforcement is active (`M30-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4667,7 +4669,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M28-G`).
 
 ### Next planned slice
-- M29-S1 kickoff brief + closure gate `M29-A`.
+- M30-S2 priority matrix + closure gate `M30-B`.
 
 ## M29 - Runtime-First Stabilization Loop (In Progress)
 
@@ -4752,7 +4754,26 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M29-G`).
 
 ### Next planned slice
-- M30-S1 kickoff brief + closure gate `M30-A`.
+- M30-S2 priority matrix + closure gate `M30-B`.
+
+## M30 - Runtime-First Stabilization Loop (In Progress)
+
+### Goal
+- Start M30 from deterministic M29 closure evidence and continue runtime-first stabilization with strict closure-gated slices.
+
+### M30-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M29 closure report + M29 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M29 closure report JSON from `build-m29-closure-report.sh`.
+- Closure audit includes dedicated `M30-A` gate.
+
+### M30-S1 tracking (live status)
+- [x] M30 kickoff brief script added.
+- [x] M30 kickoff brief contract test added.
+- [x] Book chapter documenting M30 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M30-A`).
+
+### Next planned slice
+- M30-S2 priority matrix + closure gate `M30-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4844,8 +4865,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Start M30-S1 kickoff brief from closed M29 artifacts after `M29-G`.
-2. Continue M30 runtime-first stabilization sequence (`S2..S7`) with strict closure gating parity.
+1. Implement M30-S2 priority matrix from M30 kickoff brief and wire `M30-B`.
+2. Continue M30 runtime-first stabilization sequence (`S3..S7`) with strict closure gating parity.
 
 ---
 
