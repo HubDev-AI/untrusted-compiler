@@ -5052,7 +5052,8 @@ M13-S1 go/no-go note:
 - [x] `M32-R2`: runtime ABI prototype alignment for req/json/res signatures in `sec4_runtime.h` with synchronized C backend runtime-asset expectations.
 - [x] `M32-R3`: content-level runtime guards for `headers.name`, `headers.value`, and `path.base` with deterministic C harness coverage.
 - [x] `M32-R4`: URL content-level runtime validation for `url.public`/`url.internal` using runtime tracked-string payload mapping + deterministic C harness coverage.
-- [ ] `M32-R5`: expand request-source payload extraction beyond query fallback (header/path param concrete extraction + replay-safe normalization).
+- [x] `M32-R5`: expand request-source payload extraction for query/header values using request-backed parsing and tracked-string mapping.
+- [ ] `M32-R6`: path-param extraction from route templates + replay-safe normalization and deterministic runtime coverage.
 
 ### Next planned slice
 - M33-S1 kickoff brief + closure gate `M33-A`.

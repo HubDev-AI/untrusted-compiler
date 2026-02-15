@@ -54,6 +54,8 @@ typedef struct {
   char trace_id[32];
   char method[8];
   char path[SEC4_RT_MAX_PATH_BYTES];
+  char raw_headers[SEC4_RT_REQUEST_BUFFER_BYTES];
+  size_t raw_headers_len;
   char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
   size_t body_len;
   bool body_limit_exceeded;
@@ -1075,6 +1077,10 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     return;
   }
 
+  char request_target[SEC4_RT_MAX_PATH_BYTES];
+  strncpy(request_target, path, sizeof(request_target) - 1);
+  request_target[sizeof(request_target) - 1] = '\0';
+
   char *query_start = strchr(path, '?');
   if (query_start != NULL) {
     *query_start = '\0';
@@ -1116,12 +1122,19 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     }
     g_sec4_rt_request.has_content_type = has_content_type;
     g_sec4_rt_request.content_type_is_json = content_type_is_json;
+    size_t headers_copy_len = headers_len;
+    if (headers_copy_len >= sizeof(g_sec4_rt_request.raw_headers)) {
+      headers_copy_len = sizeof(g_sec4_rt_request.raw_headers) - 1;
+    }
+    memcpy(g_sec4_rt_request.raw_headers, request, headers_copy_len);
+    g_sec4_rt_request.raw_headers[headers_copy_len] = '\0';
+    g_sec4_rt_request.raw_headers_len = headers_copy_len;
   }
 
   g_sec4_rt_request.has_request = true;
   strncpy(g_sec4_rt_request.method, method, sizeof(g_sec4_rt_request.method) - 1);
   g_sec4_rt_request.method[sizeof(g_sec4_rt_request.method) - 1] = '\0';
-  strncpy(g_sec4_rt_request.path, path, sizeof(g_sec4_rt_request.path) - 1);
+  strncpy(g_sec4_rt_request.path, request_target, sizeof(g_sec4_rt_request.path) - 1);
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
@@ -1487,7 +1500,20 @@ int64_t sec4_rt_req_path_param(const char *name) {
 }
 
 int64_t sec4_rt_req_header(const char *name) {
-  return sec4_rt_track_string_value(name, UINT64_C(0x30303));
+  char extracted[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  const char *value = name;
+  if (g_sec4_rt_request.has_request
+      && g_sec4_rt_request.raw_headers_len > 0
+      && sec4_rt_parse_header_value(
+          g_sec4_rt_request.raw_headers,
+          g_sec4_rt_request.raw_headers_len,
+          name,
+          extracted,
+          sizeof(extracted)
+      )) {
+    value = extracted;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x30303));
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {

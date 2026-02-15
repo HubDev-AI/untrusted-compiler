@@ -262,6 +262,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `295-m32-runtime-abi-prototype-alignment.md`
 - `296-m32-runtime-header-path-content-guards.md`
 - `297-m32-runtime-url-content-guards.md`
+- `298-m32-runtime-request-source-extraction.md`
 - `294-m9-alpha-release-gate-ci-workflow.md`
 - `295-m12-naming-lock-guard-and-cli-surface-alignment.md`
 - `296-m12-naming-lock-ci-workflow.md`
