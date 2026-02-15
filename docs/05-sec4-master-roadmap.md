@@ -468,6 +468,7 @@ Current strict closure result:
 | `M32-G` | PASS | Naming-lock CI enforces M32 closure report | `.github/workflows/naming-lock.yml` |
 | `M33-A` | PASS | Naming-lock CI enforces M33 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M33-B` | PASS | Naming-lock CI enforces M33 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M33-C` | PASS | Naming-lock CI enforces M33 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -605,6 +606,7 @@ Strict closure interpretation:
 - M32 closure report enforcement is active (`M32-G`).
 - M33 kickoff brief enforcement is active (`M33-A`).
 - M33 priority matrix enforcement is active (`M33-B`).
+- M33 runtime de-stub planner enforcement is active (`M33-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5086,8 +5088,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M33 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M33-B`).
 
+### M33-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M33 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M33-C` gate.
+
+### M33-S3 tracking (live status)
+- [x] M33 runtime-first de-stub plan script added.
+- [x] M33 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M33 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M33-C`).
+
 ### Next planned slice
-- M33-S3 runtime-first de-stub plan + closure gate `M33-C`.
+- M33-S4 runtime de-stub execution runner + closure gate `M33-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5179,8 +5192,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M33-S3 runtime-first de-stub plan from M33 kickoff + priority matrix artifacts and wire `M33-C`.
-2. Run full strict closure audit and publish M33 handoff status after `M33-C`.
+1. Implement M33-S4 runtime de-stub execution runner from M33 de-stub plan and wire `M33-D`.
+2. Run full strict closure audit and publish M33 handoff status after `M33-D`.
 
 ---
 
