@@ -355,6 +355,9 @@ jobs:
       - name: Validate M29 transition handoff packet
         run: scripts/test-build-m29-transition-handoff-packet.sh
 
+      - name: Validate M29 closure report
+        run: scripts/test-build-m29-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

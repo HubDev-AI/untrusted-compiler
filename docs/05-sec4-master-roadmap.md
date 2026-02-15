@@ -444,6 +444,7 @@ Current strict closure result:
 | `M29-D` | PASS | Naming-lock CI enforces M29 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 | `M29-E` | PASS | Naming-lock CI enforces M29 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M29-F` | PASS | Naming-lock CI enforces M29 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M29-G` | PASS | Naming-lock CI enforces M29 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -557,6 +558,7 @@ Strict closure interpretation:
 - M29 runtime de-stub runner enforcement is active (`M29-D`).
 - M29 executed-slice convergence summary enforcement is active (`M29-E`).
 - M29 transition handoff packet enforcement is active (`M29-F`).
+- M29 closure report enforcement is active (`M29-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4744,13 +4746,13 @@ M13-S1 go/no-go note:
 - Closure audit includes dedicated `M29-G` gate.
 
 ### M29-S7 tracking (live status)
-- [ ] M29 closure report script added.
-- [ ] M29 closure report contract test added.
-- [ ] Book chapter documenting M29 closure report added.
-- [ ] Naming-lock CI and closure gate updated (`M29-G`).
+- [x] M29 closure report script added.
+- [x] M29 closure report contract test added.
+- [x] Book chapter documenting M29 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M29-G`).
 
 ### Next planned slice
-- M29-S7 closure report + closure gate `M29-G`.
+- M30-S1 kickoff brief + closure gate `M30-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4842,8 +4844,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M29-S7 closure report from strict gate set + M29 handoff packet summary and wire `M29-G`.
-2. Start M30-S1 kickoff brief from closed M29 artifacts after `M29-G`.
+1. Start M30-S1 kickoff brief from closed M29 artifacts after `M29-G`.
+2. Continue M30 runtime-first stabilization sequence (`S2..S7`) with strict closure gating parity.
 
 ---
 
