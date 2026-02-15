@@ -55,6 +55,11 @@ Validated by:
 - `scripts/test-build-m35-transition-handoff-packet.sh`
 - `scripts/test-build-m35-executed-slice-convergence-summary.sh`
 
+## Local Iteration Note
+
+- Use `FAST=1 scripts/test-check-milestone-closure.sh` for local iteration when you need quick deterministic closure signal focused on latest M35 gates.
+- Before merge, run the full `scripts/test-check-milestone-closure.sh` (without `FAST`) to preserve exhaustive coverage.
+
 ## Trade-offs
 
 - The packet is summary-first; it references canonical copied artifacts instead of inlining all source payloads.
