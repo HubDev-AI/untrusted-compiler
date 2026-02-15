@@ -264,6 +264,7 @@ bool_has_m31_runtime_destub_runner_ci_guard=0
 bool_has_m31_executed_slice_convergence_summary_ci_guard=0
 bool_has_m31_transition_handoff_packet_ci_guard=0
 bool_has_m31_closure_report_ci_guard=0
+bool_has_m32_kickoff_brief_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -1176,6 +1177,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m31_closure_report_ci_guard=1
 fi
 
+m32_kickoff_brief_test_script="${repo_root}/scripts/test-generate-m32-kickoff-brief.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m32_kickoff_brief_test_script}" ] \
+  && rg -q 'scripts/test-generate-m32-kickoff-brief.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m32_kickoff_brief_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -1493,6 +1501,7 @@ emit_check "M31-D" "naming-lock CI enforces M31 runtime de-stub runner" "${bool_
 emit_check "M31-E" "naming-lock CI enforces M31 executed-slice convergence summary" "${bool_has_m31_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M31-F" "naming-lock CI enforces M31 transition handoff packet" "${bool_has_m31_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M31-G" "naming-lock CI enforces M31 closure report" "${bool_has_m31_closure_report_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M32-A" "naming-lock CI enforces M32 kickoff brief" "${bool_has_m32_kickoff_brief_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'

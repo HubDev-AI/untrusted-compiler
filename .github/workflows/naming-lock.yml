@@ -400,6 +400,9 @@ jobs:
       - name: Validate M31 closure report
         run: scripts/test-build-m31-closure-report.sh
 
+      - name: Validate M32 kickoff brief
+        run: scripts/test-generate-m32-kickoff-brief.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
