@@ -275,6 +275,83 @@ fn main() -> Int {
 }
 
 #[test]
+fn check_fails_when_url_internal_gate_is_disabled_by_policy() {
+    let root = temp_dir("sec4-check-url-internal-disabled");
+    let project_dir = root.join("url-internal-disabled-project");
+    write_minimal_project(&project_dir, "");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  let raw = req.query("http://127.0.0.1/service");
+  url.internal(raw);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when internal url gate is disabled by policy"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("internal net is disabled by active policy"),
+        "failure should include internal-net policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[net.internal]") && stderr.contains("enabled = true"),
+        "failure should include policy enable guidance snippet:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_when_url_internal_gate_is_enabled_by_policy() {
+    let root = temp_dir("sec4-check-url-internal-enabled");
+    let project_dir = root.join("url-internal-enabled-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.internal]
+enabled = true
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  let raw = req.query("http://127.0.0.1/service");
+  url.internal(raw);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when internal url gate policy is enabled"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_fails_when_fs_is_disabled_by_policy() {
     let root = temp_dir("sec4-check-fs-disabled");
     let project_dir = root.join("policy-disabled-project");

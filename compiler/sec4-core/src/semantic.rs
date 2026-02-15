@@ -1912,6 +1912,7 @@ impl<'a> Analyzer<'a> {
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_net_internal_policy_gate(callee_name, span.clone());
+        self.enforce_internal_url_policy_gate(callee_name, span.clone());
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_fs_policy_gate(callee_name, span.clone());
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -3629,6 +3630,24 @@ impl<'a> Analyzer<'a> {
                 .with_tag("policy")
                 .with_note(
                     "internal net calls are blocked because `[net.internal].enabled` is `false` in the active policy",
+                )
+                .with_note(
+                    "enable internal net in `sec4.policy`:\n[net.internal]\nenabled = true",
+                ),
+        );
+    }
+
+    fn enforce_internal_url_policy_gate(&mut self, callee_name: &str, span: Span) {
+        if !is_url_internal_gate(callee_name) || self.policy.net_internal.enabled {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("E2002", "internal net is disabled by active policy", span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(
+                    "internal URL construction is blocked because `[net.internal].enabled` is `false` in the active policy",
                 )
                 .with_note(
                     "enable internal net in `sec4.policy`:\n[net.internal]\nenabled = true",
@@ -6345,6 +6364,10 @@ fn is_path_under_gate(name: &str) -> bool {
 
 fn is_url_public_gate(name: &str) -> bool {
     matches!(name, "url_public" | "url.public")
+}
+
+fn is_url_internal_gate(name: &str) -> bool {
+    matches!(name, "url_internal" | "url.internal")
 }
 
 fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
