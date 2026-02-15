@@ -1,6 +1,10 @@
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn cli_bin() -> PathBuf {
@@ -12,6 +16,14 @@ fn run_cli(args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("sec4 CLI should run")
+}
+
+fn clang_available() -> bool {
+    Command::new("clang")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn unique_suffix() -> String {
@@ -26,6 +38,14 @@ fn temp_dir(prefix: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("{prefix}-{}", unique_suffix()));
     fs::create_dir_all(&path).expect("temp directory should be created");
     path
+}
+
+fn find_available_tcp_port() -> u16 {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("ephemeral tcp bind should work");
+    listener
+        .local_addr()
+        .expect("listener local address should resolve")
+        .port()
 }
 
 fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
@@ -180,6 +200,210 @@ report_only = false
     assert!(
         stderr.contains("security audit failed: findings at or above threshold HIGH"),
         "lint should fail at HIGH threshold:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_serves_request_and_exits() {
+    if !clang_available() {
+        eprintln!("skipping run-command oneshot integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-oneshot");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runoneshotcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command oneshot test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command oneshot process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command oneshot process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_fails_for_invalid_runtime_port() {
+    if !clang_available() {
+        eprintln!("skipping run-command invalid-port test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-invalid-port");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runinvalidport"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(0, router)
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--oneshot",
+        "--serve-timeout-ms",
+        "150",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when runtime startup uses invalid port"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "runtime should exit with deterministic invalid-port status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: binary"),
+        "stderr should include non-zero run diagnostics:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("exited with status 1"),
+        "stderr should include runtime exit code:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

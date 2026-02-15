@@ -3296,7 +3296,19 @@ fn cmd_run(
     if status.success() {
         Ok(())
     } else {
-        Err(status.code().unwrap_or(1))
+        if let Some(code) = status.code() {
+            eprintln!(
+                "run failed: binary `{}` exited with status {code}",
+                binary_path.display()
+            );
+            Err(code)
+        } else {
+            eprintln!(
+                "run failed: binary `{}` terminated by signal",
+                binary_path.display()
+            );
+            Err(1)
+        }
     }
 }
 
