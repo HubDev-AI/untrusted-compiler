@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #define SEC4_RT_MAX_ROUTERS 16
@@ -82,9 +84,17 @@ static sec4_rt_response_state g_sec4_rt_response;
 static sec4_rt_request_state g_sec4_rt_request;
 static sec4_rt_tracked_value g_sec4_rt_tracked_values[SEC4_RT_MAX_TRACKED_VALUES];
 static uint64_t g_sec4_rt_next_trace_id = 1;
+static int64_t g_sec4_rt_last_log_handle = 0;
 
 static const char *sec4_rt_current_trace_id(void);
 static void sec4_rt_assign_trace_id(void);
+static bool sec4_rt_parse_header_value(
+    const char *request,
+    size_t request_len,
+    const char *name,
+    char *value,
+    size_t value_size
+);
 
 static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.active = false;
@@ -310,6 +320,111 @@ static bool sec4_rt_constant_time_bytes_eq(
     diff |= (unsigned char) (left_byte ^ right_byte);
   }
   return diff == 0;
+}
+
+static int64_t sec4_rt_nonzero_constant_handle(uint64_t salt) {
+  return sec4_rt_hash_token(UINT64_C(0x9e3779b97f4a7c15) ^ salt, salt);
+}
+
+static int64_t sec4_rt_nonzero_handle_from_string(const char *input, uint64_t salt) {
+  int64_t handle = sec4_rt_track_string_value(input, salt);
+  if (handle != 0) {
+    return handle;
+  }
+  return sec4_rt_nonzero_constant_handle(salt);
+}
+
+static int64_t sec4_rt_handle_from_two(int64_t a, int64_t b, uint64_t salt) {
+  uint64_t token = ((uint64_t) a) ^ ((((uint64_t) b) << 1) | (((uint64_t) b) >> 63));
+  token ^= UINT64_C(0x94d049bb133111eb);
+  return sec4_rt_hash_token(token, salt);
+}
+
+static int64_t sec4_rt_handle_from_three(int64_t a, int64_t b, int64_t c, uint64_t salt) {
+  int64_t left = sec4_rt_handle_from_two(a, b, salt ^ UINT64_C(0x51a7d8a4));
+  return sec4_rt_handle_from_two(left, c, salt);
+}
+
+static bool sec4_rt_extract_request_header(
+    const char *name,
+    char *value,
+    size_t value_size
+) {
+  if (!g_sec4_rt_request.has_request || g_sec4_rt_request.raw_headers_len == 0) {
+    return false;
+  }
+  return sec4_rt_parse_header_value(
+      g_sec4_rt_request.raw_headers,
+      g_sec4_rt_request.raw_headers_len,
+      name,
+      value,
+      value_size
+  );
+}
+
+static bool sec4_rt_is_valid_bearer_auth(const char *auth_header) {
+  if (auth_header == NULL) {
+    return false;
+  }
+  return strncasecmp(auth_header, "Bearer ", 7) == 0 && auth_header[7] != '\0';
+}
+
+static bool sec4_rt_bearer_token_has_role(const char *auth_header, const char *required_role) {
+  if (!sec4_rt_is_valid_bearer_auth(auth_header)
+      || required_role == NULL
+      || required_role[0] == '\0') {
+    return false;
+  }
+
+  const char *token = auth_header + 7;
+  size_t role_len = strlen(required_role);
+  const char *cursor = token;
+  while ((cursor = strstr(cursor, required_role)) != NULL) {
+    char before = cursor == token ? ' ' : cursor[-1];
+    char after = cursor[role_len];
+    bool before_ok =
+        before == ' ' || before == ',' || before == ':' || before == '=' || before == ';';
+    bool after_ok = after == '\0'
+        || after == ' '
+        || after == ','
+        || after == ':'
+        || after == '='
+        || after == ';';
+    if (before_ok && after_ok) {
+      return true;
+    }
+    cursor += 1;
+  }
+  return false;
+}
+
+static void sec4_rt_ensure_error_response_in_request(void) {
+  if (!g_sec4_rt_request.has_request || g_sec4_rt_response.active) {
+    return;
+  }
+  sec4_rt_store_std_error_response(
+      500,
+      "INTERNAL.ERROR",
+      "internal",
+      "internal error"
+  );
+}
+
+static int64_t sec4_rt_emit_error_handle(
+    int64_t status,
+    const char *code,
+    const char *kind,
+    const char *message,
+    uint64_t salt
+) {
+  if (g_sec4_rt_request.has_request) {
+    sec4_rt_store_std_error_response(status, code, kind, message);
+  }
+
+  int64_t code_handle = sec4_rt_nonzero_handle_from_string(code, salt ^ UINT64_C(0x1111));
+  int64_t message_handle =
+      sec4_rt_nonzero_handle_from_string(message, salt ^ UINT64_C(0x2222));
+  return sec4_rt_handle_from_three(status, code_handle, message_handle, salt);
 }
 
 static bool sec4_rt_extract_query_value(
@@ -991,6 +1106,10 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Not Found";
     case 405:
       return "Method Not Allowed";
+    case 409:
+      return "Conflict";
+    case 429:
+      return "Too Many Requests";
     case 500:
       return "Internal Server Error";
     default:
@@ -1544,54 +1663,83 @@ bool sec4_rt_identity_bool(bool value) {
 }
 
 int64_t sec4_rt_time_now(void) {
-  return 0;
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) == 0) {
+    int64_t ms = ((int64_t) tv.tv_sec * 1000) + ((int64_t) tv.tv_usec / 1000);
+    if (ms > 0) {
+      return ms;
+    }
+  }
+
+  time_t now = time(NULL);
+  if (now > 0) {
+    return (int64_t) now * 1000;
+  }
+  return 1;
 }
 
-void sec4_rt_log_any() {
+void sec4_rt_log_any(int64_t event) {
+  g_sec4_rt_last_log_handle = event != 0
+      ? event
+      : sec4_rt_nonzero_constant_handle(UINT64_C(0xA1001));
 }
 
-int64_t sec4_rt_log_event() {
-  return 0;
+int64_t sec4_rt_log_event(const char *event_name) {
+  return sec4_rt_nonzero_handle_from_string(event_name, UINT64_C(0xA1002));
 }
 
-int64_t sec4_rt_log_field() {
-  return 0;
+int64_t sec4_rt_log_field(const char *key, int64_t value) {
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xA1003));
+  return sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xA1004));
 }
 
-int64_t sec4_rt_log_obj() {
-  return 0;
+int64_t sec4_rt_log_obj(int64_t field) {
+  return sec4_rt_handle_from_two(field, 1, UINT64_C(0xA1005));
 }
 
-int64_t sec4_rt_log_str() {
-  return 0;
+int64_t sec4_rt_log_str(const char *value) {
+  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA1006));
 }
 
-int64_t sec4_rt_log_i64() {
-  return 0;
+int64_t sec4_rt_log_i64(int64_t value) {
+  return sec4_rt_handle_from_two(value, 2, UINT64_C(0xA1007));
 }
 
-int64_t sec4_rt_log_bool() {
-  return 0;
+int64_t sec4_rt_log_bool(int64_t value) {
+  return sec4_rt_handle_from_two(value != 0 ? 1 : 0, 3, UINT64_C(0xA1008));
 }
 
-int64_t sec4_rt_log_redacted() {
-  return 0;
+int64_t sec4_rt_log_redacted(const char *value) {
+  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA1009));
 }
 
-int64_t sec4_rt_log_attr_redacted() {
-  return 0;
+int64_t sec4_rt_log_attr_redacted(const char *value) {
+  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA100A));
 }
 
-int64_t sec4_rt_log_with_attr() {
-  return 0;
+int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value) {
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xA100B));
+  int64_t attr_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xA100C));
+  return sec4_rt_handle_from_two(event, attr_handle, UINT64_C(0xA100D));
 }
 
-int64_t sec4_rt_log_with_http() {
-  return 0;
+int64_t sec4_rt_log_with_http(
+    int64_t event,
+    const char *method,
+    const char *path,
+    int64_t status,
+    int64_t duration_ms
+) {
+  int64_t method_handle = sec4_rt_nonzero_handle_from_string(method, UINT64_C(0xA100E));
+  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xA100F));
+  int64_t route_handle = sec4_rt_handle_from_two(method_handle, path_handle, UINT64_C(0xA1010));
+  int64_t http_meta = sec4_rt_handle_from_two(status, duration_ms, UINT64_C(0xA1011));
+  int64_t http_handle = sec4_rt_handle_from_two(route_handle, http_meta, UINT64_C(0xA1012));
+  return sec4_rt_handle_from_two(event, http_handle, UINT64_C(0xA1013));
 }
 
-int64_t sec4_rt_log_with_error() {
-  return 0;
+int64_t sec4_rt_log_with_error(int64_t event, int64_t error) {
+  return sec4_rt_handle_from_two(event, error, UINT64_C(0xA1014));
 }
 
 int64_t sec4_rt_req_json(int64_t schema) {
@@ -2198,86 +2346,230 @@ int64_t sec4_rt_with_auth(int64_t router, int64_t cfg) {
   return router;
 }
 
-int64_t sec4_rt_sec_default_headers() {
-  return 0;
+int64_t sec4_rt_sec_default_headers(void) {
+  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2001));
 }
 
-int64_t sec4_rt_sec_csp() {
-  return 0;
+int64_t sec4_rt_sec_csp(void) {
+  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2002));
 }
 
-int64_t sec4_rt_sec_csp_add() {
-  return 0;
+int64_t sec4_rt_sec_csp_add(int64_t csp, const char *directive, const char *value) {
+  int64_t directive_handle = sec4_rt_nonzero_handle_from_string(directive, UINT64_C(0xB2003));
+  int64_t value_handle = sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xB2004));
+  int64_t addition = sec4_rt_handle_from_two(directive_handle, value_handle, UINT64_C(0xB2005));
+  return sec4_rt_handle_from_two(csp, addition, UINT64_C(0xB2006));
 }
 
-int64_t sec4_rt_cors_from_policy() {
-  return 0;
+int64_t sec4_rt_cors_from_policy(void) {
+  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2007));
 }
 
-int64_t sec4_rt_cors_origin() {
-  return 0;
+int64_t sec4_rt_cors_origin(int64_t origin) {
+  return sec4_rt_handle_from_two(origin, 1, UINT64_C(0xB2008));
 }
 
-int64_t sec4_rt_csrf_from_policy() {
-  return 0;
+int64_t sec4_rt_csrf_from_policy(void) {
+  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2009));
 }
 
-int64_t sec4_rt_csrf_issue_token() {
-  return 0;
+int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
+  (void) ctx;
+  char token[128];
+  int written = snprintf(
+      token,
+      sizeof(token),
+      "csrf-%s",
+      sec4_rt_current_trace_id()
+  );
+  if (written <= 0 || (size_t) written >= sizeof(token)) {
+    return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2010));
+  }
+
+  int64_t handle = sec4_rt_nonzero_handle_from_string(token, UINT64_C(0xB2011));
+  if (g_sec4_rt_request.has_request) {
+    char cookie[192];
+    int cookie_written = snprintf(
+        cookie,
+        sizeof(cookie),
+        "csrf=%s; Path=/; SameSite=Lax",
+        token
+    );
+    if (cookie_written > 0 && (size_t) cookie_written < sizeof(cookie)) {
+      (void) sec4_rt_append_response_header("Set-Cookie", cookie);
+    }
+    (void) sec4_rt_append_response_header("X-CSRF-Token", token);
+  }
+  return handle;
 }
 
-int64_t sec4_rt_auth_from_policy() {
-  return 0;
+int64_t sec4_rt_auth_from_policy(void) {
+  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2012));
 }
 
-int64_t sec4_rt_auth_require() {
-  return 0;
+int64_t sec4_rt_auth_require(int64_t ctx) {
+  (void) ctx;
+  char auth_header[256];
+  bool has_auth = sec4_rt_extract_request_header(
+      "Authorization",
+      auth_header,
+      sizeof(auth_header)
+  );
+  if (!has_auth || !sec4_rt_is_valid_bearer_auth(auth_header)) {
+    if (g_sec4_rt_request.has_request) {
+      sec4_rt_store_std_error_response(
+          401,
+          "AUTH.UNAUTHORIZED",
+          "auth",
+          "Authorization header missing or invalid"
+      );
+    }
+    return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2013));
+  }
+  return sec4_rt_nonzero_handle_from_string(auth_header, UINT64_C(0xB2014));
 }
 
-int64_t sec4_rt_auth_require_role() {
-  return 0;
+int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
+  (void) ctx;
+  char auth_header[256];
+  bool has_auth = sec4_rt_extract_request_header(
+      "Authorization",
+      auth_header,
+      sizeof(auth_header)
+  );
+  if (!has_auth || !sec4_rt_is_valid_bearer_auth(auth_header)) {
+    if (g_sec4_rt_request.has_request) {
+      sec4_rt_store_std_error_response(
+          401,
+          "AUTH.UNAUTHORIZED",
+          "auth",
+          "Authorization header missing or invalid"
+      );
+    }
+    return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2015));
+  }
+
+  if (!sec4_rt_bearer_token_has_role(auth_header, required_role)) {
+    if (g_sec4_rt_request.has_request) {
+      sec4_rt_store_std_error_response(
+          403,
+          "AUTH.FORBIDDEN",
+          "auth",
+          "Authorization token missing required role"
+      );
+    }
+    int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2016));
+    return sec4_rt_handle_from_two(role_handle, 403, UINT64_C(0xB2017));
+  }
+
+  int64_t auth_handle = sec4_rt_nonzero_handle_from_string(auth_header, UINT64_C(0xB2018));
+  int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2019));
+  return sec4_rt_handle_from_two(auth_handle, role_handle, UINT64_C(0xB2020));
 }
 
-int64_t sec4_rt_err_validation() {
-  return 0;
+int64_t sec4_rt_err_validation(const char *code, const char *message) {
+  return sec4_rt_emit_error_handle(
+      400,
+      code != NULL ? code : "VALIDATION.BAD_REQUEST",
+      "validation",
+      message != NULL ? message : "validation failed",
+      UINT64_C(0xC3001)
+  );
 }
 
-int64_t sec4_rt_err_auth() {
-  return 0;
+int64_t sec4_rt_err_auth(const char *code, const char *message, int64_t status) {
+  int64_t resolved_status = status > 0 ? status : 401;
+  return sec4_rt_emit_error_handle(
+      resolved_status,
+      code != NULL ? code : "AUTH.UNAUTHORIZED",
+      "auth",
+      message != NULL ? message : "authorization failed",
+      UINT64_C(0xC3002)
+  );
 }
 
-int64_t sec4_rt_err_not_found() {
-  return 0;
+int64_t sec4_rt_err_not_found(const char *code, const char *message) {
+  return sec4_rt_emit_error_handle(
+      404,
+      code != NULL ? code : "RESOURCE.NOT_FOUND",
+      "not_found",
+      message != NULL ? message : "resource not found",
+      UINT64_C(0xC3003)
+  );
 }
 
-int64_t sec4_rt_err_conflict() {
-  return 0;
+int64_t sec4_rt_err_conflict(const char *code, const char *message) {
+  return sec4_rt_emit_error_handle(
+      409,
+      code != NULL ? code : "RESOURCE.CONFLICT",
+      "conflict",
+      message != NULL ? message : "conflict",
+      UINT64_C(0xC3004)
+  );
 }
 
-int64_t sec4_rt_err_rate_limit() {
-  return 0;
+int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t limit) {
+  const char *resolved_message = message != NULL ? message : "rate limit exceeded";
+  int64_t error_handle = sec4_rt_emit_error_handle(
+      429,
+      code != NULL ? code : "LIMIT.RATE",
+      "rate_limit",
+      resolved_message,
+      UINT64_C(0xC3005)
+  );
+  return sec4_rt_handle_from_two(error_handle, limit, UINT64_C(0xC3006));
 }
 
-int64_t sec4_rt_err_internal() {
-  return 0;
+int64_t sec4_rt_err_internal(const char *message) {
+  return sec4_rt_emit_error_handle(
+      500,
+      "INTERNAL.ERROR",
+      "internal",
+      message != NULL ? message : "internal error",
+      UINT64_C(0xC3007)
+  );
 }
 
-int64_t sec4_rt_err_with_path() {
-  return 0;
+int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
+  sec4_rt_ensure_error_response_in_request();
+  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xC3008));
+  return sec4_rt_handle_from_two(error, path_handle, UINT64_C(0xC3009));
 }
 
-int64_t sec4_rt_err_with_detail() {
-  return 0;
+int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
+  sec4_rt_ensure_error_response_in_request();
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xC3010));
+  int64_t detail_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xC3011));
+  return sec4_rt_handle_from_two(error, detail_handle, UINT64_C(0xC3012));
 }
 
-int64_t sec4_rt_err_with_limit() {
-  return 0;
+int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max) {
+  sec4_rt_ensure_error_response_in_request();
+  int64_t limit_name = sec4_rt_nonzero_handle_from_string(name, UINT64_C(0xC3013));
+  int64_t observed = sec4_rt_handle_from_two(value, max, UINT64_C(0xC3014));
+  int64_t limit_handle = sec4_rt_handle_from_two(limit_name, observed, UINT64_C(0xC3015));
+  return sec4_rt_handle_from_two(error, limit_handle, UINT64_C(0xC3016));
 }
 
-int64_t sec4_rt_err_with_dependency() {
-  return 0;
+int64_t sec4_rt_err_with_dependency(
+    int64_t error,
+    const char *service,
+    const char *operation,
+    int64_t retryable
+) {
+  sec4_rt_ensure_error_response_in_request();
+  int64_t service_handle = sec4_rt_nonzero_handle_from_string(service, UINT64_C(0xC3017));
+  int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation, UINT64_C(0xC3018));
+  int64_t dep_handle = sec4_rt_handle_from_three(
+      service_handle,
+      op_handle,
+      retryable != 0 ? 1 : 0,
+      UINT64_C(0xC3019)
+  );
+  return sec4_rt_handle_from_two(error, dep_handle, UINT64_C(0xC3020));
 }
 
-int64_t sec4_rt_err_with_cause() {
-  return 0;
+int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause) {
+  sec4_rt_ensure_error_response_in_request();
+  return sec4_rt_handle_from_two(error, cause, UINT64_C(0xC3021));
 }
