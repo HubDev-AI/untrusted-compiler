@@ -443,6 +443,7 @@ Current strict closure result:
 | `M29-C` | PASS | Naming-lock CI enforces M29 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 | `M29-D` | PASS | Naming-lock CI enforces M29 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 | `M29-E` | PASS | Naming-lock CI enforces M29 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M29-F` | PASS | Naming-lock CI enforces M29 transition handoff packet | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -555,6 +556,7 @@ Strict closure interpretation:
 - M29 runtime de-stub planner enforcement is active (`M29-C`).
 - M29 runtime de-stub runner enforcement is active (`M29-D`).
 - M29 executed-slice convergence summary enforcement is active (`M29-E`).
+- M29 transition handoff packet enforcement is active (`M29-F`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4731,13 +4733,24 @@ M13-S1 go/no-go note:
 - Closure audit includes dedicated `M29-F` gate.
 
 ### M29-S6 tracking (live status)
-- [ ] M29 transition handoff packet script added.
-- [ ] M29 transition handoff packet contract test added.
-- [ ] Book chapter documenting M29 transition handoff packet added.
-- [ ] Naming-lock CI and closure gate updated (`M29-F`).
+- [x] M29 transition handoff packet script added.
+- [x] M29 transition handoff packet contract test added.
+- [x] Book chapter documenting M29 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M29-F`).
+
+### M29-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M29 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M29-A..M29-F` are validated in one canonical closure artifact (`m29Gates[]`).
+- Closure audit includes dedicated `M29-G` gate.
+
+### M29-S7 tracking (live status)
+- [ ] M29 closure report script added.
+- [ ] M29 closure report contract test added.
+- [ ] Book chapter documenting M29 closure report added.
+- [ ] Naming-lock CI and closure gate updated (`M29-G`).
 
 ### Next planned slice
-- M29-S6 transition handoff packet + closure gate `M29-F`.
+- M29-S7 closure report + closure gate `M29-G`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4829,8 +4842,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M29-S6 transition handoff packet from M29 kickoff/matrix/plan/runner/convergence artifacts and wire `M29-F`.
-2. Prepare M29 closure report scope (`M29-S7`) using packet summary + strict gate set.
+1. Implement M29-S7 closure report from strict gate set + M29 handoff packet summary and wire `M29-G`.
+2. Start M30-S1 kickoff brief from closed M29 artifacts after `M29-G`.
 
 ---
 
