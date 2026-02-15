@@ -65,6 +65,11 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
 
 #[test]
 fn test_command_success_path() {
+    if !clang_available() {
+        eprintln!("skipping test-command success integration test: clang not available");
+        return;
+    }
+
     let project_dir = temp_dir("sec4-test-command-success");
     write_minimal_project(
         &project_dir,
@@ -76,12 +81,12 @@ report_only = false
     fs::create_dir_all(project_dir.join("tests/nested")).expect("nested tests dir should exist");
     fs::write(
         project_dir.join("tests/alpha.ut"),
-        "fn alpha() -> Int {\n  1\n}\n",
+        "fn main() -> Int {\n  0\n}\n",
     )
     .expect("alpha test should be written");
     fs::write(
         project_dir.join("tests/nested/beta.ut"),
-        "fn beta() -> Int {\n  2\n}\n",
+        "fn main() -> Int {\n  0\n}\n",
     )
     .expect("beta test should be written");
 
@@ -94,7 +99,9 @@ report_only = false
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
     assert!(
-        stdout.contains("test summary: passed=2, failed=0"),
+        stdout.contains(
+            "test summary: static_passed=2, static_failed=0, runtime_passed=2, runtime_failed=0"
+        ),
         "test summary should report all tests passing:\n{stdout}"
     );
 
@@ -113,11 +120,6 @@ report_only = false
     );
     fs::create_dir_all(project_dir.join("tests")).expect("tests dir should exist");
     fs::write(
-        project_dir.join("tests/good.ut"),
-        "fn good() -> Int {\n  1\n}\n",
-    )
-    .expect("good test should be written");
-    fs::write(
         project_dir.join("tests/bad.ut"),
         "fn bad( -> Int {\n  0\n}\n",
     )
@@ -135,14 +137,70 @@ report_only = false
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
     assert!(
-        stdout.contains("test summary: passed=1, failed=1"),
-        "test summary should report one failing test:\n{stdout}"
+        stdout.contains(
+            "test summary: static_passed=0, static_failed=1, runtime_passed=0, runtime_failed=0"
+        ),
+        "test summary should report one static failing test:\n{stdout}"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains("tests/bad.ut"),
         "diagnostics should reference the invalid test file:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn test_command_fails_when_test_runtime_exits_non_zero() {
+    if !clang_available() {
+        eprintln!("skipping test-command runtime failure integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-test-command-runtime-failure");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = true
+report_only = false
+"#,
+    );
+    fs::create_dir_all(project_dir.join("tests")).expect("tests dir should exist");
+    fs::write(
+        project_dir.join("tests/pass.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("passing test should be written");
+    fs::write(
+        project_dir.join("tests/fail.ut"),
+        "fn main() -> Int {\n  3\n}\n",
+    )
+    .expect("failing test should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["test", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "test command should fail when one runtime exits non-zero"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains(
+            "test summary: static_passed=2, static_failed=0, runtime_passed=1, runtime_failed=1"
+        ),
+        "test summary should report one runtime failing test:\n{stdout}"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("tests/fail.ut"),
+        "runtime failure should reference the failing test file:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

@@ -3336,21 +3336,31 @@ fn cmd_test(path: &Path) -> Result<(), i32> {
 
     let tests_root = path.join("tests");
     let test_entries = collect_ut_files(&tests_root)?;
-    let mut passed = 0usize;
-    let mut failed = 0usize;
+    let mut static_passed = 0usize;
+    let mut static_failed = 0usize;
+    let mut runtime_passed = 0usize;
+    let mut runtime_failed = 0usize;
 
-    for test_entry in test_entries {
+    for (test_index, test_entry) in test_entries.iter().enumerate() {
         match analyze_test_entry(&test_entry, &policy) {
-            Ok(()) => passed += 1,
+            Ok(program) => {
+                static_passed += 1;
+                match compile_and_execute_test_entry(path, test_entry, test_index, &program) {
+                    Ok(()) => runtime_passed += 1,
+                    Err(_) => runtime_failed += 1,
+                }
+            }
             Err(diagnostics) => {
-                failed += 1;
+                static_failed += 1;
                 print_diagnostics(&diagnostics);
             }
         }
     }
 
-    println!("test summary: passed={passed}, failed={failed}");
-    if failed == 0 {
+    println!(
+        "test summary: static_passed={static_passed}, static_failed={static_failed}, runtime_passed={runtime_passed}, runtime_failed={runtime_failed}"
+    );
+    if static_failed == 0 && runtime_failed == 0 {
         Ok(())
     } else {
         Err(1)
@@ -3474,7 +3484,7 @@ fn is_ut_file(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("ut"))
 }
 
-fn analyze_test_entry(path: &Path, policy: &Policy) -> Result<(), Vec<Diagnostic>> {
+fn analyze_test_entry(path: &Path, policy: &Policy) -> Result<sec4_core::ast::Program, Vec<Diagnostic>> {
     let source = fs::read_to_string(path).map_err(|err| {
         vec![
             Diagnostic::error(
@@ -3488,7 +3498,55 @@ fn analyze_test_entry(path: &Path, policy: &Policy) -> Result<(), Vec<Diagnostic
 
     let source_for_parser = strip_allow_annotations(&source);
     let program = parse_source(path, &source_for_parser)?;
-    analyze_program_with_policy(&program, policy)
+    analyze_program_with_policy(&program, policy)?;
+    Ok(program)
+}
+
+fn compile_and_execute_test_entry(
+    project_root: &Path,
+    test_entry: &Path,
+    test_index: usize,
+    program: &sec4_core::ast::Program,
+) -> Result<(), i32> {
+    let mir = sec4_core::lower_program_to_mir(program);
+    let backend_emit = emit_program_with_backend(BackendKind::C, &mir);
+    let binary_name = format!("sec4-test-{:04}", test_index + 1);
+    let (_, binary_path) = match compile_c_binary(project_root, &binary_name, &backend_emit) {
+        Ok(paths) => paths,
+        Err(code) => {
+            eprintln!("test runtime compile failed for `{}`", test_entry.display());
+            return Err(code);
+        }
+    };
+
+    let status = match Command::new(&binary_path).status() {
+        Ok(status) => status,
+        Err(err) => {
+            eprintln!(
+                "could not execute test binary `{}` for `{}`: {err}",
+                binary_path.display(),
+                test_entry.display()
+            );
+            return Err(2);
+        }
+    };
+
+    if status.success() {
+        Ok(())
+    } else {
+        if let Some(code) = status.code() {
+            eprintln!(
+                "test runtime failed for `{}`: exited with status {code}",
+                test_entry.display()
+            );
+        } else {
+            eprintln!(
+                "test runtime failed for `{}`: terminated by signal",
+                test_entry.display()
+            );
+        }
+        Err(1)
+    }
 }
 
 fn format_ut_source(source: &str) -> String {
