@@ -470,6 +470,9 @@ Current strict closure result:
 | `M33-B` | PASS | Naming-lock CI enforces M33 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M33-C` | PASS | Naming-lock CI enforces M33 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 | `M33-D` | PASS | Naming-lock CI enforces M33 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
+| `M33-E` | PASS | Naming-lock CI enforces M33 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
+| `M33-F` | PASS | Naming-lock CI enforces M33 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M33-G` | PASS | Naming-lock CI enforces M33 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -609,6 +612,9 @@ Strict closure interpretation:
 - M33 priority matrix enforcement is active (`M33-B`).
 - M33 runtime de-stub planner enforcement is active (`M33-C`).
 - M33 runtime de-stub runner enforcement is active (`M33-D`).
+- M33 executed-slice convergence summary enforcement is active (`M33-E`).
+- M33 transition handoff packet enforcement is active (`M33-F`).
+- M33 closure report enforcement is active (`M33-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5112,8 +5118,41 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M33 runtime de-stub execution runner added.
 - [x] Naming-lock CI and closure gate updated (`M33-D`).
 
+### M33-S5 executed-slice convergence summary acceptance criteria
+- Executed-slice convergence summary consumes M33 plan + runtime execution artifacts and verifies selected track/slice alignment.
+- Summary emits deterministic markdown/json output with explicit convergence status and chosen follow-up action.
+- Closure audit includes dedicated `M33-E` gate.
+
+### M33-S5 tracking (live status)
+- [x] M33 executed-slice convergence summary script added.
+- [x] M33 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M33 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M33-E`).
+
+### M33-S6 transition handoff packet acceptance criteria
+- Transition packet consumes M33 kickoff/matrix/plan/runtime/convergence artifacts and enforces deterministic selected-track/slice alignment.
+- Packet summary exposes kickoff focus, selected track/slice, runtime status, and convergence outcome.
+- Closure audit includes dedicated `M33-F` gate.
+
+### M33-S6 tracking (live status)
+- [x] M33 transition handoff packet script added.
+- [x] M33 transition handoff packet contract test added.
+- [x] Book chapter documenting M33 transition handoff packet added.
+- [x] Naming-lock CI and closure gate updated (`M33-F`).
+
+### M33-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M33 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M33-A..M33-F` are validated in one canonical closure artifact (`m33Gates[]`).
+- Closure audit includes dedicated `M33-G` gate.
+
+### M33-S7 tracking (live status)
+- [x] M33 closure report script added.
+- [x] M33 closure report contract test added.
+- [x] Book chapter documenting M33 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M33-G`).
+
 ### Next planned slice
-- M33-S5 executed-slice convergence summary + closure gate `M33-E`.
+- M34-S1 kickoff brief + closure gate `M34-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5205,8 +5244,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M33-S5 executed-slice convergence summary from M33 plan + runner artifacts and wire `M33-E`.
-2. Run full strict closure audit and publish M33 handoff status after `M33-E`.
+1. Implement M34-S1 kickoff brief from M33 closure + transition packet artifacts and wire `M34-A`.
+2. Run full strict closure audit and publish M33 closure handoff packet.
 
 ---
 

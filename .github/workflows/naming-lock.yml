@@ -433,6 +433,15 @@ jobs:
       - name: Validate M33 runtime de-stub runner
         run: scripts/test-run-m33-runtime-destub.sh
 
+      - name: Validate M33 executed-slice convergence summary
+        run: scripts/test-build-m33-executed-slice-convergence-summary.sh
+
+      - name: Validate M33 transition handoff packet
+        run: scripts/test-build-m33-transition-handoff-packet.sh
+
+      - name: Validate M33 closure report
+        run: scripts/test-build-m33-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
