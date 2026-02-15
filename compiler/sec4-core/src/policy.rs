@@ -92,6 +92,7 @@ pub struct NetPublicPolicyConfig {
     pub allowed_schemes: Vec<String>,
     pub allowed_domains: Vec<String>,
     pub blocked_domains: Vec<String>,
+    pub allowed_ports: Vec<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -217,6 +218,7 @@ impl Default for Policy {
                 allowed_schemes: vec!["https".to_string()],
                 allowed_domains: Vec::new(),
                 blocked_domains: Vec::new(),
+                allowed_ports: Vec::new(),
             },
             net_internal: NetInternalPolicyConfig {
                 enabled: false,
@@ -856,6 +858,33 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             }
             if let Some(blocked_domains) = public.blocked_domains {
                 policy.net_public.blocked_domains = blocked_domains;
+            }
+            if let Some(allowed_ports) = public.allowed_ports {
+                let invalid_ports = allowed_ports
+                    .iter()
+                    .copied()
+                    .filter(|port| !(1..=65535).contains(port))
+                    .collect::<Vec<_>>();
+                if invalid_ports.is_empty() {
+                    policy.net_public.allowed_ports =
+                        allowed_ports.into_iter().map(|port| port as u16).collect();
+                } else {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid net.public.allowed_ports",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note(format!(
+                            "allowed ports must be in range 1..65535 (invalid: {})",
+                            invalid_ports
+                                .iter()
+                                .map(|port| port.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )),
+                    );
+                }
             }
             if let Some(allowed_schemes) = public.allowed_schemes {
                 if allowed_schemes.is_empty()

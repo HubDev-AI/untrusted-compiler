@@ -678,6 +678,98 @@ blocked_domains = []
 }
 
 #[test]
+fn check_fails_when_public_url_literal_port_is_disallowed_by_policy() {
+    let root = temp_dir("sec4-check-public-url-port-disallowed");
+    let project_dir = root.join("policy-port-disallowed-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = []
+blocked_domains = []
+allowed_ports = [443]
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  url.public("https://api.example.com:8443/private");
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when literal port is outside net.public allowed_ports"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("E2002") && stderr.contains("public URL literal violates active policy"),
+        "failure should include deterministic E2002 policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("port `8443` is not allowed by `[net.public].allowed_ports`"),
+        "failure should explain disallowed port:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_when_public_url_literal_port_is_allowed_by_policy() {
+    let root = temp_dir("sec4-check-public-url-port-allowed");
+    let project_dir = root.join("policy-port-allowed-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = []
+blocked_domains = []
+allowed_ports = [8443]
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  url.public("https://api.example.com:8443/private");
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when literal port is listed in net.public allowed_ports"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("check succeeded"),
+        "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_succeeds_for_allowed_public_url_policy_usage() {
     let root = temp_dir("sec4-check-public-url-policy-allowed");
     let project_dir = root.join("policy-allowed-project");

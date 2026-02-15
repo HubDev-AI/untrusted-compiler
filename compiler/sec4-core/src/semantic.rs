@@ -1947,7 +1947,10 @@ impl<'a> Analyzer<'a> {
                 return;
             }
 
-            if !arg_types[0].is_untrusted_string() {
+            // Allow compile-time URL policy checks on literal `url.public("...")` values.
+            let literal_public_url =
+                is_url_public_gate(callee_name) && matches!(&args[0].kind, ExprKind::String(_));
+            if !literal_public_url && !arg_types[0].is_untrusted_string() {
                 self.diagnostics.push(
                     Diagnostic::error(
                         "E4001",
@@ -2017,7 +2020,7 @@ impl<'a> Analyzer<'a> {
         let ExprKind::String(literal) = &args[0].kind else {
             return;
         };
-        let Some((scheme, host)) = parse_url_literal_scheme_host(literal) else {
+        let Some((scheme, host, explicit_port)) = parse_url_literal_scheme_host(literal) else {
             return;
         };
 
@@ -2070,6 +2073,43 @@ impl<'a> Analyzer<'a> {
                 ),
             );
         }
+
+        if !self.policy.net_public.allowed_ports.is_empty() {
+            let Some(resolved_port) = resolve_public_url_port(&scheme, explicit_port) else {
+                self.push_public_url_policy_diagnostic(
+                    args[0].span.clone(),
+                    literal,
+                    format!(
+                        "scheme `{scheme}` has no default port for `[net.public].allowed_ports` enforcement"
+                    ),
+                );
+                return;
+            };
+
+            if !self
+                .policy
+                .net_public
+                .allowed_ports
+                .iter()
+                .any(|allowed| *allowed == resolved_port)
+            {
+                let allowed_ports = self
+                    .policy
+                    .net_public
+                    .allowed_ports
+                    .iter()
+                    .map(|port| port.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.push_public_url_policy_diagnostic(
+                    args[0].span.clone(),
+                    literal,
+                    format!(
+                        "port `{resolved_port}` is not allowed by `[net.public].allowed_ports` ({allowed_ports})"
+                    ),
+                );
+            }
+        }
     }
 
     fn push_public_url_policy_diagnostic(&mut self, span: Span, literal: &str, reason: String) {
@@ -2080,7 +2120,7 @@ impl<'a> Analyzer<'a> {
                 .with_note(reason)
                 .with_note(format!("literal URL: `{literal}`"))
                 .with_note(
-                    "update `[net.public]` in `sec4.policy` (allowed_schemes/allowed_domains/blocked_domains) to permit this URL literal",
+                    "update `[net.public]` in `sec4.policy` (allowed_schemes/allowed_domains/blocked_domains/allowed_ports) to permit this URL literal",
                 ),
         );
     }
@@ -6422,7 +6462,7 @@ fn sql_is_select_without_limit(sql: &str) -> bool {
     !tokens.any(|token| token == "limit")
 }
 
-fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
+fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String, Option<u16>)> {
     let scheme_end = value.find("://")?;
     if scheme_end == 0 {
         return None;
@@ -6450,11 +6490,29 @@ fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
         .rsplit_once('@')
         .map(|(_, tail)| tail)
         .unwrap_or(authority);
-    let host = if host_port.starts_with('[') {
+
+    let (host, explicit_port) = if host_port.starts_with('[') {
         let close = host_port.find(']')?;
-        &host_port[1..close]
+        let host = &host_port[1..close];
+        let explicit_port = if close + 1 == host_port.len() {
+            None
+        } else {
+            let suffix = &host_port[(close + 1)..];
+            let port_text = suffix.strip_prefix(':')?;
+            if port_text.is_empty() {
+                return None;
+            }
+            Some(port_text.parse::<u16>().ok()?)
+        };
+        (host, explicit_port)
+    } else if let Some((host, port_text)) = host_port.rsplit_once(':') {
+        if host.is_empty() || port_text.is_empty() {
+            return None;
+        }
+        let explicit_port = port_text.parse::<u16>().ok()?;
+        (host, Some(explicit_port))
     } else {
-        host_port.split(':').next().unwrap_or("")
+        (host_port, None)
     };
 
     let normalized_host = normalize_policy_domain(host);
@@ -6462,7 +6520,15 @@ fn parse_url_literal_scheme_host(value: &str) -> Option<(String, String)> {
         return None;
     }
 
-    Some((scheme, normalized_host))
+    Some((scheme, normalized_host, explicit_port))
+}
+
+fn resolve_public_url_port(scheme: &str, explicit_port: Option<u16>) -> Option<u16> {
+    explicit_port.or_else(|| match scheme {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    })
 }
 
 fn normalize_policy_domain(domain: &str) -> String {

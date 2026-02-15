@@ -104,6 +104,30 @@ blocked_domains = ["169.254.169.254"]
 }
 
 #[test]
+fn policy_parses_public_egress_allowed_ports() {
+    let source = r#"
+[net.public]
+allowed_ports = [80, 443, 8443]
+"#;
+
+    let policy =
+        parse_policy_str(Path::new("sec4.policy"), source).expect("allowed ports should parse");
+    assert_eq!(policy.net_public.allowed_ports, vec![80, 443, 8443]);
+}
+
+#[test]
+fn policy_rejects_invalid_public_egress_allowed_ports() {
+    let source = r#"
+[net.public]
+allowed_ports = [0, 65536, -1]
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("invalid allowed_ports must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
 fn policy_parses_fs_forbid_symlinks_mode() {
     let source = r#"
 [fs]
