@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,8 +28,10 @@
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
 #define SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES 2048
-#define SEC4_RT_MAX_OUTBOUND_HTTP_RESPONSE_BYTES 16384
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
+#define SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES 8192
+#define SEC4_RT_DEFAULT_NET_TIMEOUT_MS 2000
+#define SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES 1048576
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
@@ -134,6 +137,7 @@ static bool sec4_rt_parse_header_value(
     char *value,
     size_t value_size
 );
+static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
 static bool sec4_rt_fs_mkdirs(const char *path);
 
@@ -846,8 +850,48 @@ static bool sec4_rt_parse_outbound_http_url(
   return true;
 }
 
-static int sec4_rt_open_outbound_tcp_socket(const char *host, uint16_t port) {
-  if (host == NULL || host[0] == '\0' || port == 0) {
+static int64_t sec4_rt_outbound_http_timeout_ms(void) {
+  int64_t timeout_ms = sec4_rt_parse_env_i64(
+      "SEC4_RT_NET_TIMEOUT_MS",
+      SEC4_RT_DEFAULT_NET_TIMEOUT_MS
+  );
+  if (timeout_ms <= 0) {
+    timeout_ms = SEC4_RT_DEFAULT_NET_TIMEOUT_MS;
+  }
+  return timeout_ms;
+}
+
+static size_t sec4_rt_outbound_http_max_body_bytes(void) {
+  int64_t max_body_bytes = sec4_rt_parse_env_i64(
+      "SEC4_RT_NET_MAX_BODY_BYTES",
+      SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES
+  );
+  if (max_body_bytes <= 0) {
+    max_body_bytes = SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES;
+  }
+  return (size_t) max_body_bytes;
+}
+
+static bool sec4_rt_set_socket_nonblocking(int socket_fd, bool nonblocking) {
+  int flags = fcntl(socket_fd, F_GETFL, 0);
+  if (flags < 0) {
+    return false;
+  }
+
+  int updated = nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
+  return fcntl(socket_fd, F_SETFL, updated) == 0;
+}
+
+static int sec4_rt_open_outbound_tcp_socket(
+    const char *host,
+    uint16_t port,
+    int64_t timeout_ms,
+    bool *timed_out
+) {
+  if (timed_out != NULL) {
+    *timed_out = false;
+  }
+  if (host == NULL || host[0] == '\0' || port == 0 || timeout_ms <= 0) {
     return -1;
   }
 
@@ -875,18 +919,76 @@ static int sec4_rt_open_outbound_tcp_socket(const char *host, uint16_t port) {
       continue;
     }
 
+    if (!sec4_rt_set_socket_nonblocking(socket_fd, true)) {
+      close(socket_fd);
+      socket_fd = -1;
+      continue;
+    }
+
+    int connect_rc = connect(socket_fd, current->ai_addr, current->ai_addrlen);
+    if (connect_rc != 0) {
+      if (errno != EINPROGRESS && errno != EWOULDBLOCK) {
+        if (timed_out != NULL && errno == ETIMEDOUT) {
+          *timed_out = true;
+        }
+        close(socket_fd);
+        socket_fd = -1;
+        continue;
+      }
+
+      fd_set wfds;
+      FD_ZERO(&wfds);
+      FD_SET(socket_fd, &wfds);
+
+      struct timeval connect_timeout;
+      connect_timeout.tv_sec = (time_t) (timeout_ms / 1000);
+      connect_timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+
+      int select_rc = select(socket_fd + 1, NULL, &wfds, NULL, &connect_timeout);
+      if (select_rc == 0) {
+        if (timed_out != NULL) {
+          *timed_out = true;
+        }
+        close(socket_fd);
+        socket_fd = -1;
+        continue;
+      }
+      if (select_rc < 0) {
+        close(socket_fd);
+        socket_fd = -1;
+        continue;
+      }
+
+      int connect_error = 0;
+      socklen_t connect_error_len = sizeof(connect_error);
+      if (getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, &connect_error, &connect_error_len) != 0) {
+        close(socket_fd);
+        socket_fd = -1;
+        continue;
+      }
+      if (connect_error != 0) {
+        if (timed_out != NULL && connect_error == ETIMEDOUT) {
+          *timed_out = true;
+        }
+        close(socket_fd);
+        socket_fd = -1;
+        continue;
+      }
+    }
+
+    if (!sec4_rt_set_socket_nonblocking(socket_fd, false)) {
+      close(socket_fd);
+      socket_fd = -1;
+      continue;
+    }
+
     struct timeval timeout;
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = (time_t) (timeout_ms / 1000);
+    timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
     (void) setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     (void) setsockopt(socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    if (connect(socket_fd, current->ai_addr, current->ai_addrlen) == 0) {
-      break;
-    }
-
-    close(socket_fd);
-    socket_fd = -1;
+    break;
   }
 
   freeaddrinfo(addresses);
@@ -897,19 +999,37 @@ static int sec4_rt_read_outbound_http_body(
     int socket_fd,
     char *body,
     size_t body_size,
+    size_t max_body_bytes,
     size_t *body_len
 ) {
-  if (socket_fd < 0 || body == NULL || body_size == 0 || body_len == NULL) {
+  if (socket_fd < 0 || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
     return -1;
   }
   body[0] = '\0';
   *body_len = 0;
 
-  char response[SEC4_RT_MAX_OUTBOUND_HTTP_RESPONSE_BYTES];
+  size_t response_capacity = max_body_bytes + SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES + 1;
+  if (response_capacity <= max_body_bytes || response_capacity <= SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
+    return -1;
+  }
+
+  char *response = (char *) malloc(response_capacity);
+  if (response == NULL) {
+    return -1;
+  }
+
   size_t total = 0;
-  while (total < sizeof(response) - 1) {
-    ssize_t bytes_read = recv(socket_fd, response + total, sizeof(response) - 1 - total, 0);
+  while (total < response_capacity - 1) {
+    ssize_t bytes_read = recv(socket_fd, response + total, response_capacity - 1 - total, 0);
     if (bytes_read < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT) {
+        free(response);
+        return -4;
+      }
+      free(response);
       return -1;
     }
     if (bytes_read == 0) {
@@ -918,28 +1038,41 @@ static int sec4_rt_read_outbound_http_body(
     total += (size_t) bytes_read;
   }
 
-  if (total == sizeof(response) - 1) {
+  if (total == response_capacity - 1) {
+    free(response);
     return -2;
   }
 
   response[total] = '\0';
   if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
+    free(response);
     return -3;
   }
 
   char *headers_end = strstr(response, "\r\n\r\n");
   if (headers_end == NULL) {
+    free(response);
     return -3;
   }
 
   size_t header_bytes = (size_t) (headers_end - response) + 4;
   if (header_bytes > total) {
+    free(response);
     return -3;
+  }
+  if (header_bytes > SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
+    free(response);
+    return -2;
   }
 
   size_t payload_bytes = total - header_bytes;
-  if (payload_bytes >= body_size) {
+  if (payload_bytes > max_body_bytes) {
+    free(response);
     return -2;
+  }
+  if (payload_bytes >= body_size) {
+    free(response);
+    return -5;
   }
 
   if (payload_bytes > 0) {
@@ -947,6 +1080,7 @@ static int sec4_rt_read_outbound_http_body(
   }
   body[payload_bytes] = '\0';
   *body_len = payload_bytes;
+  free(response);
   return 0;
 }
 
@@ -954,6 +1088,9 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
   if (url_value == NULL || url_value[0] == '\0') {
     return 0;
   }
+
+  int64_t timeout_ms = sec4_rt_outbound_http_timeout_ms();
+  size_t max_body_bytes = sec4_rt_outbound_http_max_body_bytes();
 
   char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
   uint16_t port = 0;
@@ -1016,8 +1153,18 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     return 0;
   }
 
-  int socket_fd = sec4_rt_open_outbound_tcp_socket(host, port);
+  bool connect_timed_out = false;
+  int socket_fd = sec4_rt_open_outbound_tcp_socket(host, port, timeout_ms, &connect_timed_out);
   if (socket_fd < 0) {
+    if (connect_timed_out) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.CONNECT_TIMEOUT",
+          "timeout",
+          "outbound http connect timed out"
+      );
+      return 0;
+    }
     sec4_rt_store_std_error_response(
         500,
         "NET.CONNECT_FAILED",
@@ -1064,14 +1211,38 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
 
   char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
   size_t body_len = 0;
-  int read_status = sec4_rt_read_outbound_http_body(socket_fd, body, sizeof(body), &body_len);
+  int read_status = sec4_rt_read_outbound_http_body(
+      socket_fd,
+      body,
+      sizeof(body),
+      max_body_bytes,
+      &body_len
+  );
   close(socket_fd);
   if (read_status == -2) {
     sec4_rt_store_std_error_response(
         500,
         "NET.RESPONSE_TOO_LARGE",
+        "validation",
+        "outbound http response body exceeds runtime max body limit"
+    );
+    return 0;
+  }
+  if (read_status == -4) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.READ_TIMEOUT",
+        "timeout",
+        "outbound http response read timed out"
+    );
+    return 0;
+  }
+  if (read_status == -5) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TRACK_FAILED",
         "internal",
-        "outbound http response exceeds runtime buffer limits"
+        "outbound http response exceeds runtime tracked value limits"
     );
     return 0;
   }
