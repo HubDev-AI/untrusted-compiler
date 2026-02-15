@@ -5392,6 +5392,237 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-db-fs-net-handles");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-db-fs-net-handles");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t query_a = sec4_rt_sql_q("SELECT 1", 11);
+  int64_t query_b = sec4_rt_sql_q("SELECT 2", 11);
+  if (query_a == 0 || query_b == 0) { return 11; }
+  if (query_a == query_b) { return 12; }
+  if (sec4_rt_sql_q("", 11) != 0) { return 13; }
+
+  int64_t tx = sec4_rt_db_tx(101);
+  if (tx == 0) { return 14; }
+  if (sec4_rt_db_tx(0) != 0) { return 15; }
+
+  int64_t exec_a = sec4_rt_db_exec(101, query_a);
+  int64_t exec_b = sec4_rt_db_exec(101, query_b);
+  if (exec_a == 0 || exec_b == 0) { return 16; }
+  if (exec_a == exec_b) { return 17; }
+  if (sec4_rt_db_exec(0, query_a) != 0) { return 18; }
+
+  int64_t exec_tx = sec4_rt_db_exec_tx(tx, query_a);
+  if (exec_tx == 0) { return 19; }
+  if (sec4_rt_db_exec_tx(0, query_a) != 0) { return 20; }
+
+  int64_t row_a = sec4_rt_db_query_one(101, query_a, 501);
+  int64_t row_b = sec4_rt_db_query_one(101, query_a, 502);
+  if (row_a == 0 || row_b == 0) { return 21; }
+  if (row_a == row_b) { return 22; }
+  if (sec4_rt_db_query_one(0, query_a, 501) != 0) { return 23; }
+
+  int64_t fs_read_a = sec4_rt_fs_read(7, 2001);
+  int64_t fs_read_b = sec4_rt_fs_read(7, 2002);
+  if (fs_read_a == 0 || fs_read_b == 0) { return 24; }
+  if (fs_read_a == fs_read_b) { return 25; }
+  if (sec4_rt_fs_read(0, 2001) != 0) { return 26; }
+
+  int64_t fs_write_a = sec4_rt_fs_write(7, 2001, 1);
+  int64_t fs_write_b = sec4_rt_fs_write(7, 2001, 2);
+  if (fs_write_a == 0 || fs_write_b == 0) { return 27; }
+  if (fs_write_a == fs_write_b) { return 28; }
+  if (sec4_rt_fs_write(0, 2001, 1) != 0) { return 29; }
+
+  int64_t public_url_a = sec4_rt_req_query("https://public-a.example/path");
+  int64_t public_url_b = sec4_rt_req_query("https://public-b.example/path");
+  int64_t net_a = sec4_rt_http_get(3, public_url_a);
+  int64_t net_b = sec4_rt_http_get(3, public_url_b);
+  if (net_a == 0 || net_b == 0) { return 30; }
+  if (net_a == net_b) { return 31; }
+  if (sec4_rt_http_get(0, public_url_a) != 0) { return 32; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime db/fs/net harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime db/fs/net harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_net_denied_by_default_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net deny test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-deny");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-deny");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t internal_url = sec4_rt_req_query("http://127.0.0.1/internal-service");
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net deny harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net deny harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_net_allowed_with_env_override_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net allow test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-allow");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-allow");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t internal_url_a = sec4_rt_req_query("http://127.0.0.1/service-a");
+  int64_t internal_url_b = sec4_rt_req_query("http://10.0.0.8/service-b");
+  if (internal_url_a == 0 || internal_url_b == 0) { return 11; }
+
+  int64_t handle_a = sec4_rt_http_get_internal(1, internal_url_a);
+  int64_t handle_b = sec4_rt_http_get_internal(1, internal_url_b);
+  if (handle_a == 0 || handle_b == 0) { return 12; }
+  if (handle_a == handle_b) { return 13; }
+  if (sec4_rt_http_get_internal(0, internal_url_a) != 0) { return 14; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net allow harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net allow harness should exit successfully"
+    );
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");

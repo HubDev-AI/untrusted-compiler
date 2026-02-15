@@ -1963,40 +1963,173 @@ int64_t sec4_rt_set_cookie(int64_t cookie) {
   return sec4_rt_append_response_header("Set-Cookie", cookie_value);
 }
 
-int64_t sec4_rt_sql_q() {
-  return 0;
+int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
+  if (query_template == NULL || query_template[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.SQL_TEMPLATE_INVALID",
+        "validation",
+        "sql.q query template is required"
+    );
+    return 0;
+  }
+
+  int64_t template_handle = sec4_rt_track_string_value(query_template, UINT64_C(0x18181));
+  if (template_handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.SQL_TEMPLATE_INTERNAL",
+        "internal",
+        "sql.q runtime failure"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(template_handle, params, UINT64_C(0x18182));
 }
 
-int64_t sec4_rt_db_exec() {
-  return 0;
+int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
+  if (db == 0 || query == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_INVALID",
+        "validation",
+        "db.exec requires db capability and query handle"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(db, query, UINT64_C(0x18183));
 }
 
-int64_t sec4_rt_db_tx() {
-  return 0;
+int64_t sec4_rt_db_tx(int64_t db) {
+  if (db == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.TX_INVALID",
+        "validation",
+        "db.tx requires db capability handle"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(db, 1, UINT64_C(0x18184));
 }
 
-int64_t sec4_rt_db_exec_tx() {
-  return 0;
+int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query) {
+  if (tx == 0 || query == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_TX_INVALID",
+        "validation",
+        "db.execTx requires transaction and query handles"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(tx, query, UINT64_C(0x18185));
 }
 
-int64_t sec4_rt_db_query_one() {
-  return 0;
+int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema) {
+  if (db == 0 || query == 0 || row_schema == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.QUERY_ONE_INVALID",
+        "validation",
+        "db.queryOne requires db capability, query, and row schema handles"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_three(db, query, row_schema, UINT64_C(0x18186));
 }
 
-int64_t sec4_rt_fs_read() {
-  return 0;
+int64_t sec4_rt_fs_read(int64_t fs, int64_t path) {
+  if (fs == 0 || path == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.READ_INVALID",
+        "validation",
+        "fs.read requires fs capability and path handles"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(fs, path, UINT64_C(0x18187));
 }
 
-int64_t sec4_rt_fs_write() {
-  return 0;
+int64_t sec4_rt_fs_write(int64_t fs, int64_t path, int64_t value) {
+  if (fs == 0 || path == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "FS.WRITE_INVALID",
+        "validation",
+        "fs.write requires fs capability and path handles"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_three(fs, path, value, UINT64_C(0x18188));
 }
 
-int64_t sec4_rt_http_get() {
-  return 0;
+int64_t sec4_rt_http_get(int64_t net, int64_t url) {
+  if (net == 0 || url == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.GET_INVALID",
+        "validation",
+        "httpClient.get requires net capability and url handles"
+    );
+    return 0;
+  }
+
+  const char *url_value = sec4_rt_lookup_tracked_value(url);
+  if (url_value != NULL && !sec4_rt_is_public_url_valid(url_value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_INVALID",
+        "validation",
+        "httpClient.get requires PublicUrl input"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(net, url, UINT64_C(0x18189));
 }
 
-int64_t sec4_rt_http_get_internal() {
-  return 0;
+int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
+  if (net == 0 || url == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.GET_INTERNAL_INVALID",
+        "validation",
+        "httpClient.getInternal requires net capability and url handles"
+    );
+    return 0;
+  }
+
+  if (!sec4_rt_env_flag_enabled("SEC4_RT_ALLOW_INTERNAL_NET")) {
+    sec4_rt_store_std_error_response(
+        403,
+        "NET.INTERNAL_DENIED",
+        "authorization",
+        "internal network access denied by runtime policy"
+    );
+    return 0;
+  }
+
+  const char *url_value = sec4_rt_lookup_tracked_value(url);
+  if (url_value != NULL && !sec4_rt_is_internal_url_valid(url_value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_INVALID",
+        "validation",
+        "httpClient.getInternal requires InternalUrl input"
+    );
+    return 0;
+  }
+
+  return sec4_rt_handle_from_two(net, url, UINT64_C(0x1818A));
 }
 
 int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name) {

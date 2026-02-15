@@ -104,15 +104,16 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_set_header(int64_t name, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_cookie_build(const char *name, const char *value);"));
     assert!(header.contains("int64_t sec4_rt_set_cookie(int64_t cookie);"));
-    assert!(header.contains("int64_t sec4_rt_sql_q();"));
-    assert!(header.contains("int64_t sec4_rt_db_exec();"));
-    assert!(header.contains("int64_t sec4_rt_db_tx();"));
-    assert!(header.contains("int64_t sec4_rt_db_exec_tx();"));
-    assert!(header.contains("int64_t sec4_rt_db_query_one();"));
-    assert!(header.contains("int64_t sec4_rt_fs_read();"));
-    assert!(header.contains("int64_t sec4_rt_fs_write();"));
-    assert!(header.contains("int64_t sec4_rt_http_get();"));
-    assert!(header.contains("int64_t sec4_rt_http_get_internal();"));
+    assert!(header.contains("int64_t sec4_rt_sql_q(const char *query_template, int64_t params);"));
+    assert!(header.contains("int64_t sec4_rt_db_exec(int64_t db, int64_t query);"));
+    assert!(header.contains("int64_t sec4_rt_db_tx(int64_t db);"));
+    assert!(header.contains("int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query);"));
+    assert!(header
+        .contains("int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema);"));
+    assert!(header.contains("int64_t sec4_rt_fs_read(int64_t fs, int64_t path);"));
+    assert!(header.contains("int64_t sec4_rt_fs_write(int64_t fs, int64_t path, int64_t value);"));
+    assert!(header.contains("int64_t sec4_rt_http_get(int64_t net, int64_t url);"));
+    assert!(header.contains("int64_t sec4_rt_http_get_internal(int64_t net, int64_t url);"));
     assert!(header.contains("int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name);"));
     assert!(header.contains("int64_t sec4_rt_secret_redact(int64_t secret_value);"));
     assert!(header.contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value);"));
@@ -196,15 +197,17 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_set_header(int64_t name, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_cookie_build(const char *name, const char *value)"));
     assert!(source.contains("int64_t sec4_rt_set_cookie(int64_t cookie)"));
-    assert!(source.contains("int64_t sec4_rt_sql_q()"));
-    assert!(source.contains("int64_t sec4_rt_db_exec()"));
-    assert!(source.contains("int64_t sec4_rt_db_tx()"));
-    assert!(source.contains("int64_t sec4_rt_db_exec_tx()"));
-    assert!(source.contains("int64_t sec4_rt_db_query_one()"));
-    assert!(source.contains("int64_t sec4_rt_fs_read()"));
-    assert!(source.contains("int64_t sec4_rt_fs_write()"));
-    assert!(source.contains("int64_t sec4_rt_http_get()"));
-    assert!(source.contains("int64_t sec4_rt_http_get_internal()"));
+    assert!(source.contains("int64_t sec4_rt_sql_q(const char *query_template, int64_t params)"));
+    assert!(source.contains("int64_t sec4_rt_db_exec(int64_t db, int64_t query)"));
+    assert!(source.contains("int64_t sec4_rt_db_tx(int64_t db)"));
+    assert!(source.contains("int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query)"));
+    assert!(source.contains(
+        "int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema)"
+    ));
+    assert!(source.contains("int64_t sec4_rt_fs_read(int64_t fs, int64_t path)"));
+    assert!(source.contains("int64_t sec4_rt_fs_write(int64_t fs, int64_t path, int64_t value)"));
+    assert!(source.contains("int64_t sec4_rt_http_get(int64_t net, int64_t url)"));
+    assert!(source.contains("int64_t sec4_rt_http_get_internal(int64_t net, int64_t url)"));
     assert!(source.contains("int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name)"));
     assert!(source.contains("int64_t sec4_rt_secret_redact(int64_t secret_value)"));
     assert!(source.contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value)"));
