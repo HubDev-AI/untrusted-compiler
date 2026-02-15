@@ -451,6 +451,7 @@ Current strict closure result:
 | `M30-D` | PASS | Naming-lock CI enforces M30 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 | `M30-E` | PASS | Naming-lock CI enforces M30 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M30-F` | PASS | Naming-lock CI enforces M30 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M30-G` | PASS | Naming-lock CI enforces M30 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -571,6 +572,7 @@ Strict closure interpretation:
 - M30 runtime de-stub runner enforcement is active (`M30-D`).
 - M30 executed-slice convergence summary enforcement is active (`M30-E`).
 - M30 transition handoff packet enforcement is active (`M30-F`).
+- M30 closure report enforcement is active (`M30-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4837,8 +4839,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M30 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M30-F`).
 
+### M30-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M30 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M30-A..M30-F` are validated in one canonical closure artifact (`m30Gates[]`).
+- Closure audit includes dedicated `M30-G` gate.
+
+### M30-S7 tracking (live status)
+- [x] M30 closure report script added.
+- [x] M30 closure report contract test added.
+- [x] Book chapter documenting M30 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M30-G`).
+
 ### Next planned slice
-- M30-S7 closure report + closure gate `M30-G`.
+- M31-S1 kickoff brief + closure gate `M31-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4930,8 +4943,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M30-S7 closure report from strict closure gates + M30 handoff packet summary and wire `M30-G`.
-2. Start the next runtime-first loop milestone after M30 closure (`M31-S1`) with strict closure gating parity.
+1. Implement M31-S1 kickoff brief from M30 closure + M30 transition packet artifacts and wire `M31-A`.
+2. Continue M31 runtime-first stabilization sequence (`S2..S7`) with strict closure gating parity.
 
 ---
 
