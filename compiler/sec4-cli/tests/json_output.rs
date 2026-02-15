@@ -10027,6 +10027,455 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_crypto_ct_eq_with_redacted_query_values_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime crypto.ctEq redaction e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-http-cteq-redacted-e2e");
+    let port = find_available_tcp_port();
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("http-cteq-redacted-e2e");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+
+static int64_t compare_handler(void) {{
+  int64_t left = sec4_rt_req_query("left");
+  int64_t right = sec4_rt_req_query("right");
+  int64_t left_redacted = sec4_rt_secret_redact(left);
+  int64_t right_redacted = sec4_rt_secret_redact(right);
+  if (left_redacted == 0 || right_redacted == 0) {{
+    sec4_rt_res_text(500, "redact-failed");
+    return 0;
+  }}
+  if (sec4_rt_crypto_ct_eq(left_redacted, right_redacted)) {{
+    sec4_rt_res_text(200, "equal");
+  }} else {{
+    sec4_rt_res_text(401, "not-equal");
+  }}
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{
+    return 11;
+  }}
+  if (sec4_rt_http_route_get(router, "/compare", compare_handler) != 0) {{
+    return 12;
+  }}
+  return (int) sec4_rt_http_serve({}, router);
+}}
+"#,
+            port
+        ),
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime crypto.ctEq harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime crypto.ctEq harness should compile successfully"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("runtime crypto.ctEq harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!("runtime crypto.ctEq harness exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /compare?left=token123&right=token123 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime crypto.ctEq harness test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime crypto.ctEq harness did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "runtime crypto.ctEq harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line for equal redacted query values"
+    );
+    assert!(
+        response.contains("equal"),
+        "response should include equal body when redacted query values match"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_secret_reveal_denied_by_default_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime secret reveal deny e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-http-secret-reveal-deny-e2e");
+    let port = find_available_tcp_port();
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("http-secret-reveal-deny-e2e");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+
+static int64_t reveal_handler(void) {{
+  int64_t secret = sec4_rt_secret_get(1, "SEC4_RT_TEST_SECRET_VALUE");
+  if (secret == 0) {{
+    sec4_rt_res_text(500, "missing-secret");
+    return 0;
+  }}
+  int64_t revealed = sec4_rt_secret_reveal(1, secret);
+  if (revealed == 0) {{
+    sec4_rt_res_text(403, "reveal-denied");
+    return 0;
+  }}
+  sec4_rt_res_text(200, "reveal-allowed");
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{
+    return 11;
+  }}
+  if (sec4_rt_http_route_get(router, "/reveal", reveal_handler) != 0) {{
+    return 12;
+  }}
+  return (int) sec4_rt_http_serve({}, router);
+}}
+"#,
+            port
+        ),
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime secret reveal deny harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime secret reveal deny harness should compile successfully"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_TEST_SECRET_VALUE", "runtime-secret")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("runtime secret reveal deny harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!("runtime secret reveal deny harness exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /reveal HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime secret reveal deny harness test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime secret reveal deny harness did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "runtime secret reveal deny harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 403 Forbidden"),
+        "response should contain 403 status line when secret reveal is denied by default"
+    );
+    assert!(
+        response.contains("reveal-denied"),
+        "response should include reveal-denied body when secret reveal is denied"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_secret_reveal_allowed_with_env_override_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime secret reveal allow e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-http-secret-reveal-allow-e2e");
+    let port = find_available_tcp_port();
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("http-secret-reveal-allow-e2e");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+
+static int64_t reveal_handler(void) {{
+  int64_t secret = sec4_rt_secret_get(1, "SEC4_RT_TEST_SECRET_VALUE");
+  if (secret == 0) {{
+    sec4_rt_res_text(500, "missing-secret");
+    return 0;
+  }}
+  int64_t revealed = sec4_rt_secret_reveal(1, secret);
+  if (revealed == 0) {{
+    sec4_rt_res_text(403, "reveal-denied");
+    return 0;
+  }}
+  sec4_rt_res_text(200, "reveal-allowed");
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{
+    return 11;
+  }}
+  if (sec4_rt_http_route_get(router, "/reveal", reveal_handler) != 0) {{
+    return 12;
+  }}
+  return (int) sec4_rt_http_serve({}, router);
+}}
+"#,
+            port
+        ),
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime secret reveal allow harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime secret reveal allow harness should compile successfully"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_TEST_SECRET_VALUE", "runtime-secret")
+        .env("SEC4_RT_ALLOW_SECRET_REVEAL", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("runtime secret reveal allow harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!("runtime secret reveal allow harness exited before request with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /reveal HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime secret reveal allow harness test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("runtime secret reveal allow harness did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "runtime secret reveal allow harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line when secret reveal override is enabled"
+    );
+    assert!(
+        response.contains("reveal-allowed"),
+        "response should include reveal-allowed body when secret reveal override is enabled"
+    );
+}
+
+#[test]
 fn run_command_executes_hello_api_example_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping hello-api run integration test: clang not available");

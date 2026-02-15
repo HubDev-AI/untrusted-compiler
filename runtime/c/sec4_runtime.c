@@ -296,6 +296,22 @@ static const char *sec4_rt_lookup_tracked_value(int64_t handle) {
   return NULL;
 }
 
+static bool sec4_rt_constant_time_bytes_eq(
+    const unsigned char *left,
+    size_t left_len,
+    const unsigned char *right,
+    size_t right_len
+) {
+  size_t max_len = left_len > right_len ? left_len : right_len;
+  unsigned char diff = (unsigned char) (left_len ^ right_len);
+  for (size_t i = 0; i < max_len; i++) {
+    unsigned char left_byte = i < left_len ? left[i] : 0;
+    unsigned char right_byte = i < right_len ? right[i] : 0;
+    diff |= (unsigned char) (left_byte ^ right_byte);
+  }
+  return diff == 0;
+}
+
 static bool sec4_rt_extract_query_value(
     const char *path,
     const char *name,
@@ -1157,6 +1173,15 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
   return (int64_t) value;
 }
 
+static bool sec4_rt_env_flag_enabled(const char *name) {
+  const char *raw = getenv(name);
+  if (raw == NULL || raw[0] == '\0') {
+    return false;
+  }
+  return strcmp(raw, "1") == 0 || strcasecmp(raw, "true") == 0 || strcasecmp(raw, "yes") == 0
+      || strcasecmp(raw, "on") == 0 || strcasecmp(raw, "allow") == 0;
+}
+
 static bool sec4_rt_oneshot_mode_enabled(void) {
   const char *mode = getenv("SEC4_RT_HTTP_SERVE_MODE");
   if (mode != NULL && strcmp(mode, "oneshot") == 0) {
@@ -1622,10 +1647,39 @@ int64_t sec4_rt_req_json(int64_t schema) {
 }
 
 int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
-  (void) ctx;
-  (void) schema;
-  (void) raw;
-  return 0;
+  if (ctx == 0 || schema == 0 || raw == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.DECODE_INVALID",
+        "validation",
+        "invalid json.decode input"
+    );
+    return 0;
+  }
+
+  const char *raw_value = sec4_rt_lookup_tracked_value(raw);
+  if (raw_value == NULL || raw_value[0] == '\0'
+      || !sec4_rt_is_likely_json(raw_value, strlen(raw_value))) {
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.DECODE_INVALID",
+        "validation",
+        "invalid json.decode input"
+    );
+    return 0;
+  }
+
+  int64_t decoded = sec4_rt_track_string_value(raw_value, UINT64_C(0x13131));
+  if (decoded == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.DECODE_INTERNAL",
+        "internal",
+        "json.decode runtime failure"
+    );
+    return 0;
+  }
+  return decoded;
 }
 
 int64_t sec4_rt_json_encode(int64_t schema, int64_t value) {
@@ -1797,20 +1851,133 @@ int64_t sec4_rt_http_get_internal() {
   return 0;
 }
 
-int64_t sec4_rt_secret_get() {
-  return 0;
+int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name) {
+  if (secrets_cap == 0 || name == NULL || name[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "SECRET.GET_INVALID",
+        "validation",
+        "secret key is required"
+    );
+    return 0;
+  }
+
+  const char *value = getenv(name);
+  if (value == NULL || value[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        404,
+        "SECRET.NOT_FOUND",
+        "missing_secret",
+        "secret not found"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x41414));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "SECRET.GET_INTERNAL",
+        "internal",
+        "secret runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
-int64_t sec4_rt_secret_redact() {
-  return 0;
+int64_t sec4_rt_secret_redact(int64_t secret_value) {
+  const char *raw = sec4_rt_lookup_tracked_value(secret_value);
+  if (raw == NULL || raw[0] == '\0') {
+    return 0;
+  }
+
+  int64_t digest = sec4_rt_gate_handle_from_string(raw, UINT64_C(0x51515));
+  if (digest == 0) {
+    return 0;
+  }
+
+  char redacted[64];
+  int written = snprintf(
+      redacted,
+      sizeof(redacted),
+      "[redacted:%016llx]",
+      (unsigned long long) ((uint64_t) digest)
+  );
+  if (written <= 0 || (size_t) written >= sizeof(redacted)) {
+    return 0;
+  }
+
+  return sec4_rt_track_string_value(redacted, UINT64_C(0x61616));
 }
 
-int64_t sec4_rt_secret_reveal() {
-  return 0;
+int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value) {
+  if (secrets_cap == 0 || secret_value == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "SECRET.REVEAL_INVALID",
+        "validation",
+        "secret value is required"
+    );
+    return 0;
+  }
+
+  if (!sec4_rt_env_flag_enabled("SEC4_RT_ALLOW_SECRET_REVEAL")) {
+    sec4_rt_store_std_error_response(
+        403,
+        "SECRET.REVEAL_DENIED",
+        "authorization",
+        "secret reveal disabled by runtime policy"
+    );
+    return 0;
+  }
+
+  const char *value = sec4_rt_lookup_tracked_value(secret_value);
+  if (value == NULL || value[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        404,
+        "SECRET.NOT_FOUND",
+        "missing_secret",
+        "secret not found"
+    );
+    return 0;
+  }
+
+  return sec4_rt_track_string_value(value, UINT64_C(0x71717));
 }
 
-bool sec4_rt_crypto_ct_eq() {
-  return false;
+bool sec4_rt_crypto_ct_eq(int64_t left_secret, int64_t right_secret) {
+  const char *left_value = sec4_rt_lookup_tracked_value(left_secret);
+  const char *right_value = sec4_rt_lookup_tracked_value(right_secret);
+
+  if (left_value != NULL && right_value != NULL) {
+    return sec4_rt_constant_time_bytes_eq(
+        (const unsigned char *) left_value,
+        strlen(left_value),
+        (const unsigned char *) right_value,
+        strlen(right_value)
+    );
+  }
+
+  if (left_secret == 0 || right_secret == 0) {
+    return false;
+  }
+
+  unsigned char left_bytes[sizeof(uint64_t)];
+  unsigned char right_bytes[sizeof(uint64_t)];
+  uint64_t left_bits = (uint64_t) left_secret;
+  uint64_t right_bits = (uint64_t) right_secret;
+  for (size_t i = 0; i < sizeof(uint64_t); i++) {
+    left_bytes[i] = (unsigned char) ((left_bits >> (i * 8)) & UINT64_C(0xff));
+    right_bytes[i] = (unsigned char) ((right_bits >> (i * 8)) & UINT64_C(0xff));
+  }
+
+  return sec4_rt_constant_time_bytes_eq(
+      left_bytes,
+      sizeof(left_bytes),
+      right_bytes,
+      sizeof(right_bytes)
+  );
 }
 
 int64_t sec4_rt_validate_header_value(int64_t input) {
