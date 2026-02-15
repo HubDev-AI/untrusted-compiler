@@ -528,5 +528,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `561-m29-closure-report.md`
 - `562-m30-kickoff-brief.md`
 - `563-m30-priority-matrix.md`
+- `564-m30-runtime-destub-plan.md`
 
 As milestones progress, chapters will be added and linked from this index.

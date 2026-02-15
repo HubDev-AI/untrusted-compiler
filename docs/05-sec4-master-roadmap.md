@@ -447,6 +447,7 @@ Current strict closure result:
 | `M29-G` | PASS | Naming-lock CI enforces M29 closure report | `.github/workflows/naming-lock.yml` |
 | `M30-A` | PASS | Naming-lock CI enforces M30 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M30-B` | PASS | Naming-lock CI enforces M30 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M30-C` | PASS | Naming-lock CI enforces M30 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -563,6 +564,7 @@ Strict closure interpretation:
 - M29 closure report enforcement is active (`M29-G`).
 - M30 kickoff brief enforcement is active (`M30-A`).
 - M30 priority matrix enforcement is active (`M30-B`).
+- M30 runtime de-stub planner enforcement is active (`M30-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4785,8 +4787,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M30 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M30-B`).
 
+### M30-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M30 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M30-C` gate.
+
+### M30-S3 tracking (live status)
+- [x] M30 runtime-first de-stub plan script added.
+- [x] M30 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M30 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M30-C`).
+
 ### Next planned slice
-- M30-S3 runtime-first de-stub plan + closure gate `M30-C`.
+- M30-S4 runtime de-stub execution runner + closure gate `M30-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4878,8 +4891,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M30-S3 runtime-first de-stub plan from M30 kickoff+matrix artifacts and wire `M30-C`.
-2. Continue M30 runtime-first stabilization sequence (`S4..S7`) with strict closure gating parity.
+1. Implement M30-S4 runtime de-stub execution runner from M30 de-stub plan and wire `M30-D`.
+2. Continue M30 runtime-first stabilization sequence (`S5..S7`) with strict closure gating parity.
 
 ---
 
