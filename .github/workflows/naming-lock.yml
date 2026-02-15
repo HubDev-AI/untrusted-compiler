@@ -481,6 +481,9 @@ jobs:
       - name: Validate M35 transition handoff packet
         run: scripts/test-build-m35-transition-handoff-packet.sh
 
+      - name: Validate M35 closure report
+        run: scripts/test-build-m35-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

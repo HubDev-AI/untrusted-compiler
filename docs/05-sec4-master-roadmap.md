@@ -486,6 +486,7 @@ Current strict closure result:
 | `M35-D` | PASS | Naming-lock CI enforces M35 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 | `M35-E` | PASS | Naming-lock CI enforces M35 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M35-F` | PASS | Naming-lock CI enforces M35 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M35-G` | PASS | Naming-lock CI enforces M35 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -641,6 +642,7 @@ Strict closure interpretation:
 - M35 runtime de-stub runner enforcement is active (`M35-D`).
 - M35 executed-slice convergence summary enforcement is active (`M35-E`).
 - M35 transition handoff packet enforcement is active (`M35-F`).
+- M35 closure report enforcement is active (`M35-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5333,8 +5335,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M35 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M35-F`).
 
+### M35-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M35 transition handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M35-A..M35-F` are validated in one canonical closure artifact (`m35Gates[]`).
+- Closure audit includes dedicated `M35-G` gate.
+
+### M35-S7 tracking (live status)
+- [x] M35 closure report script added.
+- [x] M35 closure report contract test added.
+- [x] Book chapter documenting M35 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M35-G`).
+
 ### Next planned slice
-- M35-S7 closure report + closure gate `M35-G`.
+- M36-S1 kickoff brief + closure gate `M36-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5426,8 +5439,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M35-S7 closure report from M35 handoff packet artifacts and wire `M35-G`.
-2. Run full strict closure audit and publish M35 handoff status after `M35-G`.
+1. Implement M36-S1 kickoff brief from M35 closure report + transition packet artifacts and wire `M36-A`.
+2. Run full strict closure audit and publish M36 kickoff status after `M36-A`.
 
 ---
 

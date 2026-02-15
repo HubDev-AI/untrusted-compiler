@@ -5,6 +5,19 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+fast_mode="${FAST:-0}"
+case "${fast_mode}" in
+  0|1)
+    ;;
+  *)
+    echo "invalid FAST value: ${fast_mode} (expected 0 or 1)" >&2
+    exit 2
+    ;;
+esac
+if [ "${fast_mode}" = "1" ]; then
+  echo "FAST=1 enabled: running core deterministic closure checks + latest milestone gates; exhaustive historical negative matrix loops are skipped."
+fi
+
 mkdir -p "$tmp/scripts" "$tmp/.github/workflows" "$tmp/benchmark-suite/results/summaries" "$tmp/docs/book"
 
 cat > "$tmp/scripts/release-alpha-gate.sh" <<'SH'
@@ -155,6 +168,7 @@ touch "$tmp/scripts/test-plan-m35-runtime-destub.sh"
 touch "$tmp/scripts/test-run-m35-runtime-destub.sh"
 touch "$tmp/scripts/test-build-m35-executed-slice-convergence-summary.sh"
 touch "$tmp/scripts/test-build-m35-transition-handoff-packet.sh"
+touch "$tmp/scripts/test-build-m35-closure-report.sh"
 cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -541,6 +555,8 @@ jobs:
         run: scripts/test-build-m35-executed-slice-convergence-summary.sh
       - name: Validate M35 transition handoff packet
         run: scripts/test-build-m35-transition-handoff-packet.sh
+      - name: Validate M35 closure report
+        run: scripts/test-build-m35-closure-report.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -744,12 +760,43 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E",
-    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C","M28-D","M28-E","M28-F","M28-G","M29-A","M29-B","M29-C","M29-D","M29-E","M29-F","M29-G","M30-A","M30-B","M30-C","M30-D","M30-E","M30-F","M30-G","M31-A","M31-B","M31-C","M31-D","M31-E","M31-F","M31-G","M32-A","M32-B","M32-C","M32-D","M32-E","M32-F","M32-G","M33-A","M33-B","M33-C","M33-D","M33-E","M33-F","M33-G","M34-A","M34-B","M34-C","M34-D","M34-E","M34-F","M34-G","M35-A","M35-B","M35-C","M35-D","M35-E","M35-F"
+    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C","M28-D","M28-E","M28-F","M28-G","M29-A","M29-B","M29-C","M29-D","M29-E","M29-F","M29-G","M30-A","M30-B","M30-C","M30-D","M30-E","M30-F","M30-G","M31-A","M31-B","M31-C","M31-D","M31-E","M31-F","M31-G","M32-A","M32-B","M32-C","M32-D","M32-E","M32-F","M32-G","M33-A","M33-B","M33-C","M33-D","M33-E","M33-F","M33-G","M34-A","M34-B","M34-C","M34-D","M34-E","M34-F","M34-G","M35-A","M35-B","M35-C","M35-D","M35-E","M35-F","M35-G"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
   exit 1
 fi
+
+if [ "${fast_mode}" = "1" ]; then
+  if ! printf '%s\n' "$audit_json" | jq -e '
+    (.gates | map(select(.gate == "M35-A" and .status == "PASS")) | length) == 1
+    and (.gates | map(select(.gate == "M35-B" and .status == "PASS")) | length) == 1
+    and (.gates | map(select(.gate == "M35-C" and .status == "PASS")) | length) == 1
+    and (.gates | map(select(.gate == "M35-D" and .status == "PASS")) | length) == 1
+    and (.gates | map(select(.gate == "M35-E" and .status == "PASS")) | length) == 1
+    and (.gates | map(select(.gate == "M35-F" and .status == "PASS")) | length) == 1
+  ' >/dev/null; then
+    echo "expected FAST=1 mode to confirm PASS status for M35-A..M35-F gates" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M35-G") != null' >/dev/null; then
+    if ! printf '%s\n' "$audit_json" | jq -e '(.gates | map(select(.gate == "M35-G" and .status == "PASS")) | length) == 1' >/dev/null; then
+      echo "expected FAST=1 mode to confirm PASS status for M35-G gate when present" >&2
+      exit 1
+    fi
+    echo "FAST=1 notice: validated M35-A..M35-G gate coverage from deterministic fixture."
+  else
+    echo "FAST=1 notice: validated M35-A..M35-F gate coverage (M35-G not present in current closure gate list)."
+  fi
+  if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
+    echo "expected repo-relative evidence paths in json closure output" >&2
+    exit 1
+  fi
+  echo "FAST=1 completed: run full scripts/test-check-milestone-closure.sh before merge."
+  echo "check-milestone-closure test passed (FAST=1)"
+  exit 0
+fi
+
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M9-H") != null' >/dev/null; then
   echo "expected json closure output to include M9-H gate" >&2
   exit 1
@@ -1376,6 +1423,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M35-E") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M35-F") != null' >/dev/null; then
   echo "expected json closure output to include M35-F gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M35-G") != null' >/dev/null; then
+  echo "expected json closure output to include M35-G gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -3880,6 +3931,24 @@ if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | j
   and (.gates[] | select(.gate == "M35-F")).status == "PENDING"
 ' >/dev/null; then
   echo "expected M35-F to become pending when naming-lock workflow misses transition handoff packet step" >&2
+  exit 1
+fi
+
+mv "$tmp/.github/workflows/naming-lock.base.yml" "$tmp/.github/workflows/naming-lock.yml"
+
+cp "$tmp/.github/workflows/naming-lock.yml" "$tmp/.github/workflows/naming-lock.base.yml"
+awk '!/scripts\/test-build-m35-closure-report\.sh/' "$tmp/.github/workflows/naming-lock.base.yml" > "$tmp/.github/workflows/naming-lock.yml"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses M35 closure report step" >&2
+  exit 1
+fi
+
+if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | jq -e '
+  .overall == "PENDING"
+  and (.gates[] | select(.gate == "M35-G")).status == "PENDING"
+' >/dev/null; then
+  echo "expected M35-G to become pending when naming-lock workflow misses closure report step" >&2
   exit 1
 fi
 
