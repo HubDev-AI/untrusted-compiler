@@ -1909,6 +1909,7 @@ impl<'a> Analyzer<'a> {
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
+        self.enforce_net_internal_policy_gate(callee_name, span.clone());
         self.enforce_fs_sink_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_source_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_secret_redact_call_shape(callee_name, span.clone(), args, arg_types);
@@ -3534,6 +3535,24 @@ impl<'a> Analyzer<'a> {
                 )),
             );
         }
+    }
+
+    fn enforce_net_internal_policy_gate(&mut self, callee_name: &str, span: Span) {
+        if !is_net_internal_call(callee_name) || self.policy.net_internal.enabled {
+            return;
+        }
+
+        self.diagnostics.push(
+            Diagnostic::error("E2002", "internal net is disabled by active policy", span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(
+                    "internal net calls are blocked because `[net.internal].enabled` is `false` in the active policy",
+                )
+                .with_note(
+                    "enable internal net in `sec4.policy`:\n[net.internal]\nenabled = true",
+                ),
+        );
     }
 
     fn enforce_fs_sink_call_shapes(

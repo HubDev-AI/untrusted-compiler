@@ -146,6 +146,95 @@ fn init_then_check_succeeds() {
 }
 
 #[test]
+fn check_fails_when_internal_net_is_disabled_by_policy() {
+    let root = temp_dir("sec4-check-internal-net-disabled");
+    let project_dir = root.join("policy-disabled-project");
+    write_minimal_project(&project_dir, "");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn call_internal(cap: InternalNetCap, url: InternalUrl) effects { net } -> Int {
+  httpClient.getInternal(cap, url);
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when internal net policy is disabled"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("internal net is disabled by active policy"),
+        "failure should include internal-net policy diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("tags: security, policy"),
+        "failure should include policy/security tags:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[net.internal]") && stderr.contains("enabled = true"),
+        "failure should include policy enable guidance snippet:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_when_internal_net_policy_is_enabled() {
+    let root = temp_dir("sec4-check-internal-net-enabled");
+    let project_dir = root.join("policy-enabled-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.internal]
+enabled = true
+"#,
+    );
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn call_internal(cap: InternalNetCap, url: InternalUrl) effects { net } -> Int {
+  httpClient.getInternal(cap, url);
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when internal net policy is enabled and typed usage is valid"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("check succeeded"),
+        "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn init_then_run_oneshot_serves_request_and_exits() {
     if !clang_available() {
         eprintln!("skipping init run-command oneshot integration test: clang not available");
