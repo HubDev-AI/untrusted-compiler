@@ -5188,13 +5188,23 @@ entry = "src/main.ut"
   let headerB = validate.headerValue(rawB);
   if headerA == headerB { return 12; };
 
-  let publicA = url.public(rawA);
-  let publicB = url.public(rawB);
+  let rawPublicA = req.query("https://public-a.example/path");
+  let rawPublicB = req.query("https://public-b.example/path");
+  let publicA = url.public(rawPublicA);
+  let publicB = url.public(rawPublicB);
   if publicA == publicB { return 13; };
 
-  let internalA = url.internal(rawA);
-  let internalB = url.internal(rawB);
+  let rawInternalA = req.query("http://127.0.0.1/service-a");
+  let rawInternalB = req.query("http://10.0.0.4/service-b");
+  let internalA = url.internal(rawInternalA);
+  let internalB = url.internal(rawInternalB);
   if internalA == internalB { return 14; };
+
+  let rawBadPublicA = req.query("http://127.0.0.1/private-a");
+  let rawBadPublicB = req.query("http://10.0.0.2/private-b");
+  let badPublicA = url.public(rawBadPublicA);
+  let badPublicB = url.public(rawBadPublicB);
+  if badPublicA != badPublicB { return 19; };
 
   let baseA = path.base("/tmp/a");
   let baseB = path.base("/tmp/b");
@@ -5304,6 +5314,80 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime path/header guard harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_url_guards_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime url guard test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-url-guards");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-url-guards");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t public_a = sec4_rt_url_public(sec4_rt_req_query("https://public-a.example/path"));
+  int64_t public_b = sec4_rt_url_public(sec4_rt_req_query("https://public-b.example/path"));
+  if (public_a == 0 || public_b == 0) { return 11; }
+  if (public_a == public_b) { return 12; }
+
+  int64_t blocked_public_a = sec4_rt_url_public(sec4_rt_req_query("http://127.0.0.1/private-a"));
+  int64_t blocked_public_b = sec4_rt_url_public(sec4_rt_req_query("http://10.0.0.2/private-b"));
+  if (blocked_public_a != 0 || blocked_public_b != 0) { return 13; }
+
+  int64_t internal_a = sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service-a"));
+  int64_t internal_b = sec4_rt_url_internal(sec4_rt_req_query("http://10.0.0.4/service-b"));
+  if (internal_a == 0 || internal_b == 0) { return 14; }
+  if (internal_a == internal_b) { return 15; }
+
+  int64_t blocked_internal = sec4_rt_url_internal(sec4_rt_req_query("https://public.example/path"));
+  if (blocked_internal != 0) { return 16; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime url harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime url guard harness should exit successfully"
     );
 }
 

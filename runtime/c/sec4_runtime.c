@@ -15,6 +15,8 @@
 #define SEC4_RT_MAX_ROUTERS 16
 #define SEC4_RT_MAX_ROUTES 64
 #define SEC4_RT_MAX_PATH_BYTES 256
+#define SEC4_RT_MAX_TRACKED_VALUES 256
+#define SEC4_RT_MAX_TRACKED_VALUE_BYTES 1024
 #define SEC4_RT_MAX_RESPONSE_BYTES 4096
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
@@ -61,10 +63,17 @@ typedef struct {
   bool json_valid;
 } sec4_rt_request_state;
 
+typedef struct {
+  bool active;
+  int64_t handle;
+  char value[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+} sec4_rt_tracked_value;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
 static sec4_rt_request_state g_sec4_rt_request;
+static sec4_rt_tracked_value g_sec4_rt_tracked_values[SEC4_RT_MAX_TRACKED_VALUES];
 static uint64_t g_sec4_rt_next_trace_id = 1;
 
 static const char *sec4_rt_current_trace_id(void);
@@ -173,6 +182,7 @@ static void sec4_rt_store_std_success_response(int64_t status, bool include_meta
 
 static void sec4_rt_reset_request(void) {
   memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+  memset(g_sec4_rt_tracked_values, 0, sizeof(g_sec4_rt_tracked_values));
 }
 
 static const char *sec4_rt_current_trace_id(void) {
@@ -227,6 +237,255 @@ static int64_t sec4_rt_gate_handle_from_string(const char *input, uint64_t salt)
     input += 1;
   }
   return sec4_rt_hash_token(token, salt);
+}
+
+static int64_t sec4_rt_track_string_value(const char *value, uint64_t salt) {
+  if (value == NULL || value[0] == '\0') {
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_gate_handle_from_string(value, salt);
+  if (handle == 0) {
+    return 0;
+  }
+
+  size_t first_free = SEC4_RT_MAX_TRACKED_VALUES;
+  for (size_t i = 0; i < SEC4_RT_MAX_TRACKED_VALUES; i++) {
+    sec4_rt_tracked_value *slot = &g_sec4_rt_tracked_values[i];
+    if (!slot->active) {
+      if (first_free == SEC4_RT_MAX_TRACKED_VALUES) {
+        first_free = i;
+      }
+      continue;
+    }
+
+    if (slot->handle == handle && strcmp(slot->value, value) == 0) {
+      return handle;
+    }
+  }
+
+  size_t target = first_free == SEC4_RT_MAX_TRACKED_VALUES
+      ? (size_t) (((uint64_t) handle) % SEC4_RT_MAX_TRACKED_VALUES)
+      : first_free;
+  sec4_rt_tracked_value *slot = &g_sec4_rt_tracked_values[target];
+  slot->active = true;
+  slot->handle = handle;
+  strncpy(slot->value, value, sizeof(slot->value) - 1);
+  slot->value[sizeof(slot->value) - 1] = '\0';
+  return handle;
+}
+
+static const char *sec4_rt_lookup_tracked_value(int64_t handle) {
+  if (handle == 0) {
+    return NULL;
+  }
+  for (size_t i = 0; i < SEC4_RT_MAX_TRACKED_VALUES; i++) {
+    const sec4_rt_tracked_value *slot = &g_sec4_rt_tracked_values[i];
+    if (slot->active && slot->handle == handle) {
+      return slot->value;
+    }
+  }
+  return NULL;
+}
+
+static bool sec4_rt_extract_query_value(
+    const char *path,
+    const char *name,
+    char *out,
+    size_t out_size
+) {
+  if (path == NULL || name == NULL || out == NULL || out_size == 0 || name[0] == '\0') {
+    return false;
+  }
+
+  const char *query = strchr(path, '?');
+  if (query == NULL) {
+    return false;
+  }
+  query += 1;
+
+  size_t key_len = strlen(name);
+  while (*query != '\0') {
+    const char *segment_start = query;
+    const char *segment_end = strchr(segment_start, '&');
+    if (segment_end == NULL) {
+      segment_end = segment_start + strlen(segment_start);
+    }
+
+    const char *equals = memchr(segment_start, '=', (size_t) (segment_end - segment_start));
+    const char *key_end = equals != NULL ? equals : segment_end;
+
+    size_t this_key_len = (size_t) (key_end - segment_start);
+    if (this_key_len == key_len && strncmp(segment_start, name, key_len) == 0) {
+      const char *value_start = equals != NULL ? equals + 1 : key_end;
+      size_t value_len = (size_t) (segment_end - value_start);
+      if (value_len >= out_size) {
+        value_len = out_size - 1;
+      }
+      memcpy(out, value_start, value_len);
+      out[value_len] = '\0';
+      return true;
+    }
+
+    if (*segment_end == '\0') {
+      break;
+    }
+    query = segment_end + 1;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_host_equals(const char *host, size_t host_len, const char *target) {
+  size_t target_len = strlen(target);
+  return host_len == target_len && strncasecmp(host, target, host_len) == 0;
+}
+
+static bool sec4_rt_host_ends_with(const char *host, size_t host_len, const char *suffix) {
+  size_t suffix_len = strlen(suffix);
+  if (host_len < suffix_len) {
+    return false;
+  }
+  return strncasecmp(host + (host_len - suffix_len), suffix, suffix_len) == 0;
+}
+
+static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
+  int octets[4] = {0, 0, 0, 0};
+  int idx = 0;
+  int value = 0;
+  int digits = 0;
+
+  for (size_t i = 0; i < host_len; i++) {
+    char ch = host[i];
+    if (isdigit((unsigned char) ch)) {
+      value = (value * 10) + (ch - '0');
+      if (value > 255) {
+        return false;
+      }
+      digits += 1;
+      continue;
+    }
+
+    if (ch != '.' || digits == 0 || idx >= 3) {
+      return false;
+    }
+    octets[idx++] = value;
+    value = 0;
+    digits = 0;
+  }
+
+  if (idx != 3 || digits == 0) {
+    return false;
+  }
+  octets[3] = value;
+
+  int a = octets[0];
+  int b = octets[1];
+  if (a == 10 || a == 127) {
+    return true;
+  }
+  if (a == 169 && b == 254) {
+    return true;
+  }
+  if (a == 192 && b == 168) {
+    return true;
+  }
+  if (a == 172 && b >= 16 && b <= 31) {
+    return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_parse_url_host(
+    const char *url,
+    const char **host_start,
+    size_t *host_len,
+    bool *is_http,
+    bool *is_https
+) {
+  if (url == NULL || host_start == NULL || host_len == NULL || is_http == NULL
+      || is_https == NULL) {
+    return false;
+  }
+
+  const char *scheme_sep = strstr(url, "://");
+  if (scheme_sep == NULL) {
+    return false;
+  }
+
+  size_t scheme_len = (size_t) (scheme_sep - url);
+  *is_http = scheme_len == 4 && strncasecmp(url, "http", 4) == 0;
+  *is_https = scheme_len == 5 && strncasecmp(url, "https", 5) == 0;
+  if (!(*is_http || *is_https)) {
+    return false;
+  }
+
+  const char *host = scheme_sep + 3;
+  if (*host == '\0') {
+    return false;
+  }
+
+  const char *host_end = host;
+  while (*host_end != '\0' && *host_end != '/' && *host_end != '?' && *host_end != ':') {
+    host_end += 1;
+  }
+
+  size_t len = (size_t) (host_end - host);
+  if (len == 0) {
+    return false;
+  }
+  if (memchr(host, '@', len) != NULL) {
+    return false;
+  }
+
+  *host_start = host;
+  *host_len = len;
+  return true;
+}
+
+static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
+  if (sec4_rt_host_equals(host, host_len, "localhost")) {
+    return true;
+  }
+  if (sec4_rt_host_ends_with(host, host_len, ".local")
+      || sec4_rt_host_ends_with(host, host_len, ".internal")) {
+    return true;
+  }
+  if (sec4_rt_parse_ipv4_private(host, host_len)) {
+    return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_is_public_url_valid(const char *url) {
+  const char *host = NULL;
+  size_t host_len = 0;
+  bool is_http = false;
+  bool is_https = false;
+  if (!sec4_rt_parse_url_host(url, &host, &host_len, &is_http, &is_https)) {
+    return false;
+  }
+  if (!is_https) {
+    return false;
+  }
+  if (sec4_rt_host_is_internal(host, host_len)) {
+    return false;
+  }
+  return true;
+}
+
+static bool sec4_rt_is_internal_url_valid(const char *url) {
+  const char *host = NULL;
+  size_t host_len = 0;
+  bool is_http = false;
+  bool is_https = false;
+  if (!sec4_rt_parse_url_host(url, &host, &host_len, &is_http, &is_https)) {
+    return false;
+  }
+  if (!(is_http || is_https)) {
+    return false;
+  }
+  return sec4_rt_host_is_internal(host, host_len);
 }
 
 static bool sec4_rt_is_header_name_valid(const char *value) {
@@ -1209,15 +1468,26 @@ int64_t sec4_rt_req_body() {
 }
 
 int64_t sec4_rt_req_query(const char *name) {
-  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x10101));
+  char extracted[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  const char *value = name;
+  if (g_sec4_rt_request.has_request
+      && sec4_rt_extract_query_value(
+          g_sec4_rt_request.path,
+          name,
+          extracted,
+          sizeof(extracted)
+      )) {
+    value = extracted;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x10101));
 }
 
 int64_t sec4_rt_req_path_param(const char *name) {
-  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x20202));
+  return sec4_rt_track_string_value(name, UINT64_C(0x20202));
 }
 
 int64_t sec4_rt_req_header(const char *name) {
-  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x30303));
+  return sec4_rt_track_string_value(name, UINT64_C(0x30303));
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
@@ -1350,11 +1620,25 @@ int64_t sec4_rt_sanitize_html(int64_t input) {
 }
 
 int64_t sec4_rt_url_public(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0xA0A0A));
+  const char *url = sec4_rt_lookup_tracked_value(input);
+  if (url == NULL) {
+    return sec4_rt_gate_handle_from_input(input, UINT64_C(0xA0A0A));
+  }
+  if (!sec4_rt_is_public_url_valid(url)) {
+    return 0;
+  }
+  return sec4_rt_track_string_value(url, UINT64_C(0xA0A0A));
 }
 
 int64_t sec4_rt_url_internal(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0xB0B0B));
+  const char *url = sec4_rt_lookup_tracked_value(input);
+  if (url == NULL) {
+    return sec4_rt_gate_handle_from_input(input, UINT64_C(0xB0B0B));
+  }
+  if (!sec4_rt_is_internal_url_valid(url)) {
+    return 0;
+  }
+  return sec4_rt_track_string_value(url, UINT64_C(0xB0B0B));
 }
 
 int64_t sec4_rt_path_under(int64_t base, int64_t input) {
