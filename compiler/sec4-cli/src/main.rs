@@ -57,6 +57,8 @@ enum Commands {
         max_body_bytes: Option<u64>,
         #[arg(long)]
         serve_timeout_ms: Option<u64>,
+        #[arg(long, value_enum, default_value_t = BuildTlsBackend::None)]
+        tls_backend: BuildTlsBackend,
     },
     Check {
         #[arg(long, default_value = ".")]
@@ -310,7 +312,15 @@ fn main() {
             oneshot,
             max_body_bytes,
             serve_timeout_ms,
-        } => cmd_run(&path, port, oneshot, max_body_bytes, serve_timeout_ms),
+            tls_backend,
+        } => cmd_run(
+            &path,
+            port,
+            oneshot,
+            max_body_bytes,
+            serve_timeout_ms,
+            tls_backend,
+        ),
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
@@ -3453,6 +3463,7 @@ fn cmd_run(
     oneshot: bool,
     max_body_bytes: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
@@ -3462,13 +3473,7 @@ fn cmd_run(
         }
     };
 
-    cmd_build(
-        path,
-        Some(BuildEmitTarget::CBin),
-        false,
-        false,
-        BuildTlsBackend::None,
-    )?;
+    cmd_build(path, Some(BuildEmitTarget::CBin), false, false, tls_backend)?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let mut cmd = Command::new(&binary_path);

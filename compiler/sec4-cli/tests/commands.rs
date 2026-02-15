@@ -26,6 +26,46 @@ fn clang_available() -> bool {
         .unwrap_or(false)
 }
 
+fn clang_with_openssl_available() -> bool {
+    if !clang_available() {
+        return false;
+    }
+
+    let probe_dir = temp_dir("sec4-clang-openssl-probe");
+    let probe_source = probe_dir.join("probe.c");
+    let probe_binary = probe_dir.join("probe");
+    if fs::write(
+        &probe_source,
+        r#"#include <openssl/ssl.h>
+
+int main(void) {
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (ctx != NULL) {
+    SSL_CTX_free(ctx);
+  }
+  return 0;
+}
+"#,
+    )
+    .is_err()
+    {
+        return false;
+    }
+
+    Command::new("clang")
+        .arg(&probe_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-DSEC4_RT_ENABLE_OPENSSL_TLS")
+        .arg("-o")
+        .arg(&probe_binary)
+        .arg("-lssl")
+        .arg("-lcrypto")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 fn unique_suffix() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -790,6 +830,147 @@ fn main() effects { net } -> Int {
     assert!(
         status.success(),
         "run command oneshot process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_openssl_backend_serves_request_and_exits() {
+    if !clang_available() {
+        eprintln!("skipping run-command openssl oneshot test: clang not available");
+        return;
+    }
+    if !clang_with_openssl_available() {
+        eprintln!(
+            "skipping run-command openssl oneshot test: OpenSSL headers/libs not available to clang"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-openssl-oneshot");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runopenssloneshotcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--tls-backend",
+            "openssl",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command openssl oneshot test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command openssl oneshot process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command openssl oneshot process should exit successfully"
     );
     assert!(
         response.contains("HTTP/1.1 200 OK"),
