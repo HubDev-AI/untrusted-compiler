@@ -6221,6 +6221,254 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_https_self_signed_fails_tls_verify_without_insecure_override_when_openssl_backend_available()
+{
+    if !clang_with_openssl_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-net https tls-verify failure test: clang/OpenSSL headers/libs unavailable"
+        );
+        return;
+    }
+    if !openssl_cli_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-net https tls-verify failure test: openssl CLI unavailable"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-https-tls-verify-failure");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-https-tls-verify-failure");
+    let cert_path = project_dir.join("localhost-cert.pem");
+    let key_path = project_dir.join("localhost-key.pem");
+    let runtime_port = find_available_tcp_port();
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+static int64_t probe(void) {{
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) {{
+    (void) sec4_rt_err_internal("missing internal tls url");
+    return 0;
+  }}
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) {{
+    (void) sec4_rt_err_internal("invalid internal tls url");
+    return 0;
+  }}
+
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (body == 0) {{
+    return 0;
+  }}
+
+  (void) sec4_rt_res_text(200, "https-ok");
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{ return 1; }}
+  if (sec4_rt_http_route_get(router, "/probe", probe) != 0) {{ return 2; }}
+  return sec4_rt_http_serve({runtime_port}, router) == 0 ? 0 : 3;
+}}
+"#
+        ),
+    )
+    .expect("harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-DSEC4_RT_ENABLE_OPENSSL_TLS")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .arg("-lssl")
+        .arg("-lcrypto")
+        .output()
+        .expect("clang should execute for runtime https tls-verify-failure harness");
+    let compile_stderr = String::from_utf8_lossy(&compile_output.stderr);
+    assert!(
+        compile_output.status.success(),
+        "runtime internal-net https tls-verify-failure harness should compile successfully, stderr={compile_stderr}"
+    );
+
+    let cert_output = Command::new("openssl")
+        .arg("req")
+        .arg("-x509")
+        .arg("-newkey")
+        .arg("rsa:2048")
+        .arg("-keyout")
+        .arg(&key_path)
+        .arg("-out")
+        .arg(&cert_path)
+        .arg("-sha256")
+        .arg("-days")
+        .arg("1")
+        .arg("-nodes")
+        .arg("-subj")
+        .arg("/CN=127.0.0.1")
+        .output()
+        .expect("openssl req should execute for runtime https tls-verify-failure harness");
+    let cert_stderr = String::from_utf8_lossy(&cert_output.stderr);
+    assert!(
+        cert_output.status.success(),
+        "openssl req should create cert/key for runtime https tls-verify-failure harness, stderr={cert_stderr}"
+    );
+
+    let upstream_tls_port = find_available_tcp_port();
+    let mut tls_server = Command::new("openssl")
+        .arg("s_server")
+        .arg("-accept")
+        .arg(upstream_tls_port.to_string())
+        .arg("-cert")
+        .arg(&cert_path)
+        .arg("-key")
+        .arg(&key_path)
+        .arg("-www")
+        .arg("-quiet")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("openssl s_server should start for runtime https tls-verify-failure harness");
+
+    let mut upstream_ready = false;
+    for _ in 0..200 {
+        if let Some(status) = tls_server
+            .try_wait()
+            .expect("openssl s_server wait should succeed while waiting for readiness")
+        {
+            panic!("openssl s_server exited before readiness with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", upstream_tls_port)) {
+            Ok(_) => {
+                upstream_ready = true;
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    if !upstream_ready {
+        let _ = tls_server.kill();
+        let _ = tls_server.wait();
+        panic!("openssl s_server did not become ready in expected window");
+    }
+
+    let internal_url = format!("https://127.0.0.1:{upstream_tls_port}/internal-https");
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("runtime https tls-verify-failure harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "runtime https tls-verify-failure harness exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", runtime_port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /probe HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = tls_server.kill();
+            let _ = tls_server.wait();
+            panic!("runtime https tls-verify-failure harness could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = tls_server.kill();
+            let _ = tls_server.wait();
+            panic!("runtime https tls-verify-failure harness did not exit in expected window");
+        }
+    };
+
+    if tls_server
+        .try_wait()
+        .expect("openssl s_server wait should succeed during teardown")
+        .is_none()
+    {
+        let _ = tls_server.kill();
+        let _ = tls_server.wait();
+    }
+
+    assert!(
+        status.success(),
+        "runtime https tls-verify-failure harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 500 Internal Server Error"),
+        "response should contain 500 status line when tls verification fails"
+    );
+    assert!(
+        response.contains("\"code\":\"NET.TLS_VERIFY_FAILED\"")
+            && response.contains("\"message\":\"outbound tls certificate verification failed\"")
+            && response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic NET.TLS_VERIFY_FAILED payload"
+    );
+}
+
+#[test]
 fn c_bin_runtime_internal_https_roundtrip_succeeds_with_openssl_backend_when_available() {
     if !clang_with_openssl_available() {
         eprintln!(
@@ -6353,6 +6601,7 @@ int main(void) {
     let internal_url = format!("https://127.0.0.1:{port}/internal-https");
     let run = Command::new(&binary_path)
         .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TLS_ALLOW_INSECURE", "1")
         .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
         .output()
         .expect("compiled runtime https harness should run");

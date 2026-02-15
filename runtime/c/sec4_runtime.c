@@ -1261,7 +1261,22 @@ static int64_t sec4_rt_outbound_https_get_handle(
     );
     return 0;
   }
-  SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
+  bool allow_insecure_tls = sec4_rt_env_flag_enabled("SEC4_RT_TLS_ALLOW_INSECURE");
+  if (allow_insecure_tls) {
+    SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
+  } else {
+    SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER, NULL);
+    if (SSL_CTX_set_default_verify_paths(ssl_ctx) != 1) {
+      SSL_CTX_free(ssl_ctx);
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.TLS_INIT_FAILED",
+          "internal",
+          "failed to configure tls trust store for outbound request"
+      );
+      return 0;
+    }
+  }
 
   SSL *ssl = SSL_new(ssl_ctx);
   if (ssl == NULL) {
@@ -1287,10 +1302,37 @@ static int64_t sec4_rt_outbound_https_get_handle(
     );
     return 0;
   }
-
-  if (SSL_connect(ssl) != 1) {
+  if (!allow_insecure_tls && SSL_set1_host(ssl, host) != 1) {
     SSL_free(ssl);
     SSL_CTX_free(ssl_ctx);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TLS_INIT_FAILED",
+        "internal",
+        "failed to configure tls hostname verification for outbound request"
+    );
+    return 0;
+  }
+
+  if (SSL_connect(ssl) != 1) {
+    long verify_result = SSL_get_verify_result(ssl);
+    X509 *peer_cert = !allow_insecure_tls ? SSL_get_peer_certificate(ssl) : NULL;
+    bool verify_failed =
+        !allow_insecure_tls && (verify_result != X509_V_OK || peer_cert == NULL);
+    if (peer_cert != NULL) {
+      X509_free(peer_cert);
+    }
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    if (verify_failed) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.TLS_VERIFY_FAILED",
+          "validation",
+          "outbound tls certificate verification failed"
+      );
+      return 0;
+    }
     sec4_rt_store_std_error_response(
         500,
         "NET.TLS_HANDSHAKE_FAILED",
@@ -1300,6 +1342,25 @@ static int64_t sec4_rt_outbound_https_get_handle(
     return 0;
   }
   handshake_complete = true;
+  if (!allow_insecure_tls) {
+    X509 *peer_cert = SSL_get_peer_certificate(ssl);
+    if (peer_cert == NULL || SSL_get_verify_result(ssl) != X509_V_OK) {
+      if (peer_cert != NULL) {
+        X509_free(peer_cert);
+      }
+      (void) SSL_shutdown(ssl);
+      SSL_free(ssl);
+      SSL_CTX_free(ssl_ctx);
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.TLS_VERIFY_FAILED",
+          "validation",
+          "outbound tls certificate verification failed"
+      );
+      return 0;
+    }
+    X509_free(peer_cert);
+  }
 
   if (sec4_rt_ssl_write_all(ssl, request, request_len) != 0) {
     if (handshake_complete) {
