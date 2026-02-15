@@ -456,6 +456,7 @@ Current strict closure result:
 | `M31-B` | PASS | Naming-lock CI enforces M31 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M31-C` | PASS | Naming-lock CI enforces M31 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 | `M31-D` | PASS | Naming-lock CI enforces M31 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
+| `M31-E` | PASS | Naming-lock CI enforces M31 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -581,6 +582,7 @@ Strict closure interpretation:
 - M31 priority matrix enforcement is active (`M31-B`).
 - M31 runtime de-stub planner enforcement is active (`M31-C`).
 - M31 runtime de-stub runner enforcement is active (`M31-D`).
+- M31 executed-slice convergence summary enforcement is active (`M31-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4907,8 +4909,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M31 runtime de-stub execution runner added.
 - [x] Naming-lock CI and closure gate updated (`M31-D`).
 
+### M31-S5 executed-slice convergence summary acceptance criteria
+- Convergence summary consumes M31 planner + runner artifacts and computes deterministic `executionPass`/`overall`/`nextAction`.
+- Summary validates selected-slice alignment between plan and execution status artifact.
+- Closure audit includes dedicated `M31-E` gate.
+
+### M31-S5 tracking (live status)
+- [x] M31 executed-slice convergence summary script added.
+- [x] M31 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M31 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M31-E`).
+
 ### Next planned slice
-- M31-S5 executed-slice convergence summary + closure gate `M31-E`.
+- M31-S6 transition handoff packet + closure gate `M31-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5000,8 +5013,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S5 executed-slice convergence summary from M31 plan + runner artifacts and wire `M31-E`.
-2. Continue M31 runtime-first stabilization sequence (`S6..S7`) with strict closure gating parity.
+1. Implement M31-S6 transition handoff packet from M31 kickoff/matrix/plan/runner/convergence artifacts and wire `M31-F`.
+2. Continue M31 runtime-first stabilization sequence (`S7`) with strict closure gating parity.
 
 ---
 
