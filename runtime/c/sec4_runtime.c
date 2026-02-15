@@ -18,6 +18,7 @@
 #define SEC4_RT_MAX_TRACKED_VALUES 256
 #define SEC4_RT_MAX_TRACKED_VALUE_BYTES 1024
 #define SEC4_RT_MAX_RESPONSE_BYTES 4096
+#define SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES 2048
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
@@ -47,6 +48,8 @@ typedef struct {
   char content_type[64];
   char body[SEC4_RT_MAX_RESPONSE_BYTES];
   size_t body_len;
+  char extra_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  size_t extra_headers_len;
 } sec4_rt_response_state;
 
 typedef struct {
@@ -89,6 +92,8 @@ static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.content_type[0] = '\0';
   g_sec4_rt_response.body[0] = '\0';
   g_sec4_rt_response.body_len = 0;
+  g_sec4_rt_response.extra_headers[0] = '\0';
+  g_sec4_rt_response.extra_headers_len = 0;
 }
 
 static void sec4_rt_store_response(
@@ -96,7 +101,6 @@ static void sec4_rt_store_response(
     const char *content_type,
     const char *body
 ) {
-  sec4_rt_reset_response();
   g_sec4_rt_response.active = true;
   g_sec4_rt_response.status = status > 0 ? status : 200;
 
@@ -629,6 +633,38 @@ static bool sec4_rt_is_header_value_valid(const char *value) {
   return true;
 }
 
+static int64_t sec4_rt_append_response_header(const char *name, const char *value) {
+  if (!sec4_rt_is_header_name_valid(name) || !sec4_rt_is_header_value_valid(value)) {
+    return 1;
+  }
+
+  size_t used = g_sec4_rt_response.extra_headers_len;
+  if (used >= sizeof(g_sec4_rt_response.extra_headers)) {
+    return 1;
+  }
+
+  size_t remaining = sizeof(g_sec4_rt_response.extra_headers) - used;
+  int written = snprintf(
+      g_sec4_rt_response.extra_headers + used,
+      remaining,
+      "%s: %s\r\n",
+      name,
+      value
+  );
+  if (written <= 0 || (size_t) written >= remaining) {
+    return 1;
+  }
+  g_sec4_rt_response.extra_headers_len += (size_t) written;
+  return 0;
+}
+
+static const char *sec4_rt_response_extra_headers(void) {
+  if (g_sec4_rt_response.extra_headers_len == 0) {
+    return NULL;
+  }
+  return g_sec4_rt_response.extra_headers;
+}
+
 static bool sec4_rt_is_path_base_valid(const char *value) {
   if (value == NULL || value[0] == '\0') {
     return false;
@@ -1133,6 +1169,7 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
+  sec4_rt_reset_response();
   const char *security_headers = sec4_rt_security_headers_block(router);
   const char *cors_headers = router != NULL && router->cors_enabled
       ? "Access-Control-Allow-Origin: *\r\n"
@@ -1439,7 +1476,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   if (!g_sec4_rt_response.active) {
     const char *body = "";
     const char *final_headers = sec4_rt_merge_three_headers(
-        NULL,
+        sec4_rt_response_extra_headers(),
         cors_headers,
         security_headers,
         merged_headers,
@@ -1457,7 +1494,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   const char *final_headers = sec4_rt_merge_three_headers(
-      NULL,
+      sec4_rt_response_extra_headers(),
       cors_headers,
       security_headers,
       merged_headers,
@@ -1597,7 +1634,10 @@ int64_t sec4_rt_json_encode(int64_t schema, int64_t value) {
 }
 
 int64_t sec4_rt_req_body() {
-  return 0;
+  if (!g_sec4_rt_request.has_request || g_sec4_rt_request.body_len == 0) {
+    return 0;
+  }
+  return sec4_rt_track_string_value(g_sec4_rt_request.body, UINT64_C(0x11111));
 }
 
 int64_t sec4_rt_req_query(const char *name) {
@@ -1689,16 +1729,34 @@ int64_t sec4_rt_res_text(int64_t status, const char *body) {
   return 0;
 }
 
-int64_t sec4_rt_set_header() {
-  return 0;
+int64_t sec4_rt_set_header(int64_t name, int64_t value) {
+  const char *header_name = sec4_rt_lookup_tracked_value(name);
+  const char *header_value = sec4_rt_lookup_tracked_value(value);
+  if (header_name == NULL || header_value == NULL) {
+    return 1;
+  }
+  return sec4_rt_append_response_header(header_name, header_value);
 }
 
-int64_t sec4_rt_cookie_build() {
-  return 0;
+int64_t sec4_rt_cookie_build(const char *name, const char *value) {
+  if (!sec4_rt_is_header_name_valid(name) || !sec4_rt_is_header_value_valid(value)) {
+    return 0;
+  }
+
+  char cookie[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  int written = snprintf(cookie, sizeof(cookie), "%s=%s", name, value);
+  if (written <= 0 || (size_t) written >= sizeof(cookie)) {
+    return 0;
+  }
+  return sec4_rt_track_string_value(cookie, UINT64_C(0x12121));
 }
 
-int64_t sec4_rt_set_cookie() {
-  return 0;
+int64_t sec4_rt_set_cookie(int64_t cookie) {
+  const char *cookie_value = sec4_rt_lookup_tracked_value(cookie);
+  if (cookie_value == NULL) {
+    return 1;
+  }
+  return sec4_rt_append_response_header("Set-Cookie", cookie_value);
 }
 
 int64_t sec4_rt_sql_q() {
@@ -1817,14 +1875,14 @@ int64_t sec4_rt_headers_name(const char *input) {
   if (!sec4_rt_is_header_name_valid(input)) {
     return 0;
   }
-  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xE0E0E));
+  return sec4_rt_track_string_value(input, UINT64_C(0xE0E0E));
 }
 
 int64_t sec4_rt_headers_value(const char *input) {
   if (!sec4_rt_is_header_value_valid(input)) {
     return 0;
   }
-  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xF0F0F));
+  return sec4_rt_track_string_value(input, UINT64_C(0xF0F0F));
 }
 
 int64_t sec4_rt_http_router(void) {
