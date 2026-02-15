@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod audit;
+pub mod backend;
 pub mod build_metadata;
 pub mod c_backend;
 pub mod diagnostics;
@@ -30,6 +31,7 @@ pub use audit::{
     render_security_audit_text, run_security_audit, run_security_audit_with_baseline, should_fail,
     summarize_history_window, AuditHistoryWindowSummary, AuditReport, AuditSeverity, AuditTrend,
 };
+pub use backend::{emit_program_with_backend, BackendEmitOutput, BackendKind, RuntimeAssets};
 pub use build_metadata::{
     compiler_hash as build_compiler_hash, runtime_hash as build_runtime_hash, BuildMetadata,
 };

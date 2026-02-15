@@ -1,11 +1,11 @@
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use sec4_core::{
-    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows, emit_c_program,
-    emit_runtime_header, emit_runtime_source, render_security_audit_text,
-    run_security_audit_with_baseline, should_fail, summarize_history_window,
-    validate_lockfile_stub, write_build_metadata, write_lockfile_stub, write_sbom,
-    write_security_map, AuditHistoryWindowSummary, AuditReport, AuditSeverity, Diagnostic,
+    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows,
+    emit_program_with_backend, render_security_audit_text, run_security_audit_with_baseline,
+    should_fail, summarize_history_window, validate_lockfile_stub, write_build_metadata,
+    write_lockfile_stub, write_sbom, write_security_map, AuditHistoryWindowSummary, AuditReport,
+    AuditSeverity, BackendEmitOutput, BackendKind, Diagnostic,
 };
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -3044,8 +3044,9 @@ fn cmd_build(
             };
 
             let mir = emit.map(|_| sec4_core::lower_program_to_mir(&program));
-            let c_source = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
-                Some(emit_c_program(
+            let backend_emit = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
+                Some(emit_program_with_backend(
+                    BackendKind::C,
                     mir.as_ref()
                         .expect("MIR should be lowered when emit target is set"),
                 ))
@@ -3090,18 +3091,20 @@ fn cmd_build(
                 Some(BuildEmitTarget::C) => {
                     println!(
                         "{}",
-                        c_source
+                        backend_emit
                             .as_ref()
-                            .expect("C source should be available for c emit target")
+                            .expect("backend output should be available for c emit target")
+                            .source
+                            .as_str()
                     );
                 }
                 Some(BuildEmitTarget::CBin) => {
                     let (c_path, bin_path) = compile_c_binary(
                         path,
                         &manifest.package.name,
-                        c_source
+                        backend_emit
                             .as_ref()
-                            .expect("C source should be available for c-bin emit target"),
+                            .expect("backend output should be available for c-bin emit target"),
                     )?;
                     println!("generated c source: {}", c_path.display());
                     println!("compiled binary: {}", bin_path.display());
@@ -3120,7 +3123,7 @@ fn cmd_build(
 fn compile_c_binary(
     project_root: &Path,
     package_name: &str,
-    c_source: &str,
+    backend_emit: &BackendEmitOutput,
 ) -> Result<(PathBuf, PathBuf), i32> {
     let build_dir = project_root.join("build");
     if let Err(err) = fs::create_dir_all(&build_dir) {
@@ -3132,13 +3135,21 @@ fn compile_c_binary(
     }
 
     let c_path = build_dir.join("generated.c");
-    if let Err(err) = fs::write(&c_path, c_source) {
+    if let Err(err) = fs::write(&c_path, &backend_emit.source) {
         eprintln!("could not write generated C `{}`: {err}", c_path.display());
         return Err(2);
     }
 
+    let runtime_assets = match backend_emit.runtime_assets {
+        Some(runtime_assets) => runtime_assets,
+        None => {
+            eprintln!("selected backend does not provide C runtime assets");
+            return Err(2);
+        }
+    };
+
     let runtime_header_path = build_dir.join("sec4_runtime.h");
-    if let Err(err) = fs::write(&runtime_header_path, emit_runtime_header()) {
+    if let Err(err) = fs::write(&runtime_header_path, runtime_assets.header) {
         eprintln!(
             "could not write runtime header `{}`: {err}",
             runtime_header_path.display()
@@ -3147,7 +3158,7 @@ fn compile_c_binary(
     }
 
     let runtime_source_path = build_dir.join("sec4_runtime.c");
-    if let Err(err) = fs::write(&runtime_source_path, emit_runtime_source()) {
+    if let Err(err) = fs::write(&runtime_source_path, runtime_assets.source) {
         eprintln!(
             "could not write runtime source `{}`: {err}",
             runtime_source_path.display()
