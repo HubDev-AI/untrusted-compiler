@@ -1765,7 +1765,17 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
   if (!(is_http || is_https)) {
     return false;
   }
-  return sec4_rt_host_is_internal(host, host_len);
+  if (!sec4_rt_host_is_internal(host, host_len)) {
+    return false;
+  }
+
+  const char *allowed_domains = getenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS");
+  if (sec4_rt_csv_has_any_token(allowed_domains)
+      && !sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len)) {
+    return false;
+  }
+
+  return true;
 }
 
 static bool sec4_rt_is_header_name_valid(const char *value) {
