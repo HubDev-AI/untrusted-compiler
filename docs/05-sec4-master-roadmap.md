@@ -454,6 +454,7 @@ Current strict closure result:
 | `M30-G` | PASS | Naming-lock CI enforces M30 closure report | `.github/workflows/naming-lock.yml` |
 | `M31-A` | PASS | Naming-lock CI enforces M31 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M31-B` | PASS | Naming-lock CI enforces M31 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M31-C` | PASS | Naming-lock CI enforces M31 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -577,6 +578,7 @@ Strict closure interpretation:
 - M30 closure report enforcement is active (`M30-G`).
 - M31 kickoff brief enforcement is active (`M31-A`).
 - M31 priority matrix enforcement is active (`M31-B`).
+- M31 runtime de-stub planner enforcement is active (`M31-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4881,8 +4883,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M31 priority matrix added.
 - [x] Naming-lock CI and closure gate updated (`M31-B`).
 
+### M31-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M31 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M31-C` gate.
+
+### M31-S3 tracking (live status)
+- [x] M31 runtime-first de-stub plan script added.
+- [x] M31 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M31 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M31-C`).
+
 ### Next planned slice
-- M31-S3 runtime-first de-stub plan + closure gate `M31-C`.
+- M31-S4 runtime de-stub execution runner + closure gate `M31-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4974,8 +4987,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S3 runtime-first de-stub plan from M31 kickoff + priority matrix artifacts and wire `M31-C`.
-2. Continue M31 runtime-first stabilization sequence (`S4..S7`) with strict closure gating parity.
+1. Implement M31-S4 runtime de-stub execution runner from M31 de-stub plan artifact and wire `M31-D`.
+2. Continue M31 runtime-first stabilization sequence (`S5..S7`) with strict closure gating parity.
 
 ---
 
