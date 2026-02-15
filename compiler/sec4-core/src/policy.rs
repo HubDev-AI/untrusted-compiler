@@ -83,12 +83,15 @@ pub struct SqlPolicyConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct JsonPolicyConfig {
+    pub max_bytes: i64,
+    pub max_depth: i64,
     pub require_schema_for_encode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
+    pub max_redirects: i64,
     pub allowed_schemes: Vec<String>,
     pub allowed_domains: Vec<String>,
     pub blocked_domains: Vec<String>,
@@ -211,10 +214,13 @@ impl Default for Policy {
                 require_limit_on_select: "warn".to_string(),
             },
             json: JsonPolicyConfig {
+                max_bytes: 1_048_576,
+                max_depth: 32,
                 require_schema_for_encode: true,
             },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
+                max_redirects: 0,
                 allowed_schemes: vec!["https".to_string()],
                 allowed_domains: Vec::new(),
                 blocked_domains: Vec::new(),
@@ -853,6 +859,20 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             if let Some(allow_redirects) = public.allow_redirects {
                 policy.net_public.allow_redirects = allow_redirects;
             }
+            if let Some(max_redirects) = public.max_redirects {
+                if max_redirects < 0 {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid net.public.max_redirects",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("net.public.max_redirects must be >= 0"),
+                    );
+                } else {
+                    policy.net_public.max_redirects = max_redirects;
+                }
+            }
             if let Some(allowed_domains) = public.allowed_domains {
                 policy.net_public.allowed_domains = allowed_domains;
             }
@@ -945,15 +965,33 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         if let Some(require_schema_for_encode) = json.require_schema_for_encode {
             policy.json.require_schema_for_encode = require_schema_for_encode;
         }
-        if json.max_depth.unwrap_or(1) < 1 {
-            diagnostics.push(
-                Diagnostic::error(
-                    "P6003",
-                    "invalid json.max_depth",
-                    Span::point(policy_path.to_path_buf(), 1, 1),
-                )
-                .with_note("json.max_depth must be >= 1"),
-            );
+        if let Some(max_bytes) = json.max_bytes {
+            if max_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid json.max_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("json.max_bytes must be >= 1"),
+                );
+            } else {
+                policy.json.max_bytes = max_bytes;
+            }
+        }
+        if let Some(max_depth) = json.max_depth {
+            if max_depth < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid json.max_depth",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("json.max_depth must be >= 1"),
+                );
+            } else {
+                policy.json.max_depth = max_depth;
+            }
         }
     }
 

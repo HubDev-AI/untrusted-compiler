@@ -9,7 +9,10 @@ fn policy_defaults_when_empty() {
     assert!(policy.forbidden_effects.contains("shell"));
     assert!(policy.forbidden_effects.contains("unsafe"));
     assert!(policy.forbidden_effects.contains("secrets.reveal"));
+    assert_eq!(policy.json.max_bytes, 1_048_576);
+    assert_eq!(policy.json.max_depth, 32);
     assert!(policy.json.require_schema_for_encode);
+    assert_eq!(policy.net_public.max_redirects, 0);
 }
 
 #[test]
@@ -75,6 +78,19 @@ max_redirects = 1
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("invalid redirect combo must be rejected");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_negative_public_max_redirects() {
+    let source = r#"
+[net.public]
+allow_redirects = true
+max_redirects = -1
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("negative max_redirects must be rejected");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
@@ -225,6 +241,49 @@ require_schema_for_encode = false
 }
 
 #[test]
+fn policy_parses_json_and_redirect_limits() {
+    let source = r#"
+[json]
+max_bytes = 4096
+max_depth = 8
+
+[net.public]
+allow_redirects = true
+max_redirects = 7
+"#;
+
+    let policy =
+        parse_policy_str(Path::new("sec4.policy"), source).expect("limits should parse");
+    assert_eq!(policy.json.max_bytes, 4096);
+    assert_eq!(policy.json.max_depth, 8);
+    assert_eq!(policy.net_public.max_redirects, 7);
+}
+
+#[test]
+fn policy_rejects_invalid_json_max_bytes() {
+    let source = r#"
+[json]
+max_bytes = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("json.max_bytes must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_invalid_json_max_depth() {
+    let source = r#"
+[json]
+max_depth = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("json.max_depth must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
 fn policy_profile_default_secure_prod_parses() {
     let source = include_str!("../../../policies/default-secure-prod.sec4.policy");
     let policy = parse_policy_str(Path::new("sec4.policy"), source)
@@ -238,7 +297,10 @@ fn policy_profile_default_secure_prod_parses() {
         vec!["https://app.example.com".to_string()]
     );
     assert!(policy.cors.allow_credentials);
+    assert_eq!(policy.json.max_bytes, 1_048_576);
+    assert_eq!(policy.json.max_depth, 32);
     assert!(policy.security_headers.hsts_enabled);
+    assert_eq!(policy.net_public.max_redirects, 0);
     assert!(!policy.net_internal.enabled);
     assert!(!policy.fs.enabled);
     assert_eq!(policy.replay.effects, "deny");
@@ -255,6 +317,9 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.mode_as_str(), "warn");
     assert_eq!(policy.cors.allowed_origins, vec!["*".to_string()]);
     assert!(!policy.cors.allow_credentials);
+    assert_eq!(policy.json.max_bytes, 1_048_576);
+    assert_eq!(policy.json.max_depth, 64);
+    assert_eq!(policy.net_public.max_redirects, 5);
     assert!(policy.net_internal.enabled);
     assert!(policy.fs.enabled);
     assert_eq!(policy.replay.effects, "allow");
