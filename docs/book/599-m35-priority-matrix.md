@@ -1,18 +1,24 @@
 # 599 M35 Priority Matrix
 
-This chapter documents the M35-S2 priority-matrix scaffold prepared in lane-b.
+This chapter documents the second closure-gated slice in M35.
 
 ## What it is
 
 Added:
 - `scripts/build-m35-priority-matrix.sh`
 - `scripts/test-build-m35-priority-matrix.sh`
-- `docs/book/599-m35-priority-matrix.md`
+
+Updated:
+- `.github/workflows/naming-lock.yml`
+- `scripts/check-milestone-closure.sh`
+- `scripts/test-check-milestone-closure.sh`
+- `docs/05-sec4-master-roadmap.md`
+- `docs/book/README.md`
 
 Key behavior:
 - Builds deterministic M35 track ranking from M35 kickoff brief JSON.
 - Emits both machine-readable JSON and human-readable markdown artifacts.
-- Keeps closure/naming-lock wiring intentionally out of scope for this lane.
+- Wires closure gate `M35-B` into naming-lock CI and strict closure audit.
 
 ## Why it exists
 
@@ -68,4 +74,4 @@ Validated by:
 - Trade-off:
   - Scoring remains fixed and heuristic for deterministic behavior over adaptive weighting.
 - Next:
-  - lane-a can wire `M35-B` closure integration into shared naming-lock/closure/roadmap index files.
+  - implement `M35-S3` runtime-first de-stub plan and wire `M35-C`.

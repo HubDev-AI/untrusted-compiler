@@ -481,6 +481,9 @@ Current strict closure result:
 | `M34-F` | PASS | Naming-lock CI enforces M34 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M34-G` | PASS | Naming-lock CI enforces M34 closure report | `.github/workflows/naming-lock.yml` |
 | `M35-A` | PASS | Naming-lock CI enforces M35 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M35-B` | PASS | Naming-lock CI enforces M35 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M35-C` | PASS | Naming-lock CI enforces M35 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
+| `M35-D` | PASS | Naming-lock CI enforces M35 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -631,6 +634,9 @@ Strict closure interpretation:
 - M34 transition handoff packet enforcement is active (`M34-F`).
 - M34 closure report enforcement is active (`M34-G`).
 - M35 kickoff brief enforcement is active (`M35-A`).
+- M35 priority matrix enforcement is active (`M35-B`).
+- M35 runtime de-stub planner enforcement is active (`M35-C`).
+- M35 runtime de-stub runner enforcement is active (`M35-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5268,8 +5274,41 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M35 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M35-A`).
 
+### M35-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M35 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M35-B` gate.
+
+### M35-S2 tracking (live status)
+- [x] M35 priority matrix script added.
+- [x] M35 priority matrix contract test added.
+- [x] Book chapter documenting M35 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M35-B`).
+
+### M35-S3 runtime-first de-stub plan acceptance criteria
+- Runtime-first plan consumes M35 kickoff + priority matrix artifacts and emits deterministic db/fs/net/validator/secrets execution ordering.
+- Plan output includes explicit rationale + closure metadata for follow-up execution slices.
+- Closure audit includes dedicated `M35-C` gate.
+
+### M35-S3 tracking (live status)
+- [x] M35 runtime-first de-stub plan script added.
+- [x] M35 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M35 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M35-C`).
+
+### M35-S4 runtime de-stub execution runner acceptance criteria
+- Runtime execution runner consumes M35 de-stub plan and executes only the selected first runtime slice with deterministic dry-run + execute modes.
+- Runner emits execution-status artifacts with selected slice/domain metadata and closure gate annotations.
+- Closure audit includes dedicated `M35-D` gate.
+
+### M35-S4 tracking (live status)
+- [x] M35 runtime de-stub execution runner script added.
+- [x] M35 runtime de-stub execution runner contract test added.
+- [x] Book chapter documenting M35 runtime de-stub execution runner added.
+- [x] Naming-lock CI and closure gate updated (`M35-D`).
+
 ### Next planned slice
-- M35-S2 priority matrix + closure gate `M35-B`.
+- M35-S5 executed-slice convergence summary + closure gate `M35-E`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5361,8 +5400,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M35-S2 priority matrix from M35 kickoff artifact and wire `M35-B`.
-2. Run full strict closure audit and publish M35 handoff status after `M35-B`.
+1. Implement M35-S5 executed-slice convergence summary from M35 plan + runner artifacts and wire `M35-E`.
+2. Run full strict closure audit and publish M35 handoff status after `M35-E`.
 
 ---
 

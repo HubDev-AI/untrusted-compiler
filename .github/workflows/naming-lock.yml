@@ -466,6 +466,15 @@ jobs:
       - name: Validate M35 kickoff brief
         run: scripts/test-generate-m35-kickoff-brief.sh
 
+      - name: Validate M35 priority matrix
+        run: scripts/test-build-m35-priority-matrix.sh
+
+      - name: Validate M35 runtime de-stub planner
+        run: scripts/test-plan-m35-runtime-destub.sh
+
+      - name: Validate M35 runtime de-stub runner
+        run: scripts/test-run-m35-runtime-destub.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
