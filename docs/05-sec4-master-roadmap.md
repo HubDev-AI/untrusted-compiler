@@ -466,6 +466,7 @@ Current strict closure result:
 | `M32-E` | PASS | Naming-lock CI enforces M32 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M32-F` | PASS | Naming-lock CI enforces M32 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M32-G` | PASS | Naming-lock CI enforces M32 closure report | `.github/workflows/naming-lock.yml` |
+| `M33-A` | PASS | Naming-lock CI enforces M33 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -601,6 +602,7 @@ Strict closure interpretation:
 - M32 executed-slice convergence summary enforcement is active (`M32-E`).
 - M32 transition handoff packet enforcement is active (`M32-F`).
 - M32 closure report enforcement is active (`M32-G`).
+- M33 kickoff brief enforcement is active (`M33-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5055,8 +5057,24 @@ M13-S1 go/no-go note:
 - [x] `M32-R5`: expand request-source payload extraction for query/header values using request-backed parsing and tracked-string mapping.
 - [x] `M32-R6`: path-param extraction from route templates + deterministic route-pattern matching/param extraction coverage in oneshot HTTP runtime tests.
 
+## M33 - Runtime-First Stabilization Loop (In Progress)
+
+### Goal
+- Start M33 from deterministic M32 closure evidence and continue runtime-first stabilization with strict closure-gated slices.
+
+### M33-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M32 closure report + M32 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M32 closure report JSON from `build-m32-closure-report.sh`.
+- Closure audit includes dedicated `M33-A` gate.
+
+### M33-S1 tracking (live status)
+- [x] M33 kickoff brief script added.
+- [x] M33 kickoff brief contract test added.
+- [x] Book chapter documenting M33 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M33-A`).
+
 ### Next planned slice
-- M33-S1 kickoff brief + closure gate `M33-A`.
+- M33-S2 priority matrix + closure gate `M33-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5148,8 +5166,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M33-S1 kickoff brief from M32 closure + transition packet artifacts and wire `M33-A`.
-2. Run full strict closure audit and finalize M32-S7 handoff.
+1. Implement M33-S2 priority matrix from M33 kickoff artifact and wire `M33-B`.
+2. Run full strict closure audit and publish M33 handoff status after `M33-B`.
 
 ---
 

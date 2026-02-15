@@ -553,5 +553,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `581-m32-transition-handoff-packet.md`
 - `582-m32-closure-report.md`
 - `583-m32-runtime-path-param-route-template-extraction.md`
+- `584-m33-kickoff-brief.md`
 
 As milestones progress, chapters will be added and linked from this index.
