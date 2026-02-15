@@ -5155,6 +5155,95 @@ fn main() -> Int {
 }
 
 #[test]
+fn c_bin_runtime_gate_handles_are_non_stub_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime gate handle test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-runtime-gate-handles");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runtimegatehandles"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn runtimeHandles() effects { net } -> Int {
+  let rawA = req.query("a");
+  let rawB = req.query("b");
+
+  let emailA = validate.email(rawA);
+  let emailB = validate.email(rawB);
+  if emailA == emailB { return 11; };
+
+  let headerA = validate.headerValue(rawA);
+  let headerB = validate.headerValue(rawB);
+  if headerA == headerB { return 12; };
+
+  let publicA = url.public(rawA);
+  let publicB = url.public(rawB);
+  if publicA == publicB { return 13; };
+
+  let internalA = url.internal(rawA);
+  let internalB = url.internal(rawB);
+  if internalA == internalB { return 14; };
+
+  let baseA = path.base("/tmp/a");
+  let baseB = path.base("/tmp/b");
+  if baseA == baseB { return 15; };
+
+  let safeA = path.under(baseA, rawA);
+  let safeB = path.under(baseA, rawB);
+  if safeA == safeB { return 16; };
+
+  let nameA = headers.name("X-A");
+  let nameB = headers.name("X-B");
+  if nameA == nameB { return 17; };
+
+  let valueA = headers.value("one");
+  let valueB = headers.value("two");
+  if valueA == valueB { return 18; };
+
+  0
+}
+
+fn main() effects { net } -> Int {
+  runtimeHandles()
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        output.status.success(),
+        "c-bin build should succeed for runtime gate handle fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("runtimegatehandles");
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime gate handle fixture should exit successfully"
+    );
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");

@@ -191,6 +191,44 @@ static void sec4_rt_assign_trace_id(void) {
   (void) snprintf(g_sec4_rt_request.trace_id, sizeof(g_sec4_rt_request.trace_id), "rt-%llu", trace);
 }
 
+static int64_t sec4_rt_hash_token(uint64_t token, uint64_t salt) {
+  uint64_t value = token ^ salt;
+  value ^= value >> 33;
+  value *= UINT64_C(0xff51afd7ed558ccd);
+  value ^= value >> 33;
+  value *= UINT64_C(0xc4ceb9fe1a85ec53);
+  value ^= value >> 33;
+  value &= UINT64_C(0x7fffffffffffffff);
+  if (value == 0) {
+    value = salt & UINT64_C(0x7fffffffffffffff);
+    if (value == 0) {
+      value = UINT64_C(1);
+    }
+  }
+  return (int64_t) value;
+}
+
+static int64_t sec4_rt_gate_handle_from_input(int64_t input, uint64_t salt) {
+  if (input == 0) {
+    return 0;
+  }
+  return sec4_rt_hash_token((uint64_t) input, salt);
+}
+
+static int64_t sec4_rt_gate_handle_from_string(const char *input, uint64_t salt) {
+  if (input == NULL || input[0] == '\0') {
+    return 0;
+  }
+
+  uint64_t token = UINT64_C(1469598103934665603);
+  while (*input != '\0') {
+    token ^= (uint64_t) (unsigned char) *input;
+    token *= UINT64_C(1099511628211);
+    input += 1;
+  }
+  return sec4_rt_hash_token(token, salt);
+}
+
 static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
   if (body == NULL || body_len == 0) {
     return false;
@@ -1127,16 +1165,16 @@ int64_t sec4_rt_req_body() {
   return 0;
 }
 
-int64_t sec4_rt_req_query() {
-  return 0;
+int64_t sec4_rt_req_query(const char *name) {
+  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x10101));
 }
 
-int64_t sec4_rt_req_path_param() {
-  return 0;
+int64_t sec4_rt_req_path_param(const char *name) {
+  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x20202));
 }
 
-int64_t sec4_rt_req_header() {
-  return 0;
+int64_t sec4_rt_req_header(const char *name) {
+  return sec4_rt_gate_handle_from_string(name, UINT64_C(0x30303));
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
@@ -1244,52 +1282,55 @@ bool sec4_rt_crypto_ct_eq() {
   return false;
 }
 
-int64_t sec4_rt_validate_header_value() {
-  return 0;
+int64_t sec4_rt_validate_header_value(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x40404));
 }
 
-int64_t sec4_rt_validate_email() {
-  return 0;
+int64_t sec4_rt_validate_email(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x50505));
 }
 
-int64_t sec4_rt_validate_uuid() {
-  return 0;
+int64_t sec4_rt_validate_uuid(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x60606));
 }
 
-int64_t sec4_rt_validate_int64() {
-  return 0;
+int64_t sec4_rt_validate_int64(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x70707));
 }
 
-int64_t sec4_rt_validate_non_empty() {
-  return 0;
+int64_t sec4_rt_validate_non_empty(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x80808));
 }
 
-int64_t sec4_rt_sanitize_html() {
-  return 0;
+int64_t sec4_rt_sanitize_html(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x90909));
 }
 
-int64_t sec4_rt_url_public() {
-  return 0;
+int64_t sec4_rt_url_public(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0xA0A0A));
 }
 
-int64_t sec4_rt_url_internal() {
-  return 0;
+int64_t sec4_rt_url_internal(int64_t input) {
+  return sec4_rt_gate_handle_from_input(input, UINT64_C(0xB0B0B));
 }
 
-int64_t sec4_rt_path_under() {
-  return 0;
+int64_t sec4_rt_path_under(int64_t base, int64_t input) {
+  if (base == 0 || input == 0) {
+    return 0;
+  }
+  return sec4_rt_hash_token(((uint64_t) base) ^ ((uint64_t) input), UINT64_C(0xC0C0C));
 }
 
-int64_t sec4_rt_path_base() {
-  return 0;
+int64_t sec4_rt_path_base(const char *input) {
+  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xD0D0D));
 }
 
-int64_t sec4_rt_headers_name() {
-  return 0;
+int64_t sec4_rt_headers_name(const char *input) {
+  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xE0E0E));
 }
 
-int64_t sec4_rt_headers_value() {
-  return 0;
+int64_t sec4_rt_headers_value(const char *input) {
+  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xF0F0F));
 }
 
 int64_t sec4_rt_http_router(void) {

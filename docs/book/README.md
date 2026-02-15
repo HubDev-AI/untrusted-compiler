@@ -258,6 +258,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `291-m11-workspace-dependency-invalidation-for-cached-unopened-files.md`
 - `292-m11-ast-backed-effect-quickfix-rewrites.md`
 - `293-m9-alpha-release-gate-automation.md`
+- `294-m32-runtime-gate-handle-destub.md`
 - `294-m9-alpha-release-gate-ci-workflow.md`
 - `295-m12-naming-lock-guard-and-cli-surface-alignment.md`
 - `296-m12-naming-lock-ci-workflow.md`

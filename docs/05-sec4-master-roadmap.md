@@ -5042,6 +5042,11 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M32 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M32-G`).
 
+### M32 re-entry checkpoint (locked)
+- Stable checkpoint commit: `3f631c8` (`M32-G` closure report wiring complete).
+- If we need to resume unfinished runtime-first work under M32, reopen as `M32-R*` slices from this checkpoint.
+- Current post-closure engineering work tracks concrete runtime de-stub implementation and runtime behavior tests before widening the next milestone scope.
+
 ### Next planned slice
 - M33-S1 kickoff brief + closure gate `M33-A`.
 
