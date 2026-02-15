@@ -575,5 +575,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `603-m35-transition-handoff-packet.md`
 - `604-m35-closure-report.md`
 - `605-m36-kickoff-brief.md`
+- `606-m36-priority-matrix.md`
 
 As milestones progress, chapters will be added and linked from this index.
