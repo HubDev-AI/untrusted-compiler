@@ -487,6 +487,7 @@ Current strict closure result:
 | `M35-E` | PASS | Naming-lock CI enforces M35 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M35-F` | PASS | Naming-lock CI enforces M35 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M35-G` | PASS | Naming-lock CI enforces M35 closure report | `.github/workflows/naming-lock.yml` |
+| `M36-A` | PASS | Naming-lock CI enforces M36 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -643,6 +644,7 @@ Strict closure interpretation:
 - M35 executed-slice convergence summary enforcement is active (`M35-E`).
 - M35 transition handoff packet enforcement is active (`M35-F`).
 - M35 closure report enforcement is active (`M35-G`).
+- M36 kickoff brief enforcement is active (`M36-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5347,7 +5349,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M36-S1 kickoff brief + closure gate `M36-A`.
+- M36-S2 priority matrix + closure gate `M36-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5439,8 +5441,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M36-S1 kickoff brief from M35 closure report + transition packet artifacts and wire `M36-A`.
-2. Run full strict closure audit and publish M36 kickoff status after `M36-A`.
+1. Implement M36-S2 priority matrix from M36 kickoff brief and wire `M36-B`.
+2. Run full strict closure audit and publish M36-S2 status after `M36-B`.
 
 ---
 
