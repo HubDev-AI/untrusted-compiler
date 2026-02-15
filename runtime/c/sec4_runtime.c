@@ -1633,7 +1633,9 @@ int64_t sec4_rt_json_encode(int64_t schema, int64_t value) {
   return value;
 }
 
-int64_t sec4_rt_req_body() {
+int64_t sec4_rt_req_body(int64_t ctx, int64_t req) {
+  (void) ctx;
+  (void) req;
   if (!g_sec4_rt_request.has_request || g_sec4_rt_request.body_len == 0) {
     return 0;
   }
