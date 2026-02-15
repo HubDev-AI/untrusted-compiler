@@ -7,18 +7,24 @@
 int64_t sec4_rt_identity_i64(int64_t value);
 bool sec4_rt_identity_bool(bool value);
 int64_t sec4_rt_time_now(void);
-void sec4_rt_log_any();
-int64_t sec4_rt_log_event();
-int64_t sec4_rt_log_field();
-int64_t sec4_rt_log_obj();
-int64_t sec4_rt_log_str();
-int64_t sec4_rt_log_i64();
-int64_t sec4_rt_log_bool();
-int64_t sec4_rt_log_redacted();
-int64_t sec4_rt_log_attr_redacted();
-int64_t sec4_rt_log_with_attr();
-int64_t sec4_rt_log_with_http();
-int64_t sec4_rt_log_with_error();
+void sec4_rt_log_any(int64_t event);
+int64_t sec4_rt_log_event(const char *event_name);
+int64_t sec4_rt_log_field(const char *key, int64_t value);
+int64_t sec4_rt_log_obj(int64_t field);
+int64_t sec4_rt_log_str(const char *value);
+int64_t sec4_rt_log_i64(int64_t value);
+int64_t sec4_rt_log_bool(int64_t value);
+int64_t sec4_rt_log_redacted(const char *value);
+int64_t sec4_rt_log_attr_redacted(const char *value);
+int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value);
+int64_t sec4_rt_log_with_http(
+    int64_t event,
+    const char *method,
+    const char *path,
+    int64_t status,
+    int64_t duration_ms
+);
+int64_t sec4_rt_log_with_error(int64_t event, int64_t error);
 int64_t sec4_rt_req_json(int64_t schema);
 int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw);
 int64_t sec4_rt_json_encode(int64_t schema, int64_t value);
@@ -75,26 +81,31 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg);
 int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg);
 int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg);
 int64_t sec4_rt_with_auth(int64_t router, int64_t cfg);
-int64_t sec4_rt_sec_default_headers();
-int64_t sec4_rt_sec_csp();
-int64_t sec4_rt_sec_csp_add();
-int64_t sec4_rt_cors_from_policy();
-int64_t sec4_rt_cors_origin();
-int64_t sec4_rt_csrf_from_policy();
-int64_t sec4_rt_csrf_issue_token();
-int64_t sec4_rt_auth_from_policy();
-int64_t sec4_rt_auth_require();
-int64_t sec4_rt_auth_require_role();
-int64_t sec4_rt_err_validation();
-int64_t sec4_rt_err_auth();
-int64_t sec4_rt_err_not_found();
-int64_t sec4_rt_err_conflict();
-int64_t sec4_rt_err_rate_limit();
-int64_t sec4_rt_err_internal();
-int64_t sec4_rt_err_with_path();
-int64_t sec4_rt_err_with_detail();
-int64_t sec4_rt_err_with_limit();
-int64_t sec4_rt_err_with_dependency();
-int64_t sec4_rt_err_with_cause();
+int64_t sec4_rt_sec_default_headers(void);
+int64_t sec4_rt_sec_csp(void);
+int64_t sec4_rt_sec_csp_add(int64_t csp, const char *directive, const char *value);
+int64_t sec4_rt_cors_from_policy(void);
+int64_t sec4_rt_cors_origin(int64_t origin);
+int64_t sec4_rt_csrf_from_policy(void);
+int64_t sec4_rt_csrf_issue_token(int64_t ctx);
+int64_t sec4_rt_auth_from_policy(void);
+int64_t sec4_rt_auth_require(int64_t ctx);
+int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role);
+int64_t sec4_rt_err_validation(const char *code, const char *message);
+int64_t sec4_rt_err_auth(const char *code, const char *message, int64_t status);
+int64_t sec4_rt_err_not_found(const char *code, const char *message);
+int64_t sec4_rt_err_conflict(const char *code, const char *message);
+int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t limit);
+int64_t sec4_rt_err_internal(const char *message);
+int64_t sec4_rt_err_with_path(int64_t error, const char *path);
+int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value);
+int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max);
+int64_t sec4_rt_err_with_dependency(
+    int64_t error,
+    const char *service,
+    const char *operation,
+    int64_t retryable
+);
+int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause);
 
 #endif
