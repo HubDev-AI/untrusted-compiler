@@ -5395,8 +5395,8 @@ entry = "src/main.ut"
     fs::write(
         project_dir.join("src/main.ut"),
         r#"fn runtimeHandles() effects { net } -> Int {
-  let rawA = req.query("a");
-  let rawB = req.query("b");
+  let rawA = req.query("user-a@example.com");
+  let rawB = req.query("user-b@example.com");
 
   let emailA = validate.email(rawA);
   let emailB = validate.email(rawB);
@@ -5532,6 +5532,196 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime path/header guard harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_validators_and_sanitizer_enforce_checks_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime validator/sanitizer test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-validator-sanitize-checks");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-validator-sanitize-checks");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  int64_t ok_email = sec4_rt_validate_email(sec4_rt_req_query("user@example.com"));
+  if (ok_email == 0) { return 11; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_validate_email(sec4_rt_req_query("not-an-email")) != 0) { return 12; }
+  if (!g_sec4_rt_response.active) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"VALIDATE.EMAIL_INVALID\"") == NULL) { return 14; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_validate_email(INT64_C(444444)) != 0) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"VALIDATE.EMAIL_INVALID\"") == NULL) { return 16; }
+
+  int64_t ok_uuid = sec4_rt_validate_uuid(sec4_rt_req_query("550e8400-e29b-41d4-a716-446655440000"));
+  if (ok_uuid == 0) { return 17; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_validate_uuid(sec4_rt_req_query("550e8400e29b41d4a716446655440000")) != 0) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"VALIDATE.UUID_INVALID\"") == NULL) { return 19; }
+
+  int64_t ok_int64 = sec4_rt_validate_int64(sec4_rt_req_query("-9223372036854775808"));
+  if (ok_int64 == 0) { return 20; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_validate_int64(sec4_rt_req_query("9223372036854775808")) != 0) { return 21; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"VALIDATE.INT64_INVALID\"") == NULL) { return 22; }
+
+  int64_t ok_non_empty = sec4_rt_validate_non_empty(sec4_rt_req_query("x"));
+  if (ok_non_empty == 0) { return 23; }
+
+  int64_t empty_value = sec4_rt_track_sized_value("", 0, UINT64_C(0xEEEEE));
+  if (empty_value == 0) { return 24; }
+  sec4_rt_reset_response();
+  if (sec4_rt_validate_non_empty(empty_value) != 0) { return 25; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"VALIDATE.NON_EMPTY_INVALID\"") == NULL) { return 26; }
+
+  int64_t sanitized = sec4_rt_sanitize_html(sec4_rt_req_query("<a&\"'>"));
+  if (sanitized == 0) { return 27; }
+  const char *sanitized_value = sec4_rt_lookup_tracked_value(sanitized);
+  if (sanitized_value == NULL) { return 28; }
+  if (strcmp(sanitized_value, "&lt;a&amp;&quot;&#39;&gt;") != 0) { return 29; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_sanitize_html(INT64_C(999999)) != 0) { return 30; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"SANITIZE.HTML_INVALID\"") == NULL) { return 31; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime validator/sanitizer harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime validator/sanitizer harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_path_under_enforces_base_containment_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime path-under containment test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-path-under-containment");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-path-under-containment");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  int64_t base = sec4_rt_path_base("/tmp/safe//");
+  if (base == 0) { return 11; }
+  const char *base_value = sec4_rt_lookup_tracked_value(base);
+  if (base_value == NULL || strcmp(base_value, "/tmp/safe") != 0) { return 12; }
+
+  int64_t safe_rel = sec4_rt_path_under(base, sec4_rt_req_query("docs/readme.txt"));
+  if (safe_rel == 0) { return 13; }
+  const char *safe_rel_value = sec4_rt_lookup_tracked_value(safe_rel);
+  if (safe_rel_value == NULL || strcmp(safe_rel_value, "/tmp/safe/docs/readme.txt") != 0) { return 14; }
+
+  int64_t safe_abs = sec4_rt_path_under(base, sec4_rt_req_query("/tmp/safe/data/file.txt"));
+  if (safe_abs == 0) { return 15; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_path_under(base, sec4_rt_req_query("../etc/passwd")) != 0) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"PATH.UNDER_PATH_INVALID\"") == NULL) { return 17; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_path_under(base, sec4_rt_req_query("/etc/passwd")) != 0) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"PATH.UNDER_OUT_OF_BASE\"") == NULL) { return 19; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_path_under(INT64_C(1234567), sec4_rt_req_query("ok.txt")) != 0) { return 20; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"PATH.UNDER_INVALID\"") == NULL) { return 21; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_path_base("tmp/base") != 0) { return 22; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"PATH.BASE_INVALID\"") == NULL) { return 23; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_path_base("/tmp/../escape") != 0) { return 24; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"PATH.BASE_INVALID\"") == NULL) { return 25; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime path-under containment harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime path-under containment harness should exit successfully"
     );
 }
 

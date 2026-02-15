@@ -1711,6 +1711,308 @@ static bool sec4_rt_is_header_value_valid(const char *value) {
   return true;
 }
 
+static bool sec4_rt_is_email_local_char(unsigned char ch) {
+  return isalnum(ch)
+      || ch == '.'
+      || ch == '!'
+      || ch == '#'
+      || ch == '$'
+      || ch == '%'
+      || ch == '&'
+      || ch == '\''
+      || ch == '*'
+      || ch == '+'
+      || ch == '/'
+      || ch == '='
+      || ch == '?'
+      || ch == '^'
+      || ch == '_'
+      || ch == '`'
+      || ch == '{'
+      || ch == '|'
+      || ch == '}'
+      || ch == '~'
+      || ch == '-';
+}
+
+static bool sec4_rt_is_email_valid(const char *value) {
+  if (value == NULL) {
+    return false;
+  }
+
+  size_t total_len = strlen(value);
+  if (total_len < 3 || total_len > 320) {
+    return false;
+  }
+
+  const char *at = strchr(value, '@');
+  if (at == NULL || strchr(at + 1, '@') != NULL) {
+    return false;
+  }
+
+  size_t local_len = (size_t) (at - value);
+  const char *domain = at + 1;
+  size_t domain_len = strlen(domain);
+  if (local_len == 0 || local_len > 64 || domain_len < 3 || domain_len > 255) {
+    return false;
+  }
+
+  if (value[0] == '.' || value[local_len - 1] == '.') {
+    return false;
+  }
+  for (size_t i = 0; i < local_len; i++) {
+    unsigned char ch = (unsigned char) value[i];
+    if (!sec4_rt_is_email_local_char(ch)) {
+      return false;
+    }
+    if (ch == '.' && i > 0 && value[i - 1] == '.') {
+      return false;
+    }
+  }
+
+  if (domain[0] == '.' || domain[domain_len - 1] == '.') {
+    return false;
+  }
+
+  bool has_dot = false;
+  const char *label_start = domain;
+  size_t label_len = 0;
+  for (size_t i = 0; i <= domain_len; i++) {
+    char ch = domain[i];
+    if (ch == '.' || ch == '\0') {
+      if (label_len == 0 || label_len > 63) {
+        return false;
+      }
+      if (label_start[0] == '-' || label_start[label_len - 1] == '-') {
+        return false;
+      }
+      if (ch == '.') {
+        has_dot = true;
+        label_start = domain + i + 1;
+        label_len = 0;
+      } else {
+        break;
+      }
+      continue;
+    }
+
+    if (!(isalnum((unsigned char) ch) || ch == '-')) {
+      return false;
+    }
+    label_len += 1;
+  }
+
+  return has_dot;
+}
+
+static bool sec4_rt_is_uuid_valid(const char *value) {
+  if (value == NULL || strlen(value) != 36) {
+    return false;
+  }
+
+  for (size_t i = 0; i < 36; i++) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (value[i] != '-') {
+        return false;
+      }
+      continue;
+    }
+
+    if (!isxdigit((unsigned char) value[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_is_int64_text_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+
+  size_t index = 0;
+  if (value[index] == '+' || value[index] == '-') {
+    index += 1;
+  }
+  if (value[index] == '\0') {
+    return false;
+  }
+  for (; value[index] != '\0'; index++) {
+    if (!isdigit((unsigned char) value[index])) {
+      return false;
+    }
+  }
+
+  errno = 0;
+  char *end = NULL;
+  (void) strtoll(value, &end, 10);
+  if (errno == ERANGE || end == NULL || *end != '\0') {
+    return false;
+  }
+  return true;
+}
+
+static bool sec4_rt_escape_html(
+    const char *input,
+    char *escaped,
+    size_t escaped_size,
+    size_t *escaped_len
+) {
+  if (input == NULL || escaped == NULL || escaped_size == 0 || escaped_len == NULL) {
+    return false;
+  }
+
+  size_t write = 0;
+  for (size_t i = 0; input[i] != '\0'; i++) {
+    const char *replacement = NULL;
+    switch (input[i]) {
+      case '&':
+        replacement = "&amp;";
+        break;
+      case '<':
+        replacement = "&lt;";
+        break;
+      case '>':
+        replacement = "&gt;";
+        break;
+      case '"':
+        replacement = "&quot;";
+        break;
+      case '\'':
+        replacement = "&#39;";
+        break;
+      default:
+        replacement = NULL;
+        break;
+    }
+
+    if (replacement != NULL) {
+      size_t replacement_len = strlen(replacement);
+      if (write + replacement_len >= escaped_size) {
+        return false;
+      }
+      memcpy(escaped + write, replacement, replacement_len);
+      write += replacement_len;
+      continue;
+    }
+
+    if (write + 1 >= escaped_size) {
+      return false;
+    }
+    escaped[write++] = input[i];
+  }
+
+  escaped[write] = '\0';
+  *escaped_len = write;
+  return true;
+}
+
+static bool sec4_rt_normalize_absolute_path(
+    const char *value,
+    char *normalized,
+    size_t normalized_size
+) {
+  if (value == NULL || normalized == NULL || normalized_size < 2 || value[0] != '/') {
+    return false;
+  }
+
+  size_t write = 0;
+  normalized[write++] = '/';
+
+  const char *cursor = value;
+  while (*cursor == '/') {
+    cursor += 1;
+  }
+
+  while (*cursor != '\0') {
+    const char *segment_start = cursor;
+    while (*cursor != '\0' && *cursor != '/') {
+      unsigned char ch = (unsigned char) *cursor;
+      if (ch < 0x20 || ch == 0x7f || ch == '\\') {
+        return false;
+      }
+      cursor += 1;
+    }
+
+    size_t segment_len = (size_t) (cursor - segment_start);
+    if (segment_len == 0) {
+      while (*cursor == '/') {
+        cursor += 1;
+      }
+      continue;
+    }
+
+    if ((segment_len == 1 && segment_start[0] == '.')
+        || (segment_len == 2 && segment_start[0] == '.' && segment_start[1] == '.')) {
+      return false;
+    }
+
+    if (write > 1) {
+      if (write + 1 >= normalized_size) {
+        return false;
+      }
+      normalized[write++] = '/';
+    }
+
+    if (write + segment_len >= normalized_size) {
+      return false;
+    }
+    memcpy(normalized + write, segment_start, segment_len);
+    write += segment_len;
+
+    while (*cursor == '/') {
+      cursor += 1;
+    }
+  }
+
+  normalized[write] = '\0';
+  return true;
+}
+
+static bool sec4_rt_normalize_under_base_path(
+    const char *normalized_base,
+    const char *input,
+    char *normalized,
+    size_t normalized_size
+) {
+  if (normalized_base == NULL || input == NULL || input[0] == '\0') {
+    return false;
+  }
+
+  if (input[0] == '/') {
+    return sec4_rt_normalize_absolute_path(input, normalized, normalized_size);
+  }
+
+  char joined[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  int written = 0;
+  if (strcmp(normalized_base, "/") == 0) {
+    written = snprintf(joined, sizeof(joined), "/%s", input);
+  } else {
+    written = snprintf(joined, sizeof(joined), "%s/%s", normalized_base, input);
+  }
+
+  if (written <= 0 || (size_t) written >= sizeof(joined)) {
+    return false;
+  }
+  return sec4_rt_normalize_absolute_path(joined, normalized, normalized_size);
+}
+
+static bool sec4_rt_path_within_base(const char *normalized_base, const char *normalized_path) {
+  if (normalized_base == NULL || normalized_path == NULL) {
+    return false;
+  }
+  if (strcmp(normalized_base, "/") == 0) {
+    return normalized_path[0] == '/';
+  }
+
+  size_t base_len = strlen(normalized_base);
+  if (strncmp(normalized_base, normalized_path, base_len) != 0) {
+    return false;
+  }
+
+  return normalized_path[base_len] == '\0' || normalized_path[base_len] == '/';
+}
+
 static int64_t sec4_rt_append_response_header(const char *name, const char *value) {
   if (!sec4_rt_is_header_name_valid(name) || !sec4_rt_is_header_value_valid(value)) {
     return 1;
@@ -1741,22 +2043,6 @@ static const char *sec4_rt_response_extra_headers(void) {
     return NULL;
   }
   return g_sec4_rt_response.extra_headers;
-}
-
-static bool sec4_rt_is_path_base_valid(const char *value) {
-  if (value == NULL || value[0] == '\0') {
-    return false;
-  }
-  if (value[0] != '/') {
-    return false;
-  }
-  if (strstr(value, "..") != NULL) {
-    return false;
-  }
-  if (strchr(value, '\r') != NULL || strchr(value, '\n') != NULL) {
-    return false;
-  }
-  return true;
 }
 
 static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
@@ -4369,27 +4655,165 @@ bool sec4_rt_crypto_ct_eq(int64_t left_secret, int64_t right_secret) {
 }
 
 int64_t sec4_rt_validate_header_value(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x40404));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL || !sec4_rt_is_header_value_valid(value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "VALIDATE.HEADER_VALUE_INVALID",
+        "validation",
+        "validate.headerValue requires tracked valid header value input"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x40404));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "VALIDATE.HEADER_VALUE_INTERNAL",
+        "internal",
+        "validate.headerValue runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_validate_email(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x50505));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL || !sec4_rt_is_email_valid(value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "VALIDATE.EMAIL_INVALID",
+        "validation",
+        "validate.email requires tracked valid email input"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x50505));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "VALIDATE.EMAIL_INTERNAL",
+        "internal",
+        "validate.email runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_validate_uuid(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x60606));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL || !sec4_rt_is_uuid_valid(value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "VALIDATE.UUID_INVALID",
+        "validation",
+        "validate.uuid requires tracked valid uuid input"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x60606));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "VALIDATE.UUID_INTERNAL",
+        "internal",
+        "validate.uuid runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_validate_int64(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x70707));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL || !sec4_rt_is_int64_text_valid(value)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "VALIDATE.INT64_INVALID",
+        "validation",
+        "validate.int64 requires tracked valid int64 input"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x70707));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "VALIDATE.INT64_INTERNAL",
+        "internal",
+        "validate.int64 runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_validate_non_empty(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x80808));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL || value[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "VALIDATE.NON_EMPTY_INVALID",
+        "validation",
+        "validate.nonEmpty requires tracked non-empty input"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(value, UINT64_C(0x80808));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "VALIDATE.NON_EMPTY_INTERNAL",
+        "internal",
+        "validate.nonEmpty runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_sanitize_html(int64_t input) {
-  return sec4_rt_gate_handle_from_input(input, UINT64_C(0x90909));
+  const char *value = sec4_rt_lookup_tracked_value(input);
+  if (value == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "SANITIZE.HTML_INVALID",
+        "validation",
+        "sanitize.html requires tracked input"
+    );
+    return 0;
+  }
+
+  char escaped[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t escaped_len = 0;
+  if (!sec4_rt_escape_html(value, escaped, sizeof(escaped), &escaped_len)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "SANITIZE.HTML_TOO_LARGE",
+        "validation",
+        "sanitize.html output exceeds runtime limits"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_sized_value(escaped, escaped_len, UINT64_C(0x90909));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "SANITIZE.HTML_INTERNAL",
+        "internal",
+        "sanitize.html runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_url_public(int64_t input) {
@@ -4416,16 +4840,104 @@ int64_t sec4_rt_url_internal(int64_t input) {
 
 int64_t sec4_rt_path_under(int64_t base, int64_t input) {
   if (base == 0 || input == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.UNDER_INVALID",
+        "validation",
+        "path.under requires tracked base and input handles"
+    );
     return 0;
   }
-  return sec4_rt_hash_token(((uint64_t) base) ^ ((uint64_t) input), UINT64_C(0xC0C0C));
+
+  const char *base_value = sec4_rt_lookup_tracked_value(base);
+  const char *path_value = sec4_rt_lookup_tracked_value(input);
+  if (base_value == NULL || path_value == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.UNDER_INVALID",
+        "validation",
+        "path.under requires tracked base and input handles"
+    );
+    return 0;
+  }
+
+  char normalized_base[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  if (!sec4_rt_normalize_absolute_path(
+          base_value,
+          normalized_base,
+          sizeof(normalized_base)
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.UNDER_BASE_INVALID",
+        "validation",
+        "path.under base handle must contain an absolute normalized path"
+    );
+    return 0;
+  }
+
+  char normalized_path[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  if (!sec4_rt_normalize_under_base_path(
+          normalized_base,
+          path_value,
+          normalized_path,
+          sizeof(normalized_path)
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.UNDER_PATH_INVALID",
+        "validation",
+        "path.under input path is invalid"
+    );
+    return 0;
+  }
+
+  if (!sec4_rt_path_within_base(normalized_base, normalized_path)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.UNDER_OUT_OF_BASE",
+        "validation",
+        "path.under input path is outside base"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_string_value(normalized_path, UINT64_C(0xC0C0C));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "PATH.UNDER_INTERNAL",
+        "internal",
+        "path.under runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_path_base(const char *input) {
-  if (!sec4_rt_is_path_base_valid(input)) {
+  char normalized[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  if (!sec4_rt_normalize_absolute_path(input, normalized, sizeof(normalized))) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.BASE_INVALID",
+        "validation",
+        "path.base requires an absolute normalized path"
+    );
     return 0;
   }
-  return sec4_rt_gate_handle_from_string(input, UINT64_C(0xD0D0D));
+
+  int64_t handle = sec4_rt_track_string_value(normalized, UINT64_C(0xD0D0D));
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "PATH.BASE_INTERNAL",
+        "internal",
+        "path.base runtime failure"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 int64_t sec4_rt_headers_name(const char *input) {
