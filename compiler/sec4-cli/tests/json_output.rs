@@ -5604,6 +5604,31 @@ int main(void) {
   if (sec4_rt_sanitize_html(INT64_C(999999)) != 0) { return 30; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"SANITIZE.HTML_INVALID\"") == NULL) { return 31; }
 
+  sec4_rt_reset_response();
+  if (setenv("SEC4_RT_JSON_MAX_BYTES", "16", 1) != 0) { return 32; }
+  int64_t decode_size_raw = sec4_rt_track_string_value("{\"blob\":\"12345678901234567890\"}", UINT64_C(0xFA001));
+  if (decode_size_raw == 0) { return 33; }
+  if (sec4_rt_json_decode(INT64_C(1), INT64_C(2), decode_size_raw) != 0) { return 34; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.SIZE_LIMIT\"") == NULL) { return 35; }
+
+  sec4_rt_reset_response();
+  if (setenv("SEC4_RT_JSON_MAX_DEPTH", "2", 1) != 0) { return 36; }
+  if (setenv("SEC4_RT_JSON_MAX_BYTES", "256", 1) != 0) { return 45; }
+  int64_t decode_depth_raw = sec4_rt_track_string_value("{\"a\":{\"b\":{\"c\":1}}}", UINT64_C(0xFA002));
+  if (decode_depth_raw == 0) { return 37; }
+  if (sec4_rt_json_decode(INT64_C(1), INT64_C(2), decode_depth_raw) != 0) { return 38; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.DEPTH_LIMIT\"") == NULL) { return 39; }
+
+  sec4_rt_reset_response();
+  if (setenv("SEC4_RT_JSON_MAX_BYTES", "256", 1) != 0) { return 40; }
+  if (setenv("SEC4_RT_JSON_MAX_DEPTH", "6", 1) != 0) { return 41; }
+  int64_t decode_ok_raw = sec4_rt_track_string_value("{\"a\":{\"b\":1}}", UINT64_C(0xFA003));
+  if (decode_ok_raw == 0) { return 42; }
+  int64_t decode_ok = sec4_rt_json_decode(INT64_C(1), INT64_C(2), decode_ok_raw);
+  if (decode_ok == 0) { return 43; }
+  const char *decode_ok_value = sec4_rt_lookup_tracked_value(decode_ok);
+  if (decode_ok_value == NULL || strcmp(decode_ok_value, "{\"a\":{\"b\":1}}") != 0) { return 44; }
+
   return 0;
 }
 "#,
@@ -12227,6 +12252,163 @@ fn main() effects {{ net }} -> Int {{
         response.contains("\"code\":\"LIMIT.BODY_BYTES\"")
             && response.contains("\"message\":\"request body exceeds runtime limit\""),
         "response should include deterministic body-limit error payload"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_req_json_rejects_json_size_limit_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime json-size-limit harness test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-json-size-limit");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-json-size-limit");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  const char *json = "{\"blob\":\"12345678901234567890\"}";
+  if (setenv("SEC4_RT_JSON_MAX_BYTES", "16", 1) != 0) { return 11; }
+
+  sec4_rt_reset_request();
+  sec4_rt_reset_response();
+  g_sec4_rt_request.has_request = true;
+  g_sec4_rt_request.has_content_type = true;
+  g_sec4_rt_request.content_type_is_json = true;
+
+  size_t json_len = strlen(json);
+  memcpy(g_sec4_rt_request.body, json, json_len + 1);
+  g_sec4_rt_request.body_len = json_len;
+
+  if (sec4_rt_req_json(INT64_C(1)) == 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.SIZE_LIMIT\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"message\":\"json payload exceeds runtime size limit\"") == NULL) { return 14; }
+  return 0;
+}
+"#,
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime json-size-limit harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime json-size-limit harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("runtime json-size-limit harness should run");
+    assert!(
+        run.status.success(),
+        "runtime json-size-limit harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_req_json_rejects_json_depth_limit_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime json-depth-limit harness test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-json-depth-limit");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-json-depth-limit");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  const char *deep_json = "{\"a\":{\"b\":{\"c\":1}}}";
+  const char *bounded_json = "{\"a\":{\"b\":1}}";
+
+  if (setenv("SEC4_RT_JSON_MAX_DEPTH", "2", 1) != 0) { return 11; }
+  if (setenv("SEC4_RT_JSON_MAX_BYTES", "64", 1) != 0) { return 12; }
+
+  sec4_rt_reset_request();
+  sec4_rt_reset_response();
+  g_sec4_rt_request.has_request = true;
+  g_sec4_rt_request.has_content_type = true;
+  g_sec4_rt_request.content_type_is_json = true;
+
+  size_t deep_len = strlen(deep_json);
+  memcpy(g_sec4_rt_request.body, deep_json, deep_len + 1);
+  g_sec4_rt_request.body_len = deep_len;
+
+  if (sec4_rt_req_json(INT64_C(1)) == 0) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.DEPTH_LIMIT\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"message\":\"json payload exceeds runtime depth limit\"") == NULL) { return 15; }
+
+  if (setenv("SEC4_RT_JSON_MAX_DEPTH", "4", 1) != 0) { return 16; }
+  sec4_rt_reset_request();
+  sec4_rt_reset_response();
+  g_sec4_rt_request.has_request = true;
+  g_sec4_rt_request.has_content_type = true;
+  g_sec4_rt_request.content_type_is_json = true;
+
+  size_t bounded_len = strlen(bounded_json);
+  memcpy(g_sec4_rt_request.body, bounded_json, bounded_len + 1);
+  g_sec4_rt_request.body_len = bounded_len;
+
+  if (sec4_rt_req_json(INT64_C(1)) != 0) { return 17; }
+  if (!g_sec4_rt_request.json_valid) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime json-depth-limit harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime json-depth-limit harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("runtime json-depth-limit harness should run");
+    assert!(
+        run.status.success(),
+        "runtime json-depth-limit harness should exit successfully"
     );
 }
 

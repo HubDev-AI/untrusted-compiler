@@ -30,6 +30,8 @@
 #define SEC4_RT_MAX_RESPONSE_BYTES 4096
 #define SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES 2048
 #define SEC4_RT_MAX_REQUEST_BODY_BYTES 4096
+#define SEC4_RT_DEFAULT_JSON_MAX_BYTES 2048
+#define SEC4_RT_DEFAULT_JSON_MAX_DEPTH 16
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
 #define SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES 2048
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
@@ -2289,6 +2291,72 @@ static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
   return (first == '{' && last == '}') || (first == '[' && last == ']');
 }
 
+static size_t sec4_rt_json_max_bytes_limit(void) {
+  int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_JSON_MAX_BYTES", SEC4_RT_DEFAULT_JSON_MAX_BYTES);
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_JSON_MAX_BYTES;
+  }
+  return (size_t) parsed;
+}
+
+static size_t sec4_rt_json_max_depth_limit(void) {
+  int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_JSON_MAX_DEPTH", SEC4_RT_DEFAULT_JSON_MAX_DEPTH);
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_JSON_MAX_DEPTH;
+  }
+  return (size_t) parsed;
+}
+
+static bool sec4_rt_json_exceeds_depth(const char *body, size_t body_len, size_t max_depth) {
+  if (body == NULL || body_len == 0) {
+    return false;
+  }
+  if (max_depth == 0) {
+    return true;
+  }
+
+  bool in_string = false;
+  bool escaped = false;
+  size_t depth = 0;
+
+  for (size_t i = 0; i < body_len; i++) {
+    unsigned char ch = (unsigned char) body[i];
+    if (in_string) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch == '"') {
+        in_string = false;
+      }
+      continue;
+    }
+
+    if (ch == '"') {
+      in_string = true;
+      continue;
+    }
+
+    if (ch == '{' || ch == '[') {
+      depth += 1;
+      if (depth > max_depth) {
+        return true;
+      }
+      continue;
+    }
+
+    if ((ch == '}' || ch == ']') && depth > 0) {
+      depth -= 1;
+    }
+  }
+
+  return false;
+}
+
 static size_t sec4_rt_parse_content_length(const char *request, size_t request_len) {
   const char *cursor = request;
   const char *request_end = request + request_len;
@@ -3245,6 +3313,32 @@ int64_t sec4_rt_req_json(int64_t schema) {
     return 1;
   }
 
+  if (g_sec4_rt_request.body_len > sec4_rt_json_max_bytes_limit()) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_std_error_response(
+        413,
+        "JSON.SIZE_LIMIT",
+        "resource_limit",
+        "json payload exceeds runtime size limit"
+    );
+    return 1;
+  }
+
+  if (sec4_rt_json_exceeds_depth(
+          g_sec4_rt_request.body,
+          g_sec4_rt_request.body_len,
+          sec4_rt_json_max_depth_limit()
+      )) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.DEPTH_LIMIT",
+        "validation",
+        "json payload exceeds runtime depth limit"
+    );
+    return 1;
+  }
+
   g_sec4_rt_request.json_valid = true;
   return 0;
 }
@@ -3261,13 +3355,33 @@ int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
   }
 
   const char *raw_value = sec4_rt_lookup_tracked_value(raw);
-  if (raw_value == NULL || raw_value[0] == '\0'
-      || !sec4_rt_is_likely_json(raw_value, strlen(raw_value))) {
+  size_t raw_len = raw_value != NULL ? strlen(raw_value) : 0;
+  if (raw_value == NULL || raw_len == 0 || !sec4_rt_is_likely_json(raw_value, raw_len)) {
     sec4_rt_store_std_error_response(
         400,
         "JSON.DECODE_INVALID",
         "validation",
         "invalid json.decode input"
+    );
+    return 0;
+  }
+
+  if (raw_len > sec4_rt_json_max_bytes_limit()) {
+    sec4_rt_store_std_error_response(
+        413,
+        "JSON.SIZE_LIMIT",
+        "resource_limit",
+        "json payload exceeds runtime size limit"
+    );
+    return 0;
+  }
+
+  if (sec4_rt_json_exceeds_depth(raw_value, raw_len, sec4_rt_json_max_depth_limit())) {
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.DEPTH_LIMIT",
+        "validation",
+        "json payload exceeds runtime depth limit"
     );
     return 0;
   }
