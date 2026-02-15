@@ -1,11 +1,13 @@
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use sec4_core::{
-    analyze_entry, analyze_entry_with_allows, build_security_map_with_allows,
-    emit_program_with_backend, render_security_audit_text, run_security_audit_with_baseline,
-    should_fail, summarize_history_window, validate_lockfile_stub, write_build_metadata,
-    write_lockfile_stub, write_sbom, write_security_map, AuditHistoryWindowSummary, AuditReport,
-    AuditSeverity, BackendEmitOutput, BackendKind, Diagnostic,
+    analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
+    build_security_map_with_allows, emit_program_with_backend, parse_source,
+    render_security_audit_text, run_security_audit_with_baseline, should_fail,
+    strip_allow_annotations, summarize_history_window, validate_lockfile_stub,
+    write_build_metadata, write_lockfile_stub, write_sbom, write_security_map,
+    AuditHistoryWindowSummary, AuditReport, AuditSeverity, BackendEmitOutput, BackendKind,
+    Diagnostic, Policy,
 };
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -3299,9 +3301,48 @@ fn cmd_run(
 }
 
 fn cmd_test(path: &Path) -> Result<(), i32> {
-    cmd_check(path, None)?;
-    println!("test command placeholder (M0): language-level tests land in M1-M3");
-    Ok(())
+    let manifest = match sec4_core::validate_project(path) {
+        Ok(manifest) => manifest,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+
+    if let Err(diagnostics) = analyze_entry(path, &manifest) {
+        print_diagnostics(&diagnostics);
+        return Err(1);
+    }
+
+    let policy = match sec4_core::policy::load_policy(path) {
+        Ok(policy) => policy,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+
+    let tests_root = path.join("tests");
+    let test_entries = collect_ut_files(&tests_root)?;
+    let mut passed = 0usize;
+    let mut failed = 0usize;
+
+    for test_entry in test_entries {
+        match analyze_test_entry(&test_entry, &policy) {
+            Ok(()) => passed += 1,
+            Err(diagnostics) => {
+                failed += 1;
+                print_diagnostics(&diagnostics);
+            }
+        }
+    }
+
+    println!("test summary: passed={passed}, failed={failed}");
+    if failed == 0 {
+        Ok(())
+    } else {
+        Err(1)
+    }
 }
 
 fn cmd_fmt(path: &Path) -> Result<(), i32> {
@@ -3314,14 +3355,138 @@ fn cmd_fmt(path: &Path) -> Result<(), i32> {
         print_diagnostics(&[diag]);
         return Err(1);
     }
-    println!("fmt command placeholder (M0): canonical formatter lands in M8");
+
+    let mut changed = 0usize;
+    let ut_files = collect_ut_files(path)?;
+    for ut_file in ut_files {
+        let source = match fs::read_to_string(&ut_file) {
+            Ok(source) => source,
+            Err(err) => {
+                let diagnostic = Diagnostic::error(
+                    "C0002",
+                    "could not read .ut source file",
+                    sec4_core::Span::point(ut_file, 1, 1),
+                )
+                .with_note(err.to_string());
+                print_diagnostics(&[diagnostic]);
+                return Err(1);
+            }
+        };
+
+        let formatted = format_ut_source(&source);
+        if formatted != source {
+            if let Err(err) = fs::write(&ut_file, formatted) {
+                let diagnostic = Diagnostic::error(
+                    "C0003",
+                    "could not write formatted .ut source file",
+                    sec4_core::Span::point(ut_file, 1, 1),
+                )
+                .with_note(err.to_string());
+                print_diagnostics(&[diagnostic]);
+                return Err(1);
+            }
+            changed += 1;
+        }
+    }
+
+    println!("fmt summary: changed={changed}");
     Ok(())
 }
 
 fn cmd_lint(path: &Path) -> Result<(), i32> {
     cmd_check(path, None)?;
-    println!("lint command placeholder (M0): policy/security lint pass lands in M7");
+    cmd_sec_audit(
+        path,
+        AuditOutputFormat::Text,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some("risk>=HIGH"),
+    )
+}
+
+fn collect_ut_files(path: &Path) -> Result<Vec<PathBuf>, i32> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    if path.is_file() {
+        if is_ut_file(path) {
+            return Ok(vec![path.to_path_buf()]);
+        }
+        return Ok(Vec::new());
+    }
+
+    let mut files = Vec::new();
+    collect_ut_files_recursive(path, &mut files)?;
+    Ok(files)
+}
+
+fn collect_ut_files_recursive(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), i32> {
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!("could not read directory `{}`: {err}", path.display());
+            return Err(2);
+        }
+    };
+
+    let mut children = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => children.push(entry.path()),
+            Err(err) => {
+                eprintln!("could not read directory entry under `{}`: {err}", path.display());
+                return Err(2);
+            }
+        }
+    }
+    children.sort();
+
+    for child in children {
+        if child.is_dir() {
+            collect_ut_files_recursive(&child, files)?;
+        } else if is_ut_file(&child) {
+            files.push(child);
+        }
+    }
+
     Ok(())
+}
+
+fn is_ut_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("ut"))
+}
+
+fn analyze_test_entry(path: &Path, policy: &Policy) -> Result<(), Vec<Diagnostic>> {
+    let source = fs::read_to_string(path).map_err(|err| {
+        vec![
+            Diagnostic::error(
+                "C0004",
+                "could not read test entry source file",
+                sec4_core::Span::point(path.to_path_buf(), 1, 1),
+            )
+            .with_note(err.to_string()),
+        ]
+    })?;
+
+    let source_for_parser = strip_allow_annotations(&source);
+    let program = parse_source(path, &source_for_parser)?;
+    analyze_program_with_policy(&program, policy)
+}
+
+fn format_ut_source(source: &str) -> String {
+    let mut formatted = source
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    formatted.push('\n');
+    formatted
 }
 
 fn print_diagnostics(diagnostics: &[Diagnostic]) {
