@@ -412,6 +412,9 @@ jobs:
       - name: Validate M32 runtime de-stub runner
         run: scripts/test-run-m32-runtime-destub.sh
 
+      - name: Validate M32 executed-slice convergence summary
+        run: scripts/test-build-m32-executed-slice-convergence-summary.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

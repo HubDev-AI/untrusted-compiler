@@ -132,6 +132,7 @@ touch "$tmp/scripts/test-generate-m32-kickoff-brief.sh"
 touch "$tmp/scripts/test-build-m32-priority-matrix.sh"
 touch "$tmp/scripts/test-plan-m32-runtime-destub.sh"
 touch "$tmp/scripts/test-run-m32-runtime-destub.sh"
+touch "$tmp/scripts/test-build-m32-executed-slice-convergence-summary.sh"
 cat > "$tmp/scripts/test-replay-cli-json-contract.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -472,6 +473,8 @@ jobs:
         run: scripts/test-plan-m32-runtime-destub.sh
       - name: Validate M32 runtime de-stub runner
         run: scripts/test-run-m32-runtime-destub.sh
+      - name: Validate M32 executed-slice convergence summary
+        run: scripts/test-build-m32-executed-slice-convergence-summary.sh
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
       - name: Validate alpha release workflow guard behavior
@@ -675,7 +678,7 @@ if ! printf '%s\n' "$audit_json" | jq -e '
     "M13-A","M13-B","M13-C","M13-D","M13-E","M13-F",
     "M14-A","M14-B","M14-C","M14-D",
     "M15-A","M16-A","M16-B","M16-C","M16-D","M16-E",
-    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C","M28-D","M28-E","M28-F","M28-G","M29-A","M29-B","M29-C","M29-D","M29-E","M29-F","M29-G","M30-A","M30-B","M30-C","M30-D","M30-E","M30-F","M30-G","M31-A","M31-B","M31-C","M31-D","M31-E","M31-F","M31-G","M32-A","M32-B","M32-C","M32-D"
+    "M17-A","M17-B","M17-C","M17-D","M17-E","M17-F","M17-G","M17-H","M17-I","M17-J","M17-K","M17-L","M18-A","M18-B","M18-C","M18-D","M18-E","M18-F","M18-G","M18-H","M18-I","M19-A","M19-B","M19-C","M19-D","M19-E","M19-F","M19-G","M20-A","M20-B","M20-C","M20-D","M20-E","M20-F","M20-G","M21-A","M21-B","M21-C","M21-D","M21-E","M21-F","M21-G","M22-A","M22-B","M22-C","M22-D","M22-E","M22-F","M22-G","M23-A","M23-B","M23-C","M23-D","M23-E","M23-F","M23-G","M24-A","M24-B","M24-C","M24-D","M24-E","M24-F","M24-G","M25-A","M25-B","M25-C","M25-D","M25-E","M25-F","M25-G","M26-A","M26-B","M26-C","M26-D","M26-E","M26-F","M26-G","M27-A","M27-B","M27-C","M27-D","M27-E","M27-F","M27-G","M28-A","M28-B","M28-C","M28-D","M28-E","M28-F","M28-G","M29-A","M29-B","M29-C","M29-D","M29-E","M29-F","M29-G","M30-A","M30-B","M30-C","M30-D","M30-E","M30-F","M30-G","M31-A","M31-B","M31-C","M31-D","M31-E","M31-F","M31-G","M32-A","M32-B","M32-C","M32-D","M32-E"
   ]
 ' >/dev/null; then
   echo "expected deterministic gate ordering in json closure output" >&2
@@ -1215,6 +1218,10 @@ if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M32-C") !
 fi
 if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M32-D") != null' >/dev/null; then
   echo "expected json closure output to include M32-D gate" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$audit_json" | jq -e '.gates | map(.gate) | index("M32-E") != null' >/dev/null; then
+  echo "expected json closure output to include M32-E gate" >&2
   exit 1
 fi
 if printf '%s\n' "$audit_json" | rg -q -- "$tmp"; then
@@ -3305,6 +3312,24 @@ if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | j
   and (.gates[] | select(.gate == "M32-D")).status == "PENDING"
 ' >/dev/null; then
   echo "expected M32-D to become pending when naming-lock workflow misses runtime de-stub runner step" >&2
+  exit 1
+fi
+
+mv "$tmp/.github/workflows/naming-lock.base.yml" "$tmp/.github/workflows/naming-lock.yml"
+
+cp "$tmp/.github/workflows/naming-lock.yml" "$tmp/.github/workflows/naming-lock.base.yml"
+awk '!/scripts\/test-build-m32-executed-slice-convergence-summary\.sh/' "$tmp/.github/workflows/naming-lock.base.yml" > "$tmp/.github/workflows/naming-lock.yml"
+
+if "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --fail-on-pending >/dev/null 2>&1; then
+  echo "expected pending failure when naming-lock workflow misses M32 executed-slice convergence summary step" >&2
+  exit 1
+fi
+
+if ! "$root_dir/check-milestone-closure.sh" --repo-root "$tmp" --format json | jq -e '
+  .overall == "PENDING"
+  and (.gates[] | select(.gate == "M32-E")).status == "PENDING"
+' >/dev/null; then
+  echo "expected M32-E to become pending when naming-lock workflow misses executed-slice convergence summary step" >&2
   exit 1
 fi
 

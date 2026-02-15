@@ -544,5 +544,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `577-m32-priority-matrix.md`
 - `578-m32-runtime-destub-plan.md`
 - `579-m32-runtime-destub-runner.md`
+- `580-m32-executed-slice-convergence-summary.md`
 
 As milestones progress, chapters will be added and linked from this index.

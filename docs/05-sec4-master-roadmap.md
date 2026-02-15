@@ -463,6 +463,7 @@ Current strict closure result:
 | `M32-B` | PASS | Naming-lock CI enforces M32 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M32-C` | PASS | Naming-lock CI enforces M32 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 | `M32-D` | PASS | Naming-lock CI enforces M32 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
+| `M32-E` | PASS | Naming-lock CI enforces M32 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -595,6 +596,7 @@ Strict closure interpretation:
 - M32 priority matrix enforcement is active (`M32-B`).
 - M32 runtime de-stub planner enforcement is active (`M32-C`).
 - M32 runtime de-stub runner enforcement is active (`M32-D`).
+- M32 executed-slice convergence summary enforcement is active (`M32-E`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5003,8 +5005,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M32 runtime de-stub execution runner added.
 - [x] Naming-lock CI and closure gate updated (`M32-D`).
 
+### M32-S5 executed-slice convergence summary acceptance criteria
+- Executed-slice convergence summary consumes M32 plan + runtime execution artifacts and verifies selected track/slice alignment.
+- Summary emits deterministic markdown/json outputs with `executionPass`, `overall`, and `nextAction` fields.
+- Closure audit includes dedicated `M32-E` gate.
+
+### M32-S5 tracking (live status)
+- [x] M32 executed-slice convergence summary script added.
+- [x] M32 executed-slice convergence summary contract test added.
+- [x] Book chapter documenting M32 executed-slice convergence summary added.
+- [x] Naming-lock CI and closure gate updated (`M32-E`).
+
 ### Next planned slice
-- M32-S5 executed-slice convergence summary + closure gate `M32-E`.
+- M32-S6 transition handoff packet + closure gate `M32-F`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5096,8 +5109,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M32-S5 executed-slice convergence summary from M32 plan + runner artifacts and wire `M32-E`.
-2. Run full strict closure audit and finalize M32-S4 handoff.
+1. Implement M32-S6 transition handoff packet from M32 kickoff/plan/runner/convergence artifacts and wire `M32-F`.
+2. Run full strict closure audit and finalize M32-S5 handoff.
 
 ---
 
