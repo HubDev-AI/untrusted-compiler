@@ -223,6 +223,92 @@ fn spawn_one_shot_http_server_with_response_delay(
     (port, handle)
 }
 
+fn spawn_one_shot_http_redirect_chain_server(
+    expected_requests: usize,
+) -> (u16, thread::JoinHandle<()>) {
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).expect("redirect oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("redirect oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("redirect oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut served = 0_usize;
+        while served < expected_requests {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("redirect oneshot server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("redirect oneshot server accept failed: {err}"),
+                }
+            };
+
+            let mut buffer = [0_u8; 1024];
+            let mut request = Vec::new();
+            loop {
+                let bytes = stream
+                    .read(&mut buffer)
+                    .expect("redirect oneshot server request read should succeed");
+                if bytes == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..bytes]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
+                {
+                    break;
+                }
+            }
+
+            let request_text = String::from_utf8_lossy(&request);
+            let path = request_text
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or("/");
+
+            let (status_line, location, body) = match path {
+                "/internal-start" => ("302 Found", Some("/internal-hop"), "redirect-start"),
+                "/internal-hop" => ("302 Found", Some("/internal-final"), "redirect-hop"),
+                "/internal-final" => ("200 OK", None, "internal-redirect-body"),
+                _ => ("404 Not Found", None, "not-found"),
+            };
+
+            let payload = body.as_bytes();
+            let mut response_head = format!(
+                "HTTP/1.1 {status_line}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n",
+                payload.len()
+            );
+            if let Some(location_value) = location {
+                response_head.push_str(&format!("Location: {location_value}\r\n"));
+            }
+            response_head.push_str("\r\n");
+
+            stream
+                .write_all(response_head.as_bytes())
+                .expect("redirect oneshot server response headers should write");
+            if !payload.is_empty() {
+                stream
+                    .write_all(payload)
+                    .expect("redirect oneshot server response body should write");
+            }
+            stream
+                .flush()
+                .expect("redirect oneshot server response flush should succeed");
+            served += 1;
+        }
+    });
+    (port, handle)
+}
+
 fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
     let mut files = fs::read_dir(path)
         .expect("directory should be readable")
@@ -6661,6 +6747,244 @@ int main(void) {
             .expect("internal-net response body should be written"),
         "internal-roundtrip-body"
     );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_denied_by_default_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net redirect deny test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-denied");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-denied");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_FORBIDDEN\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime redirect-deny harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net redirect-deny harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) = spawn_one_shot_http_redirect_chain_server(1);
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net redirect-deny harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net redirect-deny server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_allowed_with_env_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net redirect allow test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-allowed");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-allowed");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (body == 0) { return 12; }
+
+  int64_t output_path = sec4_rt_req_query("internal-net/redirect-body.txt");
+  if (output_path == 0) { return 13; }
+  if (sec4_rt_fs_write(5, output_path, body) == 0) { return 14; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime redirect-allow harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net redirect-allow harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) = spawn_one_shot_http_redirect_chain_server(3);
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "2")
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net redirect-allow harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net redirect-allow server should exit cleanly");
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("internal-net").join("redirect-body.txt"))
+            .expect("redirect response body should be written"),
+        "internal-redirect-body"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_limit_exceeded_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net redirect limit test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-limit");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-limit");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_LIMIT\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime redirect-limit harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net redirect-limit harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) = spawn_one_shot_http_redirect_chain_server(2);
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net redirect-limit harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net redirect-limit server should exit cleanly");
 }
 
 #[test]

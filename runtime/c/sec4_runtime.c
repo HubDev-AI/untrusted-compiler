@@ -33,6 +33,7 @@
 #define SEC4_RT_DEFAULT_JSON_MAX_BYTES 2048
 #define SEC4_RT_DEFAULT_JSON_MAX_DEPTH 16
 #define SEC4_RT_REQUEST_BUFFER_BYTES 8192
+#define SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES 2048
 #define SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES 2048
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES 8192
@@ -124,6 +125,11 @@ typedef enum {
   SEC4_RT_DB_RESULT_IO = 3
 } sec4_rt_db_result;
 
+typedef enum {
+  SEC4_RT_NET_SCOPE_PUBLIC = 0,
+  SEC4_RT_NET_SCOPE_INTERNAL = 1
+} sec4_rt_net_scope;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
@@ -144,6 +150,10 @@ static bool sec4_rt_parse_header_value(
     size_t value_size
 );
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
+static bool sec4_rt_is_public_url_valid(const char *url);
+static bool sec4_rt_is_internal_url_valid(const char *url);
+static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
+static bool sec4_rt_env_flag_enabled(const char *name);
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
 static bool sec4_rt_fs_mkdirs(const char *path);
 
@@ -1318,18 +1328,56 @@ static int sec4_rt_extract_outbound_http_body(
     char *body,
     size_t body_size,
     size_t max_body_bytes,
-    size_t *body_len
+    size_t *body_len,
+    int *status_code,
+    char *redirect_location,
+    size_t redirect_location_size
 ) {
   if (response == NULL || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
     return -1;
+  }
+  if (status_code != NULL) {
+    *status_code = 0;
+  }
+  if (redirect_location != NULL && redirect_location_size > 0) {
+    redirect_location[0] = '\0';
   }
 
   if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
     return -3;
   }
 
+  const char *status_line_end = strstr(response, "\r\n");
+  if (status_line_end == NULL) {
+    return -3;
+  }
+  const char *status_cursor = response;
+  while (status_cursor < status_line_end && *status_cursor != ' ') {
+    status_cursor += 1;
+  }
+  while (status_cursor < status_line_end && *status_cursor == ' ') {
+    status_cursor += 1;
+  }
+  int parsed_status = 0;
+  int status_digits = 0;
+  while (status_cursor < status_line_end && isdigit((unsigned char) *status_cursor)
+         && status_digits < 3) {
+    parsed_status = (parsed_status * 10) + (int) (*status_cursor - '0');
+    status_cursor += 1;
+    status_digits += 1;
+  }
+  if (status_digits != 3) {
+    return -3;
+  }
+  if (status_code != NULL) {
+    *status_code = parsed_status;
+  }
+
   const char *headers_end = strstr(response, "\r\n\r\n");
   if (headers_end == NULL) {
+    return -3;
+  }
+  if (status_line_end > headers_end) {
     return -3;
   }
 
@@ -1339,6 +1387,37 @@ static int sec4_rt_extract_outbound_http_body(
   }
   if (header_bytes > SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
     return -2;
+  }
+
+  if (redirect_location != NULL && redirect_location_size > 0) {
+    const char *header_cursor = status_line_end + 2;
+    while (header_cursor < headers_end) {
+      const char *line_end = strstr(header_cursor, "\r\n");
+      if (line_end == NULL || line_end > headers_end) {
+        break;
+      }
+      if (line_end == header_cursor) {
+        break;
+      }
+      if ((size_t) (line_end - header_cursor) >= 9
+          && strncasecmp(header_cursor, "Location:", 9) == 0) {
+        const char *value_start = header_cursor + 9;
+        while (value_start < line_end && isspace((unsigned char) *value_start)) {
+          value_start += 1;
+        }
+        const char *value_end = line_end;
+        while (value_end > value_start && isspace((unsigned char) *(value_end - 1))) {
+          value_end -= 1;
+        }
+        size_t value_len = (size_t) (value_end - value_start);
+        if (value_len > 0 && value_len < redirect_location_size) {
+          memcpy(redirect_location, value_start, value_len);
+          redirect_location[value_len] = '\0';
+        }
+        break;
+      }
+      header_cursor = line_end + 2;
+    }
   }
 
   size_t payload_bytes = total - header_bytes;
@@ -1362,13 +1441,22 @@ static int sec4_rt_read_outbound_http_body(
     char *body,
     size_t body_size,
     size_t max_body_bytes,
-    size_t *body_len
+    size_t *body_len,
+    int *status_code,
+    char *redirect_location,
+    size_t redirect_location_size
 ) {
   if (socket_fd < 0 || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
     return -1;
   }
   body[0] = '\0';
   *body_len = 0;
+  if (status_code != NULL) {
+    *status_code = 0;
+  }
+  if (redirect_location != NULL && redirect_location_size > 0) {
+    redirect_location[0] = '\0';
+  }
 
   size_t response_capacity = max_body_bytes + SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES + 1;
   if (response_capacity <= max_body_bytes || response_capacity <= SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
@@ -1412,7 +1500,10 @@ static int sec4_rt_read_outbound_http_body(
       body,
       body_size,
       max_body_bytes,
-      body_len
+      body_len,
+      status_code,
+      redirect_location,
+      redirect_location_size
   );
   free(response);
   return extract_status;
@@ -1447,13 +1538,22 @@ static int sec4_rt_read_outbound_https_body(
     char *body,
     size_t body_size,
     size_t max_body_bytes,
-    size_t *body_len
+    size_t *body_len,
+    int *status_code,
+    char *redirect_location,
+    size_t redirect_location_size
 ) {
   if (ssl == NULL || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
     return -1;
   }
   body[0] = '\0';
   *body_len = 0;
+  if (status_code != NULL) {
+    *status_code = 0;
+  }
+  if (redirect_location != NULL && redirect_location_size > 0) {
+    redirect_location[0] = '\0';
+  }
 
   size_t response_capacity = max_body_bytes + SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES + 1;
   if (response_capacity <= max_body_bytes || response_capacity <= SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
@@ -1502,22 +1602,39 @@ static int sec4_rt_read_outbound_https_body(
       body,
       body_size,
       max_body_bytes,
-      body_len
+      body_len,
+      status_code,
+      redirect_location,
+      redirect_location_size
   );
   free(response);
   return extract_status;
 }
 
-static int64_t sec4_rt_outbound_https_get_handle(
+static int sec4_rt_outbound_https_read_response(
     int socket_fd,
     const char *host,
     const char *request,
     size_t request_len,
     size_t max_body_bytes,
-    uint64_t salt
+    char *body,
+    size_t body_size,
+    size_t *body_len,
+    int *status_code,
+    char *redirect_location,
+    size_t redirect_location_size
 ) {
-  if (socket_fd < 0 || host == NULL || request == NULL || request_len == 0) {
-    return 0;
+  if (socket_fd < 0 || host == NULL || request == NULL || request_len == 0 || body == NULL
+      || body_size == 0 || body_len == NULL) {
+    return -1;
+  }
+  body[0] = '\0';
+  *body_len = 0;
+  if (status_code != NULL) {
+    *status_code = 0;
+  }
+  if (redirect_location != NULL && redirect_location_size > 0) {
+    redirect_location[0] = '\0';
   }
 
   SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_client_method());
@@ -1528,7 +1645,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to initialize tls backend for outbound request"
     );
-    return 0;
+    return -6;
   }
   bool allow_insecure_tls = sec4_rt_env_flag_enabled("SEC4_RT_TLS_ALLOW_INSECURE");
   if (allow_insecure_tls) {
@@ -1543,7 +1660,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
           "internal",
           "failed to configure tls trust store for outbound request"
       );
-      return 0;
+      return -6;
     }
   }
 
@@ -1556,7 +1673,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to initialize tls backend for outbound request"
     );
-    return 0;
+    return -6;
   }
 
   bool handshake_complete = false;
@@ -1569,7 +1686,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to complete outbound tls handshake"
     );
-    return 0;
+    return -6;
   }
   if (!allow_insecure_tls && SSL_set1_host(ssl, host) != 1) {
     SSL_free(ssl);
@@ -1580,7 +1697,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to configure tls hostname verification for outbound request"
     );
-    return 0;
+    return -6;
   }
 
   if (SSL_connect(ssl) != 1) {
@@ -1600,7 +1717,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
           "validation",
           "outbound tls certificate verification failed"
       );
-      return 0;
+      return -6;
     }
     sec4_rt_store_std_error_response(
         500,
@@ -1608,7 +1725,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to complete outbound tls handshake"
     );
-    return 0;
+    return -6;
   }
   handshake_complete = true;
   if (!allow_insecure_tls) {
@@ -1626,7 +1743,7 @@ static int64_t sec4_rt_outbound_https_get_handle(
           "validation",
           "outbound tls certificate verification failed"
       );
-      return 0;
+      return -6;
     }
     X509_free(peer_cert);
   }
@@ -1643,72 +1760,25 @@ static int64_t sec4_rt_outbound_https_get_handle(
         "internal",
         "failed to send outbound request"
     );
-    return 0;
+    return -6;
   }
 
-  char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
-  size_t body_len = 0;
   int read_status = sec4_rt_read_outbound_https_body(
       ssl,
       body,
-      sizeof(body),
+      body_size,
       max_body_bytes,
-      &body_len
+      body_len,
+      status_code,
+      redirect_location,
+      redirect_location_size
   );
   if (handshake_complete) {
     (void) SSL_shutdown(ssl);
   }
   SSL_free(ssl);
   SSL_CTX_free(ssl_ctx);
-
-  if (read_status != 0) {
-    if (read_status == -2) {
-      sec4_rt_store_std_error_response(
-          500,
-          "NET.RESPONSE_TOO_LARGE",
-          "validation",
-          "outbound http response body exceeds runtime max body limit"
-      );
-      return 0;
-    }
-    if (read_status == -4) {
-      sec4_rt_store_std_error_response(
-          500,
-          "NET.READ_TIMEOUT",
-          "timeout",
-          "outbound http response read timed out"
-      );
-      return 0;
-    }
-    if (read_status == -5) {
-      sec4_rt_store_std_error_response(
-          500,
-          "NET.RESPONSE_TRACK_FAILED",
-          "internal",
-          "outbound http response exceeds runtime tracked value limits"
-      );
-      return 0;
-    }
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_INVALID",
-        "internal",
-        "failed to read outbound http response"
-    );
-    return 0;
-  }
-
-  int64_t handle = sec4_rt_track_sized_value(body, body_len, salt);
-  if (handle == 0) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_TRACK_FAILED",
-        "internal",
-        "failed to track outbound http response body"
-    );
-    return 0;
-  }
-  return handle;
+  return read_status;
 }
 #endif
 
@@ -1770,30 +1840,182 @@ static int64_t sec4_rt_track_outbound_http_body_handle(
   return handle;
 }
 
-static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t salt) {
+static bool sec4_rt_http_status_is_redirect(int status_code) {
+  return status_code == 301 || status_code == 302 || status_code == 303 || status_code == 307
+      || status_code == 308;
+}
+
+static bool sec4_rt_redirect_url_passes_scope(const char *url, sec4_rt_net_scope scope) {
+  if (scope == SEC4_RT_NET_SCOPE_INTERNAL) {
+    return sec4_rt_is_internal_url_valid(url);
+  }
+  return sec4_rt_is_public_url_valid(url);
+}
+
+static bool sec4_rt_resolve_redirect_url(
+    const char *current_url,
+    const char *location,
+    char *resolved_url,
+    size_t resolved_url_size
+) {
+  if (current_url == NULL || current_url[0] == '\0' || location == NULL || location[0] == '\0'
+      || resolved_url == NULL || resolved_url_size < 2) {
+    return false;
+  }
+  resolved_url[0] = '\0';
+
+  for (const char *cursor = location; *cursor != '\0'; cursor++) {
+    if (*cursor == '\r' || *cursor == '\n') {
+      return false;
+    }
+  }
+
+  if (strncasecmp(location, "http://", 7) == 0 || strncasecmp(location, "https://", 8) == 0) {
+    int copied = snprintf(resolved_url, resolved_url_size, "%s", location);
+    if (copied <= 0 || (size_t) copied >= resolved_url_size) {
+      return false;
+    }
+  } else {
+    char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    uint16_t port = 0;
+    const char *target = NULL;
+    size_t target_len = 0;
+    bool is_http = false;
+    bool is_https = false;
+    if (!sec4_rt_parse_outbound_http_url(
+            current_url,
+            host,
+            sizeof(host),
+            &port,
+            &target,
+            &target_len,
+            &is_http,
+            &is_https
+        )) {
+      return false;
+    }
+
+    const char *scheme = is_https ? "https" : "http";
+    char authority[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES + 8];
+    bool default_port = (is_https && port == 443) || (is_http && port == 80);
+    int authority_len = default_port
+        ? snprintf(authority, sizeof(authority), "%s", host)
+        : snprintf(authority, sizeof(authority), "%s:%u", host, (unsigned int) port);
+    if (authority_len <= 0 || (size_t) authority_len >= sizeof(authority)) {
+      return false;
+    }
+
+    if (location[0] == '/' && location[1] == '/') {
+      int written = snprintf(resolved_url, resolved_url_size, "%s:%s", scheme, location);
+      if (written <= 0 || (size_t) written >= resolved_url_size) {
+        return false;
+      }
+    } else {
+      const char *resolved_target = location;
+      char target_buffer[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+      target_buffer[0] = '\0';
+
+      const char *target_path = target;
+      size_t target_path_len = target_len;
+      if (target_path_len == 0 || target_path == NULL) {
+        target_path = "/";
+        target_path_len = 1;
+      }
+      if (target_path[0] == '?') {
+        target_path = "/";
+        target_path_len = 1;
+      } else {
+        const char *query_sep = memchr(target_path, '?', target_path_len);
+        if (query_sep != NULL) {
+          target_path_len = (size_t) (query_sep - target_path);
+        }
+        if (target_path_len == 0) {
+          target_path = "/";
+          target_path_len = 1;
+        }
+      }
+
+      if (location[0] == '?') {
+        int merged_len = snprintf(
+            target_buffer,
+            sizeof(target_buffer),
+            "%.*s%s",
+            (int) target_path_len,
+            target_path,
+            location
+        );
+        if (merged_len <= 0 || (size_t) merged_len >= sizeof(target_buffer)) {
+          return false;
+        }
+        resolved_target = target_buffer;
+      } else if (location[0] != '/') {
+        size_t dir_len = 1;
+        for (size_t i = 0; i < target_path_len; i++) {
+          if (target_path[i] == '/') {
+            dir_len = i + 1;
+          }
+        }
+        int merged_len = snprintf(
+            target_buffer,
+            sizeof(target_buffer),
+            "%.*s%s",
+            (int) dir_len,
+            target_path,
+            location
+        );
+        if (merged_len <= 0 || (size_t) merged_len >= sizeof(target_buffer)) {
+          return false;
+        }
+        resolved_target = target_buffer;
+      }
+
+      int written = snprintf(
+          resolved_url,
+          resolved_url_size,
+          "%s://%s%s",
+          scheme,
+          authority,
+          resolved_target
+      );
+      if (written <= 0 || (size_t) written >= resolved_url_size) {
+        return false;
+      }
+    }
+  }
+
+  char parsed_host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  uint16_t parsed_port = 0;
+  const char *parsed_target = NULL;
+  size_t parsed_target_len = 0;
+  bool parsed_http = false;
+  bool parsed_https = false;
+  if (!sec4_rt_parse_outbound_http_url(
+          resolved_url,
+          parsed_host,
+          sizeof(parsed_host),
+          &parsed_port,
+          &parsed_target,
+          &parsed_target_len,
+          &parsed_http,
+          &parsed_https
+      )) {
+    return false;
+  }
+  return parsed_http || parsed_https;
+}
+
+static int64_t sec4_rt_outbound_http_get_handle(
+    const char *url_value,
+    uint64_t salt,
+    sec4_rt_net_scope scope
+) {
   if (url_value == NULL || url_value[0] == '\0') {
     return 0;
   }
 
-  int64_t timeout_ms = sec4_rt_outbound_http_timeout_ms();
-  size_t max_body_bytes = sec4_rt_outbound_http_max_body_bytes();
-
-  char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
-  uint16_t port = 0;
-  const char *target = NULL;
-  size_t target_len = 0;
-  bool is_http = false;
-  bool is_https = false;
-  if (!sec4_rt_parse_outbound_http_url(
-          url_value,
-          host,
-          sizeof(host),
-          &port,
-          &target,
-          &target_len,
-          &is_http,
-          &is_https
-      )) {
+  char current_url[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+  int current_url_len = snprintf(current_url, sizeof(current_url), "%s", url_value);
+  if (current_url_len <= 0 || (size_t) current_url_len >= sizeof(current_url)) {
     sec4_rt_store_std_error_response(
         400,
         "NET.URL_INVALID",
@@ -1803,109 +2025,214 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     return 0;
   }
 
-#if !defined(SEC4_RT_ENABLE_OPENSSL_TLS)
-  if (is_https) {
-    sec4_rt_store_std_error_response(
-        501,
-        "NET.TLS_UNSUPPORTED",
-        "runtime",
-        "https outbound transport is not supported by this runtime"
-    );
-    return 0;
-  }
-#endif
-  if (!(is_http || is_https)) {
-    sec4_rt_store_std_error_response(
-        400,
-        "NET.URL_SCHEME_INVALID",
-        "validation",
-        "http outbound transport requires http scheme"
-    );
-    return 0;
-  }
+  int64_t timeout_ms = sec4_rt_outbound_http_timeout_ms();
+  size_t max_body_bytes = sec4_rt_outbound_http_max_body_bytes();
+  bool redirects_allowed = sec4_rt_env_flag_enabled("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS");
+  int64_t max_redirects = sec4_rt_parse_env_i64("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", 0);
+  bool revalidate_redirects =
+      sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS", true);
+  int64_t redirects_followed = 0;
 
-  char request[SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES];
-  int request_len = sec4_rt_build_outbound_http_request(
-      host,
-      port,
-      is_https,
-      target,
-      target_len,
-      request,
-      sizeof(request)
-  );
-  if (request_len <= 0) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.REQUEST_BUILD_FAILED",
-        "internal",
-        "failed to construct outbound request payload"
-    );
-    return 0;
-  }
-
-  bool connect_timed_out = false;
-  int socket_fd = sec4_rt_open_outbound_tcp_socket(host, port, timeout_ms, &connect_timed_out);
-  if (socket_fd < 0) {
-    if (connect_timed_out) {
+  while (true) {
+    char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    uint16_t port = 0;
+    const char *target = NULL;
+    size_t target_len = 0;
+    bool is_http = false;
+    bool is_https = false;
+    if (!sec4_rt_parse_outbound_http_url(
+            current_url,
+            host,
+            sizeof(host),
+            &port,
+            &target,
+            &target_len,
+            &is_http,
+            &is_https
+        )) {
       sec4_rt_store_std_error_response(
-          500,
-          "NET.CONNECT_TIMEOUT",
-          "timeout",
-          "outbound http connect timed out"
+          400,
+          "NET.URL_INVALID",
+          "validation",
+          "invalid outbound http url"
       );
       return 0;
     }
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.CONNECT_FAILED",
-        "internal",
-        "failed to connect outbound http socket"
+
+#if !defined(SEC4_RT_ENABLE_OPENSSL_TLS)
+    if (is_https) {
+      sec4_rt_store_std_error_response(
+          501,
+          "NET.TLS_UNSUPPORTED",
+          "runtime",
+          "https outbound transport is not supported by this runtime"
+      );
+      return 0;
+    }
+#endif
+    if (!(is_http || is_https)) {
+      sec4_rt_store_std_error_response(
+          400,
+          "NET.URL_SCHEME_INVALID",
+          "validation",
+          "http outbound transport requires http scheme"
+      );
+      return 0;
+    }
+
+    char request[SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES];
+    int request_len = sec4_rt_build_outbound_http_request(
+        host,
+        port,
+        is_https,
+        target,
+        target_len,
+        request,
+        sizeof(request)
     );
-    return 0;
-  }
+    if (request_len <= 0) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.REQUEST_BUILD_FAILED",
+          "internal",
+          "failed to construct outbound request payload"
+      );
+      return 0;
+    }
+
+    bool connect_timed_out = false;
+    int socket_fd = sec4_rt_open_outbound_tcp_socket(host, port, timeout_ms, &connect_timed_out);
+    if (socket_fd < 0) {
+      if (connect_timed_out) {
+        sec4_rt_store_std_error_response(
+            500,
+            "NET.CONNECT_TIMEOUT",
+            "timeout",
+            "outbound http connect timed out"
+        );
+        return 0;
+      }
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.CONNECT_FAILED",
+          "internal",
+          "failed to connect outbound http socket"
+      );
+      return 0;
+    }
+
+    char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+    size_t body_len = 0;
+    int status_code = 0;
+    char redirect_location[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+    int read_status = 0;
 
 #ifdef SEC4_RT_ENABLE_OPENSSL_TLS
-  if (is_https) {
-    int64_t https_handle = sec4_rt_outbound_https_get_handle(
-        socket_fd,
-        host,
-        request,
-        (size_t) request_len,
-        max_body_bytes,
-        salt
-    );
-    close(socket_fd);
-    return https_handle;
-  }
+    if (is_https) {
+      read_status = sec4_rt_outbound_https_read_response(
+          socket_fd,
+          host,
+          request,
+          (size_t) request_len,
+          max_body_bytes,
+          body,
+          sizeof(body),
+          &body_len,
+          &status_code,
+          redirect_location,
+          sizeof(redirect_location)
+      );
+      close(socket_fd);
+      if (read_status == -6) {
+        return 0;
+      }
+    } else
 #endif
+    {
+      if (sec4_rt_write_all(socket_fd, request, (size_t) request_len) != 0) {
+        close(socket_fd);
+        sec4_rt_store_std_error_response(
+            500,
+            "NET.REQUEST_IO_FAILED",
+            "internal",
+            "failed to send outbound request"
+        );
+        return 0;
+      }
 
-  if (sec4_rt_write_all(socket_fd, request, (size_t) request_len) != 0) {
-    close(socket_fd);
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.REQUEST_IO_FAILED",
-        "internal",
-        "failed to send outbound request"
-    );
-    return 0;
+      read_status = sec4_rt_read_outbound_http_body(
+          socket_fd,
+          body,
+          sizeof(body),
+          max_body_bytes,
+          &body_len,
+          &status_code,
+          redirect_location,
+          sizeof(redirect_location)
+      );
+      close(socket_fd);
+    }
+
+    if (sec4_rt_store_outbound_http_read_error(read_status)) {
+      return 0;
+    }
+
+    if (sec4_rt_http_status_is_redirect(status_code)) {
+      if (!redirects_allowed) {
+        sec4_rt_store_std_error_response(
+            403,
+            "NET.REDIRECT_FORBIDDEN",
+            "authorization",
+            "outbound redirect denied by runtime policy"
+        );
+        return 0;
+      }
+      if (redirects_followed >= max_redirects) {
+        sec4_rt_store_std_error_response(
+            400,
+            "NET.REDIRECT_LIMIT",
+            "validation",
+            "outbound redirect hop limit exceeded"
+        );
+        return 0;
+      }
+
+      char next_url[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+      bool redirect_valid = sec4_rt_resolve_redirect_url(
+          current_url,
+          redirect_location,
+          next_url,
+          sizeof(next_url)
+      );
+      if (redirect_valid && revalidate_redirects) {
+        redirect_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
+      }
+      if (!redirect_valid) {
+        sec4_rt_store_std_error_response(
+            400,
+            "NET.REDIRECT_INVALID",
+            "validation",
+            "outbound redirect location is invalid"
+        );
+        return 0;
+      }
+
+      int copied = snprintf(current_url, sizeof(current_url), "%s", next_url);
+      if (copied <= 0 || (size_t) copied >= sizeof(current_url)) {
+        sec4_rt_store_std_error_response(
+            400,
+            "NET.REDIRECT_INVALID",
+            "validation",
+            "outbound redirect location is invalid"
+        );
+        return 0;
+      }
+      redirects_followed += 1;
+      continue;
+    }
+
+    return sec4_rt_track_outbound_http_body_handle(body, body_len, salt);
   }
-
-  char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
-  size_t body_len = 0;
-  int read_status = sec4_rt_read_outbound_http_body(
-      socket_fd,
-      body,
-      sizeof(body),
-      max_body_bytes,
-      &body_len
-  );
-  close(socket_fd);
-  if (sec4_rt_store_outbound_http_read_error(read_status)) {
-    return 0;
-  }
-
-  return sec4_rt_track_outbound_http_body_handle(body, body_len, salt);
 }
 
 static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
@@ -2908,13 +3235,30 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
   return (int64_t) value;
 }
 
-static bool sec4_rt_env_flag_enabled(const char *name) {
+static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback) {
   const char *raw = getenv(name);
   if (raw == NULL || raw[0] == '\0') {
+    return fallback;
+  }
+  if (strcmp(raw, "1") == 0
+      || strcasecmp(raw, "true") == 0
+      || strcasecmp(raw, "yes") == 0
+      || strcasecmp(raw, "on") == 0
+      || strcasecmp(raw, "allow") == 0) {
+    return true;
+  }
+  if (strcmp(raw, "0") == 0
+      || strcasecmp(raw, "false") == 0
+      || strcasecmp(raw, "no") == 0
+      || strcasecmp(raw, "off") == 0
+      || strcasecmp(raw, "deny") == 0) {
     return false;
   }
-  return strcmp(raw, "1") == 0 || strcasecmp(raw, "true") == 0 || strcasecmp(raw, "yes") == 0
-      || strcasecmp(raw, "on") == 0 || strcasecmp(raw, "allow") == 0;
+  return fallback;
+}
+
+static bool sec4_rt_env_flag_enabled(const char *name) {
+  return sec4_rt_env_flag_enabled_default(name, false);
 }
 
 static bool sec4_rt_oneshot_mode_enabled(void) {
@@ -4911,7 +5255,11 @@ int64_t sec4_rt_http_get(int64_t net, int64_t url) {
   }
 
   (void) net;
-  return sec4_rt_outbound_http_get_handle(url_value, UINT64_C(0x18189));
+  return sec4_rt_outbound_http_get_handle(
+      url_value,
+      UINT64_C(0x18189),
+      SEC4_RT_NET_SCOPE_PUBLIC
+  );
 }
 
 int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
@@ -4947,7 +5295,11 @@ int64_t sec4_rt_http_get_internal(int64_t net, int64_t url) {
   }
 
   (void) net;
-  return sec4_rt_outbound_http_get_handle(url_value, UINT64_C(0x1818A));
+  return sec4_rt_outbound_http_get_handle(
+      url_value,
+      UINT64_C(0x1818A),
+      SEC4_RT_NET_SCOPE_INTERNAL
+  );
 }
 
 int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name) {
