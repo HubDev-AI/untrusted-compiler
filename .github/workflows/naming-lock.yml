@@ -475,6 +475,9 @@ jobs:
       - name: Validate M35 runtime de-stub runner
         run: scripts/test-run-m35-runtime-destub.sh
 
+      - name: Validate M35 executed-slice convergence summary
+        run: scripts/test-build-m35-executed-slice-convergence-summary.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
