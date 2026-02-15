@@ -5047,6 +5047,11 @@ M13-S1 go/no-go note:
 - If we need to resume unfinished runtime-first work under M32, reopen as `M32-R*` slices from this checkpoint.
 - Current post-closure engineering work tracks concrete runtime de-stub implementation and runtime behavior tests before widening the next milestone scope.
 
+### M32 post-closure runtime slices (execution log)
+- [x] `M32-R1`: runtime gate handle de-stub across request/gate helpers + `c-bin` runtime behavior test (`65b8001`).
+- [x] `M32-R2`: runtime ABI prototype alignment for req/json/res signatures in `sec4_runtime.h` with synchronized C backend runtime-asset expectations.
+- [ ] `M32-R3`: real content-level runtime validation for headers/paths/URLs (beyond token handles) with deterministic fixture coverage.
+
 ### Next planned slice
 - M33-S1 kickoff brief + closure gate `M33-A`.
 

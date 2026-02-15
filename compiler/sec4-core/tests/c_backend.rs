@@ -83,16 +83,18 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_log_with_attr();"));
     assert!(header.contains("int64_t sec4_rt_log_with_http();"));
     assert!(header.contains("int64_t sec4_rt_log_with_error();"));
-    assert!(header.contains("int64_t sec4_rt_req_json();"));
-    assert!(header.contains("int64_t sec4_rt_json_decode();"));
-    assert!(header.contains("int64_t sec4_rt_json_encode();"));
+    assert!(header.contains("int64_t sec4_rt_req_json(int64_t schema);"));
+    assert!(header.contains("int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw);"));
+    assert!(header.contains("int64_t sec4_rt_json_encode(int64_t schema, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_req_body();"));
     assert!(header.contains("int64_t sec4_rt_req_query(const char *name);"));
     assert!(header.contains("int64_t sec4_rt_req_path_param(const char *name);"));
     assert!(header.contains("int64_t sec4_rt_req_header(const char *name);"));
-    assert!(header.contains("int64_t sec4_rt_res_json();"));
-    assert!(header.contains("int64_t sec4_rt_res_ok();"));
-    assert!(header.contains("int64_t sec4_rt_res_ok_meta();"));
+    assert!(header.contains("int64_t sec4_rt_res_json(int64_t schema, int64_t value);"));
+    assert!(header.contains("int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value);"));
+    assert!(header.contains(
+        "int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta);"
+    ));
     assert!(header.contains("int64_t sec4_rt_res_html();"));
     assert!(header.contains("int64_t sec4_rt_res_text(int64_t status, const char *body);"));
     assert!(header.contains("int64_t sec4_rt_set_header();"));
