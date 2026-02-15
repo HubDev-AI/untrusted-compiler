@@ -440,6 +440,7 @@ Current strict closure result:
 | `M28-G` | PASS | Naming-lock CI enforces M28 closure report | `.github/workflows/naming-lock.yml` |
 | `M29-A` | PASS | Naming-lock CI enforces M29 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M29-B` | PASS | Naming-lock CI enforces M29 priority matrix | `.github/workflows/naming-lock.yml` |
+| `M29-C` | PASS | Naming-lock CI enforces M29 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -549,6 +550,7 @@ Strict closure interpretation:
 - M28 closure report enforcement is active (`M28-G`).
 - M29 kickoff brief enforcement is active (`M29-A`).
 - M29 priority matrix enforcement is active (`M29-B`).
+- M29 runtime de-stub planner enforcement is active (`M29-C`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4692,13 +4694,24 @@ M13-S1 go/no-go note:
 - Closure audit includes dedicated `M29-C` gate.
 
 ### M29-S3 tracking (live status)
-- [ ] M29 runtime-first de-stub plan script added.
-- [ ] M29 runtime-first de-stub plan contract test added.
-- [ ] Book chapter documenting M29 runtime-first de-stub plan added.
-- [ ] Naming-lock CI and closure gate updated (`M29-C`).
+- [x] M29 runtime-first de-stub plan script added.
+- [x] M29 runtime-first de-stub plan contract test added.
+- [x] Book chapter documenting M29 runtime-first de-stub plan added.
+- [x] Naming-lock CI and closure gate updated (`M29-C`).
+
+### M29-S4 runtime de-stub execution runner acceptance criteria
+- Runtime execution runner consumes M29 de-stub plan and executes only the selected first runtime slice with deterministic dry-run + execute modes.
+- Execution emits deterministic status artifact suitable for convergence summary input.
+- Closure audit includes dedicated `M29-D` gate.
+
+### M29-S4 tracking (live status)
+- [ ] M29 runtime de-stub execution runner script added.
+- [ ] M29 runtime de-stub execution runner contract test added.
+- [ ] Book chapter documenting M29 runtime de-stub execution runner added.
+- [ ] Naming-lock CI and closure gate updated (`M29-D`).
 
 ### Next planned slice
-- M29-S3 runtime-first de-stub plan + closure gate `M29-C`.
+- M29-S4 runtime de-stub execution runner + closure gate `M29-D`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4790,8 +4803,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M29-S3 runtime-first de-stub plan from M29 kickoff + priority matrix artifacts and wire `M29-C`.
-2. Execute first runtime de-stub slice from the plan and capture convergence evidence.
+1. Implement M29-S4 runtime de-stub execution runner from the M29 plan artifact and wire `M29-D`.
+2. Add first execution-status artifact and prepare M29 convergence summary slice.
 
 ---
 
