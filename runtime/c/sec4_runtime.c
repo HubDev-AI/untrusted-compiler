@@ -30,6 +30,10 @@
 #define SEC4_RT_MAX_OUTBOUND_HTTP_RESPONSE_BYTES 16384
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
+#define SEC4_RT_MAX_DB_QUERIES 256
+#define SEC4_RT_MAX_DB_TXS 256
+#define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
+#define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
 
 typedef int64_t (*sec4_rt_handler_fn)(void);
 
@@ -84,6 +88,19 @@ typedef struct {
   char value[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
 } sec4_rt_tracked_value;
 
+typedef struct {
+  bool active;
+  int64_t query_handle;
+  int64_t template_handle;
+  int64_t params;
+} sec4_rt_db_query_state;
+
+typedef struct {
+  bool active;
+  int64_t tx_handle;
+  int64_t db_handle;
+} sec4_rt_db_tx_state;
+
 typedef enum {
   SEC4_RT_FS_RESULT_OK = 0,
   SEC4_RT_FS_RESULT_INVALID = 1,
@@ -91,11 +108,20 @@ typedef enum {
   SEC4_RT_FS_RESULT_IO = 3
 } sec4_rt_fs_result;
 
+typedef enum {
+  SEC4_RT_DB_RESULT_OK = 0,
+  SEC4_RT_DB_RESULT_INVALID = 1,
+  SEC4_RT_DB_RESULT_NOT_FOUND = 2,
+  SEC4_RT_DB_RESULT_IO = 3
+} sec4_rt_db_result;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
 static sec4_rt_request_state g_sec4_rt_request;
 static sec4_rt_tracked_value g_sec4_rt_tracked_values[SEC4_RT_MAX_TRACKED_VALUES];
+static sec4_rt_db_query_state g_sec4_rt_db_queries[SEC4_RT_MAX_DB_QUERIES];
+static sec4_rt_db_tx_state g_sec4_rt_db_txs[SEC4_RT_MAX_DB_TXS];
 static uint64_t g_sec4_rt_next_trace_id = 1;
 static int64_t g_sec4_rt_last_log_handle = 0;
 
@@ -109,6 +135,7 @@ static bool sec4_rt_parse_header_value(
     size_t value_size
 );
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
+static bool sec4_rt_fs_mkdirs(const char *path);
 
 static void sec4_rt_reset_response(void) {
   g_sec4_rt_response.active = false;
@@ -2346,6 +2373,498 @@ int64_t sec4_rt_set_cookie(int64_t cookie) {
   return sec4_rt_append_response_header("Set-Cookie", cookie_value);
 }
 
+static bool sec4_rt_parse_i64_strict(const char *raw, int64_t *value_out) {
+  if (raw == NULL || raw[0] == '\0' || value_out == NULL) {
+    return false;
+  }
+
+  errno = 0;
+  char *end = NULL;
+  long long parsed = strtoll(raw, &end, 10);
+  if (errno != 0 || end == raw || (end != NULL && *end != '\0')) {
+    return false;
+  }
+
+  *value_out = (int64_t) parsed;
+  return true;
+}
+
+static const sec4_rt_db_query_state *sec4_rt_db_lookup_query_state(int64_t query_handle) {
+  if (query_handle == 0) {
+    return NULL;
+  }
+
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_QUERIES; i++) {
+    const sec4_rt_db_query_state *slot = &g_sec4_rt_db_queries[i];
+    if (slot->active && slot->query_handle == query_handle) {
+      return slot;
+    }
+  }
+  return NULL;
+}
+
+static bool sec4_rt_db_register_query_state(
+    int64_t query_handle,
+    int64_t template_handle,
+    int64_t params
+) {
+  if (query_handle == 0 || template_handle == 0) {
+    return false;
+  }
+
+  size_t first_free = SEC4_RT_MAX_DB_QUERIES;
+  size_t target = SEC4_RT_MAX_DB_QUERIES;
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_QUERIES; i++) {
+    sec4_rt_db_query_state *slot = &g_sec4_rt_db_queries[i];
+    if (!slot->active) {
+      if (first_free == SEC4_RT_MAX_DB_QUERIES) {
+        first_free = i;
+      }
+      continue;
+    }
+    if (slot->query_handle == query_handle) {
+      target = i;
+      break;
+    }
+  }
+
+  if (target == SEC4_RT_MAX_DB_QUERIES) {
+    if (first_free != SEC4_RT_MAX_DB_QUERIES) {
+      target = first_free;
+    } else {
+      target = (size_t) (((uint64_t) query_handle) % SEC4_RT_MAX_DB_QUERIES);
+    }
+  }
+
+  sec4_rt_db_query_state *slot = &g_sec4_rt_db_queries[target];
+  slot->active = true;
+  slot->query_handle = query_handle;
+  slot->template_handle = template_handle;
+  slot->params = params;
+  return true;
+}
+
+static bool sec4_rt_db_register_tx_state(int64_t tx_handle, int64_t db_handle) {
+  if (tx_handle == 0 || db_handle == 0) {
+    return false;
+  }
+
+  size_t first_free = SEC4_RT_MAX_DB_TXS;
+  size_t target = SEC4_RT_MAX_DB_TXS;
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_TXS; i++) {
+    sec4_rt_db_tx_state *slot = &g_sec4_rt_db_txs[i];
+    if (!slot->active) {
+      if (first_free == SEC4_RT_MAX_DB_TXS) {
+        first_free = i;
+      }
+      continue;
+    }
+    if (slot->tx_handle == tx_handle) {
+      target = i;
+      break;
+    }
+  }
+
+  if (target == SEC4_RT_MAX_DB_TXS) {
+    if (first_free != SEC4_RT_MAX_DB_TXS) {
+      target = first_free;
+    } else {
+      target = (size_t) (((uint64_t) tx_handle) % SEC4_RT_MAX_DB_TXS);
+    }
+  }
+
+  sec4_rt_db_tx_state *slot = &g_sec4_rt_db_txs[target];
+  slot->active = true;
+  slot->tx_handle = tx_handle;
+  slot->db_handle = db_handle;
+  return true;
+}
+
+static bool sec4_rt_db_lookup_tx_db(int64_t tx_handle, int64_t *db_handle_out) {
+  if (tx_handle == 0 || db_handle_out == NULL) {
+    return false;
+  }
+
+  for (size_t i = 0; i < SEC4_RT_MAX_DB_TXS; i++) {
+    const sec4_rt_db_tx_state *slot = &g_sec4_rt_db_txs[i];
+    if (slot->active && slot->tx_handle == tx_handle) {
+      *db_handle_out = slot->db_handle;
+      return true;
+    }
+  }
+  return false;
+}
+
+static sec4_rt_db_result sec4_rt_db_resolve_base_root(
+    char *base_root,
+    size_t base_root_size,
+    bool allow_create
+) {
+  if (base_root == NULL || base_root_size == 0) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char configured[SEC4_RT_MAX_FS_PATH_BYTES];
+  const char *raw_base = getenv("SEC4_RT_DB_BASE");
+  if (raw_base == NULL || raw_base[0] == '\0') {
+    char cwd[SEC4_RT_MAX_FS_PATH_BYTES];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+      return SEC4_RT_DB_RESULT_IO;
+    }
+    int written = snprintf(configured, sizeof(configured), "%s/.sec4-db", cwd);
+    if (written <= 0 || (size_t) written >= sizeof(configured)) {
+      return SEC4_RT_DB_RESULT_INVALID;
+    }
+  } else if (raw_base[0] == '/') {
+    if (strlen(raw_base) >= sizeof(configured)) {
+      return SEC4_RT_DB_RESULT_INVALID;
+    }
+    strncpy(configured, raw_base, sizeof(configured) - 1);
+    configured[sizeof(configured) - 1] = '\0';
+  } else {
+    char cwd[SEC4_RT_MAX_FS_PATH_BYTES];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+      return SEC4_RT_DB_RESULT_IO;
+    }
+    int written = snprintf(configured, sizeof(configured), "%s/%s", cwd, raw_base);
+    if (written <= 0 || (size_t) written >= sizeof(configured)) {
+      return SEC4_RT_DB_RESULT_INVALID;
+    }
+  }
+
+  if (strchr(configured, '\r') != NULL || strchr(configured, '\n') != NULL) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char resolved[SEC4_RT_MAX_FS_PATH_BYTES];
+  if (realpath(configured, resolved) == NULL) {
+    if (errno == ENOENT) {
+      if (!allow_create) {
+        return SEC4_RT_DB_RESULT_NOT_FOUND;
+      }
+      if (!sec4_rt_fs_mkdirs(configured)) {
+        return SEC4_RT_DB_RESULT_IO;
+      }
+      if (realpath(configured, resolved) == NULL) {
+        return SEC4_RT_DB_RESULT_IO;
+      }
+    } else {
+      return SEC4_RT_DB_RESULT_IO;
+    }
+  }
+
+  struct stat statbuf;
+  if (stat(resolved, &statbuf) != 0) {
+    return SEC4_RT_DB_RESULT_IO;
+  }
+  if (!S_ISDIR(statbuf.st_mode)) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+  if (resolved[0] != '/') {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  strncpy(base_root, resolved, base_root_size - 1);
+  base_root[base_root_size - 1] = '\0';
+  return SEC4_RT_DB_RESULT_OK;
+}
+
+static sec4_rt_db_result sec4_rt_db_resolve_record_path(
+    const char *base_root,
+    char *record_path,
+    size_t record_path_size
+) {
+  if (base_root == NULL || base_root[0] == '\0' || record_path == NULL || record_path_size == 0) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  int written = snprintf(record_path, record_path_size, "%s/records.log", base_root);
+  if (written <= 0 || (size_t) written >= record_path_size) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+  return SEC4_RT_DB_RESULT_OK;
+}
+
+static bool sec4_rt_hex_encode_bytes(
+    const char *input,
+    size_t input_len,
+    char *hex_out,
+    size_t hex_out_size
+) {
+  if (input == NULL || hex_out == NULL) {
+    return false;
+  }
+
+  size_t required = input_len * 2 + 1;
+  if (required > hex_out_size) {
+    return false;
+  }
+
+  static const char k_hex[16] = {
+      '0', '1', '2', '3', '4', '5', '6', '7',
+      '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+  };
+  for (size_t i = 0; i < input_len; i++) {
+    unsigned char byte = (unsigned char) input[i];
+    hex_out[i * 2] = k_hex[(byte >> 4) & 0x0f];
+    hex_out[i * 2 + 1] = k_hex[byte & 0x0f];
+  }
+  hex_out[input_len * 2] = '\0';
+  return true;
+}
+
+static int sec4_rt_hex_nibble(char value) {
+  if (value >= '0' && value <= '9') {
+    return value - '0';
+  }
+  if (value >= 'a' && value <= 'f') {
+    return 10 + (value - 'a');
+  }
+  if (value >= 'A' && value <= 'F') {
+    return 10 + (value - 'A');
+  }
+  return -1;
+}
+
+static bool sec4_rt_hex_decode_bytes(
+    const char *hex_input,
+    char *output,
+    size_t output_size,
+    size_t *output_len
+) {
+  if (hex_input == NULL || output == NULL || output_len == NULL) {
+    return false;
+  }
+
+  size_t hex_len = strlen(hex_input);
+  if ((hex_len % 2) != 0) {
+    return false;
+  }
+
+  size_t decoded_len = hex_len / 2;
+  if (decoded_len >= output_size) {
+    return false;
+  }
+
+  for (size_t i = 0; i < decoded_len; i++) {
+    int high = sec4_rt_hex_nibble(hex_input[i * 2]);
+    int low = sec4_rt_hex_nibble(hex_input[i * 2 + 1]);
+    if (high < 0 || low < 0) {
+      return false;
+    }
+    output[i] = (char) ((high << 4) | low);
+  }
+
+  output[decoded_len] = '\0';
+  *output_len = decoded_len;
+  return true;
+}
+
+static bool sec4_rt_db_parse_record_line(
+    char *line,
+    int64_t *db_handle,
+    int64_t *query_handle,
+    const char **body_hex
+) {
+  if (line == NULL || db_handle == NULL || query_handle == NULL || body_hex == NULL) {
+    return false;
+  }
+
+  char *first_sep = strchr(line, '|');
+  if (first_sep == NULL) {
+    return false;
+  }
+  *first_sep = '\0';
+  if (strcmp(line, "v1") != 0) {
+    return false;
+  }
+
+  char *db_raw = first_sep + 1;
+  char *second_sep = strchr(db_raw, '|');
+  if (second_sep == NULL) {
+    return false;
+  }
+  *second_sep = '\0';
+
+  char *query_raw = second_sep + 1;
+  char *third_sep = strchr(query_raw, '|');
+  if (third_sep == NULL) {
+    return false;
+  }
+  *third_sep = '\0';
+
+  char *hex_raw = third_sep + 1;
+  if (hex_raw[0] == '\0' || strchr(hex_raw, '|') != NULL) {
+    return false;
+  }
+
+  if (!sec4_rt_parse_i64_strict(db_raw, db_handle)
+      || !sec4_rt_parse_i64_strict(query_raw, query_handle)) {
+    return false;
+  }
+
+  *body_hex = hex_raw;
+  return true;
+}
+
+static sec4_rt_db_result sec4_rt_db_append_record(
+    int64_t db_handle,
+    int64_t query_handle,
+    const char *body
+) {
+  if (db_handle == 0 || query_handle == 0 || body == NULL || body[0] == '\0') {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char base_root[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_db_result base_result =
+      sec4_rt_db_resolve_base_root(base_root, sizeof(base_root), true);
+  if (base_result != SEC4_RT_DB_RESULT_OK) {
+    return base_result;
+  }
+
+  char record_path[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_db_result record_path_result =
+      sec4_rt_db_resolve_record_path(base_root, record_path, sizeof(record_path));
+  if (record_path_result != SEC4_RT_DB_RESULT_OK) {
+    return record_path_result;
+  }
+
+  size_t body_len = strlen(body);
+  if (body_len == 0 || body_len >= SEC4_RT_MAX_TRACKED_VALUE_BYTES) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char encoded_body[SEC4_RT_MAX_DB_RECORD_HEX_BYTES];
+  if (!sec4_rt_hex_encode_bytes(body, body_len, encoded_body, sizeof(encoded_body))) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char line[SEC4_RT_MAX_DB_RECORD_LINE_BYTES];
+  int written = snprintf(
+      line,
+      sizeof(line),
+      "v1|%lld|%lld|%s\n",
+      (long long) db_handle,
+      (long long) query_handle,
+      encoded_body
+  );
+  if (written <= 0 || (size_t) written >= sizeof(line)) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  FILE *file = fopen(record_path, "ab");
+  if (file == NULL) {
+    return SEC4_RT_DB_RESULT_IO;
+  }
+
+  bool io_failed = false;
+  size_t line_len = (size_t) written;
+  if (fwrite(line, 1, line_len, file) != line_len) {
+    io_failed = true;
+  }
+  if (fclose(file) != 0) {
+    io_failed = true;
+  }
+  if (io_failed) {
+    return SEC4_RT_DB_RESULT_IO;
+  }
+
+  return SEC4_RT_DB_RESULT_OK;
+}
+
+static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
+    int64_t db_handle,
+    int64_t query_handle,
+    char *body_out,
+    size_t body_out_size
+) {
+  if (db_handle == 0 || query_handle == 0 || body_out == NULL || body_out_size == 0) {
+    return SEC4_RT_DB_RESULT_INVALID;
+  }
+
+  char base_root[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_db_result base_result =
+      sec4_rt_db_resolve_base_root(base_root, sizeof(base_root), false);
+  if (base_result != SEC4_RT_DB_RESULT_OK) {
+    return base_result;
+  }
+
+  char record_path[SEC4_RT_MAX_FS_PATH_BYTES];
+  sec4_rt_db_result record_path_result =
+      sec4_rt_db_resolve_record_path(base_root, record_path, sizeof(record_path));
+  if (record_path_result != SEC4_RT_DB_RESULT_OK) {
+    return record_path_result;
+  }
+
+  FILE *file = fopen(record_path, "rb");
+  if (file == NULL) {
+    if (errno == ENOENT) {
+      return SEC4_RT_DB_RESULT_NOT_FOUND;
+    }
+    return SEC4_RT_DB_RESULT_IO;
+  }
+
+  bool io_failed = false;
+  bool found = false;
+  char line[SEC4_RT_MAX_DB_RECORD_LINE_BYTES];
+  while (fgets(line, sizeof(line), file) != NULL) {
+    size_t line_len = strlen(line);
+    if (line_len == 0) {
+      continue;
+    }
+    if (line[line_len - 1] == '\n') {
+      line[line_len - 1] = '\0';
+    } else if (!feof(file)) {
+      io_failed = true;
+      break;
+    }
+
+    if (line[0] == '\0') {
+      continue;
+    }
+
+    int64_t record_db = 0;
+    int64_t record_query = 0;
+    const char *record_body_hex = NULL;
+    if (!sec4_rt_db_parse_record_line(
+            line,
+            &record_db,
+            &record_query,
+            &record_body_hex
+        )) {
+      io_failed = true;
+      break;
+    }
+
+    if (record_db != db_handle || record_query != query_handle) {
+      continue;
+    }
+
+    size_t decoded_len = 0;
+    if (!sec4_rt_hex_decode_bytes(record_body_hex, body_out, body_out_size, &decoded_len)) {
+      io_failed = true;
+      break;
+    }
+    found = true;
+  }
+
+  if (ferror(file) != 0) {
+    io_failed = true;
+  }
+  if (fclose(file) != 0) {
+    io_failed = true;
+  }
+
+  if (io_failed) {
+    return SEC4_RT_DB_RESULT_IO;
+  }
+  if (!found) {
+    return SEC4_RT_DB_RESULT_NOT_FOUND;
+  }
+  return SEC4_RT_DB_RESULT_OK;
+}
+
 int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
   if (query_template == NULL || query_template[0] == '\0') {
     sec4_rt_store_std_error_response(
@@ -2368,7 +2887,17 @@ int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
     return 0;
   }
 
-  return sec4_rt_handle_from_two(template_handle, params, UINT64_C(0x18182));
+  int64_t query_handle = sec4_rt_handle_from_two(template_handle, params, UINT64_C(0x18182));
+  if (query_handle == 0 || !sec4_rt_db_register_query_state(query_handle, template_handle, params)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.SQL_TEMPLATE_INTERNAL",
+        "internal",
+        "sql.q runtime failure"
+    );
+    return 0;
+  }
+  return query_handle;
 }
 
 int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
@@ -2378,6 +2907,57 @@ int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
         "DB.EXEC_INVALID",
         "validation",
         "db.exec requires db capability and query handle"
+    );
+    return 0;
+  }
+
+  const sec4_rt_db_query_state *query_state = sec4_rt_db_lookup_query_state(query);
+  if (query_state == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_QUERY_INVALID",
+        "validation",
+        "db.exec query handle must come from sql.q"
+    );
+    return 0;
+  }
+
+  char record_body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  int written = snprintf(
+      record_body,
+      sizeof(record_body),
+      "op=exec;db=%lld;query=%lld;template=%lld;params=%lld;tx=0",
+      (long long) db,
+      (long long) query,
+      (long long) query_state->template_handle,
+      (long long) query_state->params
+  );
+  if (written <= 0 || (size_t) written >= sizeof(record_body)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.EXEC_IO",
+        "internal",
+        "db.exec runtime io failure"
+    );
+    return 0;
+  }
+
+  sec4_rt_db_result append_result = sec4_rt_db_append_record(db, query, record_body);
+  if (append_result == SEC4_RT_DB_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_BASE_INVALID",
+        "validation",
+        "db.exec runtime base path is invalid"
+    );
+    return 0;
+  }
+  if (append_result != SEC4_RT_DB_RESULT_OK) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.EXEC_IO",
+        "internal",
+        "db.exec runtime io failure"
     );
     return 0;
   }
@@ -2396,7 +2976,17 @@ int64_t sec4_rt_db_tx(int64_t db) {
     return 0;
   }
 
-  return sec4_rt_handle_from_two(db, 1, UINT64_C(0x18184));
+  int64_t tx_handle = sec4_rt_handle_from_two(db, 1, UINT64_C(0x18184));
+  if (tx_handle == 0 || !sec4_rt_db_register_tx_state(tx_handle, db)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.TX_INTERNAL",
+        "internal",
+        "db.tx runtime failure"
+    );
+    return 0;
+  }
+  return tx_handle;
 }
 
 int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query) {
@@ -2406,6 +2996,69 @@ int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query) {
         "DB.EXEC_TX_INVALID",
         "validation",
         "db.execTx requires transaction and query handles"
+    );
+    return 0;
+  }
+
+  int64_t db = 0;
+  if (!sec4_rt_db_lookup_tx_db(tx, &db)) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_TX_HANDLE_INVALID",
+        "validation",
+        "db.execTx transaction handle must come from db.tx"
+    );
+    return 0;
+  }
+
+  const sec4_rt_db_query_state *query_state = sec4_rt_db_lookup_query_state(query);
+  if (query_state == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_TX_QUERY_INVALID",
+        "validation",
+        "db.execTx query handle must come from sql.q"
+    );
+    return 0;
+  }
+
+  char record_body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  int written = snprintf(
+      record_body,
+      sizeof(record_body),
+      "op=execTx;db=%lld;query=%lld;template=%lld;params=%lld;tx=%lld",
+      (long long) db,
+      (long long) query,
+      (long long) query_state->template_handle,
+      (long long) query_state->params,
+      (long long) tx
+  );
+  if (written <= 0 || (size_t) written >= sizeof(record_body)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.EXEC_TX_IO",
+        "internal",
+        "db.execTx runtime io failure"
+    );
+    return 0;
+  }
+
+  sec4_rt_db_result append_result = sec4_rt_db_append_record(db, query, record_body);
+  if (append_result == SEC4_RT_DB_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.EXEC_TX_BASE_INVALID",
+        "validation",
+        "db.execTx runtime base path is invalid"
+    );
+    return 0;
+  }
+  if (append_result != SEC4_RT_DB_RESULT_OK) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.EXEC_TX_IO",
+        "internal",
+        "db.execTx runtime io failure"
     );
     return 0;
   }
@@ -2424,7 +3077,83 @@ int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema) {
     return 0;
   }
 
-  return sec4_rt_handle_from_three(db, query, row_schema, UINT64_C(0x18186));
+  const sec4_rt_db_query_state *query_state = sec4_rt_db_lookup_query_state(query);
+  if (query_state == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.QUERY_ONE_QUERY_INVALID",
+        "validation",
+        "db.queryOne query handle must come from sql.q"
+    );
+    return 0;
+  }
+  (void) query_state;
+
+  char record_body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  sec4_rt_db_result read_result = sec4_rt_db_read_latest_record_body(
+      db,
+      query,
+      record_body,
+      sizeof(record_body)
+  );
+  if (read_result == SEC4_RT_DB_RESULT_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "DB.QUERY_ONE_BASE_INVALID",
+        "validation",
+        "db.queryOne runtime base path is invalid"
+    );
+    return 0;
+  }
+  if (read_result == SEC4_RT_DB_RESULT_NOT_FOUND) {
+    sec4_rt_store_std_error_response(
+        404,
+        "DB.QUERY_ONE_NOT_FOUND",
+        "missing_dependency",
+        "db.queryOne record not found"
+    );
+    return 0;
+  }
+  if (read_result != SEC4_RT_DB_RESULT_OK) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.QUERY_ONE_IO",
+        "internal",
+        "db.queryOne runtime io failure"
+    );
+    return 0;
+  }
+
+  char row_body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  int written = snprintf(
+      row_body,
+      sizeof(row_body),
+      "%s;rowSchema=%lld",
+      record_body,
+      (long long) row_schema
+  );
+  if (written <= 0 || (size_t) written >= sizeof(row_body)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.QUERY_ONE_IO",
+        "internal",
+        "db.queryOne runtime io failure"
+    );
+    return 0;
+  }
+
+  int64_t row_handle = sec4_rt_track_string_value(row_body, UINT64_C(0x18186));
+  if (row_handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "DB.QUERY_ONE_IO",
+        "internal",
+        "db.queryOne runtime io failure"
+    );
+    return 0;
+  }
+
+  return row_handle;
 }
 
 static bool sec4_rt_fs_path_has_traversal(const char *path) {

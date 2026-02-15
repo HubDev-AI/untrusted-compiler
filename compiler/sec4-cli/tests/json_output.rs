@@ -5461,7 +5461,9 @@ fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_availa
     let project_dir = temp_dir("sec4-runtime-c-db-fs-net-handles");
     let harness_path = project_dir.join("harness.c");
     let binary_path = project_dir.join("runtime-db-fs-net-handles");
+    let db_base = project_dir.join("db-base");
     let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&db_base).expect("db base should be created");
     fs::create_dir_all(&fs_base).expect("fs base should be created");
 
     let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5565,6 +5567,7 @@ int main(void) {
     let internal_url_b = format!("http://127.0.0.1:{internal_port_b}/db-fs-net-b");
 
     let run = Command::new(&binary_path)
+        .env("SEC4_RT_DB_BASE", &db_base)
         .env("SEC4_RT_FS_BASE", &fs_base)
         .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
         .env("SEC4_RT_TEST_INTERNAL_URL_A", &internal_url_a)
@@ -5591,6 +5594,150 @@ int main(void) {
         fs::read_to_string(fs_base.join("db-fs-net").join("b.txt"))
             .expect("second fs file should be readable"),
         "beta"
+    );
+}
+
+#[test]
+fn c_bin_runtime_db_exec_query_one_roundtrip_returns_tracked_body_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime db roundtrip test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-db-roundtrip");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-db-roundtrip");
+    let db_base = project_dir.join("db-base");
+    fs::create_dir_all(&db_base).expect("db base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t query = sec4_rt_sql_q("SELECT roundtrip", 41);
+  if (query == 0) { return 10; }
+
+  int64_t exec_handle = sec4_rt_db_exec(9001, query);
+  if (exec_handle == 0) { return 11; }
+
+  int64_t row = sec4_rt_db_query_one(9001, query, 7001);
+  if (row == 0) { return 12; }
+
+  int64_t redacted = sec4_rt_secret_redact(row);
+  if (redacted == 0) { return 13; }
+
+  int64_t row_again = sec4_rt_db_query_one(9001, query, 7001);
+  if (row_again == 0) { return 14; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime db roundtrip harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_DB_BASE", &db_base)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime db roundtrip harness should exit successfully"
+    );
+
+    let records_path = db_base.join("records.log");
+    let records = fs::read_to_string(&records_path).expect("db records log should be readable");
+    assert!(
+        records.contains("v1|9001|"),
+        "db records log should include deterministic db/query prefix:\n{records}"
+    );
+}
+
+#[test]
+fn c_bin_runtime_db_query_one_missing_record_returns_error_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime db missing-record test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-db-missing-record");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-db-missing-record");
+    let db_base = project_dir.join("db-base");
+    fs::create_dir_all(&db_base).expect("db base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t query = sec4_rt_sql_q("SELECT missing", 77);
+  if (query == 0) { return 10; }
+
+  if (sec4_rt_db_query_one(404, query, 7001) != 0) { return 11; }
+  if (sec4_rt_db_query_one(404, query, 7001) != 0) { return 12; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime db missing-record harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_DB_BASE", &db_base)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime db missing-record harness should exit successfully"
     );
 }
 
