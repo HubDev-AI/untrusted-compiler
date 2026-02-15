@@ -406,6 +406,9 @@ jobs:
       - name: Validate M32 priority matrix
         run: scripts/test-build-m32-priority-matrix.sh
 
+      - name: Validate M32 runtime de-stub planner
+        run: scripts/test-plan-m32-runtime-destub.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
