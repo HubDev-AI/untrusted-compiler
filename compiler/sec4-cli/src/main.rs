@@ -38,6 +38,12 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         sbom: bool,
     },
+    Init {
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long)]
+        name: Option<String>,
+    },
     Run {
         #[arg(long, default_value = ".")]
         path: PathBuf,
@@ -287,6 +293,7 @@ fn main() {
             locked,
             sbom,
         } => cmd_build(&path, emit, locked, sbom),
+        Commands::Init { path, name } => cmd_init(&path, name.as_deref()),
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run {
             path,
@@ -2978,6 +2985,173 @@ fn write_history_report(history_dir: &Path, report: &AuditReport) -> Result<Path
     let output_path = history_dir.join(file_name);
     write_audit_report(&output_path, report)?;
     Ok(output_path)
+}
+
+fn cmd_init(path: &Path, name: Option<&str>) -> Result<(), i32> {
+    if path.exists() {
+        if !path.is_dir() {
+            eprintln!(
+                "init failed: target path `{}` is not a directory",
+                path.display()
+            );
+            return Err(1);
+        }
+
+        let has_entries = match directory_has_entries(path) {
+            Ok(has_entries) => has_entries,
+            Err(err) => {
+                eprintln!(
+                    "init failed: could not read target directory `{}`: {err}",
+                    path.display()
+                );
+                return Err(2);
+            }
+        };
+        if has_entries && path.join("sec4.toml").exists() {
+            eprintln!(
+                "init failed: target directory `{}` already contains sec4.toml",
+                path.display()
+            );
+            return Err(1);
+        }
+    } else if let Err(err) = fs::create_dir_all(path) {
+        eprintln!(
+            "init failed: could not create target directory `{}`: {err}",
+            path.display()
+        );
+        return Err(2);
+    }
+
+    let package_name = match name {
+        Some(name) => {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                eprintln!("init failed: --name must not be empty");
+                return Err(1);
+            }
+            trimmed.to_string()
+        }
+        None => default_package_name_for_init(path),
+    };
+
+    let src_dir = path.join("src");
+    if let Err(err) = fs::create_dir_all(&src_dir) {
+        eprintln!(
+            "init failed: could not create source directory `{}`: {err}",
+            src_dir.display()
+        );
+        return Err(2);
+    }
+
+    let manifest_path = path.join("sec4.toml");
+    let policy_path = path.join("sec4.policy");
+    let entry_path = src_dir.join("main.ut");
+
+    let manifest_body = format!(
+        "[package]\n\
+name = \"{package_name}\"\n\
+version = \"0.1.0\"\n\
+edition = \"2026\"\n\
+\n\
+[build]\n\
+entry = \"src/main.ut\"\n"
+    );
+    let policy_body = "[policy]\n\
+name = \"default-secure\"\n\
+version = \"0.1\"\n\
+mode = \"enforce\"\n\
+env = \"prod\"\n\
+\n\
+[security_headers]\n\
+enabled = true\n\
+\n\
+[security_headers.csp]\n\
+enabled = true\n\
+report_only = false\n";
+    let entry_body = "fn health() effects { net } -> Int {\n\
+  res.text(200, \"hello from sec4\");\n\
+  0\n\
+}\n\
+\n\
+fn main() effects { net } -> Int {\n\
+  let router = http.router();\n\
+  http.get(router, \"/health\", health);\n\
+  http.serve(8080, router);\n\
+  0\n\
+}\n";
+
+    if let Err(err) = fs::write(&manifest_path, manifest_body) {
+        eprintln!(
+            "init failed: could not write manifest `{}`: {err}",
+            manifest_path.display()
+        );
+        return Err(2);
+    }
+    if let Err(err) = fs::write(&policy_path, policy_body) {
+        eprintln!(
+            "init failed: could not write policy `{}`: {err}",
+            policy_path.display()
+        );
+        return Err(2);
+    }
+    if let Err(err) = fs::write(&entry_path, entry_body) {
+        eprintln!(
+            "init failed: could not write entry `{}`: {err}",
+            entry_path.display()
+        );
+        return Err(2);
+    }
+
+    println!("init succeeded: {}", path.display());
+    println!("created files:");
+    println!("  {}", manifest_path.display());
+    println!("  {}", policy_path.display());
+    println!("  {}", entry_path.display());
+
+    Ok(())
+}
+
+fn directory_has_entries(path: &Path) -> Result<bool, std::io::Error> {
+    let mut entries = fs::read_dir(path)?;
+    match entries.next() {
+        Some(Ok(_)) => Ok(true),
+        Some(Err(err)) => Err(err),
+        None => Ok(false),
+    }
+}
+
+fn default_package_name_for_init(path: &Path) -> String {
+    let fallback = "sec4-app";
+    let candidate = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(fallback);
+    let normalized = normalize_package_name(candidate);
+    if normalized.is_empty() {
+        fallback.to_string()
+    } else {
+        normalized
+    }
+}
+
+fn normalize_package_name(raw: &str) -> String {
+    let mut normalized = String::with_capacity(raw.len());
+    let mut last_was_separator = false;
+
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+            last_was_separator = false;
+            continue;
+        }
+
+        if !last_was_separator {
+            normalized.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    normalized.trim_matches('-').to_string()
 }
 
 fn cmd_build(

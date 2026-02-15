@@ -64,6 +64,237 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
 }
 
 #[test]
+fn init_creates_project_files_successfully() {
+    let root = temp_dir("sec4-init-create");
+    let project_dir = root.join("created-project");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "init",
+        "--path",
+        &project_path,
+        "--name",
+        "init-fixture-create",
+    ]);
+    assert!(output.status.success(), "init command should succeed");
+
+    let manifest = fs::read_to_string(project_dir.join("sec4.toml"))
+        .expect("manifest should be written by init command");
+    assert!(
+        manifest.contains("name = \"init-fixture-create\""),
+        "manifest should include explicit package name:\n{manifest}"
+    );
+    assert!(
+        project_dir.join("sec4.policy").exists(),
+        "init should write sec4.policy"
+    );
+    let entry = fs::read_to_string(project_dir.join("src/main.ut"))
+        .expect("entry source should be written by init command");
+    assert!(
+        entry.contains("http.serve(8080, router);"),
+        "entry source should include runnable server bootstrap:\n{entry}"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("created files:"),
+        "init output should include created-files summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("sec4.toml")
+            && stdout.contains("sec4.policy")
+            && stdout.contains("src/main.ut"),
+        "init output should list all generated files:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn init_then_check_succeeds() {
+    let root = temp_dir("sec4-init-check");
+    let project_dir = root.join("check-project");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let init_output = run_cli(&[
+        "init",
+        "--path",
+        &project_path,
+        "--name",
+        "init-fixture-check",
+    ]);
+    assert!(init_output.status.success(), "init command should succeed");
+
+    let check_output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        check_output.status.success(),
+        "check command should succeed for initialized project"
+    );
+    let stdout = String::from_utf8(check_output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("check succeeded"),
+        "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn init_then_run_oneshot_serves_request_and_exits() {
+    if !clang_available() {
+        eprintln!("skipping init run-command oneshot integration test: clang not available");
+        return;
+    }
+
+    let root = temp_dir("sec4-init-run-oneshot");
+    let project_dir = root.join("run-project");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let port = find_available_tcp_port();
+
+    let init_output = run_cli(&[
+        "init",
+        "--path",
+        &project_path,
+        "--name",
+        "init-fixture-run",
+    ]);
+    assert!(init_output.status.success(), "init command should succeed");
+
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            project_path.as_str(),
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("init oneshot test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("init oneshot process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command oneshot process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nhello from sec4"),
+        "response should include expected bootstrap body:\n{response}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn init_fails_deterministically_on_existing_initialized_project() {
+    let project_dir = temp_dir("sec4-init-existing-project");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let first = run_cli(&[
+        "init",
+        "--path",
+        &project_path,
+        "--name",
+        "init-fixture-existing",
+    ]);
+    assert!(first.status.success(), "first init command should succeed");
+
+    let second = run_cli(&["init", "--path", &project_path]);
+    assert!(
+        !second.status.success(),
+        "init command should fail for already initialized project"
+    );
+    assert_eq!(
+        second.status.code(),
+        Some(1),
+        "re-initialization should exit with deterministic status code"
+    );
+
+    let stderr = String::from_utf8(second.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("already contains sec4.toml"),
+        "init failure should clearly indicate existing initialized project:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn test_command_success_path() {
     if !clang_available() {
         eprintln!("skipping test-command success integration test: clang not available");
