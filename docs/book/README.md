@@ -546,5 +546,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `579-m32-runtime-destub-runner.md`
 - `580-m32-executed-slice-convergence-summary.md`
 - `581-m32-transition-handoff-packet.md`
+- `582-m32-closure-report.md`
 
 As milestones progress, chapters will be added and linked from this index.
