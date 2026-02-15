@@ -3485,6 +3485,10 @@ fn cmd_run(
     let binary_path = path.join("build").join(&manifest.package.name);
     let mut cmd = Command::new(&binary_path);
     cmd.env(
+        "SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES",
+        policy.net_public.allowed_schemes.join(","),
+    );
+    cmd.env(
         "SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS",
         policy.net_public.allowed_domains.join(","),
     );

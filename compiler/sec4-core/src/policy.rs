@@ -89,6 +89,7 @@ pub struct JsonPolicyConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
+    pub allowed_schemes: Vec<String>,
     pub allowed_domains: Vec<String>,
     pub blocked_domains: Vec<String>,
 }
@@ -213,6 +214,7 @@ impl Default for Policy {
             },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
+                allowed_schemes: vec!["https".to_string()],
                 allowed_domains: Vec::new(),
                 blocked_domains: Vec::new(),
             },
@@ -871,6 +873,8 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                             "allowed schemes must be non-empty and only include `http` or `https`",
                         ),
                     );
+                } else {
+                    policy.net_public.allowed_schemes = allowed_schemes;
                 }
             }
 
