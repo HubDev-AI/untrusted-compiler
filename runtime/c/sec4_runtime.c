@@ -54,6 +54,8 @@ typedef struct {
   char trace_id[32];
   char method[8];
   char path[SEC4_RT_MAX_PATH_BYTES];
+  char route_path[SEC4_RT_MAX_PATH_BYTES];
+  char matched_route_pattern[SEC4_RT_MAX_PATH_BYTES];
   char raw_headers[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t raw_headers_len;
   char body[SEC4_RT_MAX_REQUEST_BODY_BYTES];
@@ -333,6 +335,116 @@ static bool sec4_rt_extract_query_value(
       break;
     }
     query = segment_end + 1;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_path_pattern_matches(const char *pattern, const char *path) {
+  if (pattern == NULL || path == NULL) {
+    return false;
+  }
+
+  const char *p = pattern;
+  const char *q = path;
+  while (true) {
+    while (*p == '/') {
+      p += 1;
+    }
+    while (*q == '/') {
+      q += 1;
+    }
+
+    if (*p == '\0' || *q == '\0') {
+      break;
+    }
+
+    const char *p_start = p;
+    while (*p != '\0' && *p != '/') {
+      p += 1;
+    }
+    const char *q_start = q;
+    while (*q != '\0' && *q != '/') {
+      q += 1;
+    }
+
+    size_t p_len = (size_t) (p - p_start);
+    size_t q_len = (size_t) (q - q_start);
+    if (p_len == 0 || q_len == 0) {
+      return false;
+    }
+
+    if (p_start[0] == ':') {
+      continue;
+    }
+    if (p_len != q_len || strncmp(p_start, q_start, p_len) != 0) {
+      return false;
+    }
+  }
+
+  while (*p == '/') {
+    p += 1;
+  }
+  while (*q == '/') {
+    q += 1;
+  }
+  return *p == '\0' && *q == '\0';
+}
+
+static bool sec4_rt_extract_path_param(
+    const char *pattern,
+    const char *path,
+    const char *name,
+    char *out,
+    size_t out_size
+) {
+  if (out == NULL || out_size == 0) {
+    return false;
+  }
+  out[0] = '\0';
+  if (pattern == NULL || path == NULL || name == NULL || name[0] == '\0') {
+    return false;
+  }
+  if (!sec4_rt_path_pattern_matches(pattern, path)) {
+    return false;
+  }
+
+  size_t target_len = strlen(name);
+  const char *p = pattern;
+  const char *q = path;
+  while (true) {
+    while (*p == '/') {
+      p += 1;
+    }
+    while (*q == '/') {
+      q += 1;
+    }
+    if (*p == '\0' || *q == '\0') {
+      break;
+    }
+
+    const char *p_start = p;
+    while (*p != '\0' && *p != '/') {
+      p += 1;
+    }
+    const char *q_start = q;
+    while (*q != '\0' && *q != '/') {
+      q += 1;
+    }
+
+    size_t p_len = (size_t) (p - p_start);
+    size_t q_len = (size_t) (q - q_start);
+    if (p_len > 1 && p_start[0] == ':') {
+      if (p_len - 1 == target_len && strncmp(p_start + 1, name, target_len) == 0) {
+        size_t copy_len = q_len;
+        if (copy_len >= out_size) {
+          copy_len = out_size - 1;
+        }
+        memcpy(out, q_start, copy_len);
+        out[copy_len] = '\0';
+        return copy_len > 0;
+      }
+    }
   }
 
   return false;
@@ -924,7 +1036,7 @@ static void sec4_rt_collect_allow_methods(
   size_t used = 0;
   for (size_t i = 0; i < router->route_count; i++) {
     sec4_rt_route *candidate = &router->routes[i];
-    if (strcmp(candidate->path, path) != 0) {
+    if (!sec4_rt_path_pattern_matches(candidate->path, path)) {
       continue;
     }
     if (strstr(allow, candidate->method) != NULL) {
@@ -1136,6 +1248,8 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.method[sizeof(g_sec4_rt_request.method) - 1] = '\0';
   strncpy(g_sec4_rt_request.path, request_target, sizeof(g_sec4_rt_request.path) - 1);
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
+  strncpy(g_sec4_rt_request.route_path, path, sizeof(g_sec4_rt_request.route_path) - 1);
+  g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
     const char *extra_headers =
@@ -1250,7 +1364,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_route *method_mismatch = NULL;
   for (size_t i = 0; i < router->route_count; i++) {
     sec4_rt_route *candidate = &router->routes[i];
-    if (strcmp(candidate->path, path) != 0) {
+    if (!sec4_rt_path_pattern_matches(candidate->path, path)) {
       continue;
     }
     if (strcmp(candidate->method, method) == 0) {
@@ -1314,6 +1428,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   sec4_rt_reset_response();
+  strncpy(
+      g_sec4_rt_request.matched_route_pattern,
+      match->path,
+      sizeof(g_sec4_rt_request.matched_route_pattern) - 1
+  );
+  g_sec4_rt_request.matched_route_pattern[sizeof(g_sec4_rt_request.matched_route_pattern) - 1] = '\0';
   (void) match->handler();
 
   if (!g_sec4_rt_response.active) {
@@ -1496,7 +1616,19 @@ int64_t sec4_rt_req_query(const char *name) {
 }
 
 int64_t sec4_rt_req_path_param(const char *name) {
-  return sec4_rt_track_string_value(name, UINT64_C(0x20202));
+  char extracted[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  const char *value = name;
+  if (g_sec4_rt_request.has_request
+      && sec4_rt_extract_path_param(
+          g_sec4_rt_request.matched_route_pattern,
+          g_sec4_rt_request.route_path,
+          name,
+          extracted,
+          sizeof(extracted)
+      )) {
+    value = extracted;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x20202));
 }
 
 int64_t sec4_rt_req_header(const char *name) {
