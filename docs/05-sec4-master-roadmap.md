@@ -452,6 +452,7 @@ Current strict closure result:
 | `M30-E` | PASS | Naming-lock CI enforces M30 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M30-F` | PASS | Naming-lock CI enforces M30 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M30-G` | PASS | Naming-lock CI enforces M30 closure report | `.github/workflows/naming-lock.yml` |
+| `M31-A` | PASS | Naming-lock CI enforces M31 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -573,6 +574,7 @@ Strict closure interpretation:
 - M30 executed-slice convergence summary enforcement is active (`M30-E`).
 - M30 transition handoff packet enforcement is active (`M30-F`).
 - M30 closure report enforcement is active (`M30-G`).
+- M31 kickoff brief enforcement is active (`M31-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4850,8 +4852,24 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M30 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M30-G`).
 
+## M31 - Runtime-First Stabilization Loop (In Progress)
+
+### Goal
+- Start M31 from deterministic M30 closure evidence and continue runtime-first stabilization with strict closure-gated slices.
+
+### M31-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M30 closure report + M30 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M30 closure report JSON from `build-m30-closure-report.sh`.
+- Closure audit includes dedicated `M31-A` gate.
+
+### M31-S1 tracking (live status)
+- [x] M31 kickoff brief script added.
+- [x] M31 kickoff brief contract test added.
+- [x] Book chapter documenting M31 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M31-A`).
+
 ### Next planned slice
-- M31-S1 kickoff brief + closure gate `M31-A`.
+- M31-S2 priority matrix + closure gate `M31-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4943,8 +4961,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S1 kickoff brief from M30 closure + M30 transition packet artifacts and wire `M31-A`.
-2. Continue M31 runtime-first stabilization sequence (`S2..S7`) with strict closure gating parity.
+1. Implement M31-S2 priority matrix from M31 kickoff artifact and wire `M31-B`.
+2. Continue M31 runtime-first stabilization sequence (`S3..S7`) with strict closure gating parity.
 
 ---
 
