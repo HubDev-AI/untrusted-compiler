@@ -1576,6 +1576,284 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_rejects_public_url_when_port_is_not_allowed() {
+    if !clang_available() {
+        eprintln!("skipping run-command net.public port policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-net-public-port-disallowed");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runnetpublicportdisallowed"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = []
+blocked_domains = ["blocked.example.com"]
+allowed_ports = [443]
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  let raw = req.query("https://blocked.example.com:8443/private");
+  url.public(raw);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command net.public port policy test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command net.public port policy process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command net.public port policy process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"NET.URL_PUBLIC_INVALID\""),
+        "response should include deterministic URL policy code:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_allows_public_url_when_port_is_allowed() {
+    if !clang_available() {
+        eprintln!("skipping run-command net.public allowed-port policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-net-public-port-allowed");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runnetpublicportallowed"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[net.public]
+allowed_schemes = ["https"]
+allowed_domains = ["api.example.com"]
+blocked_domains = []
+allowed_ports = [8443]
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  let raw = req.query("https://api.example.com:8443/private");
+  url.public(raw);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command net.public allowed-port policy test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command net.public allowed-port policy process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command net.public allowed-port policy process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_applies_net_internal_allowed_domains_policy_env() {
     if !clang_available() {
         eprintln!("skipping run-command net.internal policy test: clang not available");

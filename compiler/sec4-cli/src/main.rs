@@ -3497,6 +3497,16 @@ fn cmd_run(
         policy.net_public.blocked_domains.join(","),
     );
     cmd.env(
+        "SEC4_RT_NET_PUBLIC_ALLOWED_PORTS",
+        policy
+            .net_public
+            .allowed_ports
+            .iter()
+            .map(|port| port.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    cmd.env(
         "SEC4_RT_ALLOW_INTERNAL_NET",
         if policy.net_internal.enabled { "1" } else { "0" },
     );
