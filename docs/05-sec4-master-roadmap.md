@@ -469,6 +469,7 @@ Current strict closure result:
 | `M33-A` | PASS | Naming-lock CI enforces M33 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M33-B` | PASS | Naming-lock CI enforces M33 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M33-C` | PASS | Naming-lock CI enforces M33 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
+| `M33-D` | PASS | Naming-lock CI enforces M33 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -607,6 +608,7 @@ Strict closure interpretation:
 - M33 kickoff brief enforcement is active (`M33-A`).
 - M33 priority matrix enforcement is active (`M33-B`).
 - M33 runtime de-stub planner enforcement is active (`M33-C`).
+- M33 runtime de-stub runner enforcement is active (`M33-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5099,8 +5101,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M33 runtime-first de-stub plan added.
 - [x] Naming-lock CI and closure gate updated (`M33-C`).
 
+### M33-S4 runtime de-stub execution runner acceptance criteria
+- Runtime execution runner consumes M33 de-stub plan and executes only the selected first runtime slice with deterministic dry-run + execute modes.
+- Runner emits execution-status artifacts with selected slice/domain metadata and closure gate annotations.
+- Closure audit includes dedicated `M33-D` gate.
+
+### M33-S4 tracking (live status)
+- [x] M33 runtime de-stub execution runner script added.
+- [x] M33 runtime de-stub execution runner contract test added.
+- [x] Book chapter documenting M33 runtime de-stub execution runner added.
+- [x] Naming-lock CI and closure gate updated (`M33-D`).
+
 ### Next planned slice
-- M33-S4 runtime de-stub execution runner + closure gate `M33-D`.
+- M33-S5 executed-slice convergence summary + closure gate `M33-E`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5192,8 +5205,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M33-S4 runtime de-stub execution runner from M33 de-stub plan and wire `M33-D`.
-2. Run full strict closure audit and publish M33 handoff status after `M33-D`.
+1. Implement M33-S5 executed-slice convergence summary from M33 plan + runner artifacts and wire `M33-E`.
+2. Run full strict closure audit and publish M33 handoff status after `M33-E`.
 
 ---
 

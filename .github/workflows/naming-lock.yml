@@ -430,6 +430,9 @@ jobs:
       - name: Validate M33 runtime de-stub planner
         run: scripts/test-plan-m33-runtime-destub.sh
 
+      - name: Validate M33 runtime de-stub runner
+        run: scripts/test-run-m33-runtime-destub.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
