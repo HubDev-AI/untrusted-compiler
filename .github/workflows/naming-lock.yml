@@ -388,6 +388,9 @@ jobs:
       - name: Validate M31 runtime de-stub planner
         run: scripts/test-plan-m31-runtime-destub.sh
 
+      - name: Validate M31 runtime de-stub runner
+        run: scripts/test-run-m31-runtime-destub.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

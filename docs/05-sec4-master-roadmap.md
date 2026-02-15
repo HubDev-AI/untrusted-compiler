@@ -455,6 +455,7 @@ Current strict closure result:
 | `M31-A` | PASS | Naming-lock CI enforces M31 kickoff brief | `.github/workflows/naming-lock.yml` |
 | `M31-B` | PASS | Naming-lock CI enforces M31 priority matrix | `.github/workflows/naming-lock.yml` |
 | `M31-C` | PASS | Naming-lock CI enforces M31 runtime de-stub planner | `.github/workflows/naming-lock.yml` |
+| `M31-D` | PASS | Naming-lock CI enforces M31 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -579,6 +580,7 @@ Strict closure interpretation:
 - M31 kickoff brief enforcement is active (`M31-A`).
 - M31 priority matrix enforcement is active (`M31-B`).
 - M31 runtime de-stub planner enforcement is active (`M31-C`).
+- M31 runtime de-stub runner enforcement is active (`M31-D`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4894,8 +4896,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M31 runtime-first de-stub plan added.
 - [x] Naming-lock CI and closure gate updated (`M31-C`).
 
+### M31-S4 runtime de-stub execution runner acceptance criteria
+- Runtime execution runner consumes M31 de-stub plan and executes only the selected first runtime slice with deterministic dry-run + execute modes.
+- Execution emits deterministic status artifact suitable for convergence summary input.
+- Closure audit includes dedicated `M31-D` gate.
+
+### M31-S4 tracking (live status)
+- [x] M31 runtime de-stub execution runner script added.
+- [x] M31 runtime de-stub execution runner contract test added.
+- [x] Book chapter documenting M31 runtime de-stub execution runner added.
+- [x] Naming-lock CI and closure gate updated (`M31-D`).
+
 ### Next planned slice
-- M31-S4 runtime de-stub execution runner + closure gate `M31-D`.
+- M31-S5 executed-slice convergence summary + closure gate `M31-E`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4987,8 +5000,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S4 runtime de-stub execution runner from M31 de-stub plan artifact and wire `M31-D`.
-2. Continue M31 runtime-first stabilization sequence (`S5..S7`) with strict closure gating parity.
+1. Implement M31-S5 executed-slice convergence summary from M31 plan + runner artifacts and wire `M31-E`.
+2. Continue M31 runtime-first stabilization sequence (`S6..S7`) with strict closure gating parity.
 
 ---
 
