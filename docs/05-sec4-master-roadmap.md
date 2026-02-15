@@ -453,6 +453,7 @@ Current strict closure result:
 | `M30-F` | PASS | Naming-lock CI enforces M30 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M30-G` | PASS | Naming-lock CI enforces M30 closure report | `.github/workflows/naming-lock.yml` |
 | `M31-A` | PASS | Naming-lock CI enforces M31 kickoff brief | `.github/workflows/naming-lock.yml` |
+| `M31-B` | PASS | Naming-lock CI enforces M31 priority matrix | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -575,6 +576,7 @@ Strict closure interpretation:
 - M30 transition handoff packet enforcement is active (`M30-F`).
 - M30 closure report enforcement is active (`M30-G`).
 - M31 kickoff brief enforcement is active (`M31-A`).
+- M31 priority matrix enforcement is active (`M31-B`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4868,8 +4870,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M31 kickoff brief added.
 - [x] Naming-lock CI and closure gate updated (`M31-A`).
 
+### M31-S2 priority matrix acceptance criteria
+- Priority matrix script consumes M31 kickoff brief output and computes deterministic runtime/release/editor rankings.
+- Matrix emits markdown/json outputs with explicit score ordering and rationales.
+- Closure audit includes dedicated `M31-B` gate.
+
+### M31-S2 tracking (live status)
+- [x] M31 priority matrix script added.
+- [x] M31 priority matrix contract test added.
+- [x] Book chapter documenting M31 priority matrix added.
+- [x] Naming-lock CI and closure gate updated (`M31-B`).
+
 ### Next planned slice
-- M31-S2 priority matrix + closure gate `M31-B`.
+- M31-S3 runtime-first de-stub plan + closure gate `M31-C`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -4961,8 +4974,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S2 priority matrix from M31 kickoff artifact and wire `M31-B`.
-2. Continue M31 runtime-first stabilization sequence (`S3..S7`) with strict closure gating parity.
+1. Implement M31-S3 runtime-first de-stub plan from M31 kickoff + priority matrix artifacts and wire `M31-C`.
+2. Continue M31 runtime-first stabilization sequence (`S4..S7`) with strict closure gating parity.
 
 ---
 

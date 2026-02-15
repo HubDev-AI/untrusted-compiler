@@ -382,6 +382,9 @@ jobs:
       - name: Validate M31 kickoff brief
         run: scripts/test-generate-m31-kickoff-brief.sh
 
+      - name: Validate M31 priority matrix
+        run: scripts/test-build-m31-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
