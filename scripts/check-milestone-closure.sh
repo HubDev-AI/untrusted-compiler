@@ -290,6 +290,7 @@ bool_has_m35_priority_matrix_ci_guard=0
 bool_has_m35_runtime_destub_plan_ci_guard=0
 bool_has_m35_runtime_destub_runner_ci_guard=0
 bool_has_m35_executed_slice_convergence_summary_ci_guard=0
+bool_has_m35_transition_handoff_packet_ci_guard=0
 gate_codes=()
 gate_statuses=()
 gate_labels=()
@@ -1384,6 +1385,13 @@ if [ -f "${naming_lock_workflow_path}" ] \
   bool_has_m35_executed_slice_convergence_summary_ci_guard=1
 fi
 
+m35_transition_handoff_packet_test_script="${repo_root}/scripts/test-build-m35-transition-handoff-packet.sh"
+if [ -f "${naming_lock_workflow_path}" ] \
+  && [ -f "${m35_transition_handoff_packet_test_script}" ] \
+  && rg -q 'scripts/test-build-m35-transition-handoff-packet.sh' "${naming_lock_workflow_path}"; then
+  bool_has_m35_transition_handoff_packet_ci_guard=1
+fi
+
 replay_json_contract_script="${repo_root}/scripts/test-replay-cli-json-contract.sh"
 replay_json_guard_script="${repo_root}/scripts/test-replay-cli-json-contract-guard.sh"
 if [ -f "${replay_json_contract_script}" ] \
@@ -1727,6 +1735,7 @@ emit_check "M35-B" "naming-lock CI enforces M35 priority matrix" "${bool_has_m35
 emit_check "M35-C" "naming-lock CI enforces M35 runtime de-stub planner" "${bool_has_m35_runtime_destub_plan_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M35-D" "naming-lock CI enforces M35 runtime de-stub runner" "${bool_has_m35_runtime_destub_runner_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M35-E" "naming-lock CI enforces M35 executed-slice convergence summary" "${bool_has_m35_executed_slice_convergence_summary_ci_guard}" "${naming_lock_workflow_path}"
+emit_check "M35-F" "naming-lock CI enforces M35 transition handoff packet" "${bool_has_m35_transition_handoff_packet_ci_guard}" "${naming_lock_workflow_path}"
 
 if [ "${output_format}" = "json" ]; then
   gates_json='[]'
