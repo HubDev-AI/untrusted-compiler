@@ -397,6 +397,9 @@ jobs:
       - name: Validate M31 transition handoff packet
         run: scripts/test-build-m31-transition-handoff-packet.sh
 
+      - name: Validate M31 closure report
+        run: scripts/test-build-m31-closure-report.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 

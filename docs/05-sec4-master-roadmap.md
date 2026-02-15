@@ -458,6 +458,7 @@ Current strict closure result:
 | `M31-D` | PASS | Naming-lock CI enforces M31 runtime de-stub runner | `.github/workflows/naming-lock.yml` |
 | `M31-E` | PASS | Naming-lock CI enforces M31 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M31-F` | PASS | Naming-lock CI enforces M31 transition handoff packet | `.github/workflows/naming-lock.yml` |
+| `M31-G` | PASS | Naming-lock CI enforces M31 closure report | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -585,6 +586,7 @@ Strict closure interpretation:
 - M31 runtime de-stub runner enforcement is active (`M31-D`).
 - M31 executed-slice convergence summary enforcement is active (`M31-E`).
 - M31 transition handoff packet enforcement is active (`M31-F`).
+- M31 closure report enforcement is active (`M31-G`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -4933,8 +4935,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M31 transition handoff packet added.
 - [x] Naming-lock CI and closure gate updated (`M31-F`).
 
+### M31-S7 closure report acceptance criteria
+- Closure report script consumes strict closure gates + M31 handoff packet summary and computes deterministic `overall` + `nextAction`.
+- Required gates `M31-A..M31-F` are validated in one canonical closure artifact (`m31Gates[]`).
+- Closure audit includes dedicated `M31-G` gate.
+
+### M31-S7 tracking (live status)
+- [x] M31 closure report script added.
+- [x] M31 closure report contract test added.
+- [x] Book chapter documenting M31 closure report added.
+- [x] Naming-lock CI and closure gate updated (`M31-G`).
+
 ### Next planned slice
-- M31-S7 closure report + closure gate `M31-G`.
+- M32-S1 kickoff brief + closure gate `M32-A`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5026,8 +5039,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M31-S7 closure report from strict closure gates + M31 handoff packet summary and wire `M31-G`.
-2. Run full strict closure audit and finalize M31 loop handoff.
+1. Implement M32-S1 kickoff brief from M31 closure report + M31 handoff packet and wire `M32-A`.
+2. Run full strict closure audit and finalize M31->M32 handoff.
 
 ---
 
