@@ -3239,7 +3239,7 @@ fn cmd_build(
                 if locked {
                     println!("verified lockfile: {}", path.join("sec4.lock").display());
                 } else {
-                    println!("wrote lockfile stub: {}", path.join("sec4.lock").display());
+                    println!("wrote lockfile: {}", path.join("sec4.lock").display());
                 }
                 println!("wrote build metadata: {}", build_metadata_path.display());
                 if let Some(sbom_path) = sbom_path {

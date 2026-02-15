@@ -1,5 +1,6 @@
 use sec4_core::{
-    validate_project, write_build_metadata, write_lockfile_stub, write_sbom, BuildMetadata,
+    validate_lockfile_stub, validate_project, write_build_metadata, write_lockfile_stub,
+    write_sbom, BuildMetadata,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -80,6 +81,137 @@ fn write_sbom_is_deterministic_for_same_metadata() {
     let second_path = write_sbom(&project_dir, &metadata).expect("second sbom should be written");
     let second = fs::read_to_string(&second_path).expect("second sbom should be readable");
     assert_eq!(first, second, "sbom content should be deterministic");
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lockfile_writes_sorted_dependency_entries_with_hashes() {
+    let project_dir = temp_dir("sec4-core-lock-sorted-deps");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "lock_sorted"
+version = "0.1.0"
+
+[dependencies]
+zlib = "2.0.0"
+alpha = "1.0.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let manifest = validate_project(&project_dir).expect("project should validate");
+    write_lockfile_stub(&project_dir, &manifest).expect("lockfile should be written");
+    let lock_path = project_dir.join("sec4.lock");
+    let first = fs::read_to_string(&lock_path).expect("first lockfile should be readable");
+    write_lockfile_stub(&project_dir, &manifest).expect("lockfile should be rewritten");
+    let second = fs::read_to_string(&lock_path).expect("second lockfile should be readable");
+
+    assert_eq!(first, second, "lockfile content should be deterministic");
+    assert!(
+        first.contains("[package]"),
+        "lockfile should include package table"
+    );
+    assert!(
+        first.contains("hash = \"pkg_"),
+        "lockfile should include package hash field:\n{first}"
+    );
+    assert_eq!(
+        first.matches("[[dependency]]").count(),
+        2,
+        "lockfile should include one block per dependency:\n{first}"
+    );
+    assert_eq!(
+        first.matches("hash = \"dep_").count(),
+        2,
+        "lockfile should include dependency hash fields:\n{first}"
+    );
+    let alpha_pos = first
+        .find("name = \"alpha\"")
+        .expect("alpha dependency should be present");
+    let zlib_pos = first
+        .find("name = \"zlib\"")
+        .expect("zlib dependency should be present");
+    assert!(
+        alpha_pos < zlib_pos,
+        "dependencies should be rendered in deterministic sorted order:\n{first}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lockfile_validation_reports_manifest_dependency_mismatch() {
+    let project_dir = temp_dir("sec4-core-lock-dep-mismatch");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "lock_mismatch"
+version = "0.1.0"
+
+[dependencies]
+alpha = "1.0.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let manifest = validate_project(&project_dir).expect("project should validate");
+    write_lockfile_stub(&project_dir, &manifest).expect("lockfile should be written");
+
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "lock_mismatch"
+version = "0.1.0"
+
+[dependencies]
+alpha = "2.0.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("updated manifest should be written");
+    let stale_manifest =
+        validate_project(&project_dir).expect("updated project should still validate");
+    let diagnostic =
+        validate_lockfile_stub(&project_dir, &stale_manifest).expect_err("stale lock should fail");
+
+    assert_eq!(diagnostic.code, "M0203");
+    assert!(
+        diagnostic
+            .message
+            .contains("package/build/dependency state"),
+        "diagnostic message should explain strict locked validation:\n{}",
+        diagnostic.message
+    );
+    assert!(
+        diagnostic
+            .notes
+            .iter()
+            .any(|note| note.contains("first lockfile mismatch at line")),
+        "diagnostic notes should include a clear mismatch location:\n{:?}",
+        diagnostic.notes
+    );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
