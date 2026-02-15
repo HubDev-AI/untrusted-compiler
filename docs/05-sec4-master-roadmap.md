@@ -51,6 +51,65 @@ Roadmap impact:
 - M13 operational confidence closure gates are green.
 - M13 trend-note update flow now supports local compare-matrix fallback:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
+- Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
+- Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
+
+## No-Stub Alpha Readiness (2026-02-15)
+
+This section is the canonical plan for determining when v0.1-alpha is ready as a "no-stub" runtime/compiler release.
+
+### Definition of done (no-stub alpha)
+
+No-stub alpha is considered ready only when all items below are true:
+
+1. `sec4 init/check/build/run/test/fmt/lint/audit/replay` are implemented with real deterministic behavior (no placeholder return-paths for supported flows).
+2. Runtime HTTP path is end-to-end real for:
+   - request parsing + routing + response emission,
+   - JSON request/response envelopes,
+   - middleware enforcement branches (cors/security headers/csrf/auth),
+   - stable standard error envelope behavior.
+3. Runtime security primitives are real for supported v0.1 scope:
+   - URL gates (`url.public`/`url.internal`) with policy-driven checks,
+   - FS base containment enforcement,
+   - secret get/redact/reveal policy behavior,
+   - constant-time compare path for secrets.
+4. Runtime outbound net behavior covers policy-driven scheme/domain/port checks, timeout/body limits, and redirect handling contract.
+5. Policy parser/model/runtime bridge parity exists for active keys used by compiler/runtime.
+6. Alpha smoke + targeted runtime harness tests pass on `main` without requiring branch-local patches.
+
+### Readiness estimate (live)
+
+- Runnable alpha (end-to-end): ~85-88%
+- Strict no-stub alpha: ~70-75%
+
+### Remaining implementation slices (priority order)
+
+1. Runtime JSON decode/encode semantic hardening (reduce bridge-only behavior and enforce schema-oriented contract where supported by v0.1 runtime ABI).
+2. Middleware policy materialization hardening (`fromPolicy` + `with*` paths) beyond token-level toggles.
+3. Structured runtime log emission path (not only handle construction), including deterministic redaction-safe serialization.
+4. Final alpha no-stub verification pass and publish checklist update.
+
+## M37 - No-Stub Alpha Sprint (In Progress)
+
+### Goal
+
+- Finish implementation-first de-stubbing required for no-stub alpha readiness.
+
+### M37-S1 redirect + policy parity hardening acceptance criteria
+
+- Policy model persists active runtime keys: `json.max_bytes`, `json.max_depth`, `net.public.max_redirects`.
+- Runtime outbound net path supports deterministic redirect policy behavior with explicit failure codes for:
+  - redirect forbidden,
+  - redirect limit exceeded,
+  - invalid redirect location.
+- Runtime harness coverage validates redirect denied-by-default, allowed-with-env, and redirect-limit failure paths.
+
+### M37-S1 tracking (live status)
+
+- [x] Policy model/parsing persistence for `json.max_bytes`, `json.max_depth`, `net.public.max_redirects` implemented.
+- [x] Runtime redirect handling implemented for outbound public/internal GET intrinsics.
+- [x] Clang-gated redirect runtime tests added and passing.
+- [x] Book chapter documenting M37-S1 implementation added.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5361,7 +5420,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S1 kickoff brief + closure gate `M37-A`.
+- M37-S2 runtime JSON semantic hardening (implementation-first).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5453,8 +5512,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M37-S1 kickoff brief and wire `M37-A`.
-2. Run full strict closure audit and publish M37-S1 status after `M37-A`.
+1. Complete M37-S2 runtime JSON semantic hardening for decode/encode contract paths.
+2. Complete M37-S3 middleware policy materialization hardening.
+3. Complete M37-S4 structured runtime log emission path and run full alpha smoke + targeted runtime harness verification on `main`.
 
 ---
 

@@ -581,5 +581,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `609-m36-executed-slice-convergence-summary.md`
 - `610-m36-transition-handoff-packet.md`
 - `611-m36-closure-report.md`
+- `612-no-stub-alpha-readiness-plan.md`
+- `613-m37-redirect-and-policy-parity-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
