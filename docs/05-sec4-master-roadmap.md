@@ -473,6 +473,7 @@ Current strict closure result:
 | `M33-E` | PASS | Naming-lock CI enforces M33 executed-slice convergence summary | `.github/workflows/naming-lock.yml` |
 | `M33-F` | PASS | Naming-lock CI enforces M33 transition handoff packet | `.github/workflows/naming-lock.yml` |
 | `M33-G` | PASS | Naming-lock CI enforces M33 closure report | `.github/workflows/naming-lock.yml` |
+| `M34-A` | PASS | Naming-lock CI enforces M34 kickoff brief | `.github/workflows/naming-lock.yml` |
 
 Strict closure interpretation:
 - M11 and M12 are complete for current scope.
@@ -615,6 +616,7 @@ Strict closure interpretation:
 - M33 executed-slice convergence summary enforcement is active (`M33-E`).
 - M33 transition handoff packet enforcement is active (`M33-F`).
 - M33 closure report enforcement is active (`M33-G`).
+- M34 kickoff brief enforcement is active (`M34-A`).
 
 Historical implementation bullets below are retained as build history; strict gate status above is the closure source of truth.
 
@@ -5151,8 +5153,24 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M33 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M33-G`).
 
+## M34 - Runtime-First Stabilization Loop (In Progress)
+
+### Goal
+- Start M34 from deterministic M33 closure evidence and continue runtime-first stabilization with strict closure-gated slices.
+
+### M34-S1 kickoff brief acceptance criteria
+- Kickoff brief script consumes M33 closure report + M33 transition packet artifacts and emits deterministic markdown/json output.
+- Script auto-generates missing M33 closure report JSON from `build-m33-closure-report.sh`.
+- Closure audit includes dedicated `M34-A` gate.
+
+### M34-S1 tracking (live status)
+- [x] M34 kickoff brief script added.
+- [x] M34 kickoff brief contract test added.
+- [x] Book chapter documenting M34 kickoff brief added.
+- [x] Naming-lock CI and closure gate updated (`M34-A`).
+
 ### Next planned slice
-- M34-S1 kickoff brief + closure gate `M34-A`.
+- M34-S2 priority matrix + closure gate `M34-B`.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5244,8 +5262,8 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Implement M34-S1 kickoff brief from M33 closure + transition packet artifacts and wire `M34-A`.
-2. Run full strict closure audit and publish M33 closure handoff packet.
+1. Implement M34-S2 priority matrix from M34 kickoff artifact and wire `M34-B`.
+2. Run full strict closure audit and publish M34 handoff status after `M34-B`.
 
 ---
 
