@@ -37,6 +37,8 @@ enum Commands {
         locked: bool,
         #[arg(long, default_value_t = false)]
         sbom: bool,
+        #[arg(long, value_enum, default_value_t = BuildTlsBackend::None)]
+        tls_backend: BuildTlsBackend,
     },
     Init {
         #[arg(long, default_value = ".")]
@@ -140,6 +142,12 @@ enum BuildEmitTarget {
     MirJson,
     C,
     CBin,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum BuildTlsBackend {
+    None,
+    Openssl,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -292,7 +300,8 @@ fn main() {
             emit,
             locked,
             sbom,
-        } => cmd_build(&path, emit, locked, sbom),
+            tls_backend,
+        } => cmd_build(&path, emit, locked, sbom, tls_backend),
         Commands::Init { path, name } => cmd_init(&path, name.as_deref()),
         Commands::Check { path, emit } => cmd_check(&path, emit),
         Commands::Run {
@@ -3159,6 +3168,7 @@ fn cmd_build(
     emit: Option<BuildEmitTarget>,
     locked: bool,
     sbom: bool,
+    tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
     let mir_json_mode = matches!(emit, Some(BuildEmitTarget::MirJson));
     match sec4_core::validate_project(path) {
@@ -3281,6 +3291,7 @@ fn cmd_build(
                         backend_emit
                             .as_ref()
                             .expect("backend output should be available for c-bin emit target"),
+                        tls_backend,
                     )?;
                     println!("generated c source: {}", c_path.display());
                     println!("compiled binary: {}", bin_path.display());
@@ -3300,6 +3311,7 @@ fn compile_c_binary(
     project_root: &Path,
     package_name: &str,
     backend_emit: &BackendEmitOutput,
+    tls_backend: BuildTlsBackend,
 ) -> Result<(PathBuf, PathBuf), i32> {
     let build_dir = project_root.join("build");
     if let Err(err) = fs::create_dir_all(&build_dir) {
@@ -3343,17 +3355,23 @@ fn compile_c_binary(
     }
 
     let binary_path = build_dir.join(package_name);
-    let output = match Command::new("clang")
+    let mut clang = Command::new("clang");
+    clang
         .arg(&c_path)
         .arg(&runtime_source_path)
         .arg("-std=c11")
         .arg("-O2")
         .arg("-I")
-        .arg(&build_dir)
-        .arg("-o")
-        .arg(&binary_path)
-        .output()
-    {
+        .arg(&build_dir);
+    if tls_backend == BuildTlsBackend::Openssl {
+        clang.arg("-DSEC4_RT_ENABLE_OPENSSL_TLS");
+    }
+    clang.arg("-o").arg(&binary_path);
+    if tls_backend == BuildTlsBackend::Openssl {
+        clang.arg("-lssl").arg("-lcrypto");
+    }
+
+    let output = match clang.output() {
         Ok(output) => output,
         Err(err) => {
             eprintln!("could not execute clang: {err}");
@@ -3364,6 +3382,11 @@ fn compile_c_binary(
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
+        if tls_backend == BuildTlsBackend::Openssl {
+            eprintln!(
+                "TLS backend linkage failed for `--tls-backend openssl`: clang could not compile/link OpenSSL runtime (`-DSEC4_RT_ENABLE_OPENSSL_TLS -lssl -lcrypto`)"
+            );
+        }
         eprintln!("clang failed while compiling `{}`", c_path.display());
         if !stdout.trim().is_empty() {
             eprintln!("{stdout}");
@@ -3439,7 +3462,13 @@ fn cmd_run(
         }
     };
 
-    cmd_build(path, Some(BuildEmitTarget::CBin), false, false)?;
+    cmd_build(
+        path,
+        Some(BuildEmitTarget::CBin),
+        false,
+        false,
+        BuildTlsBackend::None,
+    )?;
 
     let binary_path = path.join("build").join(&manifest.package.name);
     let mut cmd = Command::new(&binary_path);
@@ -3685,7 +3714,12 @@ fn compile_and_execute_test_entry(
     let mir = sec4_core::lower_program_to_mir(program);
     let backend_emit = emit_program_with_backend(BackendKind::C, &mir);
     let binary_name = format!("sec4-test-{:04}", test_index + 1);
-    let (_, binary_path) = match compile_c_binary(project_root, &binary_name, &backend_emit) {
+    let (_, binary_path) = match compile_c_binary(
+        project_root,
+        &binary_name,
+        &backend_emit,
+        BuildTlsBackend::None,
+    ) {
         Ok(paths) => paths,
         Err(code) => {
             eprintln!("test runtime compile failed for `{}`", test_entry.display());

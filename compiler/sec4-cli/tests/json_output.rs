@@ -48,6 +48,46 @@ fn temp_dir(prefix: &str) -> PathBuf {
     path
 }
 
+fn clang_with_openssl_available() -> bool {
+    if !clang_available() {
+        return false;
+    }
+
+    let probe_dir = temp_dir("sec4-clang-openssl-probe");
+    let probe_source = probe_dir.join("probe.c");
+    let probe_binary = probe_dir.join("probe");
+    if fs::write(
+        &probe_source,
+        r#"#include <openssl/ssl.h>
+
+int main(void) {
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (ctx != NULL) {
+    SSL_CTX_free(ctx);
+  }
+  return 0;
+}
+"#,
+    )
+    .is_err()
+    {
+        return false;
+    }
+
+    Command::new("clang")
+        .arg(&probe_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-DSEC4_RT_ENABLE_OPENSSL_TLS")
+        .arg("-o")
+        .arg(&probe_binary)
+        .arg("-lssl")
+        .arg("-lcrypto")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 fn find_available_tcp_port() -> u16 {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("ephemeral tcp bind should work");
     listener
@@ -4512,6 +4552,57 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
     assert!(
         run.status.success(),
         "compiled binary should exit successfully"
+    );
+}
+
+#[test]
+fn build_emit_c_bin_compiles_with_openssl_tls_backend_when_toolchain_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin openssl tls-backend test: clang not available");
+        return;
+    }
+    if !clang_with_openssl_available() {
+        eprintln!(
+            "skipping c-bin openssl tls-backend test: OpenSSL headers/libs not available to clang"
+        );
+        return;
+    }
+
+    let hello_path = workspace_root().join("examples/hello");
+    let hello = hello_path
+        .to_str()
+        .expect("example path should be valid utf-8");
+
+    let output = run_cli(&[
+        "build",
+        "--path",
+        hello,
+        "--emit",
+        "c-bin",
+        "--tls-backend",
+        "openssl",
+    ]);
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        output.status.success(),
+        "expected success status for openssl tls backend build, stderr={stderr}"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("compiled binary:"),
+        "build output should include compiled binary location for openssl tls backend"
+    );
+    assert!(
+        !stderr.contains("TLS backend linkage failed"),
+        "openssl build should not emit linkage failure diagnostic when toolchain is present"
+    );
+
+    let binary_path = hello_path.join("build").join("hello");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for openssl tls backend build"
     );
 }
 

@@ -17,6 +17,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef SEC4_RT_ENABLE_OPENSSL_TLS
+#include <openssl/ssl.h>
+#endif
+
 #define SEC4_RT_MAX_ROUTERS 16
 #define SEC4_RT_MAX_ROUTES 64
 #define SEC4_RT_MAX_PATH_BYTES 256
@@ -850,6 +854,50 @@ static bool sec4_rt_parse_outbound_http_url(
   return true;
 }
 
+static int sec4_rt_build_outbound_http_request(
+    const char *host,
+    uint16_t port,
+    bool is_https,
+    const char *target,
+    size_t target_len,
+    char *request,
+    size_t request_size
+) {
+  if (host == NULL || host[0] == '\0' || target == NULL || request == NULL || request_size < 2) {
+    return -1;
+  }
+
+  char host_header[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES + 8];
+  int host_header_len = 0;
+  bool use_default_port = (is_https && port == 443) || (!is_https && port == 80);
+  if (use_default_port) {
+    host_header_len = snprintf(host_header, sizeof(host_header), "%s", host);
+  } else {
+    host_header_len = snprintf(host_header, sizeof(host_header), "%s:%u", host, (unsigned int) port);
+  }
+  if (host_header_len <= 0 || (size_t) host_header_len >= sizeof(host_header)) {
+    return -1;
+  }
+
+  int request_len = snprintf(
+      request,
+      request_size,
+      "GET %.*s HTTP/1.1\r\n"
+      "Host: %s\r\n"
+      "Connection: close\r\n"
+      "Accept: */*\r\n"
+      "\r\n",
+      (int) target_len,
+      target,
+      host_header
+  );
+  if (request_len <= 0 || (size_t) request_len >= request_size) {
+    return -1;
+  }
+
+  return request_len;
+}
+
 static int64_t sec4_rt_outbound_http_timeout_ms(void) {
   int64_t timeout_ms = sec4_rt_parse_env_i64(
       "SEC4_RT_NET_TIMEOUT_MS",
@@ -995,6 +1043,51 @@ static int sec4_rt_open_outbound_tcp_socket(
   return socket_fd;
 }
 
+static int sec4_rt_extract_outbound_http_body(
+    const char *response,
+    size_t total,
+    char *body,
+    size_t body_size,
+    size_t max_body_bytes,
+    size_t *body_len
+) {
+  if (response == NULL || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
+    return -1;
+  }
+
+  if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
+    return -3;
+  }
+
+  const char *headers_end = strstr(response, "\r\n\r\n");
+  if (headers_end == NULL) {
+    return -3;
+  }
+
+  size_t header_bytes = (size_t) (headers_end - response) + 4;
+  if (header_bytes > total) {
+    return -3;
+  }
+  if (header_bytes > SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
+    return -2;
+  }
+
+  size_t payload_bytes = total - header_bytes;
+  if (payload_bytes > max_body_bytes) {
+    return -2;
+  }
+  if (payload_bytes >= body_size) {
+    return -5;
+  }
+
+  if (payload_bytes > 0) {
+    memcpy(body, response + header_bytes, payload_bytes);
+  }
+  body[payload_bytes] = '\0';
+  *body_len = payload_bytes;
+  return 0;
+}
+
 static int sec4_rt_read_outbound_http_body(
     int socket_fd,
     char *body,
@@ -1044,44 +1137,307 @@ static int sec4_rt_read_outbound_http_body(
   }
 
   response[total] = '\0';
-  if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
-    free(response);
-    return -3;
-  }
-
-  char *headers_end = strstr(response, "\r\n\r\n");
-  if (headers_end == NULL) {
-    free(response);
-    return -3;
-  }
-
-  size_t header_bytes = (size_t) (headers_end - response) + 4;
-  if (header_bytes > total) {
-    free(response);
-    return -3;
-  }
-  if (header_bytes > SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
-    free(response);
-    return -2;
-  }
-
-  size_t payload_bytes = total - header_bytes;
-  if (payload_bytes > max_body_bytes) {
-    free(response);
-    return -2;
-  }
-  if (payload_bytes >= body_size) {
-    free(response);
-    return -5;
-  }
-
-  if (payload_bytes > 0) {
-    memcpy(body, response + header_bytes, payload_bytes);
-  }
-  body[payload_bytes] = '\0';
-  *body_len = payload_bytes;
+  int extract_status = sec4_rt_extract_outbound_http_body(
+      response,
+      total,
+      body,
+      body_size,
+      max_body_bytes,
+      body_len
+  );
   free(response);
+  return extract_status;
+}
+
+#ifdef SEC4_RT_ENABLE_OPENSSL_TLS
+static int sec4_rt_ssl_write_all(SSL *ssl, const char *buffer, size_t size) {
+  if (ssl == NULL || buffer == NULL) {
+    return -1;
+  }
+
+  size_t written = 0;
+  while (written < size) {
+    int chunk_size = (int) (size - written);
+    int rc = SSL_write(ssl, buffer + written, chunk_size);
+    if (rc > 0) {
+      written += (size_t) rc;
+      continue;
+    }
+
+    int ssl_error = SSL_get_error(ssl, rc);
+    if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE) {
+      continue;
+    }
+    return -1;
+  }
   return 0;
+}
+
+static int sec4_rt_read_outbound_https_body(
+    SSL *ssl,
+    char *body,
+    size_t body_size,
+    size_t max_body_bytes,
+    size_t *body_len
+) {
+  if (ssl == NULL || body == NULL || body_size == 0 || body_len == NULL || max_body_bytes == 0) {
+    return -1;
+  }
+  body[0] = '\0';
+  *body_len = 0;
+
+  size_t response_capacity = max_body_bytes + SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES + 1;
+  if (response_capacity <= max_body_bytes || response_capacity <= SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
+    return -1;
+  }
+
+  char *response = (char *) malloc(response_capacity);
+  if (response == NULL) {
+    return -1;
+  }
+
+  size_t total = 0;
+  while (total < response_capacity - 1) {
+    int chunk_size = (int) (response_capacity - 1 - total);
+    int bytes_read = SSL_read(ssl, response + total, chunk_size);
+    if (bytes_read > 0) {
+      total += (size_t) bytes_read;
+      continue;
+    }
+    if (bytes_read == 0) {
+      break;
+    }
+
+    int ssl_error = SSL_get_error(ssl, bytes_read);
+    if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE) {
+      continue;
+    }
+    if (ssl_error == SSL_ERROR_SYSCALL
+        && (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT)) {
+      free(response);
+      return -4;
+    }
+    free(response);
+    return -1;
+  }
+
+  if (total == response_capacity - 1) {
+    free(response);
+    return -2;
+  }
+
+  response[total] = '\0';
+  int extract_status = sec4_rt_extract_outbound_http_body(
+      response,
+      total,
+      body,
+      body_size,
+      max_body_bytes,
+      body_len
+  );
+  free(response);
+  return extract_status;
+}
+
+static int64_t sec4_rt_outbound_https_get_handle(
+    int socket_fd,
+    const char *host,
+    const char *request,
+    size_t request_len,
+    size_t max_body_bytes,
+    uint64_t salt
+) {
+  if (socket_fd < 0 || host == NULL || request == NULL || request_len == 0) {
+    return 0;
+  }
+
+  SSL_CTX *ssl_ctx = SSL_CTX_new(TLS_client_method());
+  if (ssl_ctx == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TLS_INIT_FAILED",
+        "internal",
+        "failed to initialize tls backend for outbound request"
+    );
+    return 0;
+  }
+  SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, NULL);
+
+  SSL *ssl = SSL_new(ssl_ctx);
+  if (ssl == NULL) {
+    SSL_CTX_free(ssl_ctx);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TLS_INIT_FAILED",
+        "internal",
+        "failed to initialize tls backend for outbound request"
+    );
+    return 0;
+  }
+
+  bool handshake_complete = false;
+  if (SSL_set_fd(ssl, socket_fd) != 1 || SSL_set_tlsext_host_name(ssl, host) != 1) {
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TLS_HANDSHAKE_FAILED",
+        "internal",
+        "failed to complete outbound tls handshake"
+    );
+    return 0;
+  }
+
+  if (SSL_connect(ssl) != 1) {
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TLS_HANDSHAKE_FAILED",
+        "internal",
+        "failed to complete outbound tls handshake"
+    );
+    return 0;
+  }
+  handshake_complete = true;
+
+  if (sec4_rt_ssl_write_all(ssl, request, request_len) != 0) {
+    if (handshake_complete) {
+      (void) SSL_shutdown(ssl);
+    }
+    SSL_free(ssl);
+    SSL_CTX_free(ssl_ctx);
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.REQUEST_IO_FAILED",
+        "internal",
+        "failed to send outbound request"
+    );
+    return 0;
+  }
+
+  char body[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t body_len = 0;
+  int read_status = sec4_rt_read_outbound_https_body(
+      ssl,
+      body,
+      sizeof(body),
+      max_body_bytes,
+      &body_len
+  );
+  if (handshake_complete) {
+    (void) SSL_shutdown(ssl);
+  }
+  SSL_free(ssl);
+  SSL_CTX_free(ssl_ctx);
+
+  if (read_status != 0) {
+    if (read_status == -2) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.RESPONSE_TOO_LARGE",
+          "validation",
+          "outbound http response body exceeds runtime max body limit"
+      );
+      return 0;
+    }
+    if (read_status == -4) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.READ_TIMEOUT",
+          "timeout",
+          "outbound http response read timed out"
+      );
+      return 0;
+    }
+    if (read_status == -5) {
+      sec4_rt_store_std_error_response(
+          500,
+          "NET.RESPONSE_TRACK_FAILED",
+          "internal",
+          "outbound http response exceeds runtime tracked value limits"
+      );
+      return 0;
+    }
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_INVALID",
+        "internal",
+        "failed to read outbound http response"
+    );
+    return 0;
+  }
+
+  int64_t handle = sec4_rt_track_sized_value(body, body_len, salt);
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TRACK_FAILED",
+        "internal",
+        "failed to track outbound http response body"
+    );
+    return 0;
+  }
+  return handle;
+}
+#endif
+
+static bool sec4_rt_store_outbound_http_read_error(int read_status) {
+  if (read_status == 0) {
+    return false;
+  }
+  if (read_status == -2) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TOO_LARGE",
+        "validation",
+        "outbound http response body exceeds runtime max body limit"
+    );
+    return true;
+  }
+  if (read_status == -4) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.READ_TIMEOUT",
+        "timeout",
+        "outbound http response read timed out"
+    );
+    return true;
+  }
+  if (read_status == -5) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TRACK_FAILED",
+        "internal",
+        "outbound http response exceeds runtime tracked value limits"
+    );
+    return true;
+  }
+  sec4_rt_store_std_error_response(
+      500,
+      "NET.RESPONSE_INVALID",
+      "internal",
+      "failed to read outbound http response"
+  );
+  return true;
+}
+
+static int64_t sec4_rt_track_outbound_http_body_handle(
+    const char *body,
+    size_t body_len,
+    uint64_t salt
+) {
+  int64_t handle = sec4_rt_track_sized_value(body, body_len, salt);
+  if (handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_TRACK_FAILED",
+        "internal",
+        "failed to track outbound http response body"
+    );
+    return 0;
+  }
+  return handle;
 }
 
 static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t salt) {
@@ -1117,6 +1473,7 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     return 0;
   }
 
+#if !defined(SEC4_RT_ENABLE_OPENSSL_TLS)
   if (is_https) {
     sec4_rt_store_std_error_response(
         501,
@@ -1126,7 +1483,8 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     );
     return 0;
   }
-  if (!is_http) {
+#endif
+  if (!(is_http || is_https)) {
     sec4_rt_store_std_error_response(
         400,
         "NET.URL_SCHEME_INVALID",
@@ -1136,19 +1494,22 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     return 0;
   }
 
-  char host_header[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES + 8];
-  int host_header_len = 0;
-  if (port == 80) {
-    host_header_len = snprintf(host_header, sizeof(host_header), "%s", host);
-  } else {
-    host_header_len = snprintf(host_header, sizeof(host_header), "%s:%u", host, (unsigned int) port);
-  }
-  if (host_header_len <= 0 || (size_t) host_header_len >= sizeof(host_header)) {
+  char request[SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES];
+  int request_len = sec4_rt_build_outbound_http_request(
+      host,
+      port,
+      is_https,
+      target,
+      target_len,
+      request,
+      sizeof(request)
+  );
+  if (request_len <= 0) {
     sec4_rt_store_std_error_response(
         500,
         "NET.REQUEST_BUILD_FAILED",
         "internal",
-        "failed to construct outbound request host header"
+        "failed to construct outbound request payload"
     );
     return 0;
   }
@@ -1174,29 +1535,20 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
     return 0;
   }
 
-  char request[SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES];
-  int request_len = snprintf(
-      request,
-      sizeof(request),
-      "GET %.*s HTTP/1.1\r\n"
-      "Host: %s\r\n"
-      "Connection: close\r\n"
-      "Accept: */*\r\n"
-      "\r\n",
-      (int) target_len,
-      target,
-      host_header
-  );
-  if (request_len <= 0 || (size_t) request_len >= sizeof(request)) {
-    close(socket_fd);
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.REQUEST_BUILD_FAILED",
-        "internal",
-        "failed to construct outbound request payload"
+#ifdef SEC4_RT_ENABLE_OPENSSL_TLS
+  if (is_https) {
+    int64_t https_handle = sec4_rt_outbound_https_get_handle(
+        socket_fd,
+        host,
+        request,
+        (size_t) request_len,
+        max_body_bytes,
+        salt
     );
-    return 0;
+    close(socket_fd);
+    return https_handle;
   }
+#endif
 
   if (sec4_rt_write_all(socket_fd, request, (size_t) request_len) != 0) {
     close(socket_fd);
@@ -1219,54 +1571,11 @@ static int64_t sec4_rt_outbound_http_get_handle(const char *url_value, uint64_t 
       &body_len
   );
   close(socket_fd);
-  if (read_status == -2) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_TOO_LARGE",
-        "validation",
-        "outbound http response body exceeds runtime max body limit"
-    );
-    return 0;
-  }
-  if (read_status == -4) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.READ_TIMEOUT",
-        "timeout",
-        "outbound http response read timed out"
-    );
-    return 0;
-  }
-  if (read_status == -5) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_TRACK_FAILED",
-        "internal",
-        "outbound http response exceeds runtime tracked value limits"
-    );
-    return 0;
-  }
-  if (read_status != 0) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_INVALID",
-        "internal",
-        "failed to read outbound http response"
-    );
+  if (sec4_rt_store_outbound_http_read_error(read_status)) {
     return 0;
   }
 
-  int64_t handle = sec4_rt_track_sized_value(body, body_len, salt);
-  if (handle == 0) {
-    sec4_rt_store_std_error_response(
-        500,
-        "NET.RESPONSE_TRACK_FAILED",
-        "internal",
-        "failed to track outbound http response body"
-    );
-    return 0;
-  }
-  return handle;
+  return sec4_rt_track_outbound_http_body_handle(body, body_len, salt);
 }
 
 static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
