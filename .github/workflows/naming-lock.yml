@@ -403,6 +403,9 @@ jobs:
       - name: Validate M32 kickoff brief
         run: scripts/test-generate-m32-kickoff-brief.sh
 
+      - name: Validate M32 priority matrix
+        run: scripts/test-build-m32-priority-matrix.sh
+
       - name: Validate alpha release workflow contract
         run: scripts/test-alpha-release-workflow-contract.sh
 
