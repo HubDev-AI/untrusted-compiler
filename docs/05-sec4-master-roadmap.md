@@ -2466,6 +2466,25 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S113 CORS preflight private-network explicit opt-in allow-path hardening acceptance criteria
+
+- Runtime CORS preflight handling allows `Access-Control-Request-Private-Network: true` only when explicit policy/env opt-in is enabled.
+- Allowed private-network preflight responses include `Access-Control-Allow-Private-Network: true`.
+- Default behavior remains deny (`403`) when opt-in is not enabled.
+
+### M38-S113 tracking (live status)
+
+- [x] Added CORS policy/env bridge key `SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK` (default `false`).
+- [x] Added preflight allow path for private-network requests when opt-in is enabled.
+- [x] Added `Access-Control-Allow-Private-Network: true` materialization for allowed preflight responses.
+- [x] Added HTTP runtime CORS private-network preflight allow-path e2e coverage:
+  - `c_bin_http_runtime_allows_cors_preflight_with_private_network_header_when_policy_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_private_network_header_when_policy_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
