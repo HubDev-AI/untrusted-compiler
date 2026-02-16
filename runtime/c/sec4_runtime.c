@@ -7005,11 +7005,29 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         requested_method,
         sizeof(requested_method)
     );
+    if (!has_requested_method) {
+      const char *body = "cors preflight missing requested method";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     const char *allow_methods = router->cors_allow_methods[0] != '\0'
         ? router->cors_allow_methods
         : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
-    if (has_requested_method
-        && !sec4_rt_csv_contains_token_ci(
+    if (!sec4_rt_csv_contains_token_ci(
             allow_methods,
             requested_method,
             strlen(requested_method)

@@ -2048,6 +2048,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S90 CORS preflight missing requested-method rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that omit `Access-Control-Request-Method`.
+- Missing requested-method preflight requests deterministically return `400` with explicit diagnostics.
+- Valid preflight requests containing requested method continue to use existing allow/deny method enforcement behavior.
+
+### M38-S90 tracking (live status)
+
+- [x] Added explicit runtime preflight guard for missing `Access-Control-Request-Method`.
+- [x] Added deterministic missing-method rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight missing-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
