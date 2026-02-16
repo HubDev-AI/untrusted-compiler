@@ -14,6 +14,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Run M17 operator handoff CI smoke wrapper
         run: scripts/run-m17-operator-handoff-ci-smoke.sh --artifacts-root build/operator-handoff-smoke
 
