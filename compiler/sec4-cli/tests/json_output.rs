@@ -13983,6 +13983,104 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime direct wrapper malformed-target parity test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-direct-wrapper-target-parser-parity");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-direct-wrapper-target-parser-parity");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+static int assert_target_invalid_for_sink(bool internal_sink, const char *raw_url, int base) {
+  int64_t handle = sec4_rt_req_query(raw_url);
+  if (handle == 0) { return base + 1; }
+  if (internal_sink) {
+    if (sec4_rt_http_get_internal(1, handle) != 0) { return base + 2; }
+  } else {
+    if (sec4_rt_http_get(1, handle) != 0) { return base + 2; }
+  }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_TARGET_INVALID\"") == NULL) { return base + 3; }
+  if (strstr(g_sec4_rt_response.body, "\"key\":\"phase\",\"value\":\"parse\"") == NULL) { return base + 4; }
+  if (strstr(g_sec4_rt_response.body, "\"key\":\"component\",\"value\":\"target\"") == NULL) { return base + 5; }
+  return 0;
+}
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_MALFORMED_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int public_result = assert_target_invalid_for_sink(false, raw_url, 10);
+  if (public_result != 0) { return public_result; }
+
+  int internal_result = assert_target_invalid_for_sink(true, raw_url, 20);
+  if (internal_result != 0) { return internal_result; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for direct wrapper malformed-target parity harness");
+    assert!(
+        output.status.success(),
+        "runtime direct wrapper malformed-target parity harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let malformed_cases = [
+        "http://127.0.0.1/path#frag",
+        "http://127.0.0.1/path\r\nx-test: 1",
+        "http://127.0.0.1/?ok=1#tail",
+    ];
+
+    for malformed_url in malformed_cases {
+        let run = Command::new(&binary_path)
+            .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+            .env("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS", "0")
+            .env("SEC4_RT_NET_SSRF_RESOLVE_DNS", "0")
+            .env("SEC4_RT_TEST_MALFORMED_URL", malformed_url)
+            .output()
+            .expect("compiled binary should run");
+        assert!(
+            run.status.success(),
+            "runtime direct wrapper malformed-target parity harness should exit successfully for malformed url {malformed_url:?}"
+        );
+    }
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");

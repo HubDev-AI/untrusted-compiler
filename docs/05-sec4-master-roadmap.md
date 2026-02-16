@@ -1087,6 +1087,27 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage acceptance criteria
+
+- Direct malformed-input wrapper calls (`sec4_rt_http_get` and `sec4_rt_http_get_internal`) emit the same parser-class diagnostic contract when malformed target tokens bypass URL gate checks.
+- Public/internal sink bridge paths preserve deterministic parser detail payloads:
+  - `phase=parse`
+  - `component=target`
+- Runtime harness includes one direct-wrapper parity test that asserts parser diagnostics for multiple malformed target shapes without redirect indirection.
+
+### M38-S49 tracking (live status)
+
+- [x] Added direct wrapper malformed-target parity harness:
+  - `c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic parser diagnostics parity on both sinks for malformed target inputs:
+  - fragment target (`#`)
+  - CRLF target contamination
+  - query + fragment target
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_rejects_invalid_url_or_untracked_handles_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6399,7 +6420,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` direct malformed-input bridge assertions).
+- M38-S50 outbound HTTP wrapper invalid-url pre-parser diagnostics parity coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` deterministic wrapper-envelope assertions before outbound parser path).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6491,9 +6512,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S49 scope for direct malformed-input sink-bridge parity between public/internal net wrappers.
-2. Extend runtime harness with direct sink-bridge assertions for malformed inputs at wrapper boundary (`http_get` vs `http_get_internal`).
-3. Publish M38-S49 book chapter and refresh roadmap live-status counts.
+1. Add M38-S50 scope for wrapper-level invalid-url parity between public/internal net sinks before outbound parser path.
+2. Extend runtime harness with direct wrapper assertions that lock deterministic invalid-url envelope behavior (`NET.URL_PUBLIC_INVALID` vs `NET.URL_INTERNAL_INVALID`) under equivalent malformed handles.
+3. Publish M38-S50 book chapter and refresh roadmap live-status counts.
 
 ---
 
