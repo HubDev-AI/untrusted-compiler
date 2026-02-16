@@ -6611,8 +6611,12 @@ static const char *sec4_rt_preflight_headers_block(
 
 static bool sec4_rt_cors_requested_headers_allowed(
     const char *requested_headers,
-    const char *allow_headers
+    const char *allow_headers,
+    bool *invalid_token
 ) {
+  if (invalid_token != NULL) {
+    *invalid_token = false;
+  }
   if (requested_headers == NULL || requested_headers[0] == '\0') {
     return true;
   }
@@ -6629,17 +6633,26 @@ static bool sec4_rt_cors_requested_headers_allowed(
     const char *token_end = cursor;
     sec4_rt_trim_csv_token(&token_start, &token_end);
     if (token_end <= token_start) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
       return false;
     }
 
     size_t token_len = (size_t) (token_end - token_start);
     if (token_len == 0 || token_len >= 128) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
       return false;
     }
     char token[128];
     memcpy(token, token_start, token_len);
     token[token_len] = '\0';
     if (!sec4_rt_is_header_name_valid(token)) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
       return false;
     }
     if (!sec4_rt_csv_contains_token_ci(allow_headers, token, token_len)) {
@@ -7136,12 +7149,17 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     const char *allow_headers = router->cors_allow_headers[0] != '\0'
         ? router->cors_allow_headers
         : "content-type, authorization";
+    bool invalid_requested_headers = false;
     if (has_requested_headers
         && !sec4_rt_cors_requested_headers_allowed(
             requested_headers,
-            allow_headers
+            allow_headers,
+            &invalid_requested_headers
         )) {
-      const char *body = "cors preflight headers not allowed";
+      int64_t status = invalid_requested_headers ? 400 : 403;
+      const char *body = invalid_requested_headers
+          ? "cors preflight requested headers invalid"
+          : "cors preflight headers not allowed";
       const char *final_headers = sec4_rt_merge_three_headers(
           NULL,
           cors_headers,
@@ -7151,7 +7169,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       );
       (void) sec4_rt_send_response_with_extra_headers(
           socket_fd,
-          403,
+          status,
           "text/plain; charset=utf-8",
           body,
           strlen(body),
