@@ -12288,6 +12288,17 @@ fn main() effects {{ net }} -> Int {{
             && response.contains("\"traceId\":\"rt-1\""),
         "response should include deterministic std-success envelope body"
     );
+    let body = response
+        .split("\r\n\r\n")
+        .nth(1)
+        .expect("http response should include body");
+    let parsed: serde_json::Value =
+        serde_json::from_str(body).expect("success response body should be valid json");
+    let time_ms = parsed
+        .get("timeMs")
+        .and_then(serde_json::Value::as_i64)
+        .expect("success timeMs should be present");
+    assert!(time_ms > 0, "success timeMs should be non-zero: {body}");
 }
 
 #[test]
