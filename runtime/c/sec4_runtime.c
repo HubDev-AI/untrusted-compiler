@@ -5900,6 +5900,28 @@ static bool sec4_rt_has_json_media_type(const char *value, size_t value_len) {
   return false;
 }
 
+static bool sec4_rt_has_multipart_media_type(const char *value, size_t value_len) {
+  size_t start = 0;
+  while (start < value_len && isspace((unsigned char) value[start])) {
+    start += 1;
+  }
+  if (start >= value_len) {
+    return false;
+  }
+
+  size_t end = start;
+  while (end < value_len && value[end] != ';' && !isspace((unsigned char) value[end])) {
+    end += 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  size_t token_len = end - start;
+  const char *token = value + start;
+  return token_len == 19 && strncasecmp(token, "multipart/form-data", 19) == 0;
+}
+
 static bool sec4_rt_parse_content_type_is_json(
     const char *request,
     size_t request_len,
@@ -5922,6 +5944,30 @@ static bool sec4_rt_parse_content_type_is_json(
       const char *value = cursor + 13;
       *has_content_type = true;
       return sec4_rt_has_json_media_type(value, (size_t) (line_end - value));
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_content_type_is_multipart(const char *request, size_t request_len) {
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) >= 13 && strncasecmp(cursor, "Content-Type:", 13) == 0) {
+      const char *value = cursor + 13;
+      return sec4_rt_has_multipart_media_type(value, (size_t) (line_end - value));
     }
 
     cursor = line_end + 2;
@@ -7118,6 +7164,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         headers_len,
         &has_content_type
     );
+    bool content_type_is_multipart = sec4_rt_parse_content_type_is_multipart(request, headers_len);
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
     size_t body_cap = sizeof(g_sec4_rt_request.body) - 1;
     int64_t configured_body_cap = sec4_rt_parse_env_i64(
@@ -7126,6 +7173,34 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     if (configured_body_cap > 0 && (size_t) configured_body_cap < body_cap) {
       body_cap = (size_t) configured_body_cap;
+    }
+    size_t multipart_cap = body_cap;
+    int64_t configured_multipart_cap = sec4_rt_parse_env_i64(
+        "SEC4_RT_HTTP_MAX_MULTIPART_BYTES",
+        (int64_t) body_cap
+    );
+    if (configured_multipart_cap > 0 && (size_t) configured_multipart_cap < multipart_cap) {
+      multipart_cap = (size_t) configured_multipart_cap;
+    }
+    if (content_type_is_multipart
+        && (content_length > multipart_cap || available_body > multipart_cap)) {
+      const char *body = "multipart payload exceeds runtime limit";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          413,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
     }
     if (content_length > body_cap || available_body > body_cap) {
       g_sec4_rt_request.body_limit_exceeded = true;

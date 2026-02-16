@@ -3643,6 +3643,10 @@ fn cmd_run(
         policy.http.max_header_bytes.to_string(),
     );
     cmd.env(
+        "SEC4_RT_HTTP_MAX_MULTIPART_BYTES",
+        policy.http.max_multipart_bytes.to_string(),
+    );
+    cmd.env(
         "SEC4_RT_HTTP_SERVE_TIMEOUT_MS",
         policy.http.default_timeout_ms.to_string(),
     );
