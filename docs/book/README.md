@@ -615,5 +615,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `643-m38-outbound-http-redirect-configurable-downgrade-policy-diagnostics.md`
 - `644-m38-outbound-http-redirect-policy-surface-validation-diagnostics.md`
 - `645-m38-outbound-http-redirect-cycle-diagnostics.md`
+- `646-m38-outbound-http-redirect-hop-cap-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.

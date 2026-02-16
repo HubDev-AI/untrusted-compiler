@@ -1425,6 +1425,67 @@ fn spawn_one_shot_http_redirect_chain_server(
     (port, handle)
 }
 
+fn spawn_one_shot_http_monotonic_redirect_server(
+    expected_requests: usize,
+) -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("monotonic redirect oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("monotonic redirect oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("monotonic redirect oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut served = 0_usize;
+        while served < expected_requests {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("monotonic redirect oneshot server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("monotonic redirect oneshot server accept failed: {err}"),
+                }
+            };
+
+            let mut buffer = [0_u8; 1024];
+            let mut request = Vec::new();
+            loop {
+                let bytes = stream
+                    .read(&mut buffer)
+                    .expect("monotonic redirect oneshot server request read should succeed");
+                if bytes == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..bytes]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
+                {
+                    break;
+                }
+            }
+
+            let next_hop = served + 1;
+            let response_head = format!(
+                "HTTP/1.1 302 Found\r\nContent-Type: text/plain\r\nLocation: /hop/{next_hop}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            stream
+                .write_all(response_head.as_bytes())
+                .expect("monotonic redirect oneshot server response should write");
+            stream
+                .flush()
+                .expect("monotonic redirect oneshot server response flush should succeed");
+            served += 1;
+        }
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_relative_redirect_server() -> (u16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .expect("relative redirect oneshot server bind should work");
@@ -11727,6 +11788,79 @@ int main(void) {
     server_handle
         .join()
         .expect("runtime internal-net redirect-limit server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_cap_limit_returns_deterministic_code_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net redirect cap-limit test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-cap-limit");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-cap-limit");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_CAP_LIMIT\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime redirect cap-limit harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net redirect cap-limit harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_monotonic_redirect_server(65);
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "200")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net redirect cap-limit harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net redirect cap-limit server should exit cleanly");
 }
 
 #[test]

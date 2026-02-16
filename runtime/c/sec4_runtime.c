@@ -38,6 +38,7 @@
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES 8192
 #define SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS 64
+#define SEC4_RT_MAX_OUTBOUND_HTTP_POLICY_REDIRECTS 4096
 #define SEC4_RT_DEFAULT_NET_TIMEOUT_MS 2000
 #define SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES 1048576
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
@@ -3355,7 +3356,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
   if (!sec4_rt_parse_env_non_negative_i64_strict(
           "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
           0,
-          SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS,
+          SEC4_RT_MAX_OUTBOUND_HTTP_POLICY_REDIRECTS,
           &max_redirects
       )) {
     sec4_rt_store_std_error_response(
@@ -3393,6 +3394,12 @@ static int64_t sec4_rt_outbound_http_get_handle(
         "invalid boolean value for SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE"
     );
     return 0;
+  }
+  int64_t effective_max_redirects = max_redirects;
+  bool redirect_hop_cap_applied = false;
+  if (effective_max_redirects > SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS) {
+    effective_max_redirects = SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS;
+    redirect_hop_cap_applied = true;
   }
   int64_t redirects_followed = 0;
   char redirect_visited_urls[SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS + 1]
@@ -3569,7 +3576,16 @@ static int64_t sec4_rt_outbound_http_get_handle(
         );
         return 0;
       }
-      if (redirects_followed >= max_redirects) {
+      if (redirects_followed >= effective_max_redirects) {
+        if (redirect_hop_cap_applied) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_CAP_LIMIT",
+              "validation",
+              "outbound redirect hop limit exceeds runtime cap"
+          );
+          return 0;
+        }
         sec4_rt_store_std_error_response(
             400,
             "NET.REDIRECT_LIMIT",
