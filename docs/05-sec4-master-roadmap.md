@@ -668,6 +668,18 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_redirect_max_redirects_policy_format_invalid_returns_deterministic_code_when_clang_available`
 - [x] Updated range-invalid harness assertion to new range-specific code.
 - [x] Revalidated revalidate-policy-invalid diagnostics and c-backend emit contract.
+
+### M38-S31 outbound HTTP policy diagnostics cleanup acceptance criteria
+
+- Redirect policy parser helper surface removes unused generic strict-int parser path.
+- Redirect policy diagnostics behavior remains unchanged after cleanup.
+- Existing format/range and revalidate policy diagnostics remain green.
+
+### M38-S31 tracking (live status)
+
+- [x] Removed unused `sec4_rt_parse_env_non_negative_i64_strict` helper + declaration.
+- [x] Kept active redirect policy parsing path explicit and deterministic.
+- [x] Revalidated max-redirects range-invalid, revalidate-invalid, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5978,7 +5990,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S31 outbound HTTP policy diagnostics cleanup (remove unused generic strict-int parser and tighten policy parsing helpers).
+- M38-S32 outbound HTTP policy diagnostics stabilization (naming consistency + final redirect-policy matrix sweep).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6070,9 +6082,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S31 scope for redirect policy parser cleanup and helper tightening.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S31 edits.
-3. Publish M38-S31 book chapter and refresh roadmap live-status counts.
+1. Add M38-S32 scope for redirect policy diagnostic naming consistency and final matrix sweep.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S32 edits.
+3. Publish M38-S32 book chapter and refresh roadmap live-status counts.
 
 ---
 

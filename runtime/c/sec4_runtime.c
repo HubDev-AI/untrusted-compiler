@@ -259,12 +259,6 @@ static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
 static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
-static bool sec4_rt_parse_env_non_negative_i64_strict(
-    const char *name,
-    int64_t fallback,
-    int64_t max_value,
-    int64_t *out_value
-);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
 static bool sec4_rt_env_flag_enabled(const char *name);
 static void sec4_rt_read_env_string(
@@ -5379,32 +5373,6 @@ static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool 
     return true;
   }
   return false;
-}
-
-static bool sec4_rt_parse_env_non_negative_i64_strict(
-    const char *name,
-    int64_t fallback,
-    int64_t max_value,
-    int64_t *out_value
-) {
-  if (out_value == NULL || max_value < 0 || fallback < 0) {
-    return false;
-  }
-  const char *raw = getenv(name);
-  if (raw == NULL || raw[0] == '\0') {
-    *out_value = fallback;
-    return true;
-  }
-  char *end = NULL;
-  long long value = strtoll(raw, &end, 10);
-  if (end == raw || (end != NULL && *end != '\0')) {
-    return false;
-  }
-  if (value < 0 || value > max_value) {
-    return false;
-  }
-  *out_value = (int64_t) value;
-  return true;
 }
 
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback) {
