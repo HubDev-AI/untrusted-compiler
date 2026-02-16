@@ -1745,6 +1745,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S74 CORS allowed-origins invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ALLOWED_ORIGINS` env values deterministically fall back to wildcard-origin baseline (`*`).
+- Invalid raw env values are never reflected into emitted `Access-Control-Allow-Origin` response headers.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S74 tracking (live status)
+
+- [x] Runtime CORS policy loading now validates copied allowed-origin token as safe header value and falls back to wildcard when invalid.
+- [x] Added HTTP runtime CORS allowed-origins fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+- [x] Harness validates invalid header-value token fallback behavior:
+  - invalid env value containing newline falls back to wildcard origin header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7149,9 +7167,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S74 scope for CORS allowed-origins invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_ALLOWED_ORIGINS` values deterministically keep wildcard-origin fallback baseline.
-3. Publish M38-S74 book chapter and refresh roadmap live-status counts.
+1. Add M38-S75 scope for CORS allow-credentials invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_ALLOW_CREDENTIALS` values deterministically keep default credentials-disabled behavior.
+3. Publish M38-S75 book chapter and refresh roadmap live-status counts.
 
 ---
 

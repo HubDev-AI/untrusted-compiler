@@ -288,6 +288,7 @@ static bool sec4_rt_parse_header_value(
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
+static bool sec4_rt_is_header_value_valid(const char *value);
 static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
@@ -9842,7 +9843,7 @@ static void sec4_rt_load_cors_policy_from_env(void) {
           allowed_origins,
           g_sec4_rt_cors_policy.allow_origin,
           sizeof(g_sec4_rt_cors_policy.allow_origin)
-      )) {
+      ) || !sec4_rt_is_header_value_valid(g_sec4_rt_cors_policy.allow_origin)) {
     strncpy(
         g_sec4_rt_cors_policy.allow_origin,
         "*",
