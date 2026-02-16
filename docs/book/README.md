@@ -636,5 +636,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `664-post-alpha-wasm-browser-priority-lock.md`
 - `665-m38-outbound-http-request-parser-fallback-diagnostics-hardening.md`
 - `666-m38-outbound-http-request-parser-diagnostics-detail-enrichment.md`
+- `667-m38-outbound-http-request-parser-generic-fallback-normalization.md`
 
 As milestones progress, chapters will be added and linked from this index.

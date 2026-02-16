@@ -8924,6 +8924,125 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime outbound request parser unknown fallback test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-outbound-request-parser-unknown-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-outbound-request-parser-unknown-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_outbound_parse_status(SEC4_RT_OUTBOUND_URL_PARSE_INVALID)) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PARSE_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"unknown\"}]") == NULL) { return 13; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime outbound request parser unknown fallback harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime outbound request parser unknown fallback harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime redirect request parser unknown fallback test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-redirect-request-parser-unknown-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-redirect-request-parser-unknown-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  if (sec4_rt_redirect_status_from_outbound_parse_status(SEC4_RT_OUTBOUND_URL_PARSE_INVALID)
+      != SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID) { return 11; }
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_redirect_resolve_status(
+          SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID)) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PARSE_INVALID\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"unknown\"}]") == NULL) { return 14; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect request parser unknown fallback harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect request parser unknown fallback harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");

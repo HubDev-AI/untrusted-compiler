@@ -3559,7 +3559,8 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID = 13,
   SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID = 14,
   SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID = 15,
-  SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID = 16
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID = 16,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID = 17
 } sec4_rt_redirect_resolve_status;
 
 static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_parse_status(
@@ -3589,12 +3590,25 @@ static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_par
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID) {
     return SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID;
   }
-  return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  return SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID;
 }
 
 static bool sec4_rt_store_request_parse_error_from_outbound_parse_status(
     sec4_rt_outbound_url_parse_status parse_status
 ) {
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_INVALID) {
+    sec4_rt_store_std_error_response_with_two_details(
+        400,
+        "NET.REQUEST_PARSE_INVALID",
+        "validation",
+        "http request url failed parser validation",
+        "phase",
+        "parse",
+        "component",
+        "unknown"
+    );
+    return true;
+  }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING) {
     sec4_rt_store_std_error_response_with_two_details(
         400,
@@ -3743,6 +3757,11 @@ static bool sec4_rt_store_request_parse_error_from_redirect_resolve_status(
   if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID) {
     return sec4_rt_store_request_parse_error_from_outbound_parse_status(
         SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_INVALID
     );
   }
   return false;

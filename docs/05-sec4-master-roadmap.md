@@ -1013,6 +1013,33 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S46 outbound HTTP request-parser generic fallback normalization acceptance criteria
+
+- Non-classified parser-status fallback no longer emits generic `NET.URL_INVALID` in parser error path.
+- Deterministic fallback code `NET.REQUEST_PARSE_INVALID` is used for unknown parser-status fallback with structured details:
+  - `phase=parse`
+  - `component=unknown`
+- Redirect parser-status mapping normalizes unknown parser fallback to the same deterministic request-parser fallback code.
+- Runtime harness includes dedicated assertions for unknown parser-status fallback in both direct and redirect mapping paths.
+
+### M38-S46 tracking (live status)
+
+- [x] Added deterministic parser fallback code:
+  - `NET.REQUEST_PARSE_INVALID`
+  with details:
+  - `{"key":"phase","value":"parse"}`
+  - `{"key":"component","value":"unknown"}`
+- [x] Updated redirect parser-status mapping fallback to explicit `SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID`.
+- [x] Added runtime harness coverage:
+  - `c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6325,7 +6352,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S46 outbound HTTP request-parser generic fallback normalization (`NET.REQUEST_PARSE_INVALID` deterministic fallback with parser-phase details).
+- M38-S47 outbound HTTP request-parser public/internal sink parity (`sec4_rt_http_get` and `sec4_rt_http_get_internal` parser-fallback code parity assertions).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6417,9 +6444,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S46 scope for non-classified parser failures to emit deterministic `NET.REQUEST_PARSE_INVALID` instead of generic `NET.URL_INVALID`.
-2. Extend runtime harness with malformed request URL cases that still hit generic parser fallback and assert structured parser-phase details.
-3. Publish M38-S46 book chapter and refresh roadmap live-status counts.
+1. Add M38-S47 scope for parser-fallback parity assertions between public/internal net sinks in `http_get*` paths.
+2. Extend runtime harness with sink-parity assertions to ensure both public/internal paths emit the same deterministic `NET.REQUEST_*` parser diagnostics for equivalent malformed URLs.
+3. Publish M38-S47 book chapter and refresh roadmap live-status counts.
 
 ---
 
