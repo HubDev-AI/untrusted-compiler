@@ -1108,6 +1108,32 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_rejects_invalid_url_or_untracked_handles_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S50 outbound HTTP wrapper invalid-url pre-parser diagnostics parity coverage acceptance criteria
+
+- Wrapper-level invalid-url failures are asserted directly at `sec4_rt_http_get` and `sec4_rt_http_get_internal` boundaries before outbound parser execution.
+- Public/internal wrapper envelopes remain deterministic for equivalent malformed URL handles:
+  - public wrapper: `NET.URL_PUBLIC_INVALID`
+  - internal wrapper: `NET.URL_INTERNAL_INVALID`
+- Wrapper invalid-url envelopes do not regress into parser-class diagnostics (`NET.REQUEST_*`) for the same malformed URL handle classes.
+
+### M38-S50 tracking (live status)
+
+- [x] Added direct wrapper invalid-url pre-parser parity harness:
+  - `c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic wrapper envelopes for malformed URL classes:
+  - invalid scheme (`ftp://...`)
+  - missing scheme (`example.com/...`)
+  - missing host (`http:///...`)
+  - userinfo authority token (`http://user@example.com/...`)
+- [x] Harness validates untracked-handle parity:
+  - public wrapper untracked handle -> `NET.URL_PUBLIC_INVALID`
+  - internal wrapper untracked handle -> `NET.URL_INTERNAL_INVALID`
+  with parser diagnostics excluded (`NET.REQUEST_*` absent).
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6420,7 +6446,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S50 outbound HTTP wrapper invalid-url pre-parser diagnostics parity coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` deterministic wrapper-envelope assertions before outbound parser path).
+- M38-S51 outbound HTTP wrapper invalid-capability handle diagnostics parity coverage (`NET.GET_INVALID` vs `NET.GET_INTERNAL_INVALID` deterministic contract assertions for missing net/url handles).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6512,9 +6538,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S50 scope for wrapper-level invalid-url parity between public/internal net sinks before outbound parser path.
-2. Extend runtime harness with direct wrapper assertions that lock deterministic invalid-url envelope behavior (`NET.URL_PUBLIC_INVALID` vs `NET.URL_INTERNAL_INVALID`) under equivalent malformed handles.
-3. Publish M38-S50 book chapter and refresh roadmap live-status counts.
+1. Add M38-S51 scope for wrapper invalid-capability/handle parity across public/internal net sink wrappers.
+2. Extend runtime harness with direct wrapper assertions for missing/zero net or url handles (`NET.GET_INVALID` vs `NET.GET_INTERNAL_INVALID`) while keeping failure class deterministic.
+3. Publish M38-S51 book chapter and refresh roadmap live-status counts.
 
 ---
 
