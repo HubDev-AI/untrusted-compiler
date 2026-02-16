@@ -1885,6 +1885,28 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S82 CSRF header/cookie name env materialization hardening acceptance criteria
+
+- Runtime CSRF checks honor `SEC4_RT_CSRF_HEADER_NAME` and `SEC4_RT_CSRF_COOKIE_NAME` when values are valid.
+- Invalid CSRF header/cookie-name env values deterministically fall back to defaults (`X-CSRF-Token`, `csrf`).
+- CSRF name materialization hardening does not regress existing reject/allow and `csrf.issueToken` behavior.
+
+### M38-S82 tracking (live status)
+
+- [x] Runtime CSRF policy state and router state now carry header/cookie names materialized from env policy.
+- [x] CSRF enforcement path now resolves configured names instead of hardcoded values.
+- [x] `csrf.issueToken` response headers now emit configured/fallback CSRF names deterministically.
+- [x] Added HTTP runtime CSRF name-materialization e2e coverage:
+  - `c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output build_emit_c_bin_handles_csrf_issue_token_intrinsic_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

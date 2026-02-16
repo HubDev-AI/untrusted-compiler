@@ -674,5 +674,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `702-m38-csrf-protected-methods-invalid-env-fallback.md`
 - `703-m38-auth-cookie-name-invalid-env-fallback.md`
 - `704-m38-cors-max-age-env-policy-materialization.md`
+- `705-m38-csrf-name-env-policy-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.

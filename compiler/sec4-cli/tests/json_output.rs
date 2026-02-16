@@ -23050,6 +23050,278 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env() {
+    if !clang_available() {
+        eprintln!("skipping http runtime custom csrf names e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-custom-csrf-names-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcustomcsrfnamese2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(router, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP custom csrf names runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcustomcsrfnamese2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP custom csrf names runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CSRF_COOKIE_NAME", "csrf-session")
+        .env("SEC4_RT_CSRF_HEADER_NAME", "X-CSRF-Session-Token")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime custom csrf names e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime custom csrf names e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-CSRF-Session-Token: token123\r\nCookie: csrf-session=token123\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime custom csrf names e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime custom csrf names e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime custom csrf names e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "custom csrf header/cookie names should be honored when tokens match"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults() {
+    if !clang_available() {
+        eprintln!("skipping http runtime csrf names fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-csrf-names-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcsrfnamesfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(router, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP csrf names fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcsrfnamesfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP csrf names fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CSRF_COOKIE_NAME", "csrf;invalid")
+        .env("SEC4_RT_CSRF_HEADER_NAME", "X CSRF Token")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime csrf names fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime csrf names fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-CSRF-Token: token123\r\nCookie: csrf=token123\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf names fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf names fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime csrf names fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "invalid csrf name env values should fall back to default csrf names"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_serves_users_post_with_json_response_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping http runtime post/json e2e test: clang not available");

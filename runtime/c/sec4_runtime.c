@@ -99,6 +99,8 @@ typedef struct {
   bool csrf_enabled;
   char csrf_mode[32];
   char csrf_protected_methods[64];
+  char csrf_cookie_name[64];
+  char csrf_header_name[64];
   bool auth_enabled;
   char auth_mode[16];
   size_t route_count;
@@ -201,6 +203,8 @@ typedef struct {
   bool enabled;
   char mode[32];
   char protected_methods[64];
+  char cookie_name[64];
+  char header_name[64];
 } sec4_rt_csrf_policy_state;
 
 typedef struct {
@@ -5850,6 +5854,38 @@ static const char *sec4_rt_auth_cookie_name(void) {
   return "session";
 }
 
+static const char *sec4_rt_csrf_cookie_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_cookie_name[0] != '\0') {
+    return router->csrf_cookie_name;
+  }
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.cookie_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    return g_sec4_rt_csrf_policy.cookie_name;
+  }
+  const char *configured = getenv("SEC4_RT_CSRF_COOKIE_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
+    return configured;
+  }
+  return "csrf";
+}
+
+static const char *sec4_rt_csrf_header_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_header_name[0] != '\0') {
+    return router->csrf_header_name;
+  }
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.header_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    return g_sec4_rt_csrf_policy.header_name;
+  }
+  const char *configured = getenv("SEC4_RT_CSRF_HEADER_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
+    return configured;
+  }
+  return "X-CSRF-Token";
+}
+
 static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
   if (router != NULL && router->auth_mode[0] != '\0') {
     return sec4_rt_auth_mode_or_default(router->auth_mode);
@@ -6704,13 +6740,15 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(router, method)) {
+    const char *csrf_header_name = sec4_rt_csrf_header_name(router);
+    const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(router);
     char csrf_header[128];
     char cookie_header[512];
     char csrf_cookie[128];
     bool has_csrf_header = sec4_rt_parse_header_value(
         request,
         headers_len,
-        "X-CSRF-Token",
+        csrf_header_name,
         csrf_header,
         sizeof(csrf_header)
     );
@@ -6722,7 +6760,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         sizeof(cookie_header)
     );
     bool has_csrf_cookie = has_cookie_header
-        && sec4_rt_parse_cookie_value(cookie_header, "csrf", csrf_cookie, sizeof(csrf_cookie));
+        && sec4_rt_parse_cookie_value(
+            cookie_header,
+            csrf_cookie_name,
+            csrf_cookie,
+            sizeof(csrf_cookie)
+        );
 
     if (!has_csrf_header || !has_csrf_cookie || strcmp(csrf_header, csrf_cookie) != 0) {
       sec4_rt_store_std_error_response(
@@ -9839,6 +9882,18 @@ static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
       sizeof(slot->csrf_protected_methods) - 1
   );
   slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+  strncpy(
+      slot->csrf_cookie_name,
+      "csrf",
+      sizeof(slot->csrf_cookie_name) - 1
+  );
+  slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+  strncpy(
+      slot->csrf_header_name,
+      "X-CSRF-Token",
+      sizeof(slot->csrf_header_name) - 1
+  );
+  slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_auth(sec4_rt_router_state *slot) {
@@ -9991,6 +10046,34 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
       g_sec4_rt_csrf_policy.protected_methods,
       sizeof(g_sec4_rt_csrf_policy.protected_methods)
   );
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_COOKIE_NAME",
+      "csrf",
+      g_sec4_rt_csrf_policy.cookie_name,
+      sizeof(g_sec4_rt_csrf_policy.cookie_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.cookie_name,
+        "csrf",
+        sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1
+    );
+    g_sec4_rt_csrf_policy.cookie_name[sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_HEADER_NAME",
+      "X-CSRF-Token",
+      g_sec4_rt_csrf_policy.header_name,
+      sizeof(g_sec4_rt_csrf_policy.header_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.header_name,
+        "X-CSRF-Token",
+        sizeof(g_sec4_rt_csrf_policy.header_name) - 1
+    );
+    g_sec4_rt_csrf_policy.header_name[sizeof(g_sec4_rt_csrf_policy.header_name) - 1] = '\0';
+  }
   if (!sec4_rt_csrf_methods_has_protected_verb(g_sec4_rt_csrf_policy.protected_methods)) {
     strncpy(
         g_sec4_rt_csrf_policy.protected_methods,
@@ -10152,6 +10235,18 @@ int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
         sizeof(slot->csrf_protected_methods) - 1
     );
     slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+    strncpy(
+        slot->csrf_cookie_name,
+        g_sec4_rt_csrf_policy.cookie_name,
+        sizeof(slot->csrf_cookie_name) - 1
+    );
+    slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+    strncpy(
+        slot->csrf_header_name,
+        g_sec4_rt_csrf_policy.header_name,
+        sizeof(slot->csrf_header_name) - 1
+    );
+    slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_csrf(slot);
@@ -10217,6 +10312,8 @@ int64_t sec4_rt_csrf_from_policy(void) {
 
 int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
   (void) ctx;
+  const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(NULL);
+  const char *csrf_header_name = sec4_rt_csrf_header_name(NULL);
   char token[128];
   int written = snprintf(
       token,
@@ -10234,13 +10331,14 @@ int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
     int cookie_written = snprintf(
         cookie,
         sizeof(cookie),
-        "csrf=%s; Path=/; SameSite=Lax",
+        "%s=%s; Path=/; SameSite=Lax",
+        csrf_cookie_name,
         token
     );
     if (cookie_written > 0 && (size_t) cookie_written < sizeof(cookie)) {
       (void) sec4_rt_append_response_header("Set-Cookie", cookie);
     }
-    (void) sec4_rt_append_response_header("X-CSRF-Token", token);
+    (void) sec4_rt_append_response_header(csrf_header_name, token);
   }
   return handle;
 }
