@@ -1040,6 +1040,28 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S47 outbound HTTP request-parser public/internal sink parity acceptance criteria
+
+- Public sink path (`sec4_rt_http_get`) emits the same split parser diagnostics as internal sink path (`sec4_rt_http_get_internal`) for equivalent malformed redirect-target parser failures.
+- Structured parser details parity is preserved across both sinks:
+  - `phase=parse`
+  - matching `component` classification.
+- Runtime harness includes explicit public-sink redirect parser diagnostics parity assertions.
+
+### M38-S47 tracking (live status)
+
+- [x] Added public-sink redirect parser diagnostics parity harness:
+  - `c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+- [x] Parity harness validates split parser diagnostics and structured detail parity for:
+  - `NET.REQUEST_IPV6_BRACKET_MISSING` (`component=ipv6`)
+  - `NET.REQUEST_HOST_INVALID` (`component=host`)
+  - `NET.REQUEST_PORT_INVALID` (`component=port`)
+  - `NET.REQUEST_TARGET_INVALID` (`component=target`)
+- [x] Revalidated internal-sink parity baseline:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+- [x] Revalidated public-sink parity path:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6352,7 +6374,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S47 outbound HTTP request-parser public/internal sink parity (`sec4_rt_http_get` and `sec4_rt_http_get_internal` parser-fallback code parity assertions).
+- M38-S48 outbound HTTP parser diagnostics envelope consistency (`NET.REQUEST_*` parser diagnostics use unified envelope renderer path with deterministic detail order contract).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6444,9 +6466,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S47 scope for parser-fallback parity assertions between public/internal net sinks in `http_get*` paths.
-2. Extend runtime harness with sink-parity assertions to ensure both public/internal paths emit the same deterministic `NET.REQUEST_*` parser diagnostics for equivalent malformed URLs.
-3. Publish M38-S47 book chapter and refresh roadmap live-status counts.
+1. Add M38-S48 scope for parser diagnostics envelope consistency across all `NET.REQUEST_*` parse diagnostics.
+2. Extend runtime harness with deterministic detail-order and envelope-shape assertions on parser diagnostics.
+3. Publish M38-S48 book chapter and refresh roadmap live-status counts.
 
 ---
 
