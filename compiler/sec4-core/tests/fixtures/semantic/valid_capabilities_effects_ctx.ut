@@ -1,10 +1,7 @@
-fn ok(ctx: Ctx, db: DbCap, net: NetCap, internal: InternalNetCap, sec: SecretsCap, fs: FsCap, writeQuery: SqlQuery, readQuery: SqlQuery, row: Schema<Int>, publicUrl: PublicUrl, internalUrl: InternalUrl, path: PathSafe) effects { db.read, db.write, net, secrets.read, fs.read, fs.write } -> Int {
+fn ok(ctx: Ctx, db: DbCap, net: NetCap, sec: SecretsCap, writeQuery: SqlQuery, readQuery: SqlQuery, row: Schema<Int>, publicUrl: PublicUrl) effects { db.read, db.write, net, secrets.read } -> Int {
   db.exec(ctx, db, writeQuery);
   db.queryOne(ctx, db, readQuery, row);
   httpClient.get(ctx, net, publicUrl);
-  httpClient.getInternal(ctx, internal, internalUrl);
   secrets.get(ctx, sec, "TOKEN");
-  fs.read(ctx, fs, path);
-  fs.write(ctx, fs, path, "payload");
   1
 }

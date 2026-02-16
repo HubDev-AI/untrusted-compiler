@@ -14576,6 +14576,545 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy explicit deny-token matrix test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-explicit-deny-matrix");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-explicit-deny-matrix");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy explicit deny-token matrix harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy explicit deny-token matrix harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let deny_tokens = [
+        "0", "false", "no", "off", "deny", "FALSE", "No", "OFF", "DeNy",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for deny_token in deny_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", deny_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy explicit deny-token matrix harness should exit successfully for token {deny_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy empty/whitespace-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-empty-whitespace-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-empty-whitespace-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy empty/whitespace-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy empty/whitespace-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for internal_url in internal_urls {
+        let run_unset = Command::new(&binary_path)
+            .env_remove("SEC4_RT_ALLOW_INTERNAL_NET")
+            .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+            .output()
+            .expect("compiled binary should run with unset token");
+        assert!(
+            run_unset.status.success(),
+            "runtime internal-policy empty/whitespace-token fallback harness should exit successfully for unset token, url {internal_url:?}"
+        );
+    }
+
+    let blank_tokens = ["", " ", "   ", "\t", "\n", " \t "];
+    for blank_token in blank_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", blank_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy empty/whitespace-token fallback harness should exit successfully for token {blank_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy quoted-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-quoted-token-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-quoted-token-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy quoted-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy quoted-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let quoted_tokens = [
+        "\"1\"",
+        "\"true\"",
+        "\"allow\"",
+        "'yes'",
+        "'on'",
+        "'ALLOW'",
+        "\" TRUE \"",
+        "' yes '",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for quoted_token in quoted_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", quoted_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy quoted-token fallback harness should exit successfully for token {quoted_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy delimited-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-delimited-token-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-delimited-token-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy delimited-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy delimited-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let delimited_tokens = [
+        "true,allow",
+        "yes|on",
+        "allow/1",
+        "true;allow",
+        "on:yes",
+        "allow,true",
+        " yes|allow ",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for delimited_token in delimited_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", delimited_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy delimited-token fallback harness should exit successfully for token {delimited_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy prefixed-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-prefixed-token-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-prefixed-token-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy prefixed-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy prefixed-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let prefixed_tokens = [
+        "allow=true",
+        "mode:allow",
+        "token=1",
+        "value:true",
+        "internal-net=on",
+        "policy.allow=yes",
+        "allow:true",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for prefixed_token in prefixed_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", prefixed_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy prefixed-token fallback harness should exit successfully for token {prefixed_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy suffixed-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-suffixed-token-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-suffixed-token-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy suffixed-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy suffixed-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let suffixed_tokens = [
+        "true-value",
+        "allow_mode",
+        "yes-end",
+        "on1",
+        "allow+",
+        "1ok",
+        "true.",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for suffixed_token in suffixed_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", suffixed_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy suffixed-token fallback harness should exit successfully for token {suffixed_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");
@@ -16508,6 +17047,2012 @@ fn main() effects {{ net }} -> Int {{
         response.contains("Referrer-Policy: strict-origin-when-cross-origin"),
         "response should include security header referrer policy"
     );
+    assert!(
+        response.contains(
+            "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+        ),
+        "response should include security header csp default policy"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime security-headers csp report-only e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-csp-report-only-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheaderscspreportonlye2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers csp report-only runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaderscspreportonlye2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers csp report-only runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY", "1")
+        .env(
+            "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+            "default-src 'self'; object-src 'none'",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers csp report-only e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers csp report-only e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp report-only e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp report-only e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers csp report-only e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        "response should include CSP report-only header"
+    );
+    assert!(
+        !response.contains("Content-Security-Policy: default-src 'self'; object-src 'none'"),
+        "response should not include enforce CSP header when report-only mode is enabled"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers csp report-only fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-csp-report-only-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheaderscspreportonlyfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers csp report-only fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaderscspreportonlyfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers csp report-only fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_ENABLED", "1")
+        .env(
+            "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+            "default-src 'self'; object-src 'none'",
+        )
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers csp report-only fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers csp report-only fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp report-only fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp report-only fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers csp report-only fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Content-Security-Policy: default-src 'self'; object-src 'none'"),
+        "invalid csp report-only env value should fall back to enforce-mode header"
+    );
+    assert!(
+        !response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        "invalid csp report-only env value should not switch response to report-only header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers csp policy fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-csp-policy-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheaderscsppolicyfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers csp policy fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaderscsppolicyfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers csp policy fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_ENABLED", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY", "0")
+        .env(
+            "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+            "default-src 'self'\nobject-src 'none'",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers csp policy fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers csp policy fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp policy fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp policy fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers csp policy fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains(
+            "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+        ),
+        "invalid csp policy env value should fall back to default csp policy"
+    );
+    assert!(
+        !response.contains("Content-Security-Policy: default-src 'self' object-src 'none'"),
+        "invalid csp policy env value should not be reflected in emitted header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers csp enabled fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-csp-enabled-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheaderscspenabledfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers csp enabled fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheaderscspenabledfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers csp enabled fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_ENABLED", "MAYBE")
+        .env("SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY", "0")
+        .env(
+            "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+            "default-src 'self'; object-src 'none'",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers csp enabled fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers csp enabled fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp enabled fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers csp enabled fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers csp enabled fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Content-Security-Policy: default-src 'self'; object-src 'none'"),
+        "invalid csp enabled env value should keep CSP enabled with enforce-mode header"
+    );
+    assert!(
+        !response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        "invalid csp enabled env value should not alter report-only disabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime security-headers hsts e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershsts2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershsts2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", "31536000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers hsts e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers hsts e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime security-headers hsts e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime security-headers hsts e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers hsts e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"),
+        "response should include hsts header with configured max-age/subdomains/preload"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers hsts-enabled fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-enabled-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershstsenabledfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts-enabled fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershstsenabledfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts-enabled fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "MAYBE")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", "31536000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers hsts-enabled fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers hsts-enabled fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-enabled fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-enabled fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers hsts-enabled fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        !response.contains("Strict-Transport-Security: "),
+        "invalid hsts-enabled env value should keep default hsts-disabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers hsts-include-subdomains fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-include-subdomains-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershstsincludesubdomainsfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts-include-subdomains fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershstsincludesubdomainsfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts-include-subdomains fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", "31536000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS", "MAYBE")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD", "0")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect(
+            "http runtime security-headers hsts-include-subdomains fallback e2e binary should start",
+        );
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers hsts-include-subdomains fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-include-subdomains fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-include-subdomains fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers hsts-include-subdomains fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Strict-Transport-Security: max-age=31536000; includeSubDomains"),
+        "invalid hsts include-subdomains env value should preserve default includeSubDomains behavior"
+    );
+    assert!(
+        !response.contains("; preload"),
+        "hsts preload should remain disabled in this fallback case"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers hsts-preload fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-preload-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershstspreloadfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts-preload fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershstspreloadfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts-preload fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", "31536000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers hsts-preload fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers hsts-preload fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Strict-Transport-Security: max-age=31536000; includeSubDomains"),
+        "invalid hsts preload env value should preserve max-age and includeSubDomains output"
+    );
+    assert!(
+        !response.contains("; preload"),
+        "invalid hsts preload env value should keep default preload-disabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers hsts fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-fallback-e2e");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershstsfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve(19090, withHeaders);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershstsfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts fallback runtime e2e fixture"
+    );
+
+    let run_case = |case_label: &str, max_age_env: &str| -> String {
+        let port = find_available_tcp_port();
+        let mut child = Command::new(&binary_path)
+            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+            .env("SEC4_RT_HTTP_PORT", port.to_string())
+            .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "1")
+            .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", max_age_env)
+            .env("SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS", "1")
+            .env("SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD", "0")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("http runtime security-headers hsts fallback e2e binary should start");
+
+        let mut response = None;
+        for _ in 0..240 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("child wait should succeed while connecting")
+            {
+                panic!(
+                    "http runtime security-headers hsts fallback e2e binary exited before request for {case_label} with status: {status}"
+                );
+            }
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(
+                            b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                        )
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(40)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "http runtime security-headers hsts fallback e2e test could not connect to server for {case_label}"
+                );
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..200 {
+            match child.try_wait().expect("child wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "http runtime security-headers hsts fallback e2e binary did not exit in expected window for {case_label}"
+                );
+            }
+        };
+
+        assert!(
+            status.success(),
+            "http runtime security-headers hsts fallback e2e binary should exit successfully in oneshot mode for {case_label}"
+        );
+
+        response
+    };
+
+    let invalid_response = run_case("invalid-max-age", "not-a-number");
+    assert!(
+        invalid_response.contains("HTTP/1.1 200 OK"),
+        "invalid max-age case should return 200 status line"
+    );
+    assert!(
+        invalid_response.contains("Strict-Transport-Security: max-age=15552000; includeSubDomains"),
+        "invalid max-age should fall back to deterministic default hsts max-age"
+    );
+    assert!(
+        !invalid_response.contains("max-age=not-a-number"),
+        "invalid max-age should not be reflected in hsts header"
+    );
+
+    let negative_response = run_case("negative-max-age", "-7");
+    assert!(
+        negative_response.contains("HTTP/1.1 200 OK"),
+        "negative max-age case should return 200 status line"
+    );
+    assert!(
+        negative_response.contains("Strict-Transport-Security: max-age=15552000; includeSubDomains"),
+        "negative max-age should fall back to deterministic default hsts max-age"
+    );
+    assert!(
+        !negative_response.contains("max-age=-7"),
+        "negative max-age should not be reflected in hsts header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers x-frame-options fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-xfo-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadersxfofallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers x-frame-options fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadersxfofallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers x-frame-options fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS", "ALLOW-FROM")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers x-frame-options fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers x-frame-options fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers x-frame-options fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers x-frame-options fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers x-frame-options fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("X-Frame-Options: DENY"),
+        "invalid x-frame-options env value should fall back to DENY"
+    );
+    assert!(
+        !response.contains("X-Frame-Options: ALLOW-FROM"),
+        "invalid x-frame-options env value should not be reflected in header output"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls_back_to_default_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers referrer-policy fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-referrer-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadersreferrerfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers referrer-policy fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadersreferrerfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers referrer-policy fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY", "INVALID-POLICY")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers referrer-policy fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers referrer-policy fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers referrer-policy fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers referrer-policy fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers referrer-policy fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Referrer-Policy: strict-origin-when-cross-origin"),
+        "invalid referrer-policy env value should fall back to strict-origin-when-cross-origin"
+    );
+    assert!(
+        !response.contains("Referrer-Policy: INVALID-POLICY"),
+        "invalid referrer-policy env value should not be reflected in header output"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers x-content-type-options fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-nosniff-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadersnosnifffallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers x-content-type-options fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadersnosnifffallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers x-content-type-options fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect(
+            "http runtime security-headers x-content-type-options fallback e2e binary should start",
+        );
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers x-content-type-options fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers x-content-type-options fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers x-content-type-options fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers x-content-type-options fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("X-Content-Type-Options: nosniff"),
+        "invalid x-content-type-options env value should fall back to nosniff"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers enabled fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-enabled-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadersenabledfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers enabled fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadersenabledfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers enabled fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_ENABLED", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers enabled fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers enabled fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers enabled fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers enabled fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers enabled fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("X-Content-Type-Options: nosniff"),
+        "invalid security-headers enabled env value should keep baseline security headers active"
+    );
 }
 
 #[test]
@@ -17688,6 +20233,144 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode() {
+    if !clang_available() {
+        eprintln!("skipping http runtime auth mode fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-auth-mode-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpauthmodefallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let authCfg = auth.fromPolicy();
+  let withAuth = auth.withAuth(router, authCfg);
+  http.serve({}, withAuth);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP auth-mode fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpauthmodefallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP auth-mode fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_AUTH_MODE", "MAYBE")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime auth-mode fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime auth-mode fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer token123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth-mode fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth-mode fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime auth-mode fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "invalid auth mode env value should fall back to token auth mode"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when auth mode fallback succeeds"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled() {
     if !clang_available() {
         eprintln!("skipping http runtime cookie-auth allow e2e test: clang not available");
@@ -17822,6 +20505,145 @@ fn main() effects {{ net }} -> Int {{
     assert!(
         response.contains("\r\n\r\nok"),
         "response should include route body when session cookie is valid"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_auth_cookie_name_invalid_env_falls_back_to_session_cookie() {
+    if !clang_available() {
+        eprintln!("skipping http runtime auth cookie-name fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-auth-cookie-name-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpauthcookienamefallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let authCfg = auth.fromPolicy();
+  let withAuth = auth.withAuth(router, authCfg);
+  http.serve({}, withAuth);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP auth cookie-name fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpauthcookienamefallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP auth cookie-name fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_AUTH_MODE", "cookie")
+        .env("SEC4_RT_AUTH_COOKIE_NAME", "session;invalid")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime auth cookie-name fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime auth cookie-name fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nCookie: session=session123\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth cookie-name fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime auth cookie-name fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime auth cookie-name fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "invalid auth cookie name env value should fall back to default session cookie"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when cookie-name fallback succeeds"
     );
 }
 
@@ -18525,6 +21347,3642 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight missing-method e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-missing-method-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightmissingmethode2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight missing-method runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightmissingmethode2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight missing-method runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight missing-method e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight missing-method e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight missing-method e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight missing-method e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight missing-method e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for missing preflight method header"
+    );
+    assert!(
+        response.contains("cors preflight missing requested method"),
+        "response body should include deterministic missing-method diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_without_origin_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight missing-origin e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-missing-origin-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightmissingorigine2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight missing-origin runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightmissingorigine2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight missing-origin runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight missing-origin e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight missing-origin e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight missing-origin e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight missing-origin e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight missing-origin e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for missing preflight origin header"
+    );
+    assert!(
+        response.contains("cors preflight missing origin"),
+        "response body should include deterministic missing-origin diagnostics"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight invalid-origin e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-invalid-origin-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightinvalidorigine2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight invalid-origin runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightinvalidorigine2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight invalid-origin runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight invalid-origin e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight invalid-origin e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight invalid-origin e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight invalid-origin e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight invalid-origin e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for invalid preflight origin header"
+    );
+    assert!(
+        response.contains("cors preflight origin invalid"),
+        "response body should include deterministic invalid-origin diagnostics"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight duplicate-origin e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-duplicate-origin-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightduplicateorigine2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight duplicate-origin runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightduplicateorigine2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight duplicate-origin runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight duplicate-origin e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight duplicate-origin e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nOrigin: https://other.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight duplicate-origin e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight duplicate-origin e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight duplicate-origin e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for duplicate preflight origin headers"
+    );
+    assert!(
+        response.contains("cors preflight duplicate origin header"),
+        "response body should include deterministic duplicate-origin diagnostics"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_request_body() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight body-reject e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-body-reject-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightbodyrejecte2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight body-reject runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightbodyrejecte2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight body-reject runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight body-reject e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight body-reject e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight body-reject e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight body-reject e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight body-reject e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for preflight request body rejection"
+    );
+    assert!(
+        response.contains("cors preflight body not allowed"),
+        "response body should include deterministic preflight-body rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight body request should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_cookie_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight cookie-header e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-cookie-header-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightcookieheadere2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight cookie-header runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightcookieheadere2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight cookie-header runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight cookie-header e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight cookie-header e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nCookie: sid=abc\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight cookie-header e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight cookie-header e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight cookie-header e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for preflight request with cookie header"
+    );
+    assert!(
+        response.contains("cors preflight cookie header not allowed"),
+        "response body should include deterministic preflight cookie-header rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight cookie-header request should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_authorization_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight authorization-header e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-preflight-authorization-header-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightauthorizationheadere2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight authorization-header runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightauthorizationheadere2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight authorization-header runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight authorization-header e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight authorization-header e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAuthorization: Bearer test-token\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight authorization-header e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight authorization-header e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight authorization-header e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for preflight request with authorization header"
+    );
+    assert!(
+        response.contains("cors preflight authorization header not allowed"),
+        "response body should include deterministic preflight authorization-header rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight authorization-header request should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight invalid private-network header e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-preflight-invalid-private-network-header-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightinvalidprivatenetworkheadere2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight invalid private-network header runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightinvalidprivatenetworkheadere2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight invalid private-network header runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight invalid private-network header e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight invalid private-network header e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Private-Network: yes\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight invalid private-network header e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight invalid private-network header e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight invalid private-network header e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for preflight request with invalid private-network header"
+    );
+    assert!(
+        response.contains("cors preflight private-network header invalid"),
+        "response body should include deterministic preflight private-network-header validation diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight invalid private-network header request should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight duplicate private-network headers e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-preflight-duplicate-private-network-header-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightdupprivatenetworkheadere2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight duplicate private-network header runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightdupprivatenetworkheadere2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight duplicate private-network header runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight duplicate private-network header e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight duplicate private-network header e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Private-Network: true\r\nAccess-Control-Request-Private-Network: false\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate private-network header e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate private-network header e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight duplicate private-network header e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for preflight request with duplicate private-network headers"
+    );
+    assert!(
+        response.contains("cors preflight duplicate private-network header"),
+        "response body should include deterministic preflight duplicate private-network diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight duplicate private-network request should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors duplicate-origin non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-duplicate-origin-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsduplicateoriginrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors duplicate-origin non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsduplicateoriginrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors duplicate-origin non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors duplicate-origin non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors duplicate-origin non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nOrigin: https://other.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors duplicate-origin non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors duplicate-origin non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors duplicate-origin non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for duplicate non-preflight origin headers"
+    );
+    assert!(
+        response.contains("cors request duplicate origin header"),
+        "response body should include deterministic duplicate-origin request diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected duplicate-origin request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors invalid-origin non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-invalid-origin-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsinvalidoriginrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors invalid-origin non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsinvalidoriginrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors invalid-origin non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors invalid-origin non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors invalid-origin non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors invalid-origin non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors invalid-origin non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors invalid-origin non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for invalid non-preflight origin header"
+    );
+    assert!(
+        response.contains("cors request origin invalid"),
+        "response body should include deterministic invalid non-preflight origin diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected invalid-origin request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors requested-method non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-requested-method-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsrequestedmethodrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors requested-method non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsrequestedmethodrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors requested-method non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors requested-method non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors requested-method non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors requested-method non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors requested-method non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors requested-method non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for non-preflight request with requested-method header"
+    );
+    assert!(
+        response.contains("cors request requested method header not allowed"),
+        "response body should include deterministic non-preflight requested-method rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected requested-method request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors requested-headers non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-requested-headers-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsrequestedheadersrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors requested-headers non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsrequestedheadersrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors requested-headers non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors requested-headers non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors requested-headers non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Headers: content-type\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors requested-headers non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors requested-headers non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors requested-headers non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for non-preflight request with requested-headers header"
+    );
+    assert!(
+        response.contains("cors request requested headers header not allowed"),
+        "response body should include deterministic non-preflight requested-headers rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected requested-headers request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors duplicate requested-method non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-duplicate-requested-method-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsduprequestedmethodrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP duplicate requested-method non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsduprequestedmethodrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP duplicate requested-method non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime duplicate requested-method non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime duplicate requested-method non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Method: PUT\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime duplicate requested-method non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime duplicate requested-method non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime duplicate requested-method non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for non-preflight request with duplicate requested-method headers"
+    );
+    assert!(
+        response.contains("cors request duplicate requested method header"),
+        "response body should include deterministic duplicate requested-method non-preflight diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected duplicate requested-method request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_headers_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors duplicate requested-headers non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-duplicate-requested-headers-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsduprequestedheadersrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP duplicate requested-headers non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsduprequestedheadersrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP duplicate requested-headers non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime duplicate requested-headers non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime duplicate requested-headers non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Headers: content-type\r\nAccess-Control-Request-Headers: authorization\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime duplicate requested-headers non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime duplicate requested-headers non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime duplicate requested-headers non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for non-preflight request with duplicate requested-headers headers"
+    );
+    assert!(
+        response.contains("cors request duplicate requested headers header"),
+        "response body should include deterministic duplicate requested-headers non-preflight diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected duplicate requested-headers request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors private-network non-preflight e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-private-network-request-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsprivatenetworkrequeste2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors private-network non-preflight runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsprivatenetworkrequeste2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors private-network non-preflight runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors private-network non-preflight e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors private-network non-preflight e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Private-Network: true\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors private-network non-preflight e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors private-network non-preflight e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors private-network non-preflight e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for non-preflight request with private-network header"
+    );
+    assert!(
+        response.contains("cors request private-network header not allowed"),
+        "response body should include deterministic non-preflight private-network rejection diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "rejected private-network request should not emit allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight disallowed-method e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-method-deny-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightmethoddenye2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight disallowed-method runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightmethoddenye2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight disallowed-method runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight disallowed-method e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight disallowed-method e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: TRACE\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight disallowed-method e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight disallowed-method e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight disallowed-method e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 403 Forbidden"),
+        "response should contain 403 status line for disallowed preflight method"
+    );
+    assert!(
+        response.contains("cors preflight method not allowed"),
+        "response body should include deterministic disallowed-method diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight invalid-method-token e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-method-invalid-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightmethodinvalide2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight invalid-method-token runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightmethodinvalide2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight invalid-method-token runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight invalid-method-token e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight invalid-method-token e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: PO ST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight invalid-method-token e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight invalid-method-token e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight invalid-method-token e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for invalid preflight requested method token"
+    );
+    assert!(
+        response.contains("cors preflight requested method invalid"),
+        "response body should include deterministic invalid-method-token diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_method_headers() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight duplicate-requested-method e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-method-duplicate-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightmethodduplicatee2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight duplicate-requested-method runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightmethodduplicatee2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight duplicate-requested-method runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight duplicate-requested-method e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight duplicate-requested-method e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Method: PUT\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-method e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-method e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight duplicate-requested-method e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for duplicate preflight requested-method headers"
+    );
+    assert!(
+        response.contains("cors preflight duplicate requested method header"),
+        "response body should include deterministic duplicate requested-method diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "rejected preflight should not emit allow-methods header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_header_lines() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight duplicate-requested-headers-lines e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-preflight-headers-lines-duplicate-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightheaderslinesduplicatee2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight duplicate requested-headers-line runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightheaderslinesduplicatee2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight duplicate requested-headers-line runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect(
+            "http runtime cors preflight duplicate-requested-headers-lines e2e binary should start",
+        );
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers-lines e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type\r\nAccess-Control-Request-Headers: authorization\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers-lines e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers-lines e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight duplicate-requested-headers-lines e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for duplicate preflight requested-headers header lines"
+    );
+    assert!(
+        response.contains("cors preflight duplicate requested headers header"),
+        "response body should include deterministic duplicate requested-headers header-line diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Headers:"),
+        "rejected preflight should not emit allow-headers header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight allowed-headers e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-allowed-headers-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightallowedheaderse2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight allowed-headers runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightallowedheaderse2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight allowed-headers runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight allowed-headers e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight allowed-headers e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type, authorization\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight allowed-headers e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight allowed-headers e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight allowed-headers e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line for allowed preflight request headers"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Headers: content-type, authorization"),
+        "response should include cors allow-headers block for allowed preflight request headers"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors preflight disallowed-header e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-header-deny-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightheaderdenye2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight disallowed-header runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightheaderdenye2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight disallowed-header runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight disallowed-header e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight disallowed-header e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: x-evil\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight disallowed-header e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors preflight disallowed-header e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight disallowed-header e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 403 Forbidden"),
+        "response should contain 403 status line for disallowed preflight headers"
+    );
+    assert!(
+        response.contains("cors preflight headers not allowed"),
+        "response body should include deterministic disallowed-headers diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Headers:"),
+        "rejected preflight should not emit allow-headers header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight invalid-headers-token e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-header-invalid-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightheaderinvalide2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight invalid-headers-token runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightheaderinvalide2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight invalid-headers-token runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight invalid-headers-token e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight invalid-headers-token e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content type\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight invalid-headers-token e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight invalid-headers-token e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight invalid-headers-token e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for invalid preflight requested-headers token"
+    );
+    assert!(
+        response.contains("cors preflight requested headers invalid"),
+        "response body should include deterministic invalid requested-headers diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Headers:"),
+        "rejected preflight should not emit allow-headers header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight empty-requested-headers e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-header-empty-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightheaderemptye2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight empty-requested-headers runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightheaderemptye2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight empty-requested-headers runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight empty-requested-headers e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight empty-requested-headers e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers:   \r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight empty-requested-headers e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight empty-requested-headers e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight empty-requested-headers e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for empty preflight requested-headers value"
+    );
+    assert!(
+        response.contains("cors preflight requested headers invalid"),
+        "response body should include deterministic empty requested-headers diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Headers:"),
+        "rejected preflight should not emit allow-headers header block"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens() {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime cors preflight duplicate-requested-headers e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-header-duplicate-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorspreflightheaderduplicatee2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors preflight duplicate-requested-headers runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorspreflightheaderduplicatee2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors preflight duplicate-requested-headers runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors preflight duplicate-requested-headers e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type, Content-Type\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors preflight duplicate-requested-headers e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors preflight duplicate-requested-headers e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line for duplicate preflight requested-headers tokens"
+    );
+    assert!(
+        response.contains("cors preflight requested headers invalid"),
+        "response body should include deterministic duplicate requested-headers diagnostics"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Headers:"),
+        "rejected preflight should not emit allow-headers header block"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled() {
     if !clang_available() {
         eprintln!("skipping http runtime cors preflight auth/csrf e2e test: clang not available");
@@ -18811,6 +25269,2153 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors allowed-origins fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-allowed-origins-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsallowedoriginsfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors allowed-origins fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsallowedoriginsfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors allowed-origins fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env(
+            "SEC4_RT_CORS_ALLOWED_ORIGINS",
+            "https://app.example.com\nhttps://evil.example.com",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors allowed-origins fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors allowed-origins fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors allowed-origins fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "invalid cors allowed-origins env value should fall back to wildcard origin"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin: https://app.example.com"),
+        "invalid cors allowed-origins env value should not be reflected in response header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors allowed-origins missing-scheme fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-allowed-origins-missing-scheme-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsallowedoriginsmissingschemefallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors allowed-origins missing-scheme fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsallowedoriginsmissingschemefallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors allowed-origins missing-scheme fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ALLOWED_ORIGINS", "app.example.com")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors allowed-origins missing-scheme fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors allowed-origins missing-scheme fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins missing-scheme fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors allowed-origins missing-scheme fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors allowed-origins missing-scheme fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "missing-scheme allowed-origin token should be treated as invalid and fall back to wildcard"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin: app.example.com"),
+        "invalid missing-scheme token must not be emitted as allow-origin"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors allowed-origins allowlist match e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-allowed-origins-allowlist-match-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsallowedoriginsallowlistmatche2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors allowed-origins allowlist match runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsallowedoriginsallowlistmatche2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors allowed-origins allowlist match runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env(
+            "SEC4_RT_CORS_ALLOWED_ORIGINS",
+            "https://app.example.com, https://admin.example.com",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors allowed-origins allowlist match e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors allowed-origins allowlist match e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://admin.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins allowlist match e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins allowlist match e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors allowed-origins allowlist match e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://admin.example.com"),
+        "allowlist should reflect the matching request origin"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin: https://app.example.com"),
+        "allowlist match should not pin to the first configured origin when request origin matches another token"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors allowed-origins allowlist non-match e2e test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-allowed-origins-allowlist-non-match-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsallowedoriginsallowlistnonmatche2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors allowed-origins allowlist non-match runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsallowedoriginsallowlistnonmatche2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors allowed-origins allowlist non-match runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env(
+            "SEC4_RT_CORS_ALLOWED_ORIGINS",
+            "https://app.example.com, https://admin.example.com",
+        )
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors allowed-origins allowlist non-match e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors allowed-origins allowlist non-match e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://evil.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins allowlist non-match e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allowed-origins allowlist non-match e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors allowed-origins allowlist non-match e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://app.example.com"),
+        "non-matching request origin should deterministically fall back to the first configured allow-origin token"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin: https://evil.example.com"),
+        "non-matching request origin should not be reflected into CORS allow-origin header"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors wildcard credentials guard e2e test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-wildcard-credentials-guard-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorswildcardcredentialsguarde2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors wildcard credentials guard runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorswildcardcredentialsguarde2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors wildcard credentials guard runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ALLOWED_ORIGINS", "*")
+        .env("SEC4_RT_CORS_ALLOW_CREDENTIALS", "true")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors wildcard credentials guard e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors wildcard credentials guard e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors wildcard credentials guard e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors wildcard credentials guard e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors wildcard credentials guard e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "response should keep wildcard allow-origin when wildcard is configured"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Credentials: true"),
+        "wildcard allow-origin should suppress credentials header even when env requests credentials"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors non-wildcard credentials e2e test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-non-wildcard-credentials-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsnonwildcardcredentialse2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors non-wildcard credentials runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsnonwildcardcredentialse2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors non-wildcard credentials runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+        .env("SEC4_RT_CORS_ALLOW_CREDENTIALS", "true")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors non-wildcard credentials e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors non-wildcard credentials e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors non-wildcard credentials e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime cors non-wildcard credentials e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors non-wildcard credentials e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://app.example.com"),
+        "response should include configured non-wildcard allow-origin"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Credentials: true"),
+        "non-wildcard allow-origin should still emit credentials header when enabled"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors allow-credentials fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-allow-credentials-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsallowcredentialsfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors allow-credentials fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsallowcredentialsfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors allow-credentials fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ALLOW_CREDENTIALS", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors allow-credentials fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors allow-credentials fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allow-credentials fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors allow-credentials fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors allow-credentials fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "response should include cors allow-origin header"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Credentials: true"),
+        "invalid cors allow-credentials env value should keep default credentials-disabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors require-vary-origin fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-vary-origin-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsvaryoriginfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors require-vary-origin fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsvaryoriginfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors require-vary-origin fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+        .env("SEC4_RT_CORS_REQUIRE_VARY_ORIGIN", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors require-vary-origin fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors require-vary-origin fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors require-vary-origin fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors require-vary-origin fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors require-vary-origin fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://app.example.com"),
+        "response should include configured non-wildcard allow-origin header"
+    );
+    assert!(
+        !response.contains("Vary: Origin"),
+        "invalid cors require-vary-origin env value should keep default vary-origin-disabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors enabled fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-enabled-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsenabledfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors enabled fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsenabledfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors enabled fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_CORS_ENABLED", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors enabled fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors enabled fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors enabled fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors enabled fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors enabled fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "invalid cors enabled env value should keep default cors-enabled behavior"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors max-age env e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-max-age-env-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsmaxageenve2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors max-age env runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsmaxageenve2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors max-age env runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_MAX_AGE_SECONDS", "1200")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors max-age env e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors max-age env e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors max-age env e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors max-age env e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors max-age env e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line for CORS preflight request"
+    );
+    assert!(
+        response.contains("Access-Control-Max-Age: 1200"),
+        "response should reflect configured cors max-age env value"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors max-age fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-max-age-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsmaxagefallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors max-age fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsmaxagefallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors max-age fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_MAX_AGE_SECONDS", "MAYBE")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors max-age fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors max-age fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors max-age fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors max-age fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors max-age fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line for CORS preflight request"
+    );
+    assert!(
+        response.contains("Access-Control-Max-Age: 600"),
+        "invalid cors max-age env value should fall back to default max-age"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_methods_and_headers_from_env_on_preflight() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors methods/headers env e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-methods-headers-env-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsmethodsheadersenve2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors methods/headers env runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsmethodsheadersenve2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors methods/headers env runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_ALLOWED_METHODS", "GET,POST")
+        .env("SEC4_RT_CORS_ALLOWED_HEADERS", "content-type,x-csrf-token")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors methods/headers env e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors methods/headers env e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors methods/headers env e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors methods/headers env e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors methods/headers env e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Methods: GET,POST"),
+        "response should include env-configured cors allow-methods list"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Headers: content-type,x-csrf-token"),
+        "response should include env-configured cors allow-headers list"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors methods/headers fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-methods-headers-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsmethodsheadersfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  res.text(201, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors methods/headers fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsmethodsheadersfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors methods/headers fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_ALLOWED_METHODS", "TRACE")
+        .env("SEC4_RT_CORS_ALLOWED_HEADERS", "content-type, bad header")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors methods/headers fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors methods/headers fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nAccess-Control-Request-Method: POST\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors methods/headers fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors methods/headers fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors methods/headers fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS"),
+        "invalid cors allow-methods env value should fall back to default methods list"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Headers: content-type, authorization"),
+        "invalid cors allow-headers env value should fall back to default headers list"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors exposed-headers env e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-exposed-headers-env-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsexposedheadersenve2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors exposed-headers env runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsexposedheadersenve2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors exposed-headers env runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_EXPOSED_HEADERS", "x-trace-id,x-request-id")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors exposed-headers env e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors exposed-headers env e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors exposed-headers env e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors exposed-headers env e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors exposed-headers env e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Access-Control-Expose-Headers: x-trace-id,x-request-id"),
+        "response should include env-configured cors exposed-headers list"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled() {
+    if !clang_available() {
+        eprintln!("skipping http runtime cors exposed-headers fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-exposed-headers-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcorsexposedheadersfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let corsCfg = cors.fromPolicy();
+  let withCors = cors.withCors(router, corsCfg);
+  http.serve({}, withCors);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP cors exposed-headers fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcorsexposedheadersfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP cors exposed-headers fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CORS_EXPOSED_HEADERS", "x-trace-id, bad header")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime cors exposed-headers fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime cors exposed-headers fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nOrigin: https://app.example.com\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors exposed-headers fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime cors exposed-headers fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime cors exposed-headers fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        !response.contains("Access-Control-Expose-Headers:"),
+        "invalid cors exposed-headers env value should fall back to absent exposed-headers header"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled() {
     if !clang_available() {
         eprintln!("skipping http runtime csrf reject e2e test: clang not available");
@@ -18941,6 +27546,146 @@ fn main() effects {{ net }} -> Int {{
     assert!(
         response.contains("HTTP/1.1 403 Forbidden"),
         "response should contain 403 status line for missing csrf tokens"
+    );
+    assert!(
+        response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\"")
+            && response.contains("\"message\":\"CSRF token missing or invalid\""),
+        "response should include deterministic csrf error envelope payload"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set() {
+    if !clang_available() {
+        eprintln!("skipping http runtime csrf methods fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-csrf-methods-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcsrfmethodsfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(router, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP csrf methods fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcsrfmethodsfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP csrf methods fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CSRF_PROTECTED_METHODS", "MAYBE")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime csrf methods fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime csrf methods fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf methods fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf methods fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime csrf methods fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 403 Forbidden"),
+        "invalid csrf protected methods env value should preserve default post protection"
     );
     assert!(
         response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\"")
@@ -19231,6 +27976,278 @@ fn main() effects {{ net }} -> Int {{
             && response.contains("\"status\":201")
             && response.contains("\"traceId\":\"rt-1\""),
         "response should include deterministic std-success envelope payload"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env() {
+    if !clang_available() {
+        eprintln!("skipping http runtime custom csrf names e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-custom-csrf-names-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcustomcsrfnamese2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(router, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP custom csrf names runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcustomcsrfnamese2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP custom csrf names runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CSRF_COOKIE_NAME", "csrf-session")
+        .env("SEC4_RT_CSRF_HEADER_NAME", "X-CSRF-Session-Token")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime custom csrf names e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime custom csrf names e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-CSRF-Session-Token: token123\r\nCookie: csrf-session=token123\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime custom csrf names e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime custom csrf names e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime custom csrf names e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "custom csrf header/cookie names should be honored when tokens match"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults() {
+    if !clang_available() {
+        eprintln!("skipping http runtime csrf names fallback e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-csrf-names-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpcsrfnamesfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn createUser() effects {{ net }} -> Int {{
+  req.json("CreateUserRequest");
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  let csrfCfg = csrf.fromPolicy();
+  let withCsrf = csrf.withCsrf(router, csrfCfg);
+  http.serve({}, withCsrf);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP csrf names fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpcsrfnamesfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP csrf names fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_CSRF_COOKIE_NAME", "csrf;invalid")
+        .env("SEC4_RT_CSRF_HEADER_NAME", "X CSRF Token")
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime csrf names fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime csrf names fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-CSRF-Token: token123\r\nCookie: csrf=token123\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf names fallback e2e test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime csrf names fallback e2e binary did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime csrf names fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "invalid csrf name env values should fall back to default csrf names"
     );
 }
 

@@ -60,6 +60,8 @@
 #define SEC4_RT_MAX_LOG_LINE_BYTES 2048
 #define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
 #define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
+#define SEC4_RT_MAX_CSP_POLICY_BYTES 1024
+#define SEC4_RT_DEFAULT_CSP_POLICY "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 #define SEC4_RT_POLICY_CORS_HANDLE INT64_C(0x6EC4001)
 #define SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE INT64_C(0x6EC4002)
 #define SEC4_RT_POLICY_CSRF_HANDLE INT64_C(0x6EC4003)
@@ -82,14 +84,24 @@ typedef struct {
   bool cors_require_vary_origin;
   char cors_allow_methods[128];
   char cors_allow_headers[128];
+  char cors_expose_headers[128];
   int64_t cors_max_age_seconds;
   bool security_headers_enabled;
+  bool security_hsts_enabled;
+  int64_t security_hsts_max_age_seconds;
+  bool security_hsts_include_subdomains;
+  bool security_hsts_preload;
   bool security_x_content_type_options;
   char security_x_frame_options[16];
   char security_referrer_policy[128];
+  bool security_csp_enabled;
+  bool security_csp_report_only;
+  char security_csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
   bool csrf_enabled;
   char csrf_mode[32];
   char csrf_protected_methods[64];
+  char csrf_cookie_name[64];
+  char csrf_header_name[64];
   bool auth_enabled;
   char auth_mode[16];
   size_t route_count;
@@ -169,14 +181,25 @@ typedef struct {
   char allow_origin[256];
   bool allow_credentials;
   bool require_vary_origin;
+  int64_t max_age_seconds;
+  char allow_methods[128];
+  char allow_headers[128];
+  char expose_headers[128];
 } sec4_rt_cors_policy_state;
 
 typedef struct {
   bool loaded;
   bool enabled;
+  bool hsts_enabled;
+  int64_t hsts_max_age_seconds;
+  bool hsts_include_subdomains;
+  bool hsts_preload;
   bool x_content_type_options;
   char x_frame_options[16];
   char referrer_policy[128];
+  bool csp_enabled;
+  bool csp_report_only;
+  char csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
 } sec4_rt_security_headers_policy_state;
 
 typedef struct {
@@ -184,6 +207,8 @@ typedef struct {
   bool enabled;
   char mode[32];
   char protected_methods[64];
+  char cookie_name[64];
+  char header_name[64];
 } sec4_rt_csrf_policy_state;
 
 typedef struct {
@@ -272,6 +297,8 @@ static bool sec4_rt_parse_header_value(
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
+static bool sec4_rt_is_header_name_valid(const char *value);
+static bool sec4_rt_is_header_value_valid(const char *value);
 static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
@@ -1485,6 +1512,208 @@ static bool sec4_rt_csv_is_valid_port_list(const char *csv) {
     }
 
     if (parsed_port == 0UL) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_cors_methods_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    bool known_method = (token_len == 3 && strncasecmp(token_start, "GET", 3) == 0)
+        || (token_len == 4 && strncasecmp(token_start, "POST", 4) == 0)
+        || (token_len == 3 && strncasecmp(token_start, "PUT", 3) == 0)
+        || (token_len == 5 && strncasecmp(token_start, "PATCH", 5) == 0)
+        || (token_len == 6 && strncasecmp(token_start, "DELETE", 6) == 0)
+        || (token_len == 7 && strncasecmp(token_start, "OPTIONS", 7) == 0);
+    if (!known_method) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_cors_headers_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= 128) {
+      return false;
+    }
+    char token[128];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_header_name_valid(token)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_is_cors_origin_token_valid(const char *token) {
+  if (token == NULL || token[0] == '\0') {
+    return false;
+  }
+  if (strcmp(token, "*") == 0) {
+    return true;
+  }
+  if (!sec4_rt_is_header_value_valid(token)) {
+    return false;
+  }
+
+  const char *scheme_sep = strstr(token, "://");
+  if (scheme_sep == NULL) {
+    return false;
+  }
+  size_t scheme_len = (size_t) (scheme_sep - token);
+  bool scheme_ok = (scheme_len == 4 && strncasecmp(token, "http", 4) == 0)
+      || (scheme_len == 5 && strncasecmp(token, "https", 5) == 0);
+  if (!scheme_ok) {
+    return false;
+  }
+
+  const char *authority = scheme_sep + 3;
+  if (authority[0] == '\0' || strpbrk(authority, "/?#") != NULL) {
+    return false;
+  }
+
+  const char *port_sep = NULL;
+  if (authority[0] == '[') {
+    const char *close = strchr(authority, ']');
+    if (close == NULL || close == authority + 1) {
+      return false;
+    }
+    size_t literal_len = (size_t) (close - (authority + 1));
+    if (literal_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char literal[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(literal, authority + 1, literal_len);
+    literal[literal_len] = '\0';
+    struct in6_addr parsed6;
+    if (inet_pton(AF_INET6, literal, &parsed6) != 1) {
+      return false;
+    }
+    if (close[1] == '\0') {
+      return true;
+    }
+    if (close[1] != ':') {
+      return false;
+    }
+    port_sep = close + 1;
+  } else {
+    const char *first_colon = strchr(authority, ':');
+    const char *last_colon = strrchr(authority, ':');
+    if (first_colon != NULL && first_colon != last_colon) {
+      return false;
+    }
+    if (last_colon != NULL) {
+      port_sep = last_colon;
+    }
+
+    size_t host_len = port_sep != NULL ? (size_t) (port_sep - authority) : strlen(authority);
+    if (host_len == 0 || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(host, authority, host_len);
+    host[host_len] = '\0';
+    if (!sec4_rt_is_redirect_host_token_valid(host)) {
+      return false;
+    }
+    if (port_sep == NULL) {
+      return true;
+    }
+  }
+
+  const char *digits = port_sep + 1;
+  if (digits[0] == '\0') {
+    return false;
+  }
+  unsigned long parsed_port = 0;
+  while (*digits != '\0') {
+    if (!isdigit((unsigned char) *digits)) {
+      return false;
+    }
+    parsed_port = (parsed_port * 10UL) + (unsigned long) (*digits - '0');
+    if (parsed_port > 65535UL) {
+      return false;
+    }
+    digits += 1;
+  }
+  return parsed_port != 0UL;
+}
+
+static bool sec4_rt_csv_is_valid_cors_origins_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES) {
+      return false;
+    }
+    char token[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_cors_origin_token_valid(token)) {
       return false;
     }
 
@@ -4896,6 +5125,20 @@ static bool sec4_rt_is_header_name_valid(const char *value) {
   return true;
 }
 
+static bool sec4_rt_is_http_method_token_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  while (*value != '\0') {
+    unsigned char ch = (unsigned char) *value;
+    if (!(isalnum(ch) || ch == '-' || ch == '_')) {
+      return false;
+    }
+    value += 1;
+  }
+  return true;
+}
+
 static bool sec4_rt_is_header_value_valid(const char *value) {
   if (value == NULL || value[0] == '\0') {
     return false;
@@ -4907,6 +5150,30 @@ static bool sec4_rt_is_header_value_valid(const char *value) {
     value += 1;
   }
   return true;
+}
+
+static bool sec4_rt_is_referrer_policy_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+
+  static const char *allowed[] = {
+      "no-referrer",
+      "no-referrer-when-downgrade",
+      "origin",
+      "origin-when-cross-origin",
+      "same-origin",
+      "strict-origin",
+      "strict-origin-when-cross-origin",
+      "unsafe-url",
+  };
+  for (size_t i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+    if (strcasecmp(value, allowed[i]) == 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static bool sec4_rt_is_email_local_char(unsigned char ch) {
@@ -5714,6 +5981,40 @@ static bool sec4_rt_parse_header_value(
   return false;
 }
 
+static size_t sec4_rt_count_header_occurrences(
+    const char *request,
+    size_t request_len,
+    const char *name
+) {
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return 0;
+  }
+
+  size_t name_len = strlen(name);
+  size_t count = 0;
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      count += 1;
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return count;
+}
+
 static bool sec4_rt_parse_cookie_value(
     const char *cookie_header,
     const char *cookie_name,
@@ -5761,6 +6062,21 @@ static bool sec4_rt_parse_cookie_value(
   return false;
 }
 
+static bool sec4_rt_auth_mode_is_supported(const char *mode) {
+  if (mode == NULL || mode[0] == '\0') {
+    return false;
+  }
+  return strcasecmp(mode, "off") == 0 || strcasecmp(mode, "token") == 0
+      || strcasecmp(mode, "cookie") == 0 || strcasecmp(mode, "mixed") == 0;
+}
+
+static const char *sec4_rt_auth_mode_or_default(const char *mode) {
+  if (sec4_rt_auth_mode_is_supported(mode)) {
+    return mode;
+  }
+  return "token";
+}
+
 static bool sec4_rt_auth_mode_allows_token(const char *mode) {
   if (mode == NULL || mode[0] == '\0') {
     return true;
@@ -5786,24 +6102,54 @@ static bool sec4_rt_auth_mode_allows_cookie(const char *mode) {
 
 static const char *sec4_rt_auth_cookie_name(void) {
   const char *configured = getenv("SEC4_RT_AUTH_COOKIE_NAME");
-  if (configured != NULL && configured[0] != '\0') {
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
     return configured;
   }
   return "session";
 }
 
-static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
-  if (router != NULL && router->auth_mode[0] != '\0') {
-    return router->auth_mode;
+static const char *sec4_rt_csrf_cookie_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_cookie_name[0] != '\0') {
+    return router->csrf_cookie_name;
   }
-  if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
-    return g_sec4_rt_auth_policy.mode;
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.cookie_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    return g_sec4_rt_csrf_policy.cookie_name;
   }
-  const char *configured = getenv("SEC4_RT_AUTH_MODE");
-  if (configured != NULL && configured[0] != '\0') {
+  const char *configured = getenv("SEC4_RT_CSRF_COOKIE_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
     return configured;
   }
-  return "token";
+  return "csrf";
+}
+
+static const char *sec4_rt_csrf_header_name(const sec4_rt_router_state *router) {
+  if (router != NULL && router->csrf_header_name[0] != '\0') {
+    return router->csrf_header_name;
+  }
+  if (g_sec4_rt_csrf_policy.loaded && g_sec4_rt_csrf_policy.header_name[0] != '\0'
+      && sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    return g_sec4_rt_csrf_policy.header_name;
+  }
+  const char *configured = getenv("SEC4_RT_CSRF_HEADER_NAME");
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
+    return configured;
+  }
+  return "X-CSRF-Token";
+}
+
+static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
+  if (router != NULL && router->auth_mode[0] != '\0') {
+    return sec4_rt_auth_mode_or_default(router->auth_mode);
+  }
+  if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
+    return sec4_rt_auth_mode_or_default(g_sec4_rt_auth_policy.mode);
+  }
+  const char *configured = getenv("SEC4_RT_AUTH_MODE");
+  return sec4_rt_auth_mode_or_default(configured);
 }
 
 static const char *sec4_rt_auth_unauthorized_message(const char *mode) {
@@ -5907,6 +6253,16 @@ static bool sec4_rt_auth_cookie_has_role(const char *required_role) {
   }
 
   return false;
+}
+
+static bool sec4_rt_csrf_methods_has_protected_verb(const char *methods) {
+  if (methods == NULL || !sec4_rt_csv_has_any_token(methods)) {
+    return false;
+  }
+  return sec4_rt_csv_contains_token_ci(methods, "POST", strlen("POST"))
+      || sec4_rt_csv_contains_token_ci(methods, "PUT", strlen("PUT"))
+      || sec4_rt_csv_contains_token_ci(methods, "PATCH", strlen("PATCH"))
+      || sec4_rt_csv_contains_token_ci(methods, "DELETE", strlen("DELETE"));
 }
 
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method) {
@@ -6121,9 +6477,36 @@ static const char *sec4_rt_cors_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   int written = snprintf(
       buffer,
       buffer_size,
@@ -6135,7 +6518,7 @@ static const char *sec4_rt_cors_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,
@@ -6155,6 +6538,17 @@ static const char *sec4_rt_cors_headers_block(
       used += (size_t) written;
     }
   }
+  if (router->cors_expose_headers[0] != '\0') {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Expose-Headers: %s\r\n",
+        router->cors_expose_headers
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
   (void) used;
   return buffer;
 }
@@ -6168,9 +6562,36 @@ static const char *sec4_rt_preflight_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   const char *allow_methods = router->cors_allow_methods[0] != '\0'
       ? router->cors_allow_methods
       : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -6198,7 +6619,7 @@ static const char *sec4_rt_preflight_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,
@@ -6222,6 +6643,87 @@ static const char *sec4_rt_preflight_headers_block(
   return buffer;
 }
 
+static bool sec4_rt_cors_requested_headers_allowed(
+    const char *requested_headers,
+    const char *allow_headers,
+    bool *invalid_token
+) {
+  if (invalid_token != NULL) {
+    *invalid_token = false;
+  }
+  if (requested_headers == NULL) {
+    return true;
+  }
+  if (requested_headers[0] == '\0') {
+    if (invalid_token != NULL) {
+      *invalid_token = true;
+    }
+    return false;
+  }
+  if (allow_headers == NULL || allow_headers[0] == '\0') {
+    return false;
+  }
+
+  char seen_tokens[32][128];
+  size_t seen_count = 0;
+  const char *cursor = requested_headers;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+    if (token_end <= token_start) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= 128) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    char token[128];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_header_name_valid(token)) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    for (size_t i = 0; i < seen_count; i++) {
+      if (strcasecmp(seen_tokens[i], token) == 0) {
+        if (invalid_token != NULL) {
+          *invalid_token = true;
+        }
+        return false;
+      }
+    }
+    if (seen_count >= (sizeof(seen_tokens) / sizeof(seen_tokens[0]))) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    memcpy(seen_tokens[seen_count], token, token_len + 1);
+    seen_count += 1;
+    if (!sec4_rt_csv_contains_token_ci(allow_headers, token, token_len)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
 static const char *sec4_rt_security_headers_block(
     sec4_rt_router_state *router,
     char *buffer,
@@ -6233,6 +6735,25 @@ static const char *sec4_rt_security_headers_block(
 
   size_t used = 0;
   int written = 0;
+  if (router->security_hsts_enabled && router->security_hsts_max_age_seconds > 0) {
+    const char *include_subdomains = router->security_hsts_include_subdomains
+        ? "; includeSubDomains"
+        : "";
+    const char *preload = router->security_hsts_preload ? "; preload" : "";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Strict-Transport-Security: max-age=%lld%s%s\r\n",
+        (long long) router->security_hsts_max_age_seconds,
+        include_subdomains,
+        preload
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
   if (router->security_x_content_type_options) {
     written = snprintf(
         buffer + used,
@@ -6264,6 +6785,23 @@ static const char *sec4_rt_security_headers_block(
         buffer_size - used,
         "Referrer-Policy: %s\r\n",
         router->security_referrer_policy
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
+  if (router->security_csp_enabled && router->security_csp_policy[0] != '\0') {
+    const char *header_name = router->security_csp_report_only
+        ? "Content-Security-Policy-Report-Only"
+        : "Content-Security-Policy";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "%s: %s\r\n",
+        header_name,
+        router->security_csp_policy
     );
     if (written <= 0 || (size_t) written >= buffer_size - used) {
       return used > 0 ? buffer : NULL;
@@ -6417,20 +6955,16 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
   sec4_rt_reset_response();
-  char security_headers_buffer[384];
-  char cors_headers_buffer[384];
-  char preflight_headers_buffer[512];
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char cors_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char preflight_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
   const char *security_headers = sec4_rt_security_headers_block(
       router,
       security_headers_buffer,
       sizeof(security_headers_buffer)
   );
-  const char *cors_headers = sec4_rt_cors_headers_block(
-      router,
-      cors_headers_buffer,
-      sizeof(cors_headers_buffer)
-  );
-  char merged_headers[320];
+  const char *cors_headers = NULL;
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
@@ -6543,8 +7077,526 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
   strncpy(g_sec4_rt_request.route_path, path, sizeof(g_sec4_rt_request.route_path) - 1);
   g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
+  cors_headers = sec4_rt_cors_headers_block(
+      router,
+      cors_headers_buffer,
+      sizeof(cors_headers_buffer)
+  );
+  size_t request_origin_occurrences = sec4_rt_count_header_occurrences(
+      g_sec4_rt_request.raw_headers,
+      g_sec4_rt_request.raw_headers_len,
+      "Origin"
+  );
+  if (router->cors_enabled && request_origin_occurrences > 1 && strcmp(method, "OPTIONS") != 0) {
+    const char *body = "cors request duplicate origin header";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        NULL,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        400,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+  if (router->cors_enabled && strcmp(method, "OPTIONS") != 0) {
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (has_request_origin
+        && (strcmp(request_origin, "*") == 0
+            || !sec4_rt_is_cors_origin_token_valid(request_origin))) {
+      const char *body = "cors request origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_method_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Method"
+    );
+    if (requested_method_header_occurrences > 1) {
+      const char *body = "cors request duplicate requested method header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_method_header[32];
+    bool has_requested_method_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Method",
+        requested_method_header,
+        sizeof(requested_method_header)
+    );
+    if (has_requested_method_header) {
+      const char *body = "cors request requested method header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_headers_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Headers"
+    );
+    if (requested_headers_header_occurrences > 1) {
+      const char *body = "cors request duplicate requested headers header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_headers_header[256];
+    bool has_requested_headers_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers_header,
+        sizeof(requested_headers_header)
+    );
+    if (has_requested_headers_header) {
+      const char *body = "cors request requested headers header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_private_network_header[16];
+    bool has_requested_private_network_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Private-Network",
+        requested_private_network_header,
+        sizeof(requested_private_network_header)
+    );
+    if (has_requested_private_network_header) {
+      const char *body = "cors request private-network header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+  }
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
+    if (request_origin_occurrences > 1) {
+      const char *body = "cors preflight duplicate origin header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (g_sec4_rt_request.body_len > 0) {
+      const char *body = "cors preflight body not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char cookie_header[512];
+    bool has_cookie_header = sec4_rt_extract_request_header(
+        "Cookie",
+        cookie_header,
+        sizeof(cookie_header)
+    );
+    if (has_cookie_header) {
+      const char *body = "cors preflight cookie header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char authorization_header[512];
+    bool has_authorization_header = sec4_rt_extract_request_header(
+        "Authorization",
+        authorization_header,
+        sizeof(authorization_header)
+    );
+    if (has_authorization_header) {
+      const char *body = "cors preflight authorization header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    size_t requested_private_network_header_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Private-Network"
+    );
+    if (requested_private_network_header_occurrences > 1) {
+      const char *body = "cors preflight duplicate private-network header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_private_network_header[16];
+    bool has_requested_private_network_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Private-Network",
+        requested_private_network_header,
+        sizeof(requested_private_network_header)
+    );
+    if (has_requested_private_network_header
+        && strcasecmp(requested_private_network_header, "true") != 0) {
+      const char *body = "cors preflight private-network header invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (!has_request_origin) {
+      const char *body = "cors preflight missing origin";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (strcmp(request_origin, "*") == 0 || !sec4_rt_is_cors_origin_token_valid(request_origin)) {
+      const char *body = "cors preflight origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_method[32];
+    size_t requested_method_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Method"
+    );
+    if (requested_method_occurrences > 1) {
+      const char *body = "cors preflight duplicate requested method header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    bool has_requested_method = sec4_rt_extract_request_header(
+        "Access-Control-Request-Method",
+        requested_method,
+        sizeof(requested_method)
+    );
+    if (!has_requested_method) {
+      const char *body = "cors preflight missing requested method";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (!sec4_rt_is_http_method_token_valid(requested_method)) {
+      const char *body = "cors preflight requested method invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    const char *allow_methods = router->cors_allow_methods[0] != '\0'
+        ? router->cors_allow_methods
+        : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+    if (!sec4_rt_csv_contains_token_ci(
+            allow_methods,
+            requested_method,
+            strlen(requested_method)
+        )) {
+      const char *body = "cors preflight method not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          403,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_headers[256];
+    size_t requested_headers_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Headers"
+    );
+    if (requested_headers_occurrences > 1) {
+      const char *body = "cors preflight duplicate requested headers header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    bool has_requested_headers = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers,
+        sizeof(requested_headers)
+    );
+    const char *allow_headers = router->cors_allow_headers[0] != '\0'
+        ? router->cors_allow_headers
+        : "content-type, authorization";
+    bool invalid_requested_headers = false;
+    if (has_requested_headers
+        && !sec4_rt_cors_requested_headers_allowed(
+            requested_headers,
+            allow_headers,
+            &invalid_requested_headers
+        )) {
+      int64_t status = invalid_requested_headers ? 400 : 403;
+      const char *body = invalid_requested_headers
+          ? "cors preflight requested headers invalid"
+          : "cors preflight headers not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          status,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     const char *extra_headers = sec4_rt_preflight_headers_block(
         router,
         preflight_headers_buffer,
@@ -6603,13 +7655,15 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(router, method)) {
+    const char *csrf_header_name = sec4_rt_csrf_header_name(router);
+    const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(router);
     char csrf_header[128];
     char cookie_header[512];
     char csrf_cookie[128];
     bool has_csrf_header = sec4_rt_parse_header_value(
         request,
         headers_len,
-        "X-CSRF-Token",
+        csrf_header_name,
         csrf_header,
         sizeof(csrf_header)
     );
@@ -6621,7 +7675,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         sizeof(cookie_header)
     );
     bool has_csrf_cookie = has_cookie_header
-        && sec4_rt_parse_cookie_value(cookie_header, "csrf", csrf_cookie, sizeof(csrf_cookie));
+        && sec4_rt_parse_cookie_value(
+            cookie_header,
+            csrf_cookie_name,
+            csrf_cookie,
+            sizeof(csrf_cookie)
+        );
 
     if (!has_csrf_header || !has_csrf_cookie || strcmp(csrf_header, csrf_cookie) != 0) {
       sec4_rt_store_std_error_response(
@@ -9690,6 +10749,7 @@ static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
       sizeof(slot->cors_allow_headers) - 1
   );
   slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+  slot->cors_expose_headers[0] = '\0';
   slot->cors_max_age_seconds = 600;
 }
 
@@ -9698,6 +10758,10 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
     return;
   }
   slot->security_headers_enabled = true;
+  slot->security_hsts_enabled = false;
+  slot->security_hsts_max_age_seconds = 15552000;
+  slot->security_hsts_include_subdomains = true;
+  slot->security_hsts_preload = false;
   slot->security_x_content_type_options = true;
   strncpy(
       slot->security_x_frame_options,
@@ -9711,6 +10775,14 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
       sizeof(slot->security_referrer_policy) - 1
   );
   slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+  slot->security_csp_enabled = true;
+  slot->security_csp_report_only = false;
+  strncpy(
+      slot->security_csp_policy,
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      sizeof(slot->security_csp_policy) - 1
+  );
+  slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
@@ -9726,6 +10798,18 @@ static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
       sizeof(slot->csrf_protected_methods) - 1
   );
   slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+  strncpy(
+      slot->csrf_cookie_name,
+      "csrf",
+      sizeof(slot->csrf_cookie_name) - 1
+  );
+  slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+  strncpy(
+      slot->csrf_header_name,
+      "X-CSRF-Token",
+      sizeof(slot->csrf_header_name) - 1
+  );
+  slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_auth(sec4_rt_router_state *slot) {
@@ -9749,12 +10833,57 @@ static void sec4_rt_load_cors_policy_from_env(void) {
       "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
       false
   );
-  const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
-  if (!sec4_rt_csv_copy_first_token(
-          allowed_origins,
-          g_sec4_rt_cors_policy.allow_origin,
-          sizeof(g_sec4_rt_cors_policy.allow_origin)
-      )) {
+  g_sec4_rt_cors_policy.max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_CORS_MAX_AGE_SECONDS",
+      600
+  );
+  if (g_sec4_rt_cors_policy.max_age_seconds <= 0) {
+    g_sec4_rt_cors_policy.max_age_seconds = 600;
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_METHODS",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      g_sec4_rt_cors_policy.allow_methods,
+      sizeof(g_sec4_rt_cors_policy.allow_methods)
+  );
+  if (!sec4_rt_csv_is_valid_cors_methods_list(g_sec4_rt_cors_policy.allow_methods)) {
+    strncpy(
+        g_sec4_rt_cors_policy.allow_methods,
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        sizeof(g_sec4_rt_cors_policy.allow_methods) - 1
+    );
+    g_sec4_rt_cors_policy.allow_methods[sizeof(g_sec4_rt_cors_policy.allow_methods) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_HEADERS",
+      "content-type, authorization",
+      g_sec4_rt_cors_policy.allow_headers,
+      sizeof(g_sec4_rt_cors_policy.allow_headers)
+  );
+  if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.allow_headers)) {
+    strncpy(
+        g_sec4_rt_cors_policy.allow_headers,
+        "content-type, authorization",
+        sizeof(g_sec4_rt_cors_policy.allow_headers) - 1
+    );
+    g_sec4_rt_cors_policy.allow_headers[sizeof(g_sec4_rt_cors_policy.allow_headers) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_EXPOSED_HEADERS",
+      "",
+      g_sec4_rt_cors_policy.expose_headers,
+      sizeof(g_sec4_rt_cors_policy.expose_headers)
+  );
+  if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.expose_headers)) {
+    g_sec4_rt_cors_policy.expose_headers[0] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_ORIGINS",
+      "",
+      g_sec4_rt_cors_policy.allow_origin,
+      sizeof(g_sec4_rt_cors_policy.allow_origin)
+  );
+  if (!sec4_rt_csv_is_valid_cors_origins_list(g_sec4_rt_cors_policy.allow_origin)) {
     strncpy(
         g_sec4_rt_cors_policy.allow_origin,
         "*",
@@ -9774,6 +10903,26 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
   g_sec4_rt_security_headers_policy.enabled = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_ENABLED",
       true
+  );
+  g_sec4_rt_security_headers_policy.hsts_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED",
+      false
+  );
+  g_sec4_rt_security_headers_policy.hsts_max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS",
+      15552000
+  );
+  if (g_sec4_rt_security_headers_policy.hsts_max_age_seconds <= 0) {
+    g_sec4_rt_security_headers_policy.hsts_max_age_seconds = 15552000;
+  }
+  g_sec4_rt_security_headers_policy.hsts_include_subdomains =
+      sec4_rt_env_flag_enabled_default(
+          "SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS",
+          true
+      );
+  g_sec4_rt_security_headers_policy.hsts_preload = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD",
+      false
   );
   g_sec4_rt_security_headers_policy.x_content_type_options = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
@@ -9801,6 +10950,38 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
       g_sec4_rt_security_headers_policy.referrer_policy,
       sizeof(g_sec4_rt_security_headers_policy.referrer_policy)
   );
+  if (!sec4_rt_is_referrer_policy_valid(g_sec4_rt_security_headers_policy.referrer_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.referrer_policy,
+        "strict-origin-when-cross-origin",
+        sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.referrer_policy
+        [sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1] = '\0';
+  }
+  g_sec4_rt_security_headers_policy.csp_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_ENABLED",
+      true
+  );
+  g_sec4_rt_security_headers_policy.csp_report_only = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY",
+      false
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      g_sec4_rt_security_headers_policy.csp_policy,
+      sizeof(g_sec4_rt_security_headers_policy.csp_policy)
+  );
+  if (!sec4_rt_is_header_value_valid(g_sec4_rt_security_headers_policy.csp_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.csp_policy,
+        SEC4_RT_DEFAULT_CSP_POLICY,
+        sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.csp_policy
+        [sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1] = '\0';
+  }
 }
 
 static void sec4_rt_load_csrf_policy_from_env(void) {
@@ -9819,6 +11000,43 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
       g_sec4_rt_csrf_policy.protected_methods,
       sizeof(g_sec4_rt_csrf_policy.protected_methods)
   );
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_COOKIE_NAME",
+      "csrf",
+      g_sec4_rt_csrf_policy.cookie_name,
+      sizeof(g_sec4_rt_csrf_policy.cookie_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.cookie_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.cookie_name,
+        "csrf",
+        sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1
+    );
+    g_sec4_rt_csrf_policy.cookie_name[sizeof(g_sec4_rt_csrf_policy.cookie_name) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_HEADER_NAME",
+      "X-CSRF-Token",
+      g_sec4_rt_csrf_policy.header_name,
+      sizeof(g_sec4_rt_csrf_policy.header_name)
+  );
+  if (!sec4_rt_is_header_name_valid(g_sec4_rt_csrf_policy.header_name)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.header_name,
+        "X-CSRF-Token",
+        sizeof(g_sec4_rt_csrf_policy.header_name) - 1
+    );
+    g_sec4_rt_csrf_policy.header_name[sizeof(g_sec4_rt_csrf_policy.header_name) - 1] = '\0';
+  }
+  if (!sec4_rt_csrf_methods_has_protected_verb(g_sec4_rt_csrf_policy.protected_methods)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.protected_methods,
+        "POST,PUT,PATCH,DELETE",
+        sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1
+    );
+    g_sec4_rt_csrf_policy
+        .protected_methods[sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1] = '\0';
+  }
   if (strcasecmp(g_sec4_rt_csrf_policy.mode, "off") == 0) {
     g_sec4_rt_csrf_policy.enabled = false;
   }
@@ -9827,12 +11045,14 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
 static void sec4_rt_load_auth_policy_from_env(void) {
   memset(&g_sec4_rt_auth_policy, 0, sizeof(g_sec4_rt_auth_policy));
   g_sec4_rt_auth_policy.loaded = true;
-  sec4_rt_read_env_string(
-      "SEC4_RT_AUTH_MODE",
-      "token",
+  const char *configured_mode = getenv("SEC4_RT_AUTH_MODE");
+  const char *effective_mode = sec4_rt_auth_mode_or_default(configured_mode);
+  strncpy(
       g_sec4_rt_auth_policy.mode,
-      sizeof(g_sec4_rt_auth_policy.mode)
+      effective_mode,
+      sizeof(g_sec4_rt_auth_policy.mode) - 1
   );
+  g_sec4_rt_auth_policy.mode[sizeof(g_sec4_rt_auth_policy.mode) - 1] = '\0';
   g_sec4_rt_auth_policy.enabled = strcasecmp(g_sec4_rt_auth_policy.mode, "off") != 0;
 }
 
@@ -9844,6 +11064,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
   if (cfg == 0) {
     slot->cors_enabled = false;
     slot->cors_allow_origin[0] = '\0';
+    slot->cors_expose_headers[0] = '\0';
     return router;
   }
   if (cfg == SEC4_RT_POLICY_CORS_HANDLE) {
@@ -9865,17 +11086,25 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_require_vary_origin = g_sec4_rt_cors_policy.require_vary_origin;
     strncpy(
         slot->cors_allow_methods,
-        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        g_sec4_rt_cors_policy.allow_methods,
         sizeof(slot->cors_allow_methods) - 1
     );
     slot->cors_allow_methods[sizeof(slot->cors_allow_methods) - 1] = '\0';
     strncpy(
         slot->cors_allow_headers,
-        "content-type, authorization",
+        g_sec4_rt_cors_policy.allow_headers,
         sizeof(slot->cors_allow_headers) - 1
     );
     slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
-    slot->cors_max_age_seconds = 600;
+    strncpy(
+        slot->cors_expose_headers,
+        g_sec4_rt_cors_policy.expose_headers,
+        sizeof(slot->cors_expose_headers) - 1
+    );
+    slot->cors_expose_headers[sizeof(slot->cors_expose_headers) - 1] = '\0';
+    slot->cors_max_age_seconds = g_sec4_rt_cors_policy.max_age_seconds > 0
+        ? g_sec4_rt_cors_policy.max_age_seconds
+        : 600;
     return router;
   }
   sec4_rt_router_apply_default_cors(slot);
@@ -9889,6 +11118,13 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
   }
   if (cfg == 0) {
     slot->security_headers_enabled = false;
+    slot->security_hsts_enabled = false;
+    slot->security_hsts_max_age_seconds = 0;
+    slot->security_hsts_include_subdomains = false;
+    slot->security_hsts_preload = false;
+    slot->security_csp_enabled = false;
+    slot->security_csp_report_only = false;
+    slot->security_csp_policy[0] = '\0';
     return router;
   }
   if (cfg == SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE) {
@@ -9899,6 +11135,11 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
     if (!slot->security_headers_enabled) {
       return router;
     }
+    slot->security_hsts_enabled = g_sec4_rt_security_headers_policy.hsts_enabled;
+    slot->security_hsts_max_age_seconds = g_sec4_rt_security_headers_policy.hsts_max_age_seconds;
+    slot->security_hsts_include_subdomains =
+        g_sec4_rt_security_headers_policy.hsts_include_subdomains;
+    slot->security_hsts_preload = g_sec4_rt_security_headers_policy.hsts_preload;
     slot->security_x_content_type_options = g_sec4_rt_security_headers_policy.x_content_type_options;
     strncpy(
         slot->security_x_frame_options,
@@ -9912,6 +11153,14 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
         sizeof(slot->security_referrer_policy) - 1
     );
     slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+    slot->security_csp_enabled = g_sec4_rt_security_headers_policy.csp_enabled;
+    slot->security_csp_report_only = g_sec4_rt_security_headers_policy.csp_report_only;
+    strncpy(
+        slot->security_csp_policy,
+        g_sec4_rt_security_headers_policy.csp_policy,
+        sizeof(slot->security_csp_policy) - 1
+    );
+    slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_security_headers(slot);
@@ -9947,6 +11196,18 @@ int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
         sizeof(slot->csrf_protected_methods) - 1
     );
     slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+    strncpy(
+        slot->csrf_cookie_name,
+        g_sec4_rt_csrf_policy.cookie_name,
+        sizeof(slot->csrf_cookie_name) - 1
+    );
+    slot->csrf_cookie_name[sizeof(slot->csrf_cookie_name) - 1] = '\0';
+    strncpy(
+        slot->csrf_header_name,
+        g_sec4_rt_csrf_policy.header_name,
+        sizeof(slot->csrf_header_name) - 1
+    );
+    slot->csrf_header_name[sizeof(slot->csrf_header_name) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_csrf(slot);
@@ -10012,6 +11273,8 @@ int64_t sec4_rt_csrf_from_policy(void) {
 
 int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
   (void) ctx;
+  const char *csrf_cookie_name = sec4_rt_csrf_cookie_name(NULL);
+  const char *csrf_header_name = sec4_rt_csrf_header_name(NULL);
   char token[128];
   int written = snprintf(
       token,
@@ -10029,13 +11292,14 @@ int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
     int cookie_written = snprintf(
         cookie,
         sizeof(cookie),
-        "csrf=%s; Path=/; SameSite=Lax",
+        "%s=%s; Path=/; SameSite=Lax",
+        csrf_cookie_name,
         token
     );
     if (cookie_written > 0 && (size_t) cookie_written < sizeof(cookie)) {
       (void) sec4_rt_append_response_header("Set-Cookie", cookie);
     }
-    (void) sec4_rt_append_response_header("X-CSRF-Token", token);
+    (void) sec4_rt_append_response_header(csrf_header_name, token);
   }
   return handle;
 }

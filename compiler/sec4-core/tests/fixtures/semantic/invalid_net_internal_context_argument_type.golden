@@ -1,3 +1,10 @@
+error[E2002]: internal net is disabled by active policy
+  --> invalid_net_internal_context_argument_type.ut:2:3
+  note: internal net calls are blocked because `[net.internal].enabled` is `false` in the active policy
+  note: enable internal net in `sec4.policy`:
+[net.internal]
+enabled = true
+
 error[E4001]: net sink context argument must be `Ctx`
   --> invalid_net_internal_context_argument_type.ut:2:26
   note: found `Int`

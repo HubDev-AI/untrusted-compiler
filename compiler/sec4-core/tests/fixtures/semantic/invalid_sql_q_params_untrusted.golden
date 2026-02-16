@@ -1,3 +1,8 @@
+warning[E2002]: SELECT query without LIMIT violates active SQL policy
+  --> invalid_sql_q_params_untrusted.ut:2:9
+  note: query: `SELECT 1`
+  note: add `LIMIT ...` to the SELECT statement or set `[sql].require_limit_on_select = "off"` when intentional
+
 error[E4001]: sql.q params argument cannot be `Untrusted<_>`
   --> invalid_sql_q_params_untrusted.ut:2:21
   note: validate untrusted values before building SQL parameters

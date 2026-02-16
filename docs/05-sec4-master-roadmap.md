@@ -88,7 +88,112 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
 4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
 
-When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track.
+When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track, executed first through the browser-to-server promotion milestone plan (M39 below).
+
+### Post-alpha two-phase backend promotion track (browser -> server)
+
+After `WASM_START_GATE` opens, the first execution track should prioritize browser-first prototyping with deterministic server promotion.
+
+Target product loop:
+
+1. Prototype instantly in browser profile (`no deploy`).
+2. Validate UX/domain flows locally with deterministic state.
+3. Promote same domain modules to server target with mechanical adapter swap + generated deployment scaffolding.
+
+Post-alpha track acceptance anchors:
+
+- Browser profile enforces strict capability boundary:
+  - forbid `db.*`, `secrets.*`, `net.listen`, internal-net sinks.
+  - allow browser-local persistence adapter (`localdb.*`) and constrained outbound fetch gates.
+- Composition model is explicit:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Promotion flow is compiler-driven and deterministic:
+  - `sec4 promote --from browser --to server`
+  - binding rewrite at composition root (`LocalRepo` -> `ServerRepo`)
+  - generated server scaffold (schema/migrations, runtime wiring, deployment manifest baseline)
+  - deterministic diagnostics when promotion preconditions fail.
+- Promotion contract includes data portability path:
+  - browser-local export artifact
+  - generated server import scaffold/command path.
+
+## M39 - Browser-First to Server Promotion MVP (Queued; gated by `WASM_START_GATE`)
+
+### Goal
+
+- Deliver a deterministic two-phase backend loop:
+  - browser-first prototype profile (`zero deploy`)
+  - mechanical promotion to server target (`sec4 promote --from browser --to server`).
+
+### M39-S1 browser profile capability fence acceptance criteria
+
+- Compiler/profile enforcement blocks server-only capabilities in browser mode:
+  - `db.*`
+  - `secrets.*`
+  - `net.listen`
+  - internal-net sinks.
+- Browser profile allows only approved local/browser runtime capabilities (for MVP: `localdb.*`, constrained public fetch gates).
+- Deterministic diagnostics include profile context and fix guidance.
+
+### M39-S1 tracking (live status)
+
+- [ ] Profile capability fence diagnostics implemented in semantic layer.
+- [ ] Golden/compiler command tests added for allowed + forbidden capability cases.
+- [ ] Book chapter documenting S1 implementation added.
+
+### M39-S2 composition contract analyzer acceptance criteria
+
+- Analyzer enforces promotion-ready architecture contract:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Analyzer rejects direct domain coupling to browser/server-only adapters.
+- Analyzer verifies repository method parity between browser/server adapters.
+
+### M39-S2 tracking (live status)
+
+- [ ] Composition contract analyzer implemented.
+- [ ] Fixture coverage added for pass/fail composition graphs.
+- [ ] Book chapter documenting S2 implementation added.
+
+### M39-S3 `sec4 promote` dry-run planner acceptance criteria
+
+- New command surface:
+  - `sec4 promote --from browser --to server --dry-run [--path <project>]`.
+- Dry-run emits deterministic transformation plan artifact:
+  - changed bindings
+  - generated files list
+  - precondition diagnostics (if any).
+- Re-running dry-run on unchanged tree yields byte-identical plan output.
+
+### M39-S3 tracking (live status)
+
+- [ ] CLI command scaffolding + planner implementation added.
+- [ ] Determinism tests for plan artifact added.
+- [ ] Book chapter documenting S3 implementation added.
+
+### M39-S4 promotion apply + generated scaffold acceptance criteria
+
+- `sec4 promote --from browser --to server` applies composition-root binding rewrite only.
+- Domain modules remain unchanged after promotion.
+- Generator emits deterministic server scaffolding:
+  - server repo adapter
+  - schema/migration baseline
+  - deploy profile baseline
+  - promotion report artifact.
+- Added browser-export -> server-import scaffold path with deterministic validation envelope.
+- End-to-end fixture proves:
+  - browser profile prototype builds/runs,
+  - promotion succeeds,
+  - server target builds/runs on generated scaffold.
+
+### M39-S4 tracking (live status)
+
+- [ ] Apply rewrite engine implemented with composition-root-only rewrite guard.
+- [ ] Scaffold generator + deterministic report implemented.
+- [ ] End-to-end promotion fixture (browser -> server) added and green.
+- [ ] Book chapter documenting S4 implementation added.
 
 ### Readiness estimate (live)
 
@@ -1235,6 +1340,1096 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage acceptance criteria
+
+- Explicit deny tokens for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically enforce internal-net denial:
+  - `0`, `false`, `no`, `off`, `deny` (case-insensitive)
+- For valid internal URL handles under explicit deny tokens, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Explicit deny-token matrix does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S55 tracking (live status)
+
+- [x] Added internal-policy explicit deny-token matrix harness:
+  - `c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+- [x] Harness validates explicit deny-token enforcement across tokens:
+  - `"0"`, `"false"`, `"no"`, `"off"`, `"deny"`, plus mixed/upper-case variants.
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S56 outbound HTTP internal-policy empty/whitespace-token fallback coverage acceptance criteria
+
+- Unset, empty, and whitespace-only `SEC4_RT_ALLOW_INTERNAL_NET` values deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under unset/blank token states, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Empty/whitespace-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S56 tracking (live status)
+
+- [x] Added internal-policy empty/whitespace-token fallback harness:
+  - `c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback for token states:
+  - unset (`env_remove`)
+  - empty (`""`)
+  - whitespace-only (`" "`, `"   "`, `"\t"`, `"\n"`, `" \t "`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S57 outbound HTTP internal-policy quoted-token fallback coverage acceptance criteria
+
+- Quoted/escaped token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under quoted token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Quoted-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S57 tracking (live status)
+
+- [x] Added internal-policy quoted-token fallback harness:
+  - `c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates quoted-token deny-by-default fallback across tokens:
+  - double-quoted (`"\"1\""`, `"\"true\""`, `"\"allow\""`)
+  - single-quoted (`"'yes'"`, `"'on'"`, `"'ALLOW'"`)
+  - quoted + inner whitespace (`"\" TRUE \""`, `"' yes '"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S58 outbound HTTP internal-policy delimited-token fallback coverage acceptance criteria
+
+- Delimited token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under delimited token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Delimited-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S58 tracking (live status)
+
+- [x] Added internal-policy delimited-token fallback harness:
+  - `c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across delimiter classes:
+  - comma (`"true,allow"`, `"allow,true"`)
+  - pipe/slash (`"yes|on"`, `"allow/1"`)
+  - semicolon/colon (`"true;allow"`, `"on:yes"`)
+  - delimiter + spacing (`" yes|allow "`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S59 outbound HTTP internal-policy prefixed-token fallback coverage acceptance criteria
+
+- Prefixed token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under prefixed token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Prefixed-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S59 tracking (live status)
+
+- [x] Added internal-policy prefixed-token fallback harness:
+  - `c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across prefixed token spellings:
+  - key/value style (`"allow=true"`, `"token=1"`, `"internal-net=on"`)
+  - namespace/prefix style (`"mode:allow"`, `"value:true"`, `"policy.allow=yes"`, `"allow:true"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S60 security-headers CSP runtime materialization coverage acceptance criteria
+
+- Runtime security headers block includes deterministic CSP emission when security headers are enabled.
+- Default security-header policy emits enforce-mode CSP header:
+  - `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'`
+- Env policy toggles support report-only CSP header mode:
+  - `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY=1`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_POLICY=<policy>`
+- CSP runtime materialization does not regress existing security-header behavior (`nosniff`, `x-frame-options`, `referrer-policy`).
+
+### M38-S60 tracking (live status)
+
+- [x] Extended runtime security-header policy/router state with CSP fields:
+  - `csp_enabled`
+  - `csp_report_only`
+  - `csp_policy`
+- [x] Added CSP header emission in `sec4_rt_security_headers_block` with deterministic enforce/report-only header selection.
+- [x] Added env-policy loading for CSP controls and safe fallback to default CSP policy for invalid header values.
+- [x] Added/updated HTTP runtime security-header e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_on_success_when_enabled` (assert default CSP enforce header)
+  - `c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled` (assert report-only header path)
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S61 security-headers HSTS runtime materialization coverage acceptance criteria
+
+- Runtime security headers block includes deterministic HSTS emission when HSTS is enabled by policy.
+- Env policy controls materialize HSTS header value:
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD`
+- HSTS materialization does not regress existing security-header behavior (`nosniff`, `x-frame-options`, `referrer-policy`, `csp`).
+
+### M38-S61 tracking (live status)
+
+- [x] Extended runtime security-header policy/router state with HSTS fields:
+  - `hsts_enabled`
+  - `hsts_max_age_seconds`
+  - `hsts_include_subdomains`
+  - `hsts_preload`
+- [x] Added HSTS header emission in `sec4_rt_security_headers_block` with deterministic value rendering.
+- [x] Added env-policy loading/materialization for HSTS controls in runtime security-header path.
+- [x] Added HTTP runtime security-header HSTS e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S62 outbound HTTP internal-policy suffixed-token fallback coverage acceptance criteria
+
+- Suffixed token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under suffixed token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Suffixed-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S62 tracking (live status)
+
+- [x] Added internal-policy suffixed-token fallback harness:
+  - `c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across suffixed token spellings:
+  - hyphen/underscore suffixes (`"true-value"`, `"allow_mode"`, `"yes-end"`)
+  - alphanumeric/punctuation suffixes (`"on1"`, `"allow+"`, `"1ok"`, `"true."`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S63 security-headers HSTS invalid-env fallback coverage acceptance criteria
+
+- Invalid/non-numeric `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Negative `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Fallback behavior preserves existing HSTS header composition semantics (includeSubDomains/preload toggles).
+- Invalid raw env values are never reflected into emitted HSTS header strings.
+
+### M38-S63 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+- [x] Harness validates both malformed and negative max-age env inputs:
+  - malformed numeric token (`"not-a-number"`)
+  - negative numeric token (`"-7"`)
+- [x] Harness validates deterministic safe fallback header:
+  - `Strict-Transport-Security: max-age=15552000; includeSubDomains`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S64 security-headers x-frame-options invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS` env values deterministically fall back to `DENY`.
+- Invalid raw env values are never reflected in emitted `X-Frame-Options` response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S64 tracking (live status)
+
+- [x] Added HTTP runtime security-header x-frame-options fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+- [x] Harness validates invalid-token fallback behavior:
+  - invalid env token (`"ALLOW-FROM"`) falls back to `X-Frame-Options: DENY`
+- [x] Harness validates response output never reflects invalid x-frame-options token values.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S65 security-headers referrer-policy invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY` env values deterministically fall back to `strict-origin-when-cross-origin`.
+- Invalid raw env values are never reflected in emitted `Referrer-Policy` response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S65 tracking (live status)
+
+- [x] Added HTTP runtime security-header referrer-policy fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls_back_to_default_when_enabled`
+- [x] Runtime policy loader now validates referrer-policy values against an explicit allowlist and clamps invalid values to `strict-origin-when-cross-origin`.
+- [x] Harness validates invalid-token fallback behavior:
+  - invalid env token (`"INVALID-POLICY"`) falls back to `Referrer-Policy: strict-origin-when-cross-origin`
+- [x] Harness validates response output never reflects invalid referrer-policy token values.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls_back_to_default_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S66 security-headers x-content-type-options invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS` env values deterministically fall back to enabled `nosniff` behavior.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S66 tracking (live status)
+
+- [x] Added HTTP runtime security-header x-content-type-options fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) still emits `X-Content-Type-Options: nosniff`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S67 security-headers CSP report-only invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY` env values deterministically fall back to enforce-mode CSP header behavior.
+- Invalid raw env values are never reflected as report-only mode in emitted CSP header names.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S67 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP report-only fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) emits enforce header (`Content-Security-Policy`) and does not emit report-only header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S68 security-headers CSP enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_ENABLED` env values deterministically fall back to keeping CSP enabled.
+- Invalid raw env values are never reflected as disabled CSP behavior in emitted response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S68 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps enforce-mode `Content-Security-Policy` header active.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S69 security-headers middleware-enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_ENABLED` env values deterministically fall back to keeping security headers enabled.
+- Invalid raw env values are never reflected as disabled security-header behavior in emitted responses.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S69 tracking (live status)
+
+- [x] Added HTTP runtime security-header enabled-flag fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps baseline security headers active.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S70 security-headers HSTS-enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED` env values deterministically fall back to default HSTS-disabled behavior.
+- Invalid raw env values are never reflected as enabled HSTS behavior in emitted responses.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S70 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS-enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps default no-HSTS-header output.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S71 security-headers HSTS includeSubDomains invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS` env values deterministically fall back to default includeSubDomains-enabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as includeSubDomains-disabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S71 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS includeSubDomains fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves `; includeSubDomains` in emitted HSTS header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S72 security-headers HSTS preload invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD` env values deterministically fall back to default preload-disabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as preload-enabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S72 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS preload fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps HSTS header without `; preload`.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S73 security-headers CSP policy invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_POLICY` env header values deterministically fall back to default CSP policy.
+- Invalid raw env values are never reflected in emitted CSP headers.
+- Fallback coverage does not regress existing CSP/security-header success-path behavior.
+
+### M38-S73 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP policy fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled`
+- [x] Harness validates invalid header-value token fallback behavior:
+  - invalid env value containing newline falls back to default CSP policy.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back_to_default_policy_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S74 CORS allowed-origins invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ALLOWED_ORIGINS` env values deterministically fall back to wildcard-origin baseline (`*`).
+- Invalid raw env values are never reflected into emitted `Access-Control-Allow-Origin` response headers.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S74 tracking (live status)
+
+- [x] Runtime CORS policy loading now validates copied allowed-origin token as safe header value and falls back to wildcard when invalid.
+- [x] Added HTTP runtime CORS allowed-origins fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+- [x] Harness validates invalid header-value token fallback behavior:
+  - invalid env value containing newline falls back to wildcard origin header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S75 CORS allow-credentials invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ALLOW_CREDENTIALS` env values deterministically fall back to default credentials-disabled behavior.
+- Invalid raw env values are never reflected as enabled credentials behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S75 tracking (live status)
+
+- [x] Added HTTP runtime CORS allow-credentials fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps `Access-Control-Allow-Credentials` header absent.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S76 CORS require-vary-origin invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_REQUIRE_VARY_ORIGIN` env values deterministically fall back to default vary-origin-disabled behavior.
+- Invalid raw env values are never reflected as enabled vary-origin behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S76 tracking (live status)
+
+- [x] Added HTTP runtime CORS require-vary-origin fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps `Vary: Origin` header absent under non-wildcard allow-origin configuration.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S77 CORS enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ENABLED` env values deterministically fall back to default CORS-enabled behavior.
+- Invalid raw env values are never reflected as disabled CORS behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S77 tracking (live status)
+
+- [x] Added HTTP runtime CORS enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves baseline `Access-Control-Allow-Origin` emission.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S78 auth mode invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_AUTH_MODE` env values deterministically fall back to `token` mode.
+- Invalid raw env values are never allowed to force an unsupported auth mode state.
+- Fallback hardening does not regress existing token/cookie auth success-path behavior.
+
+### M38-S78 tracking (live status)
+
+- [x] Runtime auth policy loading now normalizes unsupported auth mode env values to `token`.
+- [x] Runtime effective-auth resolution now clamps unsupported mode values to `token` before auth checks.
+- [x] Added HTTP runtime auth mode fallback e2e coverage:
+  - `c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_auth_header_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S79 CSRF protected-methods invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_CSRF_PROTECTED_METHODS` env values deterministically fall back to default protected methods (`POST,PUT,PATCH,DELETE`).
+- Invalid raw env values are never allowed to weaken CSRF protection coverage for unsafe methods.
+- Fallback hardening does not regress existing CSRF reject/allow behavior.
+
+### M38-S79 tracking (live status)
+
+- [x] Runtime CSRF policy loading now validates protected-method tokens and clamps invalid lists to default unsafe-method set.
+- [x] Added HTTP runtime CSRF protected-methods fallback e2e coverage:
+  - `c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S80 auth cookie-name invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_AUTH_COOKIE_NAME` env values deterministically fall back to default cookie name (`session`).
+- Invalid raw env values are never allowed to force impossible/unsafe cookie-name matching behavior.
+- Fallback hardening does not regress existing cookie-auth success/role-check behavior.
+
+### M38-S80 tracking (live status)
+
+- [x] Runtime auth cookie-name resolution now validates env token syntax and clamps invalid values to `session`.
+- [x] Added HTTP runtime auth cookie-name fallback e2e coverage:
+  - `c_bin_http_runtime_auth_cookie_name_invalid_env_falls_back_to_session_cookie`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_cookie_name_invalid_env_falls_back_to_session_cookie`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S81 CORS max-age env policy materialization hardening acceptance criteria
+
+- Runtime CORS policy loader materializes `SEC4_RT_CORS_MAX_AGE_SECONDS` into preflight responses when valid.
+- Invalid/non-positive `SEC4_RT_CORS_MAX_AGE_SECONDS` env values deterministically fall back to default `600`.
+- Max-age policy materialization does not regress existing preflight CORS behavior.
+
+### M38-S81 tracking (live status)
+
+- [x] Runtime CORS policy state now includes max-age field loaded from env with deterministic clamp (`>0`, else `600`).
+- [x] `withCors(..., cors.fromPolicy())` now applies materialized max-age value into router preflight config.
+- [x] Added HTTP runtime CORS max-age e2e coverage:
+  - `c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S82 CSRF header/cookie name env materialization hardening acceptance criteria
+
+- Runtime CSRF checks honor `SEC4_RT_CSRF_HEADER_NAME` and `SEC4_RT_CSRF_COOKIE_NAME` when values are valid.
+- Invalid CSRF header/cookie-name env values deterministically fall back to defaults (`X-CSRF-Token`, `csrf`).
+- CSRF name materialization hardening does not regress existing reject/allow and `csrf.issueToken` behavior.
+
+### M38-S82 tracking (live status)
+
+- [x] Runtime CSRF policy state and router state now carry header/cookie names materialized from env policy.
+- [x] CSRF enforcement path now resolves configured names instead of hardcoded values.
+- [x] `csrf.issueToken` response headers now emit configured/fallback CSRF names deterministically.
+- [x] Added HTTP runtime CSRF name-materialization e2e coverage:
+  - `c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_custom_csrf_names_from_env`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_names_invalid_env_fall_back_to_defaults`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output build_emit_c_bin_handles_csrf_issue_token_intrinsic_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S83 CORS methods/headers env policy materialization hardening acceptance criteria
+
+- Runtime preflight CORS responses honor env policy lists:
+  - `SEC4_RT_CORS_ALLOWED_METHODS`
+  - `SEC4_RT_CORS_ALLOWED_HEADERS`
+- Invalid methods/header-list env values deterministically fall back to defaults.
+- Methods/headers materialization hardening does not regress existing preflight behavior.
+
+### M38-S83 tracking (live status)
+
+- [x] Runtime CORS policy state now carries allowed-methods and allowed-headers lists loaded from env policy.
+- [x] Added list validators for CORS methods and CORS header-name CSV tokens.
+- [x] `withCors(..., cors.fromPolicy())` now applies validated env-provided method/header lists.
+- [x] Added HTTP runtime CORS methods/headers e2e coverage:
+  - `c_bin_http_runtime_applies_cors_methods_and_headers_from_env_on_preflight`
+  - `c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_methods_and_headers_from_env_on_preflight`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S84 CORS exposed-headers env policy materialization hardening acceptance criteria
+
+- Runtime CORS success responses honor `SEC4_RT_CORS_EXPOSED_HEADERS` when values are valid.
+- Invalid exposed-headers env values deterministically fall back to absent `Access-Control-Expose-Headers`.
+- Exposed-headers materialization hardening does not regress existing CORS success/preflight behavior.
+
+### M38-S84 tracking (live status)
+
+- [x] Runtime CORS policy state now carries `expose_headers` loaded from env policy.
+- [x] Added exposed-headers validation/fallback path using header-name CSV validation.
+- [x] Runtime CORS success-header block now emits `Access-Control-Expose-Headers` when configured.
+- [x] Added HTTP runtime CORS exposed-headers e2e coverage:
+  - `c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S85 CORS allowed-origins allowlist request-origin materialization hardening acceptance criteria
+
+- Runtime CORS success/preflight responses honor multi-origin `SEC4_RT_CORS_ALLOWED_ORIGINS` lists by reflecting the request `Origin` when it matches an allowlist token.
+- Invalid allowlist env values deterministically fall back to wildcard (`*`) behavior.
+- Non-matching request `Origin` values do not get reflected and deterministically fall back to the first configured allow-origin token.
+
+### M38-S85 tracking (live status)
+
+- [x] Runtime CORS allowed-origins env loading now validates full CSV allowlist tokens instead of only the first token.
+- [x] Runtime CORS success/preflight header assembly now resolves effective allow-origin from request `Origin` when allowlist matching applies.
+- [x] Added HTTP runtime CORS allowlist e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S86 CORS wildcard+credentials runtime safety guard hardening acceptance criteria
+
+- Runtime CORS header emission never outputs `Access-Control-Allow-Credentials: true` when effective allow-origin is wildcard (`*`).
+- Non-wildcard allow-origin flows continue to emit credentials headers when explicitly enabled.
+- Wildcard+credentials guard applies consistently to success and preflight CORS responses.
+
+### M38-S86 tracking (live status)
+
+- [x] Runtime CORS success/preflight header assembly now suppresses credentials headers whenever effective allow-origin resolves to wildcard.
+- [x] Wildcard token detection now works for wildcard present anywhere in the configured allow-origin CSV list.
+- [x] Added HTTP runtime CORS wildcard+credentials guard e2e coverage:
+  - `c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S87 CORS allow-origin token-shape validation hardening acceptance criteria
+
+- Runtime CORS allow-origin policy list accepts only wildcard (`*`) or strict origin tokens (`http://...` / `https://...` with valid host and optional valid port).
+- Malformed allow-origin tokens (for example missing scheme) deterministically trigger wildcard fallback.
+- Strict token-shape validation does not regress valid allowlist request-origin matching behavior.
+
+### M38-S87 tracking (live status)
+
+- [x] Added strict CORS origin-token validator used by CORS allow-origin CSV policy validation.
+- [x] Origin-token validation now rejects malformed tokens lacking required scheme/authority shape before runtime header emission.
+- [x] Added HTTP runtime CORS invalid-token-shape e2e coverage:
+  - `c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S88 CORS preflight requested-method enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Method` against configured allow-methods policy.
+- Preflight requests for disallowed methods deterministically return `403` with explicit rejection diagnostics.
+- Allowed-method preflight behavior (`204` with CORS preflight headers) remains unchanged.
+
+### M38-S88 tracking (live status)
+
+- [x] Runtime preflight path now checks requested method membership in CORS allow-methods CSV before emitting success preflight headers.
+- [x] Added deterministic rejection response for disallowed preflight methods (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight disallowed-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S89 CORS preflight requested-headers enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Headers` tokens against configured CORS allow-headers policy.
+- Preflight requests containing disallowed/invalid requested headers deterministically return `403` with explicit rejection diagnostics.
+- Allowed requested-header preflight behavior remains `204` with normal CORS preflight headers.
+
+### M38-S89 tracking (live status)
+
+- [x] Added runtime requested-headers membership validation for CORS preflight path.
+- [x] Added deterministic rejection response for disallowed requested headers (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight requested-headers e2e coverage:
+  - `c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S90 CORS preflight missing requested-method rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that omit `Access-Control-Request-Method`.
+- Missing requested-method preflight requests deterministically return `400` with explicit diagnostics.
+- Valid preflight requests containing requested method continue to use existing allow/deny method enforcement behavior.
+
+### M38-S90 tracking (live status)
+
+- [x] Added explicit runtime preflight guard for missing `Access-Control-Request-Method`.
+- [x] Added deterministic missing-method rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight missing-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S91 CORS preflight origin-header presence/shape enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling requires `Origin` header presence.
+- Missing or invalid `Origin` headers deterministically return `400` with explicit diagnostics.
+- Valid preflight requests with valid origin continue through method/header policy validation.
+
+### M38-S91 tracking (live status)
+
+- [x] Added runtime preflight guard requiring `Origin` header on CORS preflight requests.
+- [x] Added strict origin-shape validation on preflight `Origin` values before method/header checks.
+- [x] Added deterministic rejection responses for missing/invalid preflight origin (`400` + fixed message bodies).
+- [x] Added HTTP runtime CORS preflight origin-guard e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S92 CORS preflight requested-method token-shape validation hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Method` token shape before allow-method policy matching.
+- Invalid requested-method tokens deterministically return `400` with explicit diagnostics.
+- Valid requested methods continue through existing allow-method membership checks (`403` for disallowed methods remains unchanged).
+
+### M38-S92 tracking (live status)
+
+- [x] Added runtime token-shape validation for preflight `Access-Control-Request-Method`.
+- [x] Added deterministic invalid-token rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid requested-method-token e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S93 CORS preflight requested-headers token-shape validation hardening acceptance criteria
+
+- Runtime CORS preflight handling distinguishes malformed `Access-Control-Request-Headers` tokens from policy-denied header names.
+- Invalid requested-header tokens deterministically return `400` with explicit diagnostics.
+- Well-formed but disallowed requested headers continue to return deterministic `403`.
+
+### M38-S93 tracking (live status)
+
+- [x] Added runtime invalid-token tracking in preflight requested-headers validation.
+- [x] Added deterministic invalid requested-headers rejection response (`400` + fixed message body).
+- [x] Preserved deterministic disallowed-header rejection path (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid requested-headers-token e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S94 CORS preflight empty requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects explicitly empty `Access-Control-Request-Headers` values as malformed input.
+- Empty requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Non-empty requested-headers behavior remains split between `400` malformed-token and `403` disallowed-policy outcomes.
+
+### M38-S94 tracking (live status)
+
+- [x] Tightened runtime requested-headers validator to classify empty values as invalid tokens.
+- [x] Added deterministic empty requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight empty requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S95 CORS preflight duplicate requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Headers` tokens as malformed input.
+- Duplicate requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Distinct requested-headers tokens continue through existing malformed/disallowed/allowed validation paths.
+
+### M38-S95 tracking (live status)
+
+- [x] Added duplicate-token detection for requested-headers validation (case-insensitive).
+- [x] Added deterministic duplicate requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S96 CORS preflight duplicate requested-method header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Method` header lines as malformed input.
+- Duplicate requested-method preflight requests deterministically return `400` with explicit diagnostics.
+- Single requested-method preflight requests continue through existing missing/invalid/disallowed/allowed branches.
+
+### M38-S96 tracking (live status)
+
+- [x] Added runtime header-occurrence counter for deterministic duplicate-header detection.
+- [x] Added duplicate `Access-Control-Request-Method` rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_method_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_method_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S97 CORS preflight duplicate requested-headers header-line rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Headers` header lines as malformed input.
+- Duplicate requested-headers header lines deterministically return `400` with explicit diagnostics.
+- Single requested-headers header-line requests continue through existing malformed/disallowed/allowed token checks.
+
+### M38-S97 tracking (live status)
+
+- [x] Added duplicate header-line detection for `Access-Control-Request-Headers` in preflight path.
+- [x] Added deterministic duplicate requested-headers header-line rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-headers header-line e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_header_lines`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_header_lines`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S98 CORS preflight duplicate origin header-line rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Origin` header lines as malformed input.
+- Duplicate preflight origin headers deterministically return `400` with explicit diagnostics.
+- Single origin-header preflight requests continue through existing missing/invalid/valid origin checks.
+
+### M38-S98 tracking (live status)
+
+- [x] Added duplicate `Origin` header-line detection in preflight path.
+- [x] Added deterministic duplicate-origin rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate-origin e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S99 CORS non-preflight duplicate origin header-line rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects duplicate `Origin` header lines on non-preflight requests as malformed input.
+- Duplicate-origin non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate-origin non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S99 tracking (live status)
+
+- [x] Added non-preflight duplicate-origin guard branch in runtime CORS handling.
+- [x] Added deterministic duplicate-origin non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate-origin non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S100 CORS preflight body rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects preflight requests with non-empty request bodies.
+- Preflight requests carrying request bodies deterministically return `400` with explicit diagnostics.
+- Rejected preflight-body requests do not emit CORS allow-methods preflight headers.
+
+### M38-S100 tracking (live status)
+
+- [x] Added runtime preflight guard for non-empty request body payloads.
+- [x] Added deterministic preflight-body rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight body-rejection e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S101 CORS non-preflight invalid-origin rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that carry invalid `Origin` values.
+- Invalid non-preflight origin requests deterministically return `400` with explicit diagnostics.
+- Rejected invalid-origin non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S101 tracking (live status)
+
+- [x] Added non-preflight invalid-origin guard branch in runtime CORS handling.
+- [x] Added deterministic invalid-origin non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS invalid-origin non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S102 CORS non-preflight requested-method-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Method`.
+- Non-preflight requests carrying preflight-only requested-method header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S102 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Method` header presence.
+- [x] Added deterministic non-preflight requested-method-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS requested-method non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S103 CORS non-preflight requested-headers-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Headers`.
+- Non-preflight requests carrying preflight-only requested-headers header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S103 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Headers` header presence.
+- [x] Added deterministic non-preflight requested-headers-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS requested-headers non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S104 CORS non-preflight duplicate requested-method-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests containing duplicate `Access-Control-Request-Method` header lines.
+- Duplicate requested-method non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate requested-method responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S104 tracking (live status)
+
+- [x] Added non-preflight duplicate-header-line guard for `Access-Control-Request-Method`.
+- [x] Added deterministic duplicate requested-method non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate requested-method non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S105 CORS non-preflight duplicate requested-headers-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests containing duplicate `Access-Control-Request-Headers` header lines.
+- Duplicate requested-headers non-preflight requests deterministically return `400` with explicit diagnostics.
+- Rejected duplicate requested-headers responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S105 tracking (live status)
+
+- [x] Added non-preflight duplicate-header-line guard for `Access-Control-Request-Headers`.
+- [x] Added deterministic duplicate requested-headers non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS duplicate requested-headers non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_headers_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_headers_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S106 CORS preflight cookie-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that include `Cookie` header.
+- Preflight requests carrying cookies deterministically return `400` with explicit diagnostics.
+- Rejected preflight cookie-header requests do not emit preflight allow-methods header block.
+
+### M38-S106 tracking (live status)
+
+- [x] Added preflight guard rejecting `Cookie` header presence.
+- [x] Added deterministic preflight cookie-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight cookie-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S107 CORS preflight authorization-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests that include `Authorization` header.
+- Preflight requests carrying authorization header deterministically return `400` with explicit diagnostics.
+- Rejected preflight authorization-header requests do not emit preflight allow-methods header block.
+
+### M38-S107 tracking (live status)
+
+- [x] Added preflight guard rejecting `Authorization` header presence.
+- [x] Added deterministic preflight authorization-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight authorization-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_cookie_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S108 CORS non-preflight private-network-header rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that include `Access-Control-Request-Private-Network`.
+- Non-preflight requests carrying private-network preflight header deterministically return `400` with explicit diagnostics.
+- Rejected responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S108 tracking (live status)
+
+- [x] Added non-preflight guard for `Access-Control-Request-Private-Network` header presence.
+- [x] Added deterministic non-preflight private-network-header rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS private-network non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_requested_headers_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S109 CORS preflight private-network-header value validation hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Private-Network` value shape when the header is present.
+- Invalid private-network preflight header values deterministically return `400` with explicit diagnostics.
+- Rejected preflight invalid private-network requests do not emit preflight allow-methods header block.
+
+### M38-S109 tracking (live status)
+
+- [x] Added preflight validation for `Access-Control-Request-Private-Network` value (`true` only).
+- [x] Added deterministic preflight private-network-header invalid-value rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight invalid private-network-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_authorization_header`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S110 CORS preflight duplicate private-network-header rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects requests containing duplicate `Access-Control-Request-Private-Network` header lines.
+- Duplicate private-network preflight header lines deterministically return `400` with explicit diagnostics.
+- Rejected preflight duplicate private-network requests do not emit preflight allow-methods header block.
+
+### M38-S110 tracking (live status)
+
+- [x] Added preflight duplicate-header-line guard for `Access-Control-Request-Private-Network`.
+- [x] Added deterministic duplicate private-network preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate private-network-header e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6547,7 +7742,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage (`0|false|no|off|deny` case-insensitive tokens should deterministically enforce policy denial).
+- M38-S74 security-headers CORS allowed-origins invalid-env fallback coverage (invalid CSV/env tokenization should deterministically fall back to wildcard origin baseline).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6639,9 +7834,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S55 scope for explicit deny-token matrix behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
-2. Extend runtime harness with direct assertions that falsy tokens (`0|false|no|off|deny`) enforce deterministic policy denial across case variants.
-3. Publish M38-S55 book chapter and refresh roadmap live-status counts.
+1. Add M38-S77 scope for CORS enabled invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_ENABLED` values deterministically keep default cors-enabled behavior.
+3. Publish M38-S77 book chapter and refresh roadmap live-status counts.
 
 ---
 
