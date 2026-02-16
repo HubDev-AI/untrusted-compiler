@@ -748,6 +748,25 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_ssrf_block_toggles_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_dns_resolution_toggle_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S35 outbound HTTP SSRF resolve-dns env-validation diagnostics acceptance criteria
+
+- Runtime `url.public(...)` path validates `SEC4_RT_NET_SSRF_RESOLVE_DNS` with strict boolean parsing.
+- Invalid `resolve_dns` values emit deterministic policy diagnostics instead of silent fallback:
+  - `NET.SSRF_POLICY_RESOLVE_DNS_INVALID`
+- Error envelope includes deterministic policy detail:
+  - `details:[{\"key\":\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_RESOLVE_DNS\"}]`
+
+### M38-S35 tracking (live status)
+
+- [x] Added strict env parsing for `SEC4_RT_NET_SSRF_RESOLVE_DNS` in runtime public-url validation path.
+- [x] Added deterministic policy-invalid diagnostic:
+  - `NET.SSRF_POLICY_RESOLVE_DNS_INVALID`
+- [x] Added dedicated runtime harness test:
+  - `c_bin_runtime_url_public_resolve_dns_policy_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated resolve-dns toggle behavior and c-backend emit contract:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_dns_resolution_toggle_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6058,7 +6077,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S35 outbound HTTP SSRF `resolve_dns` env-validation diagnostics hardening (strict invalid-value handling + deterministic policy envelope parity).
+- M38-S36 outbound HTTP public-url policy list env-validation diagnostics (strict malformed CSV/token handling for schemes/domains/ports).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6150,9 +6169,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S35 scope for strict env-value validation diagnostics on `SEC4_RT_NET_SSRF_RESOLVE_DNS`.
-2. Extend runtime harness to assert deterministic invalid-value code/details for `resolve_dns` without regressing block-toggle diagnostics.
-3. Publish M38-S35 book chapter and refresh roadmap live-status counts.
+1. Add M38-S36 scope for strict validation diagnostics on public-url policy list env keys (`ALLOWED_SCHEMES`, `ALLOWED_DOMAINS`, `BLOCKED_DOMAINS`, `ALLOWED_PORTS`).
+2. Extend runtime harness to assert deterministic malformed-token diagnostics/details without regressing existing allow/deny behavior.
+3. Publish M38-S36 book chapter and refresh roadmap live-status counts.
 
 ---
 

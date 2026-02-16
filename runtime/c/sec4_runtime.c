@@ -4008,8 +4008,20 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
              )) {
     return false;
   }
-  if (sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_RESOLVE_DNS", true)
-      && sec4_rt_host_resolves_to_internal(
+  bool resolve_dns = true;
+  if (!sec4_rt_parse_env_flag_strict("SEC4_RT_NET_SSRF_RESOLVE_DNS", true, &resolve_dns)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.SSRF_POLICY_RESOLVE_DNS_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_RESOLVE_DNS",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_RESOLVE_DNS"
+    );
+    return false;
+  }
+
+  if (resolve_dns && sec4_rt_host_resolves_to_internal(
              host,
              host_len,
              block_private_ranges,
