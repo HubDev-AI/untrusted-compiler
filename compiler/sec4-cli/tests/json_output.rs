@@ -5025,6 +5025,8 @@ int main(void) {
   int64_t with_attr = sec4_rt_log_with_attr(with_count, "token", redacted);
   int64_t with_http = sec4_rt_log_with_http(with_attr, "POST", "/users", 201, 12);
   int64_t err = sec4_rt_err_internal("boom");
+  err = sec4_rt_err_with_path(err, "$.email");
+  err = sec4_rt_err_with_detail(err, "validator", sec4_rt_log_str("validate.email"));
   int64_t with_error = sec4_rt_log_with_error(with_http, err);
   sec4_rt_log_info(with_error);
   sec4_rt_log_warn(with_error);
@@ -5076,7 +5078,9 @@ int main(void) {
         stderr.contains("\"error\":{\"code\":\"INTERNAL.ERROR\"")
             && stderr.contains("\"kind\":\"internal\"")
             && stderr.contains("\"message\":\"boom\"")
-            && stderr.contains("\"status\":500"),
+            && stderr.contains("\"status\":500")
+            && stderr.contains("\"path\":\"$.email\"")
+            && stderr.contains("\"details\":[{\"key\":\"validator\",\"value\":\"validate.email\"}]"),
         "structured log output should include structured error attachment:\n{stderr}"
     );
     assert!(
