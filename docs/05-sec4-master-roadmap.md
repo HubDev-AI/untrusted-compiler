@@ -406,6 +406,20 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_invalid_header_section_returns_deterministic_code_when_clang_available`
   - `c_bin_runtime_internal_get_header_value_control_char_returns_deterministic_code_when_clang_available`
 - [x] Revalidated obs-fold and transfer-encoding diagnostics plus c-backend emit contract.
+
+### M38-S13 outbound HTTP content-type token diagnostics hardening acceptance criteria
+
+- Runtime validates outbound response `Content-Type` media-type tokens with deterministic diagnostics.
+- Invalid/malformed `Content-Type` values map to stable runtime code.
+- Existing header-section/control-char/obs-fold diagnostics remain green.
+
+### M38-S13 tracking (live status)
+
+- [x] Runtime now validates `Content-Type` type/subtype token structure during outbound response parsing.
+- [x] Invalid `Content-Type` values now map to deterministic `NET.CONTENT_TYPE_INVALID`.
+- [x] Added strictness harness helper + test:
+  - `c_bin_runtime_internal_get_invalid_content_type_returns_deterministic_code_when_clang_available`
+- [x] Revalidated header-section and obs-fold diagnostics plus c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5716,7 +5730,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S13 outbound HTTP parser hardening follow-up (content-type token strictness and deterministic mime-parse diagnostics).
+- M38-S14 outbound HTTP parser hardening follow-up (redirect-location normalization and deterministic relative-target diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5808,9 +5822,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S13 scope for content-type token strictness and deterministic mime-parse diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char subset) after M38-S13 edits.
-3. Publish M38-S13 book chapter and refresh roadmap live-status counts.
+1. Add M38-S14 scope for redirect-location normalization and deterministic relative-target diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type subset) after M38-S14 edits.
+3. Publish M38-S14 book chapter and refresh roadmap live-status counts.
 
 ---
 

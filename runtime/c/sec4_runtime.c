@@ -1877,6 +1877,26 @@ static bool sec4_rt_is_http_header_name_char(unsigned char ch) {
   }
 }
 
+static bool sec4_rt_is_mime_token_char(unsigned char ch) {
+  if (isalnum(ch)) {
+    return true;
+  }
+  switch (ch) {
+    case '!':
+    case '#':
+    case '$':
+    case '&':
+    case '^':
+    case '_':
+    case '.':
+    case '+':
+    case '-':
+      return true;
+    default:
+      return false;
+  }
+}
+
 static int sec4_rt_extract_outbound_http_body(
     const char *response,
     size_t total,
@@ -2114,6 +2134,52 @@ static int sec4_rt_extract_outbound_http_body(
       }
       content_length = parsed;
       has_content_length = true;
+    } else if ((size_t) (line_end - header_cursor) >= 13
+               && strncasecmp(header_cursor, "Content-Type:", 13) == 0) {
+      const char *value_start = header_cursor + 13;
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
+      }
+      const char *value_end = line_end;
+      while (value_end > value_start && isspace((unsigned char) *(value_end - 1))) {
+        value_end -= 1;
+      }
+      if (value_start >= value_end) {
+        return -22;
+      }
+
+      const char *type_start = value_start;
+      const char *slash = NULL;
+      const char *token_end = value_end;
+      for (const char *cursor = value_start; cursor < value_end; cursor++) {
+        if (*cursor == ';') {
+          token_end = cursor;
+          break;
+        }
+      }
+      while (token_end > type_start && isspace((unsigned char) *(token_end - 1))) {
+        token_end -= 1;
+      }
+      if (type_start >= token_end) {
+        return -22;
+      }
+      for (const char *cursor = type_start; cursor < token_end; cursor++) {
+        if (*cursor == '/') {
+          slash = cursor;
+          break;
+        }
+      }
+      if (slash == NULL || slash == type_start || slash + 1 >= token_end) {
+        return -22;
+      }
+      for (const char *cursor = type_start; cursor < token_end; cursor++) {
+        if (cursor == slash) {
+          continue;
+        }
+        if (!sec4_rt_is_mime_token_char((unsigned char) *cursor)) {
+          return -22;
+        }
+      }
     } else if ((size_t) (line_end - header_cursor) >= 12
                && strncasecmp(header_cursor, "Retry-After:", 12) == 0) {
       const char *value_start = header_cursor + 12;
@@ -2794,6 +2860,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.HEADER_VALUE_CONTROL_INVALID",
         "validation",
         "outbound http response header value contains invalid control characters"
+    );
+    return true;
+  }
+  if (read_status == -22) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.CONTENT_TYPE_INVALID",
+        "validation",
+        "outbound http response content-type value is invalid"
     );
     return true;
   }

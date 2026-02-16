@@ -602,5 +602,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `630-m38-outbound-http-transfer-encoding-whitelist-diagnostics.md`
 - `631-m38-outbound-http-header-whitespace-obsfold-diagnostics.md`
 - `632-m38-outbound-http-header-controlchar-section-diagnostics.md`
+- `633-m38-outbound-http-content-type-token-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.
