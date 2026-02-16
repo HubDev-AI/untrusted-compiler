@@ -7084,6 +7084,30 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   );
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
+    size_t request_origin_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Origin"
+    );
+    if (request_origin_occurrences > 1) {
+      const char *body = "cors preflight duplicate origin header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     char request_origin[256];
     bool has_request_origin = sec4_rt_extract_request_header(
         "Origin",
