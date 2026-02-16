@@ -1929,6 +1929,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S84 CORS exposed-headers env policy materialization hardening acceptance criteria
+
+- Runtime CORS success responses honor `SEC4_RT_CORS_EXPOSED_HEADERS` when values are valid.
+- Invalid exposed-headers env values deterministically fall back to absent `Access-Control-Expose-Headers`.
+- Exposed-headers materialization hardening does not regress existing CORS success/preflight behavior.
+
+### M38-S84 tracking (live status)
+
+- [x] Runtime CORS policy state now carries `expose_headers` loaded from env policy.
+- [x] Added exposed-headers validation/fallback path using header-name CSV validation.
+- [x] Runtime CORS success-header block now emits `Access-Control-Expose-Headers` when configured.
+- [x] Added HTTP runtime CORS exposed-headers e2e coverage:
+  - `c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_exposed_headers_from_env_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

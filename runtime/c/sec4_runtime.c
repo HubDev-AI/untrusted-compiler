@@ -84,6 +84,7 @@ typedef struct {
   bool cors_require_vary_origin;
   char cors_allow_methods[128];
   char cors_allow_headers[128];
+  char cors_expose_headers[128];
   int64_t cors_max_age_seconds;
   bool security_headers_enabled;
   bool security_hsts_enabled;
@@ -183,6 +184,7 @@ typedef struct {
   int64_t max_age_seconds;
   char allow_methods[128];
   char allow_headers[128];
+  char expose_headers[128];
 } sec4_rt_cors_policy_state;
 
 typedef struct {
@@ -6331,6 +6333,17 @@ static const char *sec4_rt_cors_headers_block(
       used += (size_t) written;
     }
   }
+  if (router->cors_expose_headers[0] != '\0') {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Expose-Headers: %s\r\n",
+        router->cors_expose_headers
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
   (void) used;
   return buffer;
 }
@@ -9909,6 +9922,7 @@ static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
       sizeof(slot->cors_allow_headers) - 1
   );
   slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+  slot->cors_expose_headers[0] = '\0';
   slot->cors_max_age_seconds = 600;
 }
 
@@ -10026,6 +10040,15 @@ static void sec4_rt_load_cors_policy_from_env(void) {
         sizeof(g_sec4_rt_cors_policy.allow_headers) - 1
     );
     g_sec4_rt_cors_policy.allow_headers[sizeof(g_sec4_rt_cors_policy.allow_headers) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_EXPOSED_HEADERS",
+      "",
+      g_sec4_rt_cors_policy.expose_headers,
+      sizeof(g_sec4_rt_cors_policy.expose_headers)
+  );
+  if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.expose_headers)) {
+    g_sec4_rt_cors_policy.expose_headers[0] = '\0';
   }
   const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
   if (!sec4_rt_csv_copy_first_token(
@@ -10213,6 +10236,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
   if (cfg == 0) {
     slot->cors_enabled = false;
     slot->cors_allow_origin[0] = '\0';
+    slot->cors_expose_headers[0] = '\0';
     return router;
   }
   if (cfg == SEC4_RT_POLICY_CORS_HANDLE) {
@@ -10244,6 +10268,12 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
         sizeof(slot->cors_allow_headers) - 1
     );
     slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+    strncpy(
+        slot->cors_expose_headers,
+        g_sec4_rt_cors_policy.expose_headers,
+        sizeof(slot->cors_expose_headers) - 1
+    );
+    slot->cors_expose_headers[sizeof(slot->cors_expose_headers) - 1] = '\0';
     slot->cors_max_age_seconds = g_sec4_rt_cors_policy.max_age_seconds > 0
         ? g_sec4_rt_cors_policy.max_age_seconds
         : 600;

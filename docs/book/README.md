@@ -676,5 +676,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `704-m38-cors-max-age-env-policy-materialization.md`
 - `705-m38-csrf-name-env-policy-materialization.md`
 - `706-m38-cors-methods-headers-env-policy-materialization.md`
+- `707-m38-cors-exposed-headers-env-policy-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.
