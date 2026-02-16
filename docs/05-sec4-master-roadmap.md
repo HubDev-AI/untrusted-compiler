@@ -639,6 +639,19 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added allow-downgrade-policy-invalid harness test:
   - `c_bin_runtime_internal_get_redirect_allow_downgrade_policy_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated max-redirects-policy-invalid diagnostics and c-backend emit contract.
+
+### M38-S29 outbound HTTP redirect policy error-envelope detail hardening acceptance criteria
+
+- Redirect policy invalid diagnostics include deterministic structured `details` entries identifying invalid policy key.
+- Structured details are stable across allow-redirects/max-redirects/revalidate/downgrade invalid paths.
+- Existing cap-limit and cycle diagnostics remain green.
+
+### M38-S29 tracking (live status)
+
+- [x] Added structured error helper path for policy-invalid diagnostics with deterministic `details`.
+- [x] Redirect policy invalid responses now include `details:[{"key":"policyKey","value":"..."}]`.
+- [x] Extended policy-invalid harness tests to assert structured details for all redirect policy keys.
+- [x] Revalidated c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5949,7 +5962,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S29 outbound HTTP redirect policy error-envelope detail hardening (deterministic structured details for invalid keys).
+- M38-S30 outbound HTTP redirect policy diagnostics stabilization (remove cargo-lock contention patterns in validation flow and keep targeted matrix deterministic).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6041,9 +6054,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S29 scope for structured detail fields on redirect policy invalid diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S29 edits.
-3. Publish M38-S29 book chapter and refresh roadmap live-status counts.
+1. Add M38-S30 scope for redirect diagnostics stabilization and deterministic targeted matrix execution.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S30 edits.
+3. Publish M38-S30 book chapter and refresh roadmap live-status counts.
 
 ---
 

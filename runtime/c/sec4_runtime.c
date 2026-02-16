@@ -385,6 +385,42 @@ static void sec4_rt_store_std_error_response(
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
 }
 
+static void sec4_rt_store_std_error_response_with_detail(
+    int64_t status,
+    const char *code,
+    const char *kind,
+    const char *message,
+    const char *detail_key,
+    const char *detail_value
+) {
+  if (detail_key == NULL || detail_key[0] == '\0' || detail_value == NULL || detail_value[0] == '\0') {
+    sec4_rt_store_std_error_response(status, code, kind, message);
+    return;
+  }
+
+  int64_t now_ms = sec4_rt_time_now();
+  char payload[1024];
+  int written = snprintf(
+      payload,
+      sizeof(payload),
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld,\"details\":[{\"key\":\"%s\",\"value\":\"%s\"}]}}",
+      code != NULL ? code : "INTERNAL.ERROR",
+      kind != NULL ? kind : "internal",
+      message != NULL ? message : "internal error",
+      (long long) status,
+      sec4_rt_current_trace_id(),
+      (long long) now_ms,
+      detail_key,
+      detail_value
+  );
+
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    sec4_rt_store_std_error_response(status, code, kind, message);
+    return;
+  }
+  sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
+}
+
 static void sec4_rt_store_std_success_response(
     int64_t status,
     const char *data_json,
@@ -3344,11 +3380,13 @@ static int64_t sec4_rt_outbound_http_get_handle(
           false,
           &redirects_allowed
       )) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_detail(
         400,
         "NET.REDIRECT_POLICY_ALLOW_REDIRECTS_INVALID",
         "validation",
-        "invalid boolean value for SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS"
+        "invalid boolean value for SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS"
     );
     return 0;
   }
@@ -3359,11 +3397,13 @@ static int64_t sec4_rt_outbound_http_get_handle(
           SEC4_RT_MAX_OUTBOUND_HTTP_POLICY_REDIRECTS,
           &max_redirects
       )) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_detail(
         400,
         "NET.REDIRECT_POLICY_MAX_REDIRECTS_INVALID",
         "validation",
-        "invalid value for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
+        "invalid value for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
     );
     return 0;
   }
@@ -3373,11 +3413,13 @@ static int64_t sec4_rt_outbound_http_get_handle(
           true,
           &revalidate_redirects
       )) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_detail(
         400,
         "NET.REDIRECT_POLICY_REVALIDATE_REDIRECTS_INVALID",
         "validation",
-        "invalid boolean value for SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS"
+        "invalid boolean value for SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS"
     );
     return 0;
   }
@@ -3387,11 +3429,13 @@ static int64_t sec4_rt_outbound_http_get_handle(
           false,
           &allow_https_downgrade
       )) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_detail(
         400,
         "NET.REDIRECT_POLICY_ALLOW_DOWNGRADE_INVALID",
         "validation",
-        "invalid boolean value for SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE"
+        "invalid boolean value for SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE",
+        "policyKey",
+        "SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE"
     );
     return 0;
   }

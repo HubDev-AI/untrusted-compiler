@@ -11287,6 +11287,7 @@ int main(void) {
   if (internal_url == 0) { return 10; }
   if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_ALLOW_REDIRECTS_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS\"}]") == NULL) { return 13; }
 
   return 0;
 }
@@ -11352,6 +11353,7 @@ int main(void) {
   if (internal_url == 0) { return 10; }
   if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_MAX_REDIRECTS_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_MAX_REDIRECTS\"}]") == NULL) { return 13; }
 
   return 0;
 }
@@ -11417,6 +11419,7 @@ int main(void) {
   if (internal_url == 0) { return 10; }
   if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_REVALIDATE_REDIRECTS_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS\"}]") == NULL) { return 13; }
 
   return 0;
 }
@@ -11484,6 +11487,7 @@ int main(void) {
   if (internal_url == 0) { return 10; }
   if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_ALLOW_DOWNGRADE_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"policyKey\",\"value\":\"SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE\"}]") == NULL) { return 13; }
 
   return 0;
 }
