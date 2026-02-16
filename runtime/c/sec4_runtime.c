@@ -279,6 +279,12 @@ static bool sec4_rt_parse_ipv4_cidr_token(
     uint32_t *network_out,
     uint32_t *mask_out
 );
+static bool sec4_rt_parse_ipv6_cidr_token(
+    const char *token_start,
+    const char *token_end,
+    struct in6_addr *network_out,
+    uint8_t *prefix_out
+);
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method);
 static size_t sec4_rt_json_escape(
     const char *input,
@@ -1401,7 +1407,7 @@ static bool sec4_rt_csv_is_valid_port_list(const char *csv) {
   return true;
 }
 
-static bool sec4_rt_csv_is_valid_ipv4_cidr_list(const char *csv) {
+static bool sec4_rt_csv_is_valid_cidr_list(const char *csv) {
   if (csv == NULL || csv[0] == '\0') {
     return true;
   }
@@ -1421,7 +1427,11 @@ static bool sec4_rt_csv_is_valid_ipv4_cidr_list(const char *csv) {
 
     uint32_t network = 0;
     uint32_t mask = 0;
-    if (!sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask)) {
+    struct in6_addr network6;
+    uint8_t prefix6 = 0;
+    bool ipv4_ok = sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask);
+    bool ipv6_ok = sec4_rt_parse_ipv6_cidr_token(token_start, token_end, &network6, &prefix6);
+    if (!(ipv4_ok || ipv6_ok)) {
       return false;
     }
 
@@ -1533,7 +1543,100 @@ static bool sec4_rt_parse_ipv4_cidr_token(
   return true;
 }
 
-static bool sec4_rt_csv_contains_ipv4_cidr_match(
+static bool sec4_rt_parse_ipv6_addr_literal(
+    const char *host,
+    size_t host_len,
+    struct in6_addr *out
+) {
+  if (host == NULL || host_len == 0 || out == NULL
+      || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+    return false;
+  }
+
+  char host_text[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  memcpy(host_text, host, host_len);
+  host_text[host_len] = '\0';
+  return inet_pton(AF_INET6, host_text, out) == 1;
+}
+
+static bool sec4_rt_parse_ipv6_cidr_token(
+    const char *token_start,
+    const char *token_end,
+    struct in6_addr *network_out,
+    uint8_t *prefix_out
+) {
+  if (token_start == NULL || token_end == NULL || token_end <= token_start
+      || network_out == NULL || prefix_out == NULL) {
+    return false;
+  }
+
+  const char *slash = NULL;
+  for (const char *cursor = token_start; cursor < token_end; cursor++) {
+    if (*cursor == '/') {
+      if (slash != NULL) {
+        return false;
+      }
+      slash = cursor;
+    }
+  }
+  if (slash == NULL || slash == token_start || slash + 1 >= token_end) {
+    return false;
+  }
+
+  size_t addr_len = (size_t) (slash - token_start);
+  if (addr_len == 0 || addr_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+    return false;
+  }
+  char addr_text[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  memcpy(addr_text, token_start, addr_len);
+  addr_text[addr_len] = '\0';
+  if (inet_pton(AF_INET6, addr_text, network_out) != 1) {
+    return false;
+  }
+
+  uint32_t prefix = 0;
+  for (const char *cursor = slash + 1; cursor < token_end; cursor++) {
+    if (!isdigit((unsigned char) *cursor)) {
+      return false;
+    }
+    prefix = (prefix * 10U) + (uint32_t) (*cursor - '0');
+    if (prefix > 128U) {
+      return false;
+    }
+  }
+
+  *prefix_out = (uint8_t) prefix;
+  return true;
+}
+
+static bool sec4_rt_ipv6_cidr_matches(
+    const struct in6_addr *host,
+    const struct in6_addr *network,
+    uint8_t prefix
+) {
+  if (host == NULL || network == NULL) {
+    return false;
+  }
+  if (prefix == 0) {
+    return true;
+  }
+
+  size_t whole_bytes = (size_t) (prefix / 8);
+  uint8_t remaining_bits = (uint8_t) (prefix % 8);
+  if (whole_bytes > 0
+      && memcmp(host->s6_addr, network->s6_addr, whole_bytes) != 0) {
+    return false;
+  }
+  if (remaining_bits == 0) {
+    return true;
+  }
+
+  uint8_t mask = (uint8_t) (0xFFu << (8u - remaining_bits));
+  return (host->s6_addr[whole_bytes] & mask)
+      == (network->s6_addr[whole_bytes] & mask);
+}
+
+static bool sec4_rt_csv_contains_cidr_match(
     const char *csv,
     const char *host,
     size_t host_len
@@ -1543,10 +1646,13 @@ static bool sec4_rt_csv_contains_ipv4_cidr_match(
   }
 
   uint8_t host_octets[4];
-  if (!sec4_rt_parse_ipv4_octets(host, host_len, host_octets)) {
+  bool host_is_ipv4 = sec4_rt_parse_ipv4_octets(host, host_len, host_octets);
+  uint32_t host_ip = host_is_ipv4 ? sec4_rt_ipv4_octets_to_u32(host_octets) : 0;
+  struct in6_addr host_ipv6;
+  bool host_is_ipv6 = sec4_rt_parse_ipv6_addr_literal(host, host_len, &host_ipv6);
+  if (!host_is_ipv4 && !host_is_ipv6) {
     return false;
   }
-  uint32_t host_ip = sec4_rt_ipv4_octets_to_u32(host_octets);
 
   const char *cursor = csv;
   while (*cursor != '\0') {
@@ -1560,8 +1666,17 @@ static bool sec4_rt_csv_contains_ipv4_cidr_match(
     if (token_end > token_start) {
       uint32_t network = 0;
       uint32_t mask = 0;
-      if (sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask)
+      if (host_is_ipv4
+          && sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask)
           && ((host_ip & mask) == network)) {
+        return true;
+      }
+
+      struct in6_addr network6;
+      uint8_t prefix6 = 0;
+      if (host_is_ipv6
+          && sec4_rt_parse_ipv6_cidr_token(token_start, token_end, &network6, &prefix6)
+          && sec4_rt_ipv6_cidr_matches(&host_ipv6, &network6, prefix6)) {
         return true;
       }
     }
@@ -1798,22 +1913,43 @@ static bool sec4_rt_parse_url_host(
     return false;
   }
 
-  const char *host_end = host;
-  while (*host_end != '\0' && *host_end != '/' && *host_end != '?' && *host_end != ':') {
-    host_end += 1;
-  }
+  if (*host == '[') {
+    const char *ipv6_start = host + 1;
+    const char *ipv6_end = ipv6_start;
+    while (*ipv6_end != '\0' && *ipv6_end != ']') {
+      if (*ipv6_end == '@' || isspace((unsigned char) *ipv6_end)) {
+        return false;
+      }
+      ipv6_end += 1;
+    }
+    if (*ipv6_end != ']') {
+      return false;
+    }
+    size_t ipv6_len = (size_t) (ipv6_end - ipv6_start);
+    if (ipv6_len == 0) {
+      return false;
+    }
+    *host_start = ipv6_start;
+    *host_len = ipv6_len;
+    return true;
+  } else {
+    const char *host_end = host;
+    while (*host_end != '\0' && *host_end != '/' && *host_end != '?' && *host_end != ':') {
+      host_end += 1;
+    }
 
-  size_t len = (size_t) (host_end - host);
-  if (len == 0) {
-    return false;
-  }
-  if (memchr(host, '@', len) != NULL) {
-    return false;
-  }
+    size_t len = (size_t) (host_end - host);
+    if (len == 0) {
+      return false;
+    }
+    if (memchr(host, '@', len) != NULL) {
+      return false;
+    }
 
-  *host_start = host;
-  *host_len = len;
-  return true;
+    *host_start = host;
+    *host_len = len;
+    return true;
+  }
 }
 
 static bool sec4_rt_resolve_url_port(
@@ -1827,6 +1963,9 @@ static bool sec4_rt_resolve_url_port(
   }
 
   const char *cursor = host_start + host_len;
+  if (*cursor == ']') {
+    cursor += 1;
+  }
   uint16_t resolved_port = is_https ? 443 : 80;
   if (*cursor == ':') {
     cursor += 1;
@@ -4061,6 +4200,11 @@ static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
       || sec4_rt_host_ends_with(host, host_len, ".internal")) {
     return true;
   }
+  struct in6_addr ipv6;
+  if (sec4_rt_parse_ipv6_addr_literal(host, host_len, &ipv6)
+      && sec4_rt_ipv6_addr_is_internal(&ipv6)) {
+    return true;
+  }
   if (sec4_rt_parse_ipv4_private(host, host_len)) {
     return true;
   }
@@ -4283,7 +4427,7 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
     );
     return false;
   }
-  if (!sec4_rt_csv_is_valid_ipv4_cidr_list(allowed_cidrs)) {
+  if (!sec4_rt_csv_is_valid_cidr_list(allowed_cidrs)) {
     sec4_rt_store_std_error_response_with_detail(
         400,
         "NET.URL_INTERNAL_POLICY_ALLOWED_CIDRS_INVALID",
@@ -4298,8 +4442,8 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
   bool has_allowed_cidrs = sec4_rt_csv_has_any_token(allowed_cidrs);
   bool domains_match =
       has_allowed_domains && sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len);
-  bool cidrs_match = has_allowed_cidrs
-      && sec4_rt_csv_contains_ipv4_cidr_match(allowed_cidrs, host, host_len);
+  bool cidrs_match =
+      has_allowed_cidrs && sec4_rt_csv_contains_cidr_match(allowed_cidrs, host, host_len);
   if ((has_allowed_domains || has_allowed_cidrs) && !(domains_match || cidrs_match)) {
     return false;
   }

@@ -627,5 +627,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `655-m38-outbound-http-ssrf-resolve-dns-env-validation-diagnostics.md`
 - `656-m38-outbound-http-public-url-policy-list-env-validation-diagnostics.md`
 - `657-m38-outbound-http-internal-url-allowlist-env-validation-diagnostics.md`
+- `658-m38-outbound-http-internal-url-ipv6-cidr-support.md`
 
 As milestones progress, chapters will be added and linked from this index.

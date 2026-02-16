@@ -8475,6 +8475,18 @@ int main(void) {
   if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS\"") == NULL) { return 28; }
   setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8", 1);
 
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "fd00::/8", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://[fd00::1]/service")) == 0) { return 31; }
+
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "fd00:1::/64", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://[fd00:2::1]/service")) != 0) { return 32; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_INVALID\"") == NULL) { return 33; }
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "internal.service", 1);
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8", 1);
+
   sec4_rt_reset_response();
   if (sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service")) == 0) { return 11; }
 

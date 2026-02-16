@@ -814,6 +814,25 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S38 outbound HTTP internal-url allowlist IPv6-CIDR support acceptance criteria
+
+- Runtime internal allowlist CIDR validation accepts both IPv4 and IPv6 CIDR tokens.
+- Runtime internal allowlist CIDR matching supports IPv6 literal hosts (bracketed URL host form).
+- Internal URL host parsing supports IPv6 literals for policy checks and port parsing compatibility.
+
+### M38-S38 tracking (live status)
+
+- [x] Added IPv6 CIDR parser + matcher for internal allowlist checks.
+- [x] Upgraded internal CIDR list validation from IPv4-only to dual-stack (IPv4/IPv6).
+- [x] Added IPv6 literal host parsing support in URL host extraction and port resolution helper paths.
+- [x] Expanded internal allowlist harness coverage to assert IPv6 CIDR allow/mismatch behavior:
+  - `http://[fd00::1]/...` allowed by `fd00::/8`
+  - `http://[fd00:2::1]/...` rejected by mismatched `fd00:1::/64`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6124,7 +6143,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S38 outbound HTTP internal-url allowlist IPv6-CIDR support (parser + matcher + deterministic diagnostics).
+- M38-S39 outbound HTTP client IPv6-literal support for net requests (URL parser + connection path + deterministic diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6216,9 +6235,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S38 scope for IPv6 CIDR parsing/matching support in internal allowlist policy checks.
-2. Extend runtime harness to cover IPv6 allowlist success/failure paths with deterministic diagnostics for malformed CIDR tokens.
-3. Publish M38-S38 book chapter and refresh roadmap live-status counts.
+1. Add M38-S39 scope for bracketed IPv6 host parsing in `sec4_rt_parse_outbound_http_url` and outbound connect flows.
+2. Extend runtime harness with internal/public HTTP GET IPv6-literal roundtrip + deterministic invalid-host diagnostics.
+3. Publish M38-S39 book chapter and refresh roadmap live-status counts.
 
 ---
 
