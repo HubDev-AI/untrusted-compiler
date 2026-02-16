@@ -88,7 +88,7 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
 4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
 
-When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track.
+When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track, executed first through the browser-to-server promotion milestone plan (M39 below).
 
 ### Post-alpha two-phase backend promotion track (browser -> server)
 
@@ -117,6 +117,83 @@ Post-alpha track acceptance anchors:
 - Promotion contract includes data portability path:
   - browser-local export artifact
   - generated server import scaffold/command path.
+
+## M39 - Browser-First to Server Promotion MVP (Queued; gated by `WASM_START_GATE`)
+
+### Goal
+
+- Deliver a deterministic two-phase backend loop:
+  - browser-first prototype profile (`zero deploy`)
+  - mechanical promotion to server target (`sec4 promote --from browser --to server`).
+
+### M39-S1 browser profile capability fence acceptance criteria
+
+- Compiler/profile enforcement blocks server-only capabilities in browser mode:
+  - `db.*`
+  - `secrets.*`
+  - `net.listen`
+  - internal-net sinks.
+- Browser profile allows only approved local/browser runtime capabilities (for MVP: `localdb.*`, constrained public fetch gates).
+- Deterministic diagnostics include profile context and fix guidance.
+
+### M39-S1 tracking (live status)
+
+- [ ] Profile capability fence diagnostics implemented in semantic layer.
+- [ ] Golden/compiler command tests added for allowed + forbidden capability cases.
+- [ ] Book chapter documenting S1 implementation added.
+
+### M39-S2 composition contract analyzer acceptance criteria
+
+- Analyzer enforces promotion-ready architecture contract:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Analyzer rejects direct domain coupling to browser/server-only adapters.
+- Analyzer verifies repository method parity between browser/server adapters.
+
+### M39-S2 tracking (live status)
+
+- [ ] Composition contract analyzer implemented.
+- [ ] Fixture coverage added for pass/fail composition graphs.
+- [ ] Book chapter documenting S2 implementation added.
+
+### M39-S3 `sec4 promote` dry-run planner acceptance criteria
+
+- New command surface:
+  - `sec4 promote --from browser --to server --dry-run [--path <project>]`.
+- Dry-run emits deterministic transformation plan artifact:
+  - changed bindings
+  - generated files list
+  - precondition diagnostics (if any).
+- Re-running dry-run on unchanged tree yields byte-identical plan output.
+
+### M39-S3 tracking (live status)
+
+- [ ] CLI command scaffolding + planner implementation added.
+- [ ] Determinism tests for plan artifact added.
+- [ ] Book chapter documenting S3 implementation added.
+
+### M39-S4 promotion apply + generated scaffold acceptance criteria
+
+- `sec4 promote --from browser --to server` applies composition-root binding rewrite only.
+- Domain modules remain unchanged after promotion.
+- Generator emits deterministic server scaffolding:
+  - server repo adapter
+  - schema/migration baseline
+  - deploy profile baseline
+  - promotion report artifact.
+- Added browser-export -> server-import scaffold path with deterministic validation envelope.
+- End-to-end fixture proves:
+  - browser profile prototype builds/runs,
+  - promotion succeeds,
+  - server target builds/runs on generated scaffold.
+
+### M39-S4 tracking (live status)
+
+- [ ] Apply rewrite engine implemented with composition-root-only rewrite guard.
+- [ ] Scaffold generator + deterministic report implemented.
+- [ ] End-to-end promotion fixture (browser -> server) added and green.
+- [ ] Book chapter documenting S4 implementation added.
 
 ### Readiness estimate (live)
 

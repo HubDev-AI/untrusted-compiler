@@ -659,5 +659,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `687-m38-security-headers-x-content-type-options-invalid-env-fallback.md`
 - `688-m38-security-headers-csp-report-only-invalid-env-fallback.md`
 - `689-post-alpha-browser-to-server-promotion-transformation-spec.md`
+- `690-m39-browser-to-server-promotion-mvp-execution-plan.md`
 
 As milestones progress, chapters will be added and linked from this index.
