@@ -2707,6 +2707,25 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S123 HTTP ingress generic body-limit enforcement acceptance criteria
+
+- Runtime ingress enforces configured body-size cap for non-JSON handler paths that do not call `req.json(...)`.
+- Oversized non-JSON request bodies are rejected deterministically with `413` before successful route responses are emitted.
+- Existing JSON-specific body-limit behavior (`req.json` + `LIMIT.BODY_BYTES`) remains unchanged.
+
+### M38-S123 tracking (live status)
+
+- [x] Added runtime generic body-limit enforcement branch for non-JSON paths (`body_limit_exceeded && !json_checked`).
+- [x] Added run-command e2e coverage:
+  - `run_command_oneshot_enforces_body_limit_for_non_json_handler_paths`
+- [x] Revalidated non-regression for JSON limit behavior:
+  - `run_command_oneshot_applies_http_body_limit_from_policy`
+- [x] Revalidated runtime command behavior:
+  - `cargo test -p sec4 --test commands run_command_oneshot_enforces_body_limit_for_non_json_handler_paths`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_body_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8019,7 +8038,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S123 HTTP ingress generic body-limit enforcement for non-JSON request paths.
+- M38-S124 HTTP max-concurrency policy/runtime materialization bridge.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8111,9 +8130,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S123 scope for deterministic ingress body-limit rejection on non-JSON request paths.
-2. Enforce configured body-cap rejection in runtime ingress before handler execution, independent of `req.json(...)` usage.
-3. Publish M38-S123 book chapter and refresh roadmap live-status counts.
+1. Add M38-S124 scope for persisted `http.max_concurrency` policy bridge into runtime ingress controls.
+2. Materialize `http.max_concurrency` in `sec4 run` and enforce deterministic connection-throttling behavior under oneshot/offline test harness constraints.
+3. Publish M38-S124 book chapter and refresh roadmap live-status counts.
 
 ---
 

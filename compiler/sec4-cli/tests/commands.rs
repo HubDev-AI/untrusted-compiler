@@ -2907,6 +2907,141 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_enforces_body_limit_for_non_json_handler_paths() {
+    if !clang_available() {
+        eprintln!("skipping run-command generic body-limit test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-http-generic-body-limit-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runhttpgenericbodylimitpolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[http]
+max_body_bytes = 32
+max_header_bytes = 8191
+max_multipart_bytes = 4096
+default_timeout_ms = 20000
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn upload() effects { net } -> Int {
+  res.text(201, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/upload", upload);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let payload = "a".repeat(120);
+    let request = format!(
+        "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        payload.len(),
+        payload
+    );
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command generic body-limit test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command generic body-limit process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command generic body-limit process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 413 Payload Too Large"),
+        "response should contain 413 status line when generic body limit is exceeded:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nrequest body exceeds runtime limit"),
+        "response should include deterministic generic body-limit message:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_cli_max_body_bytes_overrides_policy_limit() {
     if !clang_available() {
         eprintln!("skipping run-command http body-limit override test: clang not available");

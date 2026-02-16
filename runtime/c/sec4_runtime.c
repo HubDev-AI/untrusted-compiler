@@ -7985,6 +7985,26 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.matched_route_pattern[sizeof(g_sec4_rt_request.matched_route_pattern) - 1] = '\0';
   (void) match->handler();
 
+  if (g_sec4_rt_request.body_limit_exceeded && !g_sec4_rt_request.json_checked) {
+    const char *body = "request body exceeds runtime limit";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        sec4_rt_response_extra_headers(),
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        413,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
   if (!g_sec4_rt_response.active) {
     const char *body = "";
     const char *final_headers = sec4_rt_merge_three_headers(
