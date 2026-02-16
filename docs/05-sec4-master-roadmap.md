@@ -2010,6 +2010,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S88 CORS preflight requested-method enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Method` against configured allow-methods policy.
+- Preflight requests for disallowed methods deterministically return `403` with explicit rejection diagnostics.
+- Allowed-method preflight behavior (`204` with CORS preflight headers) remains unchanged.
+
+### M38-S88 tracking (live status)
+
+- [x] Runtime preflight path now checks requested method membership in CORS allow-methods CSV before emitting success preflight headers.
+- [x] Added deterministic rejection response for disallowed preflight methods (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight disallowed-method e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
