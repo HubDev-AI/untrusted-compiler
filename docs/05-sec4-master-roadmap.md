@@ -1660,6 +1660,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_back_to_enabled_when_security_headers_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S69 security-headers middleware-enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_ENABLED` env values deterministically fall back to keeping security headers enabled.
+- Invalid raw env values are never reflected as disabled security-header behavior in emitted responses.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S69 tracking (live status)
+
+- [x] Added HTTP runtime security-header enabled-flag fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps baseline security headers active.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_enabled_invalid_env_falls_back_to_enabled_when_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6972,7 +6989,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S69 security-headers middleware-enabled invalid-env fallback coverage (invalid boolean env values should deterministically keep security headers enabled).
+- M38-S70 security-headers HSTS-enabled invalid-env fallback coverage (invalid boolean env values should deterministically keep HSTS disabled by default).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -7064,9 +7081,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S69 scope for security-headers enabled invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_ENABLED` values deterministically keep baseline security headers active.
-3. Publish M38-S69 book chapter and refresh roadmap live-status counts.
+1. Add M38-S70 scope for HSTS-enabled invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED` values deterministically keep default HSTS-disabled behavior.
+3. Publish M38-S70 book chapter and refresh roadmap live-status counts.
 
 ---
 
