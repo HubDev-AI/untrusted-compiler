@@ -90,6 +90,34 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 
 When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track.
 
+### Post-alpha two-phase backend promotion track (browser -> server)
+
+After `WASM_START_GATE` opens, the first execution track should prioritize browser-first prototyping with deterministic server promotion.
+
+Target product loop:
+
+1. Prototype instantly in browser profile (`no deploy`).
+2. Validate UX/domain flows locally with deterministic state.
+3. Promote same domain modules to server target with mechanical adapter swap + generated deployment scaffolding.
+
+Post-alpha track acceptance anchors:
+
+- Browser profile enforces strict capability boundary:
+  - forbid `db.*`, `secrets.*`, `net.listen`, internal-net sinks.
+  - allow browser-local persistence adapter (`localdb.*`) and constrained outbound fetch gates.
+- Composition model is explicit:
+  - target-agnostic domain module
+  - repository interface
+  - target-specific adapters (`LocalRepo` / `ServerRepo`).
+- Promotion flow is compiler-driven and deterministic:
+  - `sec4 promote --from browser --to server`
+  - binding rewrite at composition root (`LocalRepo` -> `ServerRepo`)
+  - generated server scaffold (schema/migrations, runtime wiring, deployment manifest baseline)
+  - deterministic diagnostics when promotion preconditions fail.
+- Promotion contract includes data portability path:
+  - browser-local export artifact
+  - generated server import scaffold/command path.
+
 ### Readiness estimate (live)
 
 - Runnable alpha (end-to-end): ~93-95%
