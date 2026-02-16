@@ -7273,6 +7273,31 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       );
       return;
     }
+    char cookie_header[512];
+    bool has_cookie_header = sec4_rt_extract_request_header(
+        "Cookie",
+        cookie_header,
+        sizeof(cookie_header)
+    );
+    if (has_cookie_header) {
+      const char *body = "cors preflight cookie header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     char request_origin[256];
     bool has_request_origin = sec4_rt_extract_request_header(
         "Origin",
