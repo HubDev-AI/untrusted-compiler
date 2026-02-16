@@ -45,7 +45,17 @@ if [ ! -d "${repo_root}" ]; then
 fi
 
 matches="$(
-  rg -n --fixed-strings --hidden --glob '!**/.git/**' --glob '!**/target/**' --glob '!**/build/**' --glob '!**/node_modules/**' --glob '!**/.DS_Store' "${forbidden_token}" "${repo_root}" || true
+  if command -v rg >/dev/null 2>&1; then
+    rg -n --fixed-strings --hidden --glob '!**/.git/**' --glob '!**/target/**' --glob '!**/build/**' --glob '!**/node_modules/**' --glob '!**/.DS_Store' "${forbidden_token}" "${repo_root}" || true
+  else
+    grep -R -n -F \
+      --exclude-dir='.git' \
+      --exclude-dir='target' \
+      --exclude-dir='build' \
+      --exclude-dir='node_modules' \
+      --exclude='.DS_Store' \
+      -- "${forbidden_token}" "${repo_root}" || true
+  fi
 )"
 
 if [ -n "${matches}" ]; then
