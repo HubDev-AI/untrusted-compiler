@@ -14845,6 +14845,96 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy delimited-token fallback test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-delimited-token-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-delimited-token-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 11; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return 18; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy delimited-token fallback harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy delimited-token fallback harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let delimited_tokens = [
+        "true,allow",
+        "yes|on",
+        "allow/1",
+        "true;allow",
+        "on:yes",
+        "allow,true",
+        " yes|allow ",
+    ];
+    let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
+
+    for delimited_token in delimited_tokens {
+        for internal_url in internal_urls {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", delimited_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", internal_url)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy delimited-token fallback harness should exit successfully for token {delimited_token:?}, url {internal_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");
