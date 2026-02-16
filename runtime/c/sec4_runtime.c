@@ -7159,6 +7159,31 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       );
       return;
     }
+    char requested_headers_header[256];
+    bool has_requested_headers_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers_header,
+        sizeof(requested_headers_header)
+    );
+    if (has_requested_headers_header) {
+      const char *body = "cors request requested headers header not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
   }
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
