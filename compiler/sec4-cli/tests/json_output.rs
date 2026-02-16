@@ -14385,6 +14385,104 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy allow-token truthy test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-allow-truthy");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-allow-truthy");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *raw_url = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (raw_url == NULL || raw_url[0] == '\0') { return 10; }
+  const char *expected_code = getenv("SEC4_RT_EXPECTED_CODE");
+  if (expected_code == NULL || expected_code[0] == '\0') { return 11; }
+  const char *expected_kind = getenv("SEC4_RT_EXPECTED_KIND");
+  if (expected_kind == NULL || expected_kind[0] == '\0') { return 12; }
+
+  int64_t internal_url = sec4_rt_req_query(raw_url);
+  if (internal_url == 0) { return 13; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, expected_kind) == NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, "NET.INTERNAL_DENIED") != NULL) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return 18; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy allow truthy harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy allow truthy harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let allow_tokens = ["1", "true", "yes", "on", "allow", "TRUE", "YeS", "On"];
+    let outcome_cases = [
+        (
+            "http://127.0.0.1/internal#frag",
+            "\"code\":\"NET.REQUEST_TARGET_INVALID\"",
+            "\"kind\":\"validation\"",
+        ),
+        (
+            "https://127.0.0.1/internal",
+            "\"code\":\"NET.TLS_UNSUPPORTED\"",
+            "\"kind\":\"runtime\"",
+        ),
+    ];
+
+    for allow_token in allow_tokens {
+        for (test_url, expected_code, expected_kind) in outcome_cases {
+            let run = Command::new(&binary_path)
+                .env("SEC4_RT_ALLOW_INTERNAL_NET", allow_token)
+                .env("SEC4_RT_TEST_INTERNAL_URL", test_url)
+                .env("SEC4_RT_EXPECTED_CODE", expected_code)
+                .env("SEC4_RT_EXPECTED_KIND", expected_kind)
+                .output()
+                .expect("compiled binary should run");
+            assert!(
+                run.status.success(),
+                "runtime internal-policy allow truthy harness should exit successfully for token {allow_token:?}, url {test_url:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");
