@@ -1343,6 +1343,32 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_quoted_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S59 outbound HTTP internal-policy prefixed-token fallback coverage acceptance criteria
+
+- Prefixed token spellings for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under prefixed token values, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Prefixed-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S59 tracking (live status)
+
+- [x] Added internal-policy prefixed-token fallback harness:
+  - `c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across prefixed token spellings:
+  - key/value style (`"allow=true"`, `"token=1"`, `"internal-net=on"`)
+  - namespace/prefix style (`"mode:allow"`, `"value:true"`, `"policy.allow=yes"`, `"allow:true"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_delimited_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6655,7 +6681,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S59 outbound HTTP internal-policy prefixed-token fallback coverage (prefixed token spellings should deterministically preserve deny-by-default behavior).
+- M38-S60 outbound HTTP internal-policy suffixed-token fallback coverage (suffixed token spellings should deterministically preserve deny-by-default behavior).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6747,9 +6773,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S59 scope for prefixed-token fallback behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
-2. Extend runtime harness with direct assertions that prefixed token spellings preserve deterministic deny-by-default behavior.
-3. Publish M38-S59 book chapter and refresh roadmap live-status counts.
+1. Add M38-S60 scope for suffixed-token fallback behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
+2. Extend runtime harness with direct assertions that suffixed token spellings preserve deterministic deny-by-default behavior.
+3. Publish M38-S60 book chapter and refresh roadmap live-status counts.
 
 ---
 
