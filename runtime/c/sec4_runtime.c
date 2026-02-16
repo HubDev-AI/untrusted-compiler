@@ -1594,6 +1594,100 @@ static bool sec4_rt_csv_is_valid_cors_headers_list(const char *csv) {
   return true;
 }
 
+static bool sec4_rt_is_cors_origin_token_valid(const char *token) {
+  if (token == NULL || token[0] == '\0') {
+    return false;
+  }
+  if (strcmp(token, "*") == 0) {
+    return true;
+  }
+  if (!sec4_rt_is_header_value_valid(token)) {
+    return false;
+  }
+
+  const char *scheme_sep = strstr(token, "://");
+  if (scheme_sep == NULL) {
+    return false;
+  }
+  size_t scheme_len = (size_t) (scheme_sep - token);
+  bool scheme_ok = (scheme_len == 4 && strncasecmp(token, "http", 4) == 0)
+      || (scheme_len == 5 && strncasecmp(token, "https", 5) == 0);
+  if (!scheme_ok) {
+    return false;
+  }
+
+  const char *authority = scheme_sep + 3;
+  if (authority[0] == '\0' || strpbrk(authority, "/?#") != NULL) {
+    return false;
+  }
+
+  const char *port_sep = NULL;
+  if (authority[0] == '[') {
+    const char *close = strchr(authority, ']');
+    if (close == NULL || close == authority + 1) {
+      return false;
+    }
+    size_t literal_len = (size_t) (close - (authority + 1));
+    if (literal_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char literal[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(literal, authority + 1, literal_len);
+    literal[literal_len] = '\0';
+    struct in6_addr parsed6;
+    if (inet_pton(AF_INET6, literal, &parsed6) != 1) {
+      return false;
+    }
+    if (close[1] == '\0') {
+      return true;
+    }
+    if (close[1] != ':') {
+      return false;
+    }
+    port_sep = close + 1;
+  } else {
+    const char *first_colon = strchr(authority, ':');
+    const char *last_colon = strrchr(authority, ':');
+    if (first_colon != NULL && first_colon != last_colon) {
+      return false;
+    }
+    if (last_colon != NULL) {
+      port_sep = last_colon;
+    }
+
+    size_t host_len = port_sep != NULL ? (size_t) (port_sep - authority) : strlen(authority);
+    if (host_len == 0 || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+    char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(host, authority, host_len);
+    host[host_len] = '\0';
+    if (!sec4_rt_is_redirect_host_token_valid(host)) {
+      return false;
+    }
+    if (port_sep == NULL) {
+      return true;
+    }
+  }
+
+  const char *digits = port_sep + 1;
+  if (digits[0] == '\0') {
+    return false;
+  }
+  unsigned long parsed_port = 0;
+  while (*digits != '\0') {
+    if (!isdigit((unsigned char) *digits)) {
+      return false;
+    }
+    parsed_port = (parsed_port * 10UL) + (unsigned long) (*digits - '0');
+    if (parsed_port > 65535UL) {
+      return false;
+    }
+    digits += 1;
+  }
+  return parsed_port != 0UL;
+}
+
 static bool sec4_rt_csv_is_valid_cors_origins_list(const char *csv) {
   if (csv == NULL || csv[0] == '\0') {
     return false;
@@ -1613,16 +1707,14 @@ static bool sec4_rt_csv_is_valid_cors_origins_list(const char *csv) {
     }
 
     size_t token_len = (size_t) (token_end - token_start);
-    if (!(token_len == 1 && token_start[0] == '*')) {
-      if (token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
-        return false;
-      }
-      char token[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
-      memcpy(token, token_start, token_len);
-      token[token_len] = '\0';
-      if (!sec4_rt_is_header_value_valid(token)) {
-        return false;
-      }
+    if (token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES) {
+      return false;
+    }
+    char token[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_cors_origin_token_valid(token)) {
+      return false;
     }
 
     if (*cursor == ',') {

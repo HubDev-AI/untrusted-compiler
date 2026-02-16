@@ -1991,6 +1991,25 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S87 CORS allow-origin token-shape validation hardening acceptance criteria
+
+- Runtime CORS allow-origin policy list accepts only wildcard (`*`) or strict origin tokens (`http://...` / `https://...` with valid host and optional valid port).
+- Malformed allow-origin tokens (for example missing scheme) deterministically trigger wildcard fallback.
+- Strict token-shape validation does not regress valid allowlist request-origin matching behavior.
+
+### M38-S87 tracking (live status)
+
+- [x] Added strict CORS origin-token validator used by CORS allow-origin CSV policy validation.
+- [x] Origin-token validation now rejects malformed tokens lacking required scheme/authority shape before runtime header emission.
+- [x] Added HTTP runtime CORS invalid-token-shape e2e coverage:
+  - `c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_missing_scheme_token_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

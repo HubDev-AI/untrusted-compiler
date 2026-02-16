@@ -679,5 +679,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `707-m38-cors-exposed-headers-env-policy-materialization.md`
 - `708-m38-cors-allowlist-request-origin-materialization.md`
 - `709-m38-cors-wildcard-credentials-runtime-guard.md`
+- `710-m38-cors-allow-origin-token-shape-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.
