@@ -8531,6 +8531,104 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_outbound_url_parser_supports_ipv6_literals_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime outbound url ipv6 parser test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-outbound-url-ipv6-parser");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-outbound-url-ipv6-parser");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  uint16_t port = 0;
+  const char *target_start = NULL;
+  size_t target_len = 0;
+  bool is_http = false;
+  bool is_https = false;
+
+  if (!sec4_rt_parse_outbound_http_url(
+          "http://[fd00::1]:8080/health?x=1",
+          host,
+          sizeof(host),
+          &port,
+          &target_start,
+          &target_len,
+          &is_http,
+          &is_https)) { return 11; }
+  if (strcmp(host, "fd00::1") != 0) { return 12; }
+  if (port != 8080) { return 13; }
+  if (!is_http || is_https) { return 14; }
+  if (target_start == NULL || target_len != strlen("/health?x=1")) { return 15; }
+  if (strncmp(target_start, "/health?x=1", target_len) != 0) { return 16; }
+
+  if (sec4_rt_parse_outbound_http_url(
+          "http://[fd00::1/health",
+          host,
+          sizeof(host),
+          &port,
+          &target_start,
+          &target_len,
+          &is_http,
+          &is_https)) { return 17; }
+
+  if (sec4_rt_parse_outbound_http_url(
+          "http://[]/health",
+          host,
+          sizeof(host),
+          &port,
+          &target_start,
+          &target_len,
+          &is_http,
+          &is_https)) { return 18; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime outbound url ipv6 parser harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime outbound url ipv6 parser harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");

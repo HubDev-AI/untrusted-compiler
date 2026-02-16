@@ -2021,20 +2021,42 @@ static bool sec4_rt_parse_outbound_http_url(
   }
 
   const char *cursor = scheme_sep + 3;
-  const char *host_begin = cursor;
-  while (*cursor != '\0' && *cursor != ':' && *cursor != '/' && *cursor != '?') {
-    if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+  size_t host_len = 0;
+  if (*cursor == '[') {
+    cursor += 1;
+    const char *host_begin = cursor;
+    while (*cursor != '\0' && *cursor != ']') {
+      if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+        return false;
+      }
+      cursor += 1;
+    }
+    if (*cursor != ']') {
       return false;
     }
+    host_len = (size_t) (cursor - host_begin);
+    if (host_len == 0 || host_len >= host_size) {
+      return false;
+    }
+    memcpy(host, host_begin, host_len);
+    host[host_len] = '\0';
     cursor += 1;
-  }
+  } else {
+    const char *host_begin = cursor;
+    while (*cursor != '\0' && *cursor != ':' && *cursor != '/' && *cursor != '?') {
+      if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+        return false;
+      }
+      cursor += 1;
+    }
 
-  size_t host_len = (size_t) (cursor - host_begin);
-  if (host_len == 0 || host_len >= host_size) {
-    return false;
+    host_len = (size_t) (cursor - host_begin);
+    if (host_len == 0 || host_len >= host_size) {
+      return false;
+    }
+    memcpy(host, host_begin, host_len);
+    host[host_len] = '\0';
   }
-  memcpy(host, host_begin, host_len);
-  host[host_len] = '\0';
 
   uint16_t resolved_port = *is_https ? 443 : 80;
   if (*cursor == ':') {

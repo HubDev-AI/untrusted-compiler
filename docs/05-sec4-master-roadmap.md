@@ -833,6 +833,22 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S39 outbound HTTP client IPv6-literal parser support acceptance criteria
+
+- Runtime outbound HTTP URL parser accepts bracketed IPv6 literal host form for net client calls.
+- URL parser keeps deterministic rejection behavior for malformed bracketed IPv6 hosts.
+- Existing IPv4/hostname parsing behavior remains unchanged.
+
+### M38-S39 tracking (live status)
+
+- [x] Added bracketed IPv6 host parsing branch in `sec4_rt_parse_outbound_http_url`.
+- [x] Added deterministic invalid-path rejection for malformed bracketed hosts (missing `]`, empty bracket host).
+- [x] Added dedicated runtime harness coverage:
+  - `c_bin_runtime_outbound_url_parser_supports_ipv6_literals_when_clang_available`
+- [x] Revalidated existing outbound/internal GET path and c-backend emit contract:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_roundtrip_succeeds_with_env_override_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6143,7 +6159,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S39 outbound HTTP client IPv6-literal support for net requests (URL parser + connection path + deterministic diagnostics).
+- M38-S40 outbound HTTP client IPv6-literal transport validation (real internal GET roundtrip on `::1` with deterministic fallback/skip behavior).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6235,9 +6251,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S39 scope for bracketed IPv6 host parsing in `sec4_rt_parse_outbound_http_url` and outbound connect flows.
-2. Extend runtime harness with internal/public HTTP GET IPv6-literal roundtrip + deterministic invalid-host diagnostics.
-3. Publish M38-S39 book chapter and refresh roadmap live-status counts.
+1. Add M38-S40 scope for real `sec4_rt_http_get_internal` IPv6 loopback roundtrip coverage (`http://[::1]:port/...`).
+2. Keep deterministic fallback semantics for environments where IPv6 loopback bind/connect is unavailable (explicit skip branch in harness).
+3. Publish M38-S40 book chapter and refresh roadmap live-status counts.
 
 ---
 
