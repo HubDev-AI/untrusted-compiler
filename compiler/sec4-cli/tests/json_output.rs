@@ -10667,6 +10667,84 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_get_redirect_scope_revalidation_disabled_returns_deterministic_code_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime redirect scope-revalidation-disabled test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-runtime-c-internal-net-redirect-scope-revalidation-disabled");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-scope-revalidation-disabled");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_SCOPE_REVALIDATION_DISABLED\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect scope-revalidation-disabled harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect scope-revalidation-disabled harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_scope_invalid_redirect_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
+        .env("SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS", "0")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect scope-revalidation-disabled harness should exit successfully"
+    );
+    server_handle.join().expect(
+        "runtime redirect scope-revalidation-disabled server should exit cleanly",
+    );
+}
+
+#[test]
 fn c_bin_runtime_internal_get_absolute_redirect_upper_host_succeeds_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime absolute redirect upper-host test: clang not available");

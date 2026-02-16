@@ -3495,9 +3495,19 @@ static int64_t sec4_rt_outbound_http_get_handle(
       );
       bool redirect_valid = resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK;
       bool redirect_scope_valid = true;
-      if (redirect_valid && revalidate_redirects) {
+      if (redirect_valid) {
         redirect_scope_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
-        redirect_valid = redirect_scope_valid;
+        if (revalidate_redirects) {
+          redirect_valid = redirect_scope_valid;
+        } else if (!redirect_scope_valid) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_SCOPE_REVALIDATION_DISABLED",
+              "validation",
+              "outbound redirect scope revalidation disabled for cross-scope target"
+          );
+          return 0;
+        }
       }
       if (!redirect_valid) {
         if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK && !redirect_scope_valid) {
