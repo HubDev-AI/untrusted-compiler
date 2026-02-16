@@ -6999,6 +6999,50 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   );
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (!has_request_origin) {
+      const char *body = "cors preflight missing origin";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (strcmp(request_origin, "*") == 0 || !sec4_rt_is_cors_origin_token_valid(request_origin)) {
+      const char *body = "cors preflight origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     char requested_method[32];
     bool has_requested_method = sec4_rt_extract_request_header(
         "Access-Control-Request-Method",

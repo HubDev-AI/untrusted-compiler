@@ -2066,6 +2066,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S91 CORS preflight origin-header presence/shape enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling requires `Origin` header presence.
+- Missing or invalid `Origin` headers deterministically return `400` with explicit diagnostics.
+- Valid preflight requests with valid origin continue through method/header policy validation.
+
+### M38-S91 tracking (live status)
+
+- [x] Added runtime preflight guard requiring `Origin` header on CORS preflight requests.
+- [x] Added strict origin-shape validation on preflight `Origin` values before method/header checks.
+- [x] Added deterministic rejection responses for missing/invalid preflight origin (`400` + fixed message bodies).
+- [x] Added HTTP runtime CORS preflight origin-guard e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
