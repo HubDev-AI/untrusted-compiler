@@ -228,6 +228,14 @@ typedef struct {
   int64_t cause_handle;
 } sec4_rt_error_state;
 
+typedef enum {
+  SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED = 0,
+  SEC4_RT_IPV6_URL_HOST_OK = 1,
+  SEC4_RT_IPV6_URL_HOST_BRACKET_MISSING = 2,
+  SEC4_RT_IPV6_URL_HOST_EMPTY = 3,
+  SEC4_RT_IPV6_URL_HOST_LITERAL_INVALID = 4
+} sec4_rt_ipv6_url_host_validation;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
@@ -4233,11 +4241,88 @@ static bool sec4_rt_host_is_internal(const char *host, size_t host_len) {
   return false;
 }
 
+static sec4_rt_ipv6_url_host_validation sec4_rt_validate_bracketed_ipv6_host_url(
+    const char *url
+) {
+  if (url == NULL) {
+    return SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED;
+  }
+
+  const char *scheme_sep = strstr(url, "://");
+  if (scheme_sep == NULL) {
+    return SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED;
+  }
+
+  const char *host = scheme_sep + 3;
+  if (*host != '[') {
+    return SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED;
+  }
+
+  const char *literal_start = host + 1;
+  const char *cursor = literal_start;
+  while (*cursor != '\0' && *cursor != ']') {
+    if (*cursor == '/' || *cursor == '?') {
+      return SEC4_RT_IPV6_URL_HOST_BRACKET_MISSING;
+    }
+    cursor += 1;
+  }
+
+  if (*cursor != ']') {
+    return SEC4_RT_IPV6_URL_HOST_BRACKET_MISSING;
+  }
+
+  size_t literal_len = (size_t) (cursor - literal_start);
+  if (literal_len == 0) {
+    return SEC4_RT_IPV6_URL_HOST_EMPTY;
+  }
+  if (literal_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+    return SEC4_RT_IPV6_URL_HOST_LITERAL_INVALID;
+  }
+
+  char literal[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  memcpy(literal, literal_start, literal_len);
+  literal[literal_len] = '\0';
+  struct in6_addr addr6;
+  if (inet_pton(AF_INET6, literal, &addr6) != 1) {
+    return SEC4_RT_IPV6_URL_HOST_LITERAL_INVALID;
+  }
+
+  return SEC4_RT_IPV6_URL_HOST_OK;
+}
+
 static bool sec4_rt_is_public_url_valid(const char *url) {
   const char *host = NULL;
   size_t host_len = 0;
   bool is_http = false;
   bool is_https = false;
+  sec4_rt_ipv6_url_host_validation ipv6_status = sec4_rt_validate_bracketed_ipv6_host_url(url);
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_BRACKET_MISSING) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_IPV6_BRACKET_MISSING",
+        "validation",
+        "url.public ipv6 host is missing closing bracket"
+    );
+    return false;
+  }
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_EMPTY) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_IPV6_EMPTY_LITERAL",
+        "validation",
+        "url.public ipv6 host literal cannot be empty"
+    );
+    return false;
+  }
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_LITERAL_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_PUBLIC_IPV6_LITERAL_INVALID",
+        "validation",
+        "url.public ipv6 host literal is invalid"
+    );
+    return false;
+  }
   if (!sec4_rt_parse_url_host(url, &host, &host_len, &is_http, &is_https)) {
     return false;
   }
@@ -4426,6 +4511,34 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
   size_t host_len = 0;
   bool is_http = false;
   bool is_https = false;
+  sec4_rt_ipv6_url_host_validation ipv6_status = sec4_rt_validate_bracketed_ipv6_host_url(url);
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_BRACKET_MISSING) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_IPV6_BRACKET_MISSING",
+        "validation",
+        "url.internal ipv6 host is missing closing bracket"
+    );
+    return false;
+  }
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_EMPTY) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_IPV6_EMPTY_LITERAL",
+        "validation",
+        "url.internal ipv6 host literal cannot be empty"
+    );
+    return false;
+  }
+  if (ipv6_status == SEC4_RT_IPV6_URL_HOST_LITERAL_INVALID) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INTERNAL_IPV6_LITERAL_INVALID",
+        "validation",
+        "url.internal ipv6 host literal is invalid"
+    );
+    return false;
+  }
   if (!sec4_rt_parse_url_host(url, &host, &host_len, &is_http, &is_https)) {
     return false;
   }

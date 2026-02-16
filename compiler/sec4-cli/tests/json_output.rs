@@ -7967,6 +7967,94 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_url_ipv6_literal_diagnostics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime url ipv6-literal diagnostics test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-url-ipv6-literal-diagnostics");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-url-ipv6-literal-diagnostics");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES", "http,https", 1);
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "", 1);
+  setenv("SEC4_RT_NET_SSRF_RESOLVE_DNS", "0", 1);
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "", 1);
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "fd00::/8", 1);
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://[fd00::1/path")) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_IPV6_BRACKET_MISSING\"") == NULL) { return 12; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://[]/path")) != 0) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_IPV6_EMPTY_LITERAL\"") == NULL) { return 14; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://[zzzz::1]/path")) != 0) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_IPV6_LITERAL_INVALID\"") == NULL) { return 16; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://[fd00::1/path")) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_BRACKET_MISSING\"") == NULL) { return 18; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://[]/path")) != 0) { return 19; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_EMPTY_LITERAL\"") == NULL) { return 20; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://[zzzz::1]/path")) != 0) { return 21; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_LITERAL_INVALID\"") == NULL) { return 22; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime url ipv6-literal diagnostics harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime url ipv6-literal diagnostics harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime url policy list test: clang not available");
