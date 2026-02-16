@@ -1425,6 +1425,143 @@ fn spawn_one_shot_http_redirect_chain_server(
     (port, handle)
 }
 
+fn spawn_one_shot_http_relative_redirect_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("relative redirect oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("relative redirect oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("relative redirect oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut served = 0_usize;
+        while served < 2 {
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("relative redirect oneshot server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("relative redirect oneshot server accept failed: {err}"),
+                }
+            };
+
+            let mut buffer = [0_u8; 1024];
+            let mut request = Vec::new();
+            loop {
+                let bytes = stream
+                    .read(&mut buffer)
+                    .expect("relative redirect oneshot server request read should succeed");
+                if bytes == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..bytes]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
+                {
+                    break;
+                }
+            }
+
+            let request_text = String::from_utf8_lossy(&request);
+            let path = request_text
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or("/");
+
+            let (status_line, location, body) = match path {
+                "/svc/start" => ("302 Found", Some("../internal-final"), "redirect-rel-start"),
+                "/internal-final" => ("200 OK", None, "internal-relative-body"),
+                _ => ("404 Not Found", None, "not-found"),
+            };
+
+            let payload = body.as_bytes();
+            let mut response_head = format!(
+                "HTTP/1.1 {status_line}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n",
+                payload.len()
+            );
+            if let Some(location_value) = location {
+                response_head.push_str(&format!("Location: {location_value}\r\n"));
+            }
+            response_head.push_str("\r\n");
+
+            stream
+                .write_all(response_head.as_bytes())
+                .expect("relative redirect oneshot server response headers should write");
+            if !payload.is_empty() {
+                stream
+                    .write_all(payload)
+                    .expect("relative redirect oneshot server response body should write");
+            }
+            stream
+                .flush()
+                .expect("relative redirect oneshot server response flush should succeed");
+            served += 1;
+        }
+    });
+    (port, handle)
+}
+
+fn spawn_one_shot_http_invalid_relative_redirect_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("invalid relative redirect oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("invalid relative redirect oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("invalid relative redirect oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!(
+                            "invalid relative redirect oneshot server timed out waiting for request"
+                        );
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("invalid relative redirect oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("invalid relative redirect oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 302 Found\r\nContent-Type: text/plain\r\nLocation: ../../../../escape\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .expect("invalid relative redirect oneshot server response should write");
+        stream
+            .flush()
+            .expect("invalid relative redirect oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn list_json_files(path: &PathBuf) -> Vec<PathBuf> {
     let mut files = fs::read_dir(path)
         .expect("directory should be readable")
@@ -9589,6 +9726,166 @@ int main(void) {
     server_handle
         .join()
         .expect("runtime duplicate content-length conflict server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_relative_redirect_is_normalized_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime relative redirect normalize test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-relative-redirect");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-relative-redirect");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (body == 0) { return 12; }
+
+  int64_t output_path = sec4_rt_req_query("internal-net/redirect-relative-body.txt");
+  if (output_path == 0) { return 13; }
+  if (sec4_rt_fs_write(5, output_path, body) == 0) { return 14; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for relative redirect normalize harness");
+    assert!(
+        output.status.success(),
+        "runtime relative redirect normalize harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_relative_redirect_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/svc/start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime relative redirect normalize harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime relative redirect normalize server should exit cleanly");
+    assert_eq!(
+        fs::read_to_string(fs_base.join("internal-net").join("redirect-relative-body.txt"))
+            .expect("relative redirect response body should be written"),
+        "internal-relative-body"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_relative_redirect_invalid_target_returns_deterministic_code_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime invalid relative redirect test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-relative-redirect-invalid");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-relative-redirect-invalid");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_TARGET_INVALID\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for invalid relative redirect harness");
+    assert!(
+        output.status.success(),
+        "runtime invalid relative redirect harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_invalid_relative_redirect_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/svc/start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime invalid relative redirect harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime invalid relative redirect server should exit cleanly");
 }
 
 #[test]

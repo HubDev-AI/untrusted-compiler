@@ -2911,7 +2911,71 @@ static bool sec4_rt_redirect_url_passes_scope(const char *url, sec4_rt_net_scope
   return sec4_rt_is_public_url_valid(url);
 }
 
-static bool sec4_rt_resolve_redirect_url(
+typedef enum sec4_rt_redirect_resolve_status {
+  SEC4_RT_REDIRECT_RESOLVE_OK = 0,
+  SEC4_RT_REDIRECT_RESOLVE_INVALID = 1,
+  SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID = 2
+} sec4_rt_redirect_resolve_status;
+
+static sec4_rt_redirect_resolve_status sec4_rt_normalize_redirect_path(
+    const char *input_path,
+    size_t input_len,
+    char *normalized_path,
+    size_t normalized_size
+) {
+  if (input_path == NULL || input_len == 0 || normalized_path == NULL || normalized_size < 2
+      || input_path[0] != '/') {
+    return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+  }
+
+  size_t out_len = 0;
+  normalized_path[out_len++] = '/';
+
+  size_t index = 1;
+  while (index <= input_len) {
+    size_t segment_start = index;
+    while (index < input_len && input_path[index] != '/') {
+      index += 1;
+    }
+    size_t segment_len = index - segment_start;
+
+    if (segment_len == 0 || (segment_len == 1 && input_path[segment_start] == '.')) {
+      // Skip empty and "." segments.
+    } else if (segment_len == 2
+               && input_path[segment_start] == '.'
+               && input_path[segment_start + 1] == '.') {
+      if (out_len == 1) {
+        return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+      }
+      out_len -= 1;
+      while (out_len > 1 && normalized_path[out_len - 1] != '/') {
+        out_len -= 1;
+      }
+    } else {
+      if (out_len > 1) {
+        if (out_len + 1 >= normalized_size) {
+          return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+        }
+        normalized_path[out_len++] = '/';
+      }
+      if (out_len + segment_len >= normalized_size) {
+        return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+      }
+      memcpy(normalized_path + out_len, input_path + segment_start, segment_len);
+      out_len += segment_len;
+    }
+
+    index += 1;
+  }
+
+  if (out_len == 0 || out_len >= normalized_size) {
+    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  }
+  normalized_path[out_len] = '\0';
+  return SEC4_RT_REDIRECT_RESOLVE_OK;
+}
+
+static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
     const char *current_url,
     const char *location,
     char *resolved_url,
@@ -2919,20 +2983,20 @@ static bool sec4_rt_resolve_redirect_url(
 ) {
   if (current_url == NULL || current_url[0] == '\0' || location == NULL || location[0] == '\0'
       || resolved_url == NULL || resolved_url_size < 2) {
-    return false;
+    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
   }
   resolved_url[0] = '\0';
 
   for (const char *cursor = location; *cursor != '\0'; cursor++) {
     if (*cursor == '\r' || *cursor == '\n') {
-      return false;
+      return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
     }
   }
 
   if (strncasecmp(location, "http://", 7) == 0 || strncasecmp(location, "https://", 8) == 0) {
     int copied = snprintf(resolved_url, resolved_url_size, "%s", location);
     if (copied <= 0 || (size_t) copied >= resolved_url_size) {
-      return false;
+      return SEC4_RT_REDIRECT_RESOLVE_INVALID;
     }
   } else {
     char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
@@ -2951,7 +3015,7 @@ static bool sec4_rt_resolve_redirect_url(
             &is_http,
             &is_https
         )) {
-      return false;
+      return SEC4_RT_REDIRECT_RESOLVE_INVALID;
     }
 
     const char *scheme = is_https ? "https" : "http";
@@ -2961,18 +3025,20 @@ static bool sec4_rt_resolve_redirect_url(
         ? snprintf(authority, sizeof(authority), "%s", host)
         : snprintf(authority, sizeof(authority), "%s:%u", host, (unsigned int) port);
     if (authority_len <= 0 || (size_t) authority_len >= sizeof(authority)) {
-      return false;
+      return SEC4_RT_REDIRECT_RESOLVE_INVALID;
     }
 
     if (location[0] == '/' && location[1] == '/') {
       int written = snprintf(resolved_url, resolved_url_size, "%s:%s", scheme, location);
       if (written <= 0 || (size_t) written >= resolved_url_size) {
-        return false;
+        return SEC4_RT_REDIRECT_RESOLVE_INVALID;
       }
     } else {
       const char *resolved_target = location;
       char target_buffer[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
       target_buffer[0] = '\0';
+      char normalized_path[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+      normalized_path[0] = '\0';
 
       const char *target_path = target;
       size_t target_path_len = target_len;
@@ -3004,10 +3070,13 @@ static bool sec4_rt_resolve_redirect_url(
             location
         );
         if (merged_len <= 0 || (size_t) merged_len >= sizeof(target_buffer)) {
-          return false;
+          return SEC4_RT_REDIRECT_RESOLVE_INVALID;
         }
         resolved_target = target_buffer;
       } else if (location[0] != '/') {
+        if (location[0] == '#') {
+          return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+        }
         size_t dir_len = 1;
         for (size_t i = 0; i < target_path_len; i++) {
           if (target_path[i] == '/') {
@@ -3023,9 +3092,49 @@ static bool sec4_rt_resolve_redirect_url(
             location
         );
         if (merged_len <= 0 || (size_t) merged_len >= sizeof(target_buffer)) {
-          return false;
+          return SEC4_RT_REDIRECT_RESOLVE_INVALID;
         }
         resolved_target = target_buffer;
+      } else {
+        int copied = snprintf(target_buffer, sizeof(target_buffer), "%s", location);
+        if (copied <= 0 || (size_t) copied >= sizeof(target_buffer)) {
+          return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+        }
+        resolved_target = target_buffer;
+      }
+
+      for (const char *cursor = resolved_target; *cursor != '\0'; cursor++) {
+        if ((unsigned char) *cursor <= 0x20 || *cursor == '\\' || *cursor == '#') {
+          return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+        }
+      }
+
+      const char *query_sep = strchr(resolved_target, '?');
+      size_t path_len = query_sep == NULL ? strlen(resolved_target) : (size_t) (query_sep - resolved_target);
+      sec4_rt_redirect_resolve_status normalize_status = sec4_rt_normalize_redirect_path(
+          resolved_target,
+          path_len,
+          normalized_path,
+          sizeof(normalized_path)
+      );
+      if (normalize_status != SEC4_RT_REDIRECT_RESOLVE_OK) {
+        return normalize_status;
+      }
+
+      if (query_sep != NULL) {
+        int merged_len = snprintf(
+            target_buffer,
+            sizeof(target_buffer),
+            "%s%s",
+            normalized_path,
+            query_sep
+        );
+        if (merged_len <= 0 || (size_t) merged_len >= sizeof(target_buffer)) {
+          return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+        }
+        resolved_target = target_buffer;
+      } else {
+        resolved_target = normalized_path;
       }
 
       int written = snprintf(
@@ -3037,7 +3146,7 @@ static bool sec4_rt_resolve_redirect_url(
           resolved_target
       );
       if (written <= 0 || (size_t) written >= resolved_url_size) {
-        return false;
+        return SEC4_RT_REDIRECT_RESOLVE_INVALID;
       }
     }
   }
@@ -3058,9 +3167,10 @@ static bool sec4_rt_resolve_redirect_url(
           &parsed_http,
           &parsed_https
       )) {
-    return false;
+    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
   }
-  return parsed_http || parsed_https;
+  return (parsed_http || parsed_https) ? SEC4_RT_REDIRECT_RESOLVE_OK
+                                       : SEC4_RT_REDIRECT_RESOLVE_INVALID;
 }
 
 static int64_t sec4_rt_outbound_http_get_handle(
@@ -3257,16 +3367,26 @@ static int64_t sec4_rt_outbound_http_get_handle(
       }
 
       char next_url[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
-      bool redirect_valid = sec4_rt_resolve_redirect_url(
+      sec4_rt_redirect_resolve_status resolve_status = sec4_rt_resolve_redirect_url(
           current_url,
           redirect_location,
           next_url,
           sizeof(next_url)
       );
+      bool redirect_valid = resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK;
       if (redirect_valid && revalidate_redirects) {
         redirect_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
       }
       if (!redirect_valid) {
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_TARGET_INVALID",
+              "validation",
+              "outbound redirect relative target is invalid"
+          );
+          return 0;
+        }
         sec4_rt_store_std_error_response(
             400,
             "NET.REDIRECT_INVALID",
