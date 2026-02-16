@@ -9,6 +9,23 @@ fn policy_defaults_when_empty() {
     assert!(policy.forbidden_effects.contains("shell"));
     assert!(policy.forbidden_effects.contains("unsafe"));
     assert!(policy.forbidden_effects.contains("secrets.reveal"));
+    assert_eq!(
+        policy.cors.allowed_methods,
+        vec![
+            "GET".to_string(),
+            "POST".to_string(),
+            "PUT".to_string(),
+            "PATCH".to_string(),
+            "DELETE".to_string(),
+            "OPTIONS".to_string(),
+        ]
+    );
+    assert_eq!(
+        policy.cors.allowed_headers,
+        vec!["content-type".to_string(), "authorization".to_string()]
+    );
+    assert!(policy.cors.exposed_headers.is_empty());
+    assert_eq!(policy.cors.max_age_seconds, 600);
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.json.require_schema_for_encode);
@@ -84,6 +101,45 @@ allow_private_network = true
     let policy = parse_policy_str(Path::new("sec4.policy"), source)
         .expect("cors.allow_private_network should parse");
     assert!(policy.cors.allow_private_network);
+}
+
+#[test]
+fn policy_parses_cors_preflight_lists_and_max_age() {
+    let source = r#"
+[cors]
+allowed_methods = ["POST", "OPTIONS"]
+allowed_headers = ["x-auth-token", "content-type"]
+exposed_headers = ["x-trace-id", "x-request-id"]
+max_age_seconds = 7200
+"#;
+
+    let policy = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect("cors preflight lists and max_age should parse");
+    assert_eq!(
+        policy.cors.allowed_methods,
+        vec!["POST".to_string(), "OPTIONS".to_string()]
+    );
+    assert_eq!(
+        policy.cors.allowed_headers,
+        vec!["x-auth-token".to_string(), "content-type".to_string()]
+    );
+    assert_eq!(
+        policy.cors.exposed_headers,
+        vec!["x-trace-id".to_string(), "x-request-id".to_string()]
+    );
+    assert_eq!(policy.cors.max_age_seconds, 7200);
+}
+
+#[test]
+fn policy_rejects_invalid_cors_max_age_seconds() {
+    let source = r#"
+[cors]
+max_age_seconds = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("cors.max_age_seconds must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
 #[test]
@@ -367,6 +423,21 @@ fn policy_profile_default_secure_prod_parses() {
         policy.cors.allowed_origins,
         vec!["https://app.example.com".to_string()]
     );
+    assert_eq!(
+        policy.cors.allowed_methods,
+        vec![
+            "GET".to_string(),
+            "POST".to_string(),
+            "PUT".to_string(),
+            "DELETE".to_string()
+        ]
+    );
+    assert_eq!(
+        policy.cors.allowed_headers,
+        vec!["content-type".to_string(), "authorization".to_string()]
+    );
+    assert!(policy.cors.exposed_headers.is_empty());
+    assert_eq!(policy.cors.max_age_seconds, 600);
     assert!(policy.cors.allow_credentials);
     assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.json.max_bytes, 1_048_576);
@@ -388,6 +459,16 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.env, "dev");
     assert_eq!(policy.mode_as_str(), "warn");
     assert_eq!(policy.cors.allowed_origins, vec!["*".to_string()]);
+    assert_eq!(
+        policy.cors.allowed_methods,
+        vec!["GET".to_string(), "POST".to_string()]
+    );
+    assert_eq!(
+        policy.cors.allowed_headers,
+        vec!["content-type".to_string()]
+    );
+    assert!(policy.cors.exposed_headers.is_empty());
+    assert_eq!(policy.cors.max_age_seconds, 600);
     assert!(!policy.cors.allow_credentials);
     assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.json.max_bytes, 1_048_576);
