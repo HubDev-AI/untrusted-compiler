@@ -8842,6 +8842,80 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime outbound request parser fallback diagnostics test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-outbound-request-parser-fallback-diagnostics");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-outbound-request-parser-fallback-diagnostics");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("127.0.0.1/path", UINT64_C(0x2B01), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_MISSING\"") == NULL) { return 12; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("ftp://127.0.0.1/path", UINT64_C(0x2B02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"") == NULL) { return 14; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://bad host/path", UINT64_C(0x2B03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_HOST_INVALID\"") == NULL) { return 16; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1:abc/path", UINT64_C(0x2B04), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PORT_INVALID\"") == NULL) { return 18; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1/path#frag", UINT64_C(0x2B05), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 19; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_TARGET_INVALID\"") == NULL) { return 20; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime outbound request parser fallback diagnostics harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime outbound request parser fallback diagnostics harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");
@@ -12048,6 +12122,9 @@ int main(void) {
             "http://[zzzz::1]/path",
             "NET.REQUEST_IPV6_LITERAL_INVALID",
         ),
+        ("http://bad host/path", "NET.REQUEST_HOST_INVALID"),
+        ("http://127.0.0.1:abc/path", "NET.REQUEST_PORT_INVALID"),
+        ("http://127.0.0.1/path#frag", "NET.REQUEST_TARGET_INVALID"),
     ];
     for (redirect_location, expected_code) in cases {
         let (internal_port, server_handle) =

@@ -954,6 +954,40 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S44 outbound HTTP request-parser fallback diagnostics hardening acceptance criteria
+
+- Non-IPv6 outbound request-parser failures in `http_get*` flow emit deterministic split diagnostics for:
+  - scheme missing
+  - scheme invalid
+  - host token invalid
+  - port token invalid
+  - target token invalid
+- Redirect-resolution parser failures preserve the same non-IPv6 split request-parser diagnostics (instead of collapsing to generic redirect-invalid).
+- Runtime harness includes deterministic assertions for both direct request-parser path and redirect-parser path for new non-IPv6 `NET.REQUEST_*` codes.
+
+### M38-S44 tracking (live status)
+
+- [x] Extended outbound parser status model with non-IPv6 failure classes:
+  - `SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID`
+- [x] Added deterministic direct request-path diagnostics:
+  - `NET.REQUEST_SCHEME_MISSING`
+  - `NET.REQUEST_SCHEME_INVALID`
+  - `NET.REQUEST_HOST_INVALID`
+  - `NET.REQUEST_PORT_INVALID`
+  - `NET.REQUEST_TARGET_INVALID`
+- [x] Extended redirect-resolver status propagation with non-IPv6 parser classes and mapped redirect-path failures to the same `NET.REQUEST_*` diagnostics.
+- [x] Added runtime harness coverage:
+  - `c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available` (expanded with non-IPv6 redirect-parser cases)
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6266,7 +6300,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S44 outbound HTTP request-parser fallback diagnostics hardening (non-IPv6 parse-failure classification + deterministic harness assertions).
+- M38-S45 outbound HTTP request-parser diagnostics detail enrichment (deterministic `details` payload for parser error class + phase).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6358,9 +6392,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S44 scope for deterministic non-IPv6 request-parser fallback diagnostics in `sec4_rt_http_get*` parse failures.
-2. Extend runtime harness with malformed request URL cases that currently collapse to generic `NET.URL_INVALID`, then split/verify deterministic codes.
-3. Publish M38-S44 book chapter and refresh roadmap live-status counts.
+1. Add M38-S45 scope for parser diagnostics detail enrichment (`phase=parse`, `component=scheme|host|port|target|ipv6`).
+2. Extend runtime harness assertions to validate deterministic `details[]` payload keys/values for `NET.REQUEST_*` parser errors.
+3. Publish M38-S45 book chapter and refresh roadmap live-status counts.
 
 ---
 
