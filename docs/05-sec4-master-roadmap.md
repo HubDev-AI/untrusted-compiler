@@ -376,6 +376,21 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added strictness harness helper + test:
   - `c_bin_runtime_internal_get_unsupported_transfer_encoding_returns_deterministic_code_when_clang_available`
 - [x] Revalidated mixed-token invalid ordering, chunked decode success, redirect-allow path, and c-backend emit contract.
+
+### M38-S11 outbound HTTP header-whitespace/obs-fold diagnostics hardening acceptance criteria
+
+- Runtime rejects obs-fold response headers (continuation lines beginning with SP/HTAB) with deterministic diagnostics.
+- Runtime rejects header-name whitespace before colon with deterministic diagnostics.
+- Existing header-line invalid and transfer-encoding strictness behavior remains green.
+
+### M38-S11 tracking (live status)
+
+- [x] Runtime now maps obs-fold header continuation lines to deterministic `NET.HEADER_OBS_FOLD_INVALID`.
+- [x] Runtime now maps header-name whitespace before colon to deterministic `NET.HEADER_WHITESPACE_INVALID`.
+- [x] Added strictness harness helpers + tests:
+  - `c_bin_runtime_internal_get_obs_fold_header_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_header_whitespace_before_colon_returns_deterministic_code_when_clang_available`
+- [x] Revalidated transfer-encoding unsupported/invalid diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5686,7 +5701,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S11 outbound HTTP parser hardening follow-up (obs-fold and malformed whitespace normalization diagnostics).
+- M38-S12 outbound HTTP parser hardening follow-up (header-value control-char diagnostics and deterministic response-invalid split).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5778,9 +5793,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S11 scope for obs-fold and malformed whitespace normalization diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding subset) after M38-S11 edits.
-3. Publish M38-S11 book chapter and refresh roadmap live-status counts.
+1. Add M38-S12 scope for header-value control-char diagnostics and deterministic response-invalid split on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold subset) after M38-S12 edits.
+3. Publish M38-S12 book chapter and refresh roadmap live-status counts.
 
 ---
 

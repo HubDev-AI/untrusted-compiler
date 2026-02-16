@@ -1971,11 +1971,14 @@ static int sec4_rt_extract_outbound_http_body(
     }
     size_t header_line_len = (size_t) (line_end - header_cursor);
     if (header_cursor[0] == ' ' || header_cursor[0] == '\t') {
-      return -13;
+      return -18;
     }
     const char *header_colon = memchr(header_cursor, ':', header_line_len);
     if (header_colon == NULL || header_colon == header_cursor) {
       return -13;
+    }
+    if (header_colon > header_cursor && isspace((unsigned char) *(header_colon - 1))) {
+      return -19;
     }
     for (const char *name_cursor = header_cursor; name_cursor < header_colon; name_cursor++) {
       if (!sec4_rt_is_http_header_name_char((unsigned char) *name_cursor)) {
@@ -2749,6 +2752,24 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.TRANSFER_ENCODING_UNSUPPORTED",
         "validation",
         "outbound http transfer-encoding token is unsupported"
+    );
+    return true;
+  }
+  if (read_status == -18) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.HEADER_OBS_FOLD_INVALID",
+        "validation",
+        "outbound http response header obs-fold is invalid"
+    );
+    return true;
+  }
+  if (read_status == -19) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.HEADER_WHITESPACE_INVALID",
+        "validation",
+        "outbound http response header has invalid whitespace before colon"
     );
     return true;
   }
