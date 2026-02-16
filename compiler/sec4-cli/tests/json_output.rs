@@ -5073,8 +5073,11 @@ int main(void) {
         "structured log output should include http metadata:\n{stderr}"
     );
     assert!(
-        stderr.contains("\"error\":{\"handle\":"),
-        "structured log output should include error attachment:\n{stderr}"
+        stderr.contains("\"error\":{\"code\":\"INTERNAL.ERROR\"")
+            && stderr.contains("\"kind\":\"internal\"")
+            && stderr.contains("\"message\":\"boom\"")
+            && stderr.contains("\"status\":500"),
+        "structured log output should include structured error attachment:\n{stderr}"
     );
     assert!(
         stderr.contains("\"traceId\":\"rt-0\""),
@@ -8702,7 +8705,9 @@ static int64_t validate(void) {{
   int64_t with_path = sec4_rt_err_with_path(base, "$.email");
   int64_t validator = sec4_rt_log_str("validate.email");
   int64_t with_detail = sec4_rt_err_with_detail(with_path, "validator", validator);
-  int64_t with_limit = sec4_rt_err_with_limit(with_detail, "maxJsonDepth", 33, 32);
+  int64_t expected = sec4_rt_log_str("Email");
+  int64_t with_detail2 = sec4_rt_err_with_detail(with_detail, "expected", expected);
+  int64_t with_limit = sec4_rt_err_with_limit(with_detail2, "maxJsonDepth", 33, 32);
   int64_t with_dependency = sec4_rt_err_with_dependency(with_limit, "postgres", "query", 1);
   (void) sec4_rt_err_with_cause(with_dependency, 123);
   return 0;
@@ -8816,8 +8821,10 @@ int main(void) {{
         "response should include validation error and path fields:\n{response}"
     );
     assert!(
-        response.contains("\"details\":[{\"key\":\"validator\",\"value\":\"validate.email\"}]"),
-        "response should include details field:\n{response}"
+        response.contains("\"details\":[")
+            && response.contains("{\"key\":\"validator\",\"value\":\"validate.email\"}")
+            && response.contains("{\"key\":\"expected\",\"value\":\"Email\"}"),
+        "response should include accumulated details field entries:\n{response}"
     );
     assert!(
         response.contains("\"limit\":{\"name\":\"maxJsonDepth\",\"value\":33,\"max\":32}"),
