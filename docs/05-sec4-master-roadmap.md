@@ -625,6 +625,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added max-redirects-invalid harness test:
   - `c_bin_runtime_internal_get_redirect_max_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated cap-limit diagnostics and c-backend emit contract.
+
+### M38-S28 outbound HTTP redirect-policy revalidate/downgrade diagnostics harness expansion acceptance criteria
+
+- Field-specific redirect policy diagnostics for revalidate/downgrade keys are covered by dedicated harness tests.
+- Harness coverage includes allow-redirects/max-redirects/revalidate/downgrade invalid-value paths.
+- Existing cap-limit and cycle diagnostics remain green.
+
+### M38-S28 tracking (live status)
+
+- [x] Added revalidate-policy-invalid harness test:
+  - `c_bin_runtime_internal_get_redirect_revalidate_policy_invalid_returns_deterministic_code_when_clang_available`
+- [x] Added allow-downgrade-policy-invalid harness test:
+  - `c_bin_runtime_internal_get_redirect_allow_downgrade_policy_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated max-redirects-policy-invalid diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5935,7 +5949,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S28 outbound HTTP redirect-policy revalidate/downgrade diagnostics harness expansion (field-specific coverage completeness).
+- M38-S29 outbound HTTP redirect policy error-envelope detail hardening (deterministic structured details for invalid keys).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6027,9 +6041,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S28 scope for dedicated harness coverage on revalidate/downgrade policy invalid-code paths.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S28 edits.
-3. Publish M38-S28 book chapter and refresh roadmap live-status counts.
+1. Add M38-S29 scope for structured detail fields on redirect policy invalid diagnostics.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S29 edits.
+3. Publish M38-S29 book chapter and refresh roadmap live-status counts.
 
 ---
 

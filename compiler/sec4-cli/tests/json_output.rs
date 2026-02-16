@@ -11386,6 +11386,139 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_get_redirect_revalidate_policy_invalid_returns_deterministic_code_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime redirect revalidate policy-invalid test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-revalidate-policy-invalid");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-revalidate-policy-invalid");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  int64_t internal_url = sec4_rt_req_query("http://127.0.0.1:1/internal-start");
+  if (internal_url == 0) { return 10; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_REVALIDATE_REDIRECTS_INVALID\"") == NULL) { return 12; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect revalidate policy-invalid harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect revalidate policy-invalid harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS", "maybe")
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect revalidate policy-invalid harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_allow_downgrade_policy_invalid_returns_deterministic_code_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime redirect allow-downgrade policy-invalid test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-runtime-c-internal-net-redirect-allow-downgrade-policy-invalid");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-allow-downgrade-policy-invalid");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  int64_t internal_url = sec4_rt_req_query("http://127.0.0.1:1/internal-start");
+  if (internal_url == 0) { return 10; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_POLICY_ALLOW_DOWNGRADE_INVALID\"") == NULL) { return 12; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect allow-downgrade policy-invalid harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect allow-downgrade policy-invalid harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE", "maybe")
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect allow-downgrade policy-invalid harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_internal_get_redirect_cycle_returns_deterministic_code_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime redirect-cycle test: clang not available");
