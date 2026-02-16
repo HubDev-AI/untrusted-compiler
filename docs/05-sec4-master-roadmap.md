@@ -1062,6 +1062,31 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
 - [x] Revalidated public-sink parity path:
   - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+
+### M38-S48 outbound HTTP parser diagnostics envelope consistency acceptance criteria
+
+- All `NET.REQUEST_*` parser diagnostics are rendered through one unified runtime envelope path.
+- Deterministic details ordering is preserved for parser diagnostics:
+  - first detail: `phase=parse`
+  - second detail: `component=<...>`
+- Runtime harness includes dedicated coverage that validates detail-order contract across unknown fallback, non-IPv6 classes, and IPv6 class.
+
+### M38-S48 tracking (live status)
+
+- [x] Refactored parser diagnostic emission to a table-driven unified renderer path in runtime.
+- [x] Added dedicated runtime harness:
+  - `c_bin_runtime_request_parser_diagnostics_use_unified_details_order_when_clang_available`
+  validating deterministic detail-order contract across:
+  - `NET.REQUEST_PARSE_INVALID`
+  - `NET.REQUEST_SCHEME_INVALID`
+  - `NET.REQUEST_HOST_INVALID`
+  - `NET.REQUEST_PORT_INVALID`
+  - `NET.REQUEST_TARGET_INVALID`
+  - `NET.REQUEST_IPV6_LITERAL_INVALID`
+- [x] Revalidated parser diagnostics regression paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6374,7 +6399,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S48 outbound HTTP parser diagnostics envelope consistency (`NET.REQUEST_*` parser diagnostics use unified envelope renderer path with deterministic detail order contract).
+- M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` direct malformed-input bridge assertions).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6466,9 +6491,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S48 scope for parser diagnostics envelope consistency across all `NET.REQUEST_*` parse diagnostics.
-2. Extend runtime harness with deterministic detail-order and envelope-shape assertions on parser diagnostics.
-3. Publish M38-S48 book chapter and refresh roadmap live-status counts.
+1. Add M38-S49 scope for direct malformed-input sink-bridge parity between public/internal net wrappers.
+2. Extend runtime harness with direct sink-bridge assertions for malformed inputs at wrapper boundary (`http_get` vs `http_get_internal`).
+3. Publish M38-S49 book chapter and refresh roadmap live-status counts.
 
 ---
 

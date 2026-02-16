@@ -9043,6 +9043,81 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_request_parser_diagnostics_use_unified_details_order_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime request parser unified details-order test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-request-parser-unified-details-order");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-request-parser-unified-details-order");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+static int assert_diag(
+    sec4_rt_outbound_url_parse_status status,
+    const char *expected_code,
+    const char *expected_component
+) {
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_outbound_parse_status(status)) { return 1; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 2; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"") == NULL) { return 3; }
+  if (strstr(g_sec4_rt_response.body, expected_component) == NULL) { return 4; }
+  return 0;
+}
+
+int main(void) {
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_INVALID, "\"code\":\"NET.REQUEST_PARSE_INVALID\"", "\"component\",\"value\":\"unknown\"") != 0) { return 11; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"", "\"component\",\"value\":\"scheme\"") != 0) { return 12; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID, "\"code\":\"NET.REQUEST_HOST_INVALID\"", "\"component\",\"value\":\"host\"") != 0) { return 13; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID, "\"code\":\"NET.REQUEST_PORT_INVALID\"", "\"component\",\"value\":\"port\"") != 0) { return 14; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID, "\"code\":\"NET.REQUEST_TARGET_INVALID\"", "\"component\",\"value\":\"target\"") != 0) { return 15; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"", "\"component\",\"value\":\"ipv6\"") != 0) { return 16; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime request parser unified details-order harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime request parser unified details-order harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_fs_net_intrinsics_produce_non_stub_handles_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db/fs/net handle test: clang not available");

@@ -3596,124 +3596,47 @@ static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_par
 static bool sec4_rt_store_request_parse_error_from_outbound_parse_status(
     sec4_rt_outbound_url_parse_status parse_status
 ) {
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_PARSE_INVALID",
-        "validation",
-        "http request url failed parser validation",
-        "phase",
-        "parse",
-        "component",
-        "unknown"
-    );
-    return true;
+  typedef struct {
+    sec4_rt_outbound_url_parse_status status;
+    const char *code;
+    const char *message;
+    const char *component;
+  } sec4_rt_request_parse_error_spec;
+
+  static const sec4_rt_request_parse_error_spec specs[] = {
+      {SEC4_RT_OUTBOUND_URL_PARSE_INVALID, "NET.REQUEST_PARSE_INVALID", "http request url failed parser validation", "unknown"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING, "NET.REQUEST_IPV6_BRACKET_MISSING", "http request url has missing ipv6 closing bracket", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL, "NET.REQUEST_IPV6_EMPTY_LITERAL", "http request url has empty ipv6 literal", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID, "NET.REQUEST_IPV6_LITERAL_INVALID", "http request url has invalid ipv6 literal", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING, "NET.REQUEST_SCHEME_MISSING", "http request url is missing scheme separator", "scheme"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID, "NET.REQUEST_SCHEME_INVALID", "http request url uses unsupported scheme", "scheme"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID, "NET.REQUEST_HOST_INVALID", "http request url has invalid host token", "host"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID, "NET.REQUEST_PORT_INVALID", "http request url has invalid port token", "port"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID, "NET.REQUEST_TARGET_INVALID", "http request url has invalid target token", "target"},
+  };
+
+  const sec4_rt_request_parse_error_spec *spec = NULL;
+  for (size_t i = 0; i < sizeof(specs) / sizeof(specs[0]); i++) {
+    if (specs[i].status == parse_status) {
+      spec = &specs[i];
+      break;
+    }
   }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_IPV6_BRACKET_MISSING",
-        "validation",
-        "http request url has missing ipv6 closing bracket",
-        "phase",
-        "parse",
-        "component",
-        "ipv6"
-    );
-    return true;
+  if (spec == NULL) {
+    return false;
   }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_IPV6_EMPTY_LITERAL",
-        "validation",
-        "http request url has empty ipv6 literal",
-        "phase",
-        "parse",
-        "component",
-        "ipv6"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_IPV6_LITERAL_INVALID",
-        "validation",
-        "http request url has invalid ipv6 literal",
-        "phase",
-        "parse",
-        "component",
-        "ipv6"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_SCHEME_MISSING",
-        "validation",
-        "http request url is missing scheme separator",
-        "phase",
-        "parse",
-        "component",
-        "scheme"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_SCHEME_INVALID",
-        "validation",
-        "http request url uses unsupported scheme",
-        "phase",
-        "parse",
-        "component",
-        "scheme"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_HOST_INVALID",
-        "validation",
-        "http request url has invalid host token",
-        "phase",
-        "parse",
-        "component",
-        "host"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_PORT_INVALID",
-        "validation",
-        "http request url has invalid port token",
-        "phase",
-        "parse",
-        "component",
-        "port"
-    );
-    return true;
-  }
-  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID) {
-    sec4_rt_store_std_error_response_with_two_details(
-        400,
-        "NET.REQUEST_TARGET_INVALID",
-        "validation",
-        "http request url has invalid target token",
-        "phase",
-        "parse",
-        "component",
-        "target"
-    );
-    return true;
-  }
-  return false;
+
+  sec4_rt_store_std_error_response_with_two_details(
+      400,
+      spec->code,
+      "validation",
+      spec->message,
+      "phase",
+      "parse",
+      "component",
+      spec->component
+  );
+  return true;
 }
 
 static bool sec4_rt_store_request_parse_error_from_redirect_resolve_status(

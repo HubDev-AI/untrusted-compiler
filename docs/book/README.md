@@ -638,5 +638,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `666-m38-outbound-http-request-parser-diagnostics-detail-enrichment.md`
 - `667-m38-outbound-http-request-parser-generic-fallback-normalization.md`
 - `668-m38-outbound-http-request-parser-public-internal-sink-parity.md`
+- `669-m38-outbound-http-parser-diagnostics-envelope-consistency.md`
 
 As milestones progress, chapters will be added and linked from this index.
