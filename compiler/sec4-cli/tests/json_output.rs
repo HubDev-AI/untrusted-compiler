@@ -8162,8 +8162,39 @@ int main(void) {
   setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "", 1);
   setenv("SEC4_RT_NET_SSRF_RESOLVE_DNS", "0", 1);
 
-  setenv("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "1", 1);
+  setenv("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", "maybe", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/policy")) != 0) { return 9; }
+  if (!g_sec4_rt_response.active) { return 10; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.SSRF_POLICY_BLOCK_LOOPBACK_INVALID\"") == NULL) { return 19; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_BLOCK_LOOPBACK\"") == NULL) { return 20; }
   setenv("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", "1", 1);
+
+  setenv("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "bad", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/policy")) != 0) { return 21; }
+  if (!g_sec4_rt_response.active) { return 22; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.SSRF_POLICY_BLOCK_PRIVATE_RANGES_INVALID\"") == NULL) { return 23; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES\"") == NULL) { return 24; }
+  setenv("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "1", 1);
+
+  setenv("SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL", "bad", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/policy")) != 0) { return 25; }
+  if (!g_sec4_rt_response.active) { return 26; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.SSRF_POLICY_BLOCK_LINK_LOCAL_INVALID\"") == NULL) { return 27; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL\"") == NULL) { return 28; }
+  setenv("SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL", "1", 1);
+
+  setenv("SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS", "bad", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/policy")) != 0) { return 29; }
+  if (!g_sec4_rt_response.active) { return 30; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.SSRF_POLICY_BLOCK_METADATA_IPS_INVALID\"") == NULL) { return 31; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS\"") == NULL) { return 32; }
+  setenv("SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS", "1", 1);
+
+  setenv("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "1", 1);
   setenv("SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL", "1", 1);
   setenv("SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS", "1", 1);
   sec4_rt_reset_response();

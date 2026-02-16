@@ -623,5 +623,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `651-m38-outbound-http-policy-diagnostics-cleanup.md`
 - `652-m38-outbound-http-policy-diagnostics-stabilization.md`
 - `653-m38-outbound-http-ssrf-block-toggle-policy-runtime-parity.md`
+- `654-m38-outbound-http-ssrf-block-toggle-env-validation-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.

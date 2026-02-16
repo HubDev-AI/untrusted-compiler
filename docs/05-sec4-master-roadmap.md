@@ -725,6 +725,29 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_ssrf_block_toggles_when_clang_available`
   - `cargo test -p sec4 --test commands`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S34 outbound HTTP SSRF block-toggle env-validation diagnostics acceptance criteria
+
+- Runtime `url.public(...)` path validates `SEC4_RT_NET_SSRF_BLOCK_*` env toggles with strict boolean parsing.
+- Invalid values emit deterministic field-specific policy diagnostics instead of silently falling back:
+  - `NET.SSRF_POLICY_BLOCK_PRIVATE_RANGES_INVALID`
+  - `NET.SSRF_POLICY_BLOCK_LOOPBACK_INVALID`
+  - `NET.SSRF_POLICY_BLOCK_LINK_LOCAL_INVALID`
+  - `NET.SSRF_POLICY_BLOCK_METADATA_IPS_INVALID`
+- Error envelopes include deterministic `details:[{\"key\":\"policyKey\",\"value\":\"...\"}]`.
+
+### M38-S34 tracking (live status)
+
+- [x] Added strict boolean parsing for SSRF block-toggle env keys in runtime public-url validation path.
+- [x] Added deterministic field-specific policy diagnostics with `policyKey` detail entries.
+- [x] Updated `url.public(...)` to preserve active detailed runtime policy diagnostics (no generic overwrite).
+- [x] Expanded runtime harness coverage in:
+  - `c_bin_runtime_url_public_respects_ssrf_block_toggles_when_clang_available`
+  to assert invalid-value diagnostics/details for all four SSRF block-toggle keys.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_ssrf_block_toggles_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_dns_resolution_toggle_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6035,7 +6058,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S34 outbound HTTP SSRF block-toggle env validation diagnostics (strict invalid-value handling + deterministic policy error envelope).
+- M38-S35 outbound HTTP SSRF `resolve_dns` env-validation diagnostics hardening (strict invalid-value handling + deterministic policy envelope parity).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6127,9 +6150,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S34 scope for strict env-value validation diagnostics on SSRF block toggles (`block_private_ranges`, `block_loopback`, `block_link_local`, `block_metadata_ips`).
-2. Extend runtime harness to assert deterministic invalid-value error codes/details for each SSRF block-toggle env key without regressing redirect-policy diagnostics.
-3. Publish M38-S34 book chapter and refresh roadmap live-status counts.
+1. Add M38-S35 scope for strict env-value validation diagnostics on `SEC4_RT_NET_SSRF_RESOLVE_DNS`.
+2. Extend runtime harness to assert deterministic invalid-value code/details for `resolve_dns` without regressing block-toggle diagnostics.
+3. Publish M38-S35 book chapter and refresh roadmap live-status counts.
 
 ---
 

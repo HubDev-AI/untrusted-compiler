@@ -3929,19 +3929,66 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   if (!(is_http || is_https)) {
     return false;
   }
-  bool block_private_ranges = sec4_rt_env_flag_enabled_default(
-      "SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES",
-      true
-  );
-  bool block_loopback = sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", true);
-  bool block_link_local = sec4_rt_env_flag_enabled_default(
-      "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
-      true
-  );
-  bool block_metadata_ips = sec4_rt_env_flag_enabled_default(
-      "SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS",
-      true
-  );
+  bool block_private_ranges = true;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES",
+          true,
+          &block_private_ranges
+      )) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.SSRF_POLICY_BLOCK_PRIVATE_RANGES_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES"
+    );
+    return false;
+  }
+  bool block_loopback = true;
+  if (!sec4_rt_parse_env_flag_strict("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", true, &block_loopback)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.SSRF_POLICY_BLOCK_LOOPBACK_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_BLOCK_LOOPBACK",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_BLOCK_LOOPBACK"
+    );
+    return false;
+  }
+  bool block_link_local = true;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
+          true,
+          &block_link_local
+      )) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.SSRF_POLICY_BLOCK_LINK_LOCAL_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL"
+    );
+    return false;
+  }
+  bool block_metadata_ips = true;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS",
+          true,
+          &block_metadata_ips
+      )) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.SSRF_POLICY_BLOCK_METADATA_IPS_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS",
+        "policyKey",
+        "SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS"
+    );
+    return false;
+  }
   if (sec4_rt_host_equals(host, host_len, "localhost")) {
     if (block_loopback) {
       return false;
@@ -8534,12 +8581,14 @@ int64_t sec4_rt_url_public(int64_t input) {
     return 0;
   }
   if (!sec4_rt_is_public_url_valid(url)) {
-    sec4_rt_store_std_error_response(
-        400,
-        "NET.URL_PUBLIC_INVALID",
-        "validation",
-        "url.public value failed runtime public-url policy checks"
-    );
+    if (!g_sec4_rt_response.active) {
+      sec4_rt_store_std_error_response(
+          400,
+          "NET.URL_PUBLIC_INVALID",
+          "validation",
+          "url.public value failed runtime public-url policy checks"
+      );
+    }
     return 0;
   }
   int64_t handle = sec4_rt_track_string_value(url, UINT64_C(0xA0A0A));
