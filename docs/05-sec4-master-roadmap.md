@@ -110,6 +110,24 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Runtime redirect handling implemented for outbound public/internal GET intrinsics.
 - [x] Clang-gated redirect runtime tests added and passing.
 - [x] Book chapter documenting M37-S1 implementation added.
+
+### M37-S2 runtime JSON semantic hardening acceptance criteria
+
+- `req.json` and `json.decode` enforce non-zero schema descriptors with deterministic diagnostics.
+- `json.decode` on active request bodies requires a successful `req.json` gate and blocks invalid-gate flows deterministically.
+- Tracked schema descriptor mismatch between `req.json` and `json.decode` emits deterministic `JSON.SCHEMA_MISMATCH`.
+- `json.encode` and JSON responders (`res.json`/`res.ok`/`res.okMeta`) materialize real envelope payload fragments instead of placeholder `{}` payloads.
+- c-bin compile path remains deterministic for descriptor-literal schema callsites used by current examples.
+
+### M37-S2 tracking (live status)
+
+- [x] Runtime request state now tracks active JSON schema handle for gate sequencing.
+- [x] Runtime decode path now enforces `JSON.GATE_REQUIRED` and `JSON.GATE_FAILED` for request-body decode order.
+- [x] Runtime decode path now enforces tracked schema mismatch diagnostics (`JSON.SCHEMA_MISMATCH`).
+- [x] Runtime encode + JSON responders now materialize deterministic `data` and `meta` payloads.
+- [x] Added runtime harness coverage for gate-required/gate-failed/schema-mismatch decode paths.
+- [x] Added compile compatibility bridge flag (`-Wno-int-conversion`) to keep schema descriptor literal callsites compiling in current ABI stage.
+- [x] Book chapter documenting M37-S2 implementation added.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5420,7 +5438,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S2 runtime JSON semantic hardening (implementation-first).
+- M37-S3 middleware policy materialization hardening (implementation-first).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5512,9 +5530,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Complete M37-S2 runtime JSON semantic hardening for decode/encode contract paths.
-2. Complete M37-S3 middleware policy materialization hardening.
-3. Complete M37-S4 structured runtime log emission path and run full alpha smoke + targeted runtime harness verification on `main`.
+1. Complete M37-S3 middleware policy materialization hardening.
+2. Complete M37-S4 structured runtime log emission path.
+3. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
 
 ---
 
