@@ -27,19 +27,58 @@ LEGACY_PATTERNS=(
   "\\.a""i\\b"
 )
 
+search_matches() {
+  local pattern="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -n --hidden \
+      --glob '!.git/**' \
+      --glob '!target/**' \
+      --glob '!scripts/check-naming-lock.sh' \
+      -e "${pattern}" \
+      "$@" || true
+  else
+    grep -R -n -E \
+      --exclude-dir='.git' \
+      --exclude-dir='target' \
+      --exclude-dir='results' \
+      --exclude-dir='build' \
+      --exclude='check-naming-lock.sh' \
+      -- "${pattern}" "$@" || true
+  fi
+}
+
+search_exists_regex() {
+  local pattern="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -q --hidden --glob '!.git/**' --glob '!target/**' -e "${pattern}" "$@"
+  else
+    grep -R -q -E \
+      --exclude-dir='.git' \
+      --exclude-dir='target' \
+      --exclude-dir='results' \
+      --exclude-dir='build' \
+      -- "${pattern}" "$@"
+  fi
+}
+
+search_exists_fixed() {
+  local token="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -Fq -- "${token}" "$@"
+  else
+    grep -Fq -- "${token}" "$@"
+  fi
+}
+
 check_legacy_patterns() {
   local failed=0
   local pattern
   for pattern in "${LEGACY_PATTERNS[@]}"; do
     local matches
-    matches="$(
-      rg -n --hidden \
-        --glob '!.git/**' \
-        --glob '!target/**' \
-        --glob '!scripts/check-naming-lock.sh' \
-        -e "${pattern}" \
-        "${SEARCH_PATHS[@]}" || true
-    )"
+    matches="$(search_matches "${pattern}" "${SEARCH_PATHS[@]}")"
     if [[ -n "${matches}" ]]; then
       echo "error: found legacy naming pattern '${pattern}':" >&2
       echo "${matches}" >&2
@@ -52,7 +91,7 @@ check_legacy_patterns() {
 require_contract_token() {
   local pattern="$1"
   local label="$2"
-  if ! rg -q --hidden --glob '!.git/**' --glob '!target/**' -e "${pattern}" "${SEARCH_PATHS[@]}"; then
+  if ! search_exists_regex "${pattern}" "${SEARCH_PATHS[@]}"; then
     echo "error: missing required naming contract token: ${label}" >&2
     return 1
   fi
@@ -78,7 +117,7 @@ check_benchmark_impl_contract() {
 
   local sample_values
   sample_values="$(
-    rg -n --no-filename '"impl"[[:space:]]*:' benchmark-suite/scripts/testdata/*.json 2>/dev/null \
+    grep -h -n -E '"impl"[[:space:]]*:' benchmark-suite/scripts/testdata/*.json 2>/dev/null \
       | awk -F'"' '{print $4}' \
       | sort -u || true
   )"
@@ -123,7 +162,7 @@ check_benchmark_artifact_contract() {
 
   local pattern
   for pattern in "${benchmark_script_patterns[@]}"; do
-    if ! rg -q --hidden --glob '!.git/**' --glob '!target/**' -e "${pattern}" benchmark-suite/scripts; then
+    if ! search_exists_regex "${pattern}" benchmark-suite/scripts; then
       echo "error: benchmark scripts missing artifact pattern: ${pattern}" >&2
       failed=1
     fi
@@ -165,7 +204,7 @@ check_benchmark_contract_spec() {
 
   local token
   for token in "${required_tokens[@]}"; do
-    if ! rg -Fq -- "${token}" "${contract}"; then
+    if ! search_exists_fixed "${token}" "${contract}"; then
       echo "error: benchmark artifact contract spec missing token: ${token}" >&2
       failed=1
     fi
