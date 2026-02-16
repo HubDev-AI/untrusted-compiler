@@ -44,6 +44,10 @@
 #define SEC4_RT_MAX_DB_TXS 256
 #define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
 #define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
+#define SEC4_RT_POLICY_CORS_HANDLE INT64_C(0x6EC4001)
+#define SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE INT64_C(0x6EC4002)
+#define SEC4_RT_POLICY_CSRF_HANDLE INT64_C(0x6EC4003)
+#define SEC4_RT_POLICY_AUTH_HANDLE INT64_C(0x6EC4004)
 
 typedef int64_t (*sec4_rt_handler_fn)(void);
 
@@ -57,9 +61,21 @@ typedef struct {
   bool active;
   int64_t handle;
   bool cors_enabled;
+  char cors_allow_origin[256];
+  bool cors_allow_credentials;
+  bool cors_require_vary_origin;
+  char cors_allow_methods[128];
+  char cors_allow_headers[128];
+  int64_t cors_max_age_seconds;
   bool security_headers_enabled;
+  bool security_x_content_type_options;
+  char security_x_frame_options[16];
+  char security_referrer_policy[128];
   bool csrf_enabled;
+  char csrf_mode[32];
+  char csrf_protected_methods[64];
   bool auth_enabled;
+  char auth_mode[16];
   size_t route_count;
   sec4_rt_route routes[SEC4_RT_MAX_ROUTES];
 } sec4_rt_router_state;
@@ -131,6 +147,35 @@ typedef enum {
   SEC4_RT_NET_SCOPE_INTERNAL = 1
 } sec4_rt_net_scope;
 
+typedef struct {
+  bool loaded;
+  bool enabled;
+  char allow_origin[256];
+  bool allow_credentials;
+  bool require_vary_origin;
+} sec4_rt_cors_policy_state;
+
+typedef struct {
+  bool loaded;
+  bool enabled;
+  bool x_content_type_options;
+  char x_frame_options[16];
+  char referrer_policy[128];
+} sec4_rt_security_headers_policy_state;
+
+typedef struct {
+  bool loaded;
+  bool enabled;
+  char mode[32];
+  char protected_methods[64];
+} sec4_rt_csrf_policy_state;
+
+typedef struct {
+  bool loaded;
+  bool enabled;
+  char mode[16];
+} sec4_rt_auth_policy_state;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
@@ -140,6 +185,10 @@ static sec4_rt_db_query_state g_sec4_rt_db_queries[SEC4_RT_MAX_DB_QUERIES];
 static sec4_rt_db_tx_state g_sec4_rt_db_txs[SEC4_RT_MAX_DB_TXS];
 static uint64_t g_sec4_rt_next_trace_id = 1;
 static int64_t g_sec4_rt_last_log_handle = 0;
+static sec4_rt_cors_policy_state g_sec4_rt_cors_policy;
+static sec4_rt_security_headers_policy_state g_sec4_rt_security_headers_policy;
+static sec4_rt_csrf_policy_state g_sec4_rt_csrf_policy;
+static sec4_rt_auth_policy_state g_sec4_rt_auth_policy;
 
 static const char *sec4_rt_current_trace_id(void);
 static void sec4_rt_assign_trace_id(void);
@@ -155,6 +204,18 @@ static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
 static bool sec4_rt_env_flag_enabled(const char *name);
+static void sec4_rt_read_env_string(
+    const char *name,
+    const char *fallback,
+    char *out,
+    size_t out_size
+);
+static bool sec4_rt_csv_copy_first_token(
+    const char *csv,
+    char *out,
+    size_t out_size
+);
+static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method);
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
 static bool sec4_rt_fs_mkdirs(const char *path);
 
@@ -720,6 +781,44 @@ static bool sec4_rt_csv_has_any_token(const char *csv) {
     const char *token_end = cursor;
     sec4_rt_trim_csv_token(&token_start, &token_end);
     if (token_end > token_start) {
+      return true;
+    }
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_csv_copy_first_token(
+    const char *csv,
+    char *out,
+    size_t out_size
+) {
+  if (out == NULL || out_size == 0) {
+    return false;
+  }
+  out[0] = '\0';
+  if (csv == NULL || csv[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+    if (token_end > token_start) {
+      size_t token_len = (size_t) (token_end - token_start);
+      if (token_len >= out_size) {
+        token_len = out_size - 1;
+      }
+      memcpy(out, token_start, token_len);
+      out[token_len] = '\0';
       return true;
     }
     if (*cursor == ',') {
@@ -3218,9 +3317,16 @@ static bool sec4_rt_parse_cookie_value(
   return false;
 }
 
-static bool sec4_rt_is_csrf_protected_method(const char *method) {
+static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method) {
   if (method == NULL) {
     return false;
+  }
+  if (router != NULL && sec4_rt_csv_has_any_token(router->csrf_protected_methods)) {
+    return sec4_rt_csv_contains_token_ci(
+        router->csrf_protected_methods,
+        method,
+        strlen(method)
+    );
   }
   return strcmp(method, "POST") == 0
       || strcmp(method, "PUT") == 0
@@ -3414,14 +3520,166 @@ static void sec4_rt_collect_allow_methods(
   }
 }
 
-static const char *sec4_rt_security_headers_block(sec4_rt_router_state *router) {
-  if (router == NULL || !router->security_headers_enabled) {
+static const char *sec4_rt_cors_headers_block(
+    sec4_rt_router_state *router,
+    char *buffer,
+    size_t buffer_size
+) {
+  if (router == NULL || !router->cors_enabled || buffer == NULL || buffer_size == 0) {
     return NULL;
   }
-  return
-      "X-Content-Type-Options: nosniff\r\n"
-      "X-Frame-Options: DENY\r\n"
-      "Referrer-Policy: strict-origin-when-cross-origin\r\n";
+
+  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+      ? router->cors_allow_origin
+      : "*";
+  int written = snprintf(
+      buffer,
+      buffer_size,
+      "Access-Control-Allow-Origin: %s\r\n",
+      allow_origin
+  );
+  if (written <= 0 || (size_t) written >= buffer_size) {
+    return NULL;
+  }
+
+  size_t used = (size_t) written;
+  if (router->cors_allow_credentials) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Allow-Credentials: true\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
+  if (router->cors_require_vary_origin && strcmp(allow_origin, "*") != 0) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Vary: Origin\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
+  (void) used;
+  return buffer;
+}
+
+static const char *sec4_rt_preflight_headers_block(
+    sec4_rt_router_state *router,
+    char *buffer,
+    size_t buffer_size
+) {
+  if (router == NULL || !router->cors_enabled || buffer == NULL || buffer_size == 0) {
+    return NULL;
+  }
+
+  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+      ? router->cors_allow_origin
+      : "*";
+  const char *allow_methods = router->cors_allow_methods[0] != '\0'
+      ? router->cors_allow_methods
+      : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+  const char *allow_headers = router->cors_allow_headers[0] != '\0'
+      ? router->cors_allow_headers
+      : "content-type, authorization";
+  int64_t max_age = router->cors_max_age_seconds > 0
+      ? router->cors_max_age_seconds
+      : 600;
+
+  int written = snprintf(
+      buffer,
+      buffer_size,
+      "Access-Control-Allow-Origin: %s\r\n"
+      "Access-Control-Allow-Methods: %s\r\n"
+      "Access-Control-Allow-Headers: %s\r\n"
+      "Access-Control-Max-Age: %lld\r\n",
+      allow_origin,
+      allow_methods,
+      allow_headers,
+      (long long) max_age
+  );
+  if (written <= 0 || (size_t) written >= buffer_size) {
+    return NULL;
+  }
+
+  size_t used = (size_t) written;
+  if (router->cors_allow_credentials) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Allow-Credentials: true\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
+  if (router->cors_require_vary_origin && strcmp(allow_origin, "*") != 0) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Vary: Origin\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
+  (void) used;
+  return buffer;
+}
+
+static const char *sec4_rt_security_headers_block(
+    sec4_rt_router_state *router,
+    char *buffer,
+    size_t buffer_size
+) {
+  if (router == NULL || !router->security_headers_enabled || buffer == NULL || buffer_size == 0) {
+    return NULL;
+  }
+
+  size_t used = 0;
+  int written = 0;
+  if (router->security_x_content_type_options) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "X-Content-Type-Options: nosniff\r\n"
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
+  if (router->security_x_frame_options[0] != '\0') {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "X-Frame-Options: %s\r\n",
+        router->security_x_frame_options
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
+  if (router->security_referrer_policy[0] != '\0') {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Referrer-Policy: %s\r\n",
+        router->security_referrer_policy
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
+  return used > 0 ? buffer : NULL;
 }
 
 static const char *sec4_rt_merge_three_headers(
@@ -3503,6 +3761,29 @@ static bool sec4_rt_env_flag_enabled(const char *name) {
   return sec4_rt_env_flag_enabled_default(name, false);
 }
 
+static void sec4_rt_read_env_string(
+    const char *name,
+    const char *fallback,
+    char *out,
+    size_t out_size
+) {
+  if (out == NULL || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+
+  const char *value = getenv(name);
+  if (value == NULL || value[0] == '\0') {
+    value = fallback;
+  }
+  if (value == NULL || value[0] == '\0') {
+    return;
+  }
+
+  strncpy(out, value, out_size - 1);
+  out[out_size - 1] = '\0';
+}
+
 static bool sec4_rt_oneshot_mode_enabled(void) {
   const char *mode = getenv("SEC4_RT_HTTP_SERVE_MODE");
   if (mode != NULL && strcmp(mode, "oneshot") == 0) {
@@ -3516,10 +3797,19 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
   sec4_rt_reset_response();
-  const char *security_headers = sec4_rt_security_headers_block(router);
-  const char *cors_headers = router != NULL && router->cors_enabled
-      ? "Access-Control-Allow-Origin: *\r\n"
-      : NULL;
+  char security_headers_buffer[384];
+  char cors_headers_buffer[384];
+  char preflight_headers_buffer[512];
+  const char *security_headers = sec4_rt_security_headers_block(
+      router,
+      security_headers_buffer,
+      sizeof(security_headers_buffer)
+  );
+  const char *cors_headers = sec4_rt_cors_headers_block(
+      router,
+      cors_headers_buffer,
+      sizeof(cors_headers_buffer)
+  );
   char merged_headers[320];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
@@ -3635,11 +3925,11 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
-    const char *extra_headers =
-        "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: content-type, authorization\r\n"
-        "Access-Control-Max-Age: 600\r\n";
+    const char *extra_headers = sec4_rt_preflight_headers_block(
+        router,
+        preflight_headers_buffer,
+        sizeof(preflight_headers_buffer)
+    );
     const char *final_headers = sec4_rt_merge_three_headers(
         extra_headers,
         NULL,
@@ -3696,7 +3986,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     }
   }
 
-  if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(method)) {
+  if (router->csrf_enabled && sec4_rt_is_csrf_protected_method(router, method)) {
     char csrf_header[128];
     char cookie_header[512];
     char csrf_cookie[128];
@@ -6272,44 +6562,320 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
   return 0;
 }
 
-int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
-  (void) cfg;
-  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
-  if (slot != NULL) {
-    slot->cors_enabled = true;
+static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
+  if (slot == NULL) {
+    return;
   }
+  slot->cors_enabled = true;
+  strncpy(slot->cors_allow_origin, "*", sizeof(slot->cors_allow_origin) - 1);
+  slot->cors_allow_origin[sizeof(slot->cors_allow_origin) - 1] = '\0';
+  slot->cors_allow_credentials = false;
+  slot->cors_require_vary_origin = false;
+  strncpy(
+      slot->cors_allow_methods,
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      sizeof(slot->cors_allow_methods) - 1
+  );
+  slot->cors_allow_methods[sizeof(slot->cors_allow_methods) - 1] = '\0';
+  strncpy(
+      slot->cors_allow_headers,
+      "content-type, authorization",
+      sizeof(slot->cors_allow_headers) - 1
+  );
+  slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+  slot->cors_max_age_seconds = 600;
+}
+
+static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *slot) {
+  if (slot == NULL) {
+    return;
+  }
+  slot->security_headers_enabled = true;
+  slot->security_x_content_type_options = true;
+  strncpy(
+      slot->security_x_frame_options,
+      "DENY",
+      sizeof(slot->security_x_frame_options) - 1
+  );
+  slot->security_x_frame_options[sizeof(slot->security_x_frame_options) - 1] = '\0';
+  strncpy(
+      slot->security_referrer_policy,
+      "strict-origin-when-cross-origin",
+      sizeof(slot->security_referrer_policy) - 1
+  );
+  slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+}
+
+static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
+  if (slot == NULL) {
+    return;
+  }
+  slot->csrf_enabled = true;
+  strncpy(slot->csrf_mode, "double_submit", sizeof(slot->csrf_mode) - 1);
+  slot->csrf_mode[sizeof(slot->csrf_mode) - 1] = '\0';
+  strncpy(
+      slot->csrf_protected_methods,
+      "POST,PUT,PATCH,DELETE",
+      sizeof(slot->csrf_protected_methods) - 1
+  );
+  slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+}
+
+static void sec4_rt_router_apply_default_auth(sec4_rt_router_state *slot) {
+  if (slot == NULL) {
+    return;
+  }
+  slot->auth_enabled = true;
+  strncpy(slot->auth_mode, "token", sizeof(slot->auth_mode) - 1);
+  slot->auth_mode[sizeof(slot->auth_mode) - 1] = '\0';
+}
+
+static void sec4_rt_load_cors_policy_from_env(void) {
+  memset(&g_sec4_rt_cors_policy, 0, sizeof(g_sec4_rt_cors_policy));
+  g_sec4_rt_cors_policy.loaded = true;
+  g_sec4_rt_cors_policy.enabled = sec4_rt_env_flag_enabled_default("SEC4_RT_CORS_ENABLED", true);
+  g_sec4_rt_cors_policy.allow_credentials = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_CORS_ALLOW_CREDENTIALS",
+      false
+  );
+  g_sec4_rt_cors_policy.require_vary_origin = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
+      false
+  );
+  const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
+  if (!sec4_rt_csv_copy_first_token(
+          allowed_origins,
+          g_sec4_rt_cors_policy.allow_origin,
+          sizeof(g_sec4_rt_cors_policy.allow_origin)
+      )) {
+    strncpy(
+        g_sec4_rt_cors_policy.allow_origin,
+        "*",
+        sizeof(g_sec4_rt_cors_policy.allow_origin) - 1
+    );
+    g_sec4_rt_cors_policy.allow_origin[sizeof(g_sec4_rt_cors_policy.allow_origin) - 1] = '\0';
+  }
+}
+
+static void sec4_rt_load_security_headers_policy_from_env(void) {
+  memset(
+      &g_sec4_rt_security_headers_policy,
+      0,
+      sizeof(g_sec4_rt_security_headers_policy)
+  );
+  g_sec4_rt_security_headers_policy.loaded = true;
+  g_sec4_rt_security_headers_policy.enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_ENABLED",
+      true
+  );
+  g_sec4_rt_security_headers_policy.x_content_type_options = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
+      true
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS",
+      "DENY",
+      g_sec4_rt_security_headers_policy.x_frame_options,
+      sizeof(g_sec4_rt_security_headers_policy.x_frame_options)
+  );
+  if (strcasecmp(g_sec4_rt_security_headers_policy.x_frame_options, "DENY") != 0
+      && strcasecmp(g_sec4_rt_security_headers_policy.x_frame_options, "SAMEORIGIN") != 0) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.x_frame_options,
+        "DENY",
+        sizeof(g_sec4_rt_security_headers_policy.x_frame_options) - 1
+    );
+    g_sec4_rt_security_headers_policy.x_frame_options
+        [sizeof(g_sec4_rt_security_headers_policy.x_frame_options) - 1] = '\0';
+  }
+  sec4_rt_read_env_string(
+      "SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY",
+      "strict-origin-when-cross-origin",
+      g_sec4_rt_security_headers_policy.referrer_policy,
+      sizeof(g_sec4_rt_security_headers_policy.referrer_policy)
+  );
+}
+
+static void sec4_rt_load_csrf_policy_from_env(void) {
+  memset(&g_sec4_rt_csrf_policy, 0, sizeof(g_sec4_rt_csrf_policy));
+  g_sec4_rt_csrf_policy.loaded = true;
+  g_sec4_rt_csrf_policy.enabled = sec4_rt_env_flag_enabled_default("SEC4_RT_CSRF_ENABLED", true);
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_MODE",
+      "double_submit",
+      g_sec4_rt_csrf_policy.mode,
+      sizeof(g_sec4_rt_csrf_policy.mode)
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_CSRF_PROTECTED_METHODS",
+      "POST,PUT,PATCH,DELETE",
+      g_sec4_rt_csrf_policy.protected_methods,
+      sizeof(g_sec4_rt_csrf_policy.protected_methods)
+  );
+  if (strcasecmp(g_sec4_rt_csrf_policy.mode, "off") == 0) {
+    g_sec4_rt_csrf_policy.enabled = false;
+  }
+}
+
+static void sec4_rt_load_auth_policy_from_env(void) {
+  memset(&g_sec4_rt_auth_policy, 0, sizeof(g_sec4_rt_auth_policy));
+  g_sec4_rt_auth_policy.loaded = true;
+  sec4_rt_read_env_string(
+      "SEC4_RT_AUTH_MODE",
+      "token",
+      g_sec4_rt_auth_policy.mode,
+      sizeof(g_sec4_rt_auth_policy.mode)
+  );
+  g_sec4_rt_auth_policy.enabled = strcasecmp(g_sec4_rt_auth_policy.mode, "off") != 0;
+}
+
+int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
+  sec4_rt_router_state *slot = sec4_rt_router_slot(router);
+  if (slot == NULL) {
+    return 1;
+  }
+  if (cfg == 0) {
+    slot->cors_enabled = false;
+    slot->cors_allow_origin[0] = '\0';
+    return router;
+  }
+  if (cfg == SEC4_RT_POLICY_CORS_HANDLE) {
+    if (!g_sec4_rt_cors_policy.loaded) {
+      sec4_rt_load_cors_policy_from_env();
+    }
+    slot->cors_enabled = g_sec4_rt_cors_policy.enabled;
+    if (!slot->cors_enabled) {
+      slot->cors_allow_origin[0] = '\0';
+      return router;
+    }
+    strncpy(
+        slot->cors_allow_origin,
+        g_sec4_rt_cors_policy.allow_origin,
+        sizeof(slot->cors_allow_origin) - 1
+    );
+    slot->cors_allow_origin[sizeof(slot->cors_allow_origin) - 1] = '\0';
+    slot->cors_allow_credentials = g_sec4_rt_cors_policy.allow_credentials;
+    slot->cors_require_vary_origin = g_sec4_rt_cors_policy.require_vary_origin;
+    strncpy(
+        slot->cors_allow_methods,
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        sizeof(slot->cors_allow_methods) - 1
+    );
+    slot->cors_allow_methods[sizeof(slot->cors_allow_methods) - 1] = '\0';
+    strncpy(
+        slot->cors_allow_headers,
+        "content-type, authorization",
+        sizeof(slot->cors_allow_headers) - 1
+    );
+    slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
+    slot->cors_max_age_seconds = 600;
+    return router;
+  }
+  sec4_rt_router_apply_default_cors(slot);
   return router;
 }
 
 int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
-  (void) cfg;
   sec4_rt_router_state *slot = sec4_rt_router_slot(router);
-  if (slot != NULL) {
-    slot->security_headers_enabled = true;
+  if (slot == NULL) {
+    return 1;
   }
+  if (cfg == 0) {
+    slot->security_headers_enabled = false;
+    return router;
+  }
+  if (cfg == SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE) {
+    if (!g_sec4_rt_security_headers_policy.loaded) {
+      sec4_rt_load_security_headers_policy_from_env();
+    }
+    slot->security_headers_enabled = g_sec4_rt_security_headers_policy.enabled;
+    if (!slot->security_headers_enabled) {
+      return router;
+    }
+    slot->security_x_content_type_options = g_sec4_rt_security_headers_policy.x_content_type_options;
+    strncpy(
+        slot->security_x_frame_options,
+        g_sec4_rt_security_headers_policy.x_frame_options,
+        sizeof(slot->security_x_frame_options) - 1
+    );
+    slot->security_x_frame_options[sizeof(slot->security_x_frame_options) - 1] = '\0';
+    strncpy(
+        slot->security_referrer_policy,
+        g_sec4_rt_security_headers_policy.referrer_policy,
+        sizeof(slot->security_referrer_policy) - 1
+    );
+    slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+    return router;
+  }
+  sec4_rt_router_apply_default_security_headers(slot);
   return router;
 }
 
 int64_t sec4_rt_with_csrf(int64_t router, int64_t cfg) {
-  (void) cfg;
   sec4_rt_router_state *slot = sec4_rt_router_slot(router);
-  if (slot != NULL) {
-    slot->csrf_enabled = true;
+  if (slot == NULL) {
+    return 1;
   }
+  if (cfg == 0) {
+    slot->csrf_enabled = false;
+    return router;
+  }
+  if (cfg == SEC4_RT_POLICY_CSRF_HANDLE) {
+    if (!g_sec4_rt_csrf_policy.loaded) {
+      sec4_rt_load_csrf_policy_from_env();
+    }
+    slot->csrf_enabled = g_sec4_rt_csrf_policy.enabled;
+    if (!slot->csrf_enabled) {
+      return router;
+    }
+    strncpy(
+        slot->csrf_mode,
+        g_sec4_rt_csrf_policy.mode,
+        sizeof(slot->csrf_mode) - 1
+    );
+    slot->csrf_mode[sizeof(slot->csrf_mode) - 1] = '\0';
+    strncpy(
+        slot->csrf_protected_methods,
+        g_sec4_rt_csrf_policy.protected_methods,
+        sizeof(slot->csrf_protected_methods) - 1
+    );
+    slot->csrf_protected_methods[sizeof(slot->csrf_protected_methods) - 1] = '\0';
+    return router;
+  }
+  sec4_rt_router_apply_default_csrf(slot);
   return router;
 }
 
 int64_t sec4_rt_with_auth(int64_t router, int64_t cfg) {
-  (void) cfg;
   sec4_rt_router_state *slot = sec4_rt_router_slot(router);
-  if (slot != NULL) {
-    slot->auth_enabled = true;
+  if (slot == NULL) {
+    return 1;
   }
+  if (cfg == 0) {
+    slot->auth_enabled = false;
+    slot->auth_mode[0] = '\0';
+    return router;
+  }
+  if (cfg == SEC4_RT_POLICY_AUTH_HANDLE) {
+    if (!g_sec4_rt_auth_policy.loaded) {
+      sec4_rt_load_auth_policy_from_env();
+    }
+    slot->auth_enabled = g_sec4_rt_auth_policy.enabled;
+    strncpy(
+        slot->auth_mode,
+        g_sec4_rt_auth_policy.mode,
+        sizeof(slot->auth_mode) - 1
+    );
+    slot->auth_mode[sizeof(slot->auth_mode) - 1] = '\0';
+    return router;
+  }
+  sec4_rt_router_apply_default_auth(slot);
   return router;
 }
 
 int64_t sec4_rt_sec_default_headers(void) {
-  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2001));
+  sec4_rt_load_security_headers_policy_from_env();
+  return SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE;
 }
 
 int64_t sec4_rt_sec_csp(void) {
@@ -6324,7 +6890,8 @@ int64_t sec4_rt_sec_csp_add(int64_t csp, const char *directive, const char *valu
 }
 
 int64_t sec4_rt_cors_from_policy(void) {
-  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2007));
+  sec4_rt_load_cors_policy_from_env();
+  return SEC4_RT_POLICY_CORS_HANDLE;
 }
 
 int64_t sec4_rt_cors_origin(int64_t origin) {
@@ -6332,7 +6899,8 @@ int64_t sec4_rt_cors_origin(int64_t origin) {
 }
 
 int64_t sec4_rt_csrf_from_policy(void) {
-  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2009));
+  sec4_rt_load_csrf_policy_from_env();
+  return SEC4_RT_POLICY_CSRF_HANDLE;
 }
 
 int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
@@ -6366,7 +6934,8 @@ int64_t sec4_rt_csrf_issue_token(int64_t ctx) {
 }
 
 int64_t sec4_rt_auth_from_policy(void) {
-  return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2012));
+  sec4_rt_load_auth_policy_from_env();
+  return SEC4_RT_POLICY_AUTH_HANDLE;
 }
 
 int64_t sec4_rt_auth_require(int64_t ctx) {

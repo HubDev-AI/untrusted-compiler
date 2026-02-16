@@ -3490,6 +3490,18 @@ fn cmd_run(
         policy.net_public.allowed_schemes.join(","),
     );
     cmd.env(
+        "SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS",
+        if policy.net_public.allow_redirects {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
+        policy.net_public.max_redirects.to_string(),
+    );
+    cmd.env(
         "SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS",
         policy.net_public.allowed_domains.join(","),
     );
@@ -3519,6 +3531,74 @@ fn cmd_run(
         "SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS",
         policy.net_internal.allowed_cidrs.join(","),
     );
+    cmd.env(
+        "SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS",
+        if policy.net_ssrf.revalidate_redirects {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env("SEC4_RT_JSON_MAX_BYTES", policy.json.max_bytes.to_string());
+    cmd.env("SEC4_RT_JSON_MAX_DEPTH", policy.json.max_depth.to_string());
+    cmd.env(
+        "SEC4_RT_CORS_ENABLED",
+        if policy.cors.enabled { "1" } else { "0" },
+    );
+    cmd.env(
+        "SEC4_RT_CORS_ALLOWED_ORIGINS",
+        policy.cors.allowed_origins.join(","),
+    );
+    cmd.env(
+        "SEC4_RT_CORS_ALLOW_CREDENTIALS",
+        if policy.cors.allow_credentials {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
+        if policy.cors.require_vary_origin {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_ENABLED",
+        if policy.security_headers.enabled {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
+        if policy.security_headers.x_content_type_options {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS",
+        policy.security_headers.x_frame_options.as_str(),
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY",
+        policy.security_headers.referrer_policy.as_str(),
+    );
+    cmd.env(
+        "SEC4_RT_CSRF_ENABLED",
+        if policy.csrf.enabled { "1" } else { "0" },
+    );
+    cmd.env("SEC4_RT_CSRF_MODE", policy.csrf.mode.as_str());
+    cmd.env(
+        "SEC4_RT_CSRF_PROTECTED_METHODS",
+        policy.csrf.protected_methods.join(","),
+    );
+    cmd.env("SEC4_RT_AUTH_MODE", policy.auth.mode.as_str());
     if let Some(port) = port {
         cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
     }
