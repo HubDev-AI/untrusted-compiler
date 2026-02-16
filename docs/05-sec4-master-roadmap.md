@@ -1447,6 +1447,27 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_suffixed_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_prefixed_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S63 security-headers HSTS invalid-env fallback coverage acceptance criteria
+
+- Invalid/non-numeric `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Negative `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS` values deterministically fall back to safe default `max-age=15552000`.
+- Fallback behavior preserves existing HSTS header composition semantics (includeSubDomains/preload toggles).
+- Invalid raw env values are never reflected into emitted HSTS header strings.
+
+### M38-S63 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+- [x] Harness validates both malformed and negative max-age env inputs:
+  - malformed numeric token (`"not-a-number"`)
+  - negative numeric token (`"-7"`)
+- [x] Harness validates deterministic safe fallback header:
+  - `Strict-Transport-Security: max-age=15552000; includeSubDomains`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6759,7 +6780,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S63 security-headers HSTS invalid-env fallback coverage (invalid/negative HSTS max-age env values should deterministically fall back to safe defaults).
+- M38-S64 security-headers x-frame-options invalid-env fallback coverage (invalid header-token env values should deterministically fall back to `DENY`).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6851,9 +6872,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S63 scope for HSTS invalid-env fallback behavior in security headers runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid/negative HSTS max-age values fall back to deterministic safe defaults.
-3. Publish M38-S63 book chapter and refresh roadmap live-status counts.
+1. Add M38-S64 scope for x-frame-options invalid-env fallback behavior in security headers runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS` values fall back to deterministic `DENY`.
+3. Publish M38-S64 book chapter and refresh roadmap live-status counts.
 
 ---
 
