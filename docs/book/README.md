@@ -597,5 +597,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `625-m38-outbound-http-framing-conflict-diagnostics.md`
 - `626-m38-outbound-http-parser-token-status-strictness.md`
 - `627-m38-outbound-http-response-version-header-line-diagnostics.md`
+- `628-m38-outbound-http-duplicate-header-retryability-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.

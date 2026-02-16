@@ -1954,6 +1954,11 @@ static int sec4_rt_extract_outbound_http_body(
   bool has_transfer_encoding = false;
   bool transfer_chunked_seen = false;
   bool transfer_chunked = false;
+  bool has_retry_after = false;
+  size_t retry_after_seconds = 0;
+  bool has_location_header = false;
+  char location_header_value[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+  location_header_value[0] = '\0';
   bool has_content_length = false;
   size_t content_length = 0;
   while (header_cursor < headers_end) {
@@ -1989,6 +1994,19 @@ static int sec4_rt_extract_outbound_http_body(
         value_end -= 1;
       }
       size_t value_len = (size_t) (value_end - value_start);
+      if (value_len >= sizeof(location_header_value)) {
+        return -15;
+      }
+      if (has_location_header) {
+        size_t existing_len = strlen(location_header_value);
+        if (existing_len != value_len || strncmp(location_header_value, value_start, value_len) != 0) {
+          return -15;
+        }
+      } else if (value_len > 0) {
+        memcpy(location_header_value, value_start, value_len);
+        location_header_value[value_len] = '\0';
+        has_location_header = true;
+      }
       if (redirect_location != NULL && redirect_location_size > 0 && value_len > 0
           && value_len < redirect_location_size) {
         memcpy(redirect_location, value_start, value_len);
@@ -2057,6 +2075,37 @@ static int sec4_rt_extract_outbound_http_body(
       }
       content_length = parsed;
       has_content_length = true;
+    } else if ((size_t) (line_end - header_cursor) >= 12
+               && strncasecmp(header_cursor, "Retry-After:", 12) == 0) {
+      const char *value_start = header_cursor + 12;
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
+      }
+      if (value_start >= line_end) {
+        return -14;
+      }
+      size_t parsed = 0;
+      bool has_digits = false;
+      while (value_start < line_end && isdigit((unsigned char) *value_start)) {
+        has_digits = true;
+        size_t digit = (size_t) (*value_start - '0');
+        if (parsed > (SIZE_MAX - digit) / 10) {
+          return -14;
+        }
+        parsed = (parsed * 10) + digit;
+        value_start += 1;
+      }
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
+      }
+      if (!has_digits || value_start != line_end) {
+        return -14;
+      }
+      if (has_retry_after && retry_after_seconds != parsed) {
+        return -14;
+      }
+      has_retry_after = true;
+      retry_after_seconds = parsed;
     }
 
     header_cursor = line_end + 2;
@@ -2634,6 +2683,24 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.HEADER_LINE_INVALID",
         "validation",
         "outbound http response header line is invalid"
+    );
+    return true;
+  }
+  if (read_status == -14) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RETRY_AFTER_INVALID",
+        "validation",
+        "outbound http retry-after header is invalid"
+    );
+    return true;
+  }
+  if (read_status == -15) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.REDIRECT_LOCATION_CONFLICT",
+        "validation",
+        "outbound redirect response has conflicting location headers"
     );
     return true;
   }
