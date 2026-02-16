@@ -5125,6 +5125,20 @@ static bool sec4_rt_is_header_name_valid(const char *value) {
   return true;
 }
 
+static bool sec4_rt_is_http_method_token_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+  while (*value != '\0') {
+    unsigned char ch = (unsigned char) *value;
+    if (!(isalnum(ch) || ch == '-' || ch == '_')) {
+      return false;
+    }
+    value += 1;
+  }
+  return true;
+}
+
 static bool sec4_rt_is_header_value_valid(const char *value) {
   if (value == NULL || value[0] == '\0') {
     return false;
@@ -7051,6 +7065,25 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     if (!has_requested_method) {
       const char *body = "cors preflight missing requested method";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    if (!sec4_rt_is_http_method_token_valid(requested_method)) {
+      const char *body = "cors preflight requested method invalid";
       const char *final_headers = sec4_rt_merge_three_headers(
           NULL,
           cors_headers,
