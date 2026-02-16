@@ -102,7 +102,7 @@ fi
 p99_ms="$(jq -r '
   (.p99 // "")
   | tostring
-  | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // ""
+  | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null) // ""
 ' <<<"$leader_json")"
 if [ -z "$p99_ms" ]; then
   echo "leader p99 is missing/non-numeric for endpoint=${endpoint}" >&2

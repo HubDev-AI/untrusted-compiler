@@ -128,7 +128,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   p99_ms="$(jq -r '
     (.p99 // "")
     | tostring
-    | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // ""
+    | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null) // ""
   ' <<<"$leader_json")"
   if [ -z "$p99_ms" ]; then
     p99_ms="0"

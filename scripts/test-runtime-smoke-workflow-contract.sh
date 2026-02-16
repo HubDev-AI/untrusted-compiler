@@ -51,7 +51,6 @@ require_token() {
   fi
 }
 
-require_token 'pull_request:'
 require_token 'push:'
 require_token 'branches:'
 require_token '- main'

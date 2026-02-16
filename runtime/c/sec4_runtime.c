@@ -1,3 +1,10 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include "sec4_runtime.h"
 
 #include <arpa/inet.h>
@@ -431,6 +438,79 @@ static void sec4_rt_store_std_error_response_with_detail(
 
   if (written <= 0 || (size_t) written >= sizeof(payload)) {
     sec4_rt_store_std_error_response(status, code, kind, message);
+    return;
+  }
+  sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
+}
+
+static void sec4_rt_store_std_error_response_with_two_details(
+    int64_t status,
+    const char *code,
+    const char *kind,
+    const char *message,
+    const char *detail_key_a,
+    const char *detail_value_a,
+    const char *detail_key_b,
+    const char *detail_value_b
+) {
+  bool detail_a_valid = detail_key_a != NULL && detail_key_a[0] != '\0' && detail_value_a != NULL
+      && detail_value_a[0] != '\0';
+  bool detail_b_valid = detail_key_b != NULL && detail_key_b[0] != '\0' && detail_value_b != NULL
+      && detail_value_b[0] != '\0';
+  if (!detail_a_valid && !detail_b_valid) {
+    sec4_rt_store_std_error_response(status, code, kind, message);
+    return;
+  }
+  if (!detail_a_valid) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_b,
+        detail_value_b
+    );
+    return;
+  }
+  if (!detail_b_valid) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_a,
+        detail_value_a
+    );
+    return;
+  }
+
+  int64_t now_ms = sec4_rt_time_now();
+  char payload[1280];
+  int written = snprintf(
+      payload,
+      sizeof(payload),
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld,\"details\":[{\"key\":\"%s\",\"value\":\"%s\"},{\"key\":\"%s\",\"value\":\"%s\"}]}}",
+      code != NULL ? code : "INTERNAL.ERROR",
+      kind != NULL ? kind : "internal",
+      message != NULL ? message : "internal error",
+      (long long) status,
+      sec4_rt_current_trace_id(),
+      (long long) now_ms,
+      detail_key_a,
+      detail_value_a,
+      detail_key_b,
+      detail_value_b
+  );
+
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_a,
+        detail_value_a
+    );
     return;
   }
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
@@ -2007,7 +2087,12 @@ typedef enum {
   SEC4_RT_OUTBOUND_URL_PARSE_INVALID = 1,
   SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING = 2,
   SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL = 3,
-  SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID = 4
+  SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID = 4,
+  SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING = 5,
+  SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID = 6,
+  SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID = 7,
+  SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID = 8,
+  SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID = 9
 } sec4_rt_outbound_url_parse_status;
 
 static bool sec4_rt_parse_outbound_http_url(
@@ -2031,12 +2116,18 @@ static bool sec4_rt_parse_outbound_http_url(
 
   const char *scheme_sep = strstr(url, "://");
   if (scheme_sep == NULL) {
+    if (status_out != NULL) {
+      *status_out = SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING;
+    }
     return false;
   }
   size_t scheme_len = (size_t) (scheme_sep - url);
   *is_http = scheme_len == 4 && strncasecmp(url, "http", 4) == 0;
   *is_https = scheme_len == 5 && strncasecmp(url, "https", 5) == 0;
   if (!(*is_http || *is_https)) {
+    if (status_out != NULL) {
+      *status_out = SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID;
+    }
     return false;
   }
 
@@ -2047,6 +2138,9 @@ static bool sec4_rt_parse_outbound_http_url(
     const char *host_begin = cursor;
     while (*cursor != '\0' && *cursor != ']') {
       if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+        if (status_out != NULL) {
+          *status_out = SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID;
+        }
         return false;
       }
       cursor += 1;
@@ -2065,6 +2159,9 @@ static bool sec4_rt_parse_outbound_http_url(
       return false;
     }
     if (host_len >= host_size) {
+      if (status_out != NULL) {
+        *status_out = SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID;
+      }
       return false;
     }
     memcpy(host, host_begin, host_len);
@@ -2081,6 +2178,9 @@ static bool sec4_rt_parse_outbound_http_url(
     const char *host_begin = cursor;
     while (*cursor != '\0' && *cursor != ':' && *cursor != '/' && *cursor != '?') {
       if (*cursor == '@' || *cursor == '#' || isspace((unsigned char) *cursor)) {
+        if (status_out != NULL) {
+          *status_out = SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID;
+        }
         return false;
       }
       cursor += 1;
@@ -2088,6 +2188,9 @@ static bool sec4_rt_parse_outbound_http_url(
 
     host_len = (size_t) (cursor - host_begin);
     if (host_len == 0 || host_len >= host_size) {
+      if (status_out != NULL) {
+        *status_out = SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID;
+      }
       return false;
     }
     memcpy(host, host_begin, host_len);
@@ -2098,6 +2201,9 @@ static bool sec4_rt_parse_outbound_http_url(
   if (*cursor == ':') {
     cursor += 1;
     if (!isdigit((unsigned char) *cursor)) {
+      if (status_out != NULL) {
+        *status_out = SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID;
+      }
       return false;
     }
     unsigned long port_value = 0;
@@ -2105,11 +2211,17 @@ static bool sec4_rt_parse_outbound_http_url(
     while (isdigit((unsigned char) *cursor)) {
       port_value = (port_value * 10UL) + (unsigned long) (*cursor - '0');
       if (port_value > 65535UL) {
+        if (status_out != NULL) {
+          *status_out = SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID;
+        }
         return false;
       }
       cursor += 1;
     }
     if (cursor == port_start || port_value == 0UL) {
+      if (status_out != NULL) {
+        *status_out = SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID;
+      }
       return false;
     }
     resolved_port = (uint16_t) port_value;
@@ -2119,11 +2231,17 @@ static bool sec4_rt_parse_outbound_http_url(
   size_t parsed_target_len = 1;
   if (*cursor != '\0') {
     if (*cursor != '/' && *cursor != '?') {
+      if (status_out != NULL) {
+        *status_out = SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID;
+      }
       return false;
     }
     const char *target_end = cursor;
     while (*target_end != '\0') {
       if (*target_end == '#' || *target_end == '\r' || *target_end == '\n') {
+        if (status_out != NULL) {
+          *status_out = SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID;
+        }
         return false;
       }
       target_end += 1;
@@ -3443,7 +3561,13 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID = 8,
   SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING = 9,
   SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL = 10,
-  SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID = 11
+  SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID = 11,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_MISSING = 12,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID = 13,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID = 14,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID = 15,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID = 16,
+  SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID = 17
 } sec4_rt_redirect_resolve_status;
 
 static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_parse_status(
@@ -3458,7 +3582,119 @@ static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_par
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID) {
     return SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID;
   }
-  return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING) {
+    return SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_MISSING;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID) {
+    return SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID) {
+    return SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID) {
+    return SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID) {
+    return SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID;
+  }
+  return SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID;
+}
+
+static bool sec4_rt_store_request_parse_error_from_outbound_parse_status(
+    sec4_rt_outbound_url_parse_status parse_status
+) {
+  typedef struct {
+    sec4_rt_outbound_url_parse_status status;
+    const char *code;
+    const char *message;
+    const char *component;
+  } sec4_rt_request_parse_error_spec;
+
+  static const sec4_rt_request_parse_error_spec specs[] = {
+      {SEC4_RT_OUTBOUND_URL_PARSE_INVALID, "NET.REQUEST_PARSE_INVALID", "http request url failed parser validation", "unknown"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING, "NET.REQUEST_IPV6_BRACKET_MISSING", "http request url has missing ipv6 closing bracket", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL, "NET.REQUEST_IPV6_EMPTY_LITERAL", "http request url has empty ipv6 literal", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID, "NET.REQUEST_IPV6_LITERAL_INVALID", "http request url has invalid ipv6 literal", "ipv6"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING, "NET.REQUEST_SCHEME_MISSING", "http request url is missing scheme separator", "scheme"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID, "NET.REQUEST_SCHEME_INVALID", "http request url uses unsupported scheme", "scheme"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID, "NET.REQUEST_HOST_INVALID", "http request url has invalid host token", "host"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID, "NET.REQUEST_PORT_INVALID", "http request url has invalid port token", "port"},
+      {SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID, "NET.REQUEST_TARGET_INVALID", "http request url has invalid target token", "target"},
+  };
+
+  const sec4_rt_request_parse_error_spec *spec = NULL;
+  for (size_t i = 0; i < sizeof(specs) / sizeof(specs[0]); i++) {
+    if (specs[i].status == parse_status) {
+      spec = &specs[i];
+      break;
+    }
+  }
+  if (spec == NULL) {
+    return false;
+  }
+
+  sec4_rt_store_std_error_response_with_two_details(
+      400,
+      spec->code,
+      "validation",
+      spec->message,
+      "phase",
+      "parse",
+      "component",
+      spec->component
+  );
+  return true;
+}
+
+static bool sec4_rt_store_request_parse_error_from_redirect_resolve_status(
+    sec4_rt_redirect_resolve_status resolve_status
+) {
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_MISSING) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_INVALID
+    );
+  }
+  return false;
 }
 
 static bool sec4_rt_is_ascii_hex_char(char value) {
@@ -3958,28 +4194,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
             &is_https,
             &parse_status
         )) {
-      if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING) {
-        sec4_rt_store_std_error_response(
-            400,
-            "NET.REQUEST_IPV6_BRACKET_MISSING",
-            "validation",
-            "http request url has missing ipv6 closing bracket"
-        );
-      } else if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL) {
-        sec4_rt_store_std_error_response(
-            400,
-            "NET.REQUEST_IPV6_EMPTY_LITERAL",
-            "validation",
-            "http request url has empty ipv6 literal"
-        );
-      } else if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID) {
-        sec4_rt_store_std_error_response(
-            400,
-            "NET.REQUEST_IPV6_LITERAL_INVALID",
-            "validation",
-            "http request url has invalid ipv6 literal"
-        );
-      } else {
+      if (!sec4_rt_store_request_parse_error_from_outbound_parse_status(parse_status)) {
         sec4_rt_store_std_error_response(
             400,
             "NET.URL_INVALID",
@@ -4225,31 +4440,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
           );
           return 0;
         }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_BRACKET_MISSING",
-              "validation",
-              "http request url has missing ipv6 closing bracket"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_EMPTY_LITERAL",
-              "validation",
-              "http request url has empty ipv6 literal"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_LITERAL_INVALID",
-              "validation",
-              "http request url has invalid ipv6 literal"
-          );
+        if (sec4_rt_store_request_parse_error_from_redirect_resolve_status(resolve_status)) {
           return 0;
         }
         if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID) {

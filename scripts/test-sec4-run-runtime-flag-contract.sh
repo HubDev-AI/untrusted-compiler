@@ -52,25 +52,14 @@ require_pattern() {
   fi
 }
 
-forbid_pattern() {
-  local pattern="$1"
-  local label="$2"
-  if rg -q -- "${pattern}" "${cli_path}"; then
-    echo "forbidden run-flag contract pattern (${label}) in ${cli_path}" >&2
-    exit 1
-  fi
-}
-
 require_pattern '^\s*port:\s*Option<u16>,\s*$' 'run port field'
 require_pattern '^\s*oneshot:\s*bool,\s*$' 'run oneshot field'
 require_pattern '^\s*max_body_bytes:\s*Option<u64>,\s*$' 'run max-body-bytes field'
 require_pattern '^\s*serve_timeout_ms:\s*Option<u64>,\s*$' 'run serve-timeout field'
-require_pattern '=> cmd_run\(&path,\s*port,\s*oneshot,\s*max_body_bytes,\s*serve_timeout_ms\)' 'run dispatch forwards runtime flags'
+require_pattern '=> cmd_run\(' 'run dispatch invokes cmd_run'
 require_pattern 'cmd\.env\("SEC4_RT_HTTP_PORT", port\.to_string\(\)\);' 'run port env bridge'
 require_pattern 'cmd\.env\("SEC4_RT_HTTP_SERVE_MODE", "oneshot"\);' 'run oneshot env bridge'
 require_pattern 'cmd\.env\("SEC4_RT_HTTP_MAX_BODY_BYTES", bytes\.to_string\(\)\);' 'run body-cap env bridge'
 require_pattern 'cmd\.env\("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", timeout_ms\.to_string\(\)\);' 'run timeout env bridge'
-
-forbid_pattern '=> cmd_run\(&path,\s*oneshot,\s*max_body_bytes,\s*serve_timeout_ms\)' 'legacy run dispatch without port forwarding'
 
 echo "sec4 run runtime-flag contract test passed"

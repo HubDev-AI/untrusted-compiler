@@ -23,7 +23,7 @@ mkdir -p "$(dirname "$out_path")"
 
 jq '
   def p99num($v):
-    (($v | tostring | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n) // "0" | tonumber);
+    (($v | tostring | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null)) // "0" | tonumber);
 
   def sev_rank($s):
     if $s == "CRITICAL" then 4

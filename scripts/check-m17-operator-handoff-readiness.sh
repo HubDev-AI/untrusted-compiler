@@ -60,10 +60,15 @@ require_token() {
   local file="$1"
   local token="$2"
   local label="$3"
-  if ! rg -Fq -- "${token}" "${file}"; then
-    echo "missing ${label} token: ${token}" >&2
-    exit 1
+  if command -v rg >/dev/null 2>&1; then
+    if rg -Fq -- "${token}" "${file}"; then
+      return 0
+    fi
+  elif grep -Fq -- "${token}" "${file}"; then
+    return 0
   fi
+  echo "missing ${label} token: ${token}" >&2
+  exit 1
 }
 
 runtime_smoke_script="${repo_root}/scripts/smoke-sec4-run-hello-api.sh"

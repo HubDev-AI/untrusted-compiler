@@ -954,6 +954,139 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S44 outbound HTTP request-parser fallback diagnostics hardening acceptance criteria
+
+- Non-IPv6 outbound request-parser failures in `http_get*` flow emit deterministic split diagnostics for:
+  - scheme missing
+  - scheme invalid
+  - host token invalid
+  - port token invalid
+  - target token invalid
+- Redirect-resolution parser failures preserve the same non-IPv6 split request-parser diagnostics (instead of collapsing to generic redirect-invalid).
+- Runtime harness includes deterministic assertions for both direct request-parser path and redirect-parser path for new non-IPv6 `NET.REQUEST_*` codes.
+
+### M38-S44 tracking (live status)
+
+- [x] Extended outbound parser status model with non-IPv6 failure classes:
+  - `SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID`
+  - `SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID`
+- [x] Added deterministic direct request-path diagnostics:
+  - `NET.REQUEST_SCHEME_MISSING`
+  - `NET.REQUEST_SCHEME_INVALID`
+  - `NET.REQUEST_HOST_INVALID`
+  - `NET.REQUEST_PORT_INVALID`
+  - `NET.REQUEST_TARGET_INVALID`
+- [x] Extended redirect-resolver status propagation with non-IPv6 parser classes and mapped redirect-path failures to the same `NET.REQUEST_*` diagnostics.
+- [x] Added runtime harness coverage:
+  - `c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available` (expanded with non-IPv6 redirect-parser cases)
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S45 outbound HTTP request-parser diagnostics detail enrichment acceptance criteria
+
+- All split `NET.REQUEST_*` parser diagnostics include deterministic structured details:
+  - `{"key":"phase","value":"parse"}`
+  - `{"key":"component","value":"..."}` where component is one of `scheme|host|port|target|ipv6`.
+- Detail enrichment applies consistently in both direct request-parser path and redirect parser-failure path.
+- Runtime harness assertions validate both split diagnostic code and deterministic detail entries.
+
+### M38-S45 tracking (live status)
+
+- [x] Added runtime standard-error helper for deterministic two-detail payloads.
+- [x] Updated outbound request-parser split diagnostic emission to include structured details:
+  - `phase=parse`
+  - `component=<scheme|host|port|target|ipv6>`
+- [x] Updated redirect parse-failure mapping path to reuse the same detail-enriched request-parser diagnostics.
+- [x] Extended runtime harness assertions for deterministic detail payload checks:
+  - `c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
+  - `c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S46 outbound HTTP request-parser generic fallback normalization acceptance criteria
+
+- Non-classified parser-status fallback no longer emits generic `NET.URL_INVALID` in parser error path.
+- Deterministic fallback code `NET.REQUEST_PARSE_INVALID` is used for unknown parser-status fallback with structured details:
+  - `phase=parse`
+  - `component=unknown`
+- Redirect parser-status mapping normalizes unknown parser fallback to the same deterministic request-parser fallback code.
+- Runtime harness includes dedicated assertions for unknown parser-status fallback in both direct and redirect mapping paths.
+
+### M38-S46 tracking (live status)
+
+- [x] Added deterministic parser fallback code:
+  - `NET.REQUEST_PARSE_INVALID`
+  with details:
+  - `{"key":"phase","value":"parse"}`
+  - `{"key":"component","value":"unknown"}`
+- [x] Updated redirect parser-status mapping fallback to explicit `SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID`.
+- [x] Added runtime harness coverage:
+  - `c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S47 outbound HTTP request-parser public/internal sink parity acceptance criteria
+
+- Public sink path (`sec4_rt_http_get`) emits the same split parser diagnostics as internal sink path (`sec4_rt_http_get_internal`) for equivalent malformed redirect-target parser failures.
+- Structured parser details parity is preserved across both sinks:
+  - `phase=parse`
+  - matching `component` classification.
+- Runtime harness includes explicit public-sink redirect parser diagnostics parity assertions.
+
+### M38-S47 tracking (live status)
+
+- [x] Added public-sink redirect parser diagnostics parity harness:
+  - `c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+- [x] Parity harness validates split parser diagnostics and structured detail parity for:
+  - `NET.REQUEST_IPV6_BRACKET_MISSING` (`component=ipv6`)
+  - `NET.REQUEST_HOST_INVALID` (`component=host`)
+  - `NET.REQUEST_PORT_INVALID` (`component=port`)
+  - `NET.REQUEST_TARGET_INVALID` (`component=target`)
+- [x] Revalidated internal-sink parity baseline:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+- [x] Revalidated public-sink parity path:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+
+### M38-S48 outbound HTTP parser diagnostics envelope consistency acceptance criteria
+
+- All `NET.REQUEST_*` parser diagnostics are rendered through one unified runtime envelope path.
+- Deterministic details ordering is preserved for parser diagnostics:
+  - first detail: `phase=parse`
+  - second detail: `component=<...>`
+- Runtime harness includes dedicated coverage that validates detail-order contract across unknown fallback, non-IPv6 classes, and IPv6 class.
+
+### M38-S48 tracking (live status)
+
+- [x] Refactored parser diagnostic emission to a table-driven unified renderer path in runtime.
+- [x] Added dedicated runtime harness:
+  - `c_bin_runtime_request_parser_diagnostics_use_unified_details_order_when_clang_available`
+  validating deterministic detail-order contract across:
+  - `NET.REQUEST_PARSE_INVALID`
+  - `NET.REQUEST_SCHEME_INVALID`
+  - `NET.REQUEST_HOST_INVALID`
+  - `NET.REQUEST_PORT_INVALID`
+  - `NET.REQUEST_TARGET_INVALID`
+  - `NET.REQUEST_IPV6_LITERAL_INVALID`
+- [x] Revalidated parser diagnostics regression paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6266,7 +6399,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S44 outbound HTTP request-parser fallback diagnostics hardening (non-IPv6 parse-failure classification + deterministic harness assertions).
+- M38-S49 outbound HTTP parser diagnostics sink-bridge contract coverage (`sec4_rt_http_get` vs `sec4_rt_http_get_internal` direct malformed-input bridge assertions).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6358,9 +6491,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S44 scope for deterministic non-IPv6 request-parser fallback diagnostics in `sec4_rt_http_get*` parse failures.
-2. Extend runtime harness with malformed request URL cases that currently collapse to generic `NET.URL_INVALID`, then split/verify deterministic codes.
-3. Publish M38-S44 book chapter and refresh roadmap live-status counts.
+1. Add M38-S49 scope for direct malformed-input sink-bridge parity between public/internal net wrappers.
+2. Extend runtime harness with direct sink-bridge assertions for malformed inputs at wrapper boundary (`http_get` vs `http_get_internal`).
+3. Publish M38-S49 book chapter and refresh roadmap live-status counts.
 
 ---
 

@@ -182,7 +182,10 @@ request_once() {
 
   local status_code=""
   local got_response=0
-  for _ in $(seq 1 320); do
+  local response_wait_ms=$((serve_timeout_ms + 20000))
+  local response_poll_ms=50
+  local response_max_attempts=$(((response_wait_ms + response_poll_ms - 1) / response_poll_ms))
+  for _ in $(seq 1 "${response_max_attempts}"); do
     if ! kill -0 "${service_pid}" >/dev/null 2>&1; then
       echo "sec4 run exited before ${name} request completed" >&2
       cat "${log_file}" >&2
@@ -194,7 +197,7 @@ request_once() {
       got_response=1
       break
     fi
-    sleep 0.03
+    sleep 0.05
   done
 
   if [ "${got_response}" -ne 1 ]; then
@@ -204,7 +207,7 @@ request_once() {
   fi
 
   local wait_status=""
-  for _ in $(seq 1 240); do
+  for _ in $(seq 1 600); do
     if wait "${service_pid}" >/dev/null 2>&1; then
       wait_status="ok"
       break
