@@ -1,9 +1,13 @@
-# Untrusted<T> lockfile v0 (deterministic)
+# Untrusted<T> lockfile v1 (deterministic)
+lock_version = 1
+
 [package]
 name = "hello-api"
 version = "0.1.0"
 edition = "2026"
+hash = "pkg_d790854f799ed213"
 
 [build]
 entry = "src/main.ut"
-manifest_fingerprint = "man_d92032e779cfe665"
+hash = "bld_c296953574b87ffb"
+manifest_hash = "man_d92032e779cfe665"
