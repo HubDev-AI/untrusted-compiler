@@ -60,6 +60,8 @@
 #define SEC4_RT_MAX_LOG_LINE_BYTES 2048
 #define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
 #define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
+#define SEC4_RT_MAX_CSP_POLICY_BYTES 1024
+#define SEC4_RT_DEFAULT_CSP_POLICY "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
 #define SEC4_RT_POLICY_CORS_HANDLE INT64_C(0x6EC4001)
 #define SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE INT64_C(0x6EC4002)
 #define SEC4_RT_POLICY_CSRF_HANDLE INT64_C(0x6EC4003)
@@ -87,6 +89,9 @@ typedef struct {
   bool security_x_content_type_options;
   char security_x_frame_options[16];
   char security_referrer_policy[128];
+  bool security_csp_enabled;
+  bool security_csp_report_only;
+  char security_csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
   bool csrf_enabled;
   char csrf_mode[32];
   char csrf_protected_methods[64];
@@ -177,6 +182,9 @@ typedef struct {
   bool x_content_type_options;
   char x_frame_options[16];
   char referrer_policy[128];
+  bool csp_enabled;
+  bool csp_report_only;
+  char csp_policy[SEC4_RT_MAX_CSP_POLICY_BYTES];
 } sec4_rt_security_headers_policy_state;
 
 typedef struct {
@@ -6271,6 +6279,23 @@ static const char *sec4_rt_security_headers_block(
     used += (size_t) written;
   }
 
+  if (router->security_csp_enabled && router->security_csp_policy[0] != '\0') {
+    const char *header_name = router->security_csp_report_only
+        ? "Content-Security-Policy-Report-Only"
+        : "Content-Security-Policy";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "%s: %s\r\n",
+        header_name,
+        router->security_csp_policy
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
   return used > 0 ? buffer : NULL;
 }
 
@@ -6417,9 +6442,9 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
   sec4_rt_reset_response();
-  char security_headers_buffer[384];
-  char cors_headers_buffer[384];
-  char preflight_headers_buffer[512];
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char cors_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char preflight_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
   const char *security_headers = sec4_rt_security_headers_block(
       router,
       security_headers_buffer,
@@ -6430,7 +6455,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       cors_headers_buffer,
       sizeof(cors_headers_buffer)
   );
-  char merged_headers[320];
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
@@ -9711,6 +9736,14 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
       sizeof(slot->security_referrer_policy) - 1
   );
   slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+  slot->security_csp_enabled = true;
+  slot->security_csp_report_only = false;
+  strncpy(
+      slot->security_csp_policy,
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      sizeof(slot->security_csp_policy) - 1
+  );
+  slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
 }
 
 static void sec4_rt_router_apply_default_csrf(sec4_rt_router_state *slot) {
@@ -9801,6 +9834,29 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
       g_sec4_rt_security_headers_policy.referrer_policy,
       sizeof(g_sec4_rt_security_headers_policy.referrer_policy)
   );
+  g_sec4_rt_security_headers_policy.csp_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_ENABLED",
+      true
+  );
+  g_sec4_rt_security_headers_policy.csp_report_only = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY",
+      false
+  );
+  sec4_rt_read_env_string(
+      "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+      SEC4_RT_DEFAULT_CSP_POLICY,
+      g_sec4_rt_security_headers_policy.csp_policy,
+      sizeof(g_sec4_rt_security_headers_policy.csp_policy)
+  );
+  if (!sec4_rt_is_header_value_valid(g_sec4_rt_security_headers_policy.csp_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.csp_policy,
+        SEC4_RT_DEFAULT_CSP_POLICY,
+        sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.csp_policy
+        [sizeof(g_sec4_rt_security_headers_policy.csp_policy) - 1] = '\0';
+  }
 }
 
 static void sec4_rt_load_csrf_policy_from_env(void) {
@@ -9889,6 +9945,9 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
   }
   if (cfg == 0) {
     slot->security_headers_enabled = false;
+    slot->security_csp_enabled = false;
+    slot->security_csp_report_only = false;
+    slot->security_csp_policy[0] = '\0';
     return router;
   }
   if (cfg == SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE) {
@@ -9912,6 +9971,14 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
         sizeof(slot->security_referrer_policy) - 1
     );
     slot->security_referrer_policy[sizeof(slot->security_referrer_policy) - 1] = '\0';
+    slot->security_csp_enabled = g_sec4_rt_security_headers_policy.csp_enabled;
+    slot->security_csp_report_only = g_sec4_rt_security_headers_policy.csp_report_only;
+    strncpy(
+        slot->security_csp_policy,
+        g_sec4_rt_security_headers_policy.csp_policy,
+        sizeof(slot->security_csp_policy) - 1
+    );
+    slot->security_csp_policy[sizeof(slot->security_csp_policy) - 1] = '\0';
     return router;
   }
   sec4_rt_router_apply_default_security_headers(slot);

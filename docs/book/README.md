@@ -650,5 +650,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `678-m38-outbound-http-internal-policy-quoted-token-fallback.md`
 - `679-m38-outbound-http-internal-policy-delimited-token-fallback.md`
 - `680-m38-outbound-http-internal-policy-prefixed-token-fallback.md`
+- `681-m38-security-headers-csp-runtime-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.
