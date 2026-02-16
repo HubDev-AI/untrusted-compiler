@@ -3395,6 +3395,25 @@ static int64_t sec4_rt_outbound_http_get_handle(
     return 0;
   }
   int64_t redirects_followed = 0;
+  char redirect_visited_urls[SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS + 1]
+                            [SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+  int64_t redirect_visited_count = 0;
+  int initial_written = snprintf(
+      redirect_visited_urls[redirect_visited_count],
+      SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES,
+      "%s",
+      current_url
+  );
+  if (initial_written <= 0 || initial_written >= SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.URL_INVALID",
+        "validation",
+        "invalid outbound http url"
+    );
+    return 0;
+  }
+  redirect_visited_count += 1;
 
   while (true) {
     char host[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
@@ -3675,6 +3694,18 @@ static int64_t sec4_rt_outbound_http_get_handle(
         return 0;
       }
 
+      for (int64_t i = 0; i < redirect_visited_count; i++) {
+        if (strcmp(next_url, redirect_visited_urls[i]) == 0) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_CYCLE_DETECTED",
+              "validation",
+              "outbound redirect chain contains a cycle"
+          );
+          return 0;
+        }
+      }
+
       int copied = snprintf(current_url, sizeof(current_url), "%s", next_url);
       if (copied <= 0 || (size_t) copied >= sizeof(current_url)) {
         sec4_rt_store_std_error_response(
@@ -3684,6 +3715,24 @@ static int64_t sec4_rt_outbound_http_get_handle(
             "outbound redirect location is invalid"
         );
         return 0;
+      }
+      if (redirect_visited_count < SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS + 1) {
+        int visited_written = snprintf(
+            redirect_visited_urls[redirect_visited_count],
+            SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES,
+            "%s",
+            next_url
+        );
+        if (visited_written <= 0 || visited_written >= SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_INVALID",
+              "validation",
+              "outbound redirect location is invalid"
+          );
+          return 0;
+        }
+        redirect_visited_count += 1;
       }
       redirects_followed += 1;
       continue;

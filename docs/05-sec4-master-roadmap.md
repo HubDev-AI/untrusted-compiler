@@ -579,6 +579,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added invalid-policy harness test:
   - `c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated configurable downgrade and invalid-scheme diagnostics plus c-backend emit contract.
+
+### M38-S25 outbound HTTP redirect hop-budget diagnostics hardening acceptance criteria
+
+- Runtime detects redirect cycles deterministically and rejects cyclic redirect chains.
+- Redirect hop accounting remains deterministic under configured max-redirect budget.
+- Existing policy-invalid and invalid-scheme diagnostics remain green.
+
+### M38-S25 tracking (live status)
+
+- [x] Redirect follow-up path now tracks visited redirect URLs and detects cycles deterministically.
+- [x] Runtime now emits deterministic `NET.REDIRECT_CYCLE_DETECTED` on cyclic redirect chains.
+- [x] Added redirect-cycle harness helper + test:
+  - `c_bin_runtime_internal_get_redirect_cycle_returns_deterministic_code_when_clang_available`
+- [x] Revalidated redirect-policy-invalid and invalid-scheme diagnostics plus c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5889,7 +5903,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S25 outbound HTTP redirect hop-budget diagnostics hardening (deterministic policy cap and hop accounting).
+- M38-S26 outbound HTTP redirect-hop budget diagnostics hardening (cap-exhaustion messaging split vs loop detection).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5981,9 +5995,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S25 scope for redirect hop-budget policy cap and deterministic hop-accounting diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid subset) after M38-S25 edits.
-3. Publish M38-S25 book chapter and refresh roadmap live-status counts.
+1. Add M38-S26 scope for redirect cap-exhaustion diagnostics split from cycle detection.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle subset) after M38-S26 edits.
+3. Publish M38-S26 book chapter and refresh roadmap live-status counts.
 
 ---
 
