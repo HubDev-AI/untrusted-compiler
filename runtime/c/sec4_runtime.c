@@ -6342,7 +6342,9 @@ static const char *sec4_rt_cors_headers_block(
       : "*";
   char resolved_allow_origin[256];
   const char *allow_origin = configured_allow_origin;
-  if (strcmp(configured_allow_origin, "*") != 0) {
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
     char request_origin[256];
     if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
         && sec4_rt_csv_contains_token_ci(
@@ -6376,7 +6378,7 @@ static const char *sec4_rt_cors_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,
@@ -6425,7 +6427,9 @@ static const char *sec4_rt_preflight_headers_block(
       : "*";
   char resolved_allow_origin[256];
   const char *allow_origin = configured_allow_origin;
-  if (strcmp(configured_allow_origin, "*") != 0) {
+  if (sec4_rt_csv_contains_token_ci(configured_allow_origin, "*", 1)) {
+    allow_origin = "*";
+  } else if (strcmp(configured_allow_origin, "*") != 0) {
     char request_origin[256];
     if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
         && sec4_rt_csv_contains_token_ci(
@@ -6475,7 +6479,7 @@ static const char *sec4_rt_preflight_headers_block(
   }
 
   size_t used = (size_t) written;
-  if (router->cors_allow_credentials) {
+  if (router->cors_allow_credentials && strcmp(allow_origin, "*") != 0) {
     written = snprintf(
         buffer + used,
         buffer_size - used,

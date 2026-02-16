@@ -1971,6 +1971,26 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S86 CORS wildcard+credentials runtime safety guard hardening acceptance criteria
+
+- Runtime CORS header emission never outputs `Access-Control-Allow-Credentials: true` when effective allow-origin is wildcard (`*`).
+- Non-wildcard allow-origin flows continue to emit credentials headers when explicitly enabled.
+- Wildcard+credentials guard applies consistently to success and preflight CORS responses.
+
+### M38-S86 tracking (live status)
+
+- [x] Runtime CORS success/preflight header assembly now suppresses credentials headers whenever effective allow-origin resolves to wildcard.
+- [x] Wildcard token detection now works for wildcard present anywhere in the configured allow-origin CSV list.
+- [x] Added HTTP runtime CORS wildcard+credentials guard e2e coverage:
+  - `c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
