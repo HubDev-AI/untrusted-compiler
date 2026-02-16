@@ -4647,6 +4647,23 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
         run.status.success(),
         "compiled binary should exit successfully"
     );
+    let stderr = String::from_utf8(run.stderr).expect("stderr should be valid utf-8");
+    assert!(
+        stderr.contains("\"event\":\"event\""),
+        "runtime log output should include event name:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"level\":\"info\""),
+        "runtime log output should include info level:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"traceId\":\"rt-0\""),
+        "runtime log output should include deterministic trace id outside HTTP request context:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"timeMs\":"),
+        "runtime log output should include timeMs field:\n{stderr}"
+    );
 }
 
 #[test]
@@ -4895,7 +4912,7 @@ entry = "src/main.ut"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        r#"fn main() -> Int {
+        r#"fn main() effects { log } -> Int {
   let event = log.event("user.created");
   let num = log.i64(1);
   let field = log.field("count", num);
@@ -4959,6 +4976,92 @@ entry = "src/main.ut"
     assert!(
         run.status.success(),
         "compiled binary should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_log_builders_emit_structured_json_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping runtime structured log harness test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-structured-log-harness");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-structured-log");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+
+int main(void) {
+  int64_t event = sec4_rt_log_event("user.created");
+  int64_t count = sec4_rt_log_i64(1);
+  int64_t with_count = sec4_rt_log_with_attr(event, "count", count);
+  int64_t redacted = sec4_rt_log_attr_redacted("token");
+  int64_t with_attr = sec4_rt_log_with_attr(with_count, "token", redacted);
+  int64_t with_http = sec4_rt_log_with_http(with_attr, "POST", "/users", 201, 12);
+  int64_t err = sec4_rt_err_internal("boom");
+  int64_t with_error = sec4_rt_log_with_error(with_http, err);
+  sec4_rt_log_any(with_error);
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime structured-log harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("runtime structured-log harness should run");
+    assert!(
+        run.status.success(),
+        "runtime structured-log harness should exit successfully"
+    );
+
+    let stderr = String::from_utf8(run.stderr).expect("stderr should be valid utf-8");
+    assert!(
+        stderr.contains("\"event\":\"user.created\""),
+        "structured log output should include event name:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"attrs\":{\"count\":1,\"token\":{\"redacted\":\"token\"}}"),
+        "structured log output should include attrs block:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"http\":{\"method\":\"POST\",\"path\":\"/users\",\"status\":201,\"latencyMs\":12}"),
+        "structured log output should include http metadata:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"error\":{\"handle\":"),
+        "structured log output should include error attachment:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"traceId\":\"rt-0\""),
+        "structured log output should include default trace id outside request context:\n{stderr}"
     );
 }
 

@@ -42,6 +42,12 @@
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
+#define SEC4_RT_MAX_LOG_VALUES 256
+#define SEC4_RT_MAX_LOG_EVENTS 128
+#define SEC4_RT_MAX_LOG_EVENT_NAME_BYTES 128
+#define SEC4_RT_MAX_LOG_JSON_VALUE_BYTES 256
+#define SEC4_RT_MAX_LOG_ATTRS_BYTES 768
+#define SEC4_RT_MAX_LOG_LINE_BYTES 2048
 #define SEC4_RT_MAX_DB_RECORD_HEX_BYTES (SEC4_RT_MAX_TRACKED_VALUE_BYTES * 2 + 1)
 #define SEC4_RT_MAX_DB_RECORD_LINE_BYTES (SEC4_RT_MAX_DB_RECORD_HEX_BYTES + 256)
 #define SEC4_RT_POLICY_CORS_HANDLE INT64_C(0x6EC4001)
@@ -176,6 +182,26 @@ typedef struct {
   char mode[16];
 } sec4_rt_auth_policy_state;
 
+typedef struct {
+  bool active;
+  int64_t handle;
+  char json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+} sec4_rt_log_value_state;
+
+typedef struct {
+  bool active;
+  int64_t handle;
+  char event_name[SEC4_RT_MAX_LOG_EVENT_NAME_BYTES];
+  char attrs_json[SEC4_RT_MAX_LOG_ATTRS_BYTES];
+  bool has_http;
+  char http_method[8];
+  char http_path[SEC4_RT_MAX_PATH_BYTES];
+  int64_t http_status;
+  int64_t http_latency_ms;
+  bool has_error;
+  int64_t error_handle;
+} sec4_rt_log_event_state;
+
 static sec4_rt_router_state g_sec4_rt_routers[SEC4_RT_MAX_ROUTERS];
 static int64_t g_sec4_rt_next_router_handle = 1;
 static sec4_rt_response_state g_sec4_rt_response;
@@ -189,6 +215,8 @@ static sec4_rt_cors_policy_state g_sec4_rt_cors_policy;
 static sec4_rt_security_headers_policy_state g_sec4_rt_security_headers_policy;
 static sec4_rt_csrf_policy_state g_sec4_rt_csrf_policy;
 static sec4_rt_auth_policy_state g_sec4_rt_auth_policy;
+static sec4_rt_log_value_state g_sec4_rt_log_values[SEC4_RT_MAX_LOG_VALUES];
+static sec4_rt_log_event_state g_sec4_rt_log_events[SEC4_RT_MAX_LOG_EVENTS];
 
 static const char *sec4_rt_current_trace_id(void);
 static void sec4_rt_assign_trace_id(void);
@@ -216,6 +244,20 @@ static bool sec4_rt_csv_copy_first_token(
     size_t out_size
 );
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method);
+static size_t sec4_rt_json_escape(
+    const char *input,
+    char *output,
+    size_t output_size
+);
+static bool sec4_rt_log_json_for_handle(
+    int64_t handle,
+    char *buffer,
+    size_t buffer_size
+);
+static sec4_rt_log_event_state *sec4_rt_log_event_state_for_handle(int64_t handle);
+static int64_t sec4_rt_log_register_event(const char *event_name);
+static int64_t sec4_rt_log_register_value(const char *json_value, uint64_t salt);
+static void sec4_rt_log_emit_json(int64_t event_handle);
 static int sec4_rt_write_all(int socket_fd, const char *buffer, size_t size);
 static bool sec4_rt_fs_mkdirs(const char *path);
 
@@ -4170,49 +4212,450 @@ int64_t sec4_rt_time_now(void) {
   return 1;
 }
 
+static size_t sec4_rt_json_escape(
+    const char *input,
+    char *output,
+    size_t output_size
+) {
+  if (output == NULL || output_size == 0) {
+    return 0;
+  }
+  output[0] = '\0';
+  if (input == NULL) {
+    return 0;
+  }
+
+  size_t used = 0;
+  for (size_t i = 0; input[i] != '\0'; i++) {
+    unsigned char ch = (unsigned char) input[i];
+    const char *replacement = NULL;
+    char replacement_buf[7];
+    switch (ch) {
+      case '\\':
+        replacement = "\\\\";
+        break;
+      case '"':
+        replacement = "\\\"";
+        break;
+      case '\n':
+        replacement = "\\n";
+        break;
+      case '\r':
+        replacement = "\\r";
+        break;
+      case '\t':
+        replacement = "\\t";
+        break;
+      default:
+        if (ch < 0x20) {
+          (void) snprintf(replacement_buf, sizeof(replacement_buf), "\\u%04x", (unsigned int) ch);
+          replacement = replacement_buf;
+        }
+        break;
+    }
+
+    if (replacement != NULL) {
+      size_t replacement_len = strlen(replacement);
+      if (used + replacement_len >= output_size) {
+        break;
+      }
+      memcpy(output + used, replacement, replacement_len);
+      used += replacement_len;
+    } else {
+      if (used + 1 >= output_size) {
+        break;
+      }
+      output[used++] = (char) ch;
+    }
+  }
+  output[used] = '\0';
+  return used;
+}
+
+static sec4_rt_log_value_state *sec4_rt_log_value_state_for_handle(int64_t handle) {
+  if (handle == 0) {
+    return NULL;
+  }
+  for (size_t i = 0; i < SEC4_RT_MAX_LOG_VALUES; i++) {
+    if (g_sec4_rt_log_values[i].active && g_sec4_rt_log_values[i].handle == handle) {
+      return &g_sec4_rt_log_values[i];
+    }
+  }
+  return NULL;
+}
+
+static int64_t sec4_rt_log_register_value(const char *json_value, uint64_t salt) {
+  const char *resolved = json_value != NULL ? json_value : "null";
+  int64_t handle = sec4_rt_nonzero_handle_from_string(resolved, salt);
+
+  sec4_rt_log_value_state *slot = sec4_rt_log_value_state_for_handle(handle);
+  if (slot == NULL) {
+    for (size_t i = 0; i < SEC4_RT_MAX_LOG_VALUES; i++) {
+      if (!g_sec4_rt_log_values[i].active) {
+        slot = &g_sec4_rt_log_values[i];
+        break;
+      }
+    }
+  }
+  if (slot == NULL) {
+    slot = &g_sec4_rt_log_values[(size_t) ((uint64_t) handle % SEC4_RT_MAX_LOG_VALUES)];
+  }
+
+  memset(slot, 0, sizeof(*slot));
+  slot->active = true;
+  slot->handle = handle;
+  strncpy(slot->json, resolved, sizeof(slot->json) - 1);
+  slot->json[sizeof(slot->json) - 1] = '\0';
+  return handle;
+}
+
+static bool sec4_rt_log_json_for_handle(
+    int64_t handle,
+    char *buffer,
+    size_t buffer_size
+) {
+  if (buffer == NULL || buffer_size == 0) {
+    return false;
+  }
+  buffer[0] = '\0';
+  if (handle == 0) {
+    strncpy(buffer, "null", buffer_size - 1);
+    buffer[buffer_size - 1] = '\0';
+    return true;
+  }
+
+  sec4_rt_log_value_state *slot = sec4_rt_log_value_state_for_handle(handle);
+  if (slot != NULL) {
+    strncpy(buffer, slot->json, buffer_size - 1);
+    buffer[buffer_size - 1] = '\0';
+    return true;
+  }
+
+  const char *tracked = sec4_rt_lookup_tracked_value(handle);
+  if (tracked != NULL) {
+    char escaped[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+    sec4_rt_json_escape(tracked, escaped, sizeof(escaped));
+    (void) snprintf(buffer, buffer_size, "\"%s\"", escaped);
+    return true;
+  }
+
+  (void) snprintf(buffer, buffer_size, "%lld", (long long) handle);
+  return true;
+}
+
+static sec4_rt_log_event_state *sec4_rt_log_event_state_for_handle(int64_t handle) {
+  if (handle == 0) {
+    return NULL;
+  }
+  for (size_t i = 0; i < SEC4_RT_MAX_LOG_EVENTS; i++) {
+    if (g_sec4_rt_log_events[i].active && g_sec4_rt_log_events[i].handle == handle) {
+      return &g_sec4_rt_log_events[i];
+    }
+  }
+  return NULL;
+}
+
+static void sec4_rt_log_store_event_state(const sec4_rt_log_event_state *state) {
+  if (state == NULL || state->handle == 0) {
+    return;
+  }
+
+  sec4_rt_log_event_state *slot = sec4_rt_log_event_state_for_handle(state->handle);
+  if (slot == NULL) {
+    for (size_t i = 0; i < SEC4_RT_MAX_LOG_EVENTS; i++) {
+      if (!g_sec4_rt_log_events[i].active) {
+        slot = &g_sec4_rt_log_events[i];
+        break;
+      }
+    }
+  }
+  if (slot == NULL) {
+    slot = &g_sec4_rt_log_events[(size_t) ((uint64_t) state->handle % SEC4_RT_MAX_LOG_EVENTS)];
+  }
+
+  memcpy(slot, state, sizeof(*slot));
+  slot->active = true;
+}
+
+static void sec4_rt_log_load_event_state(
+    int64_t handle,
+    sec4_rt_log_event_state *out
+) {
+  if (out == NULL) {
+    return;
+  }
+  memset(out, 0, sizeof(*out));
+  out->active = true;
+  out->handle = handle;
+
+  sec4_rt_log_event_state *existing = sec4_rt_log_event_state_for_handle(handle);
+  if (existing != NULL) {
+    memcpy(out, existing, sizeof(*out));
+    return;
+  }
+
+  const char *tracked = sec4_rt_lookup_tracked_value(handle);
+  if (tracked != NULL && tracked[0] != '\0') {
+    strncpy(out->event_name, tracked, sizeof(out->event_name) - 1);
+  } else {
+    strncpy(out->event_name, "runtime.event", sizeof(out->event_name) - 1);
+  }
+  out->event_name[sizeof(out->event_name) - 1] = '\0';
+}
+
+static int64_t sec4_rt_log_register_event(const char *event_name) {
+  const char *resolved = (event_name != NULL && event_name[0] != '\0')
+      ? event_name
+      : "runtime.event";
+  int64_t handle = sec4_rt_nonzero_handle_from_string(resolved, UINT64_C(0xA1002));
+  sec4_rt_log_event_state state;
+  memset(&state, 0, sizeof(state));
+  state.active = true;
+  state.handle = handle;
+  strncpy(state.event_name, resolved, sizeof(state.event_name) - 1);
+  state.event_name[sizeof(state.event_name) - 1] = '\0';
+  state.attrs_json[0] = '\0';
+  sec4_rt_log_store_event_state(&state);
+  return handle;
+}
+
+static void sec4_rt_log_append_attr(
+    sec4_rt_log_event_state *state,
+    const char *key,
+    int64_t value
+) {
+  if (state == NULL) {
+    return;
+  }
+  char escaped_key[96];
+  sec4_rt_json_escape(
+      key != NULL && key[0] != '\0' ? key : "value",
+      escaped_key,
+      sizeof(escaped_key)
+  );
+  char value_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  sec4_rt_log_json_for_handle(value, value_json, sizeof(value_json));
+
+  if (state->attrs_json[0] == '\0') {
+    (void) snprintf(
+        state->attrs_json,
+        sizeof(state->attrs_json),
+        "{\"%s\":%s}",
+        escaped_key,
+        value_json
+    );
+    return;
+  }
+
+  size_t len = strlen(state->attrs_json);
+  if (len < 2 || state->attrs_json[len - 1] != '}') {
+    state->attrs_json[0] = '\0';
+    (void) snprintf(
+        state->attrs_json,
+        sizeof(state->attrs_json),
+        "{\"%s\":%s}",
+        escaped_key,
+        value_json
+    );
+    return;
+  }
+
+  state->attrs_json[len - 1] = '\0';
+  int written = snprintf(
+      state->attrs_json + (len - 1),
+      sizeof(state->attrs_json) - (len - 1),
+      ",\"%s\":%s}",
+      escaped_key,
+      value_json
+  );
+  if (written <= 0 || (size_t) written >= sizeof(state->attrs_json) - (len - 1)) {
+    state->attrs_json[len - 1] = '}';
+    state->attrs_json[len] = '\0';
+  }
+}
+
+static void sec4_rt_log_emit_json(int64_t event_handle) {
+  const char *log_output = getenv("SEC4_RT_LOG_OUTPUT");
+  if (log_output != NULL && strcasecmp(log_output, "off") == 0) {
+    return;
+  }
+
+  FILE *stream = stderr;
+  if (log_output != NULL && strcasecmp(log_output, "stdout") == 0) {
+    stream = stdout;
+  }
+
+  sec4_rt_log_event_state state;
+  sec4_rt_log_load_event_state(event_handle, &state);
+
+  char event_name[SEC4_RT_MAX_LOG_EVENT_NAME_BYTES * 2];
+  sec4_rt_json_escape(state.event_name, event_name, sizeof(event_name));
+  char trace_id[64];
+  sec4_rt_json_escape(sec4_rt_current_trace_id(), trace_id, sizeof(trace_id));
+
+  char attrs_segment[SEC4_RT_MAX_LOG_ATTRS_BYTES + 16];
+  attrs_segment[0] = '\0';
+  if (state.attrs_json[0] != '\0') {
+    (void) snprintf(attrs_segment, sizeof(attrs_segment), ",\"attrs\":%s", state.attrs_json);
+  }
+
+  char http_segment[512];
+  http_segment[0] = '\0';
+  if (state.has_http) {
+    char method[24];
+    char path[SEC4_RT_MAX_PATH_BYTES * 2];
+    sec4_rt_json_escape(state.http_method, method, sizeof(method));
+    sec4_rt_json_escape(state.http_path, path, sizeof(path));
+    (void) snprintf(
+        http_segment,
+        sizeof(http_segment),
+        ",\"http\":{\"method\":\"%s\",\"path\":\"%s\",\"status\":%lld,\"latencyMs\":%lld}",
+        method,
+        path,
+        (long long) state.http_status,
+        (long long) state.http_latency_ms
+    );
+  }
+
+  char error_segment[96];
+  error_segment[0] = '\0';
+  if (state.has_error) {
+    (void) snprintf(
+        error_segment,
+        sizeof(error_segment),
+        ",\"error\":{\"handle\":%lld}",
+        (long long) state.error_handle
+    );
+  }
+
+  char line[SEC4_RT_MAX_LOG_LINE_BYTES];
+  int written = snprintf(
+      line,
+      sizeof(line),
+      "{\"timeMs\":%lld,\"level\":\"info\",\"traceId\":\"%s\",\"event\":\"%s\"%s%s%s}",
+      (long long) sec4_rt_time_now(),
+      trace_id,
+      event_name,
+      attrs_segment,
+      http_segment,
+      error_segment
+  );
+  if (written <= 0 || (size_t) written >= sizeof(line)) {
+    (void) fprintf(
+        stream,
+        "{\"timeMs\":%lld,\"level\":\"info\",\"traceId\":\"%s\",\"event\":\"runtime.log_overflow\"}\n",
+        (long long) sec4_rt_time_now(),
+        trace_id
+    );
+    (void) fflush(stream);
+    return;
+  }
+
+  (void) fprintf(stream, "%s\n", line);
+  (void) fflush(stream);
+}
+
 void sec4_rt_log_any(int64_t event) {
-  g_sec4_rt_last_log_handle = event != 0
+  int64_t resolved_event = event != 0
       ? event
-      : sec4_rt_nonzero_constant_handle(UINT64_C(0xA1001));
+      : sec4_rt_log_register_event("runtime.event");
+  g_sec4_rt_last_log_handle = resolved_event;
+  sec4_rt_log_emit_json(resolved_event);
 }
 
 int64_t sec4_rt_log_event(const char *event_name) {
-  return sec4_rt_nonzero_handle_from_string(event_name, UINT64_C(0xA1002));
+  return sec4_rt_log_register_event(event_name);
 }
 
 int64_t sec4_rt_log_field(const char *key, int64_t value) {
-  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xA1003));
-  return sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xA1004));
+  char escaped_key[96];
+  sec4_rt_json_escape(
+      key != NULL && key[0] != '\0' ? key : "field",
+      escaped_key,
+      sizeof(escaped_key)
+  );
+  char value_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  sec4_rt_log_json_for_handle(value, value_json, sizeof(value_json));
+  char field_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  (void) snprintf(
+      field_json,
+      sizeof(field_json),
+      "{\"%s\":%s}",
+      escaped_key,
+      value_json
+  );
+  return sec4_rt_log_register_value(field_json, UINT64_C(0xA1004));
 }
 
 int64_t sec4_rt_log_obj(int64_t field) {
-  return sec4_rt_handle_from_two(field, 1, UINT64_C(0xA1005));
+  char field_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  sec4_rt_log_json_for_handle(field, field_json, sizeof(field_json));
+  if (field_json[0] != '{') {
+    char wrapped_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+    (void) snprintf(wrapped_json, sizeof(wrapped_json), "{\"value\":%s}", field_json);
+    return sec4_rt_log_register_value(wrapped_json, UINT64_C(0xA1005));
+  }
+  return sec4_rt_log_register_value(field_json, UINT64_C(0xA1005));
 }
 
 int64_t sec4_rt_log_str(const char *value) {
-  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA1006));
+  char escaped[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  sec4_rt_json_escape(value != NULL ? value : "", escaped, sizeof(escaped));
+  char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  (void) snprintf(json_value, sizeof(json_value), "\"%s\"", escaped);
+  return sec4_rt_log_register_value(json_value, UINT64_C(0xA1006));
 }
 
 int64_t sec4_rt_log_i64(int64_t value) {
-  return sec4_rt_handle_from_two(value, 2, UINT64_C(0xA1007));
+  char json_value[32];
+  (void) snprintf(json_value, sizeof(json_value), "%lld", (long long) value);
+  return sec4_rt_log_register_value(json_value, UINT64_C(0xA1007));
 }
 
 int64_t sec4_rt_log_bool(int64_t value) {
-  return sec4_rt_handle_from_two(value != 0 ? 1 : 0, 3, UINT64_C(0xA1008));
+  return sec4_rt_log_register_value(
+      value != 0 ? "true" : "false",
+      UINT64_C(0xA1008)
+  );
 }
 
 int64_t sec4_rt_log_redacted(const char *value) {
-  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA1009));
+  char escaped[96];
+  sec4_rt_json_escape(value != NULL ? value : "secret", escaped, sizeof(escaped));
+  char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  (void) snprintf(
+      json_value,
+      sizeof(json_value),
+      "{\"redacted\":\"%s\"}",
+      escaped
+  );
+  return sec4_rt_log_register_value(json_value, UINT64_C(0xA1009));
 }
 
 int64_t sec4_rt_log_attr_redacted(const char *value) {
-  return sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xA100A));
+  char escaped[96];
+  sec4_rt_json_escape(value != NULL ? value : "secret", escaped, sizeof(escaped));
+  char json_value[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  (void) snprintf(
+      json_value,
+      sizeof(json_value),
+      "{\"redacted\":\"%s\"}",
+      escaped
+  );
+  return sec4_rt_log_register_value(json_value, UINT64_C(0xA100A));
 }
 
 int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value) {
+  sec4_rt_log_event_state state;
+  sec4_rt_log_load_event_state(event, &state);
+  sec4_rt_log_append_attr(&state, key, value);
+
   int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xA100B));
   int64_t attr_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xA100C));
-  return sec4_rt_handle_from_two(event, attr_handle, UINT64_C(0xA100D));
+  int64_t next_event = sec4_rt_handle_from_two(event, attr_handle, UINT64_C(0xA100D));
+  state.handle = next_event;
+  sec4_rt_log_store_event_state(&state);
+  return next_event;
 }
 
 int64_t sec4_rt_log_with_http(
@@ -4222,16 +4665,37 @@ int64_t sec4_rt_log_with_http(
     int64_t status,
     int64_t duration_ms
 ) {
+  sec4_rt_log_event_state state;
+  sec4_rt_log_load_event_state(event, &state);
+  state.has_http = true;
+  strncpy(state.http_method, method != NULL ? method : "", sizeof(state.http_method) - 1);
+  state.http_method[sizeof(state.http_method) - 1] = '\0';
+  strncpy(state.http_path, path != NULL ? path : "", sizeof(state.http_path) - 1);
+  state.http_path[sizeof(state.http_path) - 1] = '\0';
+  state.http_status = status;
+  state.http_latency_ms = duration_ms;
+
   int64_t method_handle = sec4_rt_nonzero_handle_from_string(method, UINT64_C(0xA100E));
   int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xA100F));
   int64_t route_handle = sec4_rt_handle_from_two(method_handle, path_handle, UINT64_C(0xA1010));
   int64_t http_meta = sec4_rt_handle_from_two(status, duration_ms, UINT64_C(0xA1011));
   int64_t http_handle = sec4_rt_handle_from_two(route_handle, http_meta, UINT64_C(0xA1012));
-  return sec4_rt_handle_from_two(event, http_handle, UINT64_C(0xA1013));
+  int64_t next_event = sec4_rt_handle_from_two(event, http_handle, UINT64_C(0xA1013));
+  state.handle = next_event;
+  sec4_rt_log_store_event_state(&state);
+  return next_event;
 }
 
 int64_t sec4_rt_log_with_error(int64_t event, int64_t error) {
-  return sec4_rt_handle_from_two(event, error, UINT64_C(0xA1014));
+  sec4_rt_log_event_state state;
+  sec4_rt_log_load_event_state(event, &state);
+  state.has_error = true;
+  state.error_handle = error;
+
+  int64_t next_event = sec4_rt_handle_from_two(event, error, UINT64_C(0xA1014));
+  state.handle = next_event;
+  sec4_rt_log_store_event_state(&state);
+  return next_event;
 }
 
 int64_t sec4_rt_req_json(int64_t schema) {
