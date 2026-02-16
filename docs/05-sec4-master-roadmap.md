@@ -231,6 +231,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added `scripts/build-m37-alpha-tag-decision-record.sh`.
 - [x] Added contract coverage `scripts/test-build-m37-alpha-tag-decision-record.sh`.
 - [x] Added book chapter documenting M37-S8 alpha tag decision record.
+
+### M38-S1 outbound HTTP chunked-body decoding hardening acceptance criteria
+
+- Runtime outbound HTTP extraction decodes `Transfer-Encoding: chunked` payloads into plain body bytes for both HTTP and HTTPS response paths.
+- Chunked decoding enforces deterministic validation errors for malformed chunk framing and resource limits.
+- Existing content-length response handling and redirect behavior remain green.
+- Clang-gated runtime harness coverage proves decoded chunked body roundtrip through `sec4_rt_http_get_internal`.
+
+### M38-S1 tracking (live status)
+
+- [x] Runtime outbound extractor now parses `Transfer-Encoding` + `Content-Length` headers and decodes chunked bodies.
+- [x] Added chunked runtime harness helper + test:
+  - `c_bin_runtime_internal_get_chunked_body_is_decoded_when_clang_available`.
+- [x] Verified no regression on existing internal GET roundtrip + redirect allow paths.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5541,7 +5555,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S1 post-alpha hardening kickoff (TLS/toolchain ergonomics + runtime robustness deltas).
+- M38-S2 outbound HTTP robustness follow-up (chunked edge cases + response framing diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5633,9 +5647,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Capture a single M37 closure summary chapter tying checklist, release-notes package, and decision record.
-2. Open M38-S1 scope with concrete post-alpha hardening deltas and acceptance criteria.
-3. Start M38-S1 implementation slice with tests and book update.
+1. Add M38-S2 scope and implement chunked-response edge-case diagnostics coverage.
+2. Run targeted runtime matrix (`json_output` internal net + redirect + TLS subset) after M38-S2 edits.
+3. Publish M38-S2 book chapter and refresh roadmap live-status counts.
 
 ---
 

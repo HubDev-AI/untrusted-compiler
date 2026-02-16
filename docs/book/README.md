@@ -590,5 +590,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `618-m37-alpha-publish-checklist-delta.md`
 - `619-m37-alpha-release-notes-package.md`
 - `620-m37-alpha-tag-decision-record.md`
+- `621-m38-outbound-http-chunked-decoding-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

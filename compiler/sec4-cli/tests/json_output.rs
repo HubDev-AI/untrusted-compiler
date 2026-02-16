@@ -164,6 +164,79 @@ fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
     (port, handle)
 }
 
+fn spawn_one_shot_http_chunked_server(body: &str) -> (u16, thread::JoinHandle<()>) {
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).expect("chunked oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("chunked oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("chunked oneshot server local address should resolve")
+        .port();
+    let payload = body.as_bytes().to_vec();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("chunked oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("chunked oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("chunked oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .expect("chunked oneshot server response headers should write");
+
+        let mut cursor = 0usize;
+        while cursor < payload.len() {
+            let chunk_len = (payload.len() - cursor).min(6);
+            let chunk_head = format!("{chunk_len:X}\r\n");
+            stream
+                .write_all(chunk_head.as_bytes())
+                .expect("chunked oneshot server chunk length should write");
+            stream
+                .write_all(&payload[cursor..cursor + chunk_len])
+                .expect("chunked oneshot server chunk body should write");
+            stream
+                .write_all(b"\r\n")
+                .expect("chunked oneshot server chunk terminator should write");
+            cursor += chunk_len;
+        }
+
+        stream
+            .write_all(b"0\r\n\r\n")
+            .expect("chunked oneshot server final chunk should write");
+        stream
+            .flush()
+            .expect("chunked oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_server_with_response_delay(
     body: &str,
     delay: Duration,
@@ -6991,6 +7064,93 @@ int main(void) {
         fs::read_to_string(fs_base.join("internal-net").join("body.txt"))
             .expect("internal-net response body should be written"),
         "internal-roundtrip-body"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_chunked_body_is_decoded_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net chunked test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-chunked");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-chunked");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (internal_url == 0 || body == 0) { return 11; }
+
+  int64_t output_path = sec4_rt_req_query("internal-net/chunked-body.txt");
+  if (output_path == 0) { return 12; }
+  if (sec4_rt_fs_write(5, output_path, body) == 0) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime chunked harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net chunked harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_chunked_server("internal-chunked-body");
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-chunked");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net chunked harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime internal-net chunked server should exit cleanly");
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("internal-net").join("chunked-body.txt"))
+            .expect("internal-net chunked response body should be written"),
+        "internal-chunked-body"
     );
 }
 

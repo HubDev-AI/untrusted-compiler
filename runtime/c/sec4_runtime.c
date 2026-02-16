@@ -1918,38 +1918,200 @@ static int sec4_rt_extract_outbound_http_body(
     return -2;
   }
 
-  if (redirect_location != NULL && redirect_location_size > 0) {
-    const char *header_cursor = status_line_end + 2;
-    while (header_cursor < headers_end) {
-      const char *line_end = strstr(header_cursor, "\r\n");
-      if (line_end == NULL || line_end > headers_end) {
-        break;
+  const char *header_cursor = status_line_end + 2;
+  bool transfer_chunked = false;
+  bool has_content_length = false;
+  size_t content_length = 0;
+  while (header_cursor < headers_end) {
+    const char *line_end = strstr(header_cursor, "\r\n");
+    if (line_end == NULL || line_end > headers_end) {
+      break;
+    }
+    if (line_end == header_cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - header_cursor) >= 9
+        && strncasecmp(header_cursor, "Location:", 9) == 0) {
+      const char *value_start = header_cursor + 9;
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
       }
-      if (line_end == header_cursor) {
-        break;
+      const char *value_end = line_end;
+      while (value_end > value_start && isspace((unsigned char) *(value_end - 1))) {
+        value_end -= 1;
       }
-      if ((size_t) (line_end - header_cursor) >= 9
-          && strncasecmp(header_cursor, "Location:", 9) == 0) {
-        const char *value_start = header_cursor + 9;
-        while (value_start < line_end && isspace((unsigned char) *value_start)) {
+      size_t value_len = (size_t) (value_end - value_start);
+      if (redirect_location != NULL && redirect_location_size > 0 && value_len > 0
+          && value_len < redirect_location_size) {
+        memcpy(redirect_location, value_start, value_len);
+        redirect_location[value_len] = '\0';
+      }
+    } else if ((size_t) (line_end - header_cursor) >= 18
+               && strncasecmp(header_cursor, "Transfer-Encoding:", 18) == 0) {
+      const char *value_start = header_cursor + 18;
+      while (value_start < line_end) {
+        while (value_start < line_end
+               && (isspace((unsigned char) *value_start) || *value_start == ',')) {
           value_start += 1;
         }
-        const char *value_end = line_end;
-        while (value_end > value_start && isspace((unsigned char) *(value_end - 1))) {
-          value_end -= 1;
+        const char *token_start = value_start;
+        while (value_start < line_end && *value_start != ',' && *value_start != ';') {
+          value_start += 1;
         }
-        size_t value_len = (size_t) (value_end - value_start);
-        if (value_len > 0 && value_len < redirect_location_size) {
-          memcpy(redirect_location, value_start, value_len);
-          redirect_location[value_len] = '\0';
+        const char *token_end = value_start;
+        while (token_end > token_start && isspace((unsigned char) *(token_end - 1))) {
+          token_end -= 1;
         }
-        break;
+        size_t token_len = (size_t) (token_end - token_start);
+        if (token_len == 7 && strncasecmp(token_start, "chunked", 7) == 0) {
+          transfer_chunked = true;
+          break;
+        }
+        while (value_start < line_end && *value_start != ',') {
+          value_start += 1;
+        }
       }
-      header_cursor = line_end + 2;
+    } else if ((size_t) (line_end - header_cursor) >= 15
+               && strncasecmp(header_cursor, "Content-Length:", 15) == 0) {
+      const char *value_start = header_cursor + 15;
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
+      }
+      if (value_start >= line_end) {
+        return -3;
+      }
+      size_t parsed = 0;
+      bool has_digits = false;
+      while (value_start < line_end && isdigit((unsigned char) *value_start)) {
+        has_digits = true;
+        size_t digit = (size_t) (*value_start - '0');
+        if (parsed > (SIZE_MAX - digit) / 10) {
+          return -2;
+        }
+        parsed = (parsed * 10) + digit;
+        value_start += 1;
+      }
+      while (value_start < line_end && isspace((unsigned char) *value_start)) {
+        value_start += 1;
+      }
+      if (!has_digits || value_start != line_end) {
+        return -3;
+      }
+      content_length = parsed;
+      has_content_length = true;
     }
+
+    header_cursor = line_end + 2;
   }
 
   size_t payload_bytes = total - header_bytes;
+  const char *payload = response + header_bytes;
+
+  if (transfer_chunked) {
+    size_t cursor = 0;
+    size_t decoded_len = 0;
+    while (true) {
+      size_t line_start = cursor;
+      while (cursor + 1 < payload_bytes
+             && !(payload[cursor] == '\r' && payload[cursor + 1] == '\n')) {
+        cursor += 1;
+      }
+      if (cursor + 1 >= payload_bytes) {
+        return -3;
+      }
+      size_t line_end = cursor;
+      cursor += 2;
+
+      size_t token_start = line_start;
+      size_t token_end = line_end;
+      while (token_start < token_end && isspace((unsigned char) payload[token_start])) {
+        token_start += 1;
+      }
+      while (token_end > token_start && isspace((unsigned char) payload[token_end - 1])) {
+        token_end -= 1;
+      }
+      for (size_t i = token_start; i < token_end; i++) {
+        if (payload[i] == ';') {
+          token_end = i;
+          break;
+        }
+      }
+      if (token_start >= token_end) {
+        return -3;
+      }
+
+      size_t chunk_size = 0;
+      for (size_t i = token_start; i < token_end; i++) {
+        unsigned char ch = (unsigned char) payload[i];
+        int value = -1;
+        if (ch >= '0' && ch <= '9') {
+          value = (int) (ch - '0');
+        } else if (ch >= 'a' && ch <= 'f') {
+          value = 10 + (int) (ch - 'a');
+        } else if (ch >= 'A' && ch <= 'F') {
+          value = 10 + (int) (ch - 'A');
+        } else {
+          return -3;
+        }
+        if (chunk_size > (SIZE_MAX - (size_t) value) / 16) {
+          return -2;
+        }
+        chunk_size = (chunk_size * 16) + (size_t) value;
+      }
+
+      if (chunk_size == 0) {
+        if (cursor + 1 < payload_bytes && payload[cursor] == '\r' && payload[cursor + 1] == '\n') {
+          cursor += 2;
+        } else {
+          while (cursor + 1 < payload_bytes) {
+            if (payload[cursor] == '\r' && payload[cursor + 1] == '\n') {
+              cursor += 2;
+              if (cursor + 1 < payload_bytes && payload[cursor] == '\r'
+                  && payload[cursor + 1] == '\n') {
+                cursor += 2;
+                break;
+              }
+              continue;
+            }
+            cursor += 1;
+          }
+        }
+        if (decoded_len >= body_size) {
+          return -5;
+        }
+        body[decoded_len] = '\0';
+        *body_len = decoded_len;
+        return 0;
+      }
+
+      if (chunk_size > max_body_bytes || decoded_len > max_body_bytes - chunk_size) {
+        return -2;
+      }
+      if (decoded_len + chunk_size >= body_size) {
+        return -5;
+      }
+      if (cursor + chunk_size + 2 > payload_bytes) {
+        return -3;
+      }
+
+      memcpy(body + decoded_len, payload + cursor, chunk_size);
+      decoded_len += chunk_size;
+      cursor += chunk_size;
+      if (!(payload[cursor] == '\r' && payload[cursor + 1] == '\n')) {
+        return -3;
+      }
+      cursor += 2;
+    }
+  }
+
+  if (has_content_length) {
+    if (content_length > payload_bytes) {
+      return -3;
+    }
+    payload_bytes = content_length;
+  }
+
   if (payload_bytes > max_body_bytes) {
     return -2;
   }
@@ -1958,7 +2120,7 @@ static int sec4_rt_extract_outbound_http_body(
   }
 
   if (payload_bytes > 0) {
-    memcpy(body, response + header_bytes, payload_bytes);
+    memcpy(body, payload, payload_bytes);
   }
   body[payload_bytes] = '\0';
   *body_len = payload_bytes;
