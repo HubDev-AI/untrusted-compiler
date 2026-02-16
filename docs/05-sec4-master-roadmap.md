@@ -2250,6 +2250,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S101 CORS non-preflight invalid-origin rejection hardening acceptance criteria
+
+- Runtime CORS handling rejects non-preflight requests that carry invalid `Origin` values.
+- Invalid non-preflight origin requests deterministically return `400` with explicit diagnostics.
+- Rejected invalid-origin non-preflight responses do not emit `Access-Control-Allow-Origin`.
+
+### M38-S101 tracking (live status)
+
+- [x] Added non-preflight invalid-origin guard branch in runtime CORS handling.
+- [x] Added deterministic invalid-origin non-preflight rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS invalid-origin non-preflight e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_invalid_origin_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_origin_headers`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

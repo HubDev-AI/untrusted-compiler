@@ -7106,6 +7106,35 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     return;
   }
+  if (router->cors_enabled && strcmp(method, "OPTIONS") != 0) {
+    char request_origin[256];
+    bool has_request_origin = sec4_rt_extract_request_header(
+        "Origin",
+        request_origin,
+        sizeof(request_origin)
+    );
+    if (has_request_origin
+        && (strcmp(request_origin, "*") == 0
+            || !sec4_rt_is_cors_origin_token_valid(request_origin))) {
+      const char *body = "cors request origin invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          NULL,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+  }
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
     if (request_origin_occurrences > 1) {
