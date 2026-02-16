@@ -2485,6 +2485,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_private_network_headers`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S114 CORS private-network policy materialization bridge acceptance criteria
+
+- `sec4.policy` supports explicit CORS toggle `cors.allow_private_network`.
+- `sec4 run` materializes `cors.allow_private_network` into runtime env (`SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK`) deterministically.
+- Policy-enabled private-network preflight requests succeed with deterministic allow headers via the normal run command path.
+
+### M38-S114 tracking (live status)
+
+- [x] Added `cors.allow_private_network` to policy model/defaults and parser ingestion.
+- [x] Wired `cmd_run` runtime env bridge for `SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK`.
+- [x] Added run-command e2e coverage for policy-driven private-network preflight allow path:
+  - `run_command_oneshot_allows_private_network_preflight_when_cors_policy_enables_it`
+- [x] Revalidated related policy/runtime bridging paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_allows_private_network_preflight_when_cors_policy_enables_it`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

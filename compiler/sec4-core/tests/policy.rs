@@ -17,6 +17,7 @@ fn policy_defaults_when_empty() {
     assert!(policy.net_ssrf.block_loopback);
     assert!(policy.net_ssrf.block_link_local);
     assert!(policy.net_ssrf.block_metadata_ips);
+    assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.auth.cookie_name, "session");
 }
 
@@ -71,6 +72,18 @@ forbid_reflect_origin = false
         .expect("CORS reflection should parse when forbid_reflect_origin is false");
     assert!(policy.cors.reflect_origin);
     assert!(!policy.cors.forbid_reflect_origin);
+}
+
+#[test]
+fn policy_parses_cors_allow_private_network_toggle() {
+    let source = r#"
+[cors]
+allow_private_network = true
+"#;
+
+    let policy = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect("cors.allow_private_network should parse");
+    assert!(policy.cors.allow_private_network);
 }
 
 #[test]
@@ -355,6 +368,7 @@ fn policy_profile_default_secure_prod_parses() {
         vec!["https://app.example.com".to_string()]
     );
     assert!(policy.cors.allow_credentials);
+    assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.security_headers.hsts_enabled);
@@ -375,6 +389,7 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.mode_as_str(), "warn");
     assert_eq!(policy.cors.allowed_origins, vec!["*".to_string()]);
     assert!(!policy.cors.allow_credentials);
+    assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 64);
     assert_eq!(policy.net_public.max_redirects, 5);

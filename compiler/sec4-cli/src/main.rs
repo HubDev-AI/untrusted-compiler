@@ -3642,6 +3642,14 @@ fn cmd_run(
         },
     );
     cmd.env(
+        "SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK",
+        if policy.cors.allow_private_network {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
         "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
         if policy.cors.require_vary_origin {
             "1"
