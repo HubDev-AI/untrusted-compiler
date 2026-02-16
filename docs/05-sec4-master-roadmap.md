@@ -435,6 +435,22 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_relative_redirect_is_normalized_when_clang_available`
   - `c_bin_runtime_internal_get_relative_redirect_invalid_target_returns_deterministic_code_when_clang_available`
 - [x] Revalidated redirect allow path, conflicting-location diagnostics, and c-backend emit contract.
+
+### M38-S15 outbound HTTP redirect-authority host-token diagnostics hardening acceptance criteria
+
+- Runtime validates redirect authority host tokens with deterministic diagnostics.
+- Redirect authority normalization canonicalizes host casing and default-port rendering after parse.
+- Invalid redirect hosts are surfaced with dedicated deterministic runtime code.
+
+### M38-S15 tracking (live status)
+
+- [x] Redirect resolver now validates host tokens via strict label-character checks.
+- [x] Redirect resolver now canonicalizes resolved redirect authority (`host` lowercase, default port elided).
+- [x] Added deterministic `NET.REDIRECT_HOST_INVALID` mapping for invalid redirect hosts.
+- [x] Added redirect-authority harness helpers + tests:
+  - `c_bin_runtime_internal_get_absolute_redirect_upper_host_succeeds_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_host_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated relative redirect normalization, redirect allow path, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5745,7 +5761,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S15 outbound HTTP parser hardening follow-up (redirect URL authority normalization and deterministic host-token diagnostics).
+- M38-S16 outbound HTTP parser hardening follow-up (query-fragment redirect diagnostics and deterministic target character policy).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5837,9 +5853,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S15 scope for redirect URL authority normalization and deterministic host-token diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect subset) after M38-S15 edits.
-3. Publish M38-S15 book chapter and refresh roadmap live-status counts.
+1. Add M38-S16 scope for query-fragment redirect diagnostics and deterministic target character policy on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host subset) after M38-S16 edits.
+3. Publish M38-S16 book chapter and refresh roadmap live-status counts.
 
 ---
 

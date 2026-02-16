@@ -1897,6 +1897,43 @@ static bool sec4_rt_is_mime_token_char(unsigned char ch) {
   }
 }
 
+static bool sec4_rt_is_redirect_host_token_valid(const char *host) {
+  if (host == NULL || host[0] == '\0') {
+    return false;
+  }
+
+  size_t len = strlen(host);
+  if (len == 0 || host[0] == '.' || host[len - 1] == '.') {
+    return false;
+  }
+
+  size_t label_len = 0;
+  for (size_t i = 0; i < len; i++) {
+    unsigned char ch = (unsigned char) host[i];
+    if (ch == '.') {
+      if (label_len == 0) {
+        return false;
+      }
+      if (host[i - 1] == '-') {
+        return false;
+      }
+      label_len = 0;
+      continue;
+    }
+    if (!(isalnum(ch) || ch == '-')) {
+      return false;
+    }
+    if (label_len == 0 && ch == '-') {
+      return false;
+    }
+    label_len += 1;
+  }
+  if (label_len == 0 || host[len - 1] == '-') {
+    return false;
+  }
+  return true;
+}
+
 static int sec4_rt_extract_outbound_http_body(
     const char *response,
     size_t total,
@@ -2914,7 +2951,8 @@ static bool sec4_rt_redirect_url_passes_scope(const char *url, sec4_rt_net_scope
 typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_OK = 0,
   SEC4_RT_REDIRECT_RESOLVE_INVALID = 1,
-  SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID = 2
+  SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID = 2,
+  SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID = 3
 } sec4_rt_redirect_resolve_status;
 
 static sec4_rt_redirect_resolve_status sec4_rt_normalize_redirect_path(
@@ -3169,8 +3207,43 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
       )) {
     return SEC4_RT_REDIRECT_RESOLVE_INVALID;
   }
-  return (parsed_http || parsed_https) ? SEC4_RT_REDIRECT_RESOLVE_OK
-                                       : SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  if (!(parsed_http || parsed_https)) {
+    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  }
+  if (!sec4_rt_is_redirect_host_token_valid(parsed_host)) {
+    return SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID;
+  }
+
+  for (char *cursor = parsed_host; *cursor != '\0'; cursor++) {
+    *cursor = (char) tolower((unsigned char) *cursor);
+  }
+
+  const char *scheme = parsed_https ? "https" : "http";
+  bool default_port = (parsed_https && parsed_port == 443) || (parsed_http && parsed_port == 80);
+  int written = default_port
+      ? snprintf(
+            resolved_url,
+            resolved_url_size,
+            "%s://%s%.*s",
+            scheme,
+            parsed_host,
+            (int) parsed_target_len,
+            parsed_target
+        )
+      : snprintf(
+            resolved_url,
+            resolved_url_size,
+            "%s://%s:%u%.*s",
+            scheme,
+            parsed_host,
+            (unsigned int) parsed_port,
+            (int) parsed_target_len,
+            parsed_target
+        );
+  if (written <= 0 || (size_t) written >= resolved_url_size) {
+    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+  }
+  return SEC4_RT_REDIRECT_RESOLVE_OK;
 }
 
 static int64_t sec4_rt_outbound_http_get_handle(
@@ -3384,6 +3457,15 @@ static int64_t sec4_rt_outbound_http_get_handle(
               "NET.REDIRECT_TARGET_INVALID",
               "validation",
               "outbound redirect relative target is invalid"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_HOST_INVALID",
+              "validation",
+              "outbound redirect host token is invalid"
           );
           return 0;
         }

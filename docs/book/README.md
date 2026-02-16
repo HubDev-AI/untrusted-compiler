@@ -604,5 +604,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `632-m38-outbound-http-header-controlchar-section-diagnostics.md`
 - `633-m38-outbound-http-content-type-token-diagnostics.md`
 - `634-m38-outbound-http-redirect-target-normalization-diagnostics.md`
+- `635-m38-outbound-http-redirect-authority-host-token-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.
