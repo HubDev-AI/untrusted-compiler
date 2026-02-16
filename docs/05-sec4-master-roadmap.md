@@ -2617,6 +2617,26 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S119 HTTP policy-vs-CLI precedence hardening acceptance criteria
+
+- `sec4 run` keeps policy-driven HTTP ingress defaults active when CLI override flags are absent.
+- CLI flags deterministically override policy-provided HTTP ingress values:
+  - `--max-body-bytes`
+  - `--serve-timeout-ms`
+- Run-command integration coverage locks both precedence branches (policy-default path and CLI-override path).
+
+### M38-S119 tracking (live status)
+
+- [x] Added run-command e2e coverage for CLI override precedence over policy body limit:
+  - `run_command_oneshot_cli_max_body_bytes_overrides_policy_limit`
+- [x] Added run-command e2e coverage for CLI timeout override precedence over policy timeout:
+  - `run_command_oneshot_cli_serve_timeout_overrides_policy_timeout`
+- [x] Revalidated command runtime bridge behavior:
+  - `cargo test -p sec4 --test commands run_command_oneshot_cli_max_body_bytes_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_oneshot_cli_serve_timeout_overrides_policy_timeout`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7929,7 +7949,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S119 HTTP policy CLI-override precedence + timeout materialization hardening coverage.
+- M38-S120 HTTP ingress override input hardening (`--max-body-bytes` / `--serve-timeout-ms`) with deterministic non-zero validation diagnostics.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8021,9 +8041,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S119 scope for `http.default_timeout_ms` policy materialization assertions in `sec4 run` oneshot flow.
-2. Add explicit run-command coverage that CLI flags (`--max-body-bytes`, `--serve-timeout-ms`) deterministically override policy-provided HTTP ingress values.
-3. Publish M38-S119 book chapter and refresh roadmap live-status counts.
+1. Add M38-S120 scope for deterministic CLI validation diagnostics when `--max-body-bytes` or `--serve-timeout-ms` are set to `0`.
+2. Enforce non-zero override semantics in `sec4 run` before runtime launch so invalid override inputs fail fast with stable CLI diagnostics.
+3. Publish M38-S120 book chapter and refresh roadmap live-status counts.
 
 ---
 
