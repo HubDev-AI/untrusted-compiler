@@ -40,10 +40,15 @@ require_token() {
 
 require_regex() {
   local pattern="$1"
-  if ! rg -q -- "${pattern}" "${workflow_path}"; then
-    echo "missing workflow contract pattern '${pattern}' in ${workflow_path}" >&2
-    exit 1
+  if command -v rg >/dev/null 2>&1; then
+    if rg -q -- "${pattern}" "${workflow_path}"; then
+      return 0
+    fi
+  elif grep -q -E -- "${pattern}" "${workflow_path}"; then
+    return 0
   fi
+  echo "missing workflow contract pattern '${pattern}' in ${workflow_path}" >&2
+  exit 1
 }
 
 require_regex '^[[:space:]]*pull_request:[[:space:]]*$'
