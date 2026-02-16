@@ -299,6 +299,24 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added conflicting-framing harness helper + test:
   - `c_bin_runtime_internal_get_conflicting_framing_headers_returns_deterministic_code_when_clang_available`.
 - [x] Revalidated chunked success, redirect allow path, and c-backend emit contract.
+
+### M38-S6 outbound HTTP parser token/status strictness diagnostics acceptance criteria
+
+- Runtime rejects invalid HTTP status-line shape with deterministic `NET.STATUS_LINE_INVALID`.
+- Runtime rejects invalid transfer-encoding token ordering with deterministic `NET.TRANSFER_ENCODING_INVALID`.
+- Existing chunked decode and redirect runtime behavior stays green after strictness checks.
+
+### M38-S6 tracking (live status)
+
+- [x] Runtime status-line parser now enforces `HTTP/1.0` / `HTTP/1.1` prefix and strict 3-digit status parsing.
+- [x] Runtime transfer-encoding parser now rejects token payload after `chunked`.
+- [x] Outbound read error mapping now emits:
+  - `NET.STATUS_LINE_INVALID`
+  - `NET.TRANSFER_ENCODING_INVALID`
+- [x] Added strictness harness helpers + tests:
+  - `c_bin_runtime_internal_get_invalid_status_line_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_invalid_transfer_encoding_returns_deterministic_code_when_clang_available`
+- [x] Revalidated chunked success path, redirect allow path, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5609,7 +5627,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S6 outbound HTTP parser hardening follow-up (status-line and framing-token strictness diagnostics).
+- M38-S7 outbound HTTP response parser hardening follow-up (response-version and header-line normalization diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5701,9 +5719,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S6 scope for status-line and framing-token strictness diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing-conflict subset) after M38-S6 edits.
-3. Publish M38-S6 book chapter and refresh roadmap live-status counts.
+1. Add M38-S7 scope for response-version and header-line normalization diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line subset) after M38-S7 edits.
+3. Publish M38-S7 book chapter and refresh roadmap live-status counts.
 
 ---
 

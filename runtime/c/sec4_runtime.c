@@ -1875,6 +1875,10 @@ static int sec4_rt_extract_outbound_http_body(
   if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
     return -3;
   }
+  if ((strncmp(response, "HTTP/1.1", 8) != 0 && strncmp(response, "HTTP/1.0", 8) != 0)
+      || response[8] != ' ') {
+    return -11;
+  }
 
   const char *status_line_end = strstr(response, "\r\n");
   if (status_line_end == NULL) {
@@ -1895,8 +1899,8 @@ static int sec4_rt_extract_outbound_http_body(
     status_cursor += 1;
     status_digits += 1;
   }
-  if (status_digits != 3) {
-    return -3;
+  if (status_digits != 3 || (status_cursor < status_line_end && *status_cursor != ' ')) {
+    return -11;
   }
   if (status_code != NULL) {
     *status_code = parsed_status;
@@ -1920,6 +1924,7 @@ static int sec4_rt_extract_outbound_http_body(
 
   const char *header_cursor = status_line_end + 2;
   bool has_transfer_encoding = false;
+  bool transfer_chunked_seen = false;
   bool transfer_chunked = false;
   bool has_content_length = false;
   size_t content_length = 0;
@@ -1966,9 +1971,15 @@ static int sec4_rt_extract_outbound_http_body(
           token_end -= 1;
         }
         size_t token_len = (size_t) (token_end - token_start);
+        if (token_len == 0) {
+          return -10;
+        }
+        if (transfer_chunked_seen) {
+          return -10;
+        }
         if (token_len == 7 && strncasecmp(token_start, "chunked", 7) == 0) {
           transfer_chunked = true;
-          break;
+          transfer_chunked_seen = true;
         }
         while (value_start < line_end && *value_start != ',') {
           value_start += 1;
@@ -2546,6 +2557,24 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.RESPONSE_FRAMING_CONFLICT",
         "validation",
         "outbound http response contains conflicting framing headers"
+    );
+    return true;
+  }
+  if (read_status == -10) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TRANSFER_ENCODING_INVALID",
+        "validation",
+        "outbound http transfer-encoding is invalid"
+    );
+    return true;
+  }
+  if (read_status == -11) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.STATUS_LINE_INVALID",
+        "validation",
+        "outbound http status line is invalid"
     );
     return true;
   }
