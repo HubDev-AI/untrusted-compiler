@@ -892,6 +892,27 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Revalidated IPv6-literal transport and c-backend contract:
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_ipv6_loopback_roundtrip_when_supported_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S42 outbound HTTP URL-gate diagnostic propagation hardening acceptance criteria
+
+- `httpClient.get(...)` preserves detailed URL gate diagnostics from `url.public(...)` validation failures.
+- `httpClient.getInternal(...)` preserves detailed URL gate diagnostics from `url.internal(...)` validation failures.
+- Generic sink diagnostics are only emitted when no detailed gate diagnostic is active.
+
+### M38-S42 tracking (live status)
+
+- [x] Updated `sec4_rt_http_get` to preserve active `url.public(...)` diagnostics instead of always overwriting with generic `NET.URL_PUBLIC_INVALID`.
+- [x] Updated `sec4_rt_http_get_internal` to preserve active `url.internal(...)` diagnostics instead of always overwriting with generic `NET.URL_INTERNAL_INVALID`.
+- [x] Added runtime harness coverage:
+  - `c_bin_runtime_internal_get_ipv6_url_gate_diagnostics_when_clang_available`
+  validating propagation for:
+  - `NET.URL_INTERNAL_IPV6_BRACKET_MISSING`
+  - `NET.URL_INTERNAL_IPV6_EMPTY_LITERAL`
+  - `NET.URL_INTERNAL_IPV6_LITERAL_INVALID`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_ipv6_loopback_roundtrip_when_supported_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_ipv6_literal_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6202,7 +6223,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S42 outbound HTTP GET IPv6-literal malformed-request diagnostics hardening (`NET.REQUEST_INVALID` split for parser invalid classes in net request path).
+- M38-S43 outbound HTTP request-parser IPv6 malformed diagnostics hardening (`http_get*` parse-failure code split with dedicated harness assertions).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6294,9 +6315,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S42 scope for field-specific malformed IPv6-literal diagnostics in `sec4_rt_http_get*` request parser path.
-2. Extend runtime harness to assert deterministic split codes/details for malformed bracketed request URLs without regressing valid IPv6 loopback roundtrip.
-3. Publish M38-S42 book chapter and refresh roadmap live-status counts.
+1. Add M38-S43 scope for deterministic split diagnostics in `sec4_rt_http_get*` request parser failures (missing bracket / empty literal / invalid literal).
+2. Extend runtime harness with redirect/request-path malformed IPv6 parser cases to exercise `NET.REQUEST_*` split codes.
+3. Publish M38-S43 book chapter and refresh roadmap live-status counts.
 
 ---
 

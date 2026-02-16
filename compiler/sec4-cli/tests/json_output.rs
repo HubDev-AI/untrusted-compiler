@@ -8657,7 +8657,8 @@ int main(void) {
           &target_start,
           &target_len,
           &is_http,
-          &is_https)) { return 11; }
+          &is_https,
+          NULL)) { return 11; }
   if (strcmp(host, "fd00::1") != 0) { return 12; }
   if (port != 8080) { return 13; }
   if (!is_http || is_https) { return 14; }
@@ -8672,7 +8673,8 @@ int main(void) {
           &target_start,
           &target_len,
           &is_http,
-          &is_https)) { return 17; }
+          &is_https,
+          NULL)) { return 17; }
 
   if (sec4_rt_parse_outbound_http_url(
           "http://[]/health",
@@ -8682,7 +8684,8 @@ int main(void) {
           &target_start,
           &target_len,
           &is_http,
-          &is_https)) { return 18; }
+          &is_https,
+          NULL)) { return 18; }
 
   return 0;
 }
@@ -9418,6 +9421,74 @@ int main(void) {
     server_handle
         .join()
         .expect("runtime internal-net ipv6 roundtrip server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_ipv6_url_gate_diagnostics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net ipv6 request diagnostics test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-ipv6-request-diagnostics");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-ipv6-request-diagnostics");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  setenv("SEC4_RT_ALLOW_INTERNAL_NET", "1", 1);
+
+  sec4_rt_reset_response();
+  if (sec4_rt_http_get_internal(1, sec4_rt_req_query("http://[fd00::1/path")) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_BRACKET_MISSING\"") == NULL) { return 12; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_http_get_internal(1, sec4_rt_req_query("http://[]/path")) != 0) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_EMPTY_LITERAL\"") == NULL) { return 14; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_http_get_internal(1, sec4_rt_req_query("http://[zzzz::1]/path")) != 0) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_IPV6_LITERAL_INVALID\"") == NULL) { return 16; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net ipv6 request diagnostics harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net ipv6 request diagnostics harness should exit successfully"
+    );
 }
 
 #[test]
