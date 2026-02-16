@@ -2028,6 +2028,26 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S89 CORS preflight requested-headers enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling validates `Access-Control-Request-Headers` tokens against configured CORS allow-headers policy.
+- Preflight requests containing disallowed/invalid requested headers deterministically return `403` with explicit rejection diagnostics.
+- Allowed requested-header preflight behavior remains `204` with normal CORS preflight headers.
+
+### M38-S89 tracking (live status)
+
+- [x] Added runtime requested-headers membership validation for CORS preflight path.
+- [x] Added deterministic rejection response for disallowed requested headers (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight requested-headers e2e coverage:
+  - `c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_with_auth_and_csrf_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

@@ -681,5 +681,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `709-m38-cors-wildcard-credentials-runtime-guard.md`
 - `710-m38-cors-allow-origin-token-shape-validation.md`
 - `711-m38-cors-preflight-requested-method-enforcement.md`
+- `712-m38-cors-preflight-requested-headers-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

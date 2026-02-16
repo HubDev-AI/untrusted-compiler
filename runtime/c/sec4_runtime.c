@@ -6595,6 +6595,50 @@ static const char *sec4_rt_preflight_headers_block(
   return buffer;
 }
 
+static bool sec4_rt_cors_requested_headers_allowed(
+    const char *requested_headers,
+    const char *allow_headers
+) {
+  if (requested_headers == NULL || requested_headers[0] == '\0') {
+    return true;
+  }
+  if (allow_headers == NULL || allow_headers[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = requested_headers;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= 128) {
+      return false;
+    }
+    char token[128];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_header_name_valid(token)) {
+      return false;
+    }
+    if (!sec4_rt_csv_contains_token_ci(allow_headers, token, token_len)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
 static const char *sec4_rt_security_headers_block(
     sec4_rt_router_state *router,
     char *buffer,
@@ -6971,6 +7015,38 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
             strlen(requested_method)
         )) {
       const char *body = "cors preflight method not allowed";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          403,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
+    char requested_headers[256];
+    bool has_requested_headers = sec4_rt_extract_request_header(
+        "Access-Control-Request-Headers",
+        requested_headers,
+        sizeof(requested_headers)
+    );
+    const char *allow_headers = router->cors_allow_headers[0] != '\0'
+        ? router->cors_allow_headers
+        : "content-type, authorization";
+    if (has_requested_headers
+        && !sec4_rt_cors_requested_headers_allowed(
+            requested_headers,
+            allow_headers
+        )) {
+      const char *body = "cors preflight headers not allowed";
       const char *final_headers = sec4_rt_merge_three_headers(
           NULL,
           cors_headers,
