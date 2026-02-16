@@ -8677,6 +8677,18 @@ int main(void) {{
             && response.contains("\"traceId\":\"rt-1\""),
         "response should include deterministic INTERNAL.ERROR envelope payload"
     );
+    let body = response
+        .split("\r\n\r\n")
+        .nth(1)
+        .expect("http response should include body");
+    let parsed: serde_json::Value =
+        serde_json::from_str(body).expect("error response body should be valid json");
+    let time_ms = parsed
+        .get("error")
+        .and_then(|error| error.get("timeMs"))
+        .and_then(serde_json::Value::as_i64)
+        .expect("error.timeMs should be present");
+    assert!(time_ms > 0, "error.timeMs should be non-zero: {body}");
 }
 
 #[test]

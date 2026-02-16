@@ -349,23 +349,25 @@ static void sec4_rt_store_std_error_response(
     const char *kind,
     const char *message
 ) {
+  int64_t now_ms = sec4_rt_time_now();
   char payload[768];
   int written = snprintf(
       payload,
       sizeof(payload),
-      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0}}",
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld}}",
       code != NULL ? code : "INTERNAL.ERROR",
       kind != NULL ? kind : "internal",
       message != NULL ? message : "internal error",
       (long long) status,
-      sec4_rt_current_trace_id()
+      sec4_rt_current_trace_id(),
+      (long long) now_ms
   );
 
   if (written <= 0 || (size_t) written >= sizeof(payload)) {
     sec4_rt_store_response(
         status,
         "application/json; charset=utf-8",
-        "{\"error\":{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"error\",\"status\":500,\"traceId\":\"rt-0\",\"timeMs\":0}}"
+        "{\"error\":{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"error\",\"status\":500,\"traceId\":\"rt-0\",\"timeMs\":1}}"
     );
     return;
   }
@@ -378,6 +380,7 @@ static void sec4_rt_store_std_success_response(
     const char *data_json,
     const char *meta_json
 ) {
+  int64_t now_ms = sec4_rt_time_now();
   char payload[768];
   if (data_json == NULL || data_json[0] == '\0') {
     data_json = "{}";
@@ -391,9 +394,10 @@ static void sec4_rt_store_std_success_response(
     written = snprintf(
         payload,
         sizeof(payload),
-        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":%s,\"meta\":%s}",
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld,\"data\":%s,\"meta\":%s}",
         (long long) status,
         sec4_rt_current_trace_id(),
+        (long long) now_ms,
         data_json,
         meta_json
     );
@@ -401,9 +405,10 @@ static void sec4_rt_store_std_success_response(
     written = snprintf(
         payload,
         sizeof(payload),
-        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":%s}",
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld,\"data\":%s}",
         (long long) status,
         sec4_rt_current_trace_id(),
+        (long long) now_ms,
         data_json
     );
   }
@@ -824,12 +829,13 @@ static void sec4_rt_error_render_json(
   int written = snprintf(
       buffer,
       buffer_size,
-      "{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0%s%s%s%s%s}",
+      "{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld%s%s%s%s%s}",
       code,
       kind,
       message,
       (long long) state->status,
       trace_id,
+      (long long) sec4_rt_time_now(),
       path_segment,
       details_segment,
       limit_segment,
@@ -839,7 +845,7 @@ static void sec4_rt_error_render_json(
   if (written <= 0 || (size_t) written >= buffer_size) {
     strncpy(
         buffer,
-        "{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"internal error\",\"status\":500,\"traceId\":\"rt-0\",\"timeMs\":0}",
+        "{\"code\":\"INTERNAL.ERROR\",\"kind\":\"internal\",\"message\":\"internal error\",\"status\":500,\"traceId\":\"rt-0\",\"timeMs\":1}",
         buffer_size - 1
     );
     buffer[buffer_size - 1] = '\0';
