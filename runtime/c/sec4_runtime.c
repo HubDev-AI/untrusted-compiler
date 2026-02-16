@@ -5900,6 +5900,28 @@ static bool sec4_rt_has_json_media_type(const char *value, size_t value_len) {
   return false;
 }
 
+static bool sec4_rt_has_multipart_media_type(const char *value, size_t value_len) {
+  size_t start = 0;
+  while (start < value_len && isspace((unsigned char) value[start])) {
+    start += 1;
+  }
+  if (start >= value_len) {
+    return false;
+  }
+
+  size_t end = start;
+  while (end < value_len && value[end] != ';' && !isspace((unsigned char) value[end])) {
+    end += 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  size_t token_len = end - start;
+  const char *token = value + start;
+  return token_len == 19 && strncasecmp(token, "multipart/form-data", 19) == 0;
+}
+
 static bool sec4_rt_parse_content_type_is_json(
     const char *request,
     size_t request_len,
@@ -5922,6 +5944,30 @@ static bool sec4_rt_parse_content_type_is_json(
       const char *value = cursor + 13;
       *has_content_type = true;
       return sec4_rt_has_json_media_type(value, (size_t) (line_end - value));
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return false;
+}
+
+static bool sec4_rt_parse_content_type_is_multipart(const char *request, size_t request_len) {
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) >= 13 && strncasecmp(cursor, "Content-Type:", 13) == 0) {
+      const char *value = cursor + 13;
+      return sec4_rt_has_multipart_media_type(value, (size_t) (line_end - value));
     }
 
     cursor = line_end + 2;
@@ -6347,6 +6393,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Conflict";
     case 429:
       return "Too Many Requests";
+    case 431:
+      return "Request Header Fields Too Large";
     case 501:
       return "Not Implemented";
     case 502:
@@ -6883,6 +6931,19 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
   return (int64_t) value;
 }
 
+static size_t sec4_rt_http_max_header_bytes_limit(void) {
+  size_t fallback = SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_HTTP_MAX_HEADER_BYTES", (int64_t) fallback);
+  if (parsed <= 0) {
+    return fallback;
+  }
+  size_t limit = (size_t) parsed;
+  if (limit > SEC4_RT_REQUEST_BUFFER_BYTES - 1) {
+    return SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  }
+  return limit;
+}
+
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
   if (out_value == NULL) {
     return false;
@@ -6986,6 +7047,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
+  size_t header_cap = sec4_rt_http_max_header_bytes_limit();
   ssize_t bytes_read = recv(socket_fd, request, sizeof(request) - 1, 0);
   if (bytes_read <= 0) {
     return;
@@ -6994,22 +7056,71 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   request[total_bytes] = '\0';
 
   char *headers_end = strstr(request, "\r\n\r\n");
-  size_t headers_len = 0;
-  if (headers_end != NULL) {
-    headers_len = (size_t) (headers_end - request) + 4;
-    size_t content_length = sec4_rt_parse_content_length(request, headers_len);
-    size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
-
-    while (content_length > available_body && total_bytes < sizeof(request) - 1) {
-      size_t remaining = (sizeof(request) - 1) - total_bytes;
-      ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
-      if (next <= 0) {
-        break;
-      }
-      total_bytes += (size_t) next;
-      request[total_bytes] = '\0';
-      available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (headers_end == NULL && total_bytes < header_cap && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
     }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    headers_end = strstr(request, "\r\n\r\n");
+  }
+
+  if (headers_end == NULL) {
+    bool too_large = total_bytes >= header_cap || total_bytes >= sizeof(request) - 1;
+    const char *body = too_large ? "request headers too large" : "bad request";
+    int64_t status = too_large ? 431 : 400;
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        status,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t headers_len = (size_t) (headers_end - request) + 4;
+  if (headers_len > header_cap) {
+    const char *body = "request headers too large";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        431,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+  size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (content_length > available_body && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
+    }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
   }
 
   char method[8] = {0};
@@ -7053,6 +7164,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
         headers_len,
         &has_content_type
     );
+    bool content_type_is_multipart = sec4_rt_parse_content_type_is_multipart(request, headers_len);
     size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
     size_t body_cap = sizeof(g_sec4_rt_request.body) - 1;
     int64_t configured_body_cap = sec4_rt_parse_env_i64(
@@ -7061,6 +7173,34 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
     );
     if (configured_body_cap > 0 && (size_t) configured_body_cap < body_cap) {
       body_cap = (size_t) configured_body_cap;
+    }
+    size_t multipart_cap = body_cap;
+    int64_t configured_multipart_cap = sec4_rt_parse_env_i64(
+        "SEC4_RT_HTTP_MAX_MULTIPART_BYTES",
+        (int64_t) body_cap
+    );
+    if (configured_multipart_cap > 0 && (size_t) configured_multipart_cap < multipart_cap) {
+      multipart_cap = (size_t) configured_multipart_cap;
+    }
+    if (content_type_is_multipart
+        && (content_length > multipart_cap || available_body > multipart_cap)) {
+      const char *body = "multipart payload exceeds runtime limit";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          413,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
     }
     if (content_length > body_cap || available_body > body_cap) {
       g_sec4_rt_request.body_limit_exceeded = true;

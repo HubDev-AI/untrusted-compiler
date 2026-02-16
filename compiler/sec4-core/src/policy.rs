@@ -103,6 +103,8 @@ pub struct JsonPolicyConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
+    pub max_header_bytes: i64,
+    pub max_multipart_bytes: i64,
     pub default_timeout_ms: i64,
 }
 
@@ -263,6 +265,8 @@ impl Default for Policy {
             },
             http: HttpPolicyConfig {
                 max_body_bytes: 4_096,
+                max_header_bytes: 8_191,
+                max_multipart_bytes: 4_096,
                 default_timeout_ms: 200,
             },
             net_public: NetPublicPolicyConfig {
@@ -849,6 +853,36 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_body_bytes = max_body_bytes;
+            }
+        }
+
+        if let Some(max_header_bytes) = section.max_header_bytes {
+            if max_header_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_header_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_header_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_header_bytes = max_header_bytes;
+            }
+        }
+
+        if let Some(max_multipart_bytes) = section.max_multipart_bytes {
+            if max_multipart_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_multipart_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_multipart_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_multipart_bytes = max_multipart_bytes;
             }
         }
 
