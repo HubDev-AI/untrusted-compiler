@@ -30,7 +30,7 @@ This slice ensures malformed redirect policy values fail closed with explicit di
 
 ## Validation
 
-- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
+- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_redirect_resolver_allows_https_to_http_downgrade_when_enabled_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_scheme_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`

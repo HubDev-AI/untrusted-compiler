@@ -23,7 +23,7 @@ Field-specific error codes help, but machine-friendly debugging and alert routin
 
 ## Validation
 
-- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
+- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_max_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_revalidate_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_allow_downgrade_policy_invalid_returns_deterministic_code_when_clang_available`

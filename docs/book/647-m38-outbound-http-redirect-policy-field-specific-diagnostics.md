@@ -26,7 +26,7 @@ Field-specific codes provide better operator/actionability and deterministic tri
 
 ## Validation
 
-- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
+- `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_max_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_cap_limit_returns_deterministic_code_when_clang_available`
 - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`

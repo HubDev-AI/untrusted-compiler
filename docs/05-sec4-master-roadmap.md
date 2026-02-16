@@ -577,7 +577,7 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added strict redirect-policy env parsers for bool and bounded non-negative integer values.
 - [x] Redirect flow now emits deterministic `NET.REDIRECT_POLICY_INVALID` for invalid redirect policy env values.
 - [x] Added invalid-policy harness test:
-  - `c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated configurable downgrade and invalid-scheme diagnostics plus c-backend emit contract.
 
 ### M38-S25 outbound HTTP redirect hop-budget diagnostics hardening acceptance criteria

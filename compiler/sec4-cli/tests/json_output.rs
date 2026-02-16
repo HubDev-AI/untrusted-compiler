@@ -11258,7 +11258,7 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available(
+fn c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available(
 ) {
     if !clang_available() {
         eprintln!("skipping c-bin runtime redirect policy-invalid test: clang not available");
