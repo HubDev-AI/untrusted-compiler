@@ -98,6 +98,66 @@ if [ -z "${trend_note_path}" ]; then
   trend_note_path="${repo_root}/docs/book/322-m13-first-trend-run-results-note.md"
 fi
 
+# GitHub runner images used by some smoke workflows may not have ripgrep installed.
+# Provide a minimal `rg` compatibility shim for the option subset this script uses.
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    local use_fixed=0
+    local quiet=0
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -F)
+          use_fixed=1
+          shift
+          ;;
+        -q)
+          quiet=1
+          shift
+          ;;
+        -Fq|-qF)
+          use_fixed=1
+          quiet=1
+          shift
+          ;;
+        --)
+          shift
+          break
+          ;;
+        -*)
+          # This script only relies on -q/-F plus optional `--`.
+          if [[ "$1" == *F* ]]; then
+            use_fixed=1
+          fi
+          if [[ "$1" == *q* ]]; then
+            quiet=1
+          fi
+          shift
+          ;;
+        *)
+          break
+          ;;
+      esac
+    done
+
+    local pattern="${1:-}"
+    if [ "$#" -gt 0 ]; then
+      shift
+    fi
+
+    local grep_cmd=(grep)
+    if [ "$use_fixed" = "1" ]; then
+      grep_cmd+=(-F)
+    else
+      grep_cmd+=(-E)
+    fi
+    if [ "$quiet" = "1" ]; then
+      grep_cmd+=(-q)
+    fi
+
+    "${grep_cmd[@]}" -- "${pattern}" "$@"
+  }
+fi
+
 status_for() {
   if [ "$1" = "1" ]; then
     echo "PASS"
