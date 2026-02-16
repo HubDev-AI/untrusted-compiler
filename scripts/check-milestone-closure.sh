@@ -1505,7 +1505,7 @@ if [ -f "${matrix_path}" ]; then
     .endpoints as $eps
     | ($eps | type == "array")
     and ($eps | length > 0)
-    and all($eps[]; [ .compared[]?.impl ] as $impls
+    and all($eps[]; [ (.compared // [])[].impl ] as $impls
       | ($impls | index("sec4") != null)
       and ($impls | index("go") != null)
       and ($impls | index("node") != null)

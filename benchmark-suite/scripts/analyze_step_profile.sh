@@ -39,7 +39,7 @@ jq -n \
     )
   })) as $rows
   | ($rows | map(.achievedRatio)) as $ratios
-  | ($rows | map(.p99 | tostring | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // "0" | tonumber)) as $p99vals
+  | ($rows | map(.p99 | tostring | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null) // "0" | tonumber)) as $p99vals
   | ($rows | map(select(.achievedRatio < $threshold)) | .[0] // null) as $knee
   | {
       version: "0.1",

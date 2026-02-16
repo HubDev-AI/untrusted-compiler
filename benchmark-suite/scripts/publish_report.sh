@@ -149,7 +149,7 @@ fi
   else
     jq -r '
       def p99num:
-        ((.p99 // "") | tostring | capture("(?<n>[0-9]+(\\.[0-9]+)?)")?.n // "0" | tonumber);
+        ((.p99 // "") | tostring | (try capture("(?<n>[0-9]+(\\.[0-9]+)?)").n catch null) // "0" | tonumber);
       .endpoints[]
       | .endpoint as $ep
       | (.compared | map(p99num)) as $vals
