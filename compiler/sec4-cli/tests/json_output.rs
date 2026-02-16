@@ -644,6 +644,111 @@ fn spawn_one_shot_http_invalid_transfer_encoding_server() -> (u16, thread::JoinH
     (port, handle)
 }
 
+fn spawn_one_shot_http_unsupported_version_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("unsupported version oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("unsupported version oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("unsupported version oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("unsupported version oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("unsupported version oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("unsupported version oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/2.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\nConnection: close\r\n\r\ntest",
+            )
+            .expect("unsupported version oneshot server response should write");
+        stream
+            .flush()
+            .expect("unsupported version oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
+fn spawn_one_shot_http_invalid_header_line_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("invalid header-line oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("invalid header-line oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("invalid header-line oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("invalid header-line oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("invalid header-line oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("invalid header-line oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        // Missing colon in header line -> invalid parser input.
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nX-Bad-Header value\r\nContent-Length: 4\r\nConnection: close\r\n\r\ntest",
+            )
+            .expect("invalid header-line oneshot server response should write");
+        stream
+            .flush()
+            .expect("invalid header-line oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_server_with_response_delay(
     body: &str,
     delay: Duration,
@@ -8076,6 +8181,148 @@ int main(void) {
     server_handle
         .join()
         .expect("runtime invalid transfer-encoding server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_unsupported_version_returns_deterministic_code_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime unsupported-version test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-unsupported-version");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-unsupported-version");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.RESPONSE_VERSION_UNSUPPORTED\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for unsupported-version harness");
+    assert!(
+        output.status.success(),
+        "runtime unsupported-version harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_unsupported_version_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-unsupported-version");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime unsupported-version harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime unsupported-version server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_invalid_header_line_returns_deterministic_code_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime invalid header-line test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-invalid-header-line");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-invalid-header-line");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.HEADER_LINE_INVALID\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for invalid header-line harness");
+    assert!(
+        output.status.success(),
+        "runtime invalid header-line harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_invalid_header_line_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-invalid-header-line");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime invalid header-line harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime invalid header-line server should exit cleanly");
 }
 
 #[test]

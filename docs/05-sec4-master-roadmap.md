@@ -317,6 +317,21 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_invalid_status_line_returns_deterministic_code_when_clang_available`
   - `c_bin_runtime_internal_get_invalid_transfer_encoding_returns_deterministic_code_when_clang_available`
 - [x] Revalidated chunked success path, redirect allow path, and c-backend emit contract.
+
+### M38-S7 outbound HTTP response-version/header-line diagnostics hardening acceptance criteria
+
+- Unsupported outbound response HTTP versions are rejected deterministically with `NET.RESPONSE_VERSION_UNSUPPORTED`.
+- Malformed outbound response header lines are rejected deterministically with `NET.HEADER_LINE_INVALID`.
+- Existing status-line/transfer-encoding strictness and chunked/redirect runtime paths remain green.
+
+### M38-S7 tracking (live status)
+
+- [x] Runtime outbound parser now emits `NET.RESPONSE_VERSION_UNSUPPORTED` for non-`HTTP/1.0|1.1` response prefixes.
+- [x] Runtime header-line validation now rejects invalid header shape/name tokens and maps to `NET.HEADER_LINE_INVALID`.
+- [x] Added strictness harness helpers + tests:
+  - `c_bin_runtime_internal_get_unsupported_version_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_invalid_header_line_returns_deterministic_code_when_clang_available`
+- [x] Revalidated existing `NET.STATUS_LINE_INVALID` + `NET.TRANSFER_ENCODING_INVALID` paths and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5627,7 +5642,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S7 outbound HTTP response parser hardening follow-up (response-version and header-line normalization diagnostics).
+- M38-S8 outbound HTTP parser hardening follow-up (duplicate-header normalization and deterministic retryability diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5719,9 +5734,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S7 scope for response-version and header-line normalization diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line subset) after M38-S7 edits.
-3. Publish M38-S7 book chapter and refresh roadmap live-status counts.
+1. Add M38-S8 scope for duplicate-header normalization and deterministic retryability diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line subset) after M38-S8 edits.
+3. Publish M38-S8 book chapter and refresh roadmap live-status counts.
 
 ---
 

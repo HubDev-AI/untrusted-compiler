@@ -1851,6 +1851,32 @@ static int sec4_rt_open_outbound_tcp_socket(
   return socket_fd;
 }
 
+static bool sec4_rt_is_http_header_name_char(unsigned char ch) {
+  if (isalnum(ch)) {
+    return true;
+  }
+  switch (ch) {
+    case '!':
+    case '#':
+    case '$':
+    case '%':
+    case '&':
+    case '\'':
+    case '*':
+    case '+':
+    case '-':
+    case '.':
+    case '^':
+    case '_':
+    case '`':
+    case '|':
+    case '~':
+      return true;
+    default:
+      return false;
+  }
+}
+
 static int sec4_rt_extract_outbound_http_body(
     const char *response,
     size_t total,
@@ -1875,8 +1901,10 @@ static int sec4_rt_extract_outbound_http_body(
   if (total < 12 || strncmp(response, "HTTP/", 5) != 0) {
     return -3;
   }
-  if ((strncmp(response, "HTTP/1.1", 8) != 0 && strncmp(response, "HTTP/1.0", 8) != 0)
-      || response[8] != ' ') {
+  if (strncmp(response, "HTTP/1.1", 8) != 0 && strncmp(response, "HTTP/1.0", 8) != 0) {
+    return -12;
+  }
+  if (response[8] != ' ') {
     return -11;
   }
 
@@ -1935,6 +1963,19 @@ static int sec4_rt_extract_outbound_http_body(
     }
     if (line_end == header_cursor) {
       break;
+    }
+    size_t header_line_len = (size_t) (line_end - header_cursor);
+    if (header_cursor[0] == ' ' || header_cursor[0] == '\t') {
+      return -13;
+    }
+    const char *header_colon = memchr(header_cursor, ':', header_line_len);
+    if (header_colon == NULL || header_colon == header_cursor) {
+      return -13;
+    }
+    for (const char *name_cursor = header_cursor; name_cursor < header_colon; name_cursor++) {
+      if (!sec4_rt_is_http_header_name_char((unsigned char) *name_cursor)) {
+        return -13;
+      }
     }
 
     if ((size_t) (line_end - header_cursor) >= 9
@@ -2575,6 +2616,24 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.STATUS_LINE_INVALID",
         "validation",
         "outbound http status line is invalid"
+    );
+    return true;
+  }
+  if (read_status == -12) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_VERSION_UNSUPPORTED",
+        "validation",
+        "outbound http response version is unsupported"
+    );
+    return true;
+  }
+  if (read_status == -13) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.HEADER_LINE_INVALID",
+        "validation",
+        "outbound http response header line is invalid"
     );
     return true;
   }
