@@ -2448,6 +2448,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S112 CORS preflight private-network default-deny enforcement hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects `Access-Control-Request-Private-Network: true` by default (no implicit private-network opt-in).
+- Private-network preflight requests deterministically return `403` with explicit diagnostics.
+- Rejected private-network preflight responses do not emit preflight allow-methods header block.
+
+### M38-S112 tracking (live status)
+
+- [x] Added explicit default-deny branch for preflight `Access-Control-Request-Private-Network`.
+- [x] Added deterministic private-network default-deny response (`403` + fixed message body).
+- [x] Added HTTP runtime CORS preflight private-network default-deny e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_private_network_header_when_not_allowed`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_invalid_private_network_header`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

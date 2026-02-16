@@ -704,5 +704,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `732-m38-cors-preflight-private-network-header-value-validation.md`
 - `733-m38-cors-preflight-duplicate-private-network-header-rejection.md`
 - `734-m38-cors-non-preflight-duplicate-private-network-header-rejection.md`
+- `735-m38-cors-preflight-private-network-default-deny.md`
 
 As milestones progress, chapters will be added and linked from this index.
