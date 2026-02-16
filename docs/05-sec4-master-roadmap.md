@@ -2124,6 +2124,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S94 CORS preflight empty requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects explicitly empty `Access-Control-Request-Headers` values as malformed input.
+- Empty requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Non-empty requested-headers behavior remains split between `400` malformed-token and `403` disallowed-policy outcomes.
+
+### M38-S94 tracking (live status)
+
+- [x] Tightened runtime requested-headers validator to classify empty values as invalid tokens.
+- [x] Added deterministic empty requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight empty requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_headers_token_is_invalid`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

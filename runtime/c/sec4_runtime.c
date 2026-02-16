@@ -6617,8 +6617,14 @@ static bool sec4_rt_cors_requested_headers_allowed(
   if (invalid_token != NULL) {
     *invalid_token = false;
   }
-  if (requested_headers == NULL || requested_headers[0] == '\0') {
+  if (requested_headers == NULL) {
     return true;
+  }
+  if (requested_headers[0] == '\0') {
+    if (invalid_token != NULL) {
+      *invalid_token = true;
+    }
+    return false;
   }
   if (allow_headers == NULL || allow_headers[0] == '\0') {
     return false;
