@@ -86,6 +86,10 @@ typedef struct {
   char cors_allow_headers[128];
   int64_t cors_max_age_seconds;
   bool security_headers_enabled;
+  bool security_hsts_enabled;
+  int64_t security_hsts_max_age_seconds;
+  bool security_hsts_include_subdomains;
+  bool security_hsts_preload;
   bool security_x_content_type_options;
   char security_x_frame_options[16];
   char security_referrer_policy[128];
@@ -179,6 +183,10 @@ typedef struct {
 typedef struct {
   bool loaded;
   bool enabled;
+  bool hsts_enabled;
+  int64_t hsts_max_age_seconds;
+  bool hsts_include_subdomains;
+  bool hsts_preload;
   bool x_content_type_options;
   char x_frame_options[16];
   char referrer_policy[128];
@@ -6241,6 +6249,25 @@ static const char *sec4_rt_security_headers_block(
 
   size_t used = 0;
   int written = 0;
+  if (router->security_hsts_enabled && router->security_hsts_max_age_seconds > 0) {
+    const char *include_subdomains = router->security_hsts_include_subdomains
+        ? "; includeSubDomains"
+        : "";
+    const char *preload = router->security_hsts_preload ? "; preload" : "";
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Strict-Transport-Security: max-age=%lld%s%s\r\n",
+        (long long) router->security_hsts_max_age_seconds,
+        include_subdomains,
+        preload
+    );
+    if (written <= 0 || (size_t) written >= buffer_size - used) {
+      return used > 0 ? buffer : NULL;
+    }
+    used += (size_t) written;
+  }
+
   if (router->security_x_content_type_options) {
     written = snprintf(
         buffer + used,
@@ -9723,6 +9750,10 @@ static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *
     return;
   }
   slot->security_headers_enabled = true;
+  slot->security_hsts_enabled = false;
+  slot->security_hsts_max_age_seconds = 15552000;
+  slot->security_hsts_include_subdomains = true;
+  slot->security_hsts_preload = false;
   slot->security_x_content_type_options = true;
   strncpy(
       slot->security_x_frame_options,
@@ -9807,6 +9838,26 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
   g_sec4_rt_security_headers_policy.enabled = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_ENABLED",
       true
+  );
+  g_sec4_rt_security_headers_policy.hsts_enabled = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED",
+      false
+  );
+  g_sec4_rt_security_headers_policy.hsts_max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS",
+      15552000
+  );
+  if (g_sec4_rt_security_headers_policy.hsts_max_age_seconds <= 0) {
+    g_sec4_rt_security_headers_policy.hsts_max_age_seconds = 15552000;
+  }
+  g_sec4_rt_security_headers_policy.hsts_include_subdomains =
+      sec4_rt_env_flag_enabled_default(
+          "SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS",
+          true
+      );
+  g_sec4_rt_security_headers_policy.hsts_preload = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD",
+      false
   );
   g_sec4_rt_security_headers_policy.x_content_type_options = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
@@ -9945,6 +9996,10 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
   }
   if (cfg == 0) {
     slot->security_headers_enabled = false;
+    slot->security_hsts_enabled = false;
+    slot->security_hsts_max_age_seconds = 0;
+    slot->security_hsts_include_subdomains = false;
+    slot->security_hsts_preload = false;
     slot->security_csp_enabled = false;
     slot->security_csp_report_only = false;
     slot->security_csp_policy[0] = '\0';
@@ -9958,6 +10013,11 @@ int64_t sec4_rt_with_security_headers(int64_t router, int64_t cfg) {
     if (!slot->security_headers_enabled) {
       return router;
     }
+    slot->security_hsts_enabled = g_sec4_rt_security_headers_policy.hsts_enabled;
+    slot->security_hsts_max_age_seconds = g_sec4_rt_security_headers_policy.hsts_max_age_seconds;
+    slot->security_hsts_include_subdomains =
+        g_sec4_rt_security_headers_policy.hsts_include_subdomains;
+    slot->security_hsts_preload = g_sec4_rt_security_headers_policy.hsts_preload;
     slot->security_x_content_type_options = g_sec4_rt_security_headers_policy.x_content_type_options;
     strncpy(
         slot->security_x_frame_options,

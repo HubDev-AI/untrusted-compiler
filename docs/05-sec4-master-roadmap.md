@@ -1395,6 +1395,32 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S61 security-headers HSTS runtime materialization coverage acceptance criteria
+
+- Runtime security headers block includes deterministic HSTS emission when HSTS is enabled by policy.
+- Env policy controls materialize HSTS header value:
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD`
+- HSTS materialization does not regress existing security-header behavior (`nosniff`, `x-frame-options`, `referrer-policy`, `csp`).
+
+### M38-S61 tracking (live status)
+
+- [x] Extended runtime security-header policy/router state with HSTS fields:
+  - `hsts_enabled`
+  - `hsts_max_age_seconds`
+  - `hsts_include_subdomains`
+  - `hsts_preload`
+- [x] Added HSTS header emission in `sec4_rt_security_headers_block` with deterministic value rendering.
+- [x] Added env-policy loading/materialization for HSTS controls in runtime security-header path.
+- [x] Added HTTP runtime security-header HSTS e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6707,7 +6733,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S61 outbound HTTP internal-policy suffixed-token fallback coverage (suffixed token spellings should deterministically preserve deny-by-default behavior).
+- M38-S62 outbound HTTP internal-policy suffixed-token fallback coverage (suffixed token spellings should deterministically preserve deny-by-default behavior).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6799,9 +6825,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S61 scope for suffixed-token fallback behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
+1. Add M38-S62 scope for suffixed-token fallback behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
 2. Extend runtime harness with direct assertions that suffixed token spellings preserve deterministic deny-by-default behavior.
-3. Publish M38-S61 book chapter and refresh roadmap live-status counts.
+3. Publish M38-S62 book chapter and refresh roadmap live-status counts.
 
 ---
 
