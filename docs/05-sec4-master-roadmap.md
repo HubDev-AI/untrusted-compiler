@@ -1797,6 +1797,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S77 CORS enabled invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_ENABLED` env values deterministically fall back to default CORS-enabled behavior.
+- Invalid raw env values are never reflected as disabled CORS behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S77 tracking (live status)
+
+- [x] Added HTTP runtime CORS enabled fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves baseline `Access-Control-Allow-Origin` emission.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
