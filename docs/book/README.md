@@ -632,5 +632,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `660-m38-outbound-http-client-ipv6-literal-transport-validation.md`
 - `661-m38-outbound-http-ipv6-literal-malformed-host-diagnostics.md`
 - `662-m38-outbound-http-url-gate-diagnostic-propagation-hardening.md`
+- `663-m38-outbound-http-request-parser-ipv6-diagnostics-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

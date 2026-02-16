@@ -3440,8 +3440,26 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5,
   SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID = 6,
   SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID = 7,
-  SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID = 8
+  SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID = 8,
+  SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING = 9,
+  SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL = 10,
+  SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID = 11
 } sec4_rt_redirect_resolve_status;
+
+static sec4_rt_redirect_resolve_status sec4_rt_redirect_status_from_outbound_parse_status(
+    sec4_rt_outbound_url_parse_status parse_status
+) {
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING) {
+    return SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL) {
+    return SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL;
+  }
+  if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID) {
+    return SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID;
+  }
+  return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+}
 
 static bool sec4_rt_is_ascii_hex_char(char value) {
   return (value >= '0' && value <= '9')
@@ -3567,6 +3585,7 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
     size_t target_len = 0;
     bool is_http = false;
     bool is_https = false;
+    sec4_rt_outbound_url_parse_status parse_status = SEC4_RT_OUTBOUND_URL_PARSE_INVALID;
     if (!sec4_rt_parse_outbound_http_url(
             current_url,
             host,
@@ -3576,9 +3595,9 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
             &target_len,
             &is_http,
             &is_https,
-            NULL
+            &parse_status
         )) {
-      return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+      return sec4_rt_redirect_status_from_outbound_parse_status(parse_status);
     }
 
     const char *scheme = is_https ? "https" : "http";
@@ -3729,6 +3748,7 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
   size_t parsed_target_len = 0;
   bool parsed_http = false;
   bool parsed_https = false;
+  sec4_rt_outbound_url_parse_status parsed_status = SEC4_RT_OUTBOUND_URL_PARSE_INVALID;
   if (!sec4_rt_parse_outbound_http_url(
           resolved_url,
           parsed_host,
@@ -3738,9 +3758,9 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
           &parsed_target_len,
           &parsed_http,
           &parsed_https,
-          NULL
+          &parsed_status
       )) {
-    return SEC4_RT_REDIRECT_RESOLVE_INVALID;
+    return sec4_rt_redirect_status_from_outbound_parse_status(parsed_status);
   }
   if (!(parsed_http || parsed_https)) {
     return SEC4_RT_REDIRECT_RESOLVE_INVALID;
@@ -4202,6 +4222,33 @@ static int64_t sec4_rt_outbound_http_get_handle(
               "NET.REDIRECT_SCHEME_INVALID",
               "validation",
               "outbound redirect absolute scheme is invalid"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REQUEST_IPV6_BRACKET_MISSING",
+              "validation",
+              "http request url has missing ipv6 closing bracket"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REQUEST_IPV6_EMPTY_LITERAL",
+              "validation",
+              "http request url has empty ipv6 literal"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REQUEST_IPV6_LITERAL_INVALID",
+              "validation",
+              "http request url has invalid ipv6 literal"
           );
           return 0;
         }

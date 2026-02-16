@@ -913,6 +913,34 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_ipv6_loopback_roundtrip_when_supported_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_ipv6_literal_diagnostics_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S43 outbound HTTP request-parser IPv6 malformed diagnostics hardening acceptance criteria
+
+- Request parser failures in outbound `http_get*` flow emit split deterministic diagnostics for malformed bracketed IPv6 URLs:
+  - missing closing bracket
+  - empty literal
+  - invalid literal token
+- Redirect resolution path preserves the same split parser diagnostics when malformed absolute redirect targets fail parser validation.
+- Runtime harness asserts both request-path and redirect-path coverage for `NET.REQUEST_IPV6_*` codes.
+
+### M38-S43 tracking (live status)
+
+- [x] Extended redirect-resolver status model with parser-derived IPv6 failure classes:
+  - `SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING`
+  - `SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL`
+  - `SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID`
+- [x] Wired `sec4_rt_resolve_redirect_url(...)` parser failures to preserve split IPv6 parse reason instead of collapsing to generic redirect invalid.
+- [x] Updated outbound redirect handling to emit deterministic request-parser diagnostics:
+  - `NET.REQUEST_IPV6_BRACKET_MISSING`
+  - `NET.REQUEST_IPV6_EMPTY_LITERAL`
+  - `NET.REQUEST_IPV6_LITERAL_INVALID`
+- [x] Added dedicated runtime harness coverage:
+  - `c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+- [x] Revalidated core runtime emission contract:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_request_parser_ipv6_diagnostics_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_redirect_ipv6_request_parser_diagnostics_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6223,7 +6251,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S43 outbound HTTP request-parser IPv6 malformed diagnostics hardening (`http_get*` parse-failure code split with dedicated harness assertions).
+- M38-S44 outbound HTTP request-parser fallback diagnostics hardening (non-IPv6 parse-failure classification + deterministic harness assertions).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6315,9 +6343,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S43 scope for deterministic split diagnostics in `sec4_rt_http_get*` request parser failures (missing bracket / empty literal / invalid literal).
-2. Extend runtime harness with redirect/request-path malformed IPv6 parser cases to exercise `NET.REQUEST_*` split codes.
-3. Publish M38-S43 book chapter and refresh roadmap live-status counts.
+1. Add M38-S44 scope for deterministic non-IPv6 request-parser fallback diagnostics in `sec4_rt_http_get*` parse failures.
+2. Extend runtime harness with malformed request URL cases that currently collapse to generic `NET.URL_INVALID`, then split/verify deterministic codes.
+3. Publish M38-S44 book chapter and refresh roadmap live-status counts.
 
 ---
 
