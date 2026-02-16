@@ -7862,7 +7862,20 @@ int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t li
       resolved_message,
       UINT64_C(0xC3005)
   );
-  return sec4_rt_handle_from_two(error_handle, limit, UINT64_C(0xC3006));
+  sec4_rt_error_state state;
+  sec4_rt_error_load_state(error_handle, &state);
+  state.has_limit = true;
+  strncpy(state.limit_name, "limit", sizeof(state.limit_name) - 1);
+  state.limit_name[sizeof(state.limit_name) - 1] = '\0';
+  state.limit_value = limit;
+  state.limit_max = limit;
+  int64_t next = sec4_rt_handle_from_two(error_handle, limit, UINT64_C(0xC3006));
+  state.handle = next;
+  sec4_rt_error_store_state(&state);
+  if (g_sec4_rt_request.has_request) {
+    sec4_rt_error_store_response(&state);
+  }
+  return next;
 }
 
 int64_t sec4_rt_err_internal(const char *message) {

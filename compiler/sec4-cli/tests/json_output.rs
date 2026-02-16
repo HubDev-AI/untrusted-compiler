@@ -8680,6 +8680,145 @@ int main(void) {{
 }
 
 #[test]
+fn c_bin_http_runtime_err_rate_limit_sets_limit_field_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime err.rateLimit e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-http-runtime-err-rate-limit-harness");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("http-runtime-err-rate-limit");
+    let port = find_available_tcp_port();
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+
+static int64_t limited(void) {{
+  (void) sec4_rt_err_rate_limit("LIMIT.RATE", "rate limited", 7);
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{ return 1; }}
+  if (sec4_rt_http_route_get(router, "/limited", limited) != 0) {{ return 2; }}
+  return sec4_rt_http_serve({port}, router) == 0 ? 0 : 3;
+}}
+"#
+        ),
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime err.rateLimit harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime err.rateLimit harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime err.rateLimit harness exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /limited HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime err.rateLimit harness could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime err.rateLimit harness did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime err.rateLimit harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 429 Too Many Requests"),
+        "response should contain 429 status line"
+    );
+    assert!(
+        response.contains("\"code\":\"LIMIT.RATE\"")
+            && response.contains("\"message\":\"rate limited\"")
+            && response.contains("\"limit\":{\"name\":\"limit\",\"value\":7,\"max\":7}"),
+        "response should include deterministic rate-limit envelope with limit object:\n{response}"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_err_with_helpers_enrich_error_response_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping http runtime err.with* e2e test: clang not available");
