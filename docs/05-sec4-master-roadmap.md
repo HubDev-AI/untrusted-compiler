@@ -219,6 +219,18 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added `scripts/build-m37-alpha-release-notes.sh`.
 - [x] Added contract coverage `scripts/test-build-m37-alpha-release-notes.sh`.
 - [x] Added book chapter documenting M37-S7 alpha release-note package.
+
+### M37-S8 alpha tag decision execution record acceptance criteria
+
+- Tag-decision record script consumes both M37-S6 and M37-S7 artifacts and emits deterministic JSON/markdown decision evidence.
+- GO decision is blocked unless prerequisites are `PASS/GO` + `alpha-ready`.
+- Record includes closure outcome, identity stamps, and explicit next action.
+
+### M37-S8 tracking (live status)
+
+- [x] Added `scripts/build-m37-alpha-tag-decision-record.sh`.
+- [x] Added contract coverage `scripts/test-build-m37-alpha-tag-decision-record.sh`.
+- [x] Added book chapter documenting M37-S8 alpha tag decision record.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5529,7 +5541,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S8 alpha tag decision execution record and M37 closure note.
+- M38-S1 post-alpha hardening kickoff (TLS/toolchain ergonomics + runtime robustness deltas).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5621,9 +5633,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Execute alpha tag decision checklist and record the M37 closure outcome artifact.
-2. Run `scripts/release-alpha-gate.sh --skip-tests` plus M37-S6/S7 builders as the final pre-tag refresh.
-3. Capture a single M37 closure summary chapter tying checklist, release-notes package, and tag decision.
+1. Capture a single M37 closure summary chapter tying checklist, release-notes package, and decision record.
+2. Open M38-S1 scope with concrete post-alpha hardening deltas and acceptance criteria.
+3. Start M38-S1 implementation slice with tests and book update.
 
 ---
 

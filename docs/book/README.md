@@ -589,5 +589,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `617-m37-final-no-stub-verification-pass.md`
 - `618-m37-alpha-publish-checklist-delta.md`
 - `619-m37-alpha-release-notes-package.md`
+- `620-m37-alpha-tag-decision-record.md`
 
 As milestones progress, chapters will be added and linked from this index.
