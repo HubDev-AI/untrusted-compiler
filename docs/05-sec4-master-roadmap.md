@@ -482,6 +482,19 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_redirect_query_percent_invalid_returns_deterministic_code_when_clang_available`
   - `c_bin_runtime_internal_get_redirect_query_separator_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated fragment/target-char diagnostics and c-backend emit contract.
+
+### M38-S18 outbound HTTP absolute-redirect scope diagnostics hardening acceptance criteria
+
+- Runtime distinguishes redirect parse failures from redirect scope-revalidation failures.
+- Cross-scope redirect targets are rejected with dedicated deterministic diagnostics.
+- Existing redirect allow/limit and query/fragment/target diagnostics remain green.
+
+### M38-S18 tracking (live status)
+
+- [x] Redirect follow-up runtime path now emits deterministic `NET.REDIRECT_SCOPE_INVALID` when resolved redirect target violates scope policy.
+- [x] Added cross-scope redirect harness helper + test:
+  - `c_bin_runtime_internal_get_redirect_scope_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated redirect allow path and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5792,7 +5805,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S18 outbound HTTP absolute-redirect scope diagnostics hardening (deterministic scope-revalidation failure code split).
+- M38-S19 outbound HTTP redirect revalidation-policy diagnostics hardening (deterministic cross-scope bypass guard visibility).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5884,9 +5897,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S18 scope for deterministic absolute-redirect scope-revalidation diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target subset) after M38-S18 edits.
-3. Publish M38-S18 book chapter and refresh roadmap live-status counts.
+1. Add M38-S19 scope for redirect revalidation-policy diagnostics and deterministic cross-scope bypass guard visibility.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target subset) after M38-S19 edits.
+3. Publish M38-S19 book chapter and refresh roadmap live-status counts.
 
 ---
 

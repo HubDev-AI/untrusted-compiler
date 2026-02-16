@@ -3494,10 +3494,21 @@ static int64_t sec4_rt_outbound_http_get_handle(
           sizeof(next_url)
       );
       bool redirect_valid = resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK;
+      bool redirect_scope_valid = true;
       if (redirect_valid && revalidate_redirects) {
-        redirect_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
+        redirect_scope_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
+        redirect_valid = redirect_scope_valid;
       }
       if (!redirect_valid) {
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK && !redirect_scope_valid) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_SCOPE_INVALID",
+              "validation",
+              "outbound redirect target violates scope policy"
+          );
+          return 0;
+        }
         if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID) {
           sec4_rt_store_std_error_response(
               400,
