@@ -101,6 +101,12 @@ pub struct JsonPolicyConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HttpPolicyConfig {
+    pub max_body_bytes: i64,
+    pub default_timeout_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetPublicPolicyConfig {
     pub allow_redirects: bool,
     pub max_redirects: i64,
@@ -153,6 +159,7 @@ pub struct Policy {
     pub logging: LoggingPolicyConfig,
     pub sql: SqlPolicyConfig,
     pub json: JsonPolicyConfig,
+    pub http: HttpPolicyConfig,
     pub net_public: NetPublicPolicyConfig,
     pub net_internal: NetInternalPolicyConfig,
     pub net_ssrf: NetSsrfPolicyConfig,
@@ -254,6 +261,10 @@ impl Default for Policy {
                 max_depth: 32,
                 require_schema_for_encode: true,
             },
+            http: HttpPolicyConfig {
+                max_body_bytes: 4_096,
+                default_timeout_ms: 200,
+            },
             net_public: NetPublicPolicyConfig {
                 allow_redirects: false,
                 max_redirects: 0,
@@ -311,6 +322,7 @@ impl Policy {
             "logging": self.logging,
             "sql": self.sql,
             "json": self.json,
+            "http": self.http,
             "net_public": self.net_public,
             "net_internal": self.net_internal,
             "net_ssrf": self.net_ssrf,
@@ -820,6 +832,38 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     )
                     .with_note("sql.require_limit_on_select must be `off`, `warn`, or `enforce`"),
                 ),
+            }
+        }
+    }
+
+    if let Some(section) = raw.http {
+        if let Some(max_body_bytes) = section.max_body_bytes {
+            if max_body_bytes < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_body_bytes",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_body_bytes must be >= 1"),
+                );
+            } else {
+                policy.http.max_body_bytes = max_body_bytes;
+            }
+        }
+
+        if let Some(default_timeout_ms) = section.default_timeout_ms {
+            if default_timeout_ms < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.default_timeout_ms",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.default_timeout_ms must be >= 1"),
+                );
+            } else {
+                policy.http.default_timeout_ms = default_timeout_ms;
             }
         }
     }
