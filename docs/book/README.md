@@ -668,5 +668,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `696-m38-security-headers-csp-policy-invalid-env-fallback.md`
 - `697-m38-cors-allowed-origins-invalid-env-fallback.md`
 - `698-m38-cors-allow-credentials-invalid-env-fallback.md`
+- `699-m38-cors-require-vary-origin-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.

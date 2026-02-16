@@ -1780,6 +1780,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S76 CORS require-vary-origin invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_CORS_REQUIRE_VARY_ORIGIN` env values deterministically fall back to default vary-origin-disabled behavior.
+- Invalid raw env values are never reflected as enabled vary-origin behavior in emitted responses.
+- Fallback coverage does not regress existing CORS success-path behavior.
+
+### M38-S76 tracking (live status)
+
+- [x] Added HTTP runtime CORS require-vary-origin fallback e2e coverage:
+  - `c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps `Vary: Origin` header absent under non-wildcard allow-origin configuration.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7184,9 +7201,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S76 scope for CORS require-vary-origin invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_REQUIRE_VARY_ORIGIN` values deterministically keep default vary-origin-disabled behavior.
-3. Publish M38-S76 book chapter and refresh roadmap live-status counts.
+1. Add M38-S77 scope for CORS enabled invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_ENABLED` values deterministically keep default cors-enabled behavior.
+3. Publish M38-S77 book chapter and refresh roadmap live-status counts.
 
 ---
 
