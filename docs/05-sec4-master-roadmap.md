@@ -1832,6 +1832,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_auth_header_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S79 CSRF protected-methods invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_CSRF_PROTECTED_METHODS` env values deterministically fall back to default protected methods (`POST,PUT,PATCH,DELETE`).
+- Invalid raw env values are never allowed to weaken CSRF protection coverage for unsafe methods.
+- Fallback hardening does not regress existing CSRF reject/allow behavior.
+
+### M38-S79 tracking (live status)
+
+- [x] Runtime CSRF policy loading now validates protected-method tokens and clamps invalid lists to default unsafe-method set.
+- [x] Added HTTP runtime CSRF protected-methods fallback e2e coverage:
+  - `c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_csrf_protected_methods_invalid_env_falls_back_to_default_set`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_post_without_csrf_tokens_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_post_with_matching_csrf_tokens_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

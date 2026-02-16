@@ -5962,6 +5962,16 @@ static bool sec4_rt_auth_cookie_has_role(const char *required_role) {
   return false;
 }
 
+static bool sec4_rt_csrf_methods_has_protected_verb(const char *methods) {
+  if (methods == NULL || !sec4_rt_csv_has_any_token(methods)) {
+    return false;
+  }
+  return sec4_rt_csv_contains_token_ci(methods, "POST", strlen("POST"))
+      || sec4_rt_csv_contains_token_ci(methods, "PUT", strlen("PUT"))
+      || sec4_rt_csv_contains_token_ci(methods, "PATCH", strlen("PATCH"))
+      || sec4_rt_csv_contains_token_ci(methods, "DELETE", strlen("DELETE"));
+}
+
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method) {
   if (method == NULL) {
     return false;
@@ -9972,6 +9982,15 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
       g_sec4_rt_csrf_policy.protected_methods,
       sizeof(g_sec4_rt_csrf_policy.protected_methods)
   );
+  if (!sec4_rt_csrf_methods_has_protected_verb(g_sec4_rt_csrf_policy.protected_methods)) {
+    strncpy(
+        g_sec4_rt_csrf_policy.protected_methods,
+        "POST,PUT,PATCH,DELETE",
+        sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1
+    );
+    g_sec4_rt_csrf_policy
+        .protected_methods[sizeof(g_sec4_rt_csrf_policy.protected_methods) - 1] = '\0';
+  }
   if (strcasecmp(g_sec4_rt_csrf_policy.mode, "off") == 0) {
     g_sec4_rt_csrf_policy.enabled = false;
   }
