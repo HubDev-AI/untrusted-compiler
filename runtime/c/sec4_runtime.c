@@ -436,6 +436,79 @@ static void sec4_rt_store_std_error_response_with_detail(
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
 }
 
+static void sec4_rt_store_std_error_response_with_two_details(
+    int64_t status,
+    const char *code,
+    const char *kind,
+    const char *message,
+    const char *detail_key_a,
+    const char *detail_value_a,
+    const char *detail_key_b,
+    const char *detail_value_b
+) {
+  bool detail_a_valid = detail_key_a != NULL && detail_key_a[0] != '\0' && detail_value_a != NULL
+      && detail_value_a[0] != '\0';
+  bool detail_b_valid = detail_key_b != NULL && detail_key_b[0] != '\0' && detail_value_b != NULL
+      && detail_value_b[0] != '\0';
+  if (!detail_a_valid && !detail_b_valid) {
+    sec4_rt_store_std_error_response(status, code, kind, message);
+    return;
+  }
+  if (!detail_a_valid) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_b,
+        detail_value_b
+    );
+    return;
+  }
+  if (!detail_b_valid) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_a,
+        detail_value_a
+    );
+    return;
+  }
+
+  int64_t now_ms = sec4_rt_time_now();
+  char payload[1280];
+  int written = snprintf(
+      payload,
+      sizeof(payload),
+      "{\"error\":{\"code\":\"%s\",\"kind\":\"%s\",\"message\":\"%s\",\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":%lld,\"details\":[{\"key\":\"%s\",\"value\":\"%s\"},{\"key\":\"%s\",\"value\":\"%s\"}]}}",
+      code != NULL ? code : "INTERNAL.ERROR",
+      kind != NULL ? kind : "internal",
+      message != NULL ? message : "internal error",
+      (long long) status,
+      sec4_rt_current_trace_id(),
+      (long long) now_ms,
+      detail_key_a,
+      detail_value_a,
+      detail_key_b,
+      detail_value_b
+  );
+
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    sec4_rt_store_std_error_response_with_detail(
+        status,
+        code,
+        kind,
+        message,
+        detail_key_a,
+        detail_value_a
+    );
+    return;
+  }
+  sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
+}
+
 static void sec4_rt_store_std_success_response(
     int64_t status,
     const char *data_json,
@@ -3523,76 +3596,154 @@ static bool sec4_rt_store_request_parse_error_from_outbound_parse_status(
     sec4_rt_outbound_url_parse_status parse_status
 ) {
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_IPV6_BRACKET_MISSING",
         "validation",
-        "http request url has missing ipv6 closing bracket"
+        "http request url has missing ipv6 closing bracket",
+        "phase",
+        "parse",
+        "component",
+        "ipv6"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_IPV6_EMPTY_LITERAL",
         "validation",
-        "http request url has empty ipv6 literal"
+        "http request url has empty ipv6 literal",
+        "phase",
+        "parse",
+        "component",
+        "ipv6"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_IPV6_LITERAL_INVALID",
         "validation",
-        "http request url has invalid ipv6 literal"
+        "http request url has invalid ipv6 literal",
+        "phase",
+        "parse",
+        "component",
+        "ipv6"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_SCHEME_MISSING",
         "validation",
-        "http request url is missing scheme separator"
+        "http request url is missing scheme separator",
+        "phase",
+        "parse",
+        "component",
+        "scheme"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_SCHEME_INVALID",
         "validation",
-        "http request url uses unsupported scheme"
+        "http request url uses unsupported scheme",
+        "phase",
+        "parse",
+        "component",
+        "scheme"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_HOST_INVALID",
         "validation",
-        "http request url has invalid host token"
+        "http request url has invalid host token",
+        "phase",
+        "parse",
+        "component",
+        "host"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_PORT_INVALID",
         "validation",
-        "http request url has invalid port token"
+        "http request url has invalid port token",
+        "phase",
+        "parse",
+        "component",
+        "port"
     );
     return true;
   }
   if (parse_status == SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID) {
-    sec4_rt_store_std_error_response(
+    sec4_rt_store_std_error_response_with_two_details(
         400,
         "NET.REQUEST_TARGET_INVALID",
         "validation",
-        "http request url has invalid target token"
+        "http request url has invalid target token",
+        "phase",
+        "parse",
+        "component",
+        "target"
     );
     return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_store_request_parse_error_from_redirect_resolve_status(
+    sec4_rt_redirect_resolve_status resolve_status
+) {
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_BRACKET_MISSING
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_EMPTY_LITERAL
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_MISSING) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_MISSING
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID
+    );
+  }
+  if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID) {
+    return sec4_rt_store_request_parse_error_from_outbound_parse_status(
+        SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID
+    );
   }
   return false;
 }
@@ -4340,76 +4491,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
           );
           return 0;
         }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_BRACKET_MISSING) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_BRACKET_MISSING",
-              "validation",
-              "http request url has missing ipv6 closing bracket"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_EMPTY_LITERAL) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_EMPTY_LITERAL",
-              "validation",
-              "http request url has empty ipv6 literal"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_IPV6_LITERAL_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_IPV6_LITERAL_INVALID",
-              "validation",
-              "http request url has invalid ipv6 literal"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_MISSING) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_SCHEME_MISSING",
-              "validation",
-              "http request url is missing scheme separator"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_SCHEME_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_SCHEME_INVALID",
-              "validation",
-              "http request url uses unsupported scheme"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_HOST_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_HOST_INVALID",
-              "validation",
-              "http request url has invalid host token"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_PORT_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_PORT_INVALID",
-              "validation",
-              "http request url has invalid port token"
-          );
-          return 0;
-        }
-        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_REQUEST_TARGET_INVALID) {
-          sec4_rt_store_std_error_response(
-              400,
-              "NET.REQUEST_TARGET_INVALID",
-              "validation",
-              "http request url has invalid target token"
-          );
+        if (sec4_rt_store_request_parse_error_from_redirect_resolve_status(resolve_status)) {
           return 0;
         }
         if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID) {

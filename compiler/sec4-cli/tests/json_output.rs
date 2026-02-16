@@ -8802,14 +8802,17 @@ int main(void) {
   sec4_rt_reset_response();
   if (sec4_rt_outbound_http_get_handle("http://[fd00::1/path", UINT64_C(0x2A01), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_BRACKET_MISSING\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 13; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://[]/path", UINT64_C(0x2A02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 13; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_EMPTY_LITERAL\"") == NULL) { return 14; }
+  if (sec4_rt_outbound_http_get_handle("http://[]/path", UINT64_C(0x2A02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_EMPTY_LITERAL\"") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 16; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://[zzzz::1]/path", UINT64_C(0x2A03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 15; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"") == NULL) { return 16; }
+  if (sec4_rt_outbound_http_get_handle("http://[zzzz::1]/path", UINT64_C(0x2A03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"") == NULL) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 19; }
 
   return 0;
 }
@@ -8868,22 +8871,27 @@ int main(void) {
   sec4_rt_reset_response();
   if (sec4_rt_outbound_http_get_handle("127.0.0.1/path", UINT64_C(0x2B01), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_MISSING\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"scheme\"}]") == NULL) { return 13; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("ftp://127.0.0.1/path", UINT64_C(0x2B02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 13; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"") == NULL) { return 14; }
+  if (sec4_rt_outbound_http_get_handle("ftp://127.0.0.1/path", UINT64_C(0x2B02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"scheme\"}]") == NULL) { return 16; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://bad host/path", UINT64_C(0x2B03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 15; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_HOST_INVALID\"") == NULL) { return 16; }
+  if (sec4_rt_outbound_http_get_handle("http://bad host/path", UINT64_C(0x2B03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_HOST_INVALID\"") == NULL) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"host\"}]") == NULL) { return 19; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1:abc/path", UINT64_C(0x2B04), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PORT_INVALID\"") == NULL) { return 18; }
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1:abc/path", UINT64_C(0x2B04), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 20; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PORT_INVALID\"") == NULL) { return 21; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"port\"}]") == NULL) { return 22; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1/path#frag", UINT64_C(0x2B05), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 19; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_TARGET_INVALID\"") == NULL) { return 20; }
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1/path#frag", UINT64_C(0x2B05), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 23; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_TARGET_INVALID\"") == NULL) { return 24; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"target\"}]") == NULL) { return 25; }
 
   return 0;
 }
@@ -12085,11 +12093,15 @@ int main(void) {
   if (internal_url_raw == NULL) { return 10; }
   const char *expected_code = getenv("SEC4_RT_EXPECTED_CODE");
   if (expected_code == NULL || expected_code[0] == '\0') { return 11; }
+  const char *expected_component = getenv("SEC4_RT_EXPECTED_COMPONENT");
+  if (expected_component == NULL || expected_component[0] == '\0') { return 12; }
 
   int64_t internal_url = sec4_rt_req_query(internal_url_raw);
-  if (internal_url == 0) { return 12; }
-  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 13; }
-  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 14; }
+  if (internal_url == 0) { return 13; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"key\":\"phase\",\"value\":\"parse\"") == NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, expected_component) == NULL) { return 17; }
 
   return 0;
 }
@@ -12116,17 +12128,35 @@ int main(void) {
         (
             "http://[fd00::1/path",
             "NET.REQUEST_IPV6_BRACKET_MISSING",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
         ),
-        ("http://[]/path", "NET.REQUEST_IPV6_EMPTY_LITERAL"),
+        (
+            "http://[]/path",
+            "NET.REQUEST_IPV6_EMPTY_LITERAL",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
+        ),
         (
             "http://[zzzz::1]/path",
             "NET.REQUEST_IPV6_LITERAL_INVALID",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
         ),
-        ("http://bad host/path", "NET.REQUEST_HOST_INVALID"),
-        ("http://127.0.0.1:abc/path", "NET.REQUEST_PORT_INVALID"),
-        ("http://127.0.0.1/path#frag", "NET.REQUEST_TARGET_INVALID"),
+        (
+            "http://bad host/path",
+            "NET.REQUEST_HOST_INVALID",
+            "\"key\":\"component\",\"value\":\"host\"",
+        ),
+        (
+            "http://127.0.0.1:abc/path",
+            "NET.REQUEST_PORT_INVALID",
+            "\"key\":\"component\",\"value\":\"port\"",
+        ),
+        (
+            "http://127.0.0.1/path#frag",
+            "NET.REQUEST_TARGET_INVALID",
+            "\"key\":\"component\",\"value\":\"target\"",
+        ),
     ];
-    for (redirect_location, expected_code) in cases {
+    for (redirect_location, expected_code, expected_component) in cases {
         let (internal_port, server_handle) =
             spawn_one_shot_http_ipv6_malformed_redirect_server(redirect_location);
         let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
@@ -12137,6 +12167,7 @@ int main(void) {
             .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
             .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
             .env("SEC4_RT_EXPECTED_CODE", expected_code)
+            .env("SEC4_RT_EXPECTED_COMPONENT", expected_component)
             .output()
             .expect("compiled binary should run");
         assert!(
