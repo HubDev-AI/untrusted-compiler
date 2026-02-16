@@ -8802,14 +8802,17 @@ int main(void) {
   sec4_rt_reset_response();
   if (sec4_rt_outbound_http_get_handle("http://[fd00::1/path", UINT64_C(0x2A01), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 11; }
   if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_BRACKET_MISSING\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 13; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://[]/path", UINT64_C(0x2A02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 13; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_EMPTY_LITERAL\"") == NULL) { return 14; }
+  if (sec4_rt_outbound_http_get_handle("http://[]/path", UINT64_C(0x2A02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_EMPTY_LITERAL\"") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 16; }
 
   sec4_rt_reset_response();
-  if (sec4_rt_outbound_http_get_handle("http://[zzzz::1]/path", UINT64_C(0x2A03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 15; }
-  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"") == NULL) { return 16; }
+  if (sec4_rt_outbound_http_get_handle("http://[zzzz::1]/path", UINT64_C(0x2A03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"") == NULL) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"ipv6\"}]") == NULL) { return 19; }
 
   return 0;
 }
@@ -8838,6 +8841,279 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime outbound request parser ipv6 diagnostics harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_outbound_request_parser_fallback_diagnostics_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime outbound request parser fallback diagnostics test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-outbound-request-parser-fallback-diagnostics");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-outbound-request-parser-fallback-diagnostics");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("127.0.0.1/path", UINT64_C(0x2B01), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_MISSING\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"scheme\"}]") == NULL) { return 13; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("ftp://127.0.0.1/path", UINT64_C(0x2B02), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"") == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"scheme\"}]") == NULL) { return 16; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://bad host/path", UINT64_C(0x2B03), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 17; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_HOST_INVALID\"") == NULL) { return 18; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"host\"}]") == NULL) { return 19; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1:abc/path", UINT64_C(0x2B04), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 20; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PORT_INVALID\"") == NULL) { return 21; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"port\"}]") == NULL) { return 22; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_outbound_http_get_handle("http://127.0.0.1/path#frag", UINT64_C(0x2B05), SEC4_RT_NET_SCOPE_INTERNAL) != 0) { return 23; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_TARGET_INVALID\"") == NULL) { return 24; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"target\"}]") == NULL) { return 25; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime outbound request parser fallback diagnostics harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime outbound request parser fallback diagnostics harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_outbound_request_parser_unknown_fallback_is_deterministic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime outbound request parser unknown fallback test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-outbound-request-parser-unknown-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-outbound-request-parser-unknown-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_outbound_parse_status(SEC4_RT_OUTBOUND_URL_PARSE_INVALID)) { return 11; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PARSE_INVALID\"") == NULL) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"unknown\"}]") == NULL) { return 13; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime outbound request parser unknown fallback harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime outbound request parser unknown fallback harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_redirect_request_parser_unknown_fallback_is_deterministic_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime redirect request parser unknown fallback test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-redirect-request-parser-unknown-fallback");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-redirect-request-parser-unknown-fallback");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  if (sec4_rt_redirect_status_from_outbound_parse_status(SEC4_RT_OUTBOUND_URL_PARSE_INVALID)
+      != SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID) { return 11; }
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_redirect_resolve_status(
+          SEC4_RT_REDIRECT_RESOLVE_REQUEST_PARSE_INVALID)) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REQUEST_PARSE_INVALID\"") == NULL) { return 13; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"unknown\"}]") == NULL) { return 14; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect request parser unknown fallback harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect request parser unknown fallback harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_request_parser_diagnostics_use_unified_details_order_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime request parser unified details-order test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-request-parser-unified-details-order");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-request-parser-unified-details-order");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+static int assert_diag(
+    sec4_rt_outbound_url_parse_status status,
+    const char *expected_code,
+    const char *expected_component
+) {
+  sec4_rt_reset_response();
+  if (!sec4_rt_store_request_parse_error_from_outbound_parse_status(status)) { return 1; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 2; }
+  if (strstr(g_sec4_rt_response.body, "\"details\":[{\"key\":\"phase\",\"value\":\"parse\"},{\"key\":\"component\",\"value\":\"") == NULL) { return 3; }
+  if (strstr(g_sec4_rt_response.body, expected_component) == NULL) { return 4; }
+  return 0;
+}
+
+int main(void) {
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_INVALID, "\"code\":\"NET.REQUEST_PARSE_INVALID\"", "\"component\",\"value\":\"unknown\"") != 0) { return 11; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_SCHEME_INVALID, "\"code\":\"NET.REQUEST_SCHEME_INVALID\"", "\"component\",\"value\":\"scheme\"") != 0) { return 12; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_HOST_INVALID, "\"code\":\"NET.REQUEST_HOST_INVALID\"", "\"component\",\"value\":\"host\"") != 0) { return 13; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_PORT_INVALID, "\"code\":\"NET.REQUEST_PORT_INVALID\"", "\"component\",\"value\":\"port\"") != 0) { return 14; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_TARGET_INVALID, "\"code\":\"NET.REQUEST_TARGET_INVALID\"", "\"component\",\"value\":\"target\"") != 0) { return 15; }
+  if (assert_diag(SEC4_RT_OUTBOUND_URL_PARSE_IPV6_LITERAL_INVALID, "\"code\":\"NET.REQUEST_IPV6_LITERAL_INVALID\"", "\"component\",\"value\":\"ipv6\"") != 0) { return 16; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime request parser unified details-order harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime request parser unified details-order harness should exit successfully"
     );
 }
 
@@ -12011,11 +12287,15 @@ int main(void) {
   if (internal_url_raw == NULL) { return 10; }
   const char *expected_code = getenv("SEC4_RT_EXPECTED_CODE");
   if (expected_code == NULL || expected_code[0] == '\0') { return 11; }
+  const char *expected_component = getenv("SEC4_RT_EXPECTED_COMPONENT");
+  if (expected_component == NULL || expected_component[0] == '\0') { return 12; }
 
   int64_t internal_url = sec4_rt_req_query(internal_url_raw);
-  if (internal_url == 0) { return 12; }
-  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 13; }
-  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 14; }
+  if (internal_url == 0) { return 13; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"key\":\"phase\",\"value\":\"parse\"") == NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, expected_component) == NULL) { return 17; }
 
   return 0;
 }
@@ -12042,14 +12322,35 @@ int main(void) {
         (
             "http://[fd00::1/path",
             "NET.REQUEST_IPV6_BRACKET_MISSING",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
         ),
-        ("http://[]/path", "NET.REQUEST_IPV6_EMPTY_LITERAL"),
+        (
+            "http://[]/path",
+            "NET.REQUEST_IPV6_EMPTY_LITERAL",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
+        ),
         (
             "http://[zzzz::1]/path",
             "NET.REQUEST_IPV6_LITERAL_INVALID",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
+        ),
+        (
+            "http://bad host/path",
+            "NET.REQUEST_HOST_INVALID",
+            "\"key\":\"component\",\"value\":\"host\"",
+        ),
+        (
+            "http://127.0.0.1:abc/path",
+            "NET.REQUEST_PORT_INVALID",
+            "\"key\":\"component\",\"value\":\"port\"",
+        ),
+        (
+            "http://127.0.0.1/path#frag",
+            "NET.REQUEST_TARGET_INVALID",
+            "\"key\":\"component\",\"value\":\"target\"",
         ),
     ];
-    for (redirect_location, expected_code) in cases {
+    for (redirect_location, expected_code, expected_component) in cases {
         let (internal_port, server_handle) =
             spawn_one_shot_http_ipv6_malformed_redirect_server(redirect_location);
         let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
@@ -12060,6 +12361,7 @@ int main(void) {
             .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
             .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
             .env("SEC4_RT_EXPECTED_CODE", expected_code)
+            .env("SEC4_RT_EXPECTED_COMPONENT", expected_component)
             .output()
             .expect("compiled binary should run");
         assert!(
@@ -12069,6 +12371,119 @@ int main(void) {
         server_handle
             .join()
             .expect("runtime redirect ipv6 request diagnostics server should exit cleanly");
+    }
+}
+
+#[test]
+fn c_bin_runtime_public_get_redirect_request_parser_diagnostics_match_internal_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime public redirect request parser diagnostics parity test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-public-net-redirect-request-diagnostics");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-public-net-redirect-request-diagnostics");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *public_url_raw = getenv("SEC4_RT_TEST_PUBLIC_URL");
+  if (public_url_raw == NULL) { return 10; }
+  const char *expected_code = getenv("SEC4_RT_EXPECTED_CODE");
+  if (expected_code == NULL || expected_code[0] == '\0') { return 11; }
+  const char *expected_component = getenv("SEC4_RT_EXPECTED_COMPONENT");
+  if (expected_component == NULL || expected_component[0] == '\0') { return 12; }
+
+  int64_t public_url = sec4_rt_req_query(public_url_raw);
+  if (public_url == 0) { return 13; }
+  if (sec4_rt_http_get(1, public_url) != 0) { return 14; }
+  if (strstr(g_sec4_rt_response.body, expected_code) == NULL) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"key\":\"phase\",\"value\":\"parse\"") == NULL) { return 16; }
+  if (strstr(g_sec4_rt_response.body, expected_component) == NULL) { return 17; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for public redirect request diagnostics parity harness");
+    assert!(
+        output.status.success(),
+        "runtime public redirect request diagnostics parity harness should compile successfully"
+    );
+
+    let cases = [
+        (
+            "http://[fd00::1/path",
+            "NET.REQUEST_IPV6_BRACKET_MISSING",
+            "\"key\":\"component\",\"value\":\"ipv6\"",
+        ),
+        (
+            "http://bad host/path",
+            "NET.REQUEST_HOST_INVALID",
+            "\"key\":\"component\",\"value\":\"host\"",
+        ),
+        (
+            "http://127.0.0.1:abc/path",
+            "NET.REQUEST_PORT_INVALID",
+            "\"key\":\"component\",\"value\":\"port\"",
+        ),
+        (
+            "http://127.0.0.1/path#frag",
+            "NET.REQUEST_TARGET_INVALID",
+            "\"key\":\"component\",\"value\":\"target\"",
+        ),
+    ];
+    for (redirect_location, expected_code, expected_component) in cases {
+        let (public_port, server_handle) =
+            spawn_one_shot_http_ipv6_malformed_redirect_server(redirect_location);
+        let public_url = format!("http://127.0.0.1:{public_port}/internal-start");
+
+        let run = Command::new(&binary_path)
+            .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+            .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
+            .env("SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL", "0")
+            .env("SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS", "0")
+            .env("SEC4_RT_NET_SSRF_RESOLVE_DNS", "0")
+            .env("SEC4_RT_TEST_PUBLIC_URL", &public_url)
+            .env("SEC4_RT_EXPECTED_CODE", expected_code)
+            .env("SEC4_RT_EXPECTED_COMPONENT", expected_component)
+            .output()
+            .expect("compiled binary should run");
+        assert!(
+            run.status.success(),
+            "runtime public redirect request diagnostics parity harness should exit successfully for {expected_code}"
+        );
+        server_handle
+            .join()
+            .expect("runtime public redirect request diagnostics parity server should exit cleanly");
     }
 }
 

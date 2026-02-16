@@ -154,7 +154,7 @@ if ! jq -e '
     and ($entry.compared | type == "array")
     and ($entry.compared | length > 0)
     and (
-      [ $entry.compared[]?.impl ] | unique | sort
+      [ ($entry.compared // [])[].impl ] | unique | sort
       | (index("sec4") != null)
       and (index("go") != null)
       and (index("node") != null)

@@ -82,9 +82,15 @@ if [ -z "${audit_ids}" ]; then
 fi
 
 explain_ids="$(
-  rg -o '"[A-Z0-9_]+"\s*=>\s*\{' "${explain_file}" \
-    | sed -E 's/"([A-Z0-9_]+)".*/\1/' \
-    | sort -u
+  if command -v rg >/dev/null 2>&1; then
+    rg -o '"[A-Z0-9_]+"\s*=>\s*\{' "${explain_file}" \
+      | sed -E 's/"([A-Z0-9_]+)".*/\1/' \
+      | sort -u
+  else
+    grep -o -E '"[A-Z0-9_]+"\s*=>\s*\{' "${explain_file}" \
+      | sed -E 's/"([A-Z0-9_]+)".*/\1/' \
+      | sort -u
+  fi
 )"
 
 if [ -z "${explain_ids}" ]; then

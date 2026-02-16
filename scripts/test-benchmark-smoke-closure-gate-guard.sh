@@ -12,7 +12,6 @@ workflow_path="${tmp}/benchmark-smoke.yml"
 cat > "${workflow_path}" <<'YAML'
 name: Benchmark Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -39,7 +38,6 @@ YAML
 cat > "${workflow_path}" <<'YAML'
 name: Benchmark Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -68,7 +66,6 @@ fi
 cat > "${workflow_path}" <<'YAML'
 name: Benchmark Smoke
 on:
-  pull_request:
   push:
     branches:
       - main

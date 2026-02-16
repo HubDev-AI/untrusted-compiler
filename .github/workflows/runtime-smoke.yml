@@ -1,7 +1,6 @@
 name: Runtime Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -13,6 +12,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Run sec4 hello-api operator smoke (default)
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default
