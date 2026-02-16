@@ -550,6 +550,21 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added invalid-scheme harness helper + test:
   - `c_bin_runtime_internal_get_redirect_scheme_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated downgrade/location-missing diagnostics and c-backend emit contract.
+
+### M38-S23 outbound HTTP redirect configurable-downgrade-policy diagnostics hardening acceptance criteria
+
+- Redirect resolver supports explicit configurable allow/deny for `https -> http` downgrade transitions.
+- Secure default remains deny with deterministic downgrade diagnostic.
+- Allow-mode resolves downgrade targets deterministically for controlled environments.
+
+### M38-S23 tracking (live status)
+
+- [x] Redirect resolver signature now accepts explicit `allow_https_downgrade` policy input.
+- [x] Runtime follow-up flow now reads `SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE` (default deny).
+- [x] Added resolver allow/deny harness coverage:
+  - `c_bin_runtime_redirect_resolver_rejects_https_to_http_downgrade_when_clang_available`
+  - `c_bin_runtime_redirect_resolver_allows_https_to_http_downgrade_when_enabled_when_clang_available`
+- [x] Revalidated invalid-scheme diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5860,7 +5875,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S23 outbound HTTP redirect same-scheme policy diagnostics hardening (deterministic configurable downgrade guard toggles).
+- M38-S24 outbound HTTP redirect policy-surface validation hardening (env policy parsing bounds + deterministic diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5952,9 +5967,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S23 scope for configurable redirect downgrade policy toggles with deterministic diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme subset) after M38-S23 edits.
-3. Publish M38-S23 book chapter and refresh roadmap live-status counts.
+1. Add M38-S24 scope for redirect policy surface validation bounds and deterministic diagnostics.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme subset) after M38-S24 edits.
+3. Publish M38-S24 book chapter and refresh roadmap live-status counts.
 
 ---
 

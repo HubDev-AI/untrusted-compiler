@@ -3050,7 +3050,8 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
     const char *current_url,
     const char *location,
     char *resolved_url,
-    size_t resolved_url_size
+    size_t resolved_url_size,
+    bool allow_https_downgrade
 ) {
   if (current_url == NULL || current_url[0] == '\0' || location == NULL || location[0] == '\0'
       || resolved_url == NULL || resolved_url_size < 2) {
@@ -3262,7 +3263,7 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
   if (!sec4_rt_is_redirect_host_token_valid(parsed_host)) {
     return SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID;
   }
-  if (current_is_https && parsed_http) {
+  if (current_is_https && parsed_http && !allow_https_downgrade) {
     return SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID;
   }
   const char *parsed_query = memchr(parsed_target, '?', parsed_target_len);
@@ -3332,6 +3333,8 @@ static int64_t sec4_rt_outbound_http_get_handle(
   int64_t max_redirects = sec4_rt_parse_env_i64("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", 0);
   bool revalidate_redirects =
       sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS", true);
+  bool allow_https_downgrade =
+      sec4_rt_env_flag_enabled("SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE");
   int64_t redirects_followed = 0;
 
   while (true) {
@@ -3512,7 +3515,8 @@ static int64_t sec4_rt_outbound_http_get_handle(
           current_url,
           redirect_location,
           next_url,
-          sizeof(next_url)
+          sizeof(next_url),
+          allow_https_downgrade
       );
       bool redirect_valid = resolve_status == SEC4_RT_REDIRECT_RESOLVE_OK;
       bool redirect_scope_valid = true;

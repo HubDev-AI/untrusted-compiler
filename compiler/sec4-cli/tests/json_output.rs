@@ -10954,7 +10954,8 @@ int main(void) {
       "https://secure.example/start",
       "http://secure.example/downgrade",
       resolved,
-      sizeof(resolved));
+      sizeof(resolved),
+      false);
   if (status != SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID) { return 10; }
   return 0;
 }
@@ -10983,6 +10984,70 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime redirect downgrade resolver harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_redirect_resolver_allows_https_to_http_downgrade_when_enabled_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime redirect downgrade-allow resolver test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-redirect-downgrade-allow-resolver");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-redirect-downgrade-allow-resolver");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  char resolved[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+  sec4_rt_redirect_resolve_status status = sec4_rt_resolve_redirect_url(
+      "https://secure.example/start",
+      "http://secure.example/downgrade",
+      resolved,
+      sizeof(resolved),
+      true);
+  if (status != SEC4_RT_REDIRECT_RESOLVE_OK) { return 10; }
+  if (strcmp(resolved, "http://secure.example/downgrade") != 0) { return 11; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect downgrade-allow resolver harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect downgrade-allow resolver harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect downgrade-allow resolver harness should exit successfully"
     );
 }
 
