@@ -680,6 +680,51 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Removed unused `sec4_rt_parse_env_non_negative_i64_strict` helper + declaration.
 - [x] Kept active redirect policy parsing path explicit and deterministic.
 - [x] Revalidated max-redirects range-invalid, revalidate-invalid, and c-backend emit contract.
+
+### M38-S32 outbound HTTP policy diagnostics stabilization acceptance criteria
+
+- Redirect policy diagnostic naming remains consistent across runtime harness tests, roadmap references, and book chapters.
+- Final redirect-oriented runtime matrix sweep is executed and remains green after naming-stabilization edits.
+- Existing redirect policy diagnostics behavior is unchanged by naming-only stabilization updates.
+
+### M38-S32 tracking (live status)
+
+- [x] Renamed policy-invalid harness surface to explicit allow-redirects variant:
+  - `c_bin_runtime_internal_get_redirect_allow_redirects_policy_invalid_returns_deterministic_code_when_clang_available`
+- [x] Updated roadmap + chapter references to aligned policy-invalid harness naming.
+- [x] Ran final redirect matrix sweep buckets:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_https_`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_redirect_resolver_`
+
+### M38-S33 outbound HTTP SSRF block-toggle policy/runtime parity acceptance criteria
+
+- Policy model persists `net.ssrf` block toggles:
+  - `block_private_ranges`
+  - `block_loopback`
+  - `block_link_local`
+  - `block_metadata_ips`
+- `sec4 run` bridges these policy values into runtime env keys.
+- Runtime `url.public(...)` validation enforces these toggles deterministically for direct host checks and DNS-resolved scope checks.
+
+### M38-S33 tracking (live status)
+
+- [x] Extended `NetSsrfPolicyConfig` persisted fields + parsing with secure defaults (`true`) for all four block toggles.
+- [x] `sec4 run` now exports:
+  - `SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES`
+  - `SEC4_RT_NET_SSRF_BLOCK_LOOPBACK`
+  - `SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL`
+  - `SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS`
+- [x] Runtime public-url gate now applies toggle-aware classification for:
+  - direct IPv4 host parsing,
+  - DNS-resolved IPv4/IPv6 addresses,
+  - loopback/link-local/metadata/private-range separation.
+- [x] Added/updated tests:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_allows_public_loopback_when_ssrf_block_toggles_are_disabled_by_policy`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_ssrf_block_toggles_when_clang_available`
+  - `cargo test -p sec4 --test commands`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5990,7 +6035,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S32 outbound HTTP policy diagnostics stabilization (naming consistency + final redirect-policy matrix sweep).
+- M38-S34 outbound HTTP SSRF block-toggle env validation diagnostics (strict invalid-value handling + deterministic policy error envelope).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6082,9 +6127,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S32 scope for redirect policy diagnostic naming consistency and final matrix sweep.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid/redirect-cycle/redirect-cap subset) after M38-S32 edits.
-3. Publish M38-S32 book chapter and refresh roadmap live-status counts.
+1. Add M38-S34 scope for strict env-value validation diagnostics on SSRF block toggles (`block_private_ranges`, `block_loopback`, `block_link_local`, `block_metadata_ips`).
+2. Extend runtime harness to assert deterministic invalid-value error codes/details for each SSRF block-toggle env key without regressing redirect-policy diagnostics.
+3. Publish M38-S34 book chapter and refresh roadmap live-status counts.
 
 ---
 

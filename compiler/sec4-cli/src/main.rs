@@ -3584,6 +3584,34 @@ fn cmd_run(
         policy.net_internal.allowed_cidrs.join(","),
     );
     cmd.env(
+        "SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES",
+        if policy.net_ssrf.block_private_ranges {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_NET_SSRF_BLOCK_LOOPBACK",
+        if policy.net_ssrf.block_loopback { "1" } else { "0" },
+    );
+    cmd.env(
+        "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
+        if policy.net_ssrf.block_link_local {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS",
+        if policy.net_ssrf.block_metadata_ips {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
         "SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS",
         if policy.net_ssrf.revalidate_redirects {
             "1"

@@ -621,5 +621,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `649-m38-outbound-http-redirect-policy-structured-details-diagnostics.md`
 - `650-m38-outbound-http-redirect-max-redirects-format-range-diagnostics.md`
 - `651-m38-outbound-http-policy-diagnostics-cleanup.md`
+- `652-m38-outbound-http-policy-diagnostics-stabilization.md`
+- `653-m38-outbound-http-ssrf-block-toggle-policy-runtime-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.

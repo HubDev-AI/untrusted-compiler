@@ -1425,24 +1425,13 @@ static bool sec4_rt_csv_contains_ipv4_cidr_match(
   return false;
 }
 
-static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
-  uint8_t octets[4];
-  if (!sec4_rt_parse_ipv4_octets(host, host_len, octets)) {
-    return false;
-  }
-  return sec4_rt_ipv4_octets_are_private(octets);
-}
-
-static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]) {
+static bool sec4_rt_ipv4_octets_are_private_range(const uint8_t octets[4]) {
   if (octets == NULL) {
     return false;
   }
   int a = (int) octets[0];
   int b = (int) octets[1];
-  if (a == 0 || a == 10 || a == 127) {
-    return true;
-  }
-  if (a == 169 && b == 254) {
+  if (a == 0 || a == 10) {
     return true;
   }
   if (a == 192 && b == 168) {
@@ -1454,30 +1443,124 @@ static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]) {
   return false;
 }
 
-static bool sec4_rt_ipv6_addr_is_internal(const struct in6_addr *addr) {
+static bool sec4_rt_ipv4_octets_are_loopback(const uint8_t octets[4]) {
+  return octets != NULL && octets[0] == 127;
+}
+
+static bool sec4_rt_ipv4_octets_are_link_local(const uint8_t octets[4]) {
+  return octets != NULL && octets[0] == 169 && octets[1] == 254;
+}
+
+static bool sec4_rt_ipv4_octets_are_metadata(const uint8_t octets[4]) {
+  return octets != NULL && octets[0] == 169 && octets[1] == 254 && octets[2] == 169
+      && octets[3] == 254;
+}
+
+static bool sec4_rt_ipv4_octets_are_blocked_by_ssrf_policy(
+    const uint8_t octets[4],
+    bool block_private_ranges,
+    bool block_loopback,
+    bool block_link_local,
+    bool block_metadata_ips
+) {
+  if (octets == NULL) {
+    return false;
+  }
+  if (block_private_ranges && sec4_rt_ipv4_octets_are_private_range(octets)) {
+    return true;
+  }
+  if (block_loopback && sec4_rt_ipv4_octets_are_loopback(octets)) {
+    return true;
+  }
+  if (block_link_local && sec4_rt_ipv4_octets_are_link_local(octets)) {
+    return true;
+  }
+  if (block_metadata_ips && sec4_rt_ipv4_octets_are_metadata(octets)) {
+    return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_parse_ipv4_blocked_by_ssrf_policy(
+    const char *host,
+    size_t host_len,
+    bool block_private_ranges,
+    bool block_loopback,
+    bool block_link_local,
+    bool block_metadata_ips
+) {
+  uint8_t octets[4];
+  if (!sec4_rt_parse_ipv4_octets(host, host_len, octets)) {
+    return false;
+  }
+  return sec4_rt_ipv4_octets_are_blocked_by_ssrf_policy(
+      octets,
+      block_private_ranges,
+      block_loopback,
+      block_link_local,
+      block_metadata_ips
+  );
+}
+
+static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
+  return sec4_rt_parse_ipv4_blocked_by_ssrf_policy(host, host_len, true, true, true, true);
+}
+
+static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]) {
+  return sec4_rt_ipv4_octets_are_blocked_by_ssrf_policy(octets, true, true, true, true);
+}
+
+static bool sec4_rt_ipv6_addr_is_internal_with_policy(
+    const struct in6_addr *addr,
+    bool block_private_ranges,
+    bool block_loopback,
+    bool block_link_local,
+    bool block_metadata_ips
+) {
   if (addr == NULL) {
     return false;
   }
 
-  if (IN6_IS_ADDR_LOOPBACK(addr) || IN6_IS_ADDR_LINKLOCAL(addr)) {
+  if (block_loopback && IN6_IS_ADDR_LOOPBACK(addr)) {
+    return true;
+  }
+
+  if (block_link_local && IN6_IS_ADDR_LINKLOCAL(addr)) {
     return true;
   }
 
   const uint8_t *bytes = addr->s6_addr;
-  if ((bytes[0] & 0xFEu) == 0xFCu) {
+  if (block_private_ranges && (bytes[0] & 0xFEu) == 0xFCu) {
     return true;
   }
 
 #ifdef IN6_IS_ADDR_V4MAPPED
   if (IN6_IS_ADDR_V4MAPPED(addr)) {
-    return sec4_rt_ipv4_octets_are_private(&bytes[12]);
+    return sec4_rt_ipv4_octets_are_blocked_by_ssrf_policy(
+        &bytes[12],
+        block_private_ranges,
+        block_loopback,
+        block_link_local,
+        block_metadata_ips
+    );
   }
 #endif
 
   return false;
 }
 
-static bool sec4_rt_host_resolves_to_internal(const char *host, size_t host_len) {
+static bool sec4_rt_ipv6_addr_is_internal(const struct in6_addr *addr) {
+  return sec4_rt_ipv6_addr_is_internal_with_policy(addr, true, true, true, true);
+}
+
+static bool sec4_rt_host_resolves_to_internal(
+    const char *host,
+    size_t host_len,
+    bool block_private_ranges,
+    bool block_loopback,
+    bool block_link_local,
+    bool block_metadata_ips
+) {
   if (host == NULL || host_len == 0 || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
     return false;
   }
@@ -1506,7 +1589,13 @@ static bool sec4_rt_host_resolves_to_internal(const char *host, size_t host_len)
       octets[1] = (uint8_t) ((host_addr >> 16) & 0xFFu);
       octets[2] = (uint8_t) ((host_addr >> 8) & 0xFFu);
       octets[3] = (uint8_t) (host_addr & 0xFFu);
-      if (sec4_rt_ipv4_octets_are_private(octets)) {
+      if (sec4_rt_ipv4_octets_are_blocked_by_ssrf_policy(
+              octets,
+              block_private_ranges,
+              block_loopback,
+              block_link_local,
+              block_metadata_ips
+          )) {
         internal = true;
         break;
       }
@@ -1514,7 +1603,13 @@ static bool sec4_rt_host_resolves_to_internal(const char *host, size_t host_len)
         current->ai_family == AF_INET6 && current->ai_addrlen >= sizeof(struct sockaddr_in6)
     ) {
       const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *) current->ai_addr;
-      if (sec4_rt_ipv6_addr_is_internal(&addr6->sin6_addr)) {
+      if (sec4_rt_ipv6_addr_is_internal_with_policy(
+              &addr6->sin6_addr,
+              block_private_ranges,
+              block_loopback,
+              block_link_local,
+              block_metadata_ips
+          )) {
         internal = true;
         break;
       }
@@ -3834,11 +3929,47 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   if (!(is_http || is_https)) {
     return false;
   }
-  if (sec4_rt_host_is_internal(host, host_len)) {
+  bool block_private_ranges = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_NET_SSRF_BLOCK_PRIVATE_RANGES",
+      true
+  );
+  bool block_loopback = sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_BLOCK_LOOPBACK", true);
+  bool block_link_local = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
+      true
+  );
+  bool block_metadata_ips = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_NET_SSRF_BLOCK_METADATA_IPS",
+      true
+  );
+  if (sec4_rt_host_equals(host, host_len, "localhost")) {
+    if (block_loopback) {
+      return false;
+    }
+  } else if (
+      sec4_rt_host_ends_with(host, host_len, ".local")
+      || sec4_rt_host_ends_with(host, host_len, ".internal")
+  ) {
+    return false;
+  } else if (sec4_rt_parse_ipv4_blocked_by_ssrf_policy(
+                 host,
+                 host_len,
+                 block_private_ranges,
+                 block_loopback,
+                 block_link_local,
+                 block_metadata_ips
+             )) {
     return false;
   }
   if (sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_RESOLVE_DNS", true)
-      && sec4_rt_host_resolves_to_internal(host, host_len)) {
+      && sec4_rt_host_resolves_to_internal(
+             host,
+             host_len,
+             block_private_ranges,
+             block_loopback,
+             block_link_local,
+             block_metadata_ips
+         )) {
     return false;
   }
 

@@ -108,6 +108,10 @@ pub struct NetInternalPolicyConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NetSsrfPolicyConfig {
+    pub block_private_ranges: bool,
+    pub block_loopback: bool,
+    pub block_link_local: bool,
+    pub block_metadata_ips: bool,
     pub revalidate_redirects: bool,
     pub resolve_dns: bool,
 }
@@ -234,6 +238,10 @@ impl Default for Policy {
                 allowed_domains: Vec::new(),
             },
             net_ssrf: NetSsrfPolicyConfig {
+                block_private_ranges: true,
+                block_loopback: true,
+                block_link_local: true,
+                block_metadata_ips: true,
                 revalidate_redirects: true,
                 resolve_dns: true,
             },
@@ -954,6 +962,18 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
 
         if let Some(ssrf) = net.ssrf {
+            if let Some(block_private_ranges) = ssrf.block_private_ranges {
+                policy.net_ssrf.block_private_ranges = block_private_ranges;
+            }
+            if let Some(block_loopback) = ssrf.block_loopback {
+                policy.net_ssrf.block_loopback = block_loopback;
+            }
+            if let Some(block_link_local) = ssrf.block_link_local {
+                policy.net_ssrf.block_link_local = block_link_local;
+            }
+            if let Some(block_metadata_ips) = ssrf.block_metadata_ips {
+                policy.net_ssrf.block_metadata_ips = block_metadata_ips;
+            }
             if let Some(revalidate_redirects) = ssrf.revalidate_redirects {
                 policy.net_ssrf.revalidate_redirects = revalidate_redirects;
             }

@@ -13,6 +13,10 @@ fn policy_defaults_when_empty() {
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.json.require_schema_for_encode);
     assert_eq!(policy.net_public.max_redirects, 0);
+    assert!(policy.net_ssrf.block_private_ranges);
+    assert!(policy.net_ssrf.block_loopback);
+    assert!(policy.net_ssrf.block_link_local);
+    assert!(policy.net_ssrf.block_metadata_ips);
     assert_eq!(policy.auth.cookie_name, "session");
 }
 
@@ -289,6 +293,28 @@ max_redirects = 7
     assert_eq!(policy.json.max_bytes, 4096);
     assert_eq!(policy.json.max_depth, 8);
     assert_eq!(policy.net_public.max_redirects, 7);
+}
+
+#[test]
+fn policy_parses_net_ssrf_block_toggles() {
+    let source = r#"
+[net.ssrf]
+block_private_ranges = false
+block_loopback = false
+block_link_local = false
+block_metadata_ips = false
+resolve_dns = false
+revalidate_redirects = false
+"#;
+
+    let policy = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect("net.ssrf block toggles should parse");
+    assert!(!policy.net_ssrf.block_private_ranges);
+    assert!(!policy.net_ssrf.block_loopback);
+    assert!(!policy.net_ssrf.block_link_local);
+    assert!(!policy.net_ssrf.block_metadata_ips);
+    assert!(!policy.net_ssrf.resolve_dns);
+    assert!(!policy.net_ssrf.revalidate_redirects);
 }
 
 #[test]
