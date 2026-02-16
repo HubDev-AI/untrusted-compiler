@@ -79,15 +79,13 @@ No-stub alpha is considered ready only when all items below are true:
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~85-88%
-- Strict no-stub alpha: ~70-75%
+- Runnable alpha (end-to-end): ~88-91%
+- Strict no-stub alpha: ~78-82%
 
 ### Remaining implementation slices (priority order)
 
-1. Runtime JSON decode/encode semantic hardening (reduce bridge-only behavior and enforce schema-oriented contract where supported by v0.1 runtime ABI).
-2. Middleware policy materialization hardening (`fromPolicy` + `with*` paths) beyond token-level toggles.
-3. Structured runtime log emission path (not only handle construction), including deterministic redaction-safe serialization.
-4. Final alpha no-stub verification pass and publish checklist update.
+1. Structured runtime log emission path (not only handle construction), including deterministic redaction-safe serialization.
+2. Final alpha no-stub verification pass and publish checklist update.
 
 ## M37 - No-Stub Alpha Sprint (In Progress)
 
@@ -128,6 +126,32 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added runtime harness coverage for gate-required/gate-failed/schema-mismatch decode paths.
 - [x] Added compile compatibility bridge flag (`-Wno-int-conversion`) to keep schema descriptor literal callsites compiling in current ABI stage.
 - [x] Book chapter documenting M37-S2 implementation added.
+
+### M37-S3 middleware policy materialization hardening acceptance criteria
+
+- `sec4 run` materializes active policy into runtime env for middleware/security paths:
+  - CORS (`enabled`, `allowed_origins`, `allow_credentials`, `require_vary_origin`),
+  - security headers (`enabled`, `x_content_type_options`, `x_frame_options`, `referrer_policy`),
+  - CSRF (`enabled`, `mode`, `protected_methods`),
+  - auth (`mode`).
+- Runtime `cors.fromPolicy` / `sec.defaultHeaders` / `csrf.fromPolicy` / `auth.fromPolicy` handles apply those policy values deterministically via `with*` middleware hooks.
+- Runtime response emission uses dynamic middleware-derived headers (not fixed constants) for normal and preflight responses.
+- `sec4 run` integration coverage proves policy materialization behavior for:
+  - CORS response headers,
+  - disabled security headers,
+  - disabled CSRF protection on protected methods.
+
+### M37-S3 tracking (live status)
+
+- [x] Runtime router middleware state expanded for policy-materialized CORS/security/CSRF/auth fields.
+- [x] Runtime middleware `with*` implementations now honor policy handles and disabled-path behavior.
+- [x] Runtime response path now emits policy-driven CORS and security headers dynamically.
+- [x] `sec4 run` now exports middleware policy env keys (plus redirect/json runtime policy bridge keys) into c-bin execution.
+- [x] Added run-command integration tests:
+  - `run_command_oneshot_applies_cors_from_policy`
+  - `run_command_oneshot_disables_security_headers_from_policy`
+  - `run_command_oneshot_disables_csrf_from_policy`
+- [x] Book chapter documenting M37-S3 implementation added.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5438,7 +5462,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S3 middleware policy materialization hardening (implementation-first).
+- M37-S4 structured runtime log emission path (implementation-first).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5530,9 +5554,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Complete M37-S3 middleware policy materialization hardening.
-2. Complete M37-S4 structured runtime log emission path.
-3. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
+1. Complete M37-S4 structured runtime log emission path.
+2. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
+3. Prepare alpha publish checklist delta from no-stub verification evidence.
 
 ---
 
