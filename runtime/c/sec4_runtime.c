@@ -2952,7 +2952,9 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_OK = 0,
   SEC4_RT_REDIRECT_RESOLVE_INVALID = 1,
   SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID = 2,
-  SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID = 3
+  SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID = 3,
+  SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID = 4,
+  SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5
 } sec4_rt_redirect_resolve_status;
 
 static sec4_rt_redirect_resolve_status sec4_rt_normalize_redirect_path(
@@ -3113,7 +3115,7 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
         resolved_target = target_buffer;
       } else if (location[0] != '/') {
         if (location[0] == '#') {
-          return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+          return SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID;
         }
         size_t dir_len = 1;
         for (size_t i = 0; i < target_path_len; i++) {
@@ -3142,8 +3144,11 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
       }
 
       for (const char *cursor = resolved_target; *cursor != '\0'; cursor++) {
-        if ((unsigned char) *cursor <= 0x20 || *cursor == '\\' || *cursor == '#') {
-          return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
+        if (*cursor == '#') {
+          return SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID;
+        }
+        if ((unsigned char) *cursor <= 0x20 || *cursor == '\\') {
+          return SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID;
         }
       }
 
@@ -3451,6 +3456,24 @@ static int64_t sec4_rt_outbound_http_get_handle(
         redirect_valid = sec4_rt_redirect_url_passes_scope(next_url, scope);
       }
       if (!redirect_valid) {
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_FRAGMENT_INVALID",
+              "validation",
+              "outbound redirect target must not include fragment"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_TARGET_CHAR_INVALID",
+              "validation",
+              "outbound redirect target contains invalid characters"
+          );
+          return 0;
+        }
         if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID) {
           sec4_rt_store_std_error_response(
               400,

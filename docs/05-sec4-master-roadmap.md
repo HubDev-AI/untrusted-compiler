@@ -451,6 +451,22 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_absolute_redirect_upper_host_succeeds_when_clang_available`
   - `c_bin_runtime_internal_get_redirect_host_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated relative redirect normalization, redirect allow path, and c-backend emit contract.
+
+### M38-S16 outbound HTTP redirect fragment/target-character diagnostics hardening acceptance criteria
+
+- Runtime redirect resolver distinguishes fragment-invalid targets from generic/character-invalid targets.
+- Redirect targets containing fragments are rejected with deterministic diagnostics.
+- Redirect targets containing invalid characters are rejected with deterministic diagnostics.
+
+### M38-S16 tracking (live status)
+
+- [x] Redirect resolver now returns dedicated statuses for fragment-invalid and target-character-invalid outcomes.
+- [x] Added deterministic `NET.REDIRECT_FRAGMENT_INVALID` mapping for fragment-bearing redirect targets.
+- [x] Added deterministic `NET.REDIRECT_TARGET_CHAR_INVALID` mapping for redirect targets containing invalid characters.
+- [x] Added redirect-target harness helpers + tests:
+  - `c_bin_runtime_internal_get_redirect_fragment_invalid_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_target_char_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated host-invalid and normalized-relative redirect paths plus c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5761,7 +5777,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S16 outbound HTTP parser hardening follow-up (query-fragment redirect diagnostics and deterministic target character policy).
+- M38-S17 outbound HTTP redirect query-component diagnostics hardening (deterministic malformed-query target handling).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5853,9 +5869,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S16 scope for query-fragment redirect diagnostics and deterministic target character policy on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host subset) after M38-S16 edits.
-3. Publish M38-S16 book chapter and refresh roadmap live-status counts.
+1. Add M38-S17 scope for redirect query-component diagnostics and deterministic malformed-query target handling.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target subset) after M38-S17 edits.
+3. Publish M38-S17 book chapter and refresh roadmap live-status counts.
 
 ---
 
