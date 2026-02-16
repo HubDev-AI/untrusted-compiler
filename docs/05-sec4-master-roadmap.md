@@ -77,6 +77,19 @@ No-stub alpha is considered ready only when all items below are true:
 5. Policy parser/model/runtime bridge parity exists for active keys used by compiler/runtime.
 6. Alpha smoke + targeted runtime harness tests pass on `main` without requiring branch-local patches.
 
+### Post-alpha priority lock (WASM/browser)
+
+WASM/browser execution is now an explicit roadmap priority, but it is hard-gated behind no-stub alpha closure so core runtime completion is not delayed.
+
+`WASM_START_GATE` opens only when all conditions are true:
+
+1. no-stub alpha readiness criteria above are fully satisfied.
+2. alpha decision record is `GO` (`build/m37-alpha-tag-decision-record.json`).
+3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
+4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
+
+When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track.
+
 ### Readiness estimate (live)
 
 - Runnable alpha (end-to-end): ~93-95%
@@ -2273,6 +2286,7 @@ Adjusted in this roadmap:
 - Policy-as-code and diagnostics taxonomy are explicitly scheduled as compiler features.
 - Success envelope/log-event schema, capture/replay, policy-key schema, and typed CORS behavior are now explicit roadmap inputs.
 - Deterministic security posture reporting (`sec4 audit`) and metadata tags (`security_map`) are explicit implementation targets.
+- Post-alpha backend expansion priority is explicit: WASM/browser profile work starts immediately after no-stub alpha release closure.
 
 ## 1. Definition of Done (Minimal Real Working Untrusted<T>)
 
@@ -2308,6 +2322,7 @@ Implementation order is intentionally linear to reduce thrash:
 11. Harden tests, diagnostics, packaging, and build integrity metadata.
 12. Run post-stability benchmark suite and publish cross-language comparison results.
 13. Implement official editor tooling stack (compiler service + LSP + Zed extension + tree-sitter grammar).
+14. Post-alpha backend expansion: add WASM backend and browser sandbox runtime profile.
 
 ## 3. Milestone Plan
 
