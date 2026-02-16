@@ -55,6 +55,7 @@ pub struct CsrfPolicyConfig {
 pub struct AuthPolicyConfig {
     pub mode: String,
     pub cross_site_frontend: bool,
+    pub cookie_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -190,6 +191,7 @@ impl Default for Policy {
             auth: AuthPolicyConfig {
                 mode: "token".to_string(),
                 cross_site_frontend: false,
+                cookie_name: "session".to_string(),
             },
             capture: CapturePolicyConfig {
                 mode: "errors".to_string(),
@@ -1140,6 +1142,20 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
 
         if let Some(cookie) = section.cookie {
+            if let Some(cookie_name) = cookie.cookie_name {
+                if cookie_name.trim().is_empty() {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid auth.cookie.cookie_name",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("auth.cookie.cookie_name must be a non-empty string"),
+                    );
+                } else {
+                    policy.auth.cookie_name = cookie_name;
+                }
+            }
             if let Some(same_site) = cookie.same_site {
                 if same_site == "None" && cookie.secure == Some(false) {
                     diagnostics.push(

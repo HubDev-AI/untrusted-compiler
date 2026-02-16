@@ -2753,6 +2753,9 @@ entry = "src/main.ut"
         r#"[auth]
 mode = "cookie"
 cross_site_frontend = false
+
+[auth.cookie]
+cookie_name = "sid"
 "#,
     )
     .expect("policy should be written");
@@ -2809,7 +2812,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nCookie: session=s123\r\nConnection: close\r\n\r\n",
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nCookie: sid=s123\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();

@@ -13,6 +13,7 @@ fn policy_defaults_when_empty() {
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.json.require_schema_for_encode);
     assert_eq!(policy.net_public.max_redirects, 0);
+    assert_eq!(policy.auth.cookie_name, "session");
 }
 
 #[test]
@@ -193,6 +194,37 @@ enabled = false
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("cookie auth must require csrf");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_parses_auth_cookie_name() {
+    let source = r#"
+[auth]
+mode = "cookie"
+
+[auth.cookie]
+cookie_name = "sid"
+"#;
+
+    let policy =
+        parse_policy_str(Path::new("sec4.policy"), source).expect("auth cookie_name should parse");
+    assert_eq!(policy.auth.mode, "cookie");
+    assert_eq!(policy.auth.cookie_name, "sid");
+}
+
+#[test]
+fn policy_rejects_empty_auth_cookie_name() {
+    let source = r#"
+[auth]
+mode = "cookie"
+
+[auth.cookie]
+cookie_name = "   "
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("empty auth.cookie.cookie_name must fail");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 

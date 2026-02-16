@@ -3603,6 +3603,7 @@ fn cmd_run(
         policy.csrf.protected_methods.join(","),
     );
     cmd.env("SEC4_RT_AUTH_MODE", policy.auth.mode.as_str());
+    cmd.env("SEC4_RT_AUTH_COOKIE_NAME", policy.auth.cookie_name.as_str());
     if let Some(port) = port {
         cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
     }
