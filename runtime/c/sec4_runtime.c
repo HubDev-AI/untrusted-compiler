@@ -2954,8 +2954,37 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID = 2,
   SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID = 3,
   SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID = 4,
-  SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5
+  SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5,
+  SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID = 6
 } sec4_rt_redirect_resolve_status;
+
+static bool sec4_rt_is_ascii_hex_char(char value) {
+  return (value >= '0' && value <= '9')
+      || (value >= 'a' && value <= 'f')
+      || (value >= 'A' && value <= 'F');
+}
+
+static bool sec4_rt_is_redirect_query_valid(const char *query, size_t query_len) {
+  if (query == NULL || query_len == 0 || query[0] != '?') {
+    return false;
+  }
+  for (size_t i = 1; i < query_len; i++) {
+    char value = query[i];
+    if (value == '?') {
+      return false;
+    }
+    if (value == '%') {
+      if (i + 2 >= query_len) {
+        return false;
+      }
+      if (!sec4_rt_is_ascii_hex_char(query[i + 1]) || !sec4_rt_is_ascii_hex_char(query[i + 2])) {
+        return false;
+      }
+      i += 2;
+    }
+  }
+  return true;
+}
 
 static sec4_rt_redirect_resolve_status sec4_rt_normalize_redirect_path(
     const char *input_path,
@@ -3154,6 +3183,12 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
 
       const char *query_sep = strchr(resolved_target, '?');
       size_t path_len = query_sep == NULL ? strlen(resolved_target) : (size_t) (query_sep - resolved_target);
+      if (query_sep != NULL) {
+        size_t query_len = strlen(query_sep);
+        if (!sec4_rt_is_redirect_query_valid(query_sep, query_len)) {
+          return SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID;
+        }
+      }
       sec4_rt_redirect_resolve_status normalize_status = sec4_rt_normalize_redirect_path(
           resolved_target,
           path_len,
@@ -3217,6 +3252,13 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
   }
   if (!sec4_rt_is_redirect_host_token_valid(parsed_host)) {
     return SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID;
+  }
+  const char *parsed_query = memchr(parsed_target, '?', parsed_target_len);
+  if (parsed_query != NULL) {
+    size_t parsed_query_len = parsed_target_len - (size_t) (parsed_query - parsed_target);
+    if (!sec4_rt_is_redirect_query_valid(parsed_query, parsed_query_len)) {
+      return SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID;
+    }
   }
 
   for (char *cursor = parsed_host; *cursor != '\0'; cursor++) {
@@ -3471,6 +3513,15 @@ static int64_t sec4_rt_outbound_http_get_handle(
               "NET.REDIRECT_TARGET_CHAR_INVALID",
               "validation",
               "outbound redirect target contains invalid characters"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_QUERY_INVALID",
+              "validation",
+              "outbound redirect query component is invalid"
           );
           return 0;
         }

@@ -467,6 +467,21 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_redirect_fragment_invalid_returns_deterministic_code_when_clang_available`
   - `c_bin_runtime_internal_get_redirect_target_char_invalid_returns_deterministic_code_when_clang_available`
 - [x] Revalidated host-invalid and normalized-relative redirect paths plus c-backend emit contract.
+
+### M38-S17 outbound HTTP redirect query-component diagnostics hardening acceptance criteria
+
+- Runtime validates redirect query components deterministically and rejects malformed query payload.
+- Invalid percent-encoding sequences in redirect query components are rejected with dedicated diagnostics.
+- Repeated query separators in redirect targets are rejected with dedicated diagnostics.
+
+### M38-S17 tracking (live status)
+
+- [x] Redirect resolver now validates query component shape and percent escapes deterministically.
+- [x] Added deterministic `NET.REDIRECT_QUERY_INVALID` mapping for malformed redirect query components.
+- [x] Added redirect-query harness helpers + tests:
+  - `c_bin_runtime_internal_get_redirect_query_percent_invalid_returns_deterministic_code_when_clang_available`
+  - `c_bin_runtime_internal_get_redirect_query_separator_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated fragment/target-char diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5777,7 +5792,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S17 outbound HTTP redirect query-component diagnostics hardening (deterministic malformed-query target handling).
+- M38-S18 outbound HTTP absolute-redirect scope diagnostics hardening (deterministic scope-revalidation failure code split).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5869,9 +5884,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S17 scope for redirect query-component diagnostics and deterministic malformed-query target handling.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target subset) after M38-S17 edits.
-3. Publish M38-S17 book chapter and refresh roadmap live-status counts.
+1. Add M38-S18 scope for deterministic absolute-redirect scope-revalidation diagnostics.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target subset) after M38-S18 edits.
+3. Publish M38-S18 book chapter and refresh roadmap live-status counts.
 
 ---
 
