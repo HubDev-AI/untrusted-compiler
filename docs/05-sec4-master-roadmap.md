@@ -1468,6 +1468,24 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S64 security-headers x-frame-options invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS` env values deterministically fall back to `DENY`.
+- Invalid raw env values are never reflected in emitted `X-Frame-Options` response headers.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S64 tracking (live status)
+
+- [x] Added HTTP runtime security-header x-frame-options fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+- [x] Harness validates invalid-token fallback behavior:
+  - invalid env token (`"ALLOW-FROM"`) falls back to `X-Frame-Options: DENY`
+- [x] Harness validates response output never reflects invalid x-frame-options token values.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_frame_options_invalid_env_falls_back_to_deny_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6780,7 +6798,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S64 security-headers x-frame-options invalid-env fallback coverage (invalid header-token env values should deterministically fall back to `DENY`).
+- M38-S65 security-headers referrer-policy invalid-env fallback coverage (invalid header values should deterministically fall back to `strict-origin-when-cross-origin`).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6872,9 +6890,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S64 scope for x-frame-options invalid-env fallback behavior in security headers runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_X_FRAME_OPTIONS` values fall back to deterministic `DENY`.
-3. Publish M38-S64 book chapter and refresh roadmap live-status counts.
+1. Add M38-S65 scope for referrer-policy invalid-env fallback behavior in security headers runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY` values fall back to deterministic `strict-origin-when-cross-origin`.
+3. Publish M38-S65 book chapter and refresh roadmap live-status counts.
 
 ---
 

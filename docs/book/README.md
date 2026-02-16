@@ -654,5 +654,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `682-m38-security-headers-hsts-runtime-materialization.md`
 - `683-m38-outbound-http-internal-policy-suffixed-token-fallback.md`
 - `684-m38-security-headers-hsts-invalid-env-fallback.md`
+- `685-m38-security-headers-x-frame-options-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.
