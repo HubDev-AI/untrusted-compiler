@@ -4034,3 +4034,59 @@ fn main() effects { net } -> Int {
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
+
+#[test]
+fn run_command_rejects_zero_max_body_bytes_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-max-body-bytes");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-body-bytes", "0"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --max-body-bytes override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-body-bytes must be >= 1"),
+        "stderr should include deterministic max-body-bytes validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_serve_timeout_ms_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-serve-timeout");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--serve-timeout-ms", "0"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --serve-timeout-ms override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --serve-timeout-ms must be >= 1"),
+        "stderr should include deterministic serve-timeout-ms validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}

@@ -3518,6 +3518,15 @@ fn cmd_run(
     serve_timeout_ms: Option<u64>,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
+    if max_body_bytes == Some(0) {
+        eprintln!("run failed: --max-body-bytes must be >= 1");
+        return Err(2);
+    }
+    if serve_timeout_ms == Some(0) {
+        eprintln!("run failed: --serve-timeout-ms must be >= 1");
+        return Err(2);
+    }
+
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
         Err(diagnostics) => {

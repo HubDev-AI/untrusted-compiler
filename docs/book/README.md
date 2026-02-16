@@ -712,5 +712,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `740-m38-csrf-cookie-header-name-policy-materialization-bridge.md`
 - `741-m38-http-body-timeout-policy-materialization-bridge.md`
 - `742-m38-http-policy-cli-override-precedence-hardening.md`
+- `743-m38-http-ingress-override-input-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
