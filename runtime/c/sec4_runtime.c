@@ -2036,10 +2036,11 @@ static int sec4_rt_extract_outbound_http_body(
         if (transfer_chunked_seen) {
           return -10;
         }
-        if (token_len == 7 && strncasecmp(token_start, "chunked", 7) == 0) {
-          transfer_chunked = true;
-          transfer_chunked_seen = true;
+        if (token_len != 7 || strncasecmp(token_start, "chunked", 7) != 0) {
+          return -17;
         }
+        transfer_chunked = true;
+        transfer_chunked_seen = true;
         while (value_start < line_end && *value_start != ',') {
           value_start += 1;
         }
@@ -2739,6 +2740,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.CONTENT_LENGTH_INVALID",
         "validation",
         "outbound http content-length header is invalid"
+    );
+    return true;
+  }
+  if (read_status == -17) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.TRANSFER_ENCODING_UNSUPPORTED",
+        "validation",
+        "outbound http transfer-encoding token is unsupported"
     );
     return true;
   }

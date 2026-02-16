@@ -362,6 +362,20 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_duplicate_content_length_equal_is_accepted_when_clang_available`
   - `c_bin_runtime_internal_get_duplicate_content_length_conflict_returns_deterministic_code_when_clang_available`
 - [x] Revalidated retry-after diagnostics, redirect-allow path, and c-backend emit contract.
+
+### M38-S10 outbound HTTP transfer-encoding whitelist diagnostics hardening acceptance criteria
+
+- Runtime accepts only `Transfer-Encoding: chunked` on outbound response parsing.
+- Unsupported transfer-encoding tokens map to deterministic `NET.TRANSFER_ENCODING_UNSUPPORTED`.
+- Mixed-token invalid ordering diagnostics (`NET.TRANSFER_ENCODING_INVALID`) remain deterministic.
+
+### M38-S10 tracking (live status)
+
+- [x] Runtime outbound parser now treats non-`chunked` transfer-encoding tokens as deterministic unsupported failures.
+- [x] Outbound read error mapping now emits deterministic `NET.TRANSFER_ENCODING_UNSUPPORTED`.
+- [x] Added strictness harness helper + test:
+  - `c_bin_runtime_internal_get_unsupported_transfer_encoding_returns_deterministic_code_when_clang_available`
+- [x] Revalidated mixed-token invalid ordering, chunked decode success, redirect-allow path, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5672,7 +5686,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S10 outbound HTTP parser hardening follow-up (transfer-encoding token whitelist and deterministic mixed-token diagnostics).
+- M38-S11 outbound HTTP parser hardening follow-up (obs-fold and malformed whitespace normalization diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5764,9 +5778,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S10 scope for transfer-encoding token whitelist and deterministic mixed-token diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length subset) after M38-S10 edits.
-3. Publish M38-S10 book chapter and refresh roadmap live-status counts.
+1. Add M38-S11 scope for obs-fold and malformed whitespace normalization diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding subset) after M38-S11 edits.
+3. Publish M38-S11 book chapter and refresh roadmap live-status counts.
 
 ---
 

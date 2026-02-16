@@ -599,5 +599,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `627-m38-outbound-http-response-version-header-line-diagnostics.md`
 - `628-m38-outbound-http-duplicate-header-retryability-diagnostics.md`
 - `629-m38-outbound-http-duplicate-content-length-diagnostics.md`
+- `630-m38-outbound-http-transfer-encoding-whitelist-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.
