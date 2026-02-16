@@ -3391,21 +3391,34 @@ static int64_t sec4_rt_outbound_http_get_handle(
     return 0;
   }
   int64_t max_redirects = 0;
-  if (!sec4_rt_parse_env_non_negative_i64_strict(
-          "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
-          0,
-          SEC4_RT_MAX_OUTBOUND_HTTP_POLICY_REDIRECTS,
-          &max_redirects
-      )) {
-    sec4_rt_store_std_error_response_with_detail(
-        400,
-        "NET.REDIRECT_POLICY_MAX_REDIRECTS_INVALID",
-        "validation",
-        "invalid value for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
-        "policyKey",
-        "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
-    );
-    return 0;
+  const char *max_redirects_raw = getenv("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS");
+  if (max_redirects_raw != NULL && max_redirects_raw[0] != '\0') {
+    char *end = NULL;
+    long long parsed_max_redirects = strtoll(max_redirects_raw, &end, 10);
+    if (end == max_redirects_raw || (end != NULL && *end != '\0')) {
+      sec4_rt_store_std_error_response_with_detail(
+          400,
+          "NET.REDIRECT_POLICY_MAX_REDIRECTS_FORMAT_INVALID",
+          "validation",
+          "invalid numeric format for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
+          "policyKey",
+          "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
+      );
+      return 0;
+    }
+    if (parsed_max_redirects < 0
+        || parsed_max_redirects > SEC4_RT_MAX_OUTBOUND_HTTP_POLICY_REDIRECTS) {
+      sec4_rt_store_std_error_response_with_detail(
+          400,
+          "NET.REDIRECT_POLICY_MAX_REDIRECTS_RANGE_INVALID",
+          "validation",
+          "value out of range for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
+          "policyKey",
+          "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
+      );
+      return 0;
+    }
+    max_redirects = (int64_t) parsed_max_redirects;
   }
   bool revalidate_redirects = true;
   if (!sec4_rt_parse_env_flag_strict(
