@@ -647,5 +647,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `675-m38-outbound-http-internal-policy-invalid-token-fallback.md`
 - `676-m38-outbound-http-internal-policy-explicit-deny-token-matrix.md`
 - `677-m38-outbound-http-internal-policy-empty-whitespace-token-fallback.md`
+- `678-m38-outbound-http-internal-policy-quoted-token-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.
