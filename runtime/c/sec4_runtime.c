@@ -1936,10 +1936,10 @@ static int sec4_rt_extract_outbound_http_body(
 
   const char *headers_end = strstr(response, "\r\n\r\n");
   if (headers_end == NULL) {
-    return -3;
+    return -20;
   }
   if (status_line_end > headers_end) {
-    return -3;
+    return -20;
   }
 
   size_t header_bytes = (size_t) (headers_end - response) + 4;
@@ -1964,7 +1964,7 @@ static int sec4_rt_extract_outbound_http_body(
   while (header_cursor < headers_end) {
     const char *line_end = strstr(header_cursor, "\r\n");
     if (line_end == NULL || line_end > headers_end) {
-      break;
+      return -20;
     }
     if (line_end == header_cursor) {
       break;
@@ -1983,6 +1983,12 @@ static int sec4_rt_extract_outbound_http_body(
     for (const char *name_cursor = header_cursor; name_cursor < header_colon; name_cursor++) {
       if (!sec4_rt_is_http_header_name_char((unsigned char) *name_cursor)) {
         return -13;
+      }
+    }
+    for (const char *value_cursor = header_colon + 1; value_cursor < line_end; value_cursor++) {
+      unsigned char ch = (unsigned char) *value_cursor;
+      if ((ch < 0x20 && ch != '\t' && ch != ' ') || ch == 0x7F) {
+        return -21;
       }
     }
 
@@ -2770,6 +2776,24 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.HEADER_WHITESPACE_INVALID",
         "validation",
         "outbound http response header has invalid whitespace before colon"
+    );
+    return true;
+  }
+  if (read_status == -20) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.HEADER_SECTION_INVALID",
+        "validation",
+        "outbound http response header section is invalid"
+    );
+    return true;
+  }
+  if (read_status == -21) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.HEADER_VALUE_CONTROL_INVALID",
+        "validation",
+        "outbound http response header value contains invalid control characters"
     );
     return true;
   }
