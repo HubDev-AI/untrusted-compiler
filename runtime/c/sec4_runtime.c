@@ -3736,6 +3736,154 @@ static bool sec4_rt_parse_cookie_value(
   return false;
 }
 
+static bool sec4_rt_auth_mode_allows_token(const char *mode) {
+  if (mode == NULL || mode[0] == '\0') {
+    return true;
+  }
+  if (strcasecmp(mode, "off") == 0) {
+    return false;
+  }
+  if (strcasecmp(mode, "token") == 0 || strcasecmp(mode, "mixed") == 0) {
+    return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_auth_mode_allows_cookie(const char *mode) {
+  if (mode == NULL || mode[0] == '\0') {
+    return false;
+  }
+  if (strcasecmp(mode, "cookie") == 0 || strcasecmp(mode, "mixed") == 0) {
+    return true;
+  }
+  return false;
+}
+
+static const char *sec4_rt_auth_cookie_name(void) {
+  const char *configured = getenv("SEC4_RT_AUTH_COOKIE_NAME");
+  if (configured != NULL && configured[0] != '\0') {
+    return configured;
+  }
+  return "session";
+}
+
+static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
+  if (router != NULL && router->auth_mode[0] != '\0') {
+    return router->auth_mode;
+  }
+  if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
+    return g_sec4_rt_auth_policy.mode;
+  }
+  const char *configured = getenv("SEC4_RT_AUTH_MODE");
+  if (configured != NULL && configured[0] != '\0') {
+    return configured;
+  }
+  return "token";
+}
+
+static const char *sec4_rt_auth_unauthorized_message(const char *mode) {
+  if (sec4_rt_auth_mode_allows_token(mode) && sec4_rt_auth_mode_allows_cookie(mode)) {
+    return "Authorization header or session cookie missing or invalid";
+  }
+  if (sec4_rt_auth_mode_allows_cookie(mode)) {
+    return "Session cookie missing or invalid";
+  }
+  return "Authorization header missing or invalid";
+}
+
+static bool sec4_rt_extract_auth_cookie(char *cookie_value, size_t cookie_value_size) {
+  if (cookie_value == NULL || cookie_value_size == 0) {
+    return false;
+  }
+  cookie_value[0] = '\0';
+  char cookie_header[512];
+  if (!sec4_rt_extract_request_header("Cookie", cookie_header, sizeof(cookie_header))) {
+    return false;
+  }
+  return sec4_rt_parse_cookie_value(
+      cookie_header,
+      sec4_rt_auth_cookie_name(),
+      cookie_value,
+      cookie_value_size
+  );
+}
+
+static bool sec4_rt_auth_collect_subject(
+    const char *mode,
+    char *subject,
+    size_t subject_size,
+    bool *used_bearer_out
+) {
+  if (subject == NULL || subject_size == 0) {
+    return false;
+  }
+  subject[0] = '\0';
+  if (used_bearer_out != NULL) {
+    *used_bearer_out = false;
+  }
+
+  if (sec4_rt_auth_mode_allows_token(mode)) {
+    char auth_header[256];
+    bool has_auth = sec4_rt_extract_request_header(
+        "Authorization",
+        auth_header,
+        sizeof(auth_header)
+    );
+    if (has_auth && sec4_rt_is_valid_bearer_auth(auth_header)) {
+      int copied = snprintf(subject, subject_size, "%s", auth_header);
+      if (copied > 0 && (size_t) copied < subject_size) {
+        if (used_bearer_out != NULL) {
+          *used_bearer_out = true;
+        }
+        return true;
+      }
+    }
+  }
+
+  if (sec4_rt_auth_mode_allows_cookie(mode)) {
+    char session_cookie[256];
+    if (sec4_rt_extract_auth_cookie(session_cookie, sizeof(session_cookie))) {
+      int copied = snprintf(subject, subject_size, "%s", session_cookie);
+      if (copied > 0 && (size_t) copied < subject_size) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+static bool sec4_rt_auth_cookie_has_role(const char *required_role) {
+  if (required_role == NULL || required_role[0] == '\0') {
+    return false;
+  }
+
+  char cookie_header[512];
+  if (sec4_rt_extract_request_header("Cookie", cookie_header, sizeof(cookie_header))) {
+    char role_cookie[128];
+    if (sec4_rt_parse_cookie_value(cookie_header, "role", role_cookie, sizeof(role_cookie))) {
+      return sec4_rt_constant_time_bytes_eq(
+          (const unsigned char *) role_cookie,
+          strlen(role_cookie),
+          (const unsigned char *) required_role,
+          strlen(required_role)
+      );
+    }
+  }
+
+  char role_header[128];
+  if (sec4_rt_extract_request_header("X-Role", role_header, sizeof(role_header))) {
+    return sec4_rt_constant_time_bytes_eq(
+        (const unsigned char *) role_header,
+        strlen(role_header),
+        (const unsigned char *) required_role,
+        strlen(required_role)
+    );
+  }
+
+  return false;
+}
+
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method) {
   if (method == NULL) {
     return false;
@@ -4368,23 +4516,19 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   }
 
   if (router->auth_enabled && strcmp(method, "OPTIONS") != 0) {
-    char auth_header[256];
-    bool has_auth = sec4_rt_parse_header_value(
-        request,
-        headers_len,
-        "Authorization",
-        auth_header,
-        sizeof(auth_header)
-    );
-    bool valid_auth = has_auth
-        && strncasecmp(auth_header, "Bearer ", 7) == 0
-        && auth_header[7] != '\0';
-    if (!valid_auth) {
+    const char *auth_mode = sec4_rt_effective_auth_mode(router);
+    char auth_subject[256];
+    if (!sec4_rt_auth_collect_subject(
+            auth_mode,
+            auth_subject,
+            sizeof(auth_subject),
+            NULL
+        )) {
       sec4_rt_store_std_error_response(
           401,
           "AUTH.UNAUTHORIZED",
           "auth",
-          "Authorization header missing or invalid"
+          sec4_rt_auth_unauthorized_message(auth_mode)
       );
       const char *final_headers = sec4_rt_merge_three_headers(
           NULL,
@@ -7842,60 +7986,69 @@ int64_t sec4_rt_auth_from_policy(void) {
 
 int64_t sec4_rt_auth_require(int64_t ctx) {
   (void) ctx;
-  char auth_header[256];
-  bool has_auth = sec4_rt_extract_request_header(
-      "Authorization",
-      auth_header,
-      sizeof(auth_header)
-  );
-  if (!has_auth || !sec4_rt_is_valid_bearer_auth(auth_header)) {
+  const char *auth_mode = sec4_rt_effective_auth_mode(NULL);
+  char auth_subject[256];
+  if (!sec4_rt_auth_collect_subject(
+          auth_mode,
+          auth_subject,
+          sizeof(auth_subject),
+          NULL
+      )) {
     if (g_sec4_rt_request.has_request) {
       sec4_rt_store_std_error_response(
           401,
           "AUTH.UNAUTHORIZED",
           "auth",
-          "Authorization header missing or invalid"
+          sec4_rt_auth_unauthorized_message(auth_mode)
       );
     }
     return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2013));
   }
-  return sec4_rt_nonzero_handle_from_string(auth_header, UINT64_C(0xB2014));
+  return sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2014));
 }
 
 int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
   (void) ctx;
-  char auth_header[256];
-  bool has_auth = sec4_rt_extract_request_header(
-      "Authorization",
-      auth_header,
-      sizeof(auth_header)
-  );
-  if (!has_auth || !sec4_rt_is_valid_bearer_auth(auth_header)) {
+  const char *auth_mode = sec4_rt_effective_auth_mode(NULL);
+  char auth_subject[256];
+  bool used_bearer = false;
+  if (!sec4_rt_auth_collect_subject(
+          auth_mode,
+          auth_subject,
+          sizeof(auth_subject),
+          &used_bearer
+      )) {
     if (g_sec4_rt_request.has_request) {
       sec4_rt_store_std_error_response(
           401,
           "AUTH.UNAUTHORIZED",
           "auth",
-          "Authorization header missing or invalid"
+          sec4_rt_auth_unauthorized_message(auth_mode)
       );
     }
     return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2015));
   }
 
-  if (!sec4_rt_bearer_token_has_role(auth_header, required_role)) {
+  bool has_required_role = used_bearer
+      ? sec4_rt_bearer_token_has_role(auth_subject, required_role)
+      : sec4_rt_auth_cookie_has_role(required_role);
+  if (!has_required_role) {
+    const char *forbidden_message = used_bearer
+        ? "Authorization token missing required role"
+        : "Authenticated cookie principal missing required role";
     if (g_sec4_rt_request.has_request) {
       sec4_rt_store_std_error_response(
           403,
           "AUTH.FORBIDDEN",
           "auth",
-          "Authorization token missing required role"
+          forbidden_message
       );
     }
     int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2016));
     return sec4_rt_handle_from_two(role_handle, 403, UINT64_C(0xB2017));
   }
 
-  int64_t auth_handle = sec4_rt_nonzero_handle_from_string(auth_header, UINT64_C(0xB2018));
+  int64_t auth_handle = sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2018));
   int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2019));
   return sec4_rt_handle_from_two(auth_handle, role_handle, UINT64_C(0xB2020));
 }
