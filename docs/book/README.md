@@ -670,5 +670,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `698-m38-cors-allow-credentials-invalid-env-fallback.md`
 - `699-m38-cors-require-vary-origin-invalid-env-fallback.md`
 - `700-m38-cors-enabled-invalid-env-fallback.md`
+- `701-m38-auth-mode-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1814,6 +1814,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_enabled_invalid_env_falls_back_to_enabled_by_default`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S78 auth mode invalid-env fallback hardening acceptance criteria
+
+- Invalid `SEC4_RT_AUTH_MODE` env values deterministically fall back to `token` mode.
+- Invalid raw env values are never allowed to force an unsupported auth mode state.
+- Fallback hardening does not regress existing token/cookie auth success-path behavior.
+
+### M38-S78 tracking (live status)
+
+- [x] Runtime auth policy loading now normalizes unsupported auth mode env values to `token`.
+- [x] Runtime effective-auth resolution now clamps unsupported mode values to `token` before auth checks.
+- [x] Added HTTP runtime auth mode fallback e2e coverage:
+  - `c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_mode_invalid_env_falls_back_to_token_mode`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_auth_header_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

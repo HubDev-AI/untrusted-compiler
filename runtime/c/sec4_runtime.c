@@ -5802,6 +5802,21 @@ static bool sec4_rt_parse_cookie_value(
   return false;
 }
 
+static bool sec4_rt_auth_mode_is_supported(const char *mode) {
+  if (mode == NULL || mode[0] == '\0') {
+    return false;
+  }
+  return strcasecmp(mode, "off") == 0 || strcasecmp(mode, "token") == 0
+      || strcasecmp(mode, "cookie") == 0 || strcasecmp(mode, "mixed") == 0;
+}
+
+static const char *sec4_rt_auth_mode_or_default(const char *mode) {
+  if (sec4_rt_auth_mode_is_supported(mode)) {
+    return mode;
+  }
+  return "token";
+}
+
 static bool sec4_rt_auth_mode_allows_token(const char *mode) {
   if (mode == NULL || mode[0] == '\0') {
     return true;
@@ -5835,16 +5850,13 @@ static const char *sec4_rt_auth_cookie_name(void) {
 
 static const char *sec4_rt_effective_auth_mode(const sec4_rt_router_state *router) {
   if (router != NULL && router->auth_mode[0] != '\0') {
-    return router->auth_mode;
+    return sec4_rt_auth_mode_or_default(router->auth_mode);
   }
   if (g_sec4_rt_auth_policy.loaded && g_sec4_rt_auth_policy.mode[0] != '\0') {
-    return g_sec4_rt_auth_policy.mode;
+    return sec4_rt_auth_mode_or_default(g_sec4_rt_auth_policy.mode);
   }
   const char *configured = getenv("SEC4_RT_AUTH_MODE");
-  if (configured != NULL && configured[0] != '\0') {
-    return configured;
-  }
-  return "token";
+  return sec4_rt_auth_mode_or_default(configured);
 }
 
 static const char *sec4_rt_auth_unauthorized_message(const char *mode) {
@@ -9968,12 +9980,14 @@ static void sec4_rt_load_csrf_policy_from_env(void) {
 static void sec4_rt_load_auth_policy_from_env(void) {
   memset(&g_sec4_rt_auth_policy, 0, sizeof(g_sec4_rt_auth_policy));
   g_sec4_rt_auth_policy.loaded = true;
-  sec4_rt_read_env_string(
-      "SEC4_RT_AUTH_MODE",
-      "token",
+  const char *configured_mode = getenv("SEC4_RT_AUTH_MODE");
+  const char *effective_mode = sec4_rt_auth_mode_or_default(configured_mode);
+  strncpy(
       g_sec4_rt_auth_policy.mode,
-      sizeof(g_sec4_rt_auth_policy.mode)
+      effective_mode,
+      sizeof(g_sec4_rt_auth_policy.mode) - 1
   );
+  g_sec4_rt_auth_policy.mode[sizeof(g_sec4_rt_auth_policy.mode) - 1] = '\0';
   g_sec4_rt_auth_policy.enabled = strcasecmp(g_sec4_rt_auth_policy.mode, "off") != 0;
 }
 
