@@ -207,6 +207,18 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added contract coverage `scripts/test-build-m37-alpha-publish-checklist-delta.sh`.
 - [x] Added book chapter documenting M37-S6 publish-checklist delta artifact.
 - [x] Updated CLI build/run TLS mode defaults to `--tls-backend auto` with deterministic OpenSSL fallback behavior.
+
+### M37-S7 alpha release-note package acceptance criteria
+
+- Release-note package script consumes M37-S6 checklist artifact and emits deterministic JSON/markdown outputs.
+- Package computes deterministic `releaseState` (`alpha-ready` or `alpha-hold`) from checklist `overall` + `tagDecision`.
+- Package includes canonical no-stub baseline statement, identity hashes, sample summary, known limits, and next action guidance.
+
+### M37-S7 tracking (live status)
+
+- [x] Added `scripts/build-m37-alpha-release-notes.sh`.
+- [x] Added contract coverage `scripts/test-build-m37-alpha-release-notes.sh`.
+- [x] Added book chapter documenting M37-S7 alpha release-note package.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5517,7 +5529,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S7 alpha release-note package + tag decision execution record.
+- M37-S8 alpha tag decision execution record and M37 closure note.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5609,9 +5621,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Draft alpha release-note package from M37-S6 checklist evidence and known limits.
-2. Execute alpha tag decision checklist and record M37 closure outcome artifact.
-3. Run `scripts/release-alpha-gate.sh --skip-tests` and rebuild M37-S6 checklist delta for final pre-tag refresh.
+1. Execute alpha tag decision checklist and record the M37 closure outcome artifact.
+2. Run `scripts/release-alpha-gate.sh --skip-tests` plus M37-S6/S7 builders as the final pre-tag refresh.
+3. Capture a single M37 closure summary chapter tying checklist, release-notes package, and tag decision.
 
 ---
 
