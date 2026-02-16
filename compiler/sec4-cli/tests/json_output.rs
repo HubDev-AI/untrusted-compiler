@@ -4647,23 +4647,6 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
         run.status.success(),
         "compiled binary should exit successfully"
     );
-    let stderr = String::from_utf8(run.stderr).expect("stderr should be valid utf-8");
-    assert!(
-        stderr.contains("\"event\":\"event\""),
-        "runtime log output should include event name:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("\"level\":\"info\""),
-        "runtime log output should include info level:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("\"traceId\":\"rt-0\""),
-        "runtime log output should include deterministic trace id outside HTTP request context:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("\"timeMs\":"),
-        "runtime log output should include timeMs field:\n{stderr}"
-    );
 }
 
 #[test]
@@ -4803,8 +4786,9 @@ entry = "src/main.ut"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        r#"fn main() effects { time.now } -> Int64 {
-  time.now()
+        r#"fn main() effects { time.now } -> Int {
+  time.now();
+  0
 }
 "#,
     )
@@ -4887,6 +4871,23 @@ entry = "src/main.ut"
     assert!(
         run.status.success(),
         "compiled binary should exit successfully"
+    );
+    let stderr = String::from_utf8(run.stderr).expect("stderr should be valid utf-8");
+    assert!(
+        stderr.contains("\"event\":\"event\""),
+        "runtime log output should include event name:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"level\":\"info\""),
+        "runtime log output should include info level:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"traceId\":\"rt-0\""),
+        "runtime log output should include deterministic trace id outside HTTP request context:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"timeMs\":"),
+        "runtime log output should include timeMs field:\n{stderr}"
     );
 }
 
@@ -5299,6 +5300,13 @@ entry = "src/main.ut"
     )
     .expect("manifest should be written");
     fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[fs]
+enabled = true
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
         project_dir.join("src/main.ut"),
         r#"fn ioOps(
   db: DbCap,
@@ -5310,7 +5318,7 @@ entry = "src/main.ut"
   path: PathSafe,
   url: PublicUrl
 ) effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
-  let built = sql.q("SELECT 1", 2);
+  let built = sql.q("SELECT 1 LIMIT 1", 2);
   db.tx(db);
   db.execTx(tx, built);
   db.exec(db, built);
@@ -5340,7 +5348,7 @@ fn main() -> Int {
 
     let generated_c = fs::read_to_string(project_dir.join("build").join("generated.c"))
         .expect("read generated C");
-    assert!(generated_c.contains("sec4_rt_sql_q(\"SELECT 1\", 2)"));
+    assert!(generated_c.contains("sec4_rt_sql_q(\"SELECT 1 LIMIT 1\", 2)"));
     assert!(generated_c.contains("sec4_rt_db_tx(db)"));
     assert!(generated_c.contains("sec4_rt_db_exec_tx(tx, built)"));
     assert!(generated_c.contains("sec4_rt_db_exec(db, built)"));
@@ -5501,6 +5509,16 @@ entry = "src/main.ut"
     )
     .expect("manifest should be written");
     fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[net.internal]
+enabled = true
+
+[fs]
+enabled = true
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
         project_dir.join("src/main.ut"),
         r#"fn gates(input: Untrusted<String>, base: PathSafe) effects { net } -> Int {
   validate.headerValue(input);
@@ -5581,6 +5599,16 @@ entry = "src/main.ut"
 "#,
     )
     .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[net.internal]
+enabled = true
+
+[fs]
+enabled = true
+"#,
+    )
+    .expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
         r#"fn runtimeHandles() effects { net } -> Int {

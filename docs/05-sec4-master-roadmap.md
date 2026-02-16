@@ -79,13 +79,13 @@ No-stub alpha is considered ready only when all items below are true:
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~90-93%
-- Strict no-stub alpha: ~84-88%
+- Runnable alpha (end-to-end): ~93-95%
+- Strict no-stub alpha: ~90-92%
 
 ### Remaining implementation slices (priority order)
 
-1. Final alpha no-stub verification pass (full alpha smoke + targeted runtime harness matrix on `main`).
-2. Alpha publish checklist delta update from verified no-stub evidence.
+1. Alpha publish checklist delta update from verified no-stub evidence.
+2. Alpha tag decision and release-note packaging for the no-stub baseline.
 
 ## M37 - No-Stub Alpha Sprint (In Progress)
 
@@ -175,6 +175,26 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added dedicated clang-gated runtime harness coverage:
   - `c_bin_runtime_log_builders_emit_structured_json_when_clang_available`.
 - [x] Book chapter documenting M37-S4 implementation added.
+
+### M37-S5 final no-stub verification pass acceptance criteria
+
+- Full runtime/compiler verification matrix runs green on `main`:
+  - `cargo test -p sec4 --test json_output`
+  - `cargo test -p sec4 --test commands`
+  - `cargo test -p sec4 --test alpha_smoke`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+- Verification evidence is summarized as a residual-gap note for alpha decision.
+
+### M37-S5 tracking (live status)
+
+- [x] `cargo test -p sec4 --test json_output` passed (`156 passed; 0 failed`).
+- [x] `cargo test -p sec4 --test commands` passed (`34 passed; 0 failed`).
+- [x] `cargo test -p sec4 --test alpha_smoke` passed (`2 passed; 0 failed`).
+- [x] `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source` passed.
+- [x] Residual gaps documented for alpha decision:
+  - log sink level differentiation (`info/warn/error`) is still unified at runtime sink ABI,
+  - HTTPS runtime path still defaults to explicit backend selection (`--tls-backend openssl`).
+- [x] Book chapter documenting M37-S5 verification pass added.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5485,7 +5505,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S5 final no-stub alpha verification pass + publish-checklist delta.
+- M37-S6 alpha publish checklist delta + tag decision package.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5577,9 +5597,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
-2. Prepare alpha publish checklist delta from no-stub verification evidence.
-3. Freeze M37 closure note with exact remaining non-stub gaps (if any) before alpha tag decision.
+1. Prepare alpha publish checklist delta from no-stub verification evidence.
+2. Draft alpha release-note package with no-stub baseline statement and known limits.
+3. Execute alpha tag decision checklist and record M37 closure outcome.
 
 ---
 
