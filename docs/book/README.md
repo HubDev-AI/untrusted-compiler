@@ -594,5 +594,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `622-m38-chunked-edge-case-diagnostics-hardening.md`
 - `623-m38-chunked-trailer-extension-strictness.md`
 - `624-m38-outbound-http-oversized-header-diagnostics.md`
+- `625-m38-outbound-http-framing-conflict-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.

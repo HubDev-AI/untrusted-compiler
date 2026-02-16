@@ -1919,6 +1919,7 @@ static int sec4_rt_extract_outbound_http_body(
   }
 
   const char *header_cursor = status_line_end + 2;
+  bool has_transfer_encoding = false;
   bool transfer_chunked = false;
   bool has_content_length = false;
   size_t content_length = 0;
@@ -1949,6 +1950,7 @@ static int sec4_rt_extract_outbound_http_body(
       }
     } else if ((size_t) (line_end - header_cursor) >= 18
                && strncasecmp(header_cursor, "Transfer-Encoding:", 18) == 0) {
+      has_transfer_encoding = true;
       const char *value_start = header_cursor + 18;
       while (value_start < line_end) {
         while (value_start < line_end
@@ -1998,6 +2000,9 @@ static int sec4_rt_extract_outbound_http_body(
       if (!has_digits || value_start != line_end) {
         return -3;
       }
+      if (has_content_length && content_length != parsed) {
+        return -9;
+      }
       content_length = parsed;
       has_content_length = true;
     }
@@ -2007,6 +2012,10 @@ static int sec4_rt_extract_outbound_http_body(
 
   size_t payload_bytes = total - header_bytes;
   const char *payload = response + header_bytes;
+
+  if (has_transfer_encoding && transfer_chunked && has_content_length) {
+    return -9;
+  }
 
   if (transfer_chunked) {
     size_t cursor = 0;
@@ -2528,6 +2537,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.RESPONSE_HEADERS_TOO_LARGE",
         "validation",
         "outbound http response headers exceed runtime header limit"
+    );
+    return true;
+  }
+  if (read_status == -9) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_FRAMING_CONFLICT",
+        "validation",
+        "outbound http response contains conflicting framing headers"
     );
     return true;
   }

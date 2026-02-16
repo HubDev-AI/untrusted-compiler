@@ -285,6 +285,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added oversized-header harness helper + test:
   - `c_bin_runtime_internal_get_oversized_headers_returns_deterministic_code_when_clang_available`.
 - [x] Revalidated c-backend emit contract and existing internal-net outbound regression paths.
+
+### M38-S5 outbound HTTP framing-conflict diagnostics hardening acceptance criteria
+
+- Runtime outbound parser rejects conflicting response framing signals (`Transfer-Encoding: chunked` combined with `Content-Length`).
+- Duplicate `Content-Length` headers with inconsistent values are rejected deterministically.
+- Conflicting framing failures map to deterministic runtime code `NET.RESPONSE_FRAMING_CONFLICT`.
+
+### M38-S5 tracking (live status)
+
+- [x] Runtime outbound parser now returns dedicated read status for framing conflicts.
+- [x] Outbound read error mapping now emits deterministic `NET.RESPONSE_FRAMING_CONFLICT`.
+- [x] Added conflicting-framing harness helper + test:
+  - `c_bin_runtime_internal_get_conflicting_framing_headers_returns_deterministic_code_when_clang_available`.
+- [x] Revalidated chunked success, redirect allow path, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5595,7 +5609,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S5 outbound HTTP parse hardening follow-up (conflicting framing headers + deterministic diagnostics).
+- M38-S6 outbound HTTP parser hardening follow-up (status-line and framing-token strictness diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5687,9 +5701,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S5 scope for conflicting framing-header parse diagnostics (`Content-Length` + `Transfer-Encoding`) on outbound runtime.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit subset) after M38-S5 edits.
-3. Publish M38-S5 book chapter and refresh roadmap live-status counts.
+1. Add M38-S6 scope for status-line and framing-token strictness diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing-conflict subset) after M38-S6 edits.
+3. Publish M38-S6 book chapter and refresh roadmap live-status counts.
 
 ---
 
