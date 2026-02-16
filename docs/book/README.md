@@ -592,5 +592,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `620-m37-alpha-tag-decision-record.md`
 - `621-m38-outbound-http-chunked-decoding-hardening.md`
 - `622-m38-chunked-edge-case-diagnostics-hardening.md`
+- `623-m38-chunked-trailer-extension-strictness.md`
 
 As milestones progress, chapters will be added and linked from this index.

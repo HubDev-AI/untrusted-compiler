@@ -293,6 +293,143 @@ fn spawn_one_shot_http_malformed_chunked_server() -> (u16, thread::JoinHandle<()
     (port, handle)
 }
 
+fn spawn_one_shot_http_chunked_with_trailers_server(body: &str) -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("chunked trailers oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("chunked trailers oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("chunked trailers oneshot server local address should resolve")
+        .port();
+    let payload = body.as_bytes().to_vec();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("chunked trailers oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("chunked trailers oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("chunked trailers oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .expect("chunked trailers oneshot server response headers should write");
+
+        let mut cursor = 0usize;
+        let mut chunk_index = 0usize;
+        while cursor < payload.len() {
+            let chunk_len = (payload.len() - cursor).min(5);
+            let chunk_head = if chunk_index == 0 {
+                format!("{chunk_len:X};ext=1\r\n")
+            } else {
+                format!("{chunk_len:X}\r\n")
+            };
+            stream
+                .write_all(chunk_head.as_bytes())
+                .expect("chunked trailers oneshot server chunk length should write");
+            stream
+                .write_all(&payload[cursor..cursor + chunk_len])
+                .expect("chunked trailers oneshot server chunk body should write");
+            stream
+                .write_all(b"\r\n")
+                .expect("chunked trailers oneshot server chunk terminator should write");
+            cursor += chunk_len;
+            chunk_index += 1;
+        }
+
+        stream
+            .write_all(b"0\r\nX-Test: one\r\nY-Trace: abc\r\n\r\n")
+            .expect("chunked trailers oneshot server final trailer should write");
+        stream
+            .flush()
+            .expect("chunked trailers oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
+fn spawn_one_shot_http_chunked_missing_trailer_terminator_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("chunked missing terminator oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("chunked missing terminator oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("chunked missing terminator oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!(
+                            "chunked missing terminator oneshot server timed out waiting for client"
+                        );
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("chunked missing terminator oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("chunked missing terminator server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .expect("chunked missing terminator response headers should write");
+        // Missing final CRLF that should terminate trailers.
+        stream
+            .write_all(b"4\r\ntest\r\n0\r\nX-Trailer: missing-end\r\n")
+            .expect("chunked missing terminator payload should write");
+        stream
+            .flush()
+            .expect("chunked missing terminator response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_server_with_response_delay(
     body: &str,
     delay: Duration,
@@ -7281,6 +7418,164 @@ int main(void) {
     server_handle
         .join()
         .expect("runtime malformed chunked server should exit cleanly");
+}
+
+#[test]
+fn c_bin_runtime_internal_get_chunked_trailers_roundtrip_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime chunked trailer roundtrip test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-chunked-trailers");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-chunked-trailers");
+    let fs_base = project_dir.join("fs-base");
+    fs::create_dir_all(&fs_base).expect("fs base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (internal_url == 0 || body == 0) { return 11; }
+
+  int64_t output_path = sec4_rt_req_query("internal-net/chunked-trailers-body.txt");
+  if (output_path == 0) { return 12; }
+  if (sec4_rt_fs_write(5, output_path, body) == 0) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for chunked trailers harness");
+    assert!(
+        output.status.success(),
+        "runtime chunked trailers harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_chunked_with_trailers_server("internal-trailer-body");
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-chunked-trailers");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_FS_BASE", &fs_base)
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime chunked trailers harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime chunked trailers server should exit cleanly");
+
+    assert_eq!(
+        fs::read_to_string(fs_base.join("internal-net").join("chunked-trailers-body.txt"))
+            .expect("chunked trailers decoded response should be written"),
+        "internal-trailer-body"
+    );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_chunked_missing_trailer_terminator_returns_chunk_invalid_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime chunked trailer terminator test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-chunked-missing-trailer-end");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-chunked-missing-trailer-end");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.CHUNK_INVALID\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for chunked missing terminator harness");
+    assert!(
+        output.status.success(),
+        "runtime chunked missing terminator harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_chunked_missing_trailer_terminator_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-chunked-bad-trailers");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime chunked missing terminator harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime chunked missing terminator server should exit cleanly");
 }
 
 #[test]

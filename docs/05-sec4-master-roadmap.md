@@ -258,6 +258,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added malformed chunked harness helper + test:
   - `c_bin_runtime_internal_get_malformed_chunked_returns_chunk_invalid_when_clang_available`.
 - [x] Revalidated chunked success path and redirect-allow regression path.
+
+### M38-S3 chunk trailer/extension parser strictness acceptance criteria
+
+- Chunked responses with chunk extensions and trailer headers decode successfully on outbound runtime path.
+- Missing trailer terminator after zero-size chunk is rejected with deterministic `NET.CHUNK_INVALID`.
+- Existing malformed-chunk and redirect-allow harness tests stay green.
+
+### M38-S3 tracking (live status)
+
+- [x] Added runtime strictness: zero-chunk trailer parsing now requires explicit trailer termination.
+- [x] Added harness helpers + tests:
+  - `c_bin_runtime_internal_get_chunked_trailers_roundtrip_when_clang_available`
+  - `c_bin_runtime_internal_get_chunked_missing_trailer_terminator_returns_chunk_invalid_when_clang_available`
+- [x] Revalidated malformed-chunk invalid-code and redirect-allow regression paths.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5568,7 +5582,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S3 outbound HTTP robustness follow-up (chunk trailers/extensions coverage + stricter parser diagnostics).
+- M38-S4 outbound HTTP hardening follow-up (header/token edge cases + deterministic response parse diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5660,9 +5674,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S3 scope for trailer/extension-heavy chunked responses and parser strictness deltas.
-2. Run targeted runtime matrix (`json_output` chunked + redirect + tls subset) after M38-S3 edits.
-3. Publish M38-S3 book chapter and refresh roadmap live-status counts.
+1. Add M38-S4 scope for header/token edge-case parsing and deterministic diagnostics.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls subset) after M38-S4 edits.
+3. Publish M38-S4 book chapter and refresh roadmap live-status counts.
 
 ---
 

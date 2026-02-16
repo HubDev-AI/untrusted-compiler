@@ -2061,21 +2061,30 @@ static int sec4_rt_extract_outbound_http_body(
       }
 
       if (chunk_size == 0) {
+        bool trailers_complete = false;
         if (cursor + 1 < payload_bytes && payload[cursor] == '\r' && payload[cursor + 1] == '\n') {
           cursor += 2;
+          trailers_complete = true;
         } else {
           while (cursor + 1 < payload_bytes) {
-            if (payload[cursor] == '\r' && payload[cursor + 1] == '\n') {
-              cursor += 2;
-              if (cursor + 1 < payload_bytes && payload[cursor] == '\r'
-                  && payload[cursor + 1] == '\n') {
-                cursor += 2;
-                break;
-              }
-              continue;
+            size_t trailer_line_start = cursor;
+            while (cursor + 1 < payload_bytes
+                   && !(payload[cursor] == '\r' && payload[cursor + 1] == '\n')) {
+              cursor += 1;
             }
-            cursor += 1;
+            if (cursor + 1 >= payload_bytes) {
+              break;
+            }
+            size_t trailer_line_end = cursor;
+            cursor += 2;
+            if (trailer_line_end == trailer_line_start) {
+              trailers_complete = true;
+              break;
+            }
           }
+        }
+        if (!trailers_complete) {
+          return -7;
         }
         if (decoded_len >= body_size) {
           return -5;
