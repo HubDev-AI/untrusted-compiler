@@ -1915,7 +1915,7 @@ static int sec4_rt_extract_outbound_http_body(
     return -3;
   }
   if (header_bytes > SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES) {
-    return -2;
+    return -8;
   }
 
   const char *header_cursor = status_line_end + 2;
@@ -2519,6 +2519,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.CHUNK_INVALID",
         "validation",
         "outbound http chunked response framing is invalid"
+    );
+    return true;
+  }
+  if (read_status == -8) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.RESPONSE_HEADERS_TOO_LARGE",
+        "validation",
+        "outbound http response headers exceed runtime header limit"
     );
     return true;
   }
