@@ -4925,6 +4925,30 @@ static bool sec4_rt_is_header_value_valid(const char *value) {
   return true;
 }
 
+static bool sec4_rt_is_referrer_policy_valid(const char *value) {
+  if (value == NULL || value[0] == '\0') {
+    return false;
+  }
+
+  static const char *allowed[] = {
+      "no-referrer",
+      "no-referrer-when-downgrade",
+      "origin",
+      "origin-when-cross-origin",
+      "same-origin",
+      "strict-origin",
+      "strict-origin-when-cross-origin",
+      "unsafe-url",
+  };
+  for (size_t i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+    if (strcasecmp(value, allowed[i]) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static bool sec4_rt_is_email_local_char(unsigned char ch) {
   return isalnum(ch)
       || ch == '.'
@@ -9885,6 +9909,15 @@ static void sec4_rt_load_security_headers_policy_from_env(void) {
       g_sec4_rt_security_headers_policy.referrer_policy,
       sizeof(g_sec4_rt_security_headers_policy.referrer_policy)
   );
+  if (!sec4_rt_is_referrer_policy_valid(g_sec4_rt_security_headers_policy.referrer_policy)) {
+    strncpy(
+        g_sec4_rt_security_headers_policy.referrer_policy,
+        "strict-origin-when-cross-origin",
+        sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1
+    );
+    g_sec4_rt_security_headers_policy.referrer_policy
+        [sizeof(g_sec4_rt_security_headers_policy.referrer_policy) - 1] = '\0';
+  }
   g_sec4_rt_security_headers_policy.csp_enabled = sec4_rt_env_flag_enabled_default(
       "SEC4_RT_SECURITY_HEADERS_CSP_ENABLED",
       true
