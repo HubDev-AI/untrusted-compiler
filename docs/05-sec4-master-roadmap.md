@@ -1134,6 +1134,31 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_direct_wrapper_malformed_target_parser_diagnostics_match_between_public_and_internal_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S51 outbound HTTP wrapper invalid-capability handle diagnostics parity coverage acceptance criteria
+
+- Missing/zero wrapper capability or URL handles are asserted directly at wrapper boundaries for both sinks:
+  - `sec4_rt_http_get` -> `NET.GET_INVALID`
+  - `sec4_rt_http_get_internal` -> `NET.GET_INTERNAL_INVALID`
+- Wrapper invalid-handle diagnostics remain deterministic `validation` envelopes and do not regress to:
+  - internal-policy denial (`NET.INTERNAL_DENIED`)
+  - parser-class diagnostics (`NET.REQUEST_*`).
+- Runtime harness includes direct assertions for both missing-net and missing-url handle classes across public/internal wrappers.
+
+### M38-S51 tracking (live status)
+
+- [x] Added direct wrapper invalid-handle parity harness:
+  - `c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+- [x] Harness validates deterministic wrapper invalid-handle contracts for:
+  - missing net capability handle (`net=0`)
+  - missing URL handle (`url=0`)
+  across both public/internal wrappers.
+- [x] Harness validates wrapper precedence:
+  - invalid-handle diagnostics emitted before internal-net policy denial checks.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6446,7 +6471,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S51 outbound HTTP wrapper invalid-capability handle diagnostics parity coverage (`NET.GET_INVALID` vs `NET.GET_INTERNAL_INVALID` deterministic contract assertions for missing net/url handles).
+- M38-S52 outbound HTTP internal-policy denial precedence coverage (`NET.INTERNAL_DENIED` deterministic contract assertions for valid internal URL handles when policy deny is active).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6538,9 +6563,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S51 scope for wrapper invalid-capability/handle parity across public/internal net sink wrappers.
-2. Extend runtime harness with direct wrapper assertions for missing/zero net or url handles (`NET.GET_INVALID` vs `NET.GET_INTERNAL_INVALID`) while keeping failure class deterministic.
-3. Publish M38-S51 book chapter and refresh roadmap live-status counts.
+1. Add M38-S52 scope for deterministic internal-policy denial precedence on valid internal wrapper inputs.
+2. Extend runtime harness with direct assertions that valid internal URL handles emit `NET.INTERNAL_DENIED` when policy deny is active.
+3. Publish M38-S52 book chapter and refresh roadmap live-status counts.
 
 ---
 
