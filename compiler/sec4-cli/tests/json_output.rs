@@ -15888,6 +15888,198 @@ fn main() effects {{ net }} -> Int {{
     );
 }
 
+fn run_http_runtime_health_with_max_concurrency_env(env_value: Option<&str>, fixture_id: &str) -> String {
+    let project_dir = temp_dir(fixture_id);
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpmaxconcurrencyenvfallbacke2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve({}, router);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP max-concurrency env fallback fixture"
+    );
+
+    let binary_path = project_dir.join("build").join("httpmaxconcurrencyenvfallbacke2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP max-concurrency env fallback fixture"
+    );
+
+    let mut command = Command::new(&binary_path);
+    command
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(value) = env_value {
+        command.env("SEC4_RT_HTTP_MAX_CONCURRENCY", value);
+    }
+    let mut child = command
+        .spawn()
+        .expect("http runtime max-concurrency env fallback binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime max-concurrency env fallback binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime max-concurrency env fallback test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime max-concurrency env fallback binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime max-concurrency env fallback binary should exit successfully in oneshot mode"
+    );
+    response
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency invalid-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        Some("invalid"),
+        "sec4-c-bin-http-runtime-max-concurrency-invalid-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "invalid max-concurrency env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when max-concurrency fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_empty_env_falls_back_to_default_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency empty-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        Some(""),
+        "sec4-c-bin-http-runtime-max-concurrency-empty-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "empty max-concurrency env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when max-concurrency fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_over_cap_env_is_clamped_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency over-cap clamp test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        Some("999999999"),
+        "sec4-c-bin-http-runtime-max-concurrency-over-cap-clamp-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "over-cap max-concurrency env value should be clamped and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when max-concurrency clamp succeeds"
+    );
+}
+
 #[test]
 fn c_bin_http_runtime_err_internal_sets_error_response_when_clang_available() {
     if !clang_available() {
@@ -30450,6 +30642,10 @@ fn run_command_help_lists_runtime_bridge_flags() {
     assert!(
         stdout.contains("--max-body-bytes <MAX_BODY_BYTES>"),
         "run --help should list --max-body-bytes runtime bridge flag"
+    );
+    assert!(
+        stdout.contains("--max-concurrency <MAX_CONCURRENCY>"),
+        "run --help should list --max-concurrency runtime bridge flag"
     );
     assert!(
         stdout.contains("--serve-timeout-ms <SERVE_TIMEOUT_MS>"),

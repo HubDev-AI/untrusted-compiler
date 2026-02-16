@@ -2776,6 +2776,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S126 HTTP max-concurrency runtime fallback/clamp hardening acceptance criteria
+
+- Runtime deterministically falls back to safe concurrency defaults when `SEC4_RT_HTTP_MAX_CONCURRENCY` is invalid or empty.
+- Runtime deterministically clamps over-cap `SEC4_RT_HTTP_MAX_CONCURRENCY` values to bounded safe limits.
+- CLI help surface explicitly documents `--max-concurrency` runtime bridge flag.
+
+### M38-S126 tracking (live status)
+
+- [x] Added runtime e2e fallback coverage for invalid max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e fallback coverage for empty max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_empty_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e clamp coverage for over-cap max-concurrency env values:
+  - `c_bin_http_runtime_max_concurrency_over_cap_env_is_clamped_when_clang_available`
+- [x] Updated CLI run help contract coverage:
+  - `run_command_help_lists_runtime_bridge_flags`
+- [x] Revalidated related runtime/CLI behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4 --test json_output run_command_help_lists_runtime_bridge_flags`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8088,7 +8109,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S126 HTTP max-concurrency runtime fallback/clamp hardening.
+- M38-S127 HTTP max-concurrency queue-boundary deterministic throttle coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8180,9 +8201,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S126 scope for deterministic runtime fallback/clamp behavior on `SEC4_RT_HTTP_MAX_CONCURRENCY`.
-2. Pin clamp/fallback behavior with runtime/CLI tests for invalid, empty, and over-cap concurrency env values.
-3. Publish M38-S126 book chapter and refresh roadmap live-status counts.
+1. Add M38-S127 scope for queue-boundary deterministic throttle behavior under max-concurrency limits.
+2. Pin deterministic throttle ordering and response invariants when accepted-connection pressure exceeds configured concurrency.
+3. Publish M38-S127 book chapter and refresh roadmap live-status counts.
 
 ---
 
