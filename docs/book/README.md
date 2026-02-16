@@ -644,5 +644,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `672-m38-outbound-http-wrapper-invalid-handle-parity.md`
 - `673-m38-outbound-http-internal-policy-denial-precedence.md`
 - `674-m38-outbound-http-internal-policy-allow-token-coverage.md`
+- `675-m38-outbound-http-internal-policy-invalid-token-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.

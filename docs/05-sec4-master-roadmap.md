@@ -1208,6 +1208,33 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S54 outbound HTTP internal-policy invalid-token fallback coverage acceptance criteria
+
+- Unknown/invalid `SEC4_RT_ALLOW_INTERNAL_NET` tokens deterministically preserve deny-by-default behavior.
+- For valid internal URL handles under invalid policy tokens, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Invalid-token fallback does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S54 tracking (live status)
+
+- [x] Added internal-policy invalid-token fallback harness:
+  - `c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+- [x] Harness validates deny-by-default fallback across invalid token classes:
+  - semantic noise (`"maybe"`, `"enabled"`, `"true-ish"`)
+  - numeric noise (`"2"`, `"-1"`)
+  - near-miss tokens/spacing (`"t"`, `"y"`, `" allow "`, `"YES!"`)
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6520,7 +6547,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S54 outbound HTTP internal-policy invalid-token fallback coverage (unknown `SEC4_RT_ALLOW_INTERNAL_NET` token should deterministically preserve deny-by-default behavior).
+- M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage (`0|false|no|off|deny` case-insensitive tokens should deterministically enforce policy denial).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6612,9 +6639,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S54 scope for unknown-token fallback behavior of `SEC4_RT_ALLOW_INTERNAL_NET`.
-2. Extend runtime harness with direct assertions that invalid policy tokens remain deny-by-default and emit `NET.INTERNAL_DENIED`.
-3. Publish M38-S54 book chapter and refresh roadmap live-status counts.
+1. Add M38-S55 scope for explicit deny-token matrix behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
+2. Extend runtime harness with direct assertions that falsy tokens (`0|false|no|off|deny`) enforce deterministic policy denial across case variants.
+3. Publish M38-S55 book chapter and refresh roadmap live-status counts.
 
 ---
 
