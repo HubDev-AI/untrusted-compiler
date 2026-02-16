@@ -3539,6 +3539,10 @@ fn cmd_run(
             "0"
         },
     );
+    cmd.env(
+        "SEC4_RT_NET_SSRF_RESOLVE_DNS",
+        if policy.net_ssrf.resolve_dns { "1" } else { "0" },
+    );
     cmd.env("SEC4_RT_JSON_MAX_BYTES", policy.json.max_bytes.to_string());
     cmd.env("SEC4_RT_JSON_MAX_DEPTH", policy.json.max_depth.to_string());
     cmd.env(

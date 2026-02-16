@@ -255,6 +255,7 @@ static bool sec4_rt_parse_header_value(
 static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
+static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
 static bool sec4_rt_env_flag_enabled(const char *name);
 static void sec4_rt_read_env_string(
@@ -1390,10 +1391,16 @@ static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
   if (!sec4_rt_parse_ipv4_octets(host, host_len, octets)) {
     return false;
   }
+  return sec4_rt_ipv4_octets_are_private(octets);
+}
 
+static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]) {
+  if (octets == NULL) {
+    return false;
+  }
   int a = (int) octets[0];
   int b = (int) octets[1];
-  if (a == 10 || a == 127) {
+  if (a == 0 || a == 10 || a == 127) {
     return true;
   }
   if (a == 169 && b == 254) {
@@ -1406,6 +1413,77 @@ static bool sec4_rt_parse_ipv4_private(const char *host, size_t host_len) {
     return true;
   }
   return false;
+}
+
+static bool sec4_rt_ipv6_addr_is_internal(const struct in6_addr *addr) {
+  if (addr == NULL) {
+    return false;
+  }
+
+  if (IN6_IS_ADDR_LOOPBACK(addr) || IN6_IS_ADDR_LINKLOCAL(addr)) {
+    return true;
+  }
+
+  const uint8_t *bytes = addr->s6_addr;
+  if ((bytes[0] & 0xFEu) == 0xFCu) {
+    return true;
+  }
+
+#ifdef IN6_IS_ADDR_V4MAPPED
+  if (IN6_IS_ADDR_V4MAPPED(addr)) {
+    return sec4_rt_ipv4_octets_are_private(&bytes[12]);
+  }
+#endif
+
+  return false;
+}
+
+static bool sec4_rt_host_resolves_to_internal(const char *host, size_t host_len) {
+  if (host == NULL || host_len == 0 || host_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+    return false;
+  }
+
+  char host_text[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+  memcpy(host_text, host, host_len);
+  host_text[host_len] = '\0';
+
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  struct addrinfo *addresses = NULL;
+  if (getaddrinfo(host_text, "80", &hints, &addresses) != 0 || addresses == NULL) {
+    return false;
+  }
+
+  bool internal = false;
+  for (struct addrinfo *current = addresses; current != NULL; current = current->ai_next) {
+    if (current->ai_family == AF_INET && current->ai_addrlen >= sizeof(struct sockaddr_in)) {
+      const struct sockaddr_in *addr = (const struct sockaddr_in *) current->ai_addr;
+      uint32_t host_addr = ntohl(addr->sin_addr.s_addr);
+      uint8_t octets[4];
+      octets[0] = (uint8_t) ((host_addr >> 24) & 0xFFu);
+      octets[1] = (uint8_t) ((host_addr >> 16) & 0xFFu);
+      octets[2] = (uint8_t) ((host_addr >> 8) & 0xFFu);
+      octets[3] = (uint8_t) (host_addr & 0xFFu);
+      if (sec4_rt_ipv4_octets_are_private(octets)) {
+        internal = true;
+        break;
+      }
+    } else if (
+        current->ai_family == AF_INET6 && current->ai_addrlen >= sizeof(struct sockaddr_in6)
+    ) {
+      const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *) current->ai_addr;
+      if (sec4_rt_ipv6_addr_is_internal(&addr6->sin6_addr)) {
+        internal = true;
+        break;
+      }
+    }
+  }
+
+  freeaddrinfo(addresses);
+  return internal;
 }
 
 static bool sec4_rt_parse_url_host(
@@ -2712,6 +2790,10 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
     return false;
   }
   if (sec4_rt_host_is_internal(host, host_len)) {
+    return false;
+  }
+  if (sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_RESOLVE_DNS", true)
+      && sec4_rt_host_resolves_to_internal(host, host_len)) {
     return false;
   }
 
