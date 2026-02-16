@@ -13,7 +13,6 @@ cat > "${workflow_path}" <<'YAML'
 name: Runtime Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -46,7 +45,6 @@ cat > "${workflow_path}" <<'YAML'
 name: Runtime Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main

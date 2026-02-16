@@ -1,7 +1,6 @@
 name: Operator Handoff Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main

@@ -13,7 +13,6 @@ cat > "${workflow_path}" <<'YAML'
 name: Operator Handoff Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -41,7 +40,6 @@ cat > "${workflow_path}" <<'YAML'
 name: Operator Handoff Smoke
 
 on:
-  pull_request:
   push:
     branches:
       - main

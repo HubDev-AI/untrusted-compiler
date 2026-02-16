@@ -1,7 +1,6 @@
 name: Naming Lock
 
 on:
-  pull_request:
   push:
     branches:
       - main

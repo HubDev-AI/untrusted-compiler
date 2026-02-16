@@ -12,7 +12,6 @@ workflow_path="${tmp}/release-contract-smoke.yml"
 cat > "${workflow_path}" <<'YAML'
 name: Release Contract Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -39,7 +38,7 @@ YAML
 cat > "${workflow_path}" <<'YAML'
 name: Release Contract Smoke
 on:
-  pull_request:
+  workflow_dispatch:
 jobs:
   release-contract-smoke:
     runs-on: ubuntu-latest
@@ -66,7 +65,6 @@ fi
 cat > "${workflow_path}" <<'YAML'
 name: Release Contract Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -94,7 +92,6 @@ fi
 cat > "${workflow_path}" <<'YAML'
 name: Release Contract Smoke
 on:
-  pull_request:
   push:
     branches:
       - main

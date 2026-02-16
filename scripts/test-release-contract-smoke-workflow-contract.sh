@@ -51,7 +51,6 @@ require_regex() {
   exit 1
 }
 
-require_regex '^[[:space:]]*pull_request:[[:space:]]*$'
 require_regex '^[[:space:]]*push:[[:space:]]*$'
 require_regex '^[[:space:]]*branches:[[:space:]]*$'
 require_regex '^[[:space:]]*-[[:space:]]*main[[:space:]]*$'
