@@ -14194,6 +14194,107 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime wrapper invalid-handle parity test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-wrapper-invalid-handle-parity");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-wrapper-invalid-handle-parity");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+static int assert_public_invalid_handles(int64_t valid_url, int base) {
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get(0, valid_url) != 0) { return base + 1; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.GET_INVALID\"") == NULL) { return base + 2; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"validation\"") == NULL) { return base + 3; }
+  if (strstr(g_sec4_rt_response.body, "requires net capability and url handles") == NULL) { return base + 4; }
+  if (strstr(g_sec4_rt_response.body, "NET.INTERNAL_DENIED") != NULL) { return base + 5; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get(1, 0) != 0) { return base + 6; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.GET_INVALID\"") == NULL) { return base + 7; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"validation\"") == NULL) { return base + 8; }
+  if (strstr(g_sec4_rt_response.body, "NET.INTERNAL_DENIED") != NULL) { return base + 9; }
+  return 0;
+}
+
+static int assert_internal_invalid_handles(int64_t valid_url, int base) {
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(0, valid_url) != 0) { return base + 1; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.GET_INTERNAL_INVALID\"") == NULL) { return base + 2; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"validation\"") == NULL) { return base + 3; }
+  if (strstr(g_sec4_rt_response.body, "requires net capability and url handles") == NULL) { return base + 4; }
+  if (strstr(g_sec4_rt_response.body, "NET.INTERNAL_DENIED") != NULL) { return base + 5; }
+
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, 0) != 0) { return base + 6; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.GET_INTERNAL_INVALID\"") == NULL) { return base + 7; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"validation\"") == NULL) { return base + 8; }
+  if (strstr(g_sec4_rt_response.body, "NET.INTERNAL_DENIED") != NULL) { return base + 9; }
+  return 0;
+}
+
+int main(void) {
+  int64_t valid_url = sec4_rt_req_query("http://127.0.0.1/test");
+  if (valid_url == 0) { return 10; }
+
+  int public_result = assert_public_invalid_handles(valid_url, 10);
+  if (public_result != 0) { return public_result; }
+
+  int internal_result = assert_internal_invalid_handles(valid_url, 30);
+  if (internal_result != 0) { return internal_result; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for wrapper invalid-handle parity harness");
+    assert!(
+        output.status.success(),
+        "runtime wrapper invalid-handle parity harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "0")
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime wrapper invalid-handle parity harness should exit successfully"
+    );
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");
