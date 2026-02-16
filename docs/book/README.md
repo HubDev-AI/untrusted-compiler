@@ -585,5 +585,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `613-m37-redirect-and-policy-parity-hardening.md`
 - `614-m37-runtime-json-semantic-hardening.md`
 - `615-m37-middleware-policy-materialization-hardening.md`
+- `616-m37-structured-runtime-log-emission.md`
 
 As milestones progress, chapters will be added and linked from this index.

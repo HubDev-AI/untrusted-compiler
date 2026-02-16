@@ -79,13 +79,13 @@ No-stub alpha is considered ready only when all items below are true:
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~88-91%
-- Strict no-stub alpha: ~78-82%
+- Runnable alpha (end-to-end): ~90-93%
+- Strict no-stub alpha: ~84-88%
 
 ### Remaining implementation slices (priority order)
 
-1. Structured runtime log emission path (not only handle construction), including deterministic redaction-safe serialization.
-2. Final alpha no-stub verification pass and publish checklist update.
+1. Final alpha no-stub verification pass (full alpha smoke + targeted runtime harness matrix on `main`).
+2. Alpha publish checklist delta update from verified no-stub evidence.
 
 ## M37 - No-Stub Alpha Sprint (In Progress)
 
@@ -152,6 +152,29 @@ No-stub alpha is considered ready only when all items below are true:
   - `run_command_oneshot_disables_security_headers_from_policy`
   - `run_command_oneshot_disables_csrf_from_policy`
 - [x] Book chapter documenting M37-S3 implementation added.
+
+### M37-S4 structured runtime log emission path acceptance criteria
+
+- Runtime log intrinsics emit structured JSON events instead of handle-only placeholders.
+- Emitted log events include deterministic baseline fields:
+  - `timeMs`
+  - `level`
+  - `traceId`
+  - `event`
+- Runtime log builder helpers (`withAttr`, `withHttp`, `withError`) materialize into emitted JSON payload fragments.
+- Runtime log emission remains deterministic and policy-safe by default:
+  - redaction helpers emit explicit redaction markers,
+  - output can be disabled via `SEC4_RT_LOG_OUTPUT=off`.
+
+### M37-S4 tracking (live status)
+
+- [x] Runtime log functions now maintain structured event state and emit JSON lines on `log_any`.
+- [x] Runtime log value helpers now materialize JSON-safe values (`str`, `i64`, `bool`, `redacted`, `attrRedacted`).
+- [x] Runtime log builder helpers now attach attrs/http/error metadata into emitted log events.
+- [x] Added c-bin log intrinsic test assertions for emitted structured log fields.
+- [x] Added dedicated clang-gated runtime harness coverage:
+  - `c_bin_runtime_log_builders_emit_structured_json_when_clang_available`.
+- [x] Book chapter documenting M37-S4 implementation added.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5462,7 +5485,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S4 structured runtime log emission path (implementation-first).
+- M37-S5 final no-stub alpha verification pass + publish-checklist delta.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5554,9 +5577,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Complete M37-S4 structured runtime log emission path.
-2. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
-3. Prepare alpha publish checklist delta from no-stub verification evidence.
+1. Run final no-stub alpha verification pass (full alpha smoke + targeted runtime harness set) on `main`.
+2. Prepare alpha publish checklist delta from no-stub verification evidence.
+3. Freeze M37 closure note with exact remaining non-stub gaps (if any) before alpha tag decision.
 
 ---
 
