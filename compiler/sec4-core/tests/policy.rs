@@ -44,6 +44,8 @@ fn policy_defaults_when_empty() {
         policy.security_headers.csp_policy,
         "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
     );
+    assert_eq!(policy.csrf.cookie_name, "csrf");
+    assert_eq!(policy.csrf.header_name, "X-CSRF-Token");
     assert_eq!(policy.auth.cookie_name, "session");
 }
 
@@ -248,6 +250,44 @@ forbid_symlinks = "invalid"
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("invalid fs.forbid_symlinks must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_parses_csrf_cookie_and_header_names() {
+    let source = r#"
+[csrf]
+cookie_name = "sid"
+header_name = "x-sid-csrf"
+"#;
+
+    let policy = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect("csrf cookie/header names should parse");
+    assert_eq!(policy.csrf.cookie_name, "sid");
+    assert_eq!(policy.csrf.header_name, "x-sid-csrf");
+}
+
+#[test]
+fn policy_rejects_empty_csrf_cookie_name() {
+    let source = r#"
+[csrf]
+cookie_name = "   "
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("empty csrf.cookie_name must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_empty_csrf_header_name() {
+    let source = r#"
+[csrf]
+header_name = "  "
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("empty csrf.header_name must fail");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
@@ -522,6 +562,8 @@ fn policy_profile_default_secure_prod_parses() {
         policy.security_headers.csp_policy,
         "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
     );
+    assert_eq!(policy.csrf.cookie_name, "csrf");
+    assert_eq!(policy.csrf.header_name, "x-csrf-token");
     assert_eq!(policy.net_public.max_redirects, 0);
     assert!(!policy.net_internal.enabled);
     assert!(!policy.fs.enabled);
@@ -562,6 +604,8 @@ fn policy_profile_permissive_dev_parses() {
         policy.security_headers.csp_policy,
         "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
     );
+    assert_eq!(policy.csrf.cookie_name, "csrf");
+    assert_eq!(policy.csrf.header_name, "x-csrf-token");
     assert_eq!(policy.net_public.max_redirects, 5);
     assert!(policy.net_internal.enabled);
     assert!(policy.fs.enabled);

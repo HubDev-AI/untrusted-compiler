@@ -3750,6 +3750,8 @@ fn cmd_run(
         if policy.csrf.enabled { "1" } else { "0" },
     );
     cmd.env("SEC4_RT_CSRF_MODE", policy.csrf.mode.as_str());
+    cmd.env("SEC4_RT_CSRF_COOKIE_NAME", policy.csrf.cookie_name.as_str());
+    cmd.env("SEC4_RT_CSRF_HEADER_NAME", policy.csrf.header_name.as_str());
     cmd.env(
         "SEC4_RT_CSRF_PROTECTED_METHODS",
         policy.csrf.protected_methods.join(","),

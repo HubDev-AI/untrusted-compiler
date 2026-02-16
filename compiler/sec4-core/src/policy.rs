@@ -55,6 +55,8 @@ pub struct SecurityHeadersPolicyConfig {
 pub struct CsrfPolicyConfig {
     pub enabled: bool,
     pub mode: String,
+    pub cookie_name: String,
+    pub header_name: String,
     pub same_site: String,
     pub secure_cookie: bool,
     pub protected_methods: Vec<String>,
@@ -209,6 +211,8 @@ impl Default for Policy {
             csrf: CsrfPolicyConfig {
                 enabled: true,
                 mode: "double_submit".to_string(),
+                cookie_name: "csrf".to_string(),
+                header_name: "X-CSRF-Token".to_string(),
                 same_site: "Lax".to_string(),
                 secure_cookie: true,
                 protected_methods: vec![
@@ -1213,6 +1217,34 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                     )
                     .with_note("csrf.mode must be `off`, `double_submit`, or `synchronizer_token`"),
                 ),
+            }
+        }
+        if let Some(cookie_name) = section.cookie_name {
+            if cookie_name.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.cookie_name",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.cookie_name must be a non-empty string"),
+                );
+            } else {
+                policy.csrf.cookie_name = cookie_name;
+            }
+        }
+        if let Some(header_name) = section.header_name {
+            if header_name.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid csrf.header_name",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("csrf.header_name must be a non-empty string"),
+                );
+            } else {
+                policy.csrf.header_name = header_name;
             }
         }
         if let Some(same_site) = section.same_site {
