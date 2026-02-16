@@ -1217,6 +1217,8 @@ fn main() effects { net } -> Int {
             "run",
             "--path",
             path,
+            "--tls-backend",
+            "auto",
             "--oneshot",
             "--port",
             port_value.as_str(),

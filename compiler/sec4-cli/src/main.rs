@@ -37,7 +37,7 @@ enum Commands {
         locked: bool,
         #[arg(long, default_value_t = false)]
         sbom: bool,
-        #[arg(long, value_enum, default_value_t = BuildTlsBackend::None)]
+        #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
     },
     Init {
@@ -57,7 +57,7 @@ enum Commands {
         max_body_bytes: Option<u64>,
         #[arg(long)]
         serve_timeout_ms: Option<u64>,
-        #[arg(long, value_enum, default_value_t = BuildTlsBackend::None)]
+        #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
     },
     Check {
@@ -148,6 +148,7 @@ enum BuildEmitTarget {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum BuildTlsBackend {
+    Auto,
     None,
     Openssl,
 }
@@ -3365,35 +3366,31 @@ fn compile_c_binary(
     }
 
     let binary_path = build_dir.join(package_name);
-    let mut clang = Command::new("clang");
-    clang
-        .arg(&c_path)
-        .arg(&runtime_source_path)
-        .arg("-std=c11")
-        .arg("-O2")
-        .arg("-Wno-int-conversion")
-        .arg("-I")
-        .arg(&build_dir);
-    if tls_backend == BuildTlsBackend::Openssl {
-        clang.arg("-DSEC4_RT_ENABLE_OPENSSL_TLS");
-    }
-    clang.arg("-o").arg(&binary_path);
-    if tls_backend == BuildTlsBackend::Openssl {
-        clang.arg("-lssl").arg("-lcrypto");
-    }
 
-    let output = match clang.output() {
-        Ok(output) => output,
-        Err(err) => {
-            eprintln!("could not execute clang: {err}");
-            return Err(2);
+    let run_clang = |with_openssl: bool| {
+        let mut clang = Command::new("clang");
+        clang
+            .arg(&c_path)
+            .arg(&runtime_source_path)
+            .arg("-std=c11")
+            .arg("-O2")
+            .arg("-Wno-int-conversion")
+            .arg("-I")
+            .arg(&build_dir);
+        if with_openssl {
+            clang.arg("-DSEC4_RT_ENABLE_OPENSSL_TLS");
         }
+        clang.arg("-o").arg(&binary_path);
+        if with_openssl {
+            clang.arg("-lssl").arg("-lcrypto");
+        }
+        clang.output()
     };
 
-    if !output.status.success() {
+    let emit_failure = |output: &std::process::Output, openssl_requested: bool| {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if tls_backend == BuildTlsBackend::Openssl {
+        if openssl_requested {
             eprintln!(
                 "TLS backend linkage failed for `--tls-backend openssl`: clang could not compile/link OpenSSL runtime (`-DSEC4_RT_ENABLE_OPENSSL_TLS -lssl -lcrypto`)"
             );
@@ -3405,7 +3402,62 @@ fn compile_c_binary(
         if !stderr.trim().is_empty() {
             eprintln!("{stderr}");
         }
-        return Err(1);
+    };
+
+    match tls_backend {
+        BuildTlsBackend::None => {
+            let output = match run_clang(false) {
+                Ok(output) => output,
+                Err(err) => {
+                    eprintln!("could not execute clang: {err}");
+                    return Err(2);
+                }
+            };
+            if !output.status.success() {
+                emit_failure(&output, false);
+                return Err(1);
+            }
+        }
+        BuildTlsBackend::Openssl => {
+            let output = match run_clang(true) {
+                Ok(output) => output,
+                Err(err) => {
+                    eprintln!("could not execute clang: {err}");
+                    return Err(2);
+                }
+            };
+            if !output.status.success() {
+                emit_failure(&output, true);
+                return Err(1);
+            }
+        }
+        BuildTlsBackend::Auto => {
+            let output = match run_clang(true) {
+                Ok(output) => output,
+                Err(err) => {
+                    eprintln!("could not execute clang: {err}");
+                    return Err(2);
+                }
+            };
+            if output.status.success() {
+                return Ok((c_path, binary_path));
+            }
+
+            eprintln!(
+                "warning: OpenSSL TLS backend unavailable in auto mode; falling back to `--tls-backend none`"
+            );
+            let fallback = match run_clang(false) {
+                Ok(output) => output,
+                Err(err) => {
+                    eprintln!("could not execute clang: {err}");
+                    return Err(2);
+                }
+            };
+            if !fallback.status.success() {
+                emit_failure(&fallback, false);
+                return Err(1);
+            }
+        }
     }
 
     Ok((c_path, binary_path))

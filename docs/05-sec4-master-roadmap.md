@@ -187,14 +187,26 @@ No-stub alpha is considered ready only when all items below are true:
 
 ### M37-S5 tracking (live status)
 
-- [x] `cargo test -p sec4 --test json_output` passed (`156 passed; 0 failed`).
-- [x] `cargo test -p sec4 --test commands` passed (`34 passed; 0 failed`).
+- [x] `cargo test -p sec4 --test json_output` passed (`161 passed; 0 failed`).
+- [x] `cargo test -p sec4 --test commands` passed (`36 passed; 0 failed`).
 - [x] `cargo test -p sec4 --test alpha_smoke` passed (`2 passed; 0 failed`).
 - [x] `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source` passed.
 - [x] Residual gaps documented for alpha decision:
-  - log sink level differentiation (`info/warn/error`) is still unified at runtime sink ABI,
-  - HTTPS runtime path still defaults to explicit backend selection (`--tls-backend openssl`).
+  - full HTTPS runtime behavior still depends on OpenSSL toolchain availability; `--tls-backend auto` falls back to non-TLS when OpenSSL linkage is unavailable.
 - [x] Book chapter documenting M37-S5 verification pass added.
+
+### M37-S6 alpha publish checklist delta + tag decision package acceptance criteria
+
+- Publish-checklist delta script consumes `build/release-alpha-gate/` artifacts and emits deterministic JSON/markdown summary.
+- Delta enforces identity-hash consistency (`policyHash`, `compilerHash`, `runtimeHash`) across release summaries, metadata, and audit reports for canonical samples.
+- Delta emits deterministic alpha tag decision (`GO`/`HOLD`) with explicit next action guidance.
+
+### M37-S6 tracking (live status)
+
+- [x] Added `scripts/build-m37-alpha-publish-checklist-delta.sh`.
+- [x] Added contract coverage `scripts/test-build-m37-alpha-publish-checklist-delta.sh`.
+- [x] Added book chapter documenting M37-S6 publish-checklist delta artifact.
+- [x] Updated CLI build/run TLS mode defaults to `--tls-backend auto` with deterministic OpenSSL fallback behavior.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5505,7 +5517,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S6 alpha publish checklist delta + tag decision package.
+- M37-S7 alpha release-note package + tag decision execution record.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5597,9 +5609,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Prepare alpha publish checklist delta from no-stub verification evidence.
-2. Draft alpha release-note package with no-stub baseline statement and known limits.
-3. Execute alpha tag decision checklist and record M37 closure outcome.
+1. Draft alpha release-note package from M37-S6 checklist evidence and known limits.
+2. Execute alpha tag decision checklist and record M37 closure outcome artifact.
+3. Run `scripts/release-alpha-gate.sh --skip-tests` and rebuild M37-S6 checklist delta for final pre-tag refresh.
 
 ---
 

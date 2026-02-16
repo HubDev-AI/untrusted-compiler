@@ -23,8 +23,8 @@ This pass establishes that evidence with one canonical matrix.
 
 ### Results
 
-- `json_output`: `156 passed; 0 failed`
-- `commands`: `34 passed; 0 failed`
+- `json_output`: `161 passed; 0 failed`
+- `commands`: `36 passed; 0 failed`
 - `alpha_smoke`: `2 passed; 0 failed`
 - `c_backend` targeted contract: passed
 
@@ -34,8 +34,7 @@ No remaining placeholder/stub behavior was found in the supported v0.1 runtime/C
 
 Known non-blocking limits remain:
 
-- runtime log sink ABI still emits baseline `level="info"` for unified sink path,
-- HTTPS runtime path still requires explicit backend selection (`--tls-backend openssl`) when TLS transport is needed.
+- TLS runtime support still depends on OpenSSL toolchain availability; `--tls-backend auto` now falls back to non-TLS compilation when OpenSSL linkage is unavailable.
 
 ## Validation
 
@@ -52,6 +51,6 @@ Known non-blocking limits remain:
 
 ## Next
 
-1. Prepare M37-S6 alpha publish-checklist delta artifact.
-2. Draft alpha release notes from verified no-stub evidence.
-3. Decide alpha tag based on checklist outcome.
+1. Draft alpha release notes from verified no-stub evidence and M37-S6 checklist artifacts.
+2. Decide alpha tag based on checklist + release-note package.
+3. Record M37 closure outcome in roadmap/book.

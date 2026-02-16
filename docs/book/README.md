@@ -587,5 +587,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `615-m37-middleware-policy-materialization-hardening.md`
 - `616-m37-structured-runtime-log-emission.md`
 - `617-m37-final-no-stub-verification-pass.md`
+- `618-m37-alpha-publish-checklist-delta.md`
 
 As milestones progress, chapters will be added and linked from this index.
