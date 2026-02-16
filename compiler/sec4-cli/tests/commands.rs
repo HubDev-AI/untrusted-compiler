@@ -2907,6 +2907,316 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_applies_http_max_concurrency_from_policy() {
+    if !clang_available() {
+        eprintln!("skipping run-command http max-concurrency policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-http-max-concurrency-policy");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runhttpmaxconcurrencypolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[http]
+max_body_bytes = 4096
+max_concurrency = 1
+max_header_bytes = 8191
+max_multipart_bytes = 4096
+default_timeout_ms = 20000
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+
+    let mut matched = false;
+    let mut last_responses = String::new();
+    for attempt in 0..8 {
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path.as_str(),
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let first_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+        let second_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+
+        let mut first_stream = match first_handle
+            .join()
+            .expect("first connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency test could not establish first connection");
+            }
+        };
+        let mut second_stream = match second_handle
+            .join()
+            .expect("second connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency test could not establish second connection");
+            }
+        };
+
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+        last_responses = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
+            first_response, second_response
+        );
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency process did not exit in expected window");
+            }
+        };
+
+        let has_success = first_response.contains("HTTP/1.1 200 OK")
+            || second_response.contains("HTTP/1.1 200 OK");
+        let has_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable")
+            || second_response.contains("HTTP/1.1 503 Service Unavailable");
+        if status.success() && has_success && has_throttle {
+            matched = true;
+            break;
+        }
+    }
+
+    assert!(
+        matched,
+        "response set should include both success and deterministic max-concurrency throttle response:\n{last_responses}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_enforces_body_limit_for_non_json_handler_paths() {
+    if !clang_available() {
+        eprintln!("skipping run-command generic body-limit test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-http-generic-body-limit-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runhttpgenericbodylimitpolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[http]
+max_body_bytes = 32
+max_header_bytes = 8191
+max_multipart_bytes = 4096
+default_timeout_ms = 20000
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn upload() effects { net } -> Int {
+  res.text(201, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/upload", upload);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let payload = "a".repeat(120);
+    let request = format!(
+        "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        payload.len(),
+        payload
+    );
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command generic body-limit test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command generic body-limit process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command generic body-limit process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 413 Payload Too Large"),
+        "response should contain 413 status line when generic body limit is exceeded:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nrequest body exceeds runtime limit"),
+        "response should include deterministic generic body-limit message:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_cli_max_body_bytes_overrides_policy_limit() {
     if !clang_available() {
         eprintln!("skipping run-command http body-limit override test: clang not available");

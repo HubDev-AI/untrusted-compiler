@@ -49,6 +49,8 @@
 #define SEC4_RT_DEFAULT_NET_TIMEOUT_MS 2000
 #define SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES 1048576
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
+#define SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY 256
+#define SEC4_RT_MAX_HTTP_MAX_CONCURRENCY 4096
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
 #define SEC4_RT_MAX_LOG_VALUES 256
@@ -6399,6 +6401,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Not Implemented";
     case 502:
       return "Bad Gateway";
+    case 503:
+      return "Service Unavailable";
     case 500:
       return "Internal Server Error";
     default:
@@ -6944,6 +6948,20 @@ static size_t sec4_rt_http_max_header_bytes_limit(void) {
   return limit;
 }
 
+static size_t sec4_rt_http_max_concurrency_limit(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_MAX_CONCURRENCY",
+      SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY
+  );
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_MAX_CONCURRENCY) {
+    parsed = SEC4_RT_MAX_HTTP_MAX_CONCURRENCY;
+  }
+  return (size_t) parsed;
+}
+
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
   if (out_value == NULL) {
     return false;
@@ -7028,6 +7046,39 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
   }
   const char *flag = getenv("SEC4_RT_HTTP_SERVE_ONCE");
   return flag != NULL && strcmp(flag, "0") != 0;
+}
+
+static void sec4_rt_send_concurrency_throttle_response(
+    int socket_fd,
+    sec4_rt_router_state *router
+) {
+  sec4_rt_reset_request();
+  sec4_rt_assign_trace_id();
+  sec4_rt_reset_response();
+
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  const char *security_headers = sec4_rt_security_headers_block(
+      router,
+      security_headers_buffer,
+      sizeof(security_headers_buffer)
+  );
+  const char *final_headers = sec4_rt_merge_three_headers(
+      NULL,
+      NULL,
+      security_headers,
+      merged_headers,
+      sizeof(merged_headers)
+  );
+  const char *body = "server busy: max concurrency exceeded";
+  (void) sec4_rt_send_response_with_extra_headers(
+      socket_fd,
+      503,
+      "text/plain; charset=utf-8",
+      body,
+      strlen(body),
+      final_headers
+  );
 }
 
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
@@ -7984,6 +8035,26 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   );
   g_sec4_rt_request.matched_route_pattern[sizeof(g_sec4_rt_request.matched_route_pattern) - 1] = '\0';
   (void) match->handler();
+
+  if (g_sec4_rt_request.body_limit_exceeded && !g_sec4_rt_request.json_checked) {
+    const char *body = "request body exceeds runtime limit";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        sec4_rt_response_extra_headers(),
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        413,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
 
   if (!g_sec4_rt_response.active) {
     const char *body = "";
@@ -10879,6 +10950,11 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
     return 1;
   }
 
+  if (!sec4_rt_set_socket_nonblocking(server_fd, true)) {
+    close(server_fd);
+    return 1;
+  }
+
   if (listen(server_fd, 16) != 0) {
     close(server_fd);
     return 1;
@@ -10893,40 +10969,103 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
     timeout_ms = SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS;
   }
 
+  size_t max_concurrency = sec4_rt_http_max_concurrency_limit();
+  int *pending_clients = (int *) calloc(max_concurrency, sizeof(int));
+  if (pending_clients == NULL) {
+    close(server_fd);
+    return 1;
+  }
+  size_t pending_count = 0;
+  bool served_request = false;
+  bool fatal_error = false;
+
   for (;;) {
-    if (oneshot) {
+    if (oneshot && served_request) {
+      break;
+    }
+
+    if (pending_count == 0) {
       fd_set fds;
       FD_ZERO(&fds);
       FD_SET(server_fd, &fds);
 
-      struct timeval timeout;
-      timeout.tv_sec = (time_t) (timeout_ms / 1000);
-      timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+      struct timeval timeout = {0};
+      struct timeval *timeout_ptr = NULL;
+      if (oneshot) {
+        timeout.tv_sec = (time_t) (timeout_ms / 1000);
+        timeout.tv_usec = (suseconds_t) ((timeout_ms % 1000) * 1000);
+        timeout_ptr = &timeout;
+      }
 
-      int select_rc = select(server_fd + 1, &fds, NULL, NULL, &timeout);
-      if (select_rc <= 0) {
+      int select_rc = select(server_fd + 1, &fds, NULL, NULL, timeout_ptr);
+      if (select_rc == 0) {
+        if (oneshot) {
+          break;
+        }
+        continue;
+      }
+      if (select_rc < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        fatal_error = true;
         break;
       }
     }
 
-    int client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
-      if (errno == EINTR) {
+    for (;;) {
+      int client_fd = accept(server_fd, NULL, NULL);
+      if (client_fd < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          break;
+        }
+        fatal_error = true;
+        break;
+      }
+
+      if (pending_count >= max_concurrency) {
+        sec4_rt_send_concurrency_throttle_response(client_fd, slot);
+        close(client_fd);
         continue;
       }
+
+      (void) sec4_rt_set_socket_nonblocking(client_fd, false);
+      pending_clients[pending_count++] = client_fd;
+    }
+
+    if (fatal_error) {
       break;
     }
+
+    if (pending_count == 0) {
+      continue;
+    }
+
+    int client_fd = pending_clients[0];
+    if (pending_count > 1) {
+      memmove(
+          pending_clients,
+          pending_clients + 1,
+          (pending_count - 1) * sizeof(pending_clients[0])
+      );
+    }
+    pending_count--;
 
     sec4_rt_handle_client(client_fd, slot);
     close(client_fd);
-
-    if (oneshot) {
-      break;
-    }
+    served_request = true;
   }
 
+  for (size_t i = 0; i < pending_count; i++) {
+    close(pending_clients[i]);
+  }
+  free(pending_clients);
+
   close(server_fd);
-  return 0;
+  return fatal_error ? 1 : 0;
 }
 
 static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
