@@ -3371,6 +3371,7 @@ fn compile_c_binary(
         .arg(&runtime_source_path)
         .arg("-std=c11")
         .arg("-O2")
+        .arg("-Wno-int-conversion")
         .arg("-I")
         .arg(&build_dir);
     if tls_backend == BuildTlsBackend::Openssl {

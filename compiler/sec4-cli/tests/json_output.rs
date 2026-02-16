@@ -12091,8 +12091,8 @@ fn main() effects {{ net }} -> Int {{
         response.contains("\"ok\":true")
             && response.contains("\"status\":201")
             && response.contains("\"traceId\":\"rt-1\"")
-            && response.contains("\"data\":{}")
-            && response.contains("\"meta\":{}"),
+            && response.contains("\"data\":1")
+            && response.contains("\"meta\":2"),
         "response should include deterministic std-success envelope with meta"
     );
 }
@@ -12811,6 +12811,105 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime json-depth-limit harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_json_decode_enforces_gate_and_schema_alignment_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping runtime json.decode gate/schema harness test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-json-gate-schema");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-json-gate-schema");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+static void set_request_body(const char *body) {
+  size_t body_len = strlen(body);
+  sec4_rt_reset_request();
+  sec4_rt_reset_response();
+  g_sec4_rt_request.has_request = true;
+  g_sec4_rt_request.has_content_type = true;
+  g_sec4_rt_request.content_type_is_json = true;
+  memcpy(g_sec4_rt_request.body, body, body_len + 1);
+  g_sec4_rt_request.body_len = body_len;
+}
+
+int main(void) {
+  const char *body = "{\"email\":\"user@example.com\"}";
+
+  set_request_body(body);
+  int64_t schema_req = sec4_rt_track_string_value("CreateUserRequest", UINT64_C(0xFAB01));
+  int64_t schema_alt = sec4_rt_track_string_value("CreateUserAlt", UINT64_C(0xFAB02));
+  int64_t raw = sec4_rt_track_string_value(body, UINT64_C(0xFAB03));
+  if (schema_req == 0 || schema_alt == 0 || raw == 0) { return 11; }
+
+  if (sec4_rt_json_decode(INT64_C(1), schema_req, raw) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.GATE_REQUIRED\"") == NULL) { return 13; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_req_json(INT64_C(0)) == 0) { return 14; }
+  sec4_rt_reset_response();
+  if (sec4_rt_json_decode(INT64_C(1), schema_req, raw) != 0) { return 15; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.GATE_FAILED\"") == NULL) { return 16; }
+
+  set_request_body(body);
+  schema_req = sec4_rt_track_string_value("CreateUserRequest", UINT64_C(0xFAB11));
+  schema_alt = sec4_rt_track_string_value("CreateUserAlt", UINT64_C(0xFAB12));
+  raw = sec4_rt_track_string_value(body, UINT64_C(0xFAB13));
+  if (schema_req == 0 || schema_alt == 0 || raw == 0) { return 17; }
+  if (sec4_rt_req_json(schema_req) != 0) { return 18; }
+
+  sec4_rt_reset_response();
+  if (sec4_rt_json_decode(INT64_C(1), schema_alt, raw) != 0) { return 19; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"JSON.SCHEMA_MISMATCH\"") == NULL) { return 20; }
+
+  sec4_rt_reset_response();
+  int64_t decoded = sec4_rt_json_decode(INT64_C(1), schema_req, raw);
+  if (decoded == 0) { return 21; }
+  const char *decoded_value = sec4_rt_lookup_tracked_value(decoded);
+  if (decoded_value == NULL || strcmp(decoded_value, body) != 0) { return 22; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("runtime harness source should be written");
+
+    let compile_output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime json gate/schema harness");
+    assert!(
+        compile_output.status.success(),
+        "runtime json gate/schema harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("runtime json gate/schema harness should run");
+    assert!(
+        run.status.success(),
+        "runtime json gate/schema harness should exit successfully"
     );
 }
 

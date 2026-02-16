@@ -90,6 +90,7 @@ typedef struct {
   bool content_type_is_json;
   bool json_checked;
   bool json_valid;
+  int64_t json_schema_handle;
 } sec4_rt_request_state;
 
 typedef struct {
@@ -230,24 +231,38 @@ static void sec4_rt_store_std_error_response(
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
 }
 
-static void sec4_rt_store_std_success_response(int64_t status, bool include_meta) {
+static void sec4_rt_store_std_success_response(
+    int64_t status,
+    const char *data_json,
+    const char *meta_json
+) {
   char payload[768];
+  if (data_json == NULL || data_json[0] == '\0') {
+    data_json = "{}";
+  }
+
   int written = 0;
-  if (include_meta) {
+  if (meta_json != NULL) {
+    if (meta_json[0] == '\0') {
+      meta_json = "{}";
+    }
     written = snprintf(
         payload,
         sizeof(payload),
-        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":{},\"meta\":{}}",
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":%s,\"meta\":%s}",
         (long long) status,
-        sec4_rt_current_trace_id()
+        sec4_rt_current_trace_id(),
+        data_json,
+        meta_json
     );
   } else {
     written = snprintf(
         payload,
         sizeof(payload),
-        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":{}}",
+        "{\"ok\":true,\"status\":%lld,\"traceId\":\"%s\",\"timeMs\":0,\"data\":%s}",
         (long long) status,
-        sec4_rt_current_trace_id()
+        sec4_rt_current_trace_id(),
+        data_json
     );
   }
 
@@ -2711,6 +2726,233 @@ static bool sec4_rt_is_likely_json(const char *body, size_t body_len) {
   return (first == '{' && last == '}') || (first == '[' && last == ']');
 }
 
+static bool sec4_rt_trim_json_token_bounds(
+    const char *input,
+    size_t input_len,
+    const char **start_out,
+    size_t *len_out
+) {
+  if (input == NULL || start_out == NULL || len_out == NULL || input_len == 0) {
+    return false;
+  }
+
+  size_t start = 0;
+  while (start < input_len && isspace((unsigned char) input[start])) {
+    start += 1;
+  }
+  if (start >= input_len) {
+    return false;
+  }
+
+  size_t end = input_len;
+  while (end > start && isspace((unsigned char) input[end - 1])) {
+    end -= 1;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  *start_out = input + start;
+  *len_out = end - start;
+  return true;
+}
+
+static bool sec4_rt_is_json_number_token(const char *token, size_t token_len) {
+  if (token == NULL || token_len == 0) {
+    return false;
+  }
+
+  size_t index = 0;
+  if (token[index] == '-') {
+    index += 1;
+  }
+  if (index >= token_len) {
+    return false;
+  }
+
+  if (token[index] == '0') {
+    index += 1;
+  } else if (token[index] >= '1' && token[index] <= '9') {
+    index += 1;
+    while (index < token_len && isdigit((unsigned char) token[index])) {
+      index += 1;
+    }
+  } else {
+    return false;
+  }
+
+  if (index < token_len && token[index] == '.') {
+    index += 1;
+    if (index >= token_len || !isdigit((unsigned char) token[index])) {
+      return false;
+    }
+    while (index < token_len && isdigit((unsigned char) token[index])) {
+      index += 1;
+    }
+  }
+
+  if (index < token_len && (token[index] == 'e' || token[index] == 'E')) {
+    index += 1;
+    if (index < token_len && (token[index] == '+' || token[index] == '-')) {
+      index += 1;
+    }
+    if (index >= token_len || !isdigit((unsigned char) token[index])) {
+      return false;
+    }
+    while (index < token_len && isdigit((unsigned char) token[index])) {
+      index += 1;
+    }
+  }
+
+  return index == token_len;
+}
+
+static bool sec4_rt_is_json_scalar_literal(const char *value, size_t value_len) {
+  const char *token = NULL;
+  size_t token_len = 0;
+  if (!sec4_rt_trim_json_token_bounds(value, value_len, &token, &token_len)) {
+    return false;
+  }
+
+  if (token_len >= 2 && token[0] == '"' && token[token_len - 1] == '"') {
+    return true;
+  }
+  if (token_len == 4 && strncmp(token, "true", 4) == 0) {
+    return true;
+  }
+  if (token_len == 5 && strncmp(token, "false", 5) == 0) {
+    return true;
+  }
+  if (token_len == 4 && strncmp(token, "null", 4) == 0) {
+    return true;
+  }
+  return sec4_rt_is_json_number_token(token, token_len);
+}
+
+static bool sec4_rt_escape_json_string(
+    const char *input,
+    char *escaped,
+    size_t escaped_size,
+    size_t *escaped_len
+) {
+  if (input == NULL || escaped == NULL || escaped_size == 0 || escaped_len == NULL) {
+    return false;
+  }
+
+  static const char *hex = "0123456789abcdef";
+  size_t write = 0;
+  if (write + 2 > escaped_size) {
+    return false;
+  }
+  escaped[write++] = '"';
+
+  for (size_t i = 0; input[i] != '\0'; i++) {
+    unsigned char ch = (unsigned char) input[i];
+    const char *replacement = NULL;
+    size_t replacement_len = 0;
+    char unicode_escape[7];
+
+    switch (ch) {
+      case '"':
+        replacement = "\\\"";
+        replacement_len = 2;
+        break;
+      case '\\':
+        replacement = "\\\\";
+        replacement_len = 2;
+        break;
+      case '\b':
+        replacement = "\\b";
+        replacement_len = 2;
+        break;
+      case '\f':
+        replacement = "\\f";
+        replacement_len = 2;
+        break;
+      case '\n':
+        replacement = "\\n";
+        replacement_len = 2;
+        break;
+      case '\r':
+        replacement = "\\r";
+        replacement_len = 2;
+        break;
+      case '\t':
+        replacement = "\\t";
+        replacement_len = 2;
+        break;
+      default:
+        if (ch < 0x20) {
+          unicode_escape[0] = '\\';
+          unicode_escape[1] = 'u';
+          unicode_escape[2] = '0';
+          unicode_escape[3] = '0';
+          unicode_escape[4] = hex[(ch >> 4) & 0x0f];
+          unicode_escape[5] = hex[ch & 0x0f];
+          unicode_escape[6] = '\0';
+          replacement = unicode_escape;
+          replacement_len = 6;
+        }
+        break;
+    }
+
+    if (replacement != NULL) {
+      if (write + replacement_len + 1 > escaped_size) {
+        return false;
+      }
+      memcpy(escaped + write, replacement, replacement_len);
+      write += replacement_len;
+      continue;
+    }
+
+    if (write + 2 > escaped_size) {
+      return false;
+    }
+    escaped[write++] = (char) ch;
+  }
+
+  if (write + 2 > escaped_size) {
+    return false;
+  }
+  escaped[write++] = '"';
+  escaped[write] = '\0';
+  *escaped_len = write;
+  return true;
+}
+
+static bool sec4_rt_render_json_fragment_from_value(
+    int64_t value,
+    char *fragment,
+    size_t fragment_size,
+    size_t *fragment_len
+) {
+  if (fragment == NULL || fragment_size == 0 || fragment_len == NULL) {
+    return false;
+  }
+
+  const char *tracked = sec4_rt_lookup_tracked_value(value);
+  if (tracked != NULL) {
+    size_t tracked_len = strlen(tracked);
+    if (sec4_rt_is_likely_json(tracked, tracked_len)
+        || sec4_rt_is_json_scalar_literal(tracked, tracked_len)) {
+      if (tracked_len + 1 > fragment_size) {
+        return false;
+      }
+      memcpy(fragment, tracked, tracked_len + 1);
+      *fragment_len = tracked_len;
+      return true;
+    }
+    return sec4_rt_escape_json_string(tracked, fragment, fragment_size, fragment_len);
+  }
+
+  int written = snprintf(fragment, fragment_size, "%lld", (long long) value);
+  if (written <= 0 || (size_t) written >= fragment_size) {
+    return false;
+  }
+  *fragment_len = (size_t) written;
+  return true;
+}
+
 static size_t sec4_rt_json_max_bytes_limit(void) {
   int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_JSON_MAX_BYTES", SEC4_RT_DEFAULT_JSON_MAX_BYTES);
   if (parsed <= 0) {
@@ -3703,8 +3945,19 @@ int64_t sec4_rt_log_with_error(int64_t event, int64_t error) {
 }
 
 int64_t sec4_rt_req_json(int64_t schema) {
-  (void) schema;
   g_sec4_rt_request.json_checked = true;
+  g_sec4_rt_request.json_schema_handle = schema;
+
+  if (schema == 0) {
+    g_sec4_rt_request.json_valid = false;
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.SCHEMA_INVALID",
+        "validation",
+        "req.json requires non-zero schema descriptor"
+    );
+    return 1;
+  }
 
   if (!g_sec4_rt_request.has_request || g_sec4_rt_request.body_len == 0) {
     g_sec4_rt_request.json_valid = false;
@@ -3781,12 +4034,22 @@ int64_t sec4_rt_req_json(int64_t schema) {
 }
 
 int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
-  if (ctx == 0 || schema == 0 || raw == 0) {
+  if (ctx == 0 || raw == 0) {
     sec4_rt_store_std_error_response(
         400,
         "JSON.DECODE_INVALID",
         "validation",
         "invalid json.decode input"
+    );
+    return 0;
+  }
+
+  if (schema == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.SCHEMA_INVALID",
+        "validation",
+        "json.decode requires non-zero schema descriptor"
     );
     return 0;
   }
@@ -3801,6 +4064,50 @@ int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
         "invalid json.decode input"
     );
     return 0;
+  }
+
+  if (g_sec4_rt_request.has_request) {
+    bool raw_matches_request_body = g_sec4_rt_request.body_len > 0
+        && raw_len == g_sec4_rt_request.body_len
+        && memcmp(raw_value, g_sec4_rt_request.body, raw_len) == 0;
+
+    if (raw_matches_request_body && !g_sec4_rt_request.json_checked) {
+      sec4_rt_store_std_error_response(
+          400,
+          "JSON.GATE_REQUIRED",
+          "validation",
+          "req.json(schema) must succeed before json.decode on request body"
+      );
+      return 0;
+    }
+
+    if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
+      sec4_rt_store_std_error_response(
+          400,
+          "JSON.GATE_FAILED",
+          "validation",
+          "json.decode blocked because req.json gate is invalid"
+      );
+      return 0;
+    }
+
+    if (g_sec4_rt_request.json_checked
+        && g_sec4_rt_request.json_valid
+        && g_sec4_rt_request.json_schema_handle != 0
+        && g_sec4_rt_request.json_schema_handle != schema) {
+      const char *request_schema =
+          sec4_rt_lookup_tracked_value(g_sec4_rt_request.json_schema_handle);
+      const char *decode_schema = sec4_rt_lookup_tracked_value(schema);
+      if (request_schema != NULL && decode_schema != NULL && strcmp(request_schema, decode_schema) != 0) {
+        sec4_rt_store_std_error_response(
+            400,
+            "JSON.SCHEMA_MISMATCH",
+            "validation",
+            "json.decode schema does not match req.json schema for active request"
+        );
+        return 0;
+      }
+    }
   }
 
   if (raw_len > sec4_rt_json_max_bytes_limit()) {
@@ -3837,8 +4144,39 @@ int64_t sec4_rt_json_decode(int64_t ctx, int64_t schema, int64_t raw) {
 }
 
 int64_t sec4_rt_json_encode(int64_t schema, int64_t value) {
-  (void) schema;
-  return value;
+  if (schema == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "JSON.SCHEMA_INVALID",
+        "validation",
+        "json.encode requires non-zero schema descriptor"
+    );
+    return 0;
+  }
+
+  char encoded[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t encoded_len = 0;
+  if (!sec4_rt_render_json_fragment_from_value(value, encoded, sizeof(encoded), &encoded_len)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "json.encode runtime failure"
+    );
+    return 0;
+  }
+
+  int64_t encoded_handle = sec4_rt_track_sized_value(encoded, encoded_len, UINT64_C(0x14141));
+  if (encoded_handle == 0) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "json.encode runtime failure"
+    );
+    return 0;
+  }
+  return encoded_handle;
 }
 
 int64_t sec4_rt_req_body(int64_t ctx, int64_t req) {
@@ -3899,33 +4237,84 @@ int64_t sec4_rt_req_header(const char *name) {
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
-  (void) schema;
-  (void) value;
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_std_success_response(200, false);
+
+  int64_t encoded = sec4_rt_json_encode(schema, value);
+  if (encoded == 0) {
+    return 1;
+  }
+  const char *data_json = sec4_rt_lookup_tracked_value(encoded);
+  if (data_json == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "res.json failed to materialize encoded payload"
+    );
+    return 1;
+  }
+  sec4_rt_store_std_success_response(200, data_json, NULL);
   return 0;
 }
 
 int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value) {
-  (void) schema;
-  (void) value;
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_std_success_response(status > 0 ? status : 201, false);
+
+  int64_t encoded = sec4_rt_json_encode(schema, value);
+  if (encoded == 0) {
+    return 1;
+  }
+  const char *data_json = sec4_rt_lookup_tracked_value(encoded);
+  if (data_json == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "res.ok failed to materialize encoded payload"
+    );
+    return 1;
+  }
+  sec4_rt_store_std_success_response(status > 0 ? status : 201, data_json, NULL);
   return 0;
 }
 
 int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta) {
-  (void) schema;
-  (void) value;
-  (void) meta;
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;
   }
-  sec4_rt_store_std_success_response(status > 0 ? status : 201, true);
+
+  int64_t encoded = sec4_rt_json_encode(schema, value);
+  if (encoded == 0) {
+    return 1;
+  }
+  const char *data_json = sec4_rt_lookup_tracked_value(encoded);
+  if (data_json == NULL) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "res.okMeta failed to materialize encoded payload"
+    );
+    return 1;
+  }
+
+  char meta_json[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  size_t meta_json_len = 0;
+  if (!sec4_rt_render_json_fragment_from_value(meta, meta_json, sizeof(meta_json), &meta_json_len)) {
+    sec4_rt_store_std_error_response(
+        500,
+        "JSON.ENCODE_INTERNAL",
+        "internal",
+        "res.okMeta failed to materialize meta payload"
+    );
+    return 1;
+  }
+  (void) meta_json_len;
+  sec4_rt_store_std_success_response(status > 0 ? status : 201, data_json, meta_json);
   return 0;
 }
 
