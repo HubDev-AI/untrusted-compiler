@@ -2531,6 +2531,40 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S116 security-headers HSTS/CSP policy materialization bridge acceptance criteria
+
+- `sec4.policy` security-headers policy persists HSTS/CSP runtime-shape fields:
+  - `security_headers.hsts.max_age_seconds`
+  - `security_headers.hsts.include_subdomains`
+  - `security_headers.hsts.preload`
+  - `security_headers.csp.policy`
+- `sec4 run` deterministically materializes those policy values into runtime env bridge keys.
+- Runtime response headers emitted through `sec4 run` reflect HSTS/CSP policy settings on success path.
+
+### M38-S116 tracking (live status)
+
+- [x] Extended `SecurityHeadersPolicyConfig` with persisted HSTS/CSP fields and secure defaults.
+- [x] Added parser ingestion/validation for:
+  - `security_headers.hsts.max_age_seconds` (>= 0, and >= 1 when HSTS enabled)
+  - `security_headers.hsts.include_subdomains`
+  - `security_headers.hsts.preload`
+  - `security_headers.csp.policy` (non-empty string when provided)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS`
+  - `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_ENABLED`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY`
+  - `SEC4_RT_SECURITY_HEADERS_CSP_POLICY`
+- [x] Added run-command e2e coverage for policy-driven HSTS/CSP materialization:
+  - `run_command_oneshot_applies_security_headers_hsts_and_csp_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_security_headers_hsts_and_csp_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_disables_security_headers_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

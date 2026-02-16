@@ -35,6 +35,15 @@ fn policy_defaults_when_empty() {
     assert!(policy.net_ssrf.block_link_local);
     assert!(policy.net_ssrf.block_metadata_ips);
     assert!(!policy.cors.allow_private_network);
+    assert_eq!(policy.security_headers.hsts_max_age_seconds, 15552000);
+    assert!(policy.security_headers.hsts_include_subdomains);
+    assert!(!policy.security_headers.hsts_preload);
+    assert!(policy.security_headers.csp_enabled);
+    assert!(!policy.security_headers.csp_report_only);
+    assert_eq!(
+        policy.security_headers.csp_policy,
+        "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+    );
     assert_eq!(policy.auth.cookie_name, "session");
 }
 
@@ -243,6 +252,67 @@ forbid_symlinks = "invalid"
 }
 
 #[test]
+fn policy_parses_security_headers_hsts_and_csp_fields() {
+    let source = r#"
+[security_headers]
+enabled = true
+x_content_type_options = true
+x_frame_options = "DENY"
+referrer_policy = "strict-origin"
+
+[security_headers.hsts]
+enabled = true
+max_age_seconds = 63072000
+include_subdomains = false
+preload = true
+
+[security_headers.csp]
+enabled = true
+report_only = true
+policy = "default-src 'none'; frame-ancestors 'none'"
+"#;
+
+    let policy = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect("security headers hsts/csp fields should parse");
+    assert!(policy.security_headers.enabled);
+    assert!(policy.security_headers.hsts_enabled);
+    assert_eq!(policy.security_headers.hsts_max_age_seconds, 63072000);
+    assert!(!policy.security_headers.hsts_include_subdomains);
+    assert!(policy.security_headers.hsts_preload);
+    assert!(policy.security_headers.csp_enabled);
+    assert!(policy.security_headers.csp_report_only);
+    assert_eq!(
+        policy.security_headers.csp_policy,
+        "default-src 'none'; frame-ancestors 'none'"
+    );
+}
+
+#[test]
+fn policy_rejects_invalid_security_headers_hsts_max_age() {
+    let source = r#"
+[security_headers.hsts]
+enabled = true
+max_age_seconds = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("hsts max_age must be >= 1 when hsts enabled");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_empty_security_headers_csp_policy() {
+    let source = r#"
+[security_headers.csp]
+policy = "   "
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("empty csp policy must fail");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
 fn policy_rejects_csrf_none_without_secure_cookie() {
     let source = r#"
 [csrf]
@@ -443,6 +513,15 @@ fn policy_profile_default_secure_prod_parses() {
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.security_headers.hsts_enabled);
+    assert_eq!(policy.security_headers.hsts_max_age_seconds, 15552000);
+    assert!(policy.security_headers.hsts_include_subdomains);
+    assert!(!policy.security_headers.hsts_preload);
+    assert!(policy.security_headers.csp_enabled);
+    assert!(!policy.security_headers.csp_report_only);
+    assert_eq!(
+        policy.security_headers.csp_policy,
+        "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+    );
     assert_eq!(policy.net_public.max_redirects, 0);
     assert!(!policy.net_internal.enabled);
     assert!(!policy.fs.enabled);
@@ -473,6 +552,16 @@ fn policy_profile_permissive_dev_parses() {
     assert!(!policy.cors.allow_private_network);
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 64);
+    assert!(!policy.security_headers.hsts_enabled);
+    assert_eq!(policy.security_headers.hsts_max_age_seconds, 0);
+    assert!(!policy.security_headers.hsts_include_subdomains);
+    assert!(!policy.security_headers.hsts_preload);
+    assert!(policy.security_headers.csp_enabled);
+    assert!(policy.security_headers.csp_report_only);
+    assert_eq!(
+        policy.security_headers.csp_policy,
+        "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+    );
     assert_eq!(policy.net_public.max_redirects, 5);
     assert!(policy.net_internal.enabled);
     assert!(policy.fs.enabled);

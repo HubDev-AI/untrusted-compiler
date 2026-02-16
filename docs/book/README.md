@@ -708,5 +708,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `736-m38-cors-preflight-private-network-explicit-opt-in-allow-path.md`
 - `737-m38-cors-private-network-policy-materialization-bridge.md`
 - `738-m38-cors-preflight-envelope-policy-materialization-bridge.md`
+- `739-m38-security-headers-hsts-csp-policy-materialization-bridge.md`
 
 As milestones progress, chapters will be added and linked from this index.

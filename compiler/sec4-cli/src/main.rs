@@ -3682,6 +3682,34 @@ fn cmd_run(
         },
     );
     cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED",
+        if policy.security_headers.hsts_enabled {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS",
+        policy.security_headers.hsts_max_age_seconds.to_string(),
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS",
+        if policy.security_headers.hsts_include_subdomains {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD",
+        if policy.security_headers.hsts_preload {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
         "SEC4_RT_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS",
         if policy.security_headers.x_content_type_options {
             "1"
@@ -3696,6 +3724,26 @@ fn cmd_run(
     cmd.env(
         "SEC4_RT_SECURITY_HEADERS_REFERRER_POLICY",
         policy.security_headers.referrer_policy.as_str(),
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_CSP_ENABLED",
+        if policy.security_headers.csp_enabled {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY",
+        if policy.security_headers.csp_report_only {
+            "1"
+        } else {
+            "0"
+        },
+    );
+    cmd.env(
+        "SEC4_RT_SECURITY_HEADERS_CSP_POLICY",
+        policy.security_headers.csp_policy.as_str(),
     );
     cmd.env(
         "SEC4_RT_CSRF_ENABLED",
