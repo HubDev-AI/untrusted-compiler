@@ -37,6 +37,7 @@
 #define SEC4_RT_MAX_OUTBOUND_HTTP_REQUEST_BYTES 2048
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES 256
 #define SEC4_RT_MAX_OUTBOUND_HTTP_HEADER_BYTES 8192
+#define SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS 64
 #define SEC4_RT_DEFAULT_NET_TIMEOUT_MS 2000
 #define SEC4_RT_DEFAULT_NET_MAX_BODY_BYTES 1048576
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
@@ -256,6 +257,13 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback);
 static bool sec4_rt_is_public_url_valid(const char *url);
 static bool sec4_rt_is_internal_url_valid(const char *url);
 static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
+static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
+static bool sec4_rt_parse_env_non_negative_i64_strict(
+    const char *name,
+    int64_t fallback,
+    int64_t max_value,
+    int64_t *out_value
+);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
 static bool sec4_rt_env_flag_enabled(const char *name);
 static void sec4_rt_read_env_string(
@@ -3329,12 +3337,63 @@ static int64_t sec4_rt_outbound_http_get_handle(
 
   int64_t timeout_ms = sec4_rt_outbound_http_timeout_ms();
   size_t max_body_bytes = sec4_rt_outbound_http_max_body_bytes();
-  bool redirects_allowed = sec4_rt_env_flag_enabled("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS");
-  int64_t max_redirects = sec4_rt_parse_env_i64("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", 0);
-  bool revalidate_redirects =
-      sec4_rt_env_flag_enabled_default("SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS", true);
-  bool allow_https_downgrade =
-      sec4_rt_env_flag_enabled("SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE");
+  bool redirects_allowed = false;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS",
+          false,
+          &redirects_allowed
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.REDIRECT_POLICY_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS"
+    );
+    return 0;
+  }
+  int64_t max_redirects = 0;
+  if (!sec4_rt_parse_env_non_negative_i64_strict(
+          "SEC4_RT_NET_PUBLIC_MAX_REDIRECTS",
+          0,
+          SEC4_RT_MAX_OUTBOUND_HTTP_REDIRECTS,
+          &max_redirects
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.REDIRECT_POLICY_INVALID",
+        "validation",
+        "invalid value for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
+    );
+    return 0;
+  }
+  bool revalidate_redirects = true;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS",
+          true,
+          &revalidate_redirects
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.REDIRECT_POLICY_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS"
+    );
+    return 0;
+  }
+  bool allow_https_downgrade = false;
+  if (!sec4_rt_parse_env_flag_strict(
+          "SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE",
+          false,
+          &allow_https_downgrade
+      )) {
+    sec4_rt_store_std_error_response(
+        400,
+        "NET.REDIRECT_POLICY_INVALID",
+        "validation",
+        "invalid boolean value for SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE"
+    );
+    return 0;
+  }
   int64_t redirects_followed = 0;
 
   while (true) {
@@ -5170,6 +5229,60 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
     return fallback;
   }
   return (int64_t) value;
+}
+
+static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
+  if (out_value == NULL) {
+    return false;
+  }
+  const char *raw = getenv(name);
+  if (raw == NULL || raw[0] == '\0') {
+    *out_value = fallback;
+    return true;
+  }
+  if (strcmp(raw, "1") == 0
+      || strcasecmp(raw, "true") == 0
+      || strcasecmp(raw, "yes") == 0
+      || strcasecmp(raw, "on") == 0
+      || strcasecmp(raw, "allow") == 0) {
+    *out_value = true;
+    return true;
+  }
+  if (strcmp(raw, "0") == 0
+      || strcasecmp(raw, "false") == 0
+      || strcasecmp(raw, "no") == 0
+      || strcasecmp(raw, "off") == 0
+      || strcasecmp(raw, "deny") == 0) {
+    *out_value = false;
+    return true;
+  }
+  return false;
+}
+
+static bool sec4_rt_parse_env_non_negative_i64_strict(
+    const char *name,
+    int64_t fallback,
+    int64_t max_value,
+    int64_t *out_value
+) {
+  if (out_value == NULL || max_value < 0 || fallback < 0) {
+    return false;
+  }
+  const char *raw = getenv(name);
+  if (raw == NULL || raw[0] == '\0') {
+    *out_value = fallback;
+    return true;
+  }
+  char *end = NULL;
+  long long value = strtoll(raw, &end, 10);
+  if (end == raw || (end != NULL && *end != '\0')) {
+    return false;
+  }
+  if (value < 0 || value > max_value) {
+    return false;
+  }
+  *out_value = (int64_t) value;
+  return true;
 }
 
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback) {

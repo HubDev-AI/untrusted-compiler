@@ -565,6 +565,20 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_redirect_resolver_rejects_https_to_http_downgrade_when_clang_available`
   - `c_bin_runtime_redirect_resolver_allows_https_to_http_downgrade_when_enabled_when_clang_available`
 - [x] Revalidated invalid-scheme diagnostics and c-backend emit contract.
+
+### M38-S24 outbound HTTP redirect policy-surface validation hardening acceptance criteria
+
+- Redirect policy env values are validated strictly with deterministic failure diagnostics.
+- Invalid boolean or integer redirect policy values no longer silently fall back.
+- Existing downgrade and invalid-scheme diagnostics remain green.
+
+### M38-S24 tracking (live status)
+
+- [x] Added strict redirect-policy env parsers for bool and bounded non-negative integer values.
+- [x] Redirect flow now emits deterministic `NET.REDIRECT_POLICY_INVALID` for invalid redirect policy env values.
+- [x] Added invalid-policy harness test:
+  - `c_bin_runtime_internal_get_redirect_policy_invalid_returns_deterministic_code_when_clang_available`
+- [x] Revalidated configurable downgrade and invalid-scheme diagnostics plus c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5875,7 +5889,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S24 outbound HTTP redirect policy-surface validation hardening (env policy parsing bounds + deterministic diagnostics).
+- M38-S25 outbound HTTP redirect hop-budget diagnostics hardening (deterministic policy cap and hop accounting).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5967,9 +5981,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S24 scope for redirect policy surface validation bounds and deterministic diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme subset) after M38-S24 edits.
-3. Publish M38-S24 book chapter and refresh roadmap live-status counts.
+1. Add M38-S25 scope for redirect hop-budget policy cap and deterministic hop-accounting diagnostics.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade/invalid-scheme/policy-invalid subset) after M38-S25 edits.
+3. Publish M38-S25 book chapter and refresh roadmap live-status counts.
 
 ---
 
