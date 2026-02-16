@@ -1235,6 +1235,32 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_allow_truthy_tokens_bypass_denial_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage acceptance criteria
+
+- Explicit deny tokens for `SEC4_RT_ALLOW_INTERNAL_NET` deterministically enforce internal-net denial:
+  - `0`, `false`, `no`, `off`, `deny` (case-insensitive)
+- For valid internal URL handles under explicit deny tokens, runtime emits:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Explicit deny-token matrix does not regress to:
+  - `NET.GET_INTERNAL_INVALID`
+  - `NET.URL_INTERNAL_INVALID`
+  - `NET.REQUEST_*`
+
+### M38-S55 tracking (live status)
+
+- [x] Added internal-policy explicit deny-token matrix harness:
+  - `c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+- [x] Harness validates explicit deny-token enforcement across tokens:
+  - `"0"`, `"false"`, `"no"`, `"off"`, `"deny"`, plus mixed/upper-case variants.
+- [x] Harness validates deterministic deny envelope on valid internal URLs:
+  - `http://127.0.0.1/...`
+  - `http://localhost/...`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_explicit_deny_tokens_enforce_denial_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_invalid_tokens_fallback_to_deny_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6547,7 +6573,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S55 outbound HTTP internal-policy explicit deny-token matrix coverage (`0|false|no|off|deny` case-insensitive tokens should deterministically enforce policy denial).
+- M38-S56 outbound HTTP internal-policy empty/whitespace-token fallback coverage (unset/blank/whitespace token values should deterministically preserve deny-by-default behavior).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6639,9 +6665,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S55 scope for explicit deny-token matrix behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
-2. Extend runtime harness with direct assertions that falsy tokens (`0|false|no|off|deny`) enforce deterministic policy denial across case variants.
-3. Publish M38-S55 book chapter and refresh roadmap live-status counts.
+1. Add M38-S56 scope for empty/whitespace token fallback behavior on `SEC4_RT_ALLOW_INTERNAL_NET`.
+2. Extend runtime harness with direct assertions that unset/blank/whitespace token values preserve deterministic deny-by-default behavior.
+3. Publish M38-S56 book chapter and refresh roadmap live-status counts.
 
 ---
 
