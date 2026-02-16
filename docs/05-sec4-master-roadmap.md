@@ -767,6 +767,30 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Revalidated resolve-dns toggle behavior and c-backend emit contract:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_dns_resolution_toggle_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S36 outbound HTTP public-url policy-list env-validation diagnostics acceptance criteria
+
+- Runtime `url.public(...)` path validates malformed list/token policy env inputs deterministically for:
+  - `SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES`
+  - `SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS`
+  - `SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS`
+  - `SEC4_RT_NET_PUBLIC_ALLOWED_PORTS`
+- Invalid values emit field-specific deterministic diagnostics with `policyKey` details:
+  - `NET.URL_PUBLIC_POLICY_ALLOWED_SCHEMES_INVALID`
+  - `NET.URL_PUBLIC_POLICY_ALLOWED_DOMAINS_INVALID`
+  - `NET.URL_PUBLIC_POLICY_BLOCKED_DOMAINS_INVALID`
+  - `NET.URL_PUBLIC_POLICY_ALLOWED_PORTS_INVALID`
+- Existing allow/deny behavior for valid list values remains unchanged.
+
+### M38-S36 tracking (live status)
+
+- [x] Added strict CSV/token validators for public scheme/domain/port list env keys in runtime URL policy path.
+- [x] Added field-specific deterministic policy diagnostics with structured `policyKey` details.
+- [x] Expanded `c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available` harness to assert all malformed-list diagnostic branches.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_enforces_allowed_ports_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6077,7 +6101,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S36 outbound HTTP public-url policy list env-validation diagnostics (strict malformed CSV/token handling for schemes/domains/ports).
+- M38-S37 outbound HTTP internal-url allowlist env-validation diagnostics (strict malformed domain/CIDR list handling).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6169,9 +6193,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S36 scope for strict validation diagnostics on public-url policy list env keys (`ALLOWED_SCHEMES`, `ALLOWED_DOMAINS`, `BLOCKED_DOMAINS`, `ALLOWED_PORTS`).
-2. Extend runtime harness to assert deterministic malformed-token diagnostics/details without regressing existing allow/deny behavior.
-3. Publish M38-S36 book chapter and refresh roadmap live-status counts.
+1. Add M38-S37 scope for strict validation diagnostics on internal-url allowlist env keys (`SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS`, `SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS`).
+2. Extend runtime harness to assert deterministic malformed-list diagnostics/details for internal allowlist envs without regressing valid internal-url behavior.
+3. Publish M38-S37 book chapter and refresh roadmap live-status counts.
 
 ---
 

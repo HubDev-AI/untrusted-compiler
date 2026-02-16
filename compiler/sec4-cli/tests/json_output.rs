@@ -7995,6 +7995,38 @@ int main(void) {
   setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "", 1);
   setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "", 1);
 
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES", "ftp", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example/path")) != 0) { return 31; }
+  if (!g_sec4_rt_response.active) { return 32; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_POLICY_ALLOWED_SCHEMES_INVALID\"") == NULL) { return 33; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES\"") == NULL) { return 34; }
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES", "https", 1);
+
+  setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "bad domain", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example/path")) != 0) { return 35; }
+  if (!g_sec4_rt_response.active) { return 36; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_POLICY_BLOCKED_DOMAINS_INVALID\"") == NULL) { return 37; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS\"") == NULL) { return 38; }
+  setenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS", "", 1);
+
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS", "bad..domain", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example/path")) != 0) { return 39; }
+  if (!g_sec4_rt_response.active) { return 40; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_POLICY_ALLOWED_DOMAINS_INVALID\"") == NULL) { return 41; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS\"") == NULL) { return 42; }
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS", "", 1);
+
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "443,abc", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_public(sec4_rt_req_query("https://public.example/path")) != 0) { return 43; }
+  if (!g_sec4_rt_response.active) { return 44; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_PUBLIC_POLICY_ALLOWED_PORTS_INVALID\"") == NULL) { return 45; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_PUBLIC_ALLOWED_PORTS\"") == NULL) { return 46; }
+  setenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS", "", 1);
+
   sec4_rt_reset_response();
   if (sec4_rt_url_public(sec4_rt_req_query("http://public.example/path")) != 0) { return 11; }
   if (!g_sec4_rt_response.active) { return 12; }

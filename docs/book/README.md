@@ -625,5 +625,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `653-m38-outbound-http-ssrf-block-toggle-policy-runtime-parity.md`
 - `654-m38-outbound-http-ssrf-block-toggle-env-validation-diagnostics.md`
 - `655-m38-outbound-http-ssrf-resolve-dns-env-validation-diagnostics.md`
+- `656-m38-outbound-http-public-url-policy-list-env-validation-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.

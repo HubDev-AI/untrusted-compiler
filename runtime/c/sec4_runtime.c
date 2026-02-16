@@ -261,6 +261,7 @@ static bool sec4_rt_ipv4_octets_are_private(const uint8_t octets[4]);
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value);
 static bool sec4_rt_env_flag_enabled_default(const char *name, bool fallback);
 static bool sec4_rt_env_flag_enabled(const char *name);
+static bool sec4_rt_is_redirect_host_token_valid(const char *host);
 static void sec4_rt_read_env_string(
     const char *name,
     const char *fallback,
@@ -1281,6 +1282,117 @@ static bool sec4_rt_csv_contains_port(const char *csv, uint16_t candidate_port) 
   }
 
   return false;
+}
+
+static bool sec4_rt_csv_is_valid_public_scheme_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    bool is_http = token_len == 4 && strncasecmp(token_start, "http", 4) == 0;
+    bool is_https = token_len == 5 && strncasecmp(token_start, "https", 5) == 0;
+    if (!(is_http || is_https)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_domain_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (token_len == 0 || token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+      return false;
+    }
+
+    char token[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+    memcpy(token, token_start, token_len);
+    token[token_len] = '\0';
+    if (!sec4_rt_is_redirect_host_token_valid(token)) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_port_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    unsigned long parsed_port = 0;
+    const char *digit = token_start;
+    while (digit < token_end) {
+      if (!isdigit((unsigned char) *digit)) {
+        return false;
+      }
+      parsed_port = (parsed_port * 10UL) + (unsigned long) (*digit - '0');
+      if (parsed_port > 65535UL) {
+        return false;
+      }
+      digit += 1;
+    }
+
+    if (parsed_port == 0UL) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
 }
 
 static bool sec4_rt_parse_ipv4_octets(const char *host, size_t host_len, uint8_t out[4]) {
@@ -4034,12 +4146,34 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
 
   const char *scheme = is_https ? "https" : "http";
   const char *allowed_schemes = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES");
+  if (!sec4_rt_csv_is_valid_public_scheme_list(allowed_schemes)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_PUBLIC_POLICY_ALLOWED_SCHEMES_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_ALLOWED_SCHEMES"
+    );
+    return false;
+  }
   if (sec4_rt_csv_has_any_token(allowed_schemes)
       && !sec4_rt_csv_contains_token_ci(allowed_schemes, scheme, strlen(scheme))) {
     return false;
   }
 
   const char *allowed_ports = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_PORTS");
+  if (!sec4_rt_csv_is_valid_port_list(allowed_ports)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_PUBLIC_POLICY_ALLOWED_PORTS_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_PUBLIC_ALLOWED_PORTS",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_ALLOWED_PORTS"
+    );
+    return false;
+  }
   if (sec4_rt_csv_has_any_token(allowed_ports)) {
     uint16_t resolved_port = 0;
     if (!sec4_rt_resolve_url_port(host, host_len, is_https, &resolved_port)
@@ -4049,11 +4183,33 @@ static bool sec4_rt_is_public_url_valid(const char *url) {
   }
 
   const char *blocked_domains = getenv("SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS");
+  if (!sec4_rt_csv_is_valid_domain_list(blocked_domains)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_PUBLIC_POLICY_BLOCKED_DOMAINS_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_BLOCKED_DOMAINS"
+    );
+    return false;
+  }
   if (sec4_rt_csv_contains_token_ci(blocked_domains, host, host_len)) {
     return false;
   }
 
   const char *allowed_domains = getenv("SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS");
+  if (!sec4_rt_csv_is_valid_domain_list(allowed_domains)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_PUBLIC_POLICY_ALLOWED_DOMAINS_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS",
+        "policyKey",
+        "SEC4_RT_NET_PUBLIC_ALLOWED_DOMAINS"
+    );
+    return false;
+  }
   if (sec4_rt_csv_has_any_token(allowed_domains)
       && !sec4_rt_csv_contains_token_ci(allowed_domains, host, host_len)) {
     return false;
