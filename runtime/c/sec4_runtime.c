@@ -2018,7 +2018,7 @@ static int sec4_rt_extract_outbound_http_body(
         cursor += 1;
       }
       if (cursor + 1 >= payload_bytes) {
-        return -3;
+        return -7;
       }
       size_t line_end = cursor;
       cursor += 2;
@@ -2038,7 +2038,7 @@ static int sec4_rt_extract_outbound_http_body(
         }
       }
       if (token_start >= token_end) {
-        return -3;
+        return -7;
       }
 
       size_t chunk_size = 0;
@@ -2052,7 +2052,7 @@ static int sec4_rt_extract_outbound_http_body(
         } else if (ch >= 'A' && ch <= 'F') {
           value = 10 + (int) (ch - 'A');
         } else {
-          return -3;
+          return -7;
         }
         if (chunk_size > (SIZE_MAX - (size_t) value) / 16) {
           return -2;
@@ -2092,14 +2092,14 @@ static int sec4_rt_extract_outbound_http_body(
         return -5;
       }
       if (cursor + chunk_size + 2 > payload_bytes) {
-        return -3;
+        return -7;
       }
 
       memcpy(body + decoded_len, payload + cursor, chunk_size);
       decoded_len += chunk_size;
       cursor += chunk_size;
       if (!(payload[cursor] == '\r' && payload[cursor + 1] == '\n')) {
-        return -3;
+        return -7;
       }
       cursor += 2;
     }
@@ -2501,6 +2501,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.RESPONSE_TRACK_FAILED",
         "internal",
         "outbound http response exceeds runtime tracked value limits"
+    );
+    return true;
+  }
+  if (read_status == -7) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.CHUNK_INVALID",
+        "validation",
+        "outbound http chunked response framing is invalid"
     );
     return true;
   }

@@ -237,6 +237,62 @@ fn spawn_one_shot_http_chunked_server(body: &str) -> (u16, thread::JoinHandle<()
     (port, handle)
 }
 
+fn spawn_one_shot_http_malformed_chunked_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("malformed chunked oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("malformed chunked oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("malformed chunked oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!("malformed chunked oneshot server timed out waiting for client");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("malformed chunked oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("malformed chunked oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+            )
+            .expect("malformed chunked oneshot server response headers should write");
+        // Invalid frame: declares 5 bytes but provides 3.
+        stream
+            .write_all(b"5\r\nabc\r\n0\r\n\r\n")
+            .expect("malformed chunked oneshot server payload should write");
+        stream
+            .flush()
+            .expect("malformed chunked oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_server_with_response_delay(
     body: &str,
     delay: Duration,
@@ -7152,6 +7208,79 @@ int main(void) {
             .expect("internal-net chunked response body should be written"),
         "internal-chunked-body"
     );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_malformed_chunked_returns_chunk_invalid_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime malformed chunked test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-malformed-chunked");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-malformed-chunked");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.CHUNK_INVALID\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for malformed chunked harness");
+    assert!(
+        output.status.success(),
+        "runtime malformed chunked harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let (internal_port, server_handle) = spawn_one_shot_http_malformed_chunked_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-chunked-malformed");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime malformed chunked harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime malformed chunked server should exit cleanly");
 }
 
 #[test]

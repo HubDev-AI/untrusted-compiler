@@ -245,6 +245,19 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added chunked runtime harness helper + test:
   - `c_bin_runtime_internal_get_chunked_body_is_decoded_when_clang_available`.
 - [x] Verified no regression on existing internal GET roundtrip + redirect allow paths.
+
+### M38-S2 chunked edge-case diagnostics hardening acceptance criteria
+
+- Malformed chunked framing maps to deterministic runtime error code `NET.CHUNK_INVALID`.
+- Chunked valid-path decoding remains green for internal-net runtime harness.
+- Redirect/internal-net existing runtime tests remain green after diagnostic mapping update.
+
+### M38-S2 tracking (live status)
+
+- [x] Runtime outbound read error mapper now handles `read_status=-7` as `NET.CHUNK_INVALID`.
+- [x] Added malformed chunked harness helper + test:
+  - `c_bin_runtime_internal_get_malformed_chunked_returns_chunk_invalid_when_clang_available`.
+- [x] Revalidated chunked success path and redirect-allow regression path.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5555,7 +5568,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S2 outbound HTTP robustness follow-up (chunked edge cases + response framing diagnostics).
+- M38-S3 outbound HTTP robustness follow-up (chunk trailers/extensions coverage + stricter parser diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5647,9 +5660,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S2 scope and implement chunked-response edge-case diagnostics coverage.
-2. Run targeted runtime matrix (`json_output` internal net + redirect + TLS subset) after M38-S2 edits.
-3. Publish M38-S2 book chapter and refresh roadmap live-status counts.
+1. Add M38-S3 scope for trailer/extension-heavy chunked responses and parser strictness deltas.
+2. Run targeted runtime matrix (`json_output` chunked + redirect + tls subset) after M38-S3 edits.
+3. Publish M38-S3 book chapter and refresh roadmap live-status counts.
 
 ---
 
