@@ -1694,6 +1694,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_enabled_invalid_env_falls_back_to_disabled_by_default`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S71 security-headers HSTS includeSubDomains invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS` env values deterministically fall back to default includeSubDomains-enabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as includeSubDomains-disabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S71 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS includeSubDomains fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) preserves `; includeSubDomains` in emitted HSTS header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7006,7 +7023,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S71 security-headers HSTS includeSubDomains invalid-env fallback coverage (invalid boolean env values should deterministically keep includeSubDomains enabled when HSTS is enabled).
+- M38-S72 security-headers HSTS preload invalid-env fallback coverage (invalid boolean env values should deterministically keep preload disabled by default).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -7098,9 +7115,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S71 scope for HSTS includeSubDomains invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS` values deterministically preserve default includeSubDomains behavior when HSTS is enabled.
-3. Publish M38-S71 book chapter and refresh roadmap live-status counts.
+1. Add M38-S72 scope for HSTS preload invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD` values deterministically keep preload disabled by default.
+3. Publish M38-S72 book chapter and refresh roadmap live-status counts.
 
 ---
 
