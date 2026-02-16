@@ -56,6 +56,8 @@ enum Commands {
         #[arg(long)]
         max_body_bytes: Option<u64>,
         #[arg(long)]
+        max_concurrency: Option<u64>,
+        #[arg(long)]
         serve_timeout_ms: Option<u64>,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
@@ -312,6 +314,7 @@ fn main() {
             port,
             oneshot,
             max_body_bytes,
+            max_concurrency,
             serve_timeout_ms,
             tls_backend,
         } => cmd_run(
@@ -319,6 +322,7 @@ fn main() {
             port,
             oneshot,
             max_body_bytes,
+            max_concurrency,
             serve_timeout_ms,
             tls_backend,
         ),
@@ -3515,11 +3519,16 @@ fn cmd_run(
     port: Option<u16>,
     oneshot: bool,
     max_body_bytes: Option<u64>,
+    max_concurrency: Option<u64>,
     serve_timeout_ms: Option<u64>,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
     if max_body_bytes == Some(0) {
         eprintln!("run failed: --max-body-bytes must be >= 1");
+        return Err(2);
+    }
+    if max_concurrency == Some(0) {
+        eprintln!("run failed: --max-concurrency must be >= 1");
         return Err(2);
     }
     if serve_timeout_ms == Some(0) {
@@ -3795,6 +3804,9 @@ fn cmd_run(
     }
     if let Some(bytes) = max_body_bytes {
         cmd.env("SEC4_RT_HTTP_MAX_BODY_BYTES", bytes.to_string());
+    }
+    if let Some(limit) = max_concurrency {
+        cmd.env("SEC4_RT_HTTP_MAX_CONCURRENCY", limit.to_string());
     }
     if let Some(timeout_ms) = serve_timeout_ms {
         cmd.env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", timeout_ms.to_string());

@@ -3430,6 +3430,183 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_cli_max_concurrency_overrides_policy_limit() {
+    if !clang_available() {
+        eprintln!("skipping run-command http max-concurrency override test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-http-max-concurrency-override");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runhttpmaxconcurrencyoverridecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[http]
+max_body_bytes = 4096
+max_concurrency = 1
+max_header_bytes = 8191
+max_multipart_bytes = 4096
+default_timeout_ms = 20000
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+
+    let mut matched = false;
+    let mut last_responses = String::new();
+    for attempt in 0..8 {
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path.as_str(),
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+                "--max-concurrency",
+                "2",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let first_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+        let second_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+
+        let mut first_stream = match first_handle
+            .join()
+            .expect("first connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency override test could not establish first connection");
+            }
+        };
+        let mut second_stream = match second_handle
+            .join()
+            .expect("second connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency override test could not establish second connection");
+            }
+        };
+
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+        last_responses = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
+            first_response, second_response
+        );
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command max-concurrency override process did not exit in expected window");
+            }
+        };
+
+        let has_success = first_response.contains("HTTP/1.1 200 OK")
+            || second_response.contains("HTTP/1.1 200 OK");
+        let has_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable")
+            || second_response.contains("HTTP/1.1 503 Service Unavailable");
+        if status.success() && has_success && !has_throttle {
+            matched = true;
+            break;
+        }
+    }
+
+    assert!(
+        matched,
+        "responses should include success and no throttle when CLI max-concurrency override is higher than policy:\n{last_responses}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_applies_net_public_policy_env() {
     if !clang_available() {
         eprintln!("skipping run-command net.public policy test: clang not available");
@@ -4670,6 +4847,34 @@ fn run_command_rejects_zero_serve_timeout_ms_override() {
     assert!(
         stderr.contains("run failed: --serve-timeout-ms must be >= 1"),
         "stderr should include deterministic serve-timeout-ms validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_max_concurrency_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-max-concurrency");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-concurrency", "0"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --max-concurrency override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-concurrency must be >= 1"),
+        "stderr should include deterministic max-concurrency validation message:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
