@@ -86,6 +86,7 @@ typedef struct {
   char cors_allow_headers[128];
   char cors_expose_headers[128];
   int64_t cors_max_age_seconds;
+  bool cors_allow_private_network;
   bool security_headers_enabled;
   bool security_hsts_enabled;
   int64_t security_hsts_max_age_seconds;
@@ -182,6 +183,7 @@ typedef struct {
   bool allow_credentials;
   bool require_vary_origin;
   int64_t max_age_seconds;
+  bool allow_private_network;
   char allow_methods[128];
   char allow_headers[128];
   char expose_headers[128];
@@ -6639,6 +6641,22 @@ static const char *sec4_rt_preflight_headers_block(
       used += (size_t) written;
     }
   }
+  char requested_private_network_header[16];
+  bool wants_private_network = sec4_rt_extract_request_header(
+      "Access-Control-Request-Private-Network",
+      requested_private_network_header,
+      sizeof(requested_private_network_header)
+  ) && strcasecmp(requested_private_network_header, "true") == 0;
+  if (router->cors_allow_private_network && wants_private_network) {
+    written = snprintf(
+        buffer + used,
+        buffer_size - used,
+        "Access-Control-Allow-Private-Network: true\r\n"
+    );
+    if (written > 0 && (size_t) written < (buffer_size - used)) {
+      used += (size_t) written;
+    }
+  }
   (void) used;
   return buffer;
 }
@@ -7422,7 +7440,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       );
       return;
     }
-    if (has_requested_private_network_header) {
+    if (has_requested_private_network_header && !router->cors_allow_private_network) {
       const char *body = "cors preflight private-network not allowed";
       const char *final_headers = sec4_rt_merge_three_headers(
           NULL,
@@ -10794,6 +10812,7 @@ static void sec4_rt_router_apply_default_cors(sec4_rt_router_state *slot) {
   slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
   slot->cors_expose_headers[0] = '\0';
   slot->cors_max_age_seconds = 600;
+  slot->cors_allow_private_network = false;
 }
 
 static void sec4_rt_router_apply_default_security_headers(sec4_rt_router_state *slot) {
@@ -10883,6 +10902,10 @@ static void sec4_rt_load_cors_policy_from_env(void) {
   if (g_sec4_rt_cors_policy.max_age_seconds <= 0) {
     g_sec4_rt_cors_policy.max_age_seconds = 600;
   }
+  g_sec4_rt_cors_policy.allow_private_network = sec4_rt_env_flag_enabled_default(
+      "SEC4_RT_CORS_ALLOW_PRIVATE_NETWORK",
+      false
+  );
   sec4_rt_read_env_string(
       "SEC4_RT_CORS_ALLOWED_METHODS",
       "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -11108,6 +11131,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_enabled = false;
     slot->cors_allow_origin[0] = '\0';
     slot->cors_expose_headers[0] = '\0';
+    slot->cors_allow_private_network = false;
     return router;
   }
   if (cfg == SEC4_RT_POLICY_CORS_HANDLE) {
@@ -11117,6 +11141,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_enabled = g_sec4_rt_cors_policy.enabled;
     if (!slot->cors_enabled) {
       slot->cors_allow_origin[0] = '\0';
+      slot->cors_allow_private_network = false;
       return router;
     }
     strncpy(
@@ -11148,6 +11173,7 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
     slot->cors_max_age_seconds = g_sec4_rt_cors_policy.max_age_seconds > 0
         ? g_sec4_rt_cors_policy.max_age_seconds
         : 600;
+    slot->cors_allow_private_network = g_sec4_rt_cors_policy.allow_private_network;
     return router;
   }
   sec4_rt_router_apply_default_cors(slot);
