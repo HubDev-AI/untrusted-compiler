@@ -2232,6 +2232,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_origin_headers`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S100 CORS preflight body rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects preflight requests with non-empty request bodies.
+- Preflight requests carrying request bodies deterministically return `400` with explicit diagnostics.
+- Rejected preflight-body requests do not emit CORS allow-methods preflight headers.
+
+### M38-S100 tracking (live status)
+
+- [x] Added runtime preflight guard for non-empty request body payloads.
+- [x] Added deterministic preflight-body rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight body-rejection e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_request_body`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
