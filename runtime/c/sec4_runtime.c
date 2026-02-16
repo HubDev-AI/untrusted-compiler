@@ -3346,7 +3346,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
       )) {
     sec4_rt_store_std_error_response(
         400,
-        "NET.REDIRECT_POLICY_INVALID",
+        "NET.REDIRECT_POLICY_ALLOW_REDIRECTS_INVALID",
         "validation",
         "invalid boolean value for SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS"
     );
@@ -3361,7 +3361,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
       )) {
     sec4_rt_store_std_error_response(
         400,
-        "NET.REDIRECT_POLICY_INVALID",
+        "NET.REDIRECT_POLICY_MAX_REDIRECTS_INVALID",
         "validation",
         "invalid value for SEC4_RT_NET_PUBLIC_MAX_REDIRECTS"
     );
@@ -3375,7 +3375,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
       )) {
     sec4_rt_store_std_error_response(
         400,
-        "NET.REDIRECT_POLICY_INVALID",
+        "NET.REDIRECT_POLICY_REVALIDATE_REDIRECTS_INVALID",
         "validation",
         "invalid boolean value for SEC4_RT_NET_SSRF_REVALIDATE_REDIRECTS"
     );
@@ -3389,7 +3389,7 @@ static int64_t sec4_rt_outbound_http_get_handle(
       )) {
     sec4_rt_store_std_error_response(
         400,
-        "NET.REDIRECT_POLICY_INVALID",
+        "NET.REDIRECT_POLICY_ALLOW_DOWNGRADE_INVALID",
         "validation",
         "invalid boolean value for SEC4_RT_NET_ALLOW_HTTPS_DOWNGRADE"
     );
