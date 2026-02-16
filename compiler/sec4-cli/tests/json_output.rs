@@ -9240,6 +9240,99 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_get_ipv6_loopback_roundtrip_when_supported_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime internal-net ipv6 roundtrip test: clang not available");
+        return;
+    }
+
+    let listener = match TcpListener::bind("[::1]:0") {
+        Ok(listener) => listener,
+        Err(_) => {
+            eprintln!(
+                "skipping c-bin runtime internal-net ipv6 roundtrip test: ipv6 loopback unavailable"
+            );
+            return;
+        }
+    };
+    let internal_port = listener
+        .local_addr()
+        .expect("ipv6 listener local addr should be available")
+        .port();
+    let server_handle = thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request_buf = [0u8; 1024];
+            let _ = stream.read(&mut request_buf);
+            let response =
+                "HTTP/1.1 200 OK\r\nContent-Length: 16\r\nConnection: close\r\n\r\ninternal-v6-body";
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-ipv6-roundtrip");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-ipv6-roundtrip");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdlib.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  int64_t body = sec4_rt_http_get_internal(1, internal_url);
+  if (body == 0) { return 12; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-net ipv6 roundtrip harness should compile successfully"
+    );
+
+    let internal_url = format!("http://[::1]:{internal_port}/internal-v6");
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime internal-net ipv6 roundtrip harness should exit successfully"
+    );
+
+    server_handle
+        .join()
+        .expect("runtime internal-net ipv6 roundtrip server should exit cleanly");
+}
+
+#[test]
 fn c_bin_runtime_internal_get_chunked_body_is_decoded_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime internal-net chunked test: clang not available");

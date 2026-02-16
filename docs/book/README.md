@@ -629,5 +629,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `657-m38-outbound-http-internal-url-allowlist-env-validation-diagnostics.md`
 - `658-m38-outbound-http-internal-url-ipv6-cidr-support.md`
 - `659-m38-outbound-http-client-ipv6-literal-parser-support.md`
+- `660-m38-outbound-http-client-ipv6-literal-transport-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.

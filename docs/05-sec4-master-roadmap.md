@@ -849,6 +849,23 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Revalidated existing outbound/internal GET path and c-backend emit contract:
   - `cargo test -p sec4 --test json_output c_bin_runtime_internal_get_roundtrip_succeeds_with_env_override_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S40 outbound HTTP client IPv6-literal transport validation acceptance criteria
+
+- Runtime internal GET path supports real IPv6 loopback URL form (`http://[::1]:port/...`) when environment supports IPv6 loopback socket bind/connect.
+- Test harness retains deterministic behavior by skipping explicitly when IPv6 loopback is unavailable.
+- Existing IPv4/internal GET behavior remains green.
+
+### M38-S40 tracking (live status)
+
+- [x] Added runtime integration test:
+  - `c_bin_runtime_internal_get_ipv6_loopback_roundtrip_when_supported_when_clang_available`
+- [x] Test now performs real one-shot IPv6 loopback roundtrip against `sec4_rt_http_get_internal(...)`.
+- [x] Added deterministic environment fallback:
+  - explicit skip message when `TcpListener::bind(\"[::1]:0\")` is unavailable.
+- [x] Revalidated parser + c-backend contract:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_outbound_url_parser_supports_ipv6_literals_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6159,7 +6176,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S40 outbound HTTP client IPv6-literal transport validation (real internal GET roundtrip on `::1` with deterministic fallback/skip behavior).
+- M38-S41 outbound HTTP IPv6-literal malformed-host diagnostics hardening (`url.public`/`url.internal` bracket-host invalid classes).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6251,9 +6268,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S40 scope for real `sec4_rt_http_get_internal` IPv6 loopback roundtrip coverage (`http://[::1]:port/...`).
-2. Keep deterministic fallback semantics for environments where IPv6 loopback bind/connect is unavailable (explicit skip branch in harness).
-3. Publish M38-S40 book chapter and refresh roadmap live-status counts.
+1. Add M38-S41 scope for deterministic malformed IPv6-literal host diagnostics in URL gate paths (missing bracket, empty bracket, invalid literal).
+2. Extend runtime harness to assert distinct invalid classes without regressing valid IPv6-literal roundtrip coverage.
+3. Publish M38-S41 book chapter and refresh roadmap live-status counts.
 
 ---
 
