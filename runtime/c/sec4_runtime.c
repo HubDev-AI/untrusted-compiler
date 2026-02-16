@@ -7348,6 +7348,32 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       );
       return;
     }
+    char requested_private_network_header[16];
+    bool has_requested_private_network_header = sec4_rt_extract_request_header(
+        "Access-Control-Request-Private-Network",
+        requested_private_network_header,
+        sizeof(requested_private_network_header)
+    );
+    if (has_requested_private_network_header
+        && strcasecmp(requested_private_network_header, "true") != 0) {
+      const char *body = "cors preflight private-network header invalid";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     char request_origin[256];
     bool has_request_origin = sec4_rt_extract_request_header(
         "Origin",
