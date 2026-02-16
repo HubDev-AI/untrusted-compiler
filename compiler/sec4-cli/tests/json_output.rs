@@ -14295,6 +14295,96 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available() {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime internal-policy denial precedence test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-policy-denial-precedence");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-policy-denial-precedence");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+static int assert_internal_denied_for_valid_url(int64_t url_handle, int base) {
+  memset(&g_sec4_rt_response, 0, sizeof(g_sec4_rt_response));
+  if (sec4_rt_http_get_internal(1, url_handle) != 0) { return base + 1; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.INTERNAL_DENIED\"") == NULL) { return base + 2; }
+  if (strstr(g_sec4_rt_response.body, "\"kind\":\"authorization\"") == NULL) { return base + 3; }
+  if (strstr(g_sec4_rt_response.body, "internal network access denied by runtime policy") == NULL) { return base + 4; }
+  if (strstr(g_sec4_rt_response.body, "NET.URL_INTERNAL_INVALID") != NULL) { return base + 5; }
+  if (strstr(g_sec4_rt_response.body, "NET.REQUEST_") != NULL) { return base + 6; }
+  if (strstr(g_sec4_rt_response.body, "NET.GET_INTERNAL_INVALID") != NULL) { return base + 7; }
+  return 0;
+}
+
+int main(void) {
+  int64_t url_loopback_ip = sec4_rt_req_query("http://127.0.0.1/internal-a");
+  int64_t url_localhost = sec4_rt_req_query("http://localhost/internal-b");
+  if (url_loopback_ip == 0 || url_localhost == 0) { return 10; }
+
+  int first = assert_internal_denied_for_valid_url(url_loopback_ip, 10);
+  if (first != 0) { return first; }
+
+  int second = assert_internal_denied_for_valid_url(url_localhost, 20);
+  if (second != 0) { return second; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for internal-policy denial precedence harness");
+    assert!(
+        output.status.success(),
+        "runtime internal-policy denial precedence harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run_default_deny = Command::new(&binary_path)
+        .env_remove("SEC4_RT_ALLOW_INTERNAL_NET")
+        .output()
+        .expect("compiled binary should run with default deny");
+    assert!(
+        run_default_deny.status.success(),
+        "runtime internal-policy denial precedence harness should exit successfully with default deny"
+    );
+
+    let run_explicit_deny = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "0")
+        .output()
+        .expect("compiled binary should run with explicit deny");
+    assert!(
+        run_explicit_deny.status.success(),
+        "runtime internal-policy denial precedence harness should exit successfully with explicit deny"
+    );
+}
+
+#[test]
 fn build_emit_c_bin_handles_http_router_intrinsics_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin http router integration test: clang not available");
