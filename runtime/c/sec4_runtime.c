@@ -3485,6 +3485,15 @@ static int64_t sec4_rt_outbound_http_get_handle(
         );
         return 0;
       }
+      if (redirect_location[0] == '\0') {
+        sec4_rt_store_std_error_response(
+            400,
+            "NET.REDIRECT_LOCATION_MISSING",
+            "validation",
+            "outbound redirect response is missing location header"
+        );
+        return 0;
+      }
 
       char next_url[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
       sec4_rt_redirect_resolve_status resolve_status = sec4_rt_resolve_redirect_url(

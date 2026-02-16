@@ -1822,6 +1822,60 @@ fn spawn_one_shot_http_scope_invalid_redirect_server() -> (u16, thread::JoinHand
     (port, handle)
 }
 
+fn spawn_one_shot_http_missing_location_redirect_server() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .expect("missing-location redirect oneshot server bind should work");
+    listener
+        .set_nonblocking(true)
+        .expect("missing-location redirect oneshot server nonblocking setup should work");
+    let port = listener
+        .local_addr()
+        .expect("missing-location redirect oneshot server local address should resolve")
+        .port();
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        panic!(
+                            "missing-location redirect oneshot server timed out waiting for request"
+                        );
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("missing-location redirect oneshot server accept failed: {err}"),
+            }
+        };
+
+        let mut buffer = [0_u8; 1024];
+        let mut request = Vec::new();
+        loop {
+            let bytes = stream
+                .read(&mut buffer)
+                .expect("missing-location redirect oneshot server request read should succeed");
+            if bytes == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
+                break;
+            }
+        }
+
+        stream
+            .write_all(
+                b"HTTP/1.1 302 Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .expect("missing-location redirect oneshot server response should write");
+        stream
+            .flush()
+            .expect("missing-location redirect oneshot server response flush should succeed");
+    });
+    (port, handle)
+}
+
 fn spawn_one_shot_http_absolute_redirect_upper_host_server() -> (u16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .expect("absolute redirect upper-host oneshot server bind should work");
@@ -10742,6 +10796,82 @@ int main(void) {
     server_handle.join().expect(
         "runtime redirect scope-revalidation-disabled server should exit cleanly",
     );
+}
+
+#[test]
+fn c_bin_runtime_internal_get_redirect_location_missing_returns_deterministic_code_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping c-bin runtime redirect missing-location test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-location-missing");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-internal-net-redirect-location-missing");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <stdlib.h>
+#include <string.h>
+
+int main(void) {
+  const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
+  if (internal_url_raw == NULL) { return 10; }
+
+  int64_t internal_url = sec4_rt_req_query(internal_url_raw);
+  if (internal_url == 0) { return 11; }
+  if (sec4_rt_http_get_internal(1, internal_url) != 0) { return 12; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.REDIRECT_LOCATION_MISSING\"") == NULL) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect missing-location harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect missing-location harness should compile successfully"
+    );
+
+    let (internal_port, server_handle) = spawn_one_shot_http_missing_location_redirect_server();
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
+        .env("SEC4_RT_NET_PUBLIC_ALLOW_REDIRECTS", "1")
+        .env("SEC4_RT_NET_PUBLIC_MAX_REDIRECTS", "3")
+        .env("SEC4_RT_TEST_INTERNAL_URL", &internal_url)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect missing-location harness should exit successfully"
+    );
+    server_handle
+        .join()
+        .expect("runtime redirect missing-location server should exit cleanly");
 }
 
 #[test]

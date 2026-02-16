@@ -509,6 +509,19 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added dedicated harness test:
   - `c_bin_runtime_internal_get_redirect_scope_revalidation_disabled_returns_deterministic_code_when_clang_available`
 - [x] Revalidated existing scope-invalid/redirect-allow flows and c-backend emit contract.
+
+### M38-S20 outbound HTTP redirect missing-location diagnostics hardening acceptance criteria
+
+- Runtime rejects redirect status responses that omit `Location` with a dedicated deterministic diagnostic.
+- Existing redirect location conflict diagnostics stay unchanged.
+- Existing scope/query/fragment/target redirect diagnostics remain green.
+
+### M38-S20 tracking (live status)
+
+- [x] Redirect follow-up path now emits deterministic `NET.REDIRECT_LOCATION_MISSING` when a redirect response omits `Location`.
+- [x] Added missing-location harness helper + test:
+  - `c_bin_runtime_internal_get_redirect_location_missing_returns_deterministic_code_when_clang_available`
+- [x] Revalidated scope-invalid diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5819,7 +5832,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S20 outbound HTTP redirect scheme-downgrade diagnostics hardening (deterministic https-to-http downgrade policy).
+- M38-S21 outbound HTTP redirect scheme-downgrade diagnostics hardening (deterministic https-to-http downgrade policy).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5911,9 +5924,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S20 scope for deterministic https-to-http redirect downgrade diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target subset) after M38-S20 edits.
-3. Publish M38-S20 book chapter and refresh roadmap live-status counts.
+1. Add M38-S21 scope for deterministic https-to-http redirect downgrade diagnostics.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing subset) after M38-S21 edits.
+3. Publish M38-S21 book chapter and refresh roadmap live-status counts.
 
 ---
 

@@ -609,5 +609,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `637-m38-outbound-http-redirect-query-component-diagnostics.md`
 - `638-m38-outbound-http-redirect-scope-revalidation-diagnostics.md`
 - `639-m38-outbound-http-redirect-revalidation-policy-diagnostics.md`
+- `640-m38-outbound-http-redirect-location-missing-diagnostics.md`
 
 As milestones progress, chapters will be added and linked from this index.
