@@ -8673,6 +8673,168 @@ int main(void) {{
 }
 
 #[test]
+fn c_bin_http_runtime_err_with_helpers_enrich_error_response_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping http runtime err.with* e2e test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-http-runtime-err-enrich-harness");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("http-runtime-err-enrich");
+    let port = find_available_tcp_port();
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        format!(
+            r#"#include "sec4_runtime.h"
+
+static int64_t validate(void) {{
+  int64_t base = sec4_rt_err_validation("VALIDATE.EMAIL_INVALID", "Invalid email.");
+  int64_t with_path = sec4_rt_err_with_path(base, "$.email");
+  int64_t validator = sec4_rt_log_str("validate.email");
+  int64_t with_detail = sec4_rt_err_with_detail(with_path, "validator", validator);
+  int64_t with_limit = sec4_rt_err_with_limit(with_detail, "maxJsonDepth", 33, 32);
+  int64_t with_dependency = sec4_rt_err_with_dependency(with_limit, "postgres", "query", 1);
+  (void) sec4_rt_err_with_cause(with_dependency, 123);
+  return 0;
+}}
+
+int main(void) {{
+  int64_t router = sec4_rt_http_router();
+  if (router == 0) {{ return 1; }}
+  if (sec4_rt_http_route_get(router, "/validate", validate) != 0) {{ return 2; }}
+  return sec4_rt_http_serve({port}, router) == 0 ? 0 : 3;
+}}
+"#
+        ),
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime err.with* harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime err.with* harness should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime err.with* harness exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /validate HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime err.with* harness could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("http runtime err.with* harness did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime err.with* harness should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain 400 status line"
+    );
+    assert!(
+        response.contains("\"code\":\"VALIDATE.EMAIL_INVALID\"")
+            && response.contains("\"message\":\"Invalid email.\"")
+            && response.contains("\"path\":\"$.email\""),
+        "response should include validation error and path fields:\n{response}"
+    );
+    assert!(
+        response.contains("\"details\":[{\"key\":\"validator\",\"value\":\"validate.email\"}]"),
+        "response should include details field:\n{response}"
+    );
+    assert!(
+        response.contains("\"limit\":{\"name\":\"maxJsonDepth\",\"value\":33,\"max\":32}"),
+        "response should include limit field:\n{response}"
+    );
+    assert!(
+        response
+            .contains("\"dependency\":{\"service\":\"postgres\",\"operation\":\"query\",\"retryable\":true}"),
+        "response should include dependency field:\n{response}"
+    );
+    assert!(
+        response.contains("\"cause\":{\"handle\":123}"),
+        "response should include cause field:\n{response}"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_auth_require_rejects_without_authorization_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping http runtime auth.require e2e test: clang not available");

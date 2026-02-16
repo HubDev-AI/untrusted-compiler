@@ -335,6 +335,44 @@ static void sec4_rt_store_std_error_response(
   sec4_rt_store_response(status, "application/json; charset=utf-8", payload);
 }
 
+static bool sec4_rt_error_response_append_fragment(const char *fragment) {
+  if (fragment == NULL || fragment[0] == '\0') {
+    return false;
+  }
+  if (!g_sec4_rt_response.active) {
+    return false;
+  }
+  if (strncmp(g_sec4_rt_response.content_type, "application/json", 16) != 0) {
+    return false;
+  }
+  if (g_sec4_rt_response.body_len < 2) {
+    return false;
+  }
+  if (g_sec4_rt_response.body[g_sec4_rt_response.body_len - 1] != '}'
+      || g_sec4_rt_response.body[g_sec4_rt_response.body_len - 2] != '}') {
+    return false;
+  }
+
+  char payload[SEC4_RT_MAX_RESPONSE_BYTES];
+  int written = snprintf(
+      payload,
+      sizeof(payload),
+      "%.*s,%s}}",
+      (int) (g_sec4_rt_response.body_len - 2),
+      g_sec4_rt_response.body,
+      fragment
+  );
+  if (written <= 0 || (size_t) written >= sizeof(payload)) {
+    return false;
+  }
+  sec4_rt_store_response(
+      g_sec4_rt_response.status,
+      g_sec4_rt_response.content_type,
+      payload
+  );
+  return true;
+}
+
 static void sec4_rt_store_std_success_response(
     int64_t status,
     const char *data_json,
@@ -7576,12 +7614,36 @@ int64_t sec4_rt_err_internal(const char *message) {
 
 int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
   sec4_rt_ensure_error_response_in_request();
+  if (path != NULL && path[0] != '\0') {
+    char escaped[SEC4_RT_MAX_PATH_BYTES * 2];
+    sec4_rt_json_escape(path, escaped, sizeof(escaped));
+    char fragment[SEC4_RT_MAX_PATH_BYTES * 2 + 16];
+    (void) snprintf(fragment, sizeof(fragment), "\"path\":\"%s\"", escaped);
+    (void) sec4_rt_error_response_append_fragment(fragment);
+  }
   int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xC3008));
   return sec4_rt_handle_from_two(error, path_handle, UINT64_C(0xC3009));
 }
 
 int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
   sec4_rt_ensure_error_response_in_request();
+  char escaped_key[96];
+  sec4_rt_json_escape(
+      key != NULL && key[0] != '\0' ? key : "detail",
+      escaped_key,
+      sizeof(escaped_key)
+  );
+  char value_json[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES];
+  sec4_rt_log_json_for_handle(value, value_json, sizeof(value_json));
+  char fragment[SEC4_RT_MAX_LOG_JSON_VALUE_BYTES + 160];
+  (void) snprintf(
+      fragment,
+      sizeof(fragment),
+      "\"details\":[{\"key\":\"%s\",\"value\":%s}]",
+      escaped_key,
+      value_json
+  );
+  (void) sec4_rt_error_response_append_fragment(fragment);
   int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xC3010));
   int64_t detail_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xC3011));
   return sec4_rt_handle_from_two(error, detail_handle, UINT64_C(0xC3012));
@@ -7589,6 +7651,22 @@ int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
 
 int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max) {
   sec4_rt_ensure_error_response_in_request();
+  char escaped_name[96];
+  sec4_rt_json_escape(
+      name != NULL && name[0] != '\0' ? name : "limit",
+      escaped_name,
+      sizeof(escaped_name)
+  );
+  char fragment[256];
+  (void) snprintf(
+      fragment,
+      sizeof(fragment),
+      "\"limit\":{\"name\":\"%s\",\"value\":%lld,\"max\":%lld}",
+      escaped_name,
+      (long long) value,
+      (long long) max
+  );
+  (void) sec4_rt_error_response_append_fragment(fragment);
   int64_t limit_name = sec4_rt_nonzero_handle_from_string(name, UINT64_C(0xC3013));
   int64_t observed = sec4_rt_handle_from_two(value, max, UINT64_C(0xC3014));
   int64_t limit_handle = sec4_rt_handle_from_two(limit_name, observed, UINT64_C(0xC3015));
@@ -7602,6 +7680,28 @@ int64_t sec4_rt_err_with_dependency(
     int64_t retryable
 ) {
   sec4_rt_ensure_error_response_in_request();
+  char escaped_service[96];
+  char escaped_operation[96];
+  sec4_rt_json_escape(
+      service != NULL && service[0] != '\0' ? service : "dependency",
+      escaped_service,
+      sizeof(escaped_service)
+  );
+  sec4_rt_json_escape(
+      operation != NULL && operation[0] != '\0' ? operation : "op",
+      escaped_operation,
+      sizeof(escaped_operation)
+  );
+  char fragment[320];
+  (void) snprintf(
+      fragment,
+      sizeof(fragment),
+      "\"dependency\":{\"service\":\"%s\",\"operation\":\"%s\",\"retryable\":%s}",
+      escaped_service,
+      escaped_operation,
+      retryable != 0 ? "true" : "false"
+  );
+  (void) sec4_rt_error_response_append_fragment(fragment);
   int64_t service_handle = sec4_rt_nonzero_handle_from_string(service, UINT64_C(0xC3017));
   int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation, UINT64_C(0xC3018));
   int64_t dep_handle = sec4_rt_handle_from_three(
@@ -7615,5 +7715,13 @@ int64_t sec4_rt_err_with_dependency(
 
 int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause) {
   sec4_rt_ensure_error_response_in_request();
+  char fragment[96];
+  (void) snprintf(
+      fragment,
+      sizeof(fragment),
+      "\"cause\":{\"handle\":%lld}",
+      (long long) cause
+  );
+  (void) sec4_rt_error_response_append_fragment(fragment);
   return sec4_rt_handle_from_two(error, cause, UINT64_C(0xC3021));
 }
