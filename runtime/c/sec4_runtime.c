@@ -273,6 +273,12 @@ static bool sec4_rt_csv_copy_first_token(
     char *out,
     size_t out_size
 );
+static bool sec4_rt_parse_ipv4_cidr_token(
+    const char *token_start,
+    const char *token_end,
+    uint32_t *network_out,
+    uint32_t *mask_out
+);
 static bool sec4_rt_is_csrf_protected_method(sec4_rt_router_state *router, const char *method);
 static size_t sec4_rt_json_escape(
     const char *input,
@@ -1385,6 +1391,37 @@ static bool sec4_rt_csv_is_valid_port_list(const char *csv) {
     }
 
     if (parsed_port == 0UL) {
+      return false;
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
+static bool sec4_rt_csv_is_valid_ipv4_cidr_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return true;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    uint32_t network = 0;
+    uint32_t mask = 0;
+    if (!sec4_rt_parse_ipv4_cidr_token(token_start, token_end, &network, &mask)) {
       return false;
     }
 
@@ -4235,6 +4272,28 @@ static bool sec4_rt_is_internal_url_valid(const char *url) {
 
   const char *allowed_domains = getenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS");
   const char *allowed_cidrs = getenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS");
+  if (!sec4_rt_csv_is_valid_domain_list(allowed_domains)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_INTERNAL_POLICY_ALLOWED_DOMAINS_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS",
+        "policyKey",
+        "SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS"
+    );
+    return false;
+  }
+  if (!sec4_rt_csv_is_valid_ipv4_cidr_list(allowed_cidrs)) {
+    sec4_rt_store_std_error_response_with_detail(
+        400,
+        "NET.URL_INTERNAL_POLICY_ALLOWED_CIDRS_INVALID",
+        "validation",
+        "invalid policy list for SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS",
+        "policyKey",
+        "SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS"
+    );
+    return false;
+  }
   bool has_allowed_domains = sec4_rt_csv_has_any_token(allowed_domains);
   bool has_allowed_cidrs = sec4_rt_csv_has_any_token(allowed_cidrs);
   bool domains_match =
@@ -8784,12 +8843,14 @@ int64_t sec4_rt_url_internal(int64_t input) {
     return 0;
   }
   if (!sec4_rt_is_internal_url_valid(url)) {
-    sec4_rt_store_std_error_response(
-        400,
-        "NET.URL_INTERNAL_INVALID",
-        "validation",
-        "url.internal value failed runtime internal-url policy checks"
-    );
+    if (!g_sec4_rt_response.active) {
+      sec4_rt_store_std_error_response(
+          400,
+          "NET.URL_INTERNAL_INVALID",
+          "validation",
+          "url.internal value failed runtime internal-url policy checks"
+      );
+    }
     return 0;
   }
   int64_t handle = sec4_rt_track_string_value(url, UINT64_C(0xB0B0B));

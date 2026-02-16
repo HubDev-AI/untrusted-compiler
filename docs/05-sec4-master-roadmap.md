@@ -791,6 +791,29 @@ No-stub alpha is considered ready only when all items below are true:
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_enforces_allowed_ports_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S37 outbound HTTP internal-url allowlist env-validation diagnostics acceptance criteria
+
+- Runtime `url.internal(...)` path validates malformed internal allowlist env inputs deterministically for:
+  - `SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS`
+  - `SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS`
+- Invalid values emit field-specific deterministic diagnostics with `policyKey` details:
+  - `NET.URL_INTERNAL_POLICY_ALLOWED_DOMAINS_INVALID`
+  - `NET.URL_INTERNAL_POLICY_ALLOWED_CIDRS_INVALID`
+- Existing internal-url allowlist behavior for valid domains/CIDRs remains unchanged.
+
+### M38-S37 tracking (live status)
+
+- [x] Added strict domain/CIDR list validators for internal allowlist env keys.
+- [x] Added deterministic internal policy diagnostics with structured `policyKey` details.
+- [x] Updated `url.internal(...)` to preserve active detailed policy diagnostics (no generic overwrite).
+- [x] Expanded internal allowlist runtime harness coverage in:
+  - `c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available`
+  to assert malformed domain/CIDR diagnostics and details.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_internal_respects_allowed_cidrs_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_url_public_respects_env_policy_lists_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6101,7 +6124,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S37 outbound HTTP internal-url allowlist env-validation diagnostics (strict malformed domain/CIDR list handling).
+- M38-S38 outbound HTTP internal-url allowlist IPv6-CIDR support (parser + matcher + deterministic diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6193,9 +6216,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S37 scope for strict validation diagnostics on internal-url allowlist env keys (`SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS`, `SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS`).
-2. Extend runtime harness to assert deterministic malformed-list diagnostics/details for internal allowlist envs without regressing valid internal-url behavior.
-3. Publish M38-S37 book chapter and refresh roadmap live-status counts.
+1. Add M38-S38 scope for IPv6 CIDR parsing/matching support in internal allowlist policy checks.
+2. Extend runtime harness to cover IPv6 allowlist success/failure paths with deterministic diagnostics for malformed CIDR tokens.
+3. Publish M38-S38 book chapter and refresh roadmap live-status counts.
 
 ---
 

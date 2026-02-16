@@ -8459,6 +8459,22 @@ int main(void) {
   setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "internal.service", 1);
   setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8", 1);
 
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "bad domain", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service")) != 0) { return 21; }
+  if (!g_sec4_rt_response.active) { return 22; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_POLICY_ALLOWED_DOMAINS_INVALID\"") == NULL) { return 23; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS\"") == NULL) { return 24; }
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS", "internal.service", 1);
+
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/x", 1);
+  sec4_rt_reset_response();
+  if (sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service")) != 0) { return 25; }
+  if (!g_sec4_rt_response.active) { return 26; }
+  if (strstr(g_sec4_rt_response.body, "\"code\":\"NET.URL_INTERNAL_POLICY_ALLOWED_CIDRS_INVALID\"") == NULL) { return 27; }
+  if (strstr(g_sec4_rt_response.body, "\"policyKey\",\"value\":\"SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS\"") == NULL) { return 28; }
+  setenv("SEC4_RT_NET_INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8", 1);
+
   sec4_rt_reset_response();
   if (sec4_rt_url_internal(sec4_rt_req_query("http://127.0.0.1/service")) == 0) { return 11; }
 
