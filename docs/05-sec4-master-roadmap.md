@@ -2503,6 +2503,34 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands run_command_oneshot_allows_private_network_preflight_when_cors_policy_enables_it`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S115 CORS preflight envelope policy materialization bridge acceptance criteria
+
+- `sec4.policy` CORS preflight envelope fields are first-class and persisted:
+  - `cors.allowed_methods`
+  - `cors.allowed_headers`
+  - `cors.exposed_headers`
+  - `cors.max_age_seconds`
+- `sec4 run` materializes those policy values into runtime env bridge keys deterministically.
+- Runtime responses through `sec4 run` reflect policy-driven preflight envelope and expose-headers behavior.
+
+### M38-S115 tracking (live status)
+
+- [x] Added persisted CORS preflight envelope fields to policy model/defaults.
+- [x] Added parser ingestion and validation for `cors.max_age_seconds` (`>= 1`).
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_CORS_ALLOWED_METHODS`
+  - `SEC4_RT_CORS_ALLOWED_HEADERS`
+  - `SEC4_RT_CORS_EXPOSED_HEADERS`
+  - `SEC4_RT_CORS_MAX_AGE_SECONDS`
+- [x] Added/extended run-command e2e coverage:
+  - `run_command_oneshot_applies_cors_from_policy` (includes expose-headers check)
+  - `run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy`
+- [x] Revalidated related policy/runtime bridging paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

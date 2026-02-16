@@ -3634,6 +3634,22 @@ fn cmd_run(
         policy.cors.allowed_origins.join(","),
     );
     cmd.env(
+        "SEC4_RT_CORS_ALLOWED_METHODS",
+        policy.cors.allowed_methods.join(","),
+    );
+    cmd.env(
+        "SEC4_RT_CORS_ALLOWED_HEADERS",
+        policy.cors.allowed_headers.join(","),
+    );
+    cmd.env(
+        "SEC4_RT_CORS_EXPOSED_HEADERS",
+        policy.cors.exposed_headers.join(","),
+    );
+    cmd.env(
+        "SEC4_RT_CORS_MAX_AGE_SECONDS",
+        policy.cors.max_age_seconds.to_string(),
+    );
+    cmd.env(
         "SEC4_RT_CORS_ALLOW_CREDENTIALS",
         if policy.cors.allow_credentials {
             "1"

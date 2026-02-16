@@ -18,6 +18,10 @@ pub enum PolicyMode {
 pub struct CorsPolicyConfig {
     pub enabled: bool,
     pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub allowed_headers: Vec<String>,
+    pub exposed_headers: Vec<String>,
+    pub max_age_seconds: i64,
     pub allow_credentials: bool,
     pub allow_private_network: bool,
     pub reflect_origin: bool,
@@ -166,6 +170,17 @@ impl Default for Policy {
             cors: CorsPolicyConfig {
                 enabled: true,
                 allowed_origins: vec!["https://app.example.com".to_string()],
+                allowed_methods: vec![
+                    "GET".to_string(),
+                    "POST".to_string(),
+                    "PUT".to_string(),
+                    "PATCH".to_string(),
+                    "DELETE".to_string(),
+                    "OPTIONS".to_string(),
+                ],
+                allowed_headers: vec!["content-type".to_string(), "authorization".to_string()],
+                exposed_headers: Vec::new(),
+                max_age_seconds: 600,
                 allow_credentials: true,
                 allow_private_network: false,
                 reflect_origin: false,
@@ -800,6 +815,29 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
         if let Some(value) = section.allowed_origins {
             policy.cors.allowed_origins = value;
+        }
+        if let Some(value) = section.allowed_methods {
+            policy.cors.allowed_methods = value;
+        }
+        if let Some(value) = section.allowed_headers {
+            policy.cors.allowed_headers = value;
+        }
+        if let Some(value) = section.exposed_headers {
+            policy.cors.exposed_headers = value;
+        }
+        if let Some(value) = section.max_age_seconds {
+            if value <= 0 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid cors.max_age_seconds",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("cors.max_age_seconds must be >= 1"),
+                );
+            } else {
+                policy.cors.max_age_seconds = value;
+            }
         }
         if let Some(value) = section.allow_credentials {
             policy.cors.allow_credentials = value;

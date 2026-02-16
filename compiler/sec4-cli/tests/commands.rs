@@ -1473,6 +1473,7 @@ entry = "src/main.ut"
 enabled = true
 allowed_origins = ["https://frontend.example"]
 allow_credentials = true
+exposed_headers = ["x-trace-id"]
 require_vary_origin = true
 "#,
     )
@@ -1589,6 +1590,10 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("Vary: Origin"),
         "response should include Vary: Origin when policy requires it:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Expose-Headers: x-trace-id"),
+        "response should include policy-driven expose headers:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
@@ -1734,6 +1739,159 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("Access-Control-Allow-Private-Network: true"),
         "response should include private-network allow header from policy bridge:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_applies_cors_preflight_methods_headers_and_max_age_from_policy() {
+    if !clang_available() {
+        eprintln!("skipping run-command cors preflight policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-cors-preflight-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runcorspreflightpolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[cors]
+enabled = true
+allowed_origins = ["https://frontend.example"]
+allowed_methods = ["POST"]
+allowed_headers = ["x-auth-token"]
+max_age_seconds = 7200
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn createUser() effects { net } -> Int {
+  res.text(201, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let router = cors.withCors(router, cors.fromPolicy());
+  http.post(router, "/users", createUser);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: x-auth-token\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command cors preflight policy test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command cors preflight policy process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command cors preflight policy process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line for cors preflight:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://frontend.example"),
+        "response should include policy-driven allow-origin header:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Methods: POST"),
+        "response should include policy-driven allowed methods:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Headers: x-auth-token"),
+        "response should include policy-driven allowed headers:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Max-Age: 7200"),
+        "response should include policy-driven max-age:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
