@@ -1711,6 +1711,23 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_include_subdomains_invalid_env_falls_back_to_enabled_when_hsts_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S72 security-headers HSTS preload invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD` env values deterministically fall back to default preload-disabled behavior when HSTS is enabled.
+- Invalid raw env values are never reflected as preload-enabled behavior in emitted HSTS headers.
+- Fallback coverage does not regress existing HSTS/header success-path behavior.
+
+### M38-S72 tracking (live status)
+
+- [x] Added HTTP runtime security-header HSTS preload fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) keeps HSTS header without `; preload`.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_hsts_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7023,7 +7040,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S72 security-headers HSTS preload invalid-env fallback coverage (invalid boolean env values should deterministically keep preload disabled by default).
+- M38-S73 security-headers CSP policy invalid-env fallback coverage (invalid header-value env input should deterministically fall back to default CSP policy).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -7115,9 +7132,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S72 scope for HSTS preload invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD` values deterministically keep preload disabled by default.
-3. Publish M38-S72 book chapter and refresh roadmap live-status counts.
+1. Add M38-S73 scope for CSP policy invalid-env fallback behavior in runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_CSP_POLICY` values deterministically fall back to the default CSP policy.
+3. Publish M38-S73 book chapter and refresh roadmap live-status counts.
 
 ---
 

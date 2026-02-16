@@ -664,5 +664,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `692-m38-security-headers-enabled-invalid-env-fallback.md`
 - `693-m38-security-headers-hsts-enabled-invalid-env-fallback.md`
 - `694-m38-security-headers-hsts-include-subdomains-invalid-env-fallback.md`
+- `695-m38-security-headers-hsts-preload-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.

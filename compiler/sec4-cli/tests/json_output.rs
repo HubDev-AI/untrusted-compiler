@@ -17971,6 +17971,161 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
+fn c_bin_http_runtime_applies_security_headers_hsts_preload_invalid_env_falls_back_to_disabled_when_hsts_enabled(
+) {
+    if !clang_available() {
+        eprintln!(
+            "skipping http runtime security-headers hsts-preload fallback e2e test: clang not available"
+        );
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-security-headers-hsts-preload-fallback-e2e");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpruntimesecurityheadershstspreloadfallback2e"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        format!(
+            r#"fn health() effects {{ net }} -> Int {{
+  res.text(200, "ok");
+  0
+}}
+
+fn main() effects {{ net }} -> Int {{
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve({}, withHeaders);
+  0
+}}
+"#,
+            port
+        ),
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for HTTP security-headers hsts-preload fallback runtime e2e fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpruntimesecurityheadershstspreloadfallback2e");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for HTTP security-headers hsts-preload fallback runtime e2e fixture"
+    );
+
+    let mut child = Command::new(&binary_path)
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_ENABLED", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_MAX_AGE_SECONDS", "31536000")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_INCLUDE_SUBDOMAINS", "1")
+        .env("SEC4_RT_SECURITY_HEADERS_HSTS_PRELOAD", "MAYBE")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("http runtime security-headers hsts-preload fallback e2e binary should start");
+
+    let mut response = None;
+    for _ in 0..240 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("child wait should succeed while connecting")
+        {
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e binary exited before request with status: {status}"
+            );
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(40)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..200 {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "http runtime security-headers hsts-preload fallback e2e binary did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "http runtime security-headers hsts-preload fallback e2e binary should exit successfully in oneshot mode"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line"
+    );
+    assert!(
+        response.contains("Strict-Transport-Security: max-age=31536000; includeSubDomains"),
+        "invalid hsts preload env value should preserve max-age and includeSubDomains output"
+    );
+    assert!(
+        !response.contains("; preload"),
+        "invalid hsts preload env value should keep default preload-disabled behavior"
+    );
+}
+
+#[test]
 fn c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled() {
     if !clang_available() {
         eprintln!(
