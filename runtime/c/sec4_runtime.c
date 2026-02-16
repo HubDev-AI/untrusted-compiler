@@ -6630,6 +6630,8 @@ static bool sec4_rt_cors_requested_headers_allowed(
     return false;
   }
 
+  char seen_tokens[32][128];
+  size_t seen_count = 0;
   const char *cursor = requested_headers;
   while (*cursor != '\0') {
     const char *token_start = cursor;
@@ -6661,6 +6663,22 @@ static bool sec4_rt_cors_requested_headers_allowed(
       }
       return false;
     }
+    for (size_t i = 0; i < seen_count; i++) {
+      if (strcasecmp(seen_tokens[i], token) == 0) {
+        if (invalid_token != NULL) {
+          *invalid_token = true;
+        }
+        return false;
+      }
+    }
+    if (seen_count >= (sizeof(seen_tokens) / sizeof(seen_tokens[0]))) {
+      if (invalid_token != NULL) {
+        *invalid_token = true;
+      }
+      return false;
+    }
+    memcpy(seen_tokens[seen_count], token, token_len + 1);
+    seen_count += 1;
     if (!sec4_rt_csv_contains_token_ci(allow_headers, token, token_len)) {
       return false;
     }

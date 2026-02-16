@@ -2142,6 +2142,24 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 
+### M38-S95 CORS preflight duplicate requested-headers rejection hardening acceptance criteria
+
+- Runtime CORS preflight handling rejects duplicate `Access-Control-Request-Headers` tokens as malformed input.
+- Duplicate requested-headers preflight requests deterministically return `400` with explicit diagnostics.
+- Distinct requested-headers tokens continue through existing malformed/disallowed/allowed validation paths.
+
+### M38-S95 tracking (live status)
+
+- [x] Added duplicate-token detection for requested-headers validation (case-insensitive).
+- [x] Added deterministic duplicate requested-headers rejection response (`400` + fixed message body).
+- [x] Added HTTP runtime CORS preflight duplicate requested-headers e2e coverage:
+  - `c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_duplicate_requested_headers_tokens`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_with_empty_requested_headers_value`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

@@ -687,5 +687,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `715-m38-cors-preflight-requested-method-shape-validation.md`
 - `716-m38-cors-preflight-requested-headers-shape-validation.md`
 - `717-m38-cors-preflight-empty-requested-headers-rejection.md`
+- `718-m38-cors-preflight-duplicate-requested-headers-rejection.md`
 
 As milestones progress, chapters will be added and linked from this index.
