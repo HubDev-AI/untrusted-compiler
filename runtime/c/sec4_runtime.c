@@ -2955,7 +2955,8 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID = 3,
   SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID = 4,
   SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5,
-  SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID = 6
+  SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID = 6,
+  SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID = 7
 } sec4_rt_redirect_resolve_status;
 
 static bool sec4_rt_is_ascii_hex_char(char value) {
@@ -3055,6 +3056,7 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
     return SEC4_RT_REDIRECT_RESOLVE_INVALID;
   }
   resolved_url[0] = '\0';
+  bool current_is_https = strncasecmp(current_url, "https://", 8) == 0;
 
   for (const char *cursor = location; *cursor != '\0'; cursor++) {
     if (*cursor == '\r' || *cursor == '\n') {
@@ -3252,6 +3254,9 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
   }
   if (!sec4_rt_is_redirect_host_token_valid(parsed_host)) {
     return SEC4_RT_REDIRECT_RESOLVE_HOST_INVALID;
+  }
+  if (current_is_https && parsed_http) {
+    return SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID;
   }
   const char *parsed_query = memchr(parsed_target, '?', parsed_target_len);
   if (parsed_query != NULL) {
@@ -3552,6 +3557,15 @@ static int64_t sec4_rt_outbound_http_get_handle(
               "NET.REDIRECT_QUERY_INVALID",
               "validation",
               "outbound redirect query component is invalid"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_DOWNGRADE_FORBIDDEN",
+              "validation",
+              "outbound redirect https-to-http downgrade is forbidden"
           );
           return 0;
         }

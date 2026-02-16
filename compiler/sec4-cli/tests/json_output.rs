@@ -10875,6 +10875,66 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_redirect_resolver_rejects_https_to_http_downgrade_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime redirect downgrade resolver test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-redirect-downgrade-resolver");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-redirect-downgrade-resolver");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+
+int main(void) {
+  char resolved[SEC4_RT_MAX_OUTBOUND_HTTP_URL_BYTES];
+  sec4_rt_redirect_resolve_status status = sec4_rt_resolve_redirect_url(
+      "https://secure.example/start",
+      "http://secure.example/downgrade",
+      resolved,
+      sizeof(resolved));
+  if (status != SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID) { return 10; }
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for redirect downgrade resolver harness");
+    assert!(
+        output.status.success(),
+        "runtime redirect downgrade resolver harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime redirect downgrade resolver harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_internal_get_absolute_redirect_upper_host_succeeds_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime absolute redirect upper-host test: clang not available");

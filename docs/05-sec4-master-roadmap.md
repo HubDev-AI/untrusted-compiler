@@ -522,6 +522,20 @@ No-stub alpha is considered ready only when all items below are true:
 - [x] Added missing-location harness helper + test:
   - `c_bin_runtime_internal_get_redirect_location_missing_returns_deterministic_code_when_clang_available`
 - [x] Revalidated scope-invalid diagnostics and c-backend emit contract.
+
+### M38-S21 outbound HTTP redirect scheme-downgrade diagnostics hardening acceptance criteria
+
+- Redirect resolver rejects `https -> http` redirect downgrade targets with deterministic status.
+- Runtime follow-up flow maps downgrade status to dedicated deterministic diagnostics.
+- Existing location-missing and scope diagnostics remain green.
+
+### M38-S21 tracking (live status)
+
+- [x] Redirect resolver now emits `SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID` for `https -> http` downgrade targets.
+- [x] Runtime follow-up flow now maps downgrade status to deterministic `NET.REDIRECT_DOWNGRADE_FORBIDDEN`.
+- [x] Added resolver harness test:
+  - `c_bin_runtime_redirect_resolver_rejects_https_to_http_downgrade_when_clang_available`
+- [x] Revalidated location-missing diagnostics and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5832,7 +5846,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S21 outbound HTTP redirect scheme-downgrade diagnostics hardening (deterministic https-to-http downgrade policy).
+- M38-S22 outbound HTTP redirect downgrade runtime-path harness hardening (openssl-gated end-to-end downgrade diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5924,9 +5938,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S21 scope for deterministic https-to-http redirect downgrade diagnostics.
-2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing subset) after M38-S21 edits.
-3. Publish M38-S21 book chapter and refresh roadmap live-status counts.
+1. Add M38-S22 scope for openssl-gated end-to-end downgrade diagnostics coverage.
+2. Run targeted runtime matrix (`json_output` redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length/transfer-encoding/obs-fold/control-char/content-type/relative-redirect/authority-host/fragment-target/query-target/scope-target/location-missing/downgrade subset) after M38-S22 edits.
+3. Publish M38-S22 book chapter and refresh roadmap live-status counts.
 
 ---
 
