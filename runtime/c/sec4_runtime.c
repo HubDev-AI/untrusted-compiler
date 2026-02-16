@@ -5981,6 +5981,40 @@ static bool sec4_rt_parse_header_value(
   return false;
 }
 
+static size_t sec4_rt_count_header_occurrences(
+    const char *request,
+    size_t request_len,
+    const char *name
+) {
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return 0;
+  }
+
+  size_t name_len = strlen(name);
+  size_t count = 0;
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      count += 1;
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return count;
+}
+
 static bool sec4_rt_parse_cookie_value(
     const char *cookie_header,
     const char *cookie_name,
@@ -7095,6 +7129,30 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       return;
     }
     char requested_method[32];
+    size_t requested_method_occurrences = sec4_rt_count_header_occurrences(
+        g_sec4_rt_request.raw_headers,
+        g_sec4_rt_request.raw_headers_len,
+        "Access-Control-Request-Method"
+    );
+    if (requested_method_occurrences > 1) {
+      const char *body = "cors preflight duplicate requested method header";
+      const char *final_headers = sec4_rt_merge_three_headers(
+          NULL,
+          cors_headers,
+          security_headers,
+          merged_headers,
+          sizeof(merged_headers)
+      );
+      (void) sec4_rt_send_response_with_extra_headers(
+          socket_fd,
+          400,
+          "text/plain; charset=utf-8",
+          body,
+          strlen(body),
+          final_headers
+      );
+      return;
+    }
     bool has_requested_method = sec4_rt_extract_request_header(
         "Access-Control-Request-Method",
         requested_method,
