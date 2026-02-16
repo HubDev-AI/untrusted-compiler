@@ -103,6 +103,7 @@ pub struct JsonPolicyConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
+    pub max_concurrency: i64,
     pub max_header_bytes: i64,
     pub max_multipart_bytes: i64,
     pub default_timeout_ms: i64,
@@ -265,6 +266,7 @@ impl Default for Policy {
             },
             http: HttpPolicyConfig {
                 max_body_bytes: 4_096,
+                max_concurrency: 256,
                 max_header_bytes: 8_191,
                 max_multipart_bytes: 4_096,
                 default_timeout_ms: 200,
@@ -853,6 +855,21 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_body_bytes = max_body_bytes;
+            }
+        }
+
+        if let Some(max_concurrency) = section.max_concurrency {
+            if max_concurrency < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_concurrency",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_concurrency must be >= 1"),
+                );
+            } else {
+                policy.http.max_concurrency = max_concurrency;
             }
         }
 
