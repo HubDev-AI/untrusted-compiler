@@ -2751,6 +2751,31 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S125 HTTP max-concurrency CLI override bridge + precedence hardening acceptance criteria
+
+- `sec4 run` accepts explicit max-concurrency override flag:
+  - `--max-concurrency <n>`
+- CLI max-concurrency override deterministically materializes to runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- CLI override takes precedence over policy `http.max_concurrency` and suppresses policy-driven throttling when override is higher.
+- CLI rejects invalid override values (`0`) with deterministic diagnostics and non-zero exit.
+
+### M38-S125 tracking (live status)
+
+- [x] Added `sec4 run` flag:
+  - `--max-concurrency`
+- [x] Wired CLI override into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_CONCURRENCY`
+- [x] Added deterministic run-command precedence coverage:
+  - `run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+- [x] Added deterministic CLI invalid-input coverage:
+  - `run_command_rejects_zero_max_concurrency_override`
+- [x] Revalidated related command/runtime behavior:
+  - `cargo test -p sec4 --test commands run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_rejects_zero_max_concurrency_override`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8063,7 +8088,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S125 HTTP max-concurrency CLI override bridge + precedence hardening.
+- M38-S126 HTTP max-concurrency runtime fallback/clamp hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8155,9 +8180,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S125 scope for `http.max_concurrency` CLI override bridge into runtime ingress controls.
-2. Add `sec4 run` override flag for `http.max_concurrency` and pin deterministic precedence over policy default.
-3. Publish M38-S125 book chapter and refresh roadmap live-status counts.
+1. Add M38-S126 scope for deterministic runtime fallback/clamp behavior on `SEC4_RT_HTTP_MAX_CONCURRENCY`.
+2. Pin clamp/fallback behavior with runtime/CLI tests for invalid, empty, and over-cap concurrency env values.
+3. Publish M38-S126 book chapter and refresh roadmap live-status counts.
 
 ---
 
