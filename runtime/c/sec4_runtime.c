@@ -192,6 +192,7 @@ typedef struct {
   bool active;
   int64_t handle;
   char event_name[SEC4_RT_MAX_LOG_EVENT_NAME_BYTES];
+  char level[8];
   char attrs_json[SEC4_RT_MAX_LOG_ATTRS_BYTES];
   bool has_http;
   char http_method[8];
@@ -4391,6 +4392,10 @@ static void sec4_rt_log_load_event_state(
   sec4_rt_log_event_state *existing = sec4_rt_log_event_state_for_handle(handle);
   if (existing != NULL) {
     memcpy(out, existing, sizeof(*out));
+    if (out->level[0] == '\0') {
+      strncpy(out->level, "info", sizeof(out->level) - 1);
+      out->level[sizeof(out->level) - 1] = '\0';
+    }
     return;
   }
 
@@ -4401,6 +4406,8 @@ static void sec4_rt_log_load_event_state(
     strncpy(out->event_name, "runtime.event", sizeof(out->event_name) - 1);
   }
   out->event_name[sizeof(out->event_name) - 1] = '\0';
+  strncpy(out->level, "info", sizeof(out->level) - 1);
+  out->level[sizeof(out->level) - 1] = '\0';
 }
 
 static int64_t sec4_rt_log_register_event(const char *event_name) {
@@ -4414,6 +4421,8 @@ static int64_t sec4_rt_log_register_event(const char *event_name) {
   state.handle = handle;
   strncpy(state.event_name, resolved, sizeof(state.event_name) - 1);
   state.event_name[sizeof(state.event_name) - 1] = '\0';
+  strncpy(state.level, "info", sizeof(state.level) - 1);
+  state.level[sizeof(state.level) - 1] = '\0';
   state.attrs_json[0] = '\0';
   sec4_rt_log_store_event_state(&state);
   return handle;
@@ -4487,9 +4496,12 @@ static void sec4_rt_log_emit_json(int64_t event_handle) {
 
   sec4_rt_log_event_state state;
   sec4_rt_log_load_event_state(event_handle, &state);
+  const char *level = state.level[0] != '\0' ? state.level : "info";
 
   char event_name[SEC4_RT_MAX_LOG_EVENT_NAME_BYTES * 2];
   sec4_rt_json_escape(state.event_name, event_name, sizeof(event_name));
+  char level_json[24];
+  sec4_rt_json_escape(level, level_json, sizeof(level_json));
   char trace_id[64];
   sec4_rt_json_escape(sec4_rt_current_trace_id(), trace_id, sizeof(trace_id));
 
@@ -4532,8 +4544,9 @@ static void sec4_rt_log_emit_json(int64_t event_handle) {
   int written = snprintf(
       line,
       sizeof(line),
-      "{\"timeMs\":%lld,\"level\":\"info\",\"traceId\":\"%s\",\"event\":\"%s\"%s%s%s}",
+      "{\"timeMs\":%lld,\"level\":\"%s\",\"traceId\":\"%s\",\"event\":\"%s\"%s%s%s}",
       (long long) sec4_rt_time_now(),
+      level_json,
       trace_id,
       event_name,
       attrs_segment,
@@ -4543,8 +4556,9 @@ static void sec4_rt_log_emit_json(int64_t event_handle) {
   if (written <= 0 || (size_t) written >= sizeof(line)) {
     (void) fprintf(
         stream,
-        "{\"timeMs\":%lld,\"level\":\"info\",\"traceId\":\"%s\",\"event\":\"runtime.log_overflow\"}\n",
+        "{\"timeMs\":%lld,\"level\":\"%s\",\"traceId\":\"%s\",\"event\":\"runtime.log_overflow\"}\n",
         (long long) sec4_rt_time_now(),
+        level_json,
         trace_id
     );
     (void) fflush(stream);
@@ -4555,12 +4569,47 @@ static void sec4_rt_log_emit_json(int64_t event_handle) {
   (void) fflush(stream);
 }
 
-void sec4_rt_log_any(int64_t event) {
+static const char *sec4_rt_log_resolve_level(const char *level) {
+  if (level == NULL || level[0] == '\0') {
+    return "info";
+  }
+  if (strcasecmp(level, "warn") == 0) {
+    return "warn";
+  }
+  if (strcasecmp(level, "error") == 0) {
+    return "error";
+  }
+  return "info";
+}
+
+static void sec4_rt_log_emit_with_level(int64_t event, const char *level) {
   int64_t resolved_event = event != 0
       ? event
       : sec4_rt_log_register_event("runtime.event");
+  sec4_rt_log_event_state state;
+  sec4_rt_log_load_event_state(resolved_event, &state);
+  const char *resolved_level = sec4_rt_log_resolve_level(level);
+  strncpy(state.level, resolved_level, sizeof(state.level) - 1);
+  state.level[sizeof(state.level) - 1] = '\0';
+  sec4_rt_log_store_event_state(&state);
   g_sec4_rt_last_log_handle = resolved_event;
   sec4_rt_log_emit_json(resolved_event);
+}
+
+void sec4_rt_log_any(int64_t event) {
+  sec4_rt_log_emit_with_level(event, "info");
+}
+
+void sec4_rt_log_info(int64_t event) {
+  sec4_rt_log_emit_with_level(event, "info");
+}
+
+void sec4_rt_log_warn(int64_t event) {
+  sec4_rt_log_emit_with_level(event, "warn");
+}
+
+void sec4_rt_log_error(int64_t event) {
+  sec4_rt_log_emit_with_level(event, "error");
 }
 
 int64_t sec4_rt_log_event(const char *event_name) {

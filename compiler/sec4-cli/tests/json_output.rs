@@ -4843,6 +4843,9 @@ entry = "src/main.ut"
         project_dir.join("src/main.ut"),
         r#"fn main() effects { log } -> Int {
   log.info(log.event("event"));
+  log.warn(log.event("warn"));
+  log.error(log.event("error"));
+  log.emit(log.event("emit"));
   0
 }
 "#,
@@ -4860,7 +4863,10 @@ entry = "src/main.ut"
 
     let generated_c = fs::read_to_string(project_dir.join("build").join("generated.c"))
         .expect("read generated C");
-    assert!(generated_c.contains("sec4_rt_log_any(sec4_rt_log_event(\"event\"))"));
+    assert!(generated_c.contains("sec4_rt_log_info(sec4_rt_log_event(\"event\"))"));
+    assert!(generated_c.contains("sec4_rt_log_warn(sec4_rt_log_event(\"warn\"))"));
+    assert!(generated_c.contains("sec4_rt_log_error(sec4_rt_log_event(\"error\"))"));
+    assert!(generated_c.contains("sec4_rt_log_any(sec4_rt_log_event(\"emit\"))"));
 
     let binary_path = project_dir.join("build").join("logdemo");
     assert!(binary_path.exists(), "compiled binary should exist");
@@ -4880,6 +4886,14 @@ entry = "src/main.ut"
     assert!(
         stderr.contains("\"level\":\"info\""),
         "runtime log output should include info level:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"event\":\"warn\"") && stderr.contains("\"level\":\"warn\""),
+        "runtime log output should include warn level event:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"event\":\"error\"") && stderr.contains("\"level\":\"error\""),
+        "runtime log output should include error level event:\n{stderr}"
     );
     assert!(
         stderr.contains("\"traceId\":\"rt-0\""),
@@ -5012,7 +5026,9 @@ int main(void) {
   int64_t with_http = sec4_rt_log_with_http(with_attr, "POST", "/users", 201, 12);
   int64_t err = sec4_rt_err_internal("boom");
   int64_t with_error = sec4_rt_log_with_error(with_http, err);
-  sec4_rt_log_any(with_error);
+  sec4_rt_log_info(with_error);
+  sec4_rt_log_warn(with_error);
+  sec4_rt_log_error(with_error);
   return 0;
 }
 "#,
@@ -5063,6 +5079,12 @@ int main(void) {
     assert!(
         stderr.contains("\"traceId\":\"rt-0\""),
         "structured log output should include default trace id outside request context:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("\"level\":\"info\"")
+            && stderr.contains("\"level\":\"warn\"")
+            && stderr.contains("\"level\":\"error\""),
+        "structured log output should include info/warn/error levels:\n{stderr}"
     );
 }
 

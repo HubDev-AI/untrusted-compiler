@@ -72,6 +72,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("bool sec4_rt_identity_bool(bool value);"));
     assert!(header.contains("int64_t sec4_rt_time_now(void);"));
     assert!(header.contains("void sec4_rt_log_any(int64_t event);"));
+    assert!(header.contains("void sec4_rt_log_info(int64_t event);"));
+    assert!(header.contains("void sec4_rt_log_warn(int64_t event);"));
+    assert!(header.contains("void sec4_rt_log_error(int64_t event);"));
     assert!(header.contains("int64_t sec4_rt_log_event(const char *event_name);"));
     assert!(header.contains("int64_t sec4_rt_log_field(const char *key, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_log_obj(int64_t field);"));
@@ -165,6 +168,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("bool sec4_rt_identity_bool(bool value)"));
     assert!(source.contains("int64_t sec4_rt_time_now(void)"));
     assert!(source.contains("void sec4_rt_log_any(int64_t event)"));
+    assert!(source.contains("void sec4_rt_log_info(int64_t event)"));
+    assert!(source.contains("void sec4_rt_log_warn(int64_t event)"));
+    assert!(source.contains("void sec4_rt_log_error(int64_t event)"));
     assert!(source.contains("int64_t sec4_rt_log_event(const char *event_name)"));
     assert!(source.contains("int64_t sec4_rt_log_field(const char *key, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_log_obj(int64_t field)"));
@@ -275,6 +281,9 @@ fn c_backend_rewrites_log_intrinsics_to_runtime_symbol() {
     let source = r#"
 fn main() effects { log } -> Int {
   log.info(log.event("event"));
+  log.warn(log.event("warn"));
+  log.error(log.event("error"));
+  log.emit(log.event("emit"));
   0
 }
 "#;
@@ -283,7 +292,10 @@ fn main() effects { log } -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
-    assert!(c.contains("(void)(sec4_rt_log_any(sec4_rt_log_event(\"event\")));"));
+    assert!(c.contains("(void)(sec4_rt_log_info(sec4_rt_log_event(\"event\")));"));
+    assert!(c.contains("(void)(sec4_rt_log_warn(sec4_rt_log_event(\"warn\")));"));
+    assert!(c.contains("(void)(sec4_rt_log_error(sec4_rt_log_event(\"error\")));"));
+    assert!(c.contains("(void)(sec4_rt_log_any(sec4_rt_log_event(\"emit\")));"));
 }
 
 #[test]
