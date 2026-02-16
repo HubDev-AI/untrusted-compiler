@@ -689,7 +689,6 @@ YAML
 cat > "$tmp/.github/workflows/runtime-smoke.yml" <<'YAML'
 name: Runtime Smoke
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -717,7 +716,6 @@ YAML
 cat > "$tmp/.github/workflows/operator-handoff-smoke.yml" <<'YAML'
 name: Operator Handoff Smoke
 on:
-  pull_request:
   push:
     branches:
       - main

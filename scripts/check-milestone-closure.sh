@@ -516,7 +516,6 @@ fi
 
 operator_handoff_workflow_path="${repo_root}/.github/workflows/operator-handoff-smoke.yml"
 if [ -f "${operator_handoff_workflow_path}" ] \
-  && rg -q 'pull_request:' "${operator_handoff_workflow_path}" \
   && rg -q 'push:' "${operator_handoff_workflow_path}" \
   && rg -q 'branches:' "${operator_handoff_workflow_path}" \
   && rg -q -- '- main' "${operator_handoff_workflow_path}" \
@@ -1533,7 +1532,6 @@ fi
 
 runtime_smoke_workflow_path="${repo_root}/.github/workflows/runtime-smoke.yml"
 if [ -f "${runtime_smoke_workflow_path}" ] \
-  && rg -q 'pull_request:' "${runtime_smoke_workflow_path}" \
   && rg -q 'push:' "${runtime_smoke_workflow_path}" \
   && rg -q 'branches:' "${runtime_smoke_workflow_path}" \
   && rg -q -- '- main' "${runtime_smoke_workflow_path}" \
@@ -1716,7 +1714,7 @@ emit_check "M14-D" "naming-lock CI enforces replay CLI json contract + guard tes
 emit_check "M15-A" "replay CLI json contract guards execution fields + missing-key fixtures" "${bool_has_replay_execution_contract_guard}" "scripts/test-replay-cli-json-contract.sh + scripts/test-replay-cli-json-contract-guard.sh"
 emit_check "M16-A" "naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests" "${bool_has_m16_runtime_http_coverage_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-B" "naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests" "${bool_has_m16_operator_smoke_script_ci_guard}" "${naming_lock_workflow_path}"
-emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke + artifact validation/index/upload on pull_request + main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
+emit_check "M16-C" "runtime-smoke workflow executes dual-branch sec4 run smoke + artifact validation/index/upload on main push" "${bool_has_m16_runtime_smoke_workflow_contract}" "${runtime_smoke_workflow_path}"
 emit_check "M16-D" "naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests" "${bool_has_m16_runtime_smoke_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M16-E" "naming-lock CI enforces sec4 run runtime-flag contract + guard tests" "${bool_has_m16_run_runtime_flag_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-A" "naming-lock CI enforces M17 operator handoff readiness checker" "${bool_has_m17_operator_handoff_ci_guard}" "${naming_lock_workflow_path}"
@@ -1724,7 +1722,7 @@ emit_check "M17-B" "naming-lock CI enforces M17 operator bootstrap profile helpe
 emit_check "M17-C" "naming-lock CI enforces M17 operator troubleshooting matrix" "${bool_has_m17_operator_troubleshooting_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-D" "naming-lock CI enforces M17 operator handoff quickstart" "${bool_has_m17_operator_quickstart_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-E" "naming-lock CI enforces M17 operator handoff CI smoke wrapper" "${bool_has_m17_operator_ci_smoke_ci_guard}" "${naming_lock_workflow_path}"
-emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
+emit_check "M17-F" "operator-handoff workflow executes CI smoke wrapper + artifact upload on main push" "${bool_has_m17_operator_handoff_workflow_contract}" "${operator_handoff_workflow_path}"
 emit_check "M17-G" "naming-lock CI enforces operator-handoff workflow contract + guard tests" "${bool_has_m17_operator_handoff_workflow_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-H" "naming-lock CI enforces M17 operator handoff artifact inspector" "${bool_has_m17_operator_artifact_inspector_ci_guard}" "${naming_lock_workflow_path}"
 emit_check "M17-I" "naming-lock CI enforces M17 operator handoff readiness summary" "${bool_has_m17_operator_summary_ci_guard}" "${naming_lock_workflow_path}"

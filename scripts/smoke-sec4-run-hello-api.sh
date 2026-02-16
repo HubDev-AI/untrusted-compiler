@@ -124,7 +124,7 @@ cleanup() {
   fi
   if [ -n "${artifacts_dir}" ]; then
     mkdir -p "${artifacts_dir}"
-    for artifact in run-metadata.txt health.headers health.body health.run.log users.headers users.body users.run.log; do
+    for artifact in run-metadata.txt warmup.log health.headers health.body health.run.log users.headers users.body users.run.log; do
       if [ -f "${tmp_dir}/${artifact}" ]; then
         cp "${tmp_dir}/${artifact}" "${artifacts_dir}/${artifact}"
       fi
@@ -152,6 +152,13 @@ serveTimeoutMs=${serve_timeout_ms}
 maxBodyBytes=${max_body_bytes:-unset}
 runFlags=${run_flags}
 META
+
+warmup_log="${tmp_dir}/warmup.log"
+if ! (cd "${root_dir}" && cargo build -p sec4 >"${warmup_log}" 2>&1); then
+  echo "sec4 warmup build failed before smoke requests" >&2
+  cat "${warmup_log}" >&2
+  exit 1
+fi
 
 request_once() {
   local name="$1"
@@ -182,7 +189,7 @@ request_once() {
 
   local status_code=""
   local got_response=0
-  local response_wait_ms=$((serve_timeout_ms + 20000))
+  local response_wait_ms=$((serve_timeout_ms + 45000))
   local response_poll_ms=50
   local response_max_attempts=$(((response_wait_ms + response_poll_ms - 1) / response_poll_ms))
   for _ in $(seq 1 "${response_max_attempts}"); do

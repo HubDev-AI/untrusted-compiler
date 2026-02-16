@@ -1380,7 +1380,7 @@ Current strict closure result:
 | `M15-A` | PASS | Replay CLI json contract scripts enforce execution fields + missing-key guard cases | `scripts/test-replay-cli-json-contract.sh`, `scripts/test-replay-cli-json-contract-guard.sh` |
 | `M16-A` | PASS | Naming-lock CI enforces M16 runtime HTTP coverage contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M16-B` | PASS | Naming-lock CI enforces sec4 run hello-api smoke script contract + guard tests | `.github/workflows/naming-lock.yml` |
-| `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on pull_request + main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
+| `M16-C` | PASS | Runtime-smoke workflow runs dual-branch sec4 run smoke on main push, validates artifacts, builds branch index, and uploads runtime artifacts | `.github/workflows/runtime-smoke.yml` |
 | `M16-D` | PASS | Naming-lock CI enforces runtime-smoke workflow contract + guard tests + artifact checker/index/bundle tests | `.github/workflows/naming-lock.yml` |
 | `M16-E` | PASS | Naming-lock CI enforces sec4 run runtime-flag contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M17-A` | PASS | Naming-lock CI enforces M17 operator handoff readiness checker | `.github/workflows/naming-lock.yml` |
@@ -1388,7 +1388,7 @@ Current strict closure result:
 | `M17-C` | PASS | Naming-lock CI enforces M17 operator troubleshooting matrix | `.github/workflows/naming-lock.yml` |
 | `M17-D` | PASS | Naming-lock CI enforces M17 operator handoff quickstart | `.github/workflows/naming-lock.yml` |
 | `M17-E` | PASS | Naming-lock CI enforces M17 operator handoff CI smoke wrapper | `.github/workflows/naming-lock.yml` |
-| `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on pull_request + main push | `.github/workflows/operator-handoff-smoke.yml` |
+| `M17-F` | PASS | Operator-handoff workflow executes CI smoke wrapper + artifact upload on main push | `.github/workflows/operator-handoff-smoke.yml` |
 | `M17-G` | PASS | Naming-lock CI enforces operator-handoff workflow contract + guard tests | `.github/workflows/naming-lock.yml` |
 | `M17-H` | PASS | Naming-lock CI enforces M17 operator handoff artifact inspector | `.github/workflows/naming-lock.yml` |
 | `M17-I` | PASS | Naming-lock CI enforces M17 operator handoff readiness summary | `.github/workflows/naming-lock.yml` |
@@ -2281,7 +2281,7 @@ Historical implementation bullets below are retained as build history; strict ga
   - closure now verifies naming-lock CI enforcement of zed grammar pin contract + guard tests (`M11-A`).
   - closure now verifies naming-lock CI enforcement of sec4 CLI command contract + guard tests (`M12-A`).
   - closure now verifies naming-lock CI enforcement of local path leak guard test (`M12-B`).
-  - release-contract-smoke workflow contract test now also enforces trigger coverage (`pull_request` + `push` on `main`).
+  - release-contract-smoke workflow contract test now enforces trigger coverage (`push` on `main`).
   - closure audit evidence paths are rendered repository-relative to avoid leaking local absolute workspace paths.
   - closure now verifies benchmark-smoke workflow keeps closure + cross-impl/trend contract guard tests plus strict closure audit wiring (`M13-D`).
   - closure now verifies naming-lock CI enforcement of benchmark-trend workflow contract + guard tests (`M13-E`).
