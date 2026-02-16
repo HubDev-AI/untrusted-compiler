@@ -642,5 +642,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `670-m38-outbound-http-parser-sink-bridge-contract-coverage.md`
 - `671-m38-outbound-http-wrapper-invalid-url-preparser-parity.md`
 - `672-m38-outbound-http-wrapper-invalid-handle-parity.md`
+- `673-m38-outbound-http-internal-policy-denial-precedence.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1159,6 +1159,30 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
   - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_url_preparser_envelope_parity_between_public_and_internal_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S52 outbound HTTP internal-policy denial precedence coverage acceptance criteria
+
+- Internal wrapper calls with valid internal URL handles emit deterministic policy denial when internal-net policy is disabled:
+  - `NET.INTERNAL_DENIED`
+  - `kind=authorization`
+- Policy denial precedence is asserted before URL/parser failure classes for the same valid internal URL handles.
+- Runtime harness includes direct coverage for both default-deny and explicit-deny (`SEC4_RT_ALLOW_INTERNAL_NET=0`) policy states.
+
+### M38-S52 tracking (live status)
+
+- [x] Added internal-policy denial precedence harness:
+  - `c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
+- [x] Harness validates deterministic denial envelopes for valid internal URLs:
+  - loopback IPv4 URL (`http://127.0.0.1/...`)
+  - localhost URL (`http://localhost/...`)
+- [x] Harness validates precedence exclusions:
+  - no `NET.URL_INTERNAL_INVALID`
+  - no `NET.REQUEST_*`
+  - no `NET.GET_INTERNAL_INVALID`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_runtime_internal_policy_denial_precedence_for_valid_internal_urls_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6471,7 +6495,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S52 outbound HTTP internal-policy denial precedence coverage (`NET.INTERNAL_DENIED` deterministic contract assertions for valid internal URL handles when policy deny is active).
+- M38-S53 outbound HTTP internal-policy allow-token coverage (`SEC4_RT_ALLOW_INTERNAL_NET` truthy token path should bypass policy denial and reach URL validation/transport stages deterministically).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6563,9 +6587,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S52 scope for deterministic internal-policy denial precedence on valid internal wrapper inputs.
-2. Extend runtime harness with direct assertions that valid internal URL handles emit `NET.INTERNAL_DENIED` when policy deny is active.
-3. Publish M38-S52 book chapter and refresh roadmap live-status counts.
+1. Add M38-S53 scope for internal policy-allow token acceptance across `SEC4_RT_ALLOW_INTERNAL_NET` truthy values.
+2. Extend runtime harness with direct assertions that truthy policy tokens bypass `NET.INTERNAL_DENIED` and flow to URL/transport outcomes.
+3. Publish M38-S53 book chapter and refresh roadmap live-status counts.
 
 ---
 
