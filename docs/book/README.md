@@ -718,5 +718,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `746-m38-http-ingress-generic-body-limit-enforcement.md`
 - `747-m38-http-max-concurrency-policy-runtime-materialization-bridge.md`
 - `748-m38-http-max-concurrency-cli-override-precedence-hardening.md`
+- `749-m38-http-max-concurrency-runtime-fallback-clamp-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
