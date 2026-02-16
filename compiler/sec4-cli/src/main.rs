@@ -3626,6 +3626,14 @@ fn cmd_run(
     cmd.env("SEC4_RT_JSON_MAX_BYTES", policy.json.max_bytes.to_string());
     cmd.env("SEC4_RT_JSON_MAX_DEPTH", policy.json.max_depth.to_string());
     cmd.env(
+        "SEC4_RT_HTTP_MAX_BODY_BYTES",
+        policy.http.max_body_bytes.to_string(),
+    );
+    cmd.env(
+        "SEC4_RT_HTTP_SERVE_TIMEOUT_MS",
+        policy.http.default_timeout_ms.to_string(),
+    );
+    cmd.env(
         "SEC4_RT_CORS_ENABLED",
         if policy.cors.enabled { "1" } else { "0" },
     );

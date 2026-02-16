@@ -2590,6 +2590,33 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands run_command_oneshot_disables_csrf_from_policy`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S118 HTTP body/timeout policy materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP ingress runtime-shape controls:
+  - `http.max_body_bytes`
+  - `http.default_timeout_ms`
+- `sec4 run` deterministically materializes those policy values into runtime env bridge keys.
+- Runtime request-body enforcement through `sec4 run` reflects policy-configured `http.max_body_bytes` without requiring CLI override flags.
+
+### M38-S118 tracking (live status)
+
+- [x] Added `HttpPolicyConfig` persisted fields with defaults aligned to runtime baseline:
+  - `max_body_bytes = 4096`
+  - `default_timeout_ms = 200`
+- [x] Added parser ingestion/validation for:
+  - `http.max_body_bytes` (>= 1)
+  - `http.default_timeout_ms` (>= 1)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_HTTP_MAX_BODY_BYTES`
+  - `SEC4_RT_HTTP_SERVE_TIMEOUT_MS`
+- [x] Added run-command e2e coverage for policy-driven ingress body-limit materialization:
+  - `run_command_oneshot_applies_http_body_limit_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_body_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7902,7 +7929,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S74 security-headers CORS allowed-origins invalid-env fallback coverage (invalid CSV/env tokenization should deterministically fall back to wildcard origin baseline).
+- M38-S119 HTTP policy CLI-override precedence + timeout materialization hardening coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -7994,9 +8021,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S77 scope for CORS enabled invalid-env fallback behavior in runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_CORS_ENABLED` values deterministically keep default cors-enabled behavior.
-3. Publish M38-S77 book chapter and refresh roadmap live-status counts.
+1. Add M38-S119 scope for `http.default_timeout_ms` policy materialization assertions in `sec4 run` oneshot flow.
+2. Add explicit run-command coverage that CLI flags (`--max-body-bytes`, `--serve-timeout-ms`) deterministically override policy-provided HTTP ingress values.
+3. Publish M38-S119 book chapter and refresh roadmap live-status counts.
 
 ---
 
