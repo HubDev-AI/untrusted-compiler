@@ -2956,7 +2956,8 @@ typedef enum sec4_rt_redirect_resolve_status {
   SEC4_RT_REDIRECT_RESOLVE_FRAGMENT_INVALID = 4,
   SEC4_RT_REDIRECT_RESOLVE_TARGET_CHAR_INVALID = 5,
   SEC4_RT_REDIRECT_RESOLVE_QUERY_INVALID = 6,
-  SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID = 7
+  SEC4_RT_REDIRECT_RESOLVE_DOWNGRADE_INVALID = 7,
+  SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID = 8
 } sec4_rt_redirect_resolve_status;
 
 static bool sec4_rt_is_ascii_hex_char(char value) {
@@ -3062,6 +3063,12 @@ static sec4_rt_redirect_resolve_status sec4_rt_resolve_redirect_url(
     if (*cursor == '\r' || *cursor == '\n') {
       return SEC4_RT_REDIRECT_RESOLVE_TARGET_INVALID;
     }
+  }
+  const char *absolute_scheme_sep = strstr(location, "://");
+  if (absolute_scheme_sep != NULL
+      && strncasecmp(location, "http://", 7) != 0
+      && strncasecmp(location, "https://", 8) != 0) {
+    return SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID;
   }
 
   if (strncasecmp(location, "http://", 7) == 0 || strncasecmp(location, "https://", 8) == 0) {
@@ -3566,6 +3573,15 @@ static int64_t sec4_rt_outbound_http_get_handle(
               "NET.REDIRECT_DOWNGRADE_FORBIDDEN",
               "validation",
               "outbound redirect https-to-http downgrade is forbidden"
+          );
+          return 0;
+        }
+        if (resolve_status == SEC4_RT_REDIRECT_RESOLVE_SCHEME_INVALID) {
+          sec4_rt_store_std_error_response(
+              400,
+              "NET.REDIRECT_SCHEME_INVALID",
+              "validation",
+              "outbound redirect absolute scheme is invalid"
           );
           return 0;
         }
