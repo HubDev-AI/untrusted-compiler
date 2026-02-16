@@ -657,5 +657,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `685-m38-security-headers-x-frame-options-invalid-env-fallback.md`
 - `686-m38-security-headers-referrer-policy-invalid-env-fallback.md`
 - `687-m38-security-headers-x-content-type-options-invalid-env-fallback.md`
+- `688-m38-security-headers-csp-report-only-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.

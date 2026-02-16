@@ -1521,6 +1521,23 @@ When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes t
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_env_falls_back_to_nosniff_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_on_success_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S67 security-headers CSP report-only invalid-env fallback coverage acceptance criteria
+
+- Invalid `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY` env values deterministically fall back to enforce-mode CSP header behavior.
+- Invalid raw env values are never reflected as report-only mode in emitted CSP header names.
+- Fallback coverage does not regress existing security-header success-path behavior.
+
+### M38-S67 tracking (live status)
+
+- [x] Added HTTP runtime security-header CSP report-only fallback e2e coverage:
+  - `c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+- [x] Harness validates invalid boolean token fallback behavior:
+  - invalid env token (`"MAYBE"`) emits enforce header (`Content-Security-Policy`) and does not emit report-only header.
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_invalid_env_falls_back_to_enforce_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -6833,7 +6850,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S67 security-headers CSP report-only invalid-env fallback coverage (invalid boolean env values should deterministically fall back to enforce mode).
+- M38-S68 security-headers CSP enabled invalid-env fallback coverage (invalid boolean env values should deterministically keep CSP enabled).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -6925,9 +6942,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S67 scope for CSP report-only invalid-env fallback behavior in security headers runtime policy loading.
-2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_CSP_REPORT_ONLY` values fall back to deterministic enforce-mode header behavior.
-3. Publish M38-S67 book chapter and refresh roadmap live-status counts.
+1. Add M38-S68 scope for CSP enabled invalid-env fallback behavior in security headers runtime policy loading.
+2. Extend runtime harness with direct assertions that invalid `SEC4_RT_SECURITY_HEADERS_CSP_ENABLED` values deterministically keep CSP active.
+3. Publish M38-S68 book chapter and refresh roadmap live-status counts.
 
 ---
 
