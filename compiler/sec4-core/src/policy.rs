@@ -19,6 +19,7 @@ pub struct CorsPolicyConfig {
     pub enabled: bool,
     pub allowed_origins: Vec<String>,
     pub allow_credentials: bool,
+    pub allow_private_network: bool,
     pub reflect_origin: bool,
     pub forbid_any_origin: bool,
     pub forbid_reflect_origin: bool,
@@ -166,6 +167,7 @@ impl Default for Policy {
                 enabled: true,
                 allowed_origins: vec!["https://app.example.com".to_string()],
                 allow_credentials: true,
+                allow_private_network: false,
                 reflect_origin: false,
                 forbid_any_origin: true,
                 forbid_reflect_origin: true,
@@ -565,6 +567,8 @@ struct CorsSection {
     #[serde(default)]
     allow_credentials: Option<bool>,
     #[serde(default)]
+    allow_private_network: Option<bool>,
+    #[serde(default)]
     reflect_origin: Option<bool>,
     #[serde(default)]
     max_age_seconds: Option<i64>,
@@ -799,6 +803,9 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
         }
         if let Some(value) = section.allow_credentials {
             policy.cors.allow_credentials = value;
+        }
+        if let Some(value) = section.allow_private_network {
+            policy.cors.allow_private_network = value;
         }
         if let Some(value) = section.reflect_origin {
             policy.cors.reflect_origin = value;
