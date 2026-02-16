@@ -2356,6 +2356,149 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_applies_csrf_cookie_and_header_names_from_policy() {
+    if !clang_available() {
+        eprintln!("skipping run-command csrf cookie/header policy test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-csrf-cookie-header-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runcsrfcookieheaderpolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[csrf]
+enabled = true
+mode = "double_submit"
+cookie_name = "sid"
+header_name = "x-sid-csrf"
+same_site = "Lax"
+secure_cookie = true
+protected_methods = ["POST","PUT","PATCH","DELETE"]
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn submit() effects { net } -> Int {
+  res.text(204, "");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let router = csrf.withCsrf(router, csrf.fromPolicy());
+  http.post(router, "/submit", submit);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /submit HTTP/1.1\r\nHost: localhost\r\nx-sid-csrf: token-1\r\nCookie: sid=token-1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command csrf cookie/header policy test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command csrf cookie/header policy process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command csrf cookie/header policy process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line when custom csrf names are respected:\n{response}"
+    );
+    assert!(
+        !response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\""),
+        "response should not include csrf token invalid error:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_applies_net_public_policy_env() {
     if !clang_available() {
         eprintln!("skipping run-command net.public policy test: clang not available");

@@ -2565,6 +2565,31 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands run_command_oneshot_disables_security_headers_from_policy`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S117 CSRF cookie/header-name policy materialization bridge acceptance criteria
+
+- `sec4.policy` persists CSRF token-name controls:
+  - `csrf.cookie_name`
+  - `csrf.header_name`
+- `sec4 run` deterministically materializes CSRF name policy into runtime env bridge keys.
+- Runtime CSRF middleware behavior through `sec4 run` respects policy-configured cookie/header token names.
+
+### M38-S117 tracking (live status)
+
+- [x] Extended `CsrfPolicyConfig` with persisted token-name fields and secure defaults.
+- [x] Added parser ingestion/validation for:
+  - `csrf.cookie_name` (non-empty string)
+  - `csrf.header_name` (non-empty string)
+- [x] Wired `sec4 run` env bridge keys:
+  - `SEC4_RT_CSRF_COOKIE_NAME`
+  - `SEC4_RT_CSRF_HEADER_NAME`
+- [x] Added run-command e2e coverage for policy-driven CSRF token-name materialization:
+  - `run_command_oneshot_applies_csrf_cookie_and_header_names_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_csrf_cookie_and_header_names_from_policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_disables_csrf_from_policy`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

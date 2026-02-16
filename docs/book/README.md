@@ -709,5 +709,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `737-m38-cors-private-network-policy-materialization-bridge.md`
 - `738-m38-cors-preflight-envelope-policy-materialization-bridge.md`
 - `739-m38-security-headers-hsts-csp-policy-materialization-bridge.md`
+- `740-m38-csrf-cookie-header-name-policy-materialization-bridge.md`
 
 As milestones progress, chapters will be added and linked from this index.
