@@ -697,5 +697,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `725-m38-cors-non-preflight-requested-method-header-rejection.md`
 - `726-m38-cors-non-preflight-requested-headers-header-rejection.md`
 - `727-m38-cors-non-preflight-duplicate-requested-method-header-rejection.md`
+- `728-m38-cors-non-preflight-duplicate-requested-headers-header-rejection.md`
 
 As milestones progress, chapters will be added and linked from this index.
