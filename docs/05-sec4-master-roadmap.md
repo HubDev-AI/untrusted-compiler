@@ -1950,6 +1950,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_origin_header_on_success_when_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S85 CORS allowed-origins allowlist request-origin materialization hardening acceptance criteria
+
+- Runtime CORS success/preflight responses honor multi-origin `SEC4_RT_CORS_ALLOWED_ORIGINS` lists by reflecting the request `Origin` when it matches an allowlist token.
+- Invalid allowlist env values deterministically fall back to wildcard (`*`) behavior.
+- Non-matching request `Origin` values do not get reflected and deterministically fall back to the first configured allow-origin token.
+
+### M38-S85 tracking (live status)
+
+- [x] Runtime CORS allowed-origins env loading now validates full CSV allowlist tokens instead of only the first token.
+- [x] Runtime CORS success/preflight header assembly now resolves effective allow-origin from request `Origin` when allowlist matching applies.
+- [x] Added HTTP runtime CORS allowlist e2e coverage:
+  - `c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_cors_allowed_origins_allowlist_non_matching_origin_falls_back_to_first_token_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`

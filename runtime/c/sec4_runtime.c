@@ -1594,6 +1594,44 @@ static bool sec4_rt_csv_is_valid_cors_headers_list(const char *csv) {
   return true;
 }
 
+static bool sec4_rt_csv_is_valid_cors_origins_list(const char *csv) {
+  if (csv == NULL || csv[0] == '\0') {
+    return false;
+  }
+
+  const char *cursor = csv;
+  while (*cursor != '\0') {
+    const char *token_start = cursor;
+    while (*cursor != '\0' && *cursor != ',') {
+      cursor += 1;
+    }
+    const char *token_end = cursor;
+    sec4_rt_trim_csv_token(&token_start, &token_end);
+
+    if (token_end <= token_start) {
+      return false;
+    }
+
+    size_t token_len = (size_t) (token_end - token_start);
+    if (!(token_len == 1 && token_start[0] == '*')) {
+      if (token_len >= SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES) {
+        return false;
+      }
+      char token[SEC4_RT_MAX_OUTBOUND_HTTP_HOST_BYTES];
+      memcpy(token, token_start, token_len);
+      token[token_len] = '\0';
+      if (!sec4_rt_is_header_value_valid(token)) {
+        return false;
+      }
+    }
+
+    if (*cursor == ',') {
+      cursor += 1;
+    }
+  }
+  return true;
+}
+
 static bool sec4_rt_csv_is_valid_cidr_list(const char *csv) {
   if (csv == NULL || csv[0] == '\0') {
     return true;
@@ -6299,9 +6337,34 @@ static const char *sec4_rt_cors_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   int written = snprintf(
       buffer,
       buffer_size,
@@ -6357,9 +6420,34 @@ static const char *sec4_rt_preflight_headers_block(
     return NULL;
   }
 
-  const char *allow_origin = router->cors_allow_origin[0] != '\0'
+  const char *configured_allow_origin = router->cors_allow_origin[0] != '\0'
       ? router->cors_allow_origin
       : "*";
+  char resolved_allow_origin[256];
+  const char *allow_origin = configured_allow_origin;
+  if (strcmp(configured_allow_origin, "*") != 0) {
+    char request_origin[256];
+    if (sec4_rt_extract_request_header("Origin", request_origin, sizeof(request_origin))
+        && sec4_rt_csv_contains_token_ci(
+            configured_allow_origin,
+            request_origin,
+            strlen(request_origin)
+        )) {
+      strncpy(
+          resolved_allow_origin,
+          request_origin,
+          sizeof(resolved_allow_origin) - 1
+      );
+      resolved_allow_origin[sizeof(resolved_allow_origin) - 1] = '\0';
+      allow_origin = resolved_allow_origin;
+    } else if (sec4_rt_csv_copy_first_token(
+                   configured_allow_origin,
+                   resolved_allow_origin,
+                   sizeof(resolved_allow_origin)
+               )) {
+      allow_origin = resolved_allow_origin;
+    }
+  }
   const char *allow_methods = router->cors_allow_methods[0] != '\0'
       ? router->cors_allow_methods
       : "GET, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -6650,11 +6738,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
       security_headers_buffer,
       sizeof(security_headers_buffer)
   );
-  const char *cors_headers = sec4_rt_cors_headers_block(
-      router,
-      cors_headers_buffer,
-      sizeof(cors_headers_buffer)
-  );
+  const char *cors_headers = NULL;
   char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
@@ -6768,6 +6852,11 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
   strncpy(g_sec4_rt_request.route_path, path, sizeof(g_sec4_rt_request.route_path) - 1);
   g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
+  cors_headers = sec4_rt_cors_headers_block(
+      router,
+      cors_headers_buffer,
+      sizeof(cors_headers_buffer)
+  );
 
   if (router->cors_enabled && strcmp(method, "OPTIONS") == 0) {
     const char *extra_headers = sec4_rt_preflight_headers_block(
@@ -10050,12 +10139,13 @@ static void sec4_rt_load_cors_policy_from_env(void) {
   if (!sec4_rt_csv_is_valid_cors_headers_list(g_sec4_rt_cors_policy.expose_headers)) {
     g_sec4_rt_cors_policy.expose_headers[0] = '\0';
   }
-  const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
-  if (!sec4_rt_csv_copy_first_token(
-          allowed_origins,
-          g_sec4_rt_cors_policy.allow_origin,
-          sizeof(g_sec4_rt_cors_policy.allow_origin)
-      ) || !sec4_rt_is_header_value_valid(g_sec4_rt_cors_policy.allow_origin)) {
+  sec4_rt_read_env_string(
+      "SEC4_RT_CORS_ALLOWED_ORIGINS",
+      "",
+      g_sec4_rt_cors_policy.allow_origin,
+      sizeof(g_sec4_rt_cors_policy.allow_origin)
+  );
+  if (!sec4_rt_csv_is_valid_cors_origins_list(g_sec4_rt_cors_policy.allow_origin)) {
     strncpy(
         g_sec4_rt_cors_policy.allow_origin,
         "*",
