@@ -347,6 +347,21 @@ No-stub alpha is considered ready only when all items below are true:
   - `c_bin_runtime_internal_get_conflicting_location_headers_returns_deterministic_code_when_clang_available`
   - `c_bin_runtime_internal_get_invalid_retry_after_returns_deterministic_code_when_clang_available`
 - [x] Revalidated response-version/header-line strictness, redirect-allow path, and c-backend emit contract.
+
+### M38-S9 outbound HTTP duplicate-content-length diagnostics hardening acceptance criteria
+
+- Runtime normalizes comma-delimited duplicate `Content-Length` values when all entries match.
+- Malformed or conflicting duplicate `Content-Length` values are rejected deterministically with dedicated diagnostics.
+- Existing retryability/redirect/status-line/header-line hardening paths remain green.
+
+### M38-S9 tracking (live status)
+
+- [x] Runtime now accepts normalized duplicate `Content-Length` list values (for example `Content-Length: 4, 4`).
+- [x] Runtime now rejects malformed/conflicting duplicate `Content-Length` values with deterministic `NET.CONTENT_LENGTH_INVALID`.
+- [x] Added strictness harness helpers + tests:
+  - `c_bin_runtime_internal_get_duplicate_content_length_equal_is_accepted_when_clang_available`
+  - `c_bin_runtime_internal_get_duplicate_content_length_conflict_returns_deterministic_code_when_clang_available`
+- [x] Revalidated retry-after diagnostics, redirect-allow path, and c-backend emit contract.
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -5657,7 +5672,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S9 outbound HTTP parser hardening follow-up (content-length duplicate normalization and deterministic malformed-header diagnostics).
+- M38-S10 outbound HTTP parser hardening follow-up (transfer-encoding token whitelist and deterministic mixed-token diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -5749,9 +5764,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S9 scope for duplicate `Content-Length` normalization and deterministic malformed-header diagnostics on outbound runtime parse path.
-2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability subset) after M38-S9 edits.
-3. Publish M38-S9 book chapter and refresh roadmap live-status counts.
+1. Add M38-S10 scope for transfer-encoding token whitelist and deterministic mixed-token diagnostics on outbound runtime parse path.
+2. Run targeted runtime matrix (`json_output` chunked/redirect/tls/header-limit/framing/status-line/header-line/retryability/content-length subset) after M38-S10 edits.
+3. Publish M38-S10 book chapter and refresh roadmap live-status counts.
 
 ---
 

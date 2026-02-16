@@ -2051,27 +2051,56 @@ static int sec4_rt_extract_outbound_http_body(
         value_start += 1;
       }
       if (value_start >= line_end) {
-        return -3;
+        return -16;
       }
       size_t parsed = 0;
-      bool has_digits = false;
-      while (value_start < line_end && isdigit((unsigned char) *value_start)) {
-        has_digits = true;
-        size_t digit = (size_t) (*value_start - '0');
-        if (parsed > (SIZE_MAX - digit) / 10) {
-          return -2;
+      bool parsed_any = false;
+      while (value_start < line_end) {
+        while (value_start < line_end && isspace((unsigned char) *value_start)) {
+          value_start += 1;
         }
-        parsed = (parsed * 10) + digit;
+        if (value_start >= line_end) {
+          break;
+        }
+
+        size_t token_value = 0;
+        bool has_digits = false;
+        while (value_start < line_end && isdigit((unsigned char) *value_start)) {
+          has_digits = true;
+          size_t digit = (size_t) (*value_start - '0');
+          if (token_value > (SIZE_MAX - digit) / 10) {
+            return -2;
+          }
+          token_value = (token_value * 10) + digit;
+          value_start += 1;
+        }
+        while (value_start < line_end && isspace((unsigned char) *value_start)) {
+          value_start += 1;
+        }
+        if (!has_digits) {
+          return -16;
+        }
+        if (!parsed_any) {
+          parsed = token_value;
+          parsed_any = true;
+        } else if (parsed != token_value) {
+          return -16;
+        }
+
+        if (value_start >= line_end) {
+          break;
+        }
+        if (*value_start != ',') {
+          return -16;
+        }
         value_start += 1;
       }
-      while (value_start < line_end && isspace((unsigned char) *value_start)) {
-        value_start += 1;
-      }
-      if (!has_digits || value_start != line_end) {
-        return -3;
+
+      if (!parsed_any) {
+        return -16;
       }
       if (has_content_length && content_length != parsed) {
-        return -9;
+        return -16;
       }
       content_length = parsed;
       has_content_length = true;
@@ -2701,6 +2730,15 @@ static bool sec4_rt_store_outbound_http_read_error(int read_status) {
         "NET.REDIRECT_LOCATION_CONFLICT",
         "validation",
         "outbound redirect response has conflicting location headers"
+    );
+    return true;
+  }
+  if (read_status == -16) {
+    sec4_rt_store_std_error_response(
+        500,
+        "NET.CONTENT_LENGTH_INVALID",
+        "validation",
+        "outbound http content-length header is invalid"
     );
     return true;
   }
