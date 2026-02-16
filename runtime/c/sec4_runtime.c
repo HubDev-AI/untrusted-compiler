@@ -178,6 +178,7 @@ typedef struct {
   char allow_origin[256];
   bool allow_credentials;
   bool require_vary_origin;
+  int64_t max_age_seconds;
 } sec4_rt_cors_policy_state;
 
 typedef struct {
@@ -9861,6 +9862,13 @@ static void sec4_rt_load_cors_policy_from_env(void) {
       "SEC4_RT_CORS_REQUIRE_VARY_ORIGIN",
       false
   );
+  g_sec4_rt_cors_policy.max_age_seconds = sec4_rt_parse_env_i64(
+      "SEC4_RT_CORS_MAX_AGE_SECONDS",
+      600
+  );
+  if (g_sec4_rt_cors_policy.max_age_seconds <= 0) {
+    g_sec4_rt_cors_policy.max_age_seconds = 600;
+  }
   const char *allowed_origins = getenv("SEC4_RT_CORS_ALLOWED_ORIGINS");
   if (!sec4_rt_csv_copy_first_token(
           allowed_origins,
@@ -10050,7 +10058,9 @@ int64_t sec4_rt_with_cors(int64_t router, int64_t cfg) {
         sizeof(slot->cors_allow_headers) - 1
     );
     slot->cors_allow_headers[sizeof(slot->cors_allow_headers) - 1] = '\0';
-    slot->cors_max_age_seconds = 600;
+    slot->cors_max_age_seconds = g_sec4_rt_cors_policy.max_age_seconds > 0
+        ? g_sec4_rt_cors_policy.max_age_seconds
+        : 600;
     return router;
   }
   sec4_rt_router_apply_default_cors(slot);

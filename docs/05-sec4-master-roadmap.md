@@ -1866,6 +1866,25 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_allows_request_with_session_cookie_when_cookie_auth_mode_enabled`
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_when_clang_available`
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S81 CORS max-age env policy materialization hardening acceptance criteria
+
+- Runtime CORS policy loader materializes `SEC4_RT_CORS_MAX_AGE_SECONDS` into preflight responses when valid.
+- Invalid/non-positive `SEC4_RT_CORS_MAX_AGE_SECONDS` env values deterministically fall back to default `600`.
+- Max-age policy materialization does not regress existing preflight CORS behavior.
+
+### M38-S81 tracking (live status)
+
+- [x] Runtime CORS policy state now includes max-age field loaded from env with deterministic clamp (`>0`, else `600`).
+- [x] `withCors(..., cors.fromPolicy())` now applies materialized max-age value into router preflight config.
+- [x] Added HTTP runtime CORS max-age e2e coverage:
+  - `c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+- [x] Revalidated related runtime paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_env_value_on_preflight_when_enabled`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_applies_cors_max_age_invalid_env_falls_back_to_default_on_preflight`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_handles_cors_preflight_when_enabled`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
