@@ -5842,7 +5842,8 @@ static bool sec4_rt_auth_mode_allows_cookie(const char *mode) {
 
 static const char *sec4_rt_auth_cookie_name(void) {
   const char *configured = getenv("SEC4_RT_AUTH_COOKIE_NAME");
-  if (configured != NULL && configured[0] != '\0') {
+  if (configured != NULL && configured[0] != '\0'
+      && sec4_rt_is_header_name_valid(configured)) {
     return configured;
   }
   return "session";

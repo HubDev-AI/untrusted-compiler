@@ -672,5 +672,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `700-m38-cors-enabled-invalid-env-fallback.md`
 - `701-m38-auth-mode-invalid-env-fallback.md`
 - `702-m38-csrf-protected-methods-invalid-env-fallback.md`
+- `703-m38-auth-cookie-name-invalid-env-fallback.md`
 
 As milestones progress, chapters will be added and linked from this index.
