@@ -40,8 +40,12 @@ impl CorsPolicyConfig {
 pub struct SecurityHeadersPolicyConfig {
     pub enabled: bool,
     pub hsts_enabled: bool,
+    pub hsts_max_age_seconds: i64,
+    pub hsts_include_subdomains: bool,
+    pub hsts_preload: bool,
     pub csp_enabled: bool,
     pub csp_report_only: bool,
+    pub csp_policy: String,
     pub x_frame_options: String,
     pub x_content_type_options: bool,
     pub referrer_policy: String,
@@ -191,8 +195,13 @@ impl Default for Policy {
             security_headers: SecurityHeadersPolicyConfig {
                 enabled: true,
                 hsts_enabled: true,
+                hsts_max_age_seconds: 15552000,
+                hsts_include_subdomains: true,
+                hsts_preload: false,
                 csp_enabled: true,
                 csp_report_only: false,
+                csp_policy:
+                    "default-src 'self'; frame-ancestors 'none'; base-uri 'self'".to_string(),
                 x_frame_options: "DENY".to_string(),
                 x_content_type_options: true,
                 referrer_policy: "strict-origin-when-cross-origin".to_string(),
@@ -634,6 +643,8 @@ struct SecurityHeadersCspSection {
     enabled: Option<bool>,
     #[serde(default)]
     report_only: Option<bool>,
+    #[serde(default)]
+    policy: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1127,6 +1138,40 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             if let Some(enabled) = hsts.enabled {
                 policy.security_headers.hsts_enabled = enabled;
             }
+            if let Some(max_age_seconds) = hsts.max_age_seconds {
+                if max_age_seconds < 0 {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid security_headers.hsts.max_age_seconds",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("security_headers.hsts.max_age_seconds must be >= 0"),
+                    );
+                } else {
+                    policy.security_headers.hsts_max_age_seconds = max_age_seconds;
+                }
+            }
+            if let Some(include_subdomains) = hsts.include_subdomains {
+                policy.security_headers.hsts_include_subdomains = include_subdomains;
+            }
+            if let Some(preload) = hsts.preload {
+                policy.security_headers.hsts_preload = preload;
+            }
+            if policy.security_headers.hsts_enabled
+                && policy.security_headers.hsts_max_age_seconds <= 0
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid security_headers.hsts.max_age_seconds",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note(
+                        "security_headers.hsts.max_age_seconds must be >= 1 when HSTS is enabled",
+                    ),
+                );
+            }
         }
 
         if let Some(csp) = section.csp {
@@ -1135,6 +1180,20 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
             }
             if let Some(report_only) = csp.report_only {
                 policy.security_headers.csp_report_only = report_only;
+            }
+            if let Some(csp_policy) = csp.policy {
+                if csp_policy.trim().is_empty() {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            "P6003",
+                            "invalid security_headers.csp.policy",
+                            Span::point(policy_path.to_path_buf(), 1, 1),
+                        )
+                        .with_note("security_headers.csp.policy must be a non-empty string"),
+                    );
+                } else {
+                    policy.security_headers.csp_policy = csp_policy;
+                }
             }
         }
     }
