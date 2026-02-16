@@ -30,6 +30,7 @@ fn policy_defaults_when_empty() {
     assert_eq!(policy.json.max_depth, 32);
     assert!(policy.json.require_schema_for_encode);
     assert_eq!(policy.http.max_body_bytes, 4_096);
+    assert_eq!(policy.http.max_header_bytes, 8_191);
     assert_eq!(policy.http.default_timeout_ms, 200);
     assert_eq!(policy.net_public.max_redirects, 0);
     assert!(policy.net_ssrf.block_private_ranges);
@@ -527,12 +528,14 @@ fn policy_parses_http_body_and_timeout_limits() {
     let source = r#"
 [http]
 max_body_bytes = 262144
+max_header_bytes = 16384
 default_timeout_ms = 7500
 "#;
 
     let policy =
         parse_policy_str(Path::new("sec4.policy"), source).expect("http limits should parse");
     assert_eq!(policy.http.max_body_bytes, 262144);
+    assert_eq!(policy.http.max_header_bytes, 16384);
     assert_eq!(policy.http.default_timeout_ms, 7500);
 }
 
@@ -545,6 +548,18 @@ max_body_bytes = 0
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("http.max_body_bytes must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_invalid_http_max_header_bytes() {
+    let source = r#"
+[http]
+max_header_bytes = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("http.max_header_bytes must be >= 1");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
@@ -593,6 +608,7 @@ fn policy_profile_default_secure_prod_parses() {
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 32);
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
+    assert_eq!(policy.http.max_header_bytes, 32768);
     assert_eq!(policy.http.default_timeout_ms, 5000);
     assert!(policy.security_headers.hsts_enabled);
     assert_eq!(policy.security_headers.hsts_max_age_seconds, 15552000);
@@ -637,6 +653,7 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.json.max_bytes, 1_048_576);
     assert_eq!(policy.json.max_depth, 64);
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
+    assert_eq!(policy.http.max_header_bytes, 8_191);
     assert_eq!(policy.http.default_timeout_ms, 15000);
     assert!(!policy.security_headers.hsts_enabled);
     assert_eq!(policy.security_headers.hsts_max_age_seconds, 0);

@@ -6347,6 +6347,8 @@ static const char *sec4_rt_status_text(int64_t status) {
       return "Conflict";
     case 429:
       return "Too Many Requests";
+    case 431:
+      return "Request Header Fields Too Large";
     case 501:
       return "Not Implemented";
     case 502:
@@ -6883,6 +6885,19 @@ static int64_t sec4_rt_parse_env_i64(const char *name, int64_t fallback) {
   return (int64_t) value;
 }
 
+static size_t sec4_rt_http_max_header_bytes_limit(void) {
+  size_t fallback = SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  int64_t parsed = sec4_rt_parse_env_i64("SEC4_RT_HTTP_MAX_HEADER_BYTES", (int64_t) fallback);
+  if (parsed <= 0) {
+    return fallback;
+  }
+  size_t limit = (size_t) parsed;
+  if (limit > SEC4_RT_REQUEST_BUFFER_BYTES - 1) {
+    return SEC4_RT_REQUEST_BUFFER_BYTES - 1;
+  }
+  return limit;
+}
+
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
   if (out_value == NULL) {
     return false;
@@ -6986,6 +7001,7 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   char request[SEC4_RT_REQUEST_BUFFER_BYTES];
   size_t total_bytes = 0;
+  size_t header_cap = sec4_rt_http_max_header_bytes_limit();
   ssize_t bytes_read = recv(socket_fd, request, sizeof(request) - 1, 0);
   if (bytes_read <= 0) {
     return;
@@ -6994,22 +7010,71 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   request[total_bytes] = '\0';
 
   char *headers_end = strstr(request, "\r\n\r\n");
-  size_t headers_len = 0;
-  if (headers_end != NULL) {
-    headers_len = (size_t) (headers_end - request) + 4;
-    size_t content_length = sec4_rt_parse_content_length(request, headers_len);
-    size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
-
-    while (content_length > available_body && total_bytes < sizeof(request) - 1) {
-      size_t remaining = (sizeof(request) - 1) - total_bytes;
-      ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
-      if (next <= 0) {
-        break;
-      }
-      total_bytes += (size_t) next;
-      request[total_bytes] = '\0';
-      available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (headers_end == NULL && total_bytes < header_cap && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
     }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    headers_end = strstr(request, "\r\n\r\n");
+  }
+
+  if (headers_end == NULL) {
+    bool too_large = total_bytes >= header_cap || total_bytes >= sizeof(request) - 1;
+    const char *body = too_large ? "request headers too large" : "bad request";
+    int64_t status = too_large ? 431 : 400;
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        status,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t headers_len = (size_t) (headers_end - request) + 4;
+  if (headers_len > header_cap) {
+    const char *body = "request headers too large";
+    const char *final_headers = sec4_rt_merge_three_headers(
+        NULL,
+        cors_headers,
+        security_headers,
+        merged_headers,
+        sizeof(merged_headers)
+    );
+    (void) sec4_rt_send_response_with_extra_headers(
+        socket_fd,
+        431,
+        "text/plain; charset=utf-8",
+        body,
+        strlen(body),
+        final_headers
+    );
+    return;
+  }
+
+  size_t content_length = sec4_rt_parse_content_length(request, headers_len);
+  size_t available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
+  while (content_length > available_body && total_bytes < sizeof(request) - 1) {
+    size_t remaining = (sizeof(request) - 1) - total_bytes;
+    ssize_t next = recv(socket_fd, request + total_bytes, remaining, 0);
+    if (next <= 0) {
+      break;
+    }
+    total_bytes += (size_t) next;
+    request[total_bytes] = '\0';
+    available_body = total_bytes > headers_len ? total_bytes - headers_len : 0;
   }
 
   char method[8] = {0};

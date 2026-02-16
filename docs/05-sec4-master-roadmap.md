@@ -2659,6 +2659,30 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S121 HTTP max-header-bytes policy/runtime materialization bridge acceptance criteria
+
+- `sec4.policy` persists HTTP ingress header-size control:
+  - `http.max_header_bytes`
+- `sec4 run` deterministically materializes `http.max_header_bytes` into runtime env bridge key:
+  - `SEC4_RT_HTTP_MAX_HEADER_BYTES`
+- Runtime HTTP ingress enforces configured header-size limit and emits deterministic rejection response when exceeded.
+
+### M38-S121 tracking (live status)
+
+- [x] Extended `HttpPolicyConfig` with persisted `max_header_bytes` field and default baseline.
+- [x] Added parser ingestion/validation for:
+  - `http.max_header_bytes` (>= 1)
+- [x] Wired `sec4 run` env bridge key:
+  - `SEC4_RT_HTTP_MAX_HEADER_BYTES`
+- [x] Added runtime ingress enforcement for configured header-size cap with deterministic `431` response path.
+- [x] Added run-command e2e coverage for policy-driven ingress header-limit materialization:
+  - `run_command_oneshot_applies_http_header_limit_from_policy`
+- [x] Revalidated related policy/runtime bridge paths:
+  - `cargo test -p sec4-core --test policy`
+  - `cargo test -p sec4 --test commands run_command_oneshot_applies_http_header_limit_from_policy`
+  - `cargo test -p sec4 --test commands`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -7971,7 +7995,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S121 HTTP max-header-bytes policy/runtime materialization bridge.
+- M38-S122 HTTP max-multipart-bytes policy/runtime materialization bridge.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8063,9 +8087,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S121 scope for persisted `http.max_header_bytes` policy bridge into runtime env materialization.
-2. Implement runtime ingestion for `SEC4_RT_HTTP_MAX_HEADER_BYTES` and enforce deterministic request-header size rejection behavior.
-3. Publish M38-S121 book chapter and refresh roadmap live-status counts.
+1. Add M38-S122 scope for persisted `http.max_multipart_bytes` policy bridge into runtime env materialization.
+2. Implement runtime ingestion for `SEC4_RT_HTTP_MAX_MULTIPART_BYTES` and enforce deterministic multipart-size rejection behavior.
+3. Publish M38-S122 book chapter and refresh roadmap live-status counts.
 
 ---
 
