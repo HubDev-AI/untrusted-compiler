@@ -3993,6 +3993,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage`.
 - [x] Revalidated ordered queue/late/burst contention contract pack after sanity coverage wiring.
 
+### M38-S222 HTTP max-concurrency ordered-attempt descriptor catalog assertion-table compaction acceptance criteria
+
+- Descriptor catalog sanity expectations are expressed as one canonical assertion table.
+- Sanity coverage iterates the assertion table instead of repeating seven manual assertion blocks.
+- Pair/late/burst descriptor contract checks remain unchanged.
+
+### M38-S222 tracking (live status)
+
+- [x] Added `OrderedContentionRunnerMetadataExpectation`.
+- [x] Added `ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS` assertion table.
+- [x] Migrated descriptor catalog sanity test to table-driven iteration.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9305,7 +9317,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S222 HTTP max-concurrency ordered-attempt descriptor catalog assertion-table compaction.
+- M38-S223 HTTP max-concurrency ordered-attempt descriptor table-driven fixture smoke harness compaction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9397,9 +9409,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S222 scope for ordered-attempt descriptor catalog assertion-table compaction.
-2. Extend ordered helper coverage with descriptor catalog assertion-table compaction.
-3. Publish M38-S222 chapter and refresh roadmap live-status counts.
+1. Add M38-S223 scope for ordered-attempt descriptor table-driven fixture smoke harness compaction.
+2. Extend ordered helper coverage with descriptor table-driven fixture smoke harness compaction.
+3. Publish M38-S223 chapter and refresh roadmap live-status counts.
 
 ---
 

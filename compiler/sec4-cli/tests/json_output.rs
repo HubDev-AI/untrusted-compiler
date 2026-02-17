@@ -1394,6 +1394,92 @@ fn assert_ordered_contention_runner_metadata(
     assert_eq!(metadata.branch_fixture, expected_branch_fixture);
 }
 
+#[derive(Clone, Copy)]
+struct OrderedContentionRunnerMetadataExpectation {
+    fixture: OrderedContentionFixtureDescriptor,
+    expected_fixture_name: &'static str,
+    expected_module_name: &'static str,
+    expected_case_label: &'static str,
+    expected_source: &'static str,
+    expected_branch_fixture: OrderedContentionBranchFixture,
+}
+
+const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerMetadataExpectation; 7] = [
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundary),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
+        expected_module_name: "httpmaxconcurrencyqueueboundarye2e",
+        expected_case_label: "max-concurrency queue-boundary",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryDefault),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Pair(
+            PairContentionFixtureDescriptor::QueueBoundaryLowTimeout,
+        ),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
+        expected_module_name: "httpmaxconcurrencyqueueboundarylowtimeout",
+        expected_case_label: "max-concurrency queue-boundary low-timeout",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryLowTimeout),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Pair(
+            PairContentionFixtureDescriptor::SecurityHeaderParity,
+        ),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
+        expected_module_name: "httpmaxconcurrencythrottlesecurityheaderse2e",
+        expected_case_label: "max-concurrency throttle security-header parity",
+        expected_source: MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::SecurityHeaderParity),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainDefault),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
+        expected_module_name: "httpmaxconcurrencylateconnectiondrain",
+        expected_case_label: "max-concurrency late-connection drain",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainDefault),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Late(
+            LateContentionFixtureDescriptor::DrainLowTimeout,
+        ),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
+        expected_module_name: "httpmaxconcurrencylateconnectionlowtimeout",
+        expected_case_label: "max-concurrency late-connection low-timeout",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainLowTimeout),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Burst(
+            BurstContentionFixtureDescriptor::TraceOrderDefault,
+        ),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
+        expected_module_name: "httpmaxconcurrencyburstingressorder",
+        expected_case_label: "max-concurrency burst-ingress trace-order",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderDefault),
+    },
+    OrderedContentionRunnerMetadataExpectation {
+        fixture: OrderedContentionFixtureDescriptor::Burst(
+            BurstContentionFixtureDescriptor::TraceOrderLowTimeout,
+        ),
+        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
+        expected_module_name: "httpmaxconcurrencyburstingresslowtimeout",
+        expected_case_label: "max-concurrency burst-ingress low-timeout",
+        expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        expected_branch_fixture:
+            OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderLowTimeout),
+    },
+];
+
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
     let metadata = ordered_contention_runner_metadata(fixture);
     let binary_path = build_c_bin_fixture(
@@ -17529,68 +17615,16 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage() {
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundary),
-        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
-        "httpmaxconcurrencyqueueboundarye2e",
-        "max-concurrency queue-boundary",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryDefault),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Pair(
-            PairContentionFixtureDescriptor::QueueBoundaryLowTimeout,
-        ),
-        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
-        "httpmaxconcurrencyqueueboundarylowtimeout",
-        "max-concurrency queue-boundary low-timeout",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryLowTimeout),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Pair(
-            PairContentionFixtureDescriptor::SecurityHeaderParity,
-        ),
-        "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
-        "httpmaxconcurrencythrottlesecurityheaderse2e",
-        "max-concurrency throttle security-header parity",
-        MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::SecurityHeaderParity),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainDefault),
-        "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
-        "httpmaxconcurrencylateconnectiondrain",
-        "max-concurrency late-connection drain",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainDefault),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainLowTimeout),
-        "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
-        "httpmaxconcurrencylateconnectionlowtimeout",
-        "max-concurrency late-connection low-timeout",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainLowTimeout),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Burst(BurstContentionFixtureDescriptor::TraceOrderDefault),
-        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
-        "httpmaxconcurrencyburstingressorder",
-        "max-concurrency burst-ingress trace-order",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderDefault),
-    );
-    assert_ordered_contention_runner_metadata(
-        OrderedContentionFixtureDescriptor::Burst(
-            BurstContentionFixtureDescriptor::TraceOrderLowTimeout,
-        ),
-        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
-        "httpmaxconcurrencyburstingresslowtimeout",
-        "max-concurrency burst-ingress low-timeout",
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderLowTimeout),
-    );
+    for expectation in ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS {
+        assert_ordered_contention_runner_metadata(
+            expectation.fixture,
+            expectation.expected_fixture_name,
+            expectation.expected_module_name,
+            expectation.expected_case_label,
+            expectation.expected_source,
+            expectation.expected_branch_fixture,
+        );
+    }
 }
 
 #[test]
