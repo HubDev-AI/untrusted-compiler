@@ -4089,6 +4089,18 @@ Post-alpha track acceptance anchors:
 - [x] Migrated `ordered_contention_smoke_case_banner(...)` to use the shared banner-prefix constant.
 - [x] Migrated banner-contract coverage expected strings to use the shared banner-prefix constant.
 
+### M38-S230 HTTP max-concurrency ordered-attempt descriptor smoke banner formatter helper contract extraction acceptance criteria
+
+- Ordered descriptor smoke banner rendering logic is centralized in a dedicated formatter helper.
+- Banner contract coverage validates the dedicated formatter helper output and case-banner wrapper parity.
+- Smoke harness tracing/failure output keeps the same deterministic banner shape after helper extraction.
+
+### M38-S230 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_banner_formatter(...)`.
+- [x] Migrated `ordered_contention_smoke_case_banner(...)` to delegate to formatter helper.
+- [x] Extended banner-contract coverage to assert formatter output plus wrapper parity.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9401,7 +9413,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S230 HTTP max-concurrency ordered-attempt descriptor smoke banner formatter helper contract extraction.
+- M38-S231 HTTP max-concurrency ordered-attempt descriptor smoke failure-banner formatter extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9493,9 +9505,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S230 scope for ordered-attempt descriptor smoke banner formatter helper contract extraction.
-2. Extend ordered helper coverage with descriptor smoke banner formatter helper contract extraction.
-3. Publish M38-S230 chapter and refresh roadmap live-status counts.
+1. Add M38-S231 scope for ordered-attempt descriptor smoke failure-banner formatter extraction.
+2. Extend ordered helper coverage with descriptor smoke failure-banner formatter extraction.
+3. Publish M38-S231 chapter and refresh roadmap live-status counts.
 
 ---
 

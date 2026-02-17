@@ -1500,12 +1500,21 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
 
 const ORDERED_CONTENTION_SMOKE_BANNER_PREFIX: &str = "[ordered-descriptor-smoke]";
 
-fn ordered_contention_smoke_case_banner(
-    expectation: OrderedContentionRunnerMetadataExpectation,
+fn ordered_contention_smoke_banner_formatter(
+    case_label: &str,
+    module_name: &str,
+    fixture_name: &str,
 ) -> String {
     format!(
         "{} case={} module={} fixture={}",
-        ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
+        ORDERED_CONTENTION_SMOKE_BANNER_PREFIX, case_label, module_name, fixture_name,
+    )
+}
+
+fn ordered_contention_smoke_case_banner(
+    expectation: OrderedContentionRunnerMetadataExpectation,
+) -> String {
+    ordered_contention_smoke_banner_formatter(
         expectation.expected_case_label,
         expectation.expected_module_name,
         expectation.expected_fixture_name,
@@ -17678,9 +17687,13 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
     for_each_ordered_contention_runner_metadata_expectation(|expectation| {
-        let banner = ordered_contention_smoke_case_banner(expectation);
+        let formatted_banner = ordered_contention_smoke_banner_formatter(
+            expectation.expected_case_label,
+            expectation.expected_module_name,
+            expectation.expected_fixture_name,
+        );
         assert_eq!(
-            banner,
+            formatted_banner,
             format!(
                 "{} case={} module={} fixture={}",
                 ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
@@ -17688,6 +17701,10 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
                 expectation.expected_module_name,
                 expectation.expected_fixture_name,
             )
+        );
+        assert_eq!(
+            ordered_contention_smoke_case_banner(expectation),
+            formatted_banner,
         );
     });
 }
