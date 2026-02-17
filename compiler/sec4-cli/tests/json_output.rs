@@ -1502,6 +1502,7 @@ const ORDERED_CONTENTION_SMOKE_BANNER_PREFIX: &str = "[ordered-descriptor-smoke]
 const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_CASE: &str = "case";
 const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE: &str = "module";
 const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE: &str = "fixture";
+const ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX: &str = "failed:";
 
 fn ordered_contention_smoke_banner_formatter(
     case_label: &str,
@@ -1531,7 +1532,10 @@ fn ordered_contention_smoke_case_banner(
 }
 
 fn ordered_contention_smoke_failure_banner(case_banner: &str, failure_message: &str) -> String {
-    format!("{case_banner} failed: {failure_message}")
+    format!(
+        "{case_banner} {} {failure_message}",
+        ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX,
+    )
 }
 
 fn ordered_contention_smoke_failure_banner_from_payload(
@@ -17736,7 +17740,10 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
     for_each_ordered_contention_runner_metadata_expectation(|expectation| {
         let case_banner = ordered_contention_smoke_case_banner(expectation);
-        let expected_failure_banner = format!("{case_banner} failed: boom");
+        let expected_failure_banner = format!(
+            "{case_banner} {} boom",
+            ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX,
+        );
         assert_eq!(
             ordered_contention_smoke_failure_banner(&case_banner, "boom"),
             expected_failure_banner,

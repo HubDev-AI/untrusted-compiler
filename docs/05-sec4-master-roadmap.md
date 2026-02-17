@@ -4125,6 +4125,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE`.
 - [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE`.
 
+### M38-S233 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix constant extraction acceptance criteria
+
+- Ordered descriptor smoke failure suffix token (`failed:`) is extracted into one canonical constant.
+- Failure-banner formatter and failure-banner contract expected rendering both use the shared failure-suffix constant.
+- Failure-banner output contract remains unchanged after suffix constant extraction.
+
+### M38-S233 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX`.
+- [x] Migrated `ordered_contention_smoke_failure_banner(...)` to use the shared failure-suffix constant.
+- [x] Migrated failure-banner contract coverage expected rendering to the shared failure-suffix constant.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9437,7 +9449,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S233 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix constant extraction.
+- M38-S234 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix contract helper extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9529,9 +9541,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S233 scope for ordered-attempt descriptor smoke failure-suffix constant extraction.
-2. Extend ordered helper coverage with descriptor smoke failure-suffix constant extraction.
-3. Publish M38-S233 chapter and refresh roadmap live-status counts.
+1. Add M38-S234 scope for ordered-attempt descriptor smoke failure-suffix contract helper extraction.
+2. Extend ordered helper coverage with descriptor smoke failure-suffix contract helper extraction.
+3. Publish M38-S234 chapter and refresh roadmap live-status counts.
 
 ---
 
