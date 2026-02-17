@@ -1685,15 +1685,21 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolver
     assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolution(case_label);
 }
 
-fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload(
     case_label: &str,
-) {
+) -> Box<dyn std::any::Any + Send> {
     let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = ordered_contention_smoke_contract_assertion_matrix_case(case_label);
     }));
     assert!(panic_result.is_err(), "unknown case label must panic");
-    let panic_payload = panic_result.err().expect("panic payload should exist");
-    let panic_message = panic_payload_message(panic_payload.as_ref());
+    panic_result.err().expect("panic payload should exist")
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+    case_label: &str,
+    panic_payload: &(dyn std::any::Any + Send),
+) {
+    let panic_message = panic_payload_message(panic_payload);
     let expected_message =
         ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
             case_label,
@@ -1704,8 +1710,27 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_
     );
 }
 
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+    case_label: &str,
+) {
+    let panic_payload =
+        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload(
+            case_label,
+        );
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+        case_label,
+        panic_payload.as_ref(),
+    );
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_contract(
+    case_label: &str,
+) {
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(case_label);
+}
+
 fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract() {
-    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_contract(
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL,
     );
 }
