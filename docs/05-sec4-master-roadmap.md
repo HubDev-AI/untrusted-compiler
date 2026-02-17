@@ -4365,6 +4365,42 @@ Post-alpha track acceptance anchors:
 - [x] Migrated unknown-label panic-message assertion helper to equality-helper dispatch.
 - [x] Revalidated unknown-label panic-message contract coverage after equality helper extraction.
 
+### M38-S253 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message contract helper extraction acceptance criteria
+
+- Unknown-label panic-message contract assertions are centralized in a contract-named helper.
+- Unknown-label panic contract orchestration delegates panic-message validation through the contract helper.
+- Panic-message contract behavior remains deterministic and unchanged after helper extraction.
+
+### M38-S253 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_contract(...)`.
+- [x] Migrated unknown-label panic contract flow to panic-message contract helper dispatch.
+- [x] Revalidated unknown-label panic-message contract behavior after helper extraction.
+
+### M38-S254 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload contract helper extraction acceptance criteria
+
+- Unknown-label panic payload contract invocation is centralized in a dedicated contract helper.
+- Unknown-label panic contract orchestration delegates panic payload capture/assertion through the contract helper.
+- Panic payload contract behavior remains deterministic after helper extraction.
+
+### M38-S254 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload_contract(...)`.
+- [x] Migrated unknown-label panic contract flow to panic payload contract helper dispatch.
+- [x] Revalidated unknown-label panic payload contract behavior after helper extraction.
+
+### M38-S255 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic orchestration helper simplification acceptance criteria
+
+- Unknown-label panic contract orchestration no longer routes through an intermediate panic assertion helper.
+- Unknown-label panic contract helper now dispatches payload and message contract helpers directly.
+- Matrix case-label contract coverage behavior remains unchanged after orchestration simplification.
+
+### M38-S255 tracking (live status)
+
+- [x] Removed intermediate unknown-label panic assertion helper from matrix contract orchestration path.
+- [x] Migrated unknown-label panic contract helper to direct payload/message contract helper dispatch.
+- [x] Revalidated matrix case-label contract coverage after orchestration simplification.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9677,7 +9713,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S253 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message contract helper extraction.
+- M38-S256 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9769,9 +9805,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S253 scope for ordered-attempt descriptor smoke contract matrix unknown-label panic-message contract helper extraction.
-2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label panic-message contract helper extraction.
-3. Publish M38-S253 chapter and refresh roadmap live-status counts.
+1. Add M38-S256 scope for ordered-attempt descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
+2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
+3. Publish M38-S256 chapter and refresh roadmap live-status counts.
 
 ---
 
