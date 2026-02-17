@@ -3910,6 +3910,17 @@ Post-alpha track acceptance anchors:
 - [x] Added fixture dispatch helpers: `pair_contention_branch_fixture(...)`, `late_contention_branch_fixture(...)`, `burst_contention_branch_fixture(...)`.
 - [x] Migrated seven ordered branch assertions to fixture-catalog dispatch calls.
 
+### M38-S215 HTTP max-concurrency ordered-attempt fixture catalog assertion-pack revalidation acceptance criteria
+
+- Fixture-catalog dispatch is consumed through one-step assertion-pack helpers for pair/late/burst paths.
+- Ordered queue/security/late/burst tests no longer nest fixture lookup inside assertion call sites.
+- Contract behavior and deterministic failure envelopes remain unchanged.
+
+### M38-S215 tracking (live status)
+
+- [x] Added assertion-pack helpers: `assert_pair_contention_fixture(...)`, `assert_late_contention_fixture(...)`, `assert_burst_contention_fixture(...)`.
+- [x] Migrated seven ordered branch assertions to one-step fixture assertion-pack calls.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9222,7 +9233,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S215 HTTP max-concurrency ordered-attempt fixture catalog assertion-pack revalidation.
+- M38-S216 HTTP max-concurrency ordered-attempt fixture-catalog grouped runner normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9314,9 +9325,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S215 scope for ordered-attempt fixture catalog assertion-pack revalidation.
-2. Extend ordered helper coverage with fixture-catalog assertion-pack revalidation.
-3. Publish M38-S215 chapter and refresh roadmap live-status counts.
+1. Add M38-S216 scope for ordered-attempt fixture-catalog grouped runner normalization.
+2. Extend ordered helper coverage with fixture-catalog grouped runner normalization.
+3. Publish M38-S216 chapter and refresh roadmap live-status counts.
 
 ---
 

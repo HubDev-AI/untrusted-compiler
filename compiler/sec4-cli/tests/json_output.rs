@@ -1015,6 +1015,33 @@ fn burst_contention_branch_fixture(
     }
 }
 
+fn assert_pair_contention_fixture(
+    binary_path: &Path,
+    request: &[u8],
+    fixture: PairContentionBranchFixture,
+) {
+    let case = pair_contention_branch_fixture(fixture);
+    assert_pair_contention_branch_case(binary_path, request, &case);
+}
+
+fn assert_late_contention_fixture(
+    binary_path: &Path,
+    request: &[u8],
+    fixture: LateContentionBranchFixture,
+) {
+    let case = late_contention_branch_fixture(fixture);
+    assert_late_contention_branch_case(binary_path, request, &case);
+}
+
+fn assert_burst_contention_fixture(
+    binary_path: &Path,
+    request: &[u8],
+    fixture: BurstContentionBranchFixture,
+) {
+    let case = burst_contention_branch_fixture(fixture);
+    assert_burst_contention_branch_case(binary_path, request, &case);
+}
+
 fn assert_pair_contention_branch_case(
     binary_path: &Path,
     request: &[u8],
@@ -17224,10 +17251,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_branch_case(
+    assert_pair_contention_fixture(
         &binary_path,
         request,
-        &pair_contention_branch_fixture(PairContentionBranchFixture::QueueBoundaryDefault),
+        PairContentionBranchFixture::QueueBoundaryDefault,
     );
 }
 
@@ -17258,10 +17285,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_branch_case(
+    assert_pair_contention_fixture(
         &binary_path,
         request,
-        &pair_contention_branch_fixture(PairContentionBranchFixture::QueueBoundaryLowTimeout),
+        PairContentionBranchFixture::QueueBoundaryLowTimeout,
     );
 }
 
@@ -17294,10 +17321,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_branch_case(
+    assert_pair_contention_fixture(
         &binary_path,
         request,
-        &pair_contention_branch_fixture(PairContentionBranchFixture::SecurityHeaderParity),
+        PairContentionBranchFixture::SecurityHeaderParity,
     );
 }
 
@@ -17328,10 +17355,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_late_contention_branch_case(
+    assert_late_contention_fixture(
         &binary_path,
         request,
-        &late_contention_branch_fixture(LateContentionBranchFixture::DrainDefault),
+        LateContentionBranchFixture::DrainDefault,
     );
 }
 
@@ -17362,10 +17389,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_late_contention_branch_case(
+    assert_late_contention_fixture(
         &binary_path,
         request,
-        &late_contention_branch_fixture(LateContentionBranchFixture::DrainLowTimeout),
+        LateContentionBranchFixture::DrainLowTimeout,
     );
 }
 
@@ -17396,10 +17423,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_burst_contention_branch_case(
+    assert_burst_contention_fixture(
         &binary_path,
         request,
-        &burst_contention_branch_fixture(BurstContentionBranchFixture::TraceOrderDefault),
+        BurstContentionBranchFixture::TraceOrderDefault,
     );
 }
 
@@ -17430,10 +17457,10 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_burst_contention_branch_case(
+    assert_burst_contention_fixture(
         &binary_path,
         request,
-        &burst_contention_branch_fixture(BurstContentionBranchFixture::TraceOrderLowTimeout),
+        BurstContentionBranchFixture::TraceOrderLowTimeout,
     );
 }
 
