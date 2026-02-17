@@ -3981,6 +3981,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `ordered_contention_runner_metadata(...)` envelope resolver.
 - [x] Unified ordered fixture execution into one `run_ordered_contention_fixture_descriptor_case(...)` path.
 
+### M38-S221 HTTP max-concurrency ordered-attempt descriptor contract catalog sanity coverage acceptance criteria
+
+- Descriptor catalog contract invariants are verified by explicit sanity coverage tests.
+- Pair/late/burst descriptor metadata expectations (fixture id, module, label, source, branch mapping) are asserted deterministically.
+- Sanity coverage is independent of clang/runtime availability.
+
+### M38-S221 tracking (live status)
+
+- [x] Added `assert_ordered_contention_runner_metadata(...)`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage`.
+- [x] Revalidated ordered queue/late/burst contention contract pack after sanity coverage wiring.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9293,7 +9305,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S221 HTTP max-concurrency ordered-attempt descriptor contract catalog sanity coverage.
+- M38-S222 HTTP max-concurrency ordered-attempt descriptor catalog assertion-table compaction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9385,9 +9397,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S221 scope for ordered-attempt descriptor contract catalog sanity coverage.
-2. Extend ordered helper coverage with descriptor contract catalog sanity coverage.
-3. Publish M38-S221 chapter and refresh roadmap live-status counts.
+1. Add M38-S222 scope for ordered-attempt descriptor catalog assertion-table compaction.
+2. Extend ordered helper coverage with descriptor catalog assertion-table compaction.
+3. Publish M38-S222 chapter and refresh roadmap live-status counts.
 
 ---
 
