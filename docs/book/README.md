@@ -744,5 +744,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `776-m38-http-max-concurrency-queue-fixture-helper-adoption.md`
 - `777-m38-http-max-concurrency-late-burst-fixture-helper-adoption.md`
 - `778-m38-http-max-concurrency-env-security-fixture-helper-adoption.md`
+- `779-m38-http-max-concurrency-helper-layer-determinism-regression-guard-expansion.md`
+- `780-m38-http-max-concurrency-connector-retry-helper-introduction.md`
+- `781-m38-http-max-concurrency-socket-io-helper-layer-adoption.md`
+- `782-m38-http-max-concurrency-child-exit-deterministic-wait-helper.md`
+- `783-m38-http-max-concurrency-response-contract-predicate-helper-introduction.md`
+- `784-m38-http-max-concurrency-pair-selection-observation-formatter-helper.md`
+- `785-m38-http-max-concurrency-queue-contention-helper-adoption.md`
+- `786-m38-http-max-concurrency-security-header-parity-helper-adoption.md`
+- `787-m38-http-max-concurrency-late-connection-helper-adoption.md`
+- `788-m38-http-max-concurrency-burst-ingress-helper-adoption.md`
 
 As milestones progress, chapters will be added and linked from this index.
