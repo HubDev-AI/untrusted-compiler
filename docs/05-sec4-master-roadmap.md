@@ -4185,6 +4185,18 @@ Post-alpha track acceptance anchors:
 - [x] Migrated case-banner contract coverage test to the shared contract assertion dispatcher.
 - [x] Migrated failure-banner contract coverage test to the shared contract assertion dispatcher.
 
+### M38-S238 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix helper extraction acceptance criteria
+
+- Ordered descriptor smoke contract assertion cases are represented by a canonical matrix helper with case-label + assertion function binding.
+- Contract coverage tests resolve and execute matrix cases through dedicated matrix-case helpers.
+- Contract behavior remains unchanged after assertion-matrix helper extraction.
+
+### M38-S238 tracking (live status)
+
+- [x] Added `OrderedContentionSmokeContractAssertionMatrixCase`.
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX` + case-label resolver helper.
+- [x] Migrated case/failure banner contract coverage tests to matrix-case helper dispatch.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9497,7 +9509,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S238 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix helper extraction.
+- M38-S239 HTTP max-concurrency ordered-attempt descriptor smoke contract assertion matrix case-label constant extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9589,9 +9601,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S238 scope for ordered-attempt descriptor smoke contract assertion matrix helper extraction.
-2. Extend ordered helper coverage with descriptor smoke contract assertion matrix helper extraction.
-3. Publish M38-S238 chapter and refresh roadmap live-status counts.
+1. Add M38-S239 scope for ordered-attempt descriptor smoke contract assertion matrix case-label constant extraction.
+2. Extend ordered helper coverage with descriptor smoke contract assertion matrix case-label constant extraction.
+3. Publish M38-S239 chapter and refresh roadmap live-status counts.
 
 ---
 

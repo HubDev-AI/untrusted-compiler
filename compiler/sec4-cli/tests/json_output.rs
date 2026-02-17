@@ -1600,10 +1600,49 @@ fn assert_ordered_contention_smoke_failure_banner_contract_expectation(
     );
 }
 
+#[derive(Clone, Copy)]
+struct OrderedContentionSmokeContractAssertionMatrixCase {
+    case_label: &'static str,
+    assertion: fn(OrderedContentionRunnerMetadataExpectation),
+}
+
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL: &str = "case-banner";
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL: &str =
+    "failure-banner";
+
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX: [OrderedContentionSmokeContractAssertionMatrixCase;
+    2] = [
+    OrderedContentionSmokeContractAssertionMatrixCase {
+        case_label: ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
+        assertion: assert_ordered_contention_smoke_case_banner_contract_expectation,
+    },
+    OrderedContentionSmokeContractAssertionMatrixCase {
+        case_label: ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
+        assertion: assert_ordered_contention_smoke_failure_banner_contract_expectation,
+    },
+];
+
+fn ordered_contention_smoke_contract_assertion_matrix_case(
+    case_label: &str,
+) -> OrderedContentionSmokeContractAssertionMatrixCase {
+    for matrix_case in ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX {
+        if matrix_case.case_label == case_label {
+            return matrix_case;
+        }
+    }
+    panic!("unknown ordered contention smoke contract assertion matrix case label: {case_label}");
+}
+
 fn run_ordered_contention_smoke_contract_assertion_dispatch(
     assertion: fn(OrderedContentionRunnerMetadataExpectation),
 ) {
     for_each_ordered_contention_runner_metadata_expectation(assertion);
+}
+
+fn run_ordered_contention_smoke_contract_assertion_matrix_case(
+    matrix_case: OrderedContentionSmokeContractAssertionMatrixCase,
+) {
+    run_ordered_contention_smoke_contract_assertion_dispatch(matrix_case.assertion);
 }
 
 fn run_ordered_contention_smoke_expectation_with_failure_context(
@@ -17771,16 +17810,18 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
-    run_ordered_contention_smoke_contract_assertion_dispatch(
-        assert_ordered_contention_smoke_case_banner_contract_expectation,
+    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
     );
+    run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
 }
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
-    run_ordered_contention_smoke_contract_assertion_dispatch(
-        assert_ordered_contention_smoke_failure_banner_contract_expectation,
+    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
     );
+    run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
 }
 
 #[test]
