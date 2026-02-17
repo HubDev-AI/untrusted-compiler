@@ -4137,6 +4137,18 @@ Post-alpha track acceptance anchors:
 - [x] Migrated `ordered_contention_smoke_failure_banner(...)` to use the shared failure-suffix constant.
 - [x] Migrated failure-banner contract coverage expected rendering to the shared failure-suffix constant.
 
+### M38-S234 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix contract helper extraction acceptance criteria
+
+- Failure-banner contract expected rendering is centralized in a dedicated helper.
+- Failure-banner formatter delegates to the same contract helper to keep output expectations and runtime path synchronized.
+- Failure-banner contract coverage uses the dedicated helper instead of in-test expected string assembly.
+
+### M38-S234 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_failure_banner_contract_expected(...)`.
+- [x] Migrated `ordered_contention_smoke_failure_banner(...)` to delegate to the contract helper.
+- [x] Migrated failure-banner contract test expected rendering to helper-based assembly.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9449,7 +9461,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S234 HTTP max-concurrency ordered-attempt descriptor smoke failure-suffix contract helper extraction.
+- M38-S235 HTTP max-concurrency ordered-attempt descriptor smoke banner-contract assertion helper extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9541,9 +9553,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S234 scope for ordered-attempt descriptor smoke failure-suffix contract helper extraction.
-2. Extend ordered helper coverage with descriptor smoke failure-suffix contract helper extraction.
-3. Publish M38-S234 chapter and refresh roadmap live-status counts.
+1. Add M38-S235 scope for ordered-attempt descriptor smoke banner-contract assertion helper extraction.
+2. Extend ordered helper coverage with descriptor smoke banner-contract assertion helper extraction.
+3. Publish M38-S235 chapter and refresh roadmap live-status counts.
 
 ---
 
