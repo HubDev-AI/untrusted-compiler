@@ -1488,10 +1488,31 @@ fn for_each_ordered_contention_runner_metadata_expectation(
     }
 }
 
-fn for_each_ordered_contention_fixture_descriptor(
-    mut f: impl FnMut(OrderedContentionFixtureDescriptor),
+fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
+}
+
+fn run_ordered_contention_smoke_expectation_with_failure_context(
+    expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
-    for_each_ordered_contention_runner_metadata_expectation(|expectation| f(expectation.fixture));
+    let run_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_ordered_contention_fixture_descriptor_case(expectation.fixture);
+    }));
+    if let Err(payload) = run_result {
+        panic!(
+            "ordered descriptor smoke harness case `{}` ({}) [{}] failed: {}",
+            expectation.expected_case_label,
+            expectation.expected_module_name,
+            expectation.expected_fixture_name,
+            panic_payload_message(payload.as_ref()),
+        );
+    }
 }
 
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
@@ -17651,7 +17672,9 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_w
         return;
     }
 
-    for_each_ordered_contention_fixture_descriptor(run_ordered_contention_fixture_descriptor_case);
+    for_each_ordered_contention_runner_metadata_expectation(
+        run_ordered_contention_smoke_expectation_with_failure_context,
+    );
 }
 
 #[test]
