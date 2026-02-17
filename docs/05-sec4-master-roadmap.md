@@ -4149,6 +4149,18 @@ Post-alpha track acceptance anchors:
 - [x] Migrated `ordered_contention_smoke_failure_banner(...)` to delegate to the contract helper.
 - [x] Migrated failure-banner contract test expected rendering to helper-based assembly.
 
+### M38-S235 HTTP max-concurrency ordered-attempt descriptor smoke banner-contract assertion helper extraction acceptance criteria
+
+- Ordered descriptor case-banner contract assertions are centralized in a dedicated helper.
+- Ordered descriptor failure-banner contract assertions are centralized in a dedicated helper.
+- Case/failure banner contract coverage tests run table iteration via assertion helpers rather than in-test duplicated assertion blocks.
+
+### M38-S235 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_case_banner_contract(...)`.
+- [x] Added `assert_ordered_contention_smoke_failure_banner_contract(...)`.
+- [x] Migrated case/failure banner contract coverage tests to helper-based assertion dispatch.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9461,7 +9473,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S235 HTTP max-concurrency ordered-attempt descriptor smoke banner-contract assertion helper extraction.
+- M38-S236 HTTP max-concurrency ordered-attempt descriptor smoke contract helper naming parity cleanup.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9553,9 +9565,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S235 scope for ordered-attempt descriptor smoke banner-contract assertion helper extraction.
-2. Extend ordered helper coverage with descriptor smoke banner-contract assertion helper extraction.
-3. Publish M38-S235 chapter and refresh roadmap live-status counts.
+1. Add M38-S236 scope for ordered-attempt descriptor smoke contract helper naming parity cleanup.
+2. Extend ordered helper coverage with descriptor smoke contract helper naming parity cleanup.
+3. Publish M38-S236 chapter and refresh roadmap live-status counts.
 
 ---
 
