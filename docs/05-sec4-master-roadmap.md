@@ -3921,6 +3921,30 @@ Post-alpha track acceptance anchors:
 - [x] Added assertion-pack helpers: `assert_pair_contention_fixture(...)`, `assert_late_contention_fixture(...)`, `assert_burst_contention_fixture(...)`.
 - [x] Migrated seven ordered branch assertions to one-step fixture assertion-pack calls.
 
+### M38-S216 HTTP max-concurrency ordered-attempt fixture-catalog grouped runner normalization acceptance criteria
+
+- Pair/late/burst fixture execution paths use canonical grouped runner helpers.
+- Shared HTTP route fixture source strings are centralized instead of repeated inline test fixtures.
+- Ordered branch assertions keep deterministic behavior while test-local build/assert boilerplate is reduced.
+
+### M38-S216 tracking (live status)
+
+- [x] Added grouped runner helpers: `run_pair_contention_fixture_case(...)`, `run_late_contention_fixture_case(...)`, `run_burst_contention_fixture_case(...)`.
+- [x] Added shared fixture source constants for simple router and security-header router variants.
+- [x] Migrated seven ordered branch tests to grouped runner helper calls.
+
+### M38-S217 HTTP max-concurrency ordered-attempt fixture descriptor catalog normalization acceptance criteria
+
+- Fixture name/module/label/source selection is centralized behind descriptor catalogs.
+- Pair/late/burst grouped runner call sites dispatch by descriptor enums instead of literal fixture metadata.
+- Deterministic contention contracts remain unchanged after descriptor-catalog adoption.
+
+### M38-S217 tracking (live status)
+
+- [x] Added descriptor enums: `PairContentionFixtureDescriptor`, `LateContentionFixtureDescriptor`, `BurstContentionFixtureDescriptor`.
+- [x] Added descriptor catalog helpers for pair/late/burst grouped runners.
+- [x] Migrated seven ordered branch tests to descriptor-driven grouped runner calls.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9233,7 +9257,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S216 HTTP max-concurrency ordered-attempt fixture-catalog grouped runner normalization.
+- M38-S218 HTTP max-concurrency ordered-attempt descriptor-runner assertion-pack unification.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9325,9 +9349,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S216 scope for ordered-attempt fixture-catalog grouped runner normalization.
-2. Extend ordered helper coverage with fixture-catalog grouped runner normalization.
-3. Publish M38-S216 chapter and refresh roadmap live-status counts.
+1. Add M38-S218 scope for ordered-attempt descriptor-runner assertion-pack unification.
+2. Extend ordered helper coverage with descriptor-runner assertion-pack unification.
+3. Publish M38-S218 chapter and refresh roadmap live-status counts.
 
 ---
 

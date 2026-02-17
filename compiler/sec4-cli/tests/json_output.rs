@@ -926,6 +926,50 @@ enum BurstContentionBranchFixture {
     TraceOrderLowTimeout,
 }
 
+enum PairContentionFixtureDescriptor {
+    QueueBoundary,
+    QueueBoundaryLowTimeout,
+    SecurityHeaderParity,
+}
+
+enum LateContentionFixtureDescriptor {
+    DrainDefault,
+    DrainLowTimeout,
+}
+
+enum BurstContentionFixtureDescriptor {
+    TraceOrderDefault,
+    TraceOrderLowTimeout,
+}
+
+const MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE: &str = r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#;
+
+const MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE: &str = r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  let headersCfg = sec.defaultHeaders();
+  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
+  http.serve(8080, withHeaders);
+  0
+}
+"#;
+
 fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairContentionBranchCase<'static> {
     match fixture {
         PairContentionBranchFixture::QueueBoundaryDefault => pair_contention_branch_case(
@@ -961,6 +1005,34 @@ fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairC
     }
 }
 
+fn pair_contention_fixture_descriptor(
+    fixture: PairContentionFixtureDescriptor,
+) -> (&'static str, &'static str, &'static str, &'static str, PairContentionBranchFixture) {
+    match fixture {
+        PairContentionFixtureDescriptor::QueueBoundary => (
+            "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
+            "httpmaxconcurrencyqueueboundarye2e",
+            "max-concurrency queue-boundary",
+            MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+            PairContentionBranchFixture::QueueBoundaryDefault,
+        ),
+        PairContentionFixtureDescriptor::QueueBoundaryLowTimeout => (
+            "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
+            "httpmaxconcurrencyqueueboundarylowtimeout",
+            "max-concurrency queue-boundary low-timeout",
+            MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+            PairContentionBranchFixture::QueueBoundaryLowTimeout,
+        ),
+        PairContentionFixtureDescriptor::SecurityHeaderParity => (
+            "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
+            "httpmaxconcurrencythrottlesecurityheaderse2e",
+            "max-concurrency throttle security-header parity",
+            MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
+            PairContentionBranchFixture::SecurityHeaderParity,
+        ),
+    }
+}
+
 fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateContentionBranchCase<'static> {
     match fixture {
         LateContentionBranchFixture::DrainDefault => late_contention_branch_case(
@@ -982,6 +1054,25 @@ fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateC
             8192,
             1000,
             "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        ),
+    }
+}
+
+fn late_contention_fixture_descriptor(
+    fixture: LateContentionFixtureDescriptor,
+) -> (&'static str, &'static str, &'static str, LateContentionBranchFixture) {
+    match fixture {
+        LateContentionFixtureDescriptor::DrainDefault => (
+            "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
+            "httpmaxconcurrencylateconnectiondrain",
+            "max-concurrency late-connection drain",
+            LateContentionBranchFixture::DrainDefault,
+        ),
+        LateContentionFixtureDescriptor::DrainLowTimeout => (
+            "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
+            "httpmaxconcurrencylateconnectionlowtimeout",
+            "max-concurrency late-connection low-timeout",
+            LateContentionBranchFixture::DrainLowTimeout,
         ),
     }
 }
@@ -1011,6 +1102,25 @@ fn burst_contention_branch_fixture(
             8192,
             1000,
             "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        ),
+    }
+}
+
+fn burst_contention_fixture_descriptor(
+    fixture: BurstContentionFixtureDescriptor,
+) -> (&'static str, &'static str, &'static str, BurstContentionBranchFixture) {
+    match fixture {
+        BurstContentionFixtureDescriptor::TraceOrderDefault => (
+            "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
+            "httpmaxconcurrencyburstingressorder",
+            "max-concurrency burst-ingress trace-order",
+            BurstContentionBranchFixture::TraceOrderDefault,
+        ),
+        BurstContentionFixtureDescriptor::TraceOrderLowTimeout => (
+            "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
+            "httpmaxconcurrencyburstingresslowtimeout",
+            "max-concurrency burst-ingress low-timeout",
+            BurstContentionBranchFixture::TraceOrderLowTimeout,
         ),
     }
 }
@@ -1101,6 +1211,68 @@ fn assert_burst_contention_branch_case(
     ) {
         panic!("{}:\n{last_observation}", case.failure_message);
     }
+}
+
+fn run_pair_contention_fixture_case(
+    fixture_name: &str,
+    module_name: &str,
+    case_label: &str,
+    source: &str,
+    fixture: PairContentionBranchFixture,
+) {
+    let binary_path = build_c_bin_fixture(fixture_name, module_name, source, case_label);
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    assert_pair_contention_fixture(&binary_path, request, fixture);
+}
+
+fn run_late_contention_fixture_case(
+    fixture_name: &str,
+    module_name: &str,
+    case_label: &str,
+    fixture: LateContentionBranchFixture,
+) {
+    let binary_path = build_c_bin_fixture(
+        fixture_name,
+        module_name,
+        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        case_label,
+    );
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    assert_late_contention_fixture(&binary_path, request, fixture);
+}
+
+fn run_burst_contention_fixture_case(
+    fixture_name: &str,
+    module_name: &str,
+    case_label: &str,
+    fixture: BurstContentionBranchFixture,
+) {
+    let binary_path = build_c_bin_fixture(
+        fixture_name,
+        module_name,
+        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        case_label,
+    );
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    assert_burst_contention_fixture(&binary_path, request, fixture);
+}
+
+fn run_pair_contention_fixture_descriptor_case(fixture: PairContentionFixtureDescriptor) {
+    let (fixture_name, module_name, case_label, source, branch_fixture) =
+        pair_contention_fixture_descriptor(fixture);
+    run_pair_contention_fixture_case(fixture_name, module_name, case_label, source, branch_fixture);
+}
+
+fn run_late_contention_fixture_descriptor_case(fixture: LateContentionFixtureDescriptor) {
+    let (fixture_name, module_name, case_label, branch_fixture) =
+        late_contention_fixture_descriptor(fixture);
+    run_late_contention_fixture_case(fixture_name, module_name, case_label, branch_fixture);
+}
+
+fn run_burst_contention_fixture_descriptor_case(fixture: BurstContentionFixtureDescriptor) {
+    let (fixture_name, module_name, case_label, branch_fixture) =
+        burst_contention_fixture_descriptor(fixture);
+    run_burst_contention_fixture_case(fixture_name, module_name, case_label, branch_fixture);
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
@@ -17232,30 +17404,7 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttl
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
-        "httpmaxconcurrencyqueueboundarye2e",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency queue-boundary",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_fixture(
-        &binary_path,
-        request,
-        PairContentionBranchFixture::QueueBoundaryDefault,
-    );
+    run_pair_contention_fixture_descriptor_case(PairContentionFixtureDescriptor::QueueBoundary);
 }
 
 #[test]
@@ -17266,29 +17415,8 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
-        "httpmaxconcurrencyqueueboundarylowtimeout",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency queue-boundary low-timeout",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_fixture(
-        &binary_path,
-        request,
-        PairContentionBranchFixture::QueueBoundaryLowTimeout,
+    run_pair_contention_fixture_descriptor_case(
+        PairContentionFixtureDescriptor::QueueBoundaryLowTimeout,
     );
 }
 
@@ -17300,32 +17428,7 @@ fn c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_heade
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
-        "httpmaxconcurrencythrottlesecurityheaderse2e",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  let headersCfg = sec.defaultHeaders();
-  let withHeaders = sec.withSecurityHeaders(router, headersCfg);
-  http.serve(8080, withHeaders);
-  0
-}
-"#,
-        "max-concurrency throttle security-header parity",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_fixture(
-        &binary_path,
-        request,
-        PairContentionBranchFixture::SecurityHeaderParity,
-    );
+    run_pair_contention_fixture_descriptor_case(PairContentionFixtureDescriptor::SecurityHeaderParity);
 }
 
 #[test]
@@ -17336,30 +17439,7 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
-        "httpmaxconcurrencylateconnectiondrain",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency late-connection drain",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_late_contention_fixture(
-        &binary_path,
-        request,
-        LateContentionBranchFixture::DrainDefault,
-    );
+    run_late_contention_fixture_descriptor_case(LateContentionFixtureDescriptor::DrainDefault);
 }
 
 #[test]
@@ -17370,30 +17450,7 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
-        "httpmaxconcurrencylateconnectionlowtimeout",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency late-connection low-timeout",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_late_contention_fixture(
-        &binary_path,
-        request,
-        LateContentionBranchFixture::DrainLowTimeout,
-    );
+    run_late_contention_fixture_descriptor_case(LateContentionFixtureDescriptor::DrainLowTimeout);
 }
 
 #[test]
@@ -17404,30 +17461,7 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_orde
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
-        "httpmaxconcurrencyburstingressorder",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency burst-ingress trace-order",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_burst_contention_fixture(
-        &binary_path,
-        request,
-        BurstContentionBranchFixture::TraceOrderDefault,
-    );
+    run_burst_contention_fixture_descriptor_case(BurstContentionFixtureDescriptor::TraceOrderDefault);
 }
 
 #[test]
@@ -17438,29 +17472,8 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_pr
         return;
     }
 
-    let binary_path = build_c_bin_fixture(
-        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
-        "httpmaxconcurrencyburstingresslowtimeout",
-        r#"fn health() effects { net } -> Int {
-  res.text(200, "ok");
-  0
-}
-
-fn main() effects { net } -> Int {
-  let router = http.router();
-  http.get(router, "/health", health);
-  http.serve(8080, router);
-  0
-}
-"#,
-        "max-concurrency burst-ingress low-timeout",
-    );
-
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_burst_contention_fixture(
-        &binary_path,
-        request,
-        BurstContentionBranchFixture::TraceOrderLowTimeout,
+    run_burst_contention_fixture_descriptor_case(
+        BurstContentionFixtureDescriptor::TraceOrderLowTimeout,
     );
 }
 
