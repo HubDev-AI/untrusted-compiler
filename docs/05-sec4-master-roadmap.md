@@ -3543,6 +3543,117 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
 - [x] Published book chapters `799..808`.
 
+### M38-S182 HTTP max-concurrency queue/security pair-attempt bootstrap helper normalization acceptance criteria
+
+- Queue/security contention tests share normalized pair-attempt bootstrap helper paths.
+- Pair-attempt bootstrap helper adoption removes repeated attempt setup boilerplate.
+- Queue/security contention behavior remains unchanged.
+
+### M38-S182 tracking (live status)
+
+- [x] Added normalized pair-attempt bootstrap helper coverage for queue/security branches.
+- [x] Revalidated queue/security contention contracts after helper adoption.
+
+### M38-S183 HTTP max-concurrency pair-attempt spawn helper introduction acceptance criteria
+
+- Pair contention branches use a dedicated attempt spawn helper.
+- Attempt helper centralizes `attempt_started + port + oneshot spawn` bootstrap.
+- Spawn diagnostics remain case-specific.
+
+### M38-S183 tracking (live status)
+
+- [x] Added `spawn_pair_contention_attempt(...)`.
+- [x] Helper reuses staged contention bootstrap semantics.
+
+### M38-S184 HTTP max-concurrency queue default pair-attempt spawn helper adoption acceptance criteria
+
+- Queue default contention path uses pair-attempt spawn helper.
+- Queue default test no longer duplicates attempt bootstrap.
+- Queue default deterministic contract remains unchanged.
+
+### M38-S184 tracking (live status)
+
+- [x] Migrated queue default attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved one-success/one-throttle queue default contract.
+
+### M38-S185 HTTP max-concurrency queue low-timeout pair-attempt spawn helper adoption acceptance criteria
+
+- Queue low-timeout contention path uses pair-attempt spawn helper.
+- Queue low-timeout test no longer duplicates attempt bootstrap.
+- Queue low-timeout bounded-tail contract remains unchanged.
+
+### M38-S185 tracking (live status)
+
+- [x] Migrated queue low-timeout attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved queue low-timeout bounded-tail contract.
+
+### M38-S186 HTTP max-concurrency security parity pair-attempt spawn helper adoption acceptance criteria
+
+- Security parity contention path uses pair-attempt spawn helper.
+- Security parity test no longer duplicates attempt bootstrap.
+- Security parity contract remains unchanged.
+
+### M38-S186 tracking (live status)
+
+- [x] Migrated security parity attempt bootstrap to `spawn_pair_contention_attempt(...)`.
+- [x] Preserved deterministic success/throttle security parity contract.
+
+### M38-S187 HTTP max-concurrency pair stream connect-timeout helper introduction acceptance criteria
+
+- Pair contention branches use one helper for pair connect + stream timeout setup.
+- Pair helper centralizes first/second connection failure envelopes.
+- Connect-timeout behavior remains deterministic.
+
+### M38-S187 tracking (live status)
+
+- [x] Added `connect_pair_streams_or_terminate(...)`.
+- [x] Helper centralizes pair connect retry envelope + timeout wiring.
+
+### M38-S188 HTTP max-concurrency queue pair-connect helper adoption acceptance criteria
+
+- Queue default and low-timeout branches use pair connect-timeout helper.
+- Queue branches no longer duplicate pair connect + timeout setup.
+- Queue contracts remain deterministic.
+
+### M38-S188 tracking (live status)
+
+- [x] Migrated queue default pair connect setup to helper.
+- [x] Migrated queue low-timeout pair connect setup to helper.
+
+### M38-S189 HTTP max-concurrency security parity pair-connect helper adoption acceptance criteria
+
+- Security parity branch uses pair connect-timeout helper.
+- Security parity branch no longer duplicates pair connect + timeout setup.
+- Security parity contract remains deterministic.
+
+### M38-S189 tracking (live status)
+
+- [x] Migrated security parity pair connect setup to helper.
+- [x] Preserved deterministic security parity contention contract.
+
+### M38-S190 HTTP max-concurrency pair request-exchange helper introduction acceptance criteria
+
+- Pair contention branches use one helper for paired request writes and response collection.
+- Helper centralizes request exchange envelope in queue/security branches.
+- Request exchange behavior remains deterministic.
+
+### M38-S190 tracking (live status)
+
+- [x] Added `exchange_pair_http_requests_and_collect(...)`.
+- [x] Migrated queue/security pair request exchange to helper.
+
+### M38-S191 HTTP max-concurrency queue/security pair-helper consolidation revalidation acceptance criteria
+
+- Queue/security pair helper consolidation keeps contention contracts green.
+- No regression in queue default, queue low-timeout, or security parity branches.
+- Roadmap/book tracking is refreshed for `M38-S182..M38-S191`.
+
+### M38-S191 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `809..818`.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8855,7 +8966,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S182 HTTP max-concurrency queue/security pair-attempt bootstrap helper normalization.
+- M38-S192 HTTP max-concurrency queue/security pair-attempt outcome helper normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8947,9 +9058,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S182 scope for queue/security pair-attempt bootstrap helper normalization.
-2. Consolidate queue/security pair attempt-start boilerplate into shared helper paths with deterministic failure envelopes.
-3. Publish M38-S182 chapter and refresh roadmap live-status counts.
+1. Add M38-S192 scope for queue/security pair-attempt outcome helper normalization.
+2. Consolidate queue/security pair status + observation handling into shared helper paths.
+3. Publish M38-S192 chapter and refresh roadmap live-status counts.
 
 ---
 
