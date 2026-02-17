@@ -197,15 +197,15 @@ Post-alpha track acceptance anchors:
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~93-95%
-- Strict no-stub alpha: ~90-92%
+- Runnable alpha (end-to-end): ~96-98%
+- Strict no-stub alpha: ~94-96%
 
 ### Remaining implementation slices (priority order)
 
-1. Alpha publish checklist delta update from verified no-stub evidence.
-2. Alpha tag decision and release-note packaging for the no-stub baseline.
+1. Execute alpha tag creation + post-tag verification from the latest `M37-S8` `GO` decision record.
+2. Publish alpha-closure summary and open `WASM_START_GATE` to begin `M39` browser-to-server promotion work.
 
-## M37 - No-Stub Alpha Sprint (In Progress)
+## M37 - No-Stub Alpha Sprint (Execution-Complete; Tag Pending)
 
 ### Goal
 
@@ -9713,7 +9713,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S256 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
+- M37-S9 full alpha-tag gate execution evidence refresh (release-gate + checklist/release-notes/tag-decision chain).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9805,9 +9805,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S256 scope for ordered-attempt descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
-2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label panic payload capture helper naming parity cleanup.
-3. Publish M38-S256 chapter and refresh roadmap live-status counts.
+1. Execute `scripts/release-alpha-gate.sh` (full run with tests) for the candidate tag window and capture artifacts.
+2. Rebuild M37-S6/S7/S8 artifacts from the latest gate evidence and confirm `GO` decision continuity.
+3. Create alpha-closure record chapter + tag execution checklist, then open `WASM_START_GATE` for M39 kickoff.
 
 ---
 
