@@ -2767,11 +2767,11 @@ Post-alpha track acceptance anchors:
 - [x] Wired CLI override into runtime env bridge key:
   - `SEC4_RT_HTTP_MAX_CONCURRENCY`
 - [x] Added deterministic run-command precedence coverage:
-  - `run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+  - `run_command_cli_max_concurrency_overrides_policy_limit`
 - [x] Added deterministic CLI invalid-input coverage:
   - `run_command_rejects_zero_max_concurrency_override`
 - [x] Revalidated related command/runtime behavior:
-  - `cargo test -p sec4 --test commands run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_cli_max_concurrency_overrides_policy_limit`
   - `cargo test -p sec4 --test commands run_command_rejects_zero_max_concurrency_override`
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`

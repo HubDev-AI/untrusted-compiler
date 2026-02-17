@@ -3430,7 +3430,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_oneshot_cli_max_concurrency_overrides_policy_limit() {
+fn run_command_cli_max_concurrency_overrides_policy_limit() {
     if !clang_available() {
         eprintln!("skipping run-command http max-concurrency override test: clang not available");
         return;
@@ -3493,7 +3493,6 @@ fn main() effects { net } -> Int {
                 "run",
                 "--path",
                 path.as_str(),
-                "--oneshot",
                 "--port",
                 port_value.as_str(),
                 "--max-concurrency",
@@ -3569,30 +3568,19 @@ fn main() effects { net } -> Int {
             first_response, second_response
         );
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("run command wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
+        if let Some(status) = child.try_wait().expect("run command wait should succeed") {
+            last_responses = format!("{last_responses}\nprocess_status={status}");
+            continue;
         }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!("run command max-concurrency override process did not exit in expected window");
-            }
-        };
 
-        let has_success = first_response.contains("HTTP/1.1 200 OK")
-            || second_response.contains("HTTP/1.1 200 OK");
+        let _ = child.kill();
+        let _ = child.wait();
+
+        let first_success = first_response.contains("HTTP/1.1 200 OK");
+        let second_success = second_response.contains("HTTP/1.1 200 OK");
         let has_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable")
             || second_response.contains("HTTP/1.1 503 Service Unavailable");
-        if status.success() && has_success && !has_throttle {
+        if first_success && second_success && !has_throttle {
             matched = true;
             break;
         }
@@ -3600,7 +3588,7 @@ fn main() effects { net } -> Int {
 
     assert!(
         matched,
-        "responses should include success and no throttle when CLI max-concurrency override is higher than policy:\n{last_responses}"
+        "responses should include two successful replies and no throttle when CLI max-concurrency override is higher than policy:\n{last_responses}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
