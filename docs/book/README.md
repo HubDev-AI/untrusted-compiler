@@ -724,5 +724,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `752-m38-http-max-concurrency-oneshot-late-connection-deterministic-drain-coverage.md`
 - `753-m38-http-max-concurrency-burst-ingress-trace-order-deterministic-coverage.md`
 - `754-m38-http-max-concurrency-throttle-body-delivery-socket-close-determinism-hardening.md`
+- `755-m38-http-max-concurrency-throttle-close-drain-timeout-budget-coverage-hardening.md`
+- `756-m38-http-max-concurrency-throttle-drain-timeout-env-fallback-clamp-hardening.md`
+- `757-m38-http-max-concurrency-throttle-close-drain-low-timeout-deterministic-body-contract-coverage.md`
+- `758-m38-http-max-concurrency-throttle-close-drain-zero-timeout-fallback-hardening.md`
+- `759-m38-http-max-concurrency-throttle-close-drain-minimum-budget-late-connection-hardening.md`
+- `760-m38-http-max-concurrency-throttle-drain-timeout-negative-value-fallback-hardening.md`
+- `761-m38-http-max-concurrency-throttle-drain-timeout-whitespace-token-fallback-hardening.md`
+- `762-m38-http-max-concurrency-throttle-drain-timeout-empty-token-fallback-hardening.md`
+- `763-m38-http-max-concurrency-throttle-drain-timeout-malformed-token-fallback-hardening.md`
+- `764-m38-http-max-concurrency-queue-boundary-low-timeout-deterministic-throttle-contract-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
