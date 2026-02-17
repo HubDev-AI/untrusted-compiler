@@ -1719,7 +1719,7 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_
     );
 }
 
-fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_contract(
     case_label: &str,
     panic_payload: &(dyn std::any::Any + Send),
 ) {
@@ -1737,23 +1737,23 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_
     );
 }
 
-fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload_contract(
     case_label: &str,
-) {
-    let panic_payload =
-        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload(
-            case_label,
-        );
-    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
-        case_label,
-        panic_payload.as_ref(),
-    );
+) -> Box<dyn std::any::Any + Send> {
+    ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload(case_label)
 }
 
 fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_contract(
     case_label: &str,
 ) {
-    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(case_label);
+    let panic_payload =
+        assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_payload_contract(
+            case_label,
+        );
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_contract(
+        case_label,
+        panic_payload.as_ref(),
+    );
 }
 
 fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract() {

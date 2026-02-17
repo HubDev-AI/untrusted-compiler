@@ -845,5 +845,8 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `877-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-message-expected-value-helper-extraction.md`
 - `878-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-message-actual-value-helper-extraction.md`
 - `879-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-message-equality-helper-extraction.md`
+- `880-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-message-contract-helper-extraction.md`
+- `881-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-payload-contract-helper-extraction.md`
+- `882-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-orchestration-helper-simplification.md`
 
 As milestones progress, chapters will be added and linked from this index.
