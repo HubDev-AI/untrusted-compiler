@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -123,6 +123,145 @@ fn spawn_max_concurrency_oneshot_binary(
         command.env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", value);
     }
     command.spawn().expect(start_message)
+}
+
+fn connect_with_retry(port: u16, attempts: usize, sleep_ms: u64) -> Option<TcpStream> {
+    for _ in 0..attempts {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => return Some(stream),
+            Err(_) => thread::sleep(Duration::from_millis(sleep_ms)),
+        }
+    }
+    None
+}
+
+fn connect_with_retry_or_terminate(
+    child: &mut Child,
+    port: u16,
+    attempts: usize,
+    sleep_ms: u64,
+    failure_message: &str,
+) -> TcpStream {
+    match connect_with_retry(port, attempts, sleep_ms) {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{failure_message}");
+        }
+    }
+}
+
+fn set_stream_read_timeout(stream: &TcpStream, label: &str) {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap_or_else(|err| panic!("{label} read timeout should be set: {err}"));
+}
+
+fn write_http_request(stream: &mut TcpStream, request: &[u8], label: &str) {
+    stream
+        .write_all(request)
+        .unwrap_or_else(|err| panic!("{label} request should be written: {err}"));
+}
+
+fn write_http_trailing_noise(stream: &mut TcpStream, len: usize, label: &str) {
+    let trailing_noise = vec![b'x'; len];
+    stream
+        .write_all(&trailing_noise)
+        .unwrap_or_else(|err| panic!("{label} trailing payload noise should be written: {err}"));
+}
+
+fn read_http_response(stream: &mut TcpStream) -> String {
+    let mut response = String::new();
+    let _ = stream.read_to_string(&mut response);
+    response
+}
+
+fn wait_for_child_exit_or_terminate(
+    child: &mut Child,
+    attempts: usize,
+    sleep_ms: u64,
+    timeout_message: &str,
+) -> ExitStatus {
+    for _ in 0..attempts {
+        match child.try_wait().expect("child wait should succeed") {
+            Some(status) => return status,
+            None => thread::sleep(Duration::from_millis(sleep_ms)),
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    panic!("{timeout_message}");
+}
+
+fn response_is_http_200(response: &str) -> bool {
+    response.contains("HTTP/1.1 200 OK")
+}
+
+fn response_is_http_503(response: &str) -> bool {
+    response.contains("HTTP/1.1 503 Service Unavailable")
+}
+
+fn response_has_success_contract(response: &str) -> bool {
+    response.contains("X-Trace-Id: rt-")
+        && response.contains("Content-Type: text/plain; charset=utf-8")
+        && response.contains("\r\n\r\nok")
+}
+
+fn response_has_success_contract_with_trace(response: &str, trace_header: &str) -> bool {
+    response_has_success_contract(response) && response.contains(trace_header)
+}
+
+fn response_has_throttle_contract(response: &str) -> bool {
+    response.contains("X-Trace-Id: rt-")
+        && response.contains("Content-Type: text/plain; charset=utf-8")
+        && response.contains("Content-Length: 37")
+        && response.contains("Connection: close")
+        && response.contains("\r\n\r\nserver busy: max concurrency exceeded")
+}
+
+fn response_has_throttle_contract_with_trace(response: &str, trace_header: &str) -> bool {
+    response_has_throttle_contract(response) && response.contains(trace_header)
+}
+
+fn response_has_default_security_headers(response: &str) -> bool {
+    [
+        "X-Content-Type-Options: nosniff",
+        "X-Frame-Options: DENY",
+        "Referrer-Policy: strict-origin-when-cross-origin",
+        "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+    ]
+    .iter()
+    .all(|header| response.contains(header))
+}
+
+fn select_success_and_throttle<'a>(first: &'a str, second: &'a str) -> Option<(&'a str, &'a str)> {
+    if response_is_http_200(first) && response_is_http_503(second) {
+        Some((first, second))
+    } else if response_is_http_200(second) && response_is_http_503(first) {
+        Some((second, first))
+    } else {
+        None
+    }
+}
+
+fn format_two_response_observation(attempt: usize, first: &str, second: &str) -> String {
+    format!(
+        "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
+        first, second
+    )
+}
+
+fn format_three_response_observation(
+    attempt: usize,
+    first: &str,
+    second: &str,
+    third: &str,
+) -> String {
+    format!(
+        "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}\nthird_response=\n{}",
+        first, second, third
+    )
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
@@ -16284,24 +16423,10 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency queue-boundary binary should start",
         );
 
-        let first_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
-        let second_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
+        let first_port = port;
+        let second_port = port;
+        let first_handle = thread::spawn(move || connect_with_retry(first_port, 800, 10));
+        let second_handle = thread::spawn(move || connect_with_retry(second_port, 800, 10));
 
         let mut first_stream = match first_handle
             .join()
@@ -16326,90 +16451,35 @@ fn main() effects { net } -> Int {
             }
         };
 
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        set_stream_read_timeout(&first_stream, "first stream");
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
+        write_http_request(&mut first_stream, request, "first");
+        write_http_request(&mut second_stream, request, "second");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency queue-boundary binary did not exit in expected window"
-                );
-            }
-        };
-
-        let first_is_success = first_response.contains("HTTP/1.1 200 OK");
-        let second_is_success = second_response.contains("HTTP/1.1 200 OK");
-        let first_is_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable");
-        let second_is_throttle = second_response.contains("HTTP/1.1 503 Service Unavailable");
-        let success_count = usize::from(first_is_success) + usize::from(second_is_success);
-        let throttle_count = usize::from(first_is_throttle) + usize::from(second_is_throttle);
-        let throttle_response = if first_is_throttle {
-            first_response.as_str()
-        } else if second_is_throttle {
-            second_response.as_str()
-        } else {
-            ""
-        };
-        let success_response = if first_is_success {
-            first_response.as_str()
-        } else if second_is_success {
-            second_response.as_str()
-        } else {
-            ""
-        };
-
-        let throttle_contract = throttle_response.contains("X-Trace-Id: rt-")
-            && throttle_response.contains("Content-Type: text/plain; charset=utf-8")
-            && throttle_response.contains("Content-Length: 37")
-            && throttle_response.contains("Connection: close")
-            && throttle_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
-        let success_contract = success_response.contains("X-Trace-Id: rt-")
-            && success_response.contains("Content-Type: text/plain; charset=utf-8")
-            && success_response.contains("\r\n\r\nok");
-
-        if status.success()
-            && success_count == 1
-            && throttle_count == 1
-            && throttle_contract
-            && success_contract
-        {
-            matched = true;
-            break;
-        }
-
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
-            first_response, second_response
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency queue-boundary binary did not exit in expected window",
         );
+
+        if let Some((success_response, throttle_response)) =
+            select_success_and_throttle(&first_response, &second_response)
+        {
+            if status.success()
+                && response_has_success_contract(success_response)
+                && response_has_throttle_contract(throttle_response)
+            {
+                matched = true;
+                break;
+            }
+        }
+
+        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
 
     assert!(
@@ -16457,24 +16527,10 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency queue-boundary low-timeout binary should start",
         );
 
-        let first_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
-        let second_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
+        let first_port = port;
+        let second_port = port;
+        let first_handle = thread::spawn(move || connect_with_retry(first_port, 800, 10));
+        let second_handle = thread::spawn(move || connect_with_retry(second_port, 800, 10));
 
         let mut first_stream = match first_handle
             .join()
@@ -16499,92 +16555,38 @@ fn main() effects { net } -> Int {
             }
         };
 
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        set_stream_read_timeout(&first_stream, "first stream");
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
+        write_http_request(&mut first_stream, request, "first");
+        write_http_request(&mut second_stream, request, "second");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency queue-boundary low-timeout binary did not exit in expected window"
-                );
-            }
-        };
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
+        );
 
-        let first_is_success = first_response.contains("HTTP/1.1 200 OK");
-        let second_is_success = second_response.contains("HTTP/1.1 200 OK");
-        let first_is_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable");
-        let second_is_throttle = second_response.contains("HTTP/1.1 503 Service Unavailable");
-        let success_count = usize::from(first_is_success) + usize::from(second_is_success);
-        let throttle_count = usize::from(first_is_throttle) + usize::from(second_is_throttle);
-        let throttle_response = if first_is_throttle {
-            first_response.as_str()
-        } else if second_is_throttle {
-            second_response.as_str()
-        } else {
-            ""
-        };
-        let success_response = if first_is_success {
-            first_response.as_str()
-        } else if second_is_success {
-            second_response.as_str()
-        } else {
-            ""
-        };
-
-        let throttle_contract = throttle_response.contains("X-Trace-Id: rt-")
-            && throttle_response.contains("Content-Type: text/plain; charset=utf-8")
-            && throttle_response.contains("Content-Length: 37")
-            && throttle_response.contains("Connection: close")
-            && throttle_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
-        let success_contract = success_response.contains("X-Trace-Id: rt-")
-            && success_response.contains("Content-Type: text/plain; charset=utf-8")
-            && success_response.contains("\r\n\r\nok");
         let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
 
-        if status.success()
-            && success_count == 1
-            && throttle_count == 1
-            && throttle_contract
-            && success_contract
-            && bounded_tail_contract
+        if let Some((success_response, throttle_response)) =
+            select_success_and_throttle(&first_response, &second_response)
         {
-            matched = true;
-            break;
+            if status.success()
+                && response_has_success_contract(success_response)
+                && response_has_throttle_contract(throttle_response)
+                && bounded_tail_contract
+            {
+                matched = true;
+                break;
+            }
         }
 
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
-            first_response, second_response
-        );
+        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
 
     assert!(
@@ -16633,24 +16635,10 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency throttle security-header parity binary should start",
         );
 
-        let first_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
-        let second_handle = thread::spawn(move || {
-            for _ in 0..800 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(stream) => return Some(stream),
-                    Err(_) => thread::sleep(Duration::from_millis(10)),
-                }
-            }
-            None
-        });
+        let first_port = port;
+        let second_port = port;
+        let first_handle = thread::spawn(move || connect_with_retry(first_port, 800, 10));
+        let second_handle = thread::spawn(move || connect_with_retry(second_port, 800, 10));
 
         let mut first_stream = match first_handle
             .join()
@@ -16679,100 +16667,38 @@ fn main() effects { net } -> Int {
             }
         };
 
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        set_stream_read_timeout(&first_stream, "first stream");
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
+        write_http_request(&mut first_stream, request, "first");
+        write_http_request(&mut second_stream, request, "second");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency throttle security-header parity binary did not exit in expected window"
-                );
-            }
-        };
-
-        let first_is_success = first_response.contains("HTTP/1.1 200 OK");
-        let second_is_success = second_response.contains("HTTP/1.1 200 OK");
-        let first_is_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable");
-        let second_is_throttle = second_response.contains("HTTP/1.1 503 Service Unavailable");
-        let success_count = usize::from(first_is_success) + usize::from(second_is_success);
-        let throttle_count = usize::from(first_is_throttle) + usize::from(second_is_throttle);
-        let throttle_response = if first_is_throttle {
-            first_response.as_str()
-        } else if second_is_throttle {
-            second_response.as_str()
-        } else {
-            ""
-        };
-        let success_response = if first_is_success {
-            first_response.as_str()
-        } else if second_is_success {
-            second_response.as_str()
-        } else {
-            ""
-        };
-
-        let security_headers_contract = [
-            "X-Content-Type-Options: nosniff",
-            "X-Frame-Options: DENY",
-            "Referrer-Policy: strict-origin-when-cross-origin",
-            "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
-        ]
-        .iter()
-        .all(|header| {
-            success_response.contains(header) && throttle_response.contains(header)
-        });
-        let throttle_contract = throttle_response.contains("X-Trace-Id: rt-")
-            && throttle_response.contains("Content-Type: text/plain; charset=utf-8")
-            && throttle_response.contains("Connection: close")
-            && throttle_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
-        let success_contract = success_response.contains("X-Trace-Id: rt-")
-            && success_response.contains("Content-Type: text/plain; charset=utf-8")
-            && success_response.contains("\r\n\r\nok");
-
-        if status.success()
-            && success_count == 1
-            && throttle_count == 1
-            && throttle_contract
-            && success_contract
-            && security_headers_contract
-        {
-            matched = true;
-            break;
-        }
-
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
-            first_response, second_response
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency throttle security-header parity binary did not exit in expected window",
         );
+
+        if let Some((success_response, throttle_response)) =
+            select_success_and_throttle(&first_response, &second_response)
+        {
+            let security_headers_contract = response_has_default_security_headers(success_response)
+                && response_has_default_security_headers(throttle_response);
+            if status.success()
+                && response_has_success_contract(success_response)
+                && response_has_throttle_contract(throttle_response)
+                && security_headers_contract
+            {
+                matched = true;
+                break;
+            }
+        }
+
+        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
 
     assert!(
@@ -16820,104 +16746,44 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency late-connection drain binary should start",
         );
 
-        let mut first_stream = None;
-        for _ in 0..800 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    first_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut first_stream = match first_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection drain test could not establish first connection"
-                );
-            }
-        };
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
+        let mut first_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            800,
+            10,
+            "max-concurrency late-connection drain test could not establish first connection",
+        );
+        set_stream_read_timeout(&first_stream, "first stream");
 
         // Give runtime time to accept the first connection and block on its recv call.
         thread::sleep(Duration::from_millis(75));
 
-        let mut second_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    second_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut second_stream = match second_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection drain test could not establish second connection"
-                );
-            }
-        };
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        let mut second_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency late-connection drain test could not establish second connection",
+        );
+        set_stream_read_timeout(&second_stream, "second stream");
 
         // Queue a late second request before unblocking the first handler.
-        let trailing_noise = vec![b'x'; 4096];
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
-        second_stream
-            .write_all(&trailing_noise)
-            .expect("second trailing payload noise should be written");
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
+        write_http_request(&mut second_stream, request, "second");
+        write_http_trailing_noise(&mut second_stream, 4096, "second");
+        write_http_request(&mut first_stream, request, "first");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection drain binary did not exit in expected window"
-                );
-            }
-        };
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency late-connection drain binary did not exit in expected window",
+        );
 
-        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
-            && first_response.contains("X-Trace-Id: rt-1")
-            && first_response.contains("\r\n\r\nok")
-            && second_response.contains("HTTP/1.1 503 Service Unavailable")
-            && second_response.contains("X-Trace-Id: rt-2")
-            && second_response.contains("Content-Type: text/plain; charset=utf-8")
-            && second_response.contains("Content-Length: 37")
-            && second_response.contains("Connection: close")
-            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let ordered_contract = response_has_success_contract_with_trace(&first_response, "X-Trace-Id: rt-1")
+            && response_has_throttle_contract_with_trace(&second_response, "X-Trace-Id: rt-2");
         let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1200);
 
         if status.success() && ordered_contract && bounded_tail_contract {
@@ -16925,10 +16791,7 @@ fn main() effects { net } -> Int {
             break;
         }
 
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
-            first_response, second_response
-        );
+        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
 
     assert!(
@@ -16976,102 +16839,42 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency late-connection low-timeout binary should start",
         );
 
-        let mut first_stream = None;
-        for _ in 0..800 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    first_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut first_stream = match first_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection low-timeout test could not establish first connection"
-                );
-            }
-        };
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
+        let mut first_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            800,
+            10,
+            "max-concurrency late-connection low-timeout test could not establish first connection",
+        );
+        set_stream_read_timeout(&first_stream, "first stream");
 
         thread::sleep(Duration::from_millis(75));
 
-        let mut second_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    second_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut second_stream = match second_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection low-timeout test could not establish second connection"
-                );
-            }
-        };
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        let mut second_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency late-connection low-timeout test could not establish second connection",
+        );
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        let trailing_noise = vec![b'x'; 8192];
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
-        second_stream
-            .write_all(&trailing_noise)
-            .expect("second trailing payload noise should be written");
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
+        write_http_request(&mut second_stream, request, "second");
+        write_http_trailing_noise(&mut second_stream, 8192, "second");
+        write_http_request(&mut first_stream, request, "first");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency late-connection low-timeout binary did not exit in expected window"
-                );
-            }
-        };
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency late-connection low-timeout binary did not exit in expected window",
+        );
 
-        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
-            && first_response.contains("X-Trace-Id: rt-1")
-            && first_response.contains("\r\n\r\nok")
-            && second_response.contains("HTTP/1.1 503 Service Unavailable")
-            && second_response.contains("X-Trace-Id: rt-2")
-            && second_response.contains("Content-Type: text/plain; charset=utf-8")
-            && second_response.contains("Content-Length: 37")
-            && second_response.contains("Connection: close")
-            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let ordered_contract = response_has_success_contract_with_trace(&first_response, "X-Trace-Id: rt-1")
+            && response_has_throttle_contract_with_trace(&second_response, "X-Trace-Id: rt-2");
         let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
 
         if status.success() && ordered_contract && bounded_tail_contract {
@@ -17079,10 +16882,7 @@ fn main() effects { net } -> Int {
             break;
         }
 
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
-            first_response, second_response
-        );
+        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
 
     assert!(
@@ -17130,142 +16930,57 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency burst-ingress trace-order binary should start",
         );
 
-        let mut first_stream = None;
-        for _ in 0..800 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    first_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut first_stream = match first_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress trace-order test could not establish first connection"
-                );
-            }
-        };
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
+        let mut first_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            800,
+            10,
+            "max-concurrency burst-ingress trace-order test could not establish first connection",
+        );
+        set_stream_read_timeout(&first_stream, "first stream");
 
         // Ensure first connection is accepted and handler is waiting on recv.
         thread::sleep(Duration::from_millis(75));
 
-        let mut second_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    second_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut second_stream = match second_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress trace-order test could not establish second connection"
-                );
-            }
-        };
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        let mut second_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency burst-ingress trace-order test could not establish second connection",
+        );
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        let mut third_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    third_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut third_stream = match third_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress trace-order test could not establish third connection"
-                );
-            }
-        };
-        third_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("third stream read timeout should be set");
+        let mut third_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency burst-ingress trace-order test could not establish third connection",
+        );
+        set_stream_read_timeout(&third_stream, "third stream");
 
         // Stage backlog requests first, then release the accepted first client.
-        let trailing_noise = vec![b'x'; 4096];
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
-        second_stream
-            .write_all(&trailing_noise)
-            .expect("second trailing payload noise should be written");
-        third_stream
-            .write_all(request)
-            .expect("third request should be written");
-        third_stream
-            .write_all(&trailing_noise)
-            .expect("third trailing payload noise should be written");
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
+        write_http_request(&mut second_stream, request, "second");
+        write_http_trailing_noise(&mut second_stream, 4096, "second");
+        write_http_request(&mut third_stream, request, "third");
+        write_http_trailing_noise(&mut third_stream, 4096, "third");
+        write_http_request(&mut first_stream, request, "first");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let mut third_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
-        let _ = third_stream.read_to_string(&mut third_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
+        let third_response = read_http_response(&mut third_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress trace-order binary did not exit in expected window"
-                );
-            }
-        };
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency burst-ingress trace-order binary did not exit in expected window",
+        );
 
-        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
-            && first_response.contains("X-Trace-Id: rt-1")
-            && first_response.contains("\r\n\r\nok")
-            && second_response.contains("HTTP/1.1 503 Service Unavailable")
-            && second_response.contains("X-Trace-Id: rt-2")
-            && second_response.contains("Content-Type: text/plain; charset=utf-8")
-            && second_response.contains("Content-Length: 37")
-            && second_response.contains("Connection: close")
-            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
-            && third_response.contains("HTTP/1.1 503 Service Unavailable")
-            && third_response.contains("X-Trace-Id: rt-3")
-            && third_response.contains("Content-Type: text/plain; charset=utf-8")
-            && third_response.contains("Content-Length: 37")
-            && third_response.contains("Connection: close")
-            && third_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let ordered_contract = response_has_success_contract_with_trace(&first_response, "X-Trace-Id: rt-1")
+            && response_has_throttle_contract_with_trace(&second_response, "X-Trace-Id: rt-2")
+            && response_has_throttle_contract_with_trace(&third_response, "X-Trace-Id: rt-3");
         let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1200);
 
         if status.success() && ordered_contract && bounded_tail_contract {
@@ -17273,10 +16988,8 @@ fn main() effects { net } -> Int {
             break;
         }
 
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}\nthird_response=\n{}",
-            first_response, second_response, third_response
-        );
+        last_observation =
+            format_three_response_observation(attempt, &first_response, &second_response, &third_response);
     }
 
     assert!(
@@ -17324,140 +17037,55 @@ fn main() effects { net } -> Int {
             "http runtime max-concurrency burst-ingress low-timeout binary should start",
         );
 
-        let mut first_stream = None;
-        for _ in 0..800 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    first_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut first_stream = match first_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress low-timeout test could not establish first connection"
-                );
-            }
-        };
-        first_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("first stream read timeout should be set");
+        let mut first_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            800,
+            10,
+            "max-concurrency burst-ingress low-timeout test could not establish first connection",
+        );
+        set_stream_read_timeout(&first_stream, "first stream");
 
         thread::sleep(Duration::from_millis(75));
 
-        let mut second_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    second_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut second_stream = match second_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress low-timeout test could not establish second connection"
-                );
-            }
-        };
-        second_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("second stream read timeout should be set");
+        let mut second_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency burst-ingress low-timeout test could not establish second connection",
+        );
+        set_stream_read_timeout(&second_stream, "second stream");
 
-        let mut third_stream = None;
-        for _ in 0..400 {
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => {
-                    third_stream = Some(stream);
-                    break;
-                }
-                Err(_) => thread::sleep(Duration::from_millis(10)),
-            }
-        }
-        let mut third_stream = match third_stream {
-            Some(stream) => stream,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress low-timeout test could not establish third connection"
-                );
-            }
-        };
-        third_stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .expect("third stream read timeout should be set");
+        let mut third_stream = connect_with_retry_or_terminate(
+            &mut child,
+            port,
+            400,
+            10,
+            "max-concurrency burst-ingress low-timeout test could not establish third connection",
+        );
+        set_stream_read_timeout(&third_stream, "third stream");
 
-        let trailing_noise = vec![b'x'; 8192];
-        second_stream
-            .write_all(request)
-            .expect("second request should be written");
-        second_stream
-            .write_all(&trailing_noise)
-            .expect("second trailing payload noise should be written");
-        third_stream
-            .write_all(request)
-            .expect("third request should be written");
-        third_stream
-            .write_all(&trailing_noise)
-            .expect("third trailing payload noise should be written");
-        first_stream
-            .write_all(request)
-            .expect("first request should be written");
+        write_http_request(&mut second_stream, request, "second");
+        write_http_trailing_noise(&mut second_stream, 8192, "second");
+        write_http_request(&mut third_stream, request, "third");
+        write_http_trailing_noise(&mut third_stream, 8192, "third");
+        write_http_request(&mut first_stream, request, "first");
 
-        let mut first_response = String::new();
-        let mut second_response = String::new();
-        let mut third_response = String::new();
-        let _ = first_stream.read_to_string(&mut first_response);
-        let _ = second_stream.read_to_string(&mut second_response);
-        let _ = third_stream.read_to_string(&mut third_response);
+        let first_response = read_http_response(&mut first_stream);
+        let second_response = read_http_response(&mut second_stream);
+        let third_response = read_http_response(&mut third_stream);
 
-        let mut status = None;
-        for _ in 0..240 {
-            match child.try_wait().expect("child wait should succeed") {
-                Some(next) => {
-                    status = Some(next);
-                    break;
-                }
-                None => thread::sleep(Duration::from_millis(25)),
-            }
-        }
-        let status = match status {
-            Some(status) => status,
-            None => {
-                let _ = child.kill();
-                let _ = child.wait();
-                panic!(
-                    "max-concurrency burst-ingress low-timeout binary did not exit in expected window"
-                );
-            }
-        };
+        let status = wait_for_child_exit_or_terminate(
+            &mut child,
+            240,
+            25,
+            "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
+        );
 
-        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
-            && first_response.contains("X-Trace-Id: rt-1")
-            && first_response.contains("\r\n\r\nok")
-            && second_response.contains("HTTP/1.1 503 Service Unavailable")
-            && second_response.contains("X-Trace-Id: rt-2")
-            && second_response.contains("Content-Type: text/plain; charset=utf-8")
-            && second_response.contains("Content-Length: 37")
-            && second_response.contains("Connection: close")
-            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
-            && third_response.contains("HTTP/1.1 503 Service Unavailable")
-            && third_response.contains("X-Trace-Id: rt-3")
-            && third_response.contains("Content-Type: text/plain; charset=utf-8")
-            && third_response.contains("Content-Length: 37")
-            && third_response.contains("Connection: close")
-            && third_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let ordered_contract = response_has_success_contract_with_trace(&first_response, "X-Trace-Id: rt-1")
+            && response_has_throttle_contract_with_trace(&second_response, "X-Trace-Id: rt-2")
+            && response_has_throttle_contract_with_trace(&third_response, "X-Trace-Id: rt-3");
         let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
 
         if status.success() && ordered_contract && bounded_tail_contract {
@@ -17465,10 +17093,8 @@ fn main() effects { net } -> Int {
             break;
         }
 
-        last_observation = format!(
-            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}\nthird_response=\n{}",
-            first_response, second_response, third_response
-        );
+        last_observation =
+            format_three_response_observation(attempt, &first_response, &second_response, &third_response);
     }
 
     assert!(

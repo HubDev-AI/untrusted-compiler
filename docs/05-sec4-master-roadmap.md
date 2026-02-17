@@ -3195,6 +3195,127 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S152 HTTP max-concurrency helper-layer determinism regression guard expansion acceptance criteria
+
+- Max-concurrency contention tests centralize deterministic guard logic behind explicit helper functions.
+- Guard helper adoption keeps queue/late/burst/security runtime contracts unchanged.
+- Regression diagnostics remain attempt-scoped and deterministic.
+
+### M38-S152 tracking (live status)
+
+- [x] Added deterministic helper-layer guard surface across max-concurrency contention tests.
+- [x] Preserved one-success/one-throttle and ordered-trace contracts after helper adoption.
+- [x] Revalidated max-concurrency contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S153 HTTP max-concurrency connector retry helper introduction acceptance criteria
+
+- Connection retry loops are centralized in one helper for deterministic retry cadence.
+- Connector failure handling is centralized with child terminate+wait fallback.
+- Queue/late/burst tests no longer duplicate raw retry loops.
+
+### M38-S153 tracking (live status)
+
+- [x] Added `connect_with_retry(...)`.
+- [x] Added `connect_with_retry_or_terminate(...)`.
+- [x] Adopted helper in late/burst setup paths.
+
+### M38-S154 HTTP max-concurrency socket I/O helper layer adoption acceptance criteria
+
+- Read-timeout setup uses one canonical helper.
+- Request writes and trailing-noise writes use canonical helper wrappers with deterministic diagnostics.
+- Response reads use one helper surface across contention tests.
+
+### M38-S154 tracking (live status)
+
+- [x] Added `set_stream_read_timeout(...)`.
+- [x] Added `write_http_request(...)` and `write_http_trailing_noise(...)`.
+- [x] Added `read_http_response(...)` and migrated queue/late/burst/security tests.
+
+### M38-S155 HTTP max-concurrency child-exit deterministic wait helper acceptance criteria
+
+- Child wait loops are centralized in one bounded helper with kill+wait timeout fallback.
+- All contention tests use the same wait window and polling cadence contracts.
+- Exit timeout failure diagnostics remain test-specific.
+
+### M38-S155 tracking (live status)
+
+- [x] Added `wait_for_child_exit_or_terminate(...)`.
+- [x] Migrated queue/late/burst/security contention paths to helper wait surface.
+
+### M38-S156 HTTP max-concurrency response contract predicate helper introduction acceptance criteria
+
+- Success/throttle contract assertions are centralized in canonical predicate helpers.
+- Trace-specific contract checks for ordered paths use explicit helper entrypoints.
+- Security-header parity checks use one canonical predicate.
+
+### M38-S156 tracking (live status)
+
+- [x] Added canonical response predicates:
+  - `response_has_success_contract(...)`
+  - `response_has_success_contract_with_trace(...)`
+  - `response_has_throttle_contract(...)`
+  - `response_has_throttle_contract_with_trace(...)`
+  - `response_has_default_security_headers(...)`
+
+### M38-S157 HTTP max-concurrency pair-selection and observation formatter helper introduction acceptance criteria
+
+- Pair success/throttle selection logic is centralized to prevent branch drift.
+- Attempt observation rendering uses canonical formatters for two-response and three-response paths.
+- Contention test failure envelopes remain deterministic and readable.
+
+### M38-S157 tracking (live status)
+
+- [x] Added `select_success_and_throttle(...)`.
+- [x] Added `format_two_response_observation(...)` and `format_three_response_observation(...)`.
+- [x] Migrated queue/security/late/burst attempt observation strings to helper formatters.
+
+### M38-S158 HTTP max-concurrency queue contention helper adoption acceptance criteria
+
+- Queue-boundary default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Queue contention invariants remain deterministic after helper migration.
+- Low-timeout bounded-tail contract remains intact.
+
+### M38-S158 tracking (live status)
+
+- [x] Migrated queue-boundary default contention test to helper layer.
+- [x] Migrated queue-boundary low-timeout contention test to helper layer.
+
+### M38-S159 HTTP max-concurrency security-header parity helper adoption acceptance criteria
+
+- Security-header parity contention test consumes canonical connect/I/O/wait and predicate helpers.
+- Success/throttle header parity is asserted through canonical header predicate helper.
+- Security parity contract remains unchanged.
+
+### M38-S159 tracking (live status)
+
+- [x] Migrated security-header parity contention test to helper layer.
+- [x] Preserved deterministic parity assertions for success and throttle envelopes.
+
+### M38-S160 HTTP max-concurrency late-connection helper adoption acceptance criteria
+
+- Late-connection default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Ordered `rt-1 success -> rt-2 throttle` contract remains deterministic.
+- Bounded-tail contract remains intact for both timeout branches.
+
+### M38-S160 tracking (live status)
+
+- [x] Migrated late-connection default contention path to helper layer.
+- [x] Migrated late-connection low-timeout contention path to helper layer.
+
+### M38-S161 HTTP max-concurrency burst-ingress helper adoption acceptance criteria
+
+- Burst-ingress default and low-timeout tests consume canonical connect/I/O/wait/predicate helpers.
+- Ordered `rt-1 success -> rt-2/rt-3 throttle` contract remains deterministic.
+- Bounded-tail contract remains intact for both timeout branches.
+
+### M38-S161 tracking (live status)
+
+- [x] Migrated burst-ingress default contention path to helper layer.
+- [x] Migrated burst-ingress low-timeout contention path to helper layer.
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8507,7 +8628,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S152 HTTP max-concurrency helper-layer determinism regression guard expansion.
+- M38-S162 HTTP max-concurrency connector-thread helper normalization for queue/security contention paths.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8599,9 +8720,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S152 scope for helper-layer determinism regression guards across max-concurrency harness paths.
-2. Extend helper-focused regression coverage so refactors cannot silently weaken runtime contention contracts.
-3. Publish M38-S152 book chapter and refresh roadmap live-status counts.
+1. Add M38-S162 scope for connector-thread spawn/join normalization in queue/security contention tests.
+2. Consolidate dual-connector failure envelopes behind one helper so retry failure diagnostics cannot drift.
+3. Publish M38-S162 chapter and refresh roadmap live-status counts.
 
 ---
 
