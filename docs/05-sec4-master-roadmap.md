@@ -3887,6 +3887,17 @@ Post-alpha track acceptance anchors:
 - [x] Added `assert_pair_contention_branch_case(...)`, `assert_late_contention_branch_case(...)`, and `assert_burst_contention_branch_case(...)`.
 - [x] Migrated seven ordered max-concurrency branch assertions to branch-scope matrix helper calls.
 
+### M38-S213 HTTP max-concurrency ordered-attempt helper branch-case fixture-constructor normalization acceptance criteria
+
+- Branch-case fixture construction for pair/late/burst paths uses canonical constructor helpers.
+- Queue boundary, security parity, late, and burst branches no longer inline branch-case field wiring.
+- Ordered helper failure contracts remain deterministic across all constructor-backed branches.
+
+### M38-S213 tracking (live status)
+
+- [x] Added `pair_contention_branch_case(...)`, `late_contention_branch_case(...)`, and `burst_contention_branch_case(...)`.
+- [x] Migrated seven ordered branch assertions to constructor-backed branch-case fixtures.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9199,7 +9210,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S213 HTTP max-concurrency ordered-attempt helper branch-case fixture-constructor normalization.
+- M38-S214 HTTP max-concurrency ordered-attempt helper fixture-catalog dispatch normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9291,9 +9302,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S213 scope for ordered-attempt helper branch-case fixture-constructor normalization.
-2. Extend ordered helper coverage with branch-case fixture-constructor normalization.
-3. Publish M38-S213 chapter and refresh roadmap live-status counts.
+1. Add M38-S214 scope for ordered-attempt helper fixture-catalog dispatch normalization.
+2. Extend ordered helper coverage with fixture-catalog dispatch normalization.
+3. Publish M38-S214 chapter and refresh roadmap live-status counts.
 
 ---
 
