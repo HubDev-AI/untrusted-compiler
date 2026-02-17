@@ -808,5 +808,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `840-m38-http-max-concurrency-ordered-attempt-helper-branch-case-fixture-constructor-normalization.md`
 - `841-m38-http-max-concurrency-ordered-attempt-helper-fixture-catalog-dispatch-normalization.md`
 - `842-m38-http-max-concurrency-ordered-attempt-fixture-catalog-assertion-pack-revalidation.md`
+- `843-m38-http-max-concurrency-ordered-attempt-fixture-catalog-grouped-runner-normalization.md`
+- `844-m38-http-max-concurrency-ordered-attempt-fixture-descriptor-catalog-normalization.md`
 
 As milestones progress, chapters will be added and linked from this index.
