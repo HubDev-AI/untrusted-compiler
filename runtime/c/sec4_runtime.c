@@ -7064,7 +7064,10 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
   return flag != NULL && strcmp(flag, "0") != 0;
 }
 
-static void sec4_rt_finalize_throttle_socket_close(int socket_fd) {
+static void sec4_rt_finalize_throttle_socket_close(
+    int socket_fd,
+    int64_t throttle_drain_timeout_ms
+) {
   if (socket_fd < 0) {
     return;
   }
@@ -7073,7 +7076,10 @@ static void sec4_rt_finalize_throttle_socket_close(int socket_fd) {
   (void) shutdown(socket_fd, SHUT_WR);
   (void) sec4_rt_set_socket_nonblocking(socket_fd, true);
 
-  int64_t timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  int64_t timeout_ms = throttle_drain_timeout_ms;
+  if (timeout_ms <= 0) {
+    timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  }
   int64_t deadline_ms = sec4_rt_time_now() + timeout_ms;
 
   char discard[256];
@@ -7150,7 +7156,8 @@ static void sec4_rt_drain_oneshot_backlog_with_throttle(
     sec4_rt_router_state *router,
     int *pending_clients,
     size_t *pending_count,
-    bool *fatal_error
+    bool *fatal_error,
+    int64_t throttle_drain_timeout_ms
 ) {
   if (router == NULL || pending_clients == NULL || pending_count == NULL) {
     return;
@@ -7162,7 +7169,7 @@ static void sec4_rt_drain_oneshot_backlog_with_throttle(
       continue;
     }
     sec4_rt_send_concurrency_throttle_response(client_fd, router);
-    sec4_rt_finalize_throttle_socket_close(client_fd);
+    sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
     close(client_fd);
   }
   *pending_count = 0;
@@ -7183,7 +7190,7 @@ static void sec4_rt_drain_oneshot_backlog_with_throttle(
     }
 
     sec4_rt_send_concurrency_throttle_response(client_fd, router);
-    sec4_rt_finalize_throttle_socket_close(client_fd);
+    sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
     close(client_fd);
   }
 }
@@ -11075,6 +11082,7 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
   if (timeout_ms < 0) {
     timeout_ms = SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS;
   }
+  int64_t throttle_drain_timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
 
   size_t max_concurrency = sec4_rt_http_max_concurrency_limit();
   int *pending_clients = (int *) calloc(max_concurrency, sizeof(int));
@@ -11093,7 +11101,8 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
           slot,
           pending_clients,
           &pending_count,
-          &fatal_error
+          &fatal_error,
+          throttle_drain_timeout_ms
       );
       break;
     }
@@ -11142,7 +11151,7 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
 
       if (pending_count >= max_concurrency) {
         sec4_rt_send_concurrency_throttle_response(client_fd, slot);
-        sec4_rt_finalize_throttle_socket_close(client_fd);
+        sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
         close(client_fd);
         continue;
       }

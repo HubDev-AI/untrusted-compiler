@@ -734,5 +734,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `762-m38-http-max-concurrency-throttle-drain-timeout-empty-token-fallback-hardening.md`
 - `763-m38-http-max-concurrency-throttle-drain-timeout-malformed-token-fallback-hardening.md`
 - `764-m38-http-max-concurrency-queue-boundary-low-timeout-deterministic-throttle-contract-hardening.md`
+- `765-m38-http-max-concurrency-throttle-drain-timeout-runtime-cache-hardening.md`
+- `766-m38-http-max-concurrency-timeout-fallback-matrix-assertion-helper-dedup.md`
+- `767-m38-http-max-concurrency-oneshot-spawn-helper-dedup.md`
+- `768-m38-http-max-concurrency-queue-security-spawn-helper-adoption.md`
+- `769-m38-http-max-concurrency-late-connection-spawn-helper-adoption.md`
+- `770-m38-http-max-concurrency-burst-ingress-spawn-helper-adoption.md`
+- `775-m38-http-max-concurrency-c-bin-fixture-helper-introduction.md`
+- `776-m38-http-max-concurrency-queue-fixture-helper-adoption.md`
+- `777-m38-http-max-concurrency-late-burst-fixture-helper-adoption.md`
+- `778-m38-http-max-concurrency-env-security-fixture-helper-adoption.md`
 
 As milestones progress, chapters will be added and linked from this index.
