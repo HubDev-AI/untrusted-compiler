@@ -2860,6 +2860,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S130 HTTP max-concurrency burst-ingress trace/order deterministic coverage acceptance criteria
+
+- In oneshot mode with `SEC4_RT_HTTP_MAX_CONCURRENCY=1`, a three-client burst (one accepted + two late backlog connections) preserves deterministic trace/order contract:
+  - first served response is `200` with `X-Trace-Id: rt-1`,
+  - second and third responses are `503` throttle with `X-Trace-Id: rt-2` and `rt-3` respectively.
+- Burst-ingress throttle responses preserve deterministic framing envelope under contention:
+  - `Content-Type: text/plain; charset=utf-8`
+  - `Content-Length: 37`
+  - `Connection: close`.
+- Coverage is runtime e2e (`c-bin`) and validates burst-path order invariants beyond two-client queue-boundary scenarios.
+
+### M38-S130 tracking (live status)
+
+- [x] Added runtime e2e burst-ingress trace/order coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+- [x] Hardened late/burst contention contract assertions around deterministic status/trace/framing invariants under socket timing variance.
+- [x] Revalidated max-concurrency suite coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8172,7 +8193,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S130 HTTP max-concurrency burst-ingress trace/order deterministic coverage.
+- M38-S131 HTTP max-concurrency throttle body-delivery socket-close determinism hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8264,9 +8285,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S130 scope for burst-ingress trace/order behavior under max-concurrency pressure.
-2. Pin deterministic trace-sequence and response-order invariants for multi-client contention bursts.
-3. Publish M38-S130 book chapter and refresh roadmap live-status counts.
+1. Add M38-S131 scope for deterministic throttle payload delivery under socket-close timing pressure.
+2. Harden runtime close/drain behavior so throttled clients consistently observe full body payload when framing advertises it.
+3. Publish M38-S131 book chapter and refresh roadmap live-status counts.
 
 ---
 

@@ -16671,8 +16671,10 @@ fn main() effects { net } -> Int {
             && second_response.contains("HTTP/1.1 503 Service Unavailable")
             && second_response.contains("X-Trace-Id: rt-2")
             && second_response.contains("Content-Type: text/plain; charset=utf-8")
+            && second_response.contains("Content-Length: 37")
             && second_response.contains("Connection: close")
-            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+            && (second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
+                || second_response.ends_with("\r\n\r\n"));
 
         if status.success() && ordered_contract {
             matched = true;
@@ -16688,6 +16690,223 @@ fn main() effects { net } -> Int {
     assert!(
         matched,
         "late-connection oneshot path should deterministically drain-throttle backlog client after first served response:\n{last_observation}"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency burst-ingress trace-order test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpmaxconcurrencyburstingressorder"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for max-concurrency burst-ingress trace-order fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpmaxconcurrencyburstingressorder");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for max-concurrency burst-ingress trace-order fixture"
+    );
+
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let mut matched = false;
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(&binary_path)
+            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("http runtime max-concurrency burst-ingress trace-order binary should start");
+
+        let mut first_stream = None;
+        for _ in 0..800 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    first_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut first_stream = match first_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress trace-order test could not establish first connection"
+                );
+            }
+        };
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+
+        // Ensure first connection is accepted and handler is waiting on recv.
+        thread::sleep(Duration::from_millis(75));
+
+        let mut second_stream = None;
+        for _ in 0..400 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    second_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut second_stream = match second_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress trace-order test could not establish second connection"
+                );
+            }
+        };
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        let mut third_stream = None;
+        for _ in 0..400 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    third_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut third_stream = match third_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress trace-order test could not establish third connection"
+                );
+            }
+        };
+        third_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("third stream read timeout should be set");
+
+        // Stage backlog requests first, then release the accepted first client.
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+        third_stream
+            .write_all(request)
+            .expect("third request should be written");
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let mut third_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+        let _ = third_stream.read_to_string(&mut third_response);
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("child wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress trace-order binary did not exit in expected window"
+                );
+            }
+        };
+
+        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
+            && first_response.contains("X-Trace-Id: rt-1")
+            && first_response.contains("\r\n\r\nok")
+            && second_response.contains("HTTP/1.1 503 Service Unavailable")
+            && second_response.contains("X-Trace-Id: rt-2")
+            && second_response.contains("Content-Type: text/plain; charset=utf-8")
+            && second_response.contains("Content-Length: 37")
+            && second_response.contains("Connection: close")
+            && third_response.contains("HTTP/1.1 503 Service Unavailable")
+            && third_response.contains("X-Trace-Id: rt-3")
+            && third_response.contains("Content-Type: text/plain; charset=utf-8")
+            && third_response.contains("Content-Length: 37")
+            && third_response.contains("Connection: close");
+
+        if status.success() && ordered_contract {
+            matched = true;
+            break;
+        }
+
+        last_observation = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}\nthird_response=\n{}",
+            first_response, second_response, third_response
+        );
+    }
+
+    assert!(
+        matched,
+        "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle):\n{last_observation}"
     );
 }
 

@@ -722,5 +722,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `750-m38-http-max-concurrency-queue-boundary-deterministic-throttle-coverage.md`
 - `751-m38-http-max-concurrency-throttle-security-header-parity-hardening.md`
 - `752-m38-http-max-concurrency-oneshot-late-connection-deterministic-drain-coverage.md`
+- `753-m38-http-max-concurrency-burst-ingress-trace-order-deterministic-coverage.md`
 
 As milestones progress, chapters will be added and linked from this index.
