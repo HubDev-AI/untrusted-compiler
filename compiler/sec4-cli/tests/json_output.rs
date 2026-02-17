@@ -537,6 +537,277 @@ fn format_three_response_observation(
     )
 }
 
+fn run_pair_contention_attempt_loop(
+    binary_path: &Path,
+    request: &[u8],
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+    first_connect_failure_message: &str,
+    second_connect_failure_message: &str,
+    exit_timeout_message: &str,
+    contract: PairOutcomeContract,
+    max_tail_millis: Option<u64>,
+) -> Option<String> {
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let (attempt_started, port, mut child) =
+            spawn_pair_contention_attempt(binary_path, throttle_drain_timeout_env, start_message);
+
+        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
+            &mut child,
+            port,
+            first_connect_failure_message,
+            second_connect_failure_message,
+        );
+
+        let outcome = collect_pair_attempt_outcome(
+            &mut child,
+            &mut first_stream,
+            &mut second_stream,
+            request,
+            exit_timeout_message,
+        );
+
+        let matches = if let Some(max_tail_millis) = max_tail_millis {
+            pair_outcome_matches_contract_with_bounded_tail(
+                &outcome,
+                contract,
+                &attempt_started,
+                max_tail_millis,
+            )
+        } else {
+            pair_outcome_matches_contract(&outcome, contract)
+        };
+        if matches {
+            return None;
+        }
+
+        last_observation = format_pair_outcome_observation(attempt, &outcome);
+    }
+    Some(last_observation)
+}
+
+struct OrderedPairAttemptOutcome {
+    status: ExitStatus,
+    first_response: String,
+    second_response: String,
+}
+
+struct OrderedTripleAttemptOutcome {
+    status: ExitStatus,
+    first_response: String,
+    second_response: String,
+    third_response: String,
+}
+
+type OrderedPairContract = fn(&str, &str) -> bool;
+type OrderedTripleContract = fn(&str, &str, &str) -> bool;
+
+fn collect_late_ordered_pair_attempt_outcome(
+    child: &mut Child,
+    first_stream: &mut TcpStream,
+    second_stream: &mut TcpStream,
+    request: &[u8],
+    trailing_noise_len: usize,
+    exit_timeout_message: &str,
+) -> OrderedPairAttemptOutcome {
+    stage_late_backlog_requests(first_stream, second_stream, request, trailing_noise_len);
+    let (first_response, second_response) = read_two_http_responses(first_stream, second_stream);
+    let status = wait_for_child_exit_or_terminate(child, 240, 25, exit_timeout_message);
+    OrderedPairAttemptOutcome {
+        status,
+        first_response,
+        second_response,
+    }
+}
+
+fn collect_burst_ordered_triple_attempt_outcome(
+    child: &mut Child,
+    first_stream: &mut TcpStream,
+    second_stream: &mut TcpStream,
+    third_stream: &mut TcpStream,
+    request: &[u8],
+    trailing_noise_len: usize,
+    exit_timeout_message: &str,
+) -> OrderedTripleAttemptOutcome {
+    stage_burst_backlog_requests(
+        first_stream,
+        second_stream,
+        third_stream,
+        request,
+        trailing_noise_len,
+    );
+    let (first_response, second_response, third_response) =
+        read_three_http_responses(first_stream, second_stream, third_stream);
+    let status = wait_for_child_exit_or_terminate(child, 240, 25, exit_timeout_message);
+    OrderedTripleAttemptOutcome {
+        status,
+        first_response,
+        second_response,
+        third_response,
+    }
+}
+
+fn ordered_pair_outcome_matches_contract(
+    outcome: &OrderedPairAttemptOutcome,
+    contract: OrderedPairContract,
+) -> bool {
+    outcome.status.success()
+        && contract(
+            outcome.first_response.as_str(),
+            outcome.second_response.as_str(),
+        )
+}
+
+fn ordered_pair_outcome_matches_contract_with_bounded_tail(
+    outcome: &OrderedPairAttemptOutcome,
+    contract: OrderedPairContract,
+    attempt_started: &Instant,
+    max_tail_millis: u64,
+) -> bool {
+    ordered_pair_outcome_matches_contract(outcome, contract)
+        && has_bounded_tail_latency(attempt_started, max_tail_millis)
+}
+
+fn ordered_triple_outcome_matches_contract(
+    outcome: &OrderedTripleAttemptOutcome,
+    contract: OrderedTripleContract,
+) -> bool {
+    outcome.status.success()
+        && contract(
+            outcome.first_response.as_str(),
+            outcome.second_response.as_str(),
+            outcome.third_response.as_str(),
+        )
+}
+
+fn ordered_triple_outcome_matches_contract_with_bounded_tail(
+    outcome: &OrderedTripleAttemptOutcome,
+    contract: OrderedTripleContract,
+    attempt_started: &Instant,
+    max_tail_millis: u64,
+) -> bool {
+    ordered_triple_outcome_matches_contract(outcome, contract)
+        && has_bounded_tail_latency(attempt_started, max_tail_millis)
+}
+
+fn format_ordered_pair_outcome_observation(
+    attempt: usize,
+    outcome: &OrderedPairAttemptOutcome,
+) -> String {
+    format_two_response_observation(
+        attempt,
+        outcome.first_response.as_str(),
+        outcome.second_response.as_str(),
+    )
+}
+
+fn format_ordered_triple_outcome_observation(
+    attempt: usize,
+    outcome: &OrderedTripleAttemptOutcome,
+) -> String {
+    format_three_response_observation(
+        attempt,
+        outcome.first_response.as_str(),
+        outcome.second_response.as_str(),
+        outcome.third_response.as_str(),
+    )
+}
+
+fn run_late_contention_attempt_loop(
+    binary_path: &Path,
+    request: &[u8],
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+    first_connect_failure_message: &str,
+    second_connect_failure_message: &str,
+    exit_timeout_message: &str,
+    trailing_noise_len: usize,
+    max_tail_millis: u64,
+) -> Option<String> {
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let (attempt_started, port, mut child) =
+            spawn_staged_contention_attempt(binary_path, throttle_drain_timeout_env, start_message);
+
+        let mut first_stream =
+            connect_staged_first_stream_or_terminate(&mut child, port, first_connect_failure_message);
+        wait_for_oneshot_accept_barrier();
+        let mut second_stream =
+            connect_staged_second_stream_or_terminate(&mut child, port, second_connect_failure_message);
+
+        let outcome = collect_late_ordered_pair_attempt_outcome(
+            &mut child,
+            &mut first_stream,
+            &mut second_stream,
+            request,
+            trailing_noise_len,
+            exit_timeout_message,
+        );
+
+        if ordered_pair_outcome_matches_contract_with_bounded_tail(
+            &outcome,
+            late_ordered_trace_contract_holds,
+            &attempt_started,
+            max_tail_millis,
+        ) {
+            return None;
+        }
+
+        last_observation = format_ordered_pair_outcome_observation(attempt, &outcome);
+    }
+    Some(last_observation)
+}
+
+fn run_burst_contention_attempt_loop(
+    binary_path: &Path,
+    request: &[u8],
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+    first_connect_failure_message: &str,
+    second_connect_failure_message: &str,
+    third_connect_failure_message: &str,
+    exit_timeout_message: &str,
+    trailing_noise_len: usize,
+    max_tail_millis: u64,
+) -> Option<String> {
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let (attempt_started, port, mut child) =
+            spawn_staged_contention_attempt(binary_path, throttle_drain_timeout_env, start_message);
+
+        let mut first_stream =
+            connect_staged_first_stream_or_terminate(&mut child, port, first_connect_failure_message);
+        wait_for_oneshot_accept_barrier();
+        let mut second_stream =
+            connect_staged_second_stream_or_terminate(&mut child, port, second_connect_failure_message);
+        let mut third_stream =
+            connect_staged_third_stream_or_terminate(&mut child, port, third_connect_failure_message);
+
+        let outcome = collect_burst_ordered_triple_attempt_outcome(
+            &mut child,
+            &mut first_stream,
+            &mut second_stream,
+            &mut third_stream,
+            request,
+            trailing_noise_len,
+            exit_timeout_message,
+        );
+
+        if ordered_triple_outcome_matches_contract_with_bounded_tail(
+            &outcome,
+            burst_ordered_trace_contract_holds,
+            &attempt_started,
+            max_tail_millis,
+        ) {
+            return None;
+        }
+
+        last_observation = format_ordered_triple_outcome_observation(attempt, &outcome);
+    }
+    Some(last_observation)
+}
+
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
     let listener =
         TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
@@ -16685,42 +16956,21 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (_attempt_started, port, mut child) = spawn_pair_contention_attempt(
-            &binary_path,
-            None,
-            "http runtime max-concurrency queue-boundary binary should start",
+    if let Some(last_observation) = run_pair_contention_attempt_loop(
+        &binary_path,
+        request,
+        None,
+        "http runtime max-concurrency queue-boundary binary should start",
+        "max-concurrency queue-boundary test could not establish first connection",
+        "max-concurrency queue-boundary test could not establish second connection",
+        "max-concurrency queue-boundary binary did not exit in expected window",
+        pair_success_throttle_contract_holds,
+        None,
+    ) {
+        panic!(
+            "max-concurrency queue-boundary run should produce one success and one deterministic throttle response:\n{last_observation}"
         );
-
-        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency queue-boundary test could not establish first connection",
-            "max-concurrency queue-boundary test could not establish second connection",
-        );
-
-        let outcome = collect_pair_attempt_outcome(
-            &mut child,
-            &mut first_stream,
-            &mut second_stream,
-            request,
-            "max-concurrency queue-boundary binary did not exit in expected window",
-        );
-
-        if pair_outcome_matches_contract(&outcome, pair_success_throttle_contract_holds) {
-            matched = true;
-            break;
-        }
-
-        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
-
-    assert!(
-        matched,
-        "max-concurrency queue-boundary run should produce one success and one deterministic throttle response:\n{last_observation}"
-    );
 }
 
 #[test]
@@ -16750,47 +17000,21 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (attempt_started, port, mut child) = spawn_pair_contention_attempt(
-            &binary_path,
-            Some("1"),
-            "http runtime max-concurrency queue-boundary low-timeout binary should start",
+    if let Some(last_observation) = run_pair_contention_attempt_loop(
+        &binary_path,
+        request,
+        Some("1"),
+        "http runtime max-concurrency queue-boundary low-timeout binary should start",
+        "max-concurrency queue-boundary low-timeout test could not establish first connection",
+        "max-concurrency queue-boundary low-timeout test could not establish second connection",
+        "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
+        pair_success_throttle_contract_holds,
+        Some(1000),
+    ) {
+        panic!(
+            "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
         );
-
-        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency queue-boundary low-timeout test could not establish first connection",
-            "max-concurrency queue-boundary low-timeout test could not establish second connection",
-        );
-
-        let outcome = collect_pair_attempt_outcome(
-            &mut child,
-            &mut first_stream,
-            &mut second_stream,
-            request,
-            "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
-        );
-
-        if pair_outcome_matches_contract_with_bounded_tail(
-            &outcome,
-            pair_success_throttle_contract_holds,
-            &attempt_started,
-            1000,
-        ) {
-            matched = true;
-            break;
-        }
-
-        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
-
-    assert!(
-        matched,
-        "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-    );
 }
 
 #[test]
@@ -16822,45 +17046,21 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (_attempt_started, port, mut child) = spawn_pair_contention_attempt(
-            &binary_path,
-            None,
-            "http runtime max-concurrency throttle security-header parity binary should start",
+    if let Some(last_observation) = run_pair_contention_attempt_loop(
+        &binary_path,
+        request,
+        None,
+        "http runtime max-concurrency throttle security-header parity binary should start",
+        "max-concurrency throttle security-header parity test could not establish first connection",
+        "max-concurrency throttle security-header parity test could not establish second connection",
+        "max-concurrency throttle security-header parity binary did not exit in expected window",
+        pair_success_throttle_with_security_header_parity_holds,
+        None,
+    ) {
+        panic!(
+            "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled:\n{last_observation}"
         );
-
-        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency throttle security-header parity test could not establish first connection",
-            "max-concurrency throttle security-header parity test could not establish second connection",
-        );
-
-        let outcome = collect_pair_attempt_outcome(
-            &mut child,
-            &mut first_stream,
-            &mut second_stream,
-            request,
-            "max-concurrency throttle security-header parity binary did not exit in expected window",
-        );
-
-        if pair_outcome_matches_contract(
-            &outcome,
-            pair_success_throttle_with_security_header_parity_holds,
-        ) {
-            matched = true;
-            break;
-        }
-
-        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
-
-    assert!(
-        matched,
-        "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled:\n{last_observation}"
-    );
 }
 
 #[test]
@@ -16890,58 +17090,21 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
-            &binary_path,
-            Some("25"),
-            "http runtime max-concurrency late-connection drain binary should start",
+    if let Some(last_observation) = run_late_contention_attempt_loop(
+        &binary_path,
+        request,
+        Some("25"),
+        "http runtime max-concurrency late-connection drain binary should start",
+        "max-concurrency late-connection drain test could not establish first connection",
+        "max-concurrency late-connection drain test could not establish second connection",
+        "max-concurrency late-connection drain binary did not exit in expected window",
+        4096,
+        1200,
+    ) {
+        panic!(
+            "late-connection oneshot path should deterministically drain-throttle backlog client after first served response:\n{last_observation}"
         );
-
-        let mut first_stream = connect_staged_first_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency late-connection drain test could not establish first connection",
-        );
-
-        // Give runtime time to accept the first connection and block on its recv call.
-        wait_for_oneshot_accept_barrier();
-
-        let mut second_stream = connect_staged_second_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency late-connection drain test could not establish second connection",
-        );
-
-        // Queue a late second request before unblocking the first handler.
-        stage_late_backlog_requests(&mut first_stream, &mut second_stream, request, 4096);
-
-        let (first_response, second_response) =
-            read_two_http_responses(&mut first_stream, &mut second_stream);
-
-        let status = wait_for_child_exit_or_terminate(
-            &mut child,
-            240,
-            25,
-            "max-concurrency late-connection drain binary did not exit in expected window",
-        );
-
-        let ordered_contract = late_ordered_trace_contract_holds(&first_response, &second_response);
-        let bounded_tail_contract = has_bounded_tail_latency(&attempt_started, 1200);
-
-        if status.success() && ordered_contract && bounded_tail_contract {
-            matched = true;
-            break;
-        }
-
-        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
-
-    assert!(
-        matched,
-        "late-connection oneshot path should deterministically drain-throttle backlog client after first served response:\n{last_observation}"
-    );
 }
 
 #[test]
@@ -16971,56 +17134,21 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
-            &binary_path,
-            Some("1"),
-            "http runtime max-concurrency late-connection low-timeout binary should start",
+    if let Some(last_observation) = run_late_contention_attempt_loop(
+        &binary_path,
+        request,
+        Some("1"),
+        "http runtime max-concurrency late-connection low-timeout binary should start",
+        "max-concurrency late-connection low-timeout test could not establish first connection",
+        "max-concurrency late-connection low-timeout test could not establish second connection",
+        "max-concurrency late-connection low-timeout binary did not exit in expected window",
+        8192,
+        1000,
+    ) {
+        panic!(
+            "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
         );
-
-        let mut first_stream = connect_staged_first_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency late-connection low-timeout test could not establish first connection",
-        );
-
-        wait_for_oneshot_accept_barrier();
-
-        let mut second_stream = connect_staged_second_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency late-connection low-timeout test could not establish second connection",
-        );
-
-        stage_late_backlog_requests(&mut first_stream, &mut second_stream, request, 8192);
-
-        let (first_response, second_response) =
-            read_two_http_responses(&mut first_stream, &mut second_stream);
-
-        let status = wait_for_child_exit_or_terminate(
-            &mut child,
-            240,
-            25,
-            "max-concurrency late-connection low-timeout binary did not exit in expected window",
-        );
-
-        let ordered_contract = late_ordered_trace_contract_holds(&first_response, &second_response);
-        let bounded_tail_contract = has_bounded_tail_latency(&attempt_started, 1000);
-
-        if status.success() && ordered_contract && bounded_tail_contract {
-            matched = true;
-            break;
-        }
-
-        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
     }
-
-    assert!(
-        matched,
-        "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-    );
 }
 
 #[test]
@@ -17050,66 +17178,22 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
-            &binary_path,
-            Some("25"),
-            "http runtime max-concurrency burst-ingress trace-order binary should start",
+    if let Some(last_observation) = run_burst_contention_attempt_loop(
+        &binary_path,
+        request,
+        Some("25"),
+        "http runtime max-concurrency burst-ingress trace-order binary should start",
+        "max-concurrency burst-ingress trace-order test could not establish first connection",
+        "max-concurrency burst-ingress trace-order test could not establish second connection",
+        "max-concurrency burst-ingress trace-order test could not establish third connection",
+        "max-concurrency burst-ingress trace-order binary did not exit in expected window",
+        4096,
+        1200,
+    ) {
+        panic!(
+            "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle):\n{last_observation}"
         );
-
-        let mut first_stream = connect_staged_first_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress trace-order test could not establish first connection",
-        );
-
-        // Ensure first connection is accepted and handler is waiting on recv.
-        wait_for_oneshot_accept_barrier();
-
-        let mut second_stream = connect_staged_second_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress trace-order test could not establish second connection",
-        );
-
-        let mut third_stream = connect_staged_third_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress trace-order test could not establish third connection",
-        );
-
-        // Stage backlog requests first, then release the accepted first client.
-        stage_burst_backlog_requests(&mut first_stream, &mut second_stream, &mut third_stream, request, 4096);
-
-        let (first_response, second_response, third_response) =
-            read_three_http_responses(&mut first_stream, &mut second_stream, &mut third_stream);
-
-        let status = wait_for_child_exit_or_terminate(
-            &mut child,
-            240,
-            25,
-            "max-concurrency burst-ingress trace-order binary did not exit in expected window",
-        );
-
-        let ordered_contract =
-            burst_ordered_trace_contract_holds(&first_response, &second_response, &third_response);
-        let bounded_tail_contract = has_bounded_tail_latency(&attempt_started, 1200);
-
-        if status.success() && ordered_contract && bounded_tail_contract {
-            matched = true;
-            break;
-        }
-
-        last_observation =
-            format_three_response_observation(attempt, &first_response, &second_response, &third_response);
     }
-
-    assert!(
-        matched,
-        "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle):\n{last_observation}"
-    );
 }
 
 #[test]
@@ -17139,64 +17223,22 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    let mut matched = false;
-    let mut last_observation = String::new();
-    for attempt in 0..8 {
-        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
-            &binary_path,
-            Some("1"),
-            "http runtime max-concurrency burst-ingress low-timeout binary should start",
+    if let Some(last_observation) = run_burst_contention_attempt_loop(
+        &binary_path,
+        request,
+        Some("1"),
+        "http runtime max-concurrency burst-ingress low-timeout binary should start",
+        "max-concurrency burst-ingress low-timeout test could not establish first connection",
+        "max-concurrency burst-ingress low-timeout test could not establish second connection",
+        "max-concurrency burst-ingress low-timeout test could not establish third connection",
+        "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
+        8192,
+        1000,
+    ) {
+        panic!(
+            "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
         );
-
-        let mut first_stream = connect_staged_first_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress low-timeout test could not establish first connection",
-        );
-
-        wait_for_oneshot_accept_barrier();
-
-        let mut second_stream = connect_staged_second_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress low-timeout test could not establish second connection",
-        );
-
-        let mut third_stream = connect_staged_third_stream_or_terminate(
-            &mut child,
-            port,
-            "max-concurrency burst-ingress low-timeout test could not establish third connection",
-        );
-
-        stage_burst_backlog_requests(&mut first_stream, &mut second_stream, &mut third_stream, request, 8192);
-
-        let (first_response, second_response, third_response) =
-            read_three_http_responses(&mut first_stream, &mut second_stream, &mut third_stream);
-
-        let status = wait_for_child_exit_or_terminate(
-            &mut child,
-            240,
-            25,
-            "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
-        );
-
-        let ordered_contract =
-            burst_ordered_trace_contract_holds(&first_response, &second_response, &third_response);
-        let bounded_tail_contract = has_bounded_tail_latency(&attempt_started, 1000);
-
-        if status.success() && ordered_contract && bounded_tail_contract {
-            matched = true;
-            break;
-        }
-
-        last_observation =
-            format_three_response_observation(attempt, &first_response, &second_response, &third_response);
     }
-
-    assert!(
-        matched,
-        "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-    );
 }
 
 #[test]
