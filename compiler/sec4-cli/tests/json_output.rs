@@ -1480,6 +1480,20 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
     },
 ];
 
+fn for_each_ordered_contention_runner_metadata_expectation(
+    mut f: impl FnMut(OrderedContentionRunnerMetadataExpectation),
+) {
+    for expectation in ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS {
+        f(expectation);
+    }
+}
+
+fn for_each_ordered_contention_fixture_descriptor(
+    mut f: impl FnMut(OrderedContentionFixtureDescriptor),
+) {
+    for_each_ordered_contention_runner_metadata_expectation(|expectation| f(expectation.fixture));
+}
+
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
     let metadata = ordered_contention_runner_metadata(fixture);
     let binary_path = build_c_bin_fixture(
@@ -17615,7 +17629,7 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage() {
-    for expectation in ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS {
+    for_each_ordered_contention_runner_metadata_expectation(|expectation| {
         assert_ordered_contention_runner_metadata(
             expectation.fixture,
             expectation.expected_fixture_name,
@@ -17624,7 +17638,7 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
             expectation.expected_source,
             expectation.expected_branch_fixture,
         );
-    }
+    });
 }
 
 #[test]
@@ -17637,9 +17651,7 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_w
         return;
     }
 
-    for expectation in ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS {
-        run_ordered_contention_fixture_descriptor_case(expectation.fixture);
-    }
+    for_each_ordered_contention_fixture_descriptor(run_ordered_contention_fixture_descriptor_case);
 }
 
 #[test]
