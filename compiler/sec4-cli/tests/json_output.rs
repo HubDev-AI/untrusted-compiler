@@ -141,6 +141,14 @@ fn spawn_staged_contention_attempt(
     (attempt_started, port, child)
 }
 
+fn spawn_pair_contention_attempt(
+    binary_path: &Path,
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+) -> (Instant, u16, Child) {
+    spawn_staged_contention_attempt(binary_path, throttle_drain_timeout_env, start_message)
+}
+
 fn connect_with_retry(port: u16, attempts: usize, sleep_ms: u64) -> Option<TcpStream> {
     for _ in 0..attempts {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -242,6 +250,25 @@ fn connect_pair_in_parallel_or_terminate(
     (first_stream, second_stream)
 }
 
+fn connect_pair_streams_or_terminate(
+    child: &mut Child,
+    port: u16,
+    first_failure_message: &str,
+    second_failure_message: &str,
+) -> (TcpStream, TcpStream) {
+    let (first_stream, second_stream) = connect_pair_in_parallel_or_terminate(
+        child,
+        port,
+        800,
+        10,
+        first_failure_message,
+        second_failure_message,
+    );
+    set_stream_read_timeout(&first_stream, "first stream");
+    set_stream_read_timeout(&second_stream, "second stream");
+    (first_stream, second_stream)
+}
+
 fn set_stream_read_timeout(stream: &TcpStream, label: &str) {
     stream
         .set_read_timeout(Some(Duration::from_secs(2)))
@@ -269,6 +296,16 @@ fn read_http_response(stream: &mut TcpStream) -> String {
 
 fn read_two_http_responses(first: &mut TcpStream, second: &mut TcpStream) -> (String, String) {
     (read_http_response(first), read_http_response(second))
+}
+
+fn exchange_pair_http_requests_and_collect(
+    first: &mut TcpStream,
+    second: &mut TcpStream,
+    request: &[u8],
+) -> (String, String) {
+    write_http_request(first, request, "first");
+    write_http_request(second, request, "second");
+    read_two_http_responses(first, second)
 }
 
 fn read_three_http_responses(
@@ -16597,31 +16634,21 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (_attempt_started, port, mut child) = spawn_pair_contention_attempt(
             &binary_path,
-            port,
             None,
             "http runtime max-concurrency queue-boundary binary should start",
         );
 
-        let (mut first_stream, mut second_stream) = connect_pair_in_parallel_or_terminate(
+        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency queue-boundary test could not establish first connection",
             "max-concurrency queue-boundary test could not establish second connection",
         );
 
-        set_stream_read_timeout(&first_stream, "first stream");
-        set_stream_read_timeout(&second_stream, "second stream");
-
-        write_http_request(&mut first_stream, request, "first");
-        write_http_request(&mut second_stream, request, "second");
-
         let (first_response, second_response) =
-            read_two_http_responses(&mut first_stream, &mut second_stream);
+            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
 
         let status = wait_for_child_exit_or_terminate(
             &mut child,
@@ -16674,32 +16701,21 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let attempt_started = Instant::now();
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (attempt_started, port, mut child) = spawn_pair_contention_attempt(
             &binary_path,
-            port,
             Some("1"),
             "http runtime max-concurrency queue-boundary low-timeout binary should start",
         );
 
-        let (mut first_stream, mut second_stream) = connect_pair_in_parallel_or_terminate(
+        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency queue-boundary low-timeout test could not establish first connection",
             "max-concurrency queue-boundary low-timeout test could not establish second connection",
         );
 
-        set_stream_read_timeout(&first_stream, "first stream");
-        set_stream_read_timeout(&second_stream, "second stream");
-
-        write_http_request(&mut first_stream, request, "first");
-        write_http_request(&mut second_stream, request, "second");
-
         let (first_response, second_response) =
-            read_two_http_responses(&mut first_stream, &mut second_stream);
+            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
 
         let status = wait_for_child_exit_or_terminate(
             &mut child,
@@ -16758,31 +16774,21 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (_attempt_started, port, mut child) = spawn_pair_contention_attempt(
             &binary_path,
-            port,
             None,
             "http runtime max-concurrency throttle security-header parity binary should start",
         );
 
-        let (mut first_stream, mut second_stream) = connect_pair_in_parallel_or_terminate(
+        let (mut first_stream, mut second_stream) = connect_pair_streams_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency throttle security-header parity test could not establish first connection",
             "max-concurrency throttle security-header parity test could not establish second connection",
         );
 
-        set_stream_read_timeout(&first_stream, "first stream");
-        set_stream_read_timeout(&second_stream, "second stream");
-
-        write_http_request(&mut first_stream, request, "first");
-        write_http_request(&mut second_stream, request, "second");
-
         let (first_response, second_response) =
-            read_two_http_responses(&mut first_stream, &mut second_stream);
+            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
 
         let status = wait_for_child_exit_or_terminate(
             &mut child,

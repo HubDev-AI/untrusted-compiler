@@ -774,5 +774,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `806-m38-http-max-concurrency-late-staged-attempt-spawn-helper-adoption.md`
 - `807-m38-http-max-concurrency-burst-staged-attempt-spawn-helper-adoption.md`
 - `808-m38-http-max-concurrency-staged-connection-helper-consolidation-revalidation.md`
+- `809-m38-http-max-concurrency-queue-security-pair-attempt-bootstrap-helper-normalization.md`
+- `810-m38-http-max-concurrency-pair-attempt-spawn-helper-introduction.md`
+- `811-m38-http-max-concurrency-queue-default-pair-attempt-spawn-helper-adoption.md`
+- `812-m38-http-max-concurrency-queue-low-timeout-pair-attempt-spawn-helper-adoption.md`
+- `813-m38-http-max-concurrency-security-parity-pair-attempt-spawn-helper-adoption.md`
+- `814-m38-http-max-concurrency-pair-stream-connect-timeout-helper-introduction.md`
+- `815-m38-http-max-concurrency-queue-pair-connect-helper-adoption.md`
+- `816-m38-http-max-concurrency-security-parity-pair-connect-helper-adoption.md`
+- `817-m38-http-max-concurrency-pair-request-exchange-helper-introduction.md`
+- `818-m38-http-max-concurrency-queue-security-pair-helper-consolidation-revalidation.md`
 
 As milestones progress, chapters will be added and linked from this index.
