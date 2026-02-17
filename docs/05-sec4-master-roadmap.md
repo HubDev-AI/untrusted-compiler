@@ -3316,6 +3316,120 @@ Post-alpha track acceptance anchors:
 - [x] Revalidated helper-layer contract suite:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
 
+### M38-S162 HTTP max-concurrency connector-thread helper normalization for queue/security contention paths acceptance criteria
+
+- Queue/security contention tests no longer inline connector thread spawn/join blocks.
+- Connector thread failure handling is centralized behind one helper path.
+- Queue/security contention contracts remain unchanged.
+
+### M38-S162 tracking (live status)
+
+- [x] Added shared queue/security connector-thread helper surface.
+- [x] Migrated queue default/low-timeout and security parity tests to helper-based connector setup.
+
+### M38-S163 HTTP max-concurrency parallel connector-pair helper introduction acceptance criteria
+
+- Canonical helper builds two parallel connector attempts with deterministic retry cadence.
+- Helper emits case-specific first/second connection failure diagnostics.
+- Child terminate+wait fallback is preserved on connector failure.
+
+### M38-S163 tracking (live status)
+
+- [x] Added `connect_pair_in_parallel_or_terminate(...)`.
+- [x] Preserved first/second connector-specific failure envelopes in migrated tests.
+
+### M38-S164 HTTP max-concurrency two/three response read helper introduction acceptance criteria
+
+- Two-stream and three-stream response read collection are centralized.
+- Contention tests use canonical multi-response readers instead of repeated inline calls.
+- Failure envelopes remain deterministic.
+
+### M38-S164 tracking (live status)
+
+- [x] Added `read_two_http_responses(...)`.
+- [x] Added `read_three_http_responses(...)`.
+- [x] Migrated queue/late/burst contention paths to helper response readers.
+
+### M38-S165 HTTP max-concurrency pair contract predicate helper introduction acceptance criteria
+
+- Pair contention success/throttle contract validation is centralized.
+- Pair helper validates process success and envelope contracts in one deterministic predicate.
+- Queue pair assertions no longer duplicate contract branch logic.
+
+### M38-S165 tracking (live status)
+
+- [x] Added `pair_success_throttle_contract_holds(...)`.
+- [x] Migrated queue default + low-timeout assertion paths to helper predicate.
+
+### M38-S166 HTTP max-concurrency security parity pair predicate helper adoption acceptance criteria
+
+- Security-header parity pair assertions are centralized in one deterministic predicate helper.
+- Success/throttle envelope and default security header parity checks share one path.
+- Security parity contention contract remains unchanged.
+
+### M38-S166 tracking (live status)
+
+- [x] Added `pair_success_throttle_with_security_header_parity_holds(...)`.
+- [x] Migrated security parity contention assertion path to helper predicate.
+
+### M38-S167 HTTP max-concurrency oneshot accept-barrier helper introduction acceptance criteria
+
+- Accepted-socket synchronization delay uses one helper instead of raw sleep literals.
+- Late/burst contention tests express accept-barrier intent consistently.
+- Accept-barrier timing contract remains unchanged.
+
+### M38-S167 tracking (live status)
+
+- [x] Added `wait_for_oneshot_accept_barrier(...)`.
+- [x] Migrated late + burst contention tests to helper barrier call.
+
+### M38-S168 HTTP max-concurrency late-backlog staging helper adoption acceptance criteria
+
+- Late-connection backlog request/noise staging is centralized in one helper.
+- Default and low-timeout late contention tests share one staging path.
+- Ordered late contention contract remains unchanged.
+
+### M38-S168 tracking (live status)
+
+- [x] Added `stage_late_backlog_requests(...)`.
+- [x] Migrated late default + low-timeout backlog staging to helper.
+
+### M38-S169 HTTP max-concurrency burst-backlog staging helper adoption acceptance criteria
+
+- Burst-ingress backlog request/noise staging is centralized in one helper.
+- Default and low-timeout burst contention tests share one staging path.
+- Ordered burst contention contract remains unchanged.
+
+### M38-S169 tracking (live status)
+
+- [x] Added `stage_burst_backlog_requests(...)`.
+- [x] Migrated burst default + low-timeout backlog staging to helper.
+
+### M38-S170 HTTP max-concurrency ordered-trace predicate helper adoption acceptance criteria
+
+- Late and burst ordered trace assertions use canonical trace-aware predicate helpers.
+- Ordered-trace contract logic is no longer duplicated inline.
+- `rt-1 success` and throttle trace sequencing remains deterministic.
+
+### M38-S170 tracking (live status)
+
+- [x] Added `late_ordered_trace_contract_holds(...)`.
+- [x] Added `burst_ordered_trace_contract_holds(...)`.
+- [x] Migrated late/burst ordered trace assertions to helper predicates.
+
+### M38-S171 HTTP max-concurrency bounded-tail latency helper normalization acceptance criteria
+
+- Bounded-tail latency checks use one helper with explicit millisecond window input.
+- Queue/late/burst low-timeout and default bounded-tail branches share one check path.
+- Bounded-tail contract behavior remains unchanged.
+
+### M38-S171 tracking (live status)
+
+- [x] Added `has_bounded_tail_latency(...)`.
+- [x] Migrated bounded-tail assertions across queue/late/burst contention paths to helper.
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8628,7 +8742,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S162 HTTP max-concurrency connector-thread helper normalization for queue/security contention paths.
+- M38-S172 HTTP max-concurrency staged-connection setup helper normalization for late/burst contention paths.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8720,9 +8834,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S162 scope for connector-thread spawn/join normalization in queue/security contention tests.
-2. Consolidate dual-connector failure envelopes behind one helper so retry failure diagnostics cannot drift.
-3. Publish M38-S162 chapter and refresh roadmap live-status counts.
+1. Add M38-S172 scope for staged connection-setup helper normalization in late/burst contention tests.
+2. Consolidate first/second/third staged connection setup into shared helpers with deterministic failure envelopes.
+3. Publish M38-S172 chapter and refresh roadmap live-status counts.
 
 ---
 
