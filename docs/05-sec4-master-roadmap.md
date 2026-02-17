@@ -197,8 +197,8 @@ Post-alpha track acceptance anchors:
 
 ### Readiness estimate (live)
 
-- Runnable alpha (end-to-end): ~96-98%
-- Strict no-stub alpha: ~94-96%
+- Runnable alpha (end-to-end): ~97-99%
+- Strict no-stub alpha: ~95-97%
 
 ### Remaining implementation slices (priority order)
 
@@ -349,6 +349,30 @@ Post-alpha track acceptance anchors:
 - [x] Added `scripts/build-m37-alpha-tag-decision-record.sh`.
 - [x] Added contract coverage `scripts/test-build-m37-alpha-tag-decision-record.sh`.
 - [x] Added book chapter documenting M37-S8 alpha tag decision record.
+
+### M37-S9 alpha tag gate execution evidence refresh acceptance criteria
+
+- Live release gate execution evidence is refreshed from current `dev`.
+- M37-S6/S7/S8 artifacts are rebuilt from refreshed gate artifacts and remain `GO`-compatible.
+- Roadmap readiness/next actions are aligned to refreshed evidence state.
+
+### M37-S9 tracking (live status)
+
+- [x] Executed `scripts/release-alpha-gate.sh --skip-tests` with passing closure + sample determinism/audit chain.
+- [x] Rebuilt M37-S6/S7/S8 artifacts and confirmed `PASS/GO`, `alpha-ready`, `GO/PASS`.
+- [x] Added book chapter documenting M37-S9 evidence refresh (`docs/book/883-m37-alpha-tag-gate-execution-evidence-refresh.md`).
+
+### M37-S10 full alpha gate execution with tests acceptance criteria
+
+- Full release gate execution path (`scripts/release-alpha-gate.sh`) passes with complete test phase enabled.
+- Rebuilt M37-S6/S7/S8 artifacts from full-gate outputs preserve `PASS/GO` continuity.
+- Alpha closure actions are advanced to tag execution and post-tag verification.
+
+### M37-S10 tracking (live status)
+
+- [x] Executed `scripts/release-alpha-gate.sh` (with tests) and observed final gate `PASS`.
+- [x] Rebuilt M37-S6/S7/S8 artifacts from full-gate evidence and revalidated `PASS/GO`, `alpha-ready GO`, `GO PASS`.
+- [x] Added book chapter documenting M37-S10 full-gate execution evidence (`docs/book/884-m37-full-alpha-gate-execution-with-tests.md`).
 
 ### M38-S1 outbound HTTP chunked-body decoding hardening acceptance criteria
 
@@ -9713,7 +9737,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S9 full alpha-tag gate execution evidence refresh (release-gate + checklist/release-notes/tag-decision chain).
+- M37-S11 alpha tag execution + post-tag verification checklist closure.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9805,9 +9829,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Execute `scripts/release-alpha-gate.sh` (full run with tests) for the candidate tag window and capture artifacts.
-2. Rebuild M37-S6/S7/S8 artifacts from the latest gate evidence and confirm `GO` decision continuity.
-3. Create alpha-closure record chapter + tag execution checklist, then open `WASM_START_GATE` for M39 kickoff.
+1. Execute alpha tag creation from the latest `M37-S8` `GO` decision record.
+2. Run post-tag verification (`verify-release-promotion-inputs` + publish-manifest verification) against the tagged artifact set.
+3. Publish alpha closure summary and open `WASM_START_GATE` for `M39` kickoff.
 
 ---
 
