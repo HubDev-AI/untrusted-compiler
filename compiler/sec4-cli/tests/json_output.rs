@@ -125,6 +125,22 @@ fn spawn_max_concurrency_oneshot_binary(
     command.spawn().expect(start_message)
 }
 
+fn spawn_staged_contention_attempt(
+    binary_path: &Path,
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+) -> (Instant, u16, Child) {
+    let attempt_started = Instant::now();
+    let port = find_available_tcp_port();
+    let child = spawn_max_concurrency_oneshot_binary(
+        binary_path,
+        port,
+        throttle_drain_timeout_env,
+        start_message,
+    );
+    (attempt_started, port, child)
+}
+
 fn connect_with_retry(port: u16, attempts: usize, sleep_ms: u64) -> Option<TcpStream> {
     for _ in 0..attempts {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -150,6 +166,42 @@ fn connect_with_retry_or_terminate(
             panic!("{failure_message}");
         }
     }
+}
+
+fn connect_staged_stream_or_terminate(
+    child: &mut Child,
+    port: u16,
+    attempts: usize,
+    failure_message: &str,
+    stream_label: &str,
+) -> TcpStream {
+    let stream = connect_with_retry_or_terminate(child, port, attempts, 10, failure_message);
+    set_stream_read_timeout(&stream, stream_label);
+    stream
+}
+
+fn connect_staged_first_stream_or_terminate(
+    child: &mut Child,
+    port: u16,
+    failure_message: &str,
+) -> TcpStream {
+    connect_staged_stream_or_terminate(child, port, 800, failure_message, "first stream")
+}
+
+fn connect_staged_second_stream_or_terminate(
+    child: &mut Child,
+    port: u16,
+    failure_message: &str,
+) -> TcpStream {
+    connect_staged_stream_or_terminate(child, port, 400, failure_message, "second stream")
+}
+
+fn connect_staged_third_stream_or_terminate(
+    child: &mut Child,
+    port: u16,
+    failure_message: &str,
+) -> TcpStream {
+    connect_staged_stream_or_terminate(child, port, 400, failure_message, "third stream")
 }
 
 fn connect_pair_in_parallel_or_terminate(
@@ -16787,35 +16839,26 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let attempt_started = Instant::now();
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
             &binary_path,
-            port,
             Some("25"),
             "http runtime max-concurrency late-connection drain binary should start",
         );
 
-        let mut first_stream = connect_with_retry_or_terminate(
+        let mut first_stream = connect_staged_first_stream_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency late-connection drain test could not establish first connection",
         );
-        set_stream_read_timeout(&first_stream, "first stream");
 
         // Give runtime time to accept the first connection and block on its recv call.
         wait_for_oneshot_accept_barrier();
 
-        let mut second_stream = connect_with_retry_or_terminate(
+        let mut second_stream = connect_staged_second_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency late-connection drain test could not establish second connection",
         );
-        set_stream_read_timeout(&second_stream, "second stream");
 
         // Queue a late second request before unblocking the first handler.
         stage_late_backlog_requests(&mut first_stream, &mut second_stream, request, 4096);
@@ -16877,34 +16920,25 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let attempt_started = Instant::now();
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
             &binary_path,
-            port,
             Some("1"),
             "http runtime max-concurrency late-connection low-timeout binary should start",
         );
 
-        let mut first_stream = connect_with_retry_or_terminate(
+        let mut first_stream = connect_staged_first_stream_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency late-connection low-timeout test could not establish first connection",
         );
-        set_stream_read_timeout(&first_stream, "first stream");
 
         wait_for_oneshot_accept_barrier();
 
-        let mut second_stream = connect_with_retry_or_terminate(
+        let mut second_stream = connect_staged_second_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency late-connection low-timeout test could not establish second connection",
         );
-        set_stream_read_timeout(&second_stream, "second stream");
 
         stage_late_backlog_requests(&mut first_stream, &mut second_stream, request, 8192);
 
@@ -16965,44 +16999,32 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let attempt_started = Instant::now();
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
             &binary_path,
-            port,
             Some("25"),
             "http runtime max-concurrency burst-ingress trace-order binary should start",
         );
 
-        let mut first_stream = connect_with_retry_or_terminate(
+        let mut first_stream = connect_staged_first_stream_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency burst-ingress trace-order test could not establish first connection",
         );
-        set_stream_read_timeout(&first_stream, "first stream");
 
         // Ensure first connection is accepted and handler is waiting on recv.
         wait_for_oneshot_accept_barrier();
 
-        let mut second_stream = connect_with_retry_or_terminate(
+        let mut second_stream = connect_staged_second_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency burst-ingress trace-order test could not establish second connection",
         );
-        set_stream_read_timeout(&second_stream, "second stream");
 
-        let mut third_stream = connect_with_retry_or_terminate(
+        let mut third_stream = connect_staged_third_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency burst-ingress trace-order test could not establish third connection",
         );
-        set_stream_read_timeout(&third_stream, "third stream");
 
         // Stage backlog requests first, then release the accepted first client.
         stage_burst_backlog_requests(&mut first_stream, &mut second_stream, &mut third_stream, request, 4096);
@@ -17066,43 +17088,31 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
-        let attempt_started = Instant::now();
-        let port = find_available_tcp_port();
-        let mut child = spawn_max_concurrency_oneshot_binary(
+        let (attempt_started, port, mut child) = spawn_staged_contention_attempt(
             &binary_path,
-            port,
             Some("1"),
             "http runtime max-concurrency burst-ingress low-timeout binary should start",
         );
 
-        let mut first_stream = connect_with_retry_or_terminate(
+        let mut first_stream = connect_staged_first_stream_or_terminate(
             &mut child,
             port,
-            800,
-            10,
             "max-concurrency burst-ingress low-timeout test could not establish first connection",
         );
-        set_stream_read_timeout(&first_stream, "first stream");
 
         wait_for_oneshot_accept_barrier();
 
-        let mut second_stream = connect_with_retry_or_terminate(
+        let mut second_stream = connect_staged_second_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency burst-ingress low-timeout test could not establish second connection",
         );
-        set_stream_read_timeout(&second_stream, "second stream");
 
-        let mut third_stream = connect_with_retry_or_terminate(
+        let mut third_stream = connect_staged_third_stream_or_terminate(
             &mut child,
             port,
-            400,
-            10,
             "max-concurrency burst-ingress low-timeout test could not establish third connection",
         );
-        set_stream_read_timeout(&third_stream, "third stream");
 
         stage_burst_backlog_requests(&mut first_stream, &mut second_stream, &mut third_stream, request, 8192);
 

@@ -3430,6 +3430,119 @@ Post-alpha track acceptance anchors:
 - [x] Revalidated helper-layer contract suite:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
 
+### M38-S172 HTTP max-concurrency staged-connection helper foundation acceptance criteria
+
+- Late/burst contention setup paths share one staged-connection helper foundation.
+- Helper foundation keeps connection-retry, timeout wiring, and failure envelopes deterministic.
+- Existing contention behavior remains unchanged.
+
+### M38-S172 tracking (live status)
+
+- [x] Added staged-connection helper foundation:
+  - `connect_staged_stream_or_terminate(...)`
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S173 HTTP max-concurrency staged first-connection helper introduction acceptance criteria
+
+- First staged connection setup in late/burst paths uses a dedicated helper.
+- First-connection retry budget and diagnostics are centralized.
+- First-connection contract behavior remains unchanged.
+
+### M38-S173 tracking (live status)
+
+- [x] Added `connect_staged_first_stream_or_terminate(...)`.
+- [x] Migrated late/burst first-connection setup to helper.
+
+### M38-S174 HTTP max-concurrency staged second-connection helper introduction acceptance criteria
+
+- Second staged connection setup in late/burst paths uses a dedicated helper.
+- Second-connection retry budget and diagnostics are centralized.
+- Second-connection contract behavior remains unchanged.
+
+### M38-S174 tracking (live status)
+
+- [x] Added `connect_staged_second_stream_or_terminate(...)`.
+- [x] Migrated late/burst second-connection setup to helper.
+
+### M38-S175 HTTP max-concurrency staged third-connection helper introduction acceptance criteria
+
+- Third staged connection setup in burst paths uses a dedicated helper.
+- Third-connection retry budget and diagnostics are centralized.
+- Third-connection contract behavior remains unchanged.
+
+### M38-S175 tracking (live status)
+
+- [x] Added `connect_staged_third_stream_or_terminate(...)`.
+- [x] Migrated burst third-connection setup to helper.
+
+### M38-S176 HTTP max-concurrency late staged-connection helper adoption acceptance criteria
+
+- Late-connection default and low-timeout paths use staged first/second connection helpers.
+- Late staged setup no longer duplicates retry + read-timeout wiring inline.
+- Ordered late contention contracts remain deterministic.
+
+### M38-S176 tracking (live status)
+
+- [x] Migrated late default contention setup to staged connection helpers.
+- [x] Migrated late low-timeout contention setup to staged connection helpers.
+
+### M38-S177 HTTP max-concurrency burst staged-connection helper adoption acceptance criteria
+
+- Burst-ingress default and low-timeout paths use staged first/second/third connection helpers.
+- Burst staged setup no longer duplicates retry + read-timeout wiring inline.
+- Ordered burst contention contracts remain deterministic.
+
+### M38-S177 tracking (live status)
+
+- [x] Migrated burst default contention setup to staged connection helpers.
+- [x] Migrated burst low-timeout contention setup to staged connection helpers.
+
+### M38-S178 HTTP max-concurrency staged-attempt spawn helper introduction acceptance criteria
+
+- Late/burst contention paths use one helper that returns attempt start time, port, and spawned child.
+- Attempt bootstrap no longer duplicates `Instant::now + find port + spawn` blocks inline.
+- Spawn contract behavior remains unchanged.
+
+### M38-S178 tracking (live status)
+
+- [x] Added `spawn_staged_contention_attempt(...)`.
+- [x] Helper preserves deterministic oneshot spawn wiring.
+
+### M38-S179 HTTP max-concurrency late staged-attempt spawn helper adoption acceptance criteria
+
+- Late default and low-timeout contention paths use the staged-attempt spawn helper.
+- Late attempt bootstrap duplication is removed.
+- Late contention contracts remain deterministic.
+
+### M38-S179 tracking (live status)
+
+- [x] Migrated late default attempt bootstrap to helper.
+- [x] Migrated late low-timeout attempt bootstrap to helper.
+
+### M38-S180 HTTP max-concurrency burst staged-attempt spawn helper adoption acceptance criteria
+
+- Burst default and low-timeout contention paths use the staged-attempt spawn helper.
+- Burst attempt bootstrap duplication is removed.
+- Burst contention contracts remain deterministic.
+
+### M38-S180 tracking (live status)
+
+- [x] Migrated burst default attempt bootstrap to helper.
+- [x] Migrated burst low-timeout attempt bootstrap to helper.
+
+### M38-S181 HTTP max-concurrency staged-connection helper consolidation revalidation acceptance criteria
+
+- Consolidated staged-connection helper layer keeps all max-concurrency contention contracts green.
+- No behavioral regression in queue, security, late, or burst branches after staged helper adoption.
+- Roadmap/book tracking is refreshed for `M38-S172..M38-S181`.
+
+### M38-S181 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `799..808`.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8742,7 +8855,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S172 HTTP max-concurrency staged-connection setup helper normalization for late/burst contention paths.
+- M38-S182 HTTP max-concurrency queue/security pair-attempt bootstrap helper normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8834,9 +8947,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S172 scope for staged connection-setup helper normalization in late/burst contention tests.
-2. Consolidate first/second/third staged connection setup into shared helpers with deterministic failure envelopes.
-3. Publish M38-S172 chapter and refresh roadmap live-status counts.
+1. Add M38-S182 scope for queue/security pair-attempt bootstrap helper normalization.
+2. Consolidate queue/security pair attempt-start boilerplate into shared helper paths with deterministic failure envelopes.
+3. Publish M38-S182 chapter and refresh roadmap live-status counts.
 
 ---
 
