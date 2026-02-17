@@ -942,6 +942,12 @@ enum BurstContentionFixtureDescriptor {
     TraceOrderLowTimeout,
 }
 
+enum OrderedContentionFixtureDescriptor {
+    Pair(PairContentionFixtureDescriptor),
+    Late(LateContentionFixtureDescriptor),
+    Burst(BurstContentionFixtureDescriptor),
+}
+
 const MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE: &str = r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -1273,6 +1279,20 @@ fn run_burst_contention_fixture_descriptor_case(fixture: BurstContentionFixtureD
     let (fixture_name, module_name, case_label, branch_fixture) =
         burst_contention_fixture_descriptor(fixture);
     run_burst_contention_fixture_case(fixture_name, module_name, case_label, branch_fixture);
+}
+
+fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
+    match fixture {
+        OrderedContentionFixtureDescriptor::Pair(next) => {
+            run_pair_contention_fixture_descriptor_case(next)
+        }
+        OrderedContentionFixtureDescriptor::Late(next) => {
+            run_late_contention_fixture_descriptor_case(next)
+        }
+        OrderedContentionFixtureDescriptor::Burst(next) => {
+            run_burst_contention_fixture_descriptor_case(next)
+        }
+    }
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
@@ -17404,7 +17424,9 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttl
         return;
     }
 
-    run_pair_contention_fixture_descriptor_case(PairContentionFixtureDescriptor::QueueBoundary);
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
+        PairContentionFixtureDescriptor::QueueBoundary,
+    ));
 }
 
 #[test]
@@ -17415,9 +17437,9 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves
         return;
     }
 
-    run_pair_contention_fixture_descriptor_case(
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
         PairContentionFixtureDescriptor::QueueBoundaryLowTimeout,
-    );
+    ));
 }
 
 #[test]
@@ -17428,7 +17450,9 @@ fn c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_heade
         return;
     }
 
-    run_pair_contention_fixture_descriptor_case(PairContentionFixtureDescriptor::SecurityHeaderParity);
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
+        PairContentionFixtureDescriptor::SecurityHeaderParity,
+    ));
 }
 
 #[test]
@@ -17439,7 +17463,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled
         return;
     }
 
-    run_late_contention_fixture_descriptor_case(LateContentionFixtureDescriptor::DrainDefault);
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Late(
+        LateContentionFixtureDescriptor::DrainDefault,
+    ));
 }
 
 #[test]
@@ -17450,7 +17476,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_
         return;
     }
 
-    run_late_contention_fixture_descriptor_case(LateContentionFixtureDescriptor::DrainLowTimeout);
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Late(
+        LateContentionFixtureDescriptor::DrainLowTimeout,
+    ));
 }
 
 #[test]
@@ -17461,7 +17489,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_orde
         return;
     }
 
-    run_burst_contention_fixture_descriptor_case(BurstContentionFixtureDescriptor::TraceOrderDefault);
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Burst(
+        BurstContentionFixtureDescriptor::TraceOrderDefault,
+    ));
 }
 
 #[test]
@@ -17472,9 +17502,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_pr
         return;
     }
 
-    run_burst_contention_fixture_descriptor_case(
+    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Burst(
         BurstContentionFixtureDescriptor::TraceOrderLowTimeout,
-    );
+    ));
 }
 
 #[test]
