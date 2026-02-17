@@ -7048,6 +7048,46 @@ static bool sec4_rt_oneshot_mode_enabled(void) {
   return flag != NULL && strcmp(flag, "0") != 0;
 }
 
+static void sec4_rt_finalize_throttle_socket_close(int socket_fd) {
+  if (socket_fd < 0) {
+    return;
+  }
+
+  // Ensure response writes are half-closed before final close.
+  (void) shutdown(socket_fd, SHUT_WR);
+  (void) sec4_rt_set_socket_nonblocking(socket_fd, true);
+
+  char discard[256];
+  for (int attempt = 0; attempt < 4; attempt++) {
+    for (;;) {
+      ssize_t rc = recv(socket_fd, discard, sizeof(discard), 0);
+      if (rc > 0) {
+        continue;
+      }
+      if (rc == 0) {
+        return;
+      }
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        break;
+      }
+      return;
+    }
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    FD_SET(socket_fd, &read_fds);
+    struct timeval timeout = {0};
+    timeout.tv_usec = 5000;
+    int select_rc = select(socket_fd + 1, &read_fds, NULL, NULL, &timeout);
+    if (select_rc <= 0 || !FD_ISSET(socket_fd, &read_fds)) {
+      return;
+    }
+  }
+}
+
 static void sec4_rt_send_concurrency_throttle_response(
     int socket_fd,
     sec4_rt_router_state *router
@@ -7098,6 +7138,7 @@ static void sec4_rt_drain_oneshot_backlog_with_throttle(
       continue;
     }
     sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    sec4_rt_finalize_throttle_socket_close(client_fd);
     close(client_fd);
   }
   *pending_count = 0;
@@ -7116,7 +7157,9 @@ static void sec4_rt_drain_oneshot_backlog_with_throttle(
       }
       break;
     }
+
     sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    sec4_rt_finalize_throttle_socket_close(client_fd);
     close(client_fd);
   }
 }
@@ -11075,6 +11118,7 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
 
       if (pending_count >= max_concurrency) {
         sec4_rt_send_concurrency_throttle_response(client_fd, slot);
+        sec4_rt_finalize_throttle_socket_close(client_fd);
         close(client_fd);
         continue;
       }

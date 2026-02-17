@@ -16673,8 +16673,7 @@ fn main() effects { net } -> Int {
             && second_response.contains("Content-Type: text/plain; charset=utf-8")
             && second_response.contains("Content-Length: 37")
             && second_response.contains("Connection: close")
-            && (second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
-                || second_response.ends_with("\r\n\r\n"));
+            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
 
         if status.success() && ordered_contract {
             matched = true;
@@ -16887,11 +16886,13 @@ fn main() effects { net } -> Int {
             && second_response.contains("Content-Type: text/plain; charset=utf-8")
             && second_response.contains("Content-Length: 37")
             && second_response.contains("Connection: close")
+            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
             && third_response.contains("HTTP/1.1 503 Service Unavailable")
             && third_response.contains("X-Trace-Id: rt-3")
             && third_response.contains("Content-Type: text/plain; charset=utf-8")
             && third_response.contains("Content-Length: 37")
-            && third_response.contains("Connection: close");
+            && third_response.contains("Connection: close")
+            && third_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
 
         if status.success() && ordered_contract {
             matched = true;
