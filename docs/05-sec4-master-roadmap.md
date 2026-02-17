@@ -4233,6 +4233,18 @@ Post-alpha track acceptance anchors:
 - [x] Migrated matrix case-label contract coverage unknown-label assertions to helper dispatch.
 - [x] Revalidated matrix case-label unknown-label panic contract after helper extraction.
 
+### M38-S242 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message helper extraction acceptance criteria
+
+- Unknown matrix case-label panic message rendering is centralized in a dedicated helper.
+- Matrix case-label resolver panic path delegates to the panic-message helper.
+- Unknown-label panic assertion helper validates exact deterministic message equality from the panic-message helper.
+
+### M38-S242 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(...)`.
+- [x] Migrated resolver panic rendering to use the unknown-label panic-message helper.
+- [x] Tightened unknown-label panic assertion helper to exact deterministic message equality.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9545,7 +9557,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S242 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic-message helper extraction.
+- M38-S243 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix case-label resolver assertion helper extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9637,9 +9649,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S242 scope for ordered-attempt descriptor smoke contract matrix unknown-label panic-message helper extraction.
-2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label panic-message helper extraction.
-3. Publish M38-S242 chapter and refresh roadmap live-status counts.
+1. Add M38-S243 scope for ordered-attempt descriptor smoke contract matrix case-label resolver assertion helper extraction.
+2. Extend ordered helper coverage with descriptor smoke contract matrix case-label resolver assertion helper extraction.
+3. Publish M38-S243 chapter and refresh roadmap live-status counts.
 
 ---
 

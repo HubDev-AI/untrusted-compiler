@@ -1612,6 +1612,15 @@ const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL: &st
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX: &str =
     "unknown ordered contention smoke contract assertion matrix case label:";
 
+fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+    case_label: &str,
+) -> String {
+    format!(
+        "{} {case_label}",
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX,
+    )
+}
+
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX: [OrderedContentionSmokeContractAssertionMatrixCase;
     2] = [
     OrderedContentionSmokeContractAssertionMatrixCase {
@@ -1633,8 +1642,10 @@ fn ordered_contention_smoke_contract_assertion_matrix_case(
         }
     }
     panic!(
-        "{} {case_label}",
-        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX,
+        "{}",
+        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+            case_label
+        ),
     );
 }
 
@@ -1671,15 +1682,13 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_
     assert!(panic_result.is_err(), "unknown case label must panic");
     let panic_payload = panic_result.err().expect("panic payload should exist");
     let panic_message = panic_payload_message(panic_payload.as_ref());
-    assert!(
-        panic_message.contains(
-            ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX
-        ),
-        "panic message should include matrix unknown-case prefix: {panic_message}"
-    );
-    assert!(
-        panic_message.contains(case_label),
-        "panic message should include unknown case label: {panic_message}"
+    let expected_message =
+        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+            case_label,
+        );
+    assert_eq!(
+        panic_message, expected_message,
+        "panic message should match deterministic unknown-case contract"
     );
 }
 
