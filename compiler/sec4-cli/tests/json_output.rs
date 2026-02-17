@@ -1480,6 +1480,16 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
     },
 ];
 
+const ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS: [OrderedContentionFixtureDescriptor; 7] = [
+    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundary),
+    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundaryLowTimeout),
+    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::SecurityHeaderParity),
+    OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainDefault),
+    OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainLowTimeout),
+    OrderedContentionFixtureDescriptor::Burst(BurstContentionFixtureDescriptor::TraceOrderDefault),
+    OrderedContentionFixtureDescriptor::Burst(BurstContentionFixtureDescriptor::TraceOrderLowTimeout),
+];
+
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
     let metadata = ordered_contention_runner_metadata(fixture);
     let binary_path = build_c_bin_fixture(
@@ -17628,94 +17638,18 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 }
 
 #[test]
-fn c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available(
-) {
+fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available()
+{
     if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency queue-boundary test: clang not available");
+        eprintln!(
+            "skipping http runtime max-concurrency ordered descriptor smoke harness test: clang not available"
+        );
         return;
     }
 
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
-        PairContentionFixtureDescriptor::QueueBoundary,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves_throttle_body_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency queue-boundary low-timeout test: clang not available");
-        return;
+    for fixture in ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS {
+        run_ordered_contention_fixture_descriptor_case(fixture);
     }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
-        PairContentionFixtureDescriptor::QueueBoundaryLowTimeout,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency throttle security-header parity test: clang not available");
-        return;
-    }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Pair(
-        PairContentionFixtureDescriptor::SecurityHeaderParity,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency late-connection drain test: clang not available");
-        return;
-    }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Late(
-        LateContentionFixtureDescriptor::DrainDefault,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_preserves_throttle_body_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency late-connection low-timeout test: clang not available");
-        return;
-    }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Late(
-        LateContentionFixtureDescriptor::DrainLowTimeout,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency burst-ingress trace-order test: clang not available");
-        return;
-    }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Burst(
-        BurstContentionFixtureDescriptor::TraceOrderDefault,
-    ));
-}
-
-#[test]
-fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available(
-) {
-    if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency burst-ingress low-timeout test: clang not available");
-        return;
-    }
-
-    run_ordered_contention_fixture_descriptor_case(OrderedContentionFixtureDescriptor::Burst(
-        BurstContentionFixtureDescriptor::TraceOrderLowTimeout,
-    ));
 }
 
 #[test]

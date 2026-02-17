@@ -4005,6 +4005,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS` assertion table.
 - [x] Migrated descriptor catalog sanity test to table-driven iteration.
 
+### M38-S223 HTTP max-concurrency ordered-attempt descriptor table-driven fixture smoke harness compaction acceptance criteria
+
+- Ordered descriptor smoke coverage is executed from one canonical descriptor table instead of seven repeated fixture test bodies.
+- Pair/late/burst fixture smoke assertions continue to run unchanged through the existing ordered descriptor runner path.
+- Clang-gated ordered contention smoke validation remains deterministic after harness compaction.
+
+### M38-S223 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS`.
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available`.
+- [x] Removed repeated per-descriptor smoke test bodies in favor of table-driven iteration.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9317,7 +9329,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S223 HTTP max-concurrency ordered-attempt descriptor table-driven fixture smoke harness compaction.
+- M38-S224 HTTP max-concurrency ordered-attempt descriptor contract/smoke dual-table unification.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9409,9 +9421,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S223 scope for ordered-attempt descriptor table-driven fixture smoke harness compaction.
-2. Extend ordered helper coverage with descriptor table-driven fixture smoke harness compaction.
-3. Publish M38-S223 chapter and refresh roadmap live-status counts.
+1. Add M38-S224 scope for ordered-attempt descriptor contract/smoke dual-table unification.
+2. Extend ordered helper coverage with descriptor contract/smoke dual-table unification.
+3. Publish M38-S224 chapter and refresh roadmap live-status counts.
 
 ---
 
