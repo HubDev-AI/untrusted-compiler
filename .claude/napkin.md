@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-17 | self | Triggered the `web` tool by mistake while inspecting local roadmap content. | Stay on `functions.exec_command`/`apply_patch` for local repository work; use `web` tooling only for explicit external research tasks. |
 | 2026-02-17 | self | Used backticks in a double-quoted `gh pr create --body` shell string, which triggered command substitution and dropped milestone tags from the PR body. | For PR bodies containing backticks or parenthesized identifiers, write body content through a single-quoted heredoc/file and pass `--body-file` to `gh`. |
 | 2026-02-17 | self | Launched two `cargo test` commands in parallel during slice validation, reintroducing build-dir/package-cache lock contention noise. | Run Cargo validations strictly sequentially in this repo; parallelize only read/search commands. |
 | 2026-02-15 | self | Tried validating opaque runtime handles through Untrusted<T> source code by comparing strong types (`HeaderName`, `PathSafe`) against numeric literals, which the typechecker correctly rejects. | For runtime behavior on opaque constructors, add direct C harness tests against `runtime/c/sec4_runtime.c` instead of fighting language-level type safety. |
