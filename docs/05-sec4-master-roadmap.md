@@ -2907,6 +2907,154 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S132 HTTP max-concurrency throttle close-drain timeout-budget coverage hardening acceptance criteria
+
+- Throttle close-drain loop enforces deterministic bounded timeout budget instead of fixed attempt count.
+- Timeout budget is configurable via runtime env bridge `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` with safe defaults.
+- Late/burst contention coverage validates throttle body delivery under backlog trailing-input pressure while keeping bounded tail-latency contract.
+
+### M38-S132 tracking (live status)
+
+- [x] Added runtime throttle drain timeout-budget bridge:
+  - `sec4_rt_http_throttle_drain_timeout_ms(...)`
+  - `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` (`default=20ms`, bounded max clamp)
+- [x] Reworked throttle close helper to deadline-driven bounded drain:
+  - `sec4_rt_finalize_throttle_socket_close(...)` now uses time budget + remaining-time select waits.
+- [x] Hardened late/burst contention runtime e2e coverage with backlog trailing-input pressure and bounded-tail assertions:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+
+### M38-S133 HTTP max-concurrency throttle drain-timeout env fallback/clamp hardening acceptance criteria
+
+- Invalid `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe defaults.
+- Over-cap timeout values are deterministically clamped to bounded runtime maximum.
+- Coverage pins fallback/clamp behavior without regressing max-concurrency route success contracts.
+
+### M38-S133 tracking (live status)
+
+- [x] Added runtime e2e fallback coverage for invalid throttle-drain-timeout env values:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_invalid_env_falls_back_to_default_when_clang_available`
+- [x] Added runtime e2e clamp coverage for over-cap throttle-drain-timeout env values:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_over_cap_env_is_clamped_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S134 HTTP max-concurrency throttle close-drain low-timeout deterministic body contract coverage acceptance criteria
+
+- With `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` configured to a low value, oneshot burst contention still preserves deterministic throttle body delivery (`Content-Length: 37` + full payload bytes).
+- Low-timeout contention path preserves deterministic trace/order invariants (`rt-1` success, `rt-2`/`rt-3` throttle).
+- Low-timeout contention path preserves bounded tail-latency contract under trailing-input backlog pressure.
+
+### M38-S134 tracking (live status)
+
+- [x] Added runtime e2e low-timeout burst coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Locked deterministic low-timeout contention contract:
+  - throttle body delivery remains present for both throttled clients,
+  - trace/order contract remains deterministic (`rt-1`, `rt-2`, `rt-3`),
+  - bounded tail-latency assertion remains enforced.
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S135 HTTP max-concurrency throttle close-drain zero/near-zero timeout fallback behavior hardening acceptance criteria
+
+- `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=0` follows deterministic safe fallback semantics (default timeout budget), not zero-budget close behavior.
+- Zero-value fallback preserves existing route-success contracts in oneshot runtime paths.
+- Coverage explicitly locks zero-timeout fallback behavior alongside existing invalid/over-cap timeout tests.
+
+### M38-S135 tracking (live status)
+
+- [x] Added runtime e2e zero-value fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_zero_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including timeout fallback/clamp matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S136 HTTP max-concurrency throttle close-drain minimum-budget deterministic latency/contract hardening acceptance criteria
+
+- With minimum configured timeout budget (`SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=1`), late-connection oneshot contention preserves deterministic throttle body-delivery contract.
+- Minimum-budget late-connection path preserves deterministic trace/order invariants (`rt-1` success, `rt-2` throttle).
+- Minimum-budget late-connection path remains bounded in tail-latency under trailing-input backlog pressure.
+
+### M38-S136 tracking (live status)
+
+- [x] Added runtime e2e low-timeout late-connection coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including minimum-budget burst+late contention paths:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S137 HTTP max-concurrency throttle drain-timeout negative-value fallback behavior hardening acceptance criteria
+
+- Negative `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Negative-value fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks negative-value fallback alongside zero/invalid/over-cap timeout matrix.
+
+### M38-S137 tracking (live status)
+
+- [x] Added runtime e2e negative-value fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_negative_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency runtime contract suite including timeout fallback/clamp matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
+### M38-S138 HTTP max-concurrency throttle drain-timeout whitespace-token fallback behavior hardening acceptance criteria
+
+- Whitespace-padded `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Whitespace-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks whitespace-token fallback semantics in the timeout fallback matrix.
+
+### M38-S138 tracking (live status)
+
+- [x] Added runtime e2e whitespace-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_whitespace_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S139 HTTP max-concurrency throttle drain-timeout empty-token fallback behavior hardening acceptance criteria
+
+- Empty `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values deterministically fall back to safe default timeout budget.
+- Empty-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks empty-token fallback semantics in the timeout fallback matrix.
+
+### M38-S139 tracking (live status)
+
+- [x] Added runtime e2e empty-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_empty_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S140 HTTP max-concurrency throttle drain-timeout malformed-token fallback behavior hardening acceptance criteria
+
+- Malformed `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` values (non-numeric suffix/prefix) deterministically fall back to safe default timeout budget.
+- Malformed-token fallback preserves oneshot runtime route-success contracts.
+- Coverage explicitly locks malformed-token fallback semantics in the timeout fallback matrix.
+
+### M38-S140 tracking (live status)
+
+- [x] Added runtime e2e malformed-token fallback coverage:
+  - `c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls_back_to_default_when_clang_available`
+- [x] Revalidated max-concurrency timeout fallback matrix:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S141 HTTP max-concurrency queue-boundary low-timeout deterministic throttle contract hardening acceptance criteria
+
+- Queue-boundary contention with minimum timeout budget (`SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS=1`) preserves deterministic one-success/one-throttle contract.
+- Low-timeout queue-boundary path preserves deterministic throttle body delivery (`Content-Length: 37` + full payload bytes).
+- Low-timeout queue-boundary path preserves bounded tail-latency under trailing-input pressure.
+
+### M38-S141 tracking (live status)
+
+- [x] Added runtime e2e low-timeout queue-boundary coverage:
+  - `c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves_throttle_body_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8219,7 +8367,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S132 HTTP max-concurrency throttle close-drain timeout-budget coverage hardening.
+- M38-S142 HTTP max-concurrency throttle drain-timeout fallback matrix consolidation and helper deduplication.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8311,9 +8459,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S132 scope for bounded throttle close-drain timeout behavior under socket-close timing pressure.
-2. Add M38-S132 coverage for bounded close-drain timeout behavior so oneshot contention paths keep deterministic payload delivery without unbounded tail latency.
-3. Publish M38-S132 book chapter and refresh roadmap live-status counts.
+1. Add M38-S142 scope for timeout fallback-matrix consolidation and helper deduplication.
+2. Reduce duplicated contention/fallback fixture setup while preserving deterministic runtime contracts.
+3. Publish M38-S142 book chapter and refresh roadmap live-status counts.
 
 ---
 

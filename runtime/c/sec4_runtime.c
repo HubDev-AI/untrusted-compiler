@@ -51,6 +51,8 @@
 #define SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS 200
 #define SEC4_RT_DEFAULT_HTTP_MAX_CONCURRENCY 256
 #define SEC4_RT_MAX_HTTP_MAX_CONCURRENCY 4096
+#define SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 20
+#define SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 1000
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
 #define SEC4_RT_MAX_LOG_VALUES 256
@@ -6962,6 +6964,20 @@ static size_t sec4_rt_http_max_concurrency_limit(void) {
   return (size_t) parsed;
 }
 
+static int64_t sec4_rt_http_throttle_drain_timeout_ms(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS",
+      SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS
+  );
+  if (parsed <= 0) {
+    parsed = SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS) {
+    parsed = SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS;
+  }
+  return parsed;
+}
+
 static bool sec4_rt_parse_env_flag_strict(const char *name, bool fallback, bool *out_value) {
   if (out_value == NULL) {
     return false;
@@ -7057,8 +7073,11 @@ static void sec4_rt_finalize_throttle_socket_close(int socket_fd) {
   (void) shutdown(socket_fd, SHUT_WR);
   (void) sec4_rt_set_socket_nonblocking(socket_fd, true);
 
+  int64_t timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  int64_t deadline_ms = sec4_rt_time_now() + timeout_ms;
+
   char discard[256];
-  for (int attempt = 0; attempt < 4; attempt++) {
+  for (;;) {
     for (;;) {
       ssize_t rc = recv(socket_fd, discard, sizeof(discard), 0);
       if (rc > 0) {
@@ -7076,11 +7095,16 @@ static void sec4_rt_finalize_throttle_socket_close(int socket_fd) {
       return;
     }
 
+    int64_t remaining_ms = deadline_ms - sec4_rt_time_now();
+    if (remaining_ms <= 0) {
+      return;
+    }
     fd_set read_fds;
     FD_ZERO(&read_fds);
     FD_SET(socket_fd, &read_fds);
     struct timeval timeout = {0};
-    timeout.tv_usec = 5000;
+    timeout.tv_sec = (time_t) (remaining_ms / 1000);
+    timeout.tv_usec = (suseconds_t) ((remaining_ms % 1000) * 1000);
     int select_rc = select(socket_fd + 1, &read_fds, NULL, NULL, &timeout);
     if (select_rc <= 0 || !FD_ISSET(socket_fd, &read_fds)) {
       return;

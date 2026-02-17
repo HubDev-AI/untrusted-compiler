@@ -15888,7 +15888,11 @@ fn main() effects {{ net }} -> Int {{
     );
 }
 
-fn run_http_runtime_health_with_max_concurrency_env(env_value: Option<&str>, fixture_id: &str) -> String {
+fn run_http_runtime_health_with_max_concurrency_env(
+    env_value: Option<&str>,
+    throttle_drain_timeout_env: Option<&str>,
+    fixture_id: &str,
+) -> String {
     let project_dir = temp_dir(fixture_id);
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
@@ -15947,6 +15951,9 @@ fn main() effects {{ net }} -> Int {{
         .stderr(Stdio::null());
     if let Some(value) = env_value {
         command.env("SEC4_RT_HTTP_MAX_CONCURRENCY", value);
+    }
+    if let Some(value) = throttle_drain_timeout_env {
+        command.env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", value);
     }
     let mut child = command
         .spawn()
@@ -16026,6 +16033,7 @@ fn c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_cla
 
     let response = run_http_runtime_health_with_max_concurrency_env(
         Some("invalid"),
+        None,
         "sec4-c-bin-http-runtime-max-concurrency-invalid-env-fallback-e2e",
     );
     assert!(
@@ -16047,6 +16055,7 @@ fn c_bin_http_runtime_max_concurrency_empty_env_falls_back_to_default_when_clang
 
     let response = run_http_runtime_health_with_max_concurrency_env(
         Some(""),
+        None,
         "sec4-c-bin-http-runtime-max-concurrency-empty-env-fallback-e2e",
     );
     assert!(
@@ -16068,6 +16077,7 @@ fn c_bin_http_runtime_max_concurrency_over_cap_env_is_clamped_when_clang_availab
 
     let response = run_http_runtime_health_with_max_concurrency_env(
         Some("999999999"),
+        None,
         "sec4-c-bin-http-runtime-max-concurrency-over-cap-clamp-e2e",
     );
     assert!(
@@ -16077,6 +16087,167 @@ fn c_bin_http_runtime_max_concurrency_over_cap_env_is_clamped_when_clang_availab
     assert!(
         response.contains("\r\n\r\nok"),
         "response should include route body when max-concurrency clamp succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_invalid_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout invalid-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("invalid"),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-invalid-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "invalid throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_over_cap_env_is_clamped_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout over-cap clamp test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("999999999"),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-over-cap-clamp-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "over-cap throttle-drain-timeout env value should be clamped and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout clamp succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_zero_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout zero-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("0"),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-zero-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "zero throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout zero-value fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_negative_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout negative-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("-1"),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-negative-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "negative throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout negative-value fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_empty_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout empty-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some(""),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-empty-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "empty throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout empty-value fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_whitespace_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout whitespace-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("20 "),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-whitespace-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "whitespace-suffixed throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout whitespace fallback succeeds"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls_back_to_default_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime throttle-drain-timeout malformed-env fallback test: clang not available");
+        return;
+    }
+
+    let response = run_http_runtime_health_with_max_concurrency_env(
+        None,
+        Some("20ms"),
+        "sec4-c-bin-http-runtime-throttle-drain-timeout-malformed-env-fallback-e2e",
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "malformed throttle-drain-timeout env value should fall back to default and preserve route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "response should include route body when throttle-drain-timeout malformed fallback succeeds"
     );
 }
 
@@ -16283,6 +16454,224 @@ fn main() effects { net } -> Int {
     assert!(
         matched,
         "max-concurrency queue-boundary run should produce one success and one deterministic throttle response:\n{last_observation}"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves_throttle_body_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency queue-boundary low-timeout test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpmaxconcurrencyqueueboundarylowtimeout"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for max-concurrency queue-boundary low-timeout fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpmaxconcurrencyqueueboundarylowtimeout");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for max-concurrency queue-boundary low-timeout fixture"
+    );
+
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let mut matched = false;
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let attempt_started = Instant::now();
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(&binary_path)
+            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
+            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("http runtime max-concurrency queue-boundary low-timeout binary should start");
+
+        let first_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+        let second_handle = thread::spawn(move || {
+            for _ in 0..800 {
+                match TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(stream) => return Some(stream),
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            None
+        });
+
+        let mut first_stream = match first_handle
+            .join()
+            .expect("first connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("max-concurrency queue-boundary low-timeout test could not establish first connection");
+            }
+        };
+        let mut second_stream = match second_handle
+            .join()
+            .expect("second connector thread should join")
+        {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("max-concurrency queue-boundary low-timeout test could not establish second connection");
+            }
+        };
+
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        let trailing_noise = vec![b'x'; 8192];
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+        first_stream
+            .write_all(&trailing_noise)
+            .expect("first trailing payload noise should be written");
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+        second_stream
+            .write_all(&trailing_noise)
+            .expect("second trailing payload noise should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("child wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency queue-boundary low-timeout binary did not exit in expected window"
+                );
+            }
+        };
+
+        let first_is_success = first_response.contains("HTTP/1.1 200 OK");
+        let second_is_success = second_response.contains("HTTP/1.1 200 OK");
+        let first_is_throttle = first_response.contains("HTTP/1.1 503 Service Unavailable");
+        let second_is_throttle = second_response.contains("HTTP/1.1 503 Service Unavailable");
+        let success_count = usize::from(first_is_success) + usize::from(second_is_success);
+        let throttle_count = usize::from(first_is_throttle) + usize::from(second_is_throttle);
+        let throttle_response = if first_is_throttle {
+            first_response.as_str()
+        } else if second_is_throttle {
+            second_response.as_str()
+        } else {
+            ""
+        };
+        let success_response = if first_is_success {
+            first_response.as_str()
+        } else if second_is_success {
+            second_response.as_str()
+        } else {
+            ""
+        };
+
+        let throttle_contract = throttle_response.contains("X-Trace-Id: rt-")
+            && throttle_response.contains("Content-Type: text/plain; charset=utf-8")
+            && throttle_response.contains("Content-Length: 37")
+            && throttle_response.contains("Connection: close")
+            && throttle_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let success_contract = success_response.contains("X-Trace-Id: rt-")
+            && success_response.contains("Content-Type: text/plain; charset=utf-8")
+            && success_response.contains("\r\n\r\nok");
+        let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
+
+        if status.success()
+            && success_count == 1
+            && throttle_count == 1
+            && throttle_contract
+            && success_contract
+            && bounded_tail_contract
+        {
+            matched = true;
+            break;
+        }
+
+        last_observation = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
+            first_response, second_response
+        );
+    }
+
+    assert!(
+        matched,
+        "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
     );
 }
 
@@ -16568,12 +16957,14 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
+        let attempt_started = Instant::now();
         let port = find_available_tcp_port();
         let port_value = port.to_string();
         let mut child = Command::new(&binary_path)
             .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
             .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
             .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "25")
             .env("SEC4_RT_HTTP_PORT", port_value.as_str())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -16632,9 +17023,13 @@ fn main() effects { net } -> Int {
             .expect("second stream read timeout should be set");
 
         // Queue a late second request before unblocking the first handler.
+        let trailing_noise = vec![b'x'; 4096];
         second_stream
             .write_all(request)
             .expect("second request should be written");
+        second_stream
+            .write_all(&trailing_noise)
+            .expect("second trailing payload noise should be written");
         first_stream
             .write_all(request)
             .expect("first request should be written");
@@ -16674,8 +17069,9 @@ fn main() effects { net } -> Int {
             && second_response.contains("Content-Length: 37")
             && second_response.contains("Connection: close")
             && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1200);
 
-        if status.success() && ordered_contract {
+        if status.success() && ordered_contract && bounded_tail_contract {
             matched = true;
             break;
         }
@@ -16689,6 +17085,196 @@ fn main() effects { net } -> Int {
     assert!(
         matched,
         "late-connection oneshot path should deterministically drain-throttle backlog client after first served response:\n{last_observation}"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_preserves_throttle_body_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency late-connection low-timeout test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpmaxconcurrencylateconnectionlowtimeout"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for max-concurrency late-connection low-timeout fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpmaxconcurrencylateconnectionlowtimeout");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for max-concurrency late-connection low-timeout fixture"
+    );
+
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let mut matched = false;
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let attempt_started = Instant::now();
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(&binary_path)
+            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
+            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("http runtime max-concurrency late-connection low-timeout binary should start");
+
+        let mut first_stream = None;
+        for _ in 0..800 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    first_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut first_stream = match first_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency late-connection low-timeout test could not establish first connection"
+                );
+            }
+        };
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+
+        thread::sleep(Duration::from_millis(75));
+
+        let mut second_stream = None;
+        for _ in 0..400 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    second_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut second_stream = match second_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency late-connection low-timeout test could not establish second connection"
+                );
+            }
+        };
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        let trailing_noise = vec![b'x'; 8192];
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+        second_stream
+            .write_all(&trailing_noise)
+            .expect("second trailing payload noise should be written");
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("child wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency late-connection low-timeout binary did not exit in expected window"
+                );
+            }
+        };
+
+        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
+            && first_response.contains("X-Trace-Id: rt-1")
+            && first_response.contains("\r\n\r\nok")
+            && second_response.contains("HTTP/1.1 503 Service Unavailable")
+            && second_response.contains("X-Trace-Id: rt-2")
+            && second_response.contains("Content-Type: text/plain; charset=utf-8")
+            && second_response.contains("Content-Length: 37")
+            && second_response.contains("Connection: close")
+            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
+
+        if status.success() && ordered_contract && bounded_tail_contract {
+            matched = true;
+            break;
+        }
+
+        last_observation = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}",
+            first_response, second_response
+        );
+    }
+
+    assert!(
+        matched,
+        "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
     );
 }
 
@@ -16752,12 +17338,14 @@ fn main() effects { net } -> Int {
     let mut matched = false;
     let mut last_observation = String::new();
     for attempt in 0..8 {
+        let attempt_started = Instant::now();
         let port = find_available_tcp_port();
         let port_value = port.to_string();
         let mut child = Command::new(&binary_path)
             .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
             .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
             .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "25")
             .env("SEC4_RT_HTTP_PORT", port_value.as_str())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -16840,12 +17428,19 @@ fn main() effects { net } -> Int {
             .expect("third stream read timeout should be set");
 
         // Stage backlog requests first, then release the accepted first client.
+        let trailing_noise = vec![b'x'; 4096];
         second_stream
             .write_all(request)
             .expect("second request should be written");
+        second_stream
+            .write_all(&trailing_noise)
+            .expect("second trailing payload noise should be written");
         third_stream
             .write_all(request)
             .expect("third request should be written");
+        third_stream
+            .write_all(&trailing_noise)
+            .expect("third trailing payload noise should be written");
         first_stream
             .write_all(request)
             .expect("first request should be written");
@@ -16893,8 +17488,9 @@ fn main() effects { net } -> Int {
             && third_response.contains("Content-Length: 37")
             && third_response.contains("Connection: close")
             && third_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1200);
 
-        if status.success() && ordered_contract {
+        if status.success() && ordered_contract && bounded_tail_contract {
             matched = true;
             break;
         }
@@ -16908,6 +17504,234 @@ fn main() effects { net } -> Int {
     assert!(
         matched,
         "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle):\n{last_observation}"
+    );
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_preserves_throttle_body_when_clang_available(
+) {
+    if !clang_available() {
+        eprintln!("skipping http runtime max-concurrency burst-ingress low-timeout test: clang not available");
+        return;
+    }
+
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "httpmaxconcurrencyburstingresslowtimeout"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for max-concurrency burst-ingress low-timeout fixture"
+    );
+
+    let binary_path = project_dir
+        .join("build")
+        .join("httpmaxconcurrencyburstingresslowtimeout");
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for max-concurrency burst-ingress low-timeout fixture"
+    );
+
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let mut matched = false;
+    let mut last_observation = String::new();
+    for attempt in 0..8 {
+        let attempt_started = Instant::now();
+        let port = find_available_tcp_port();
+        let port_value = port.to_string();
+        let mut child = Command::new(&binary_path)
+            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
+            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("http runtime max-concurrency burst-ingress low-timeout binary should start");
+
+        let mut first_stream = None;
+        for _ in 0..800 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    first_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut first_stream = match first_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress low-timeout test could not establish first connection"
+                );
+            }
+        };
+        first_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("first stream read timeout should be set");
+
+        thread::sleep(Duration::from_millis(75));
+
+        let mut second_stream = None;
+        for _ in 0..400 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    second_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut second_stream = match second_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress low-timeout test could not establish second connection"
+                );
+            }
+        };
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("second stream read timeout should be set");
+
+        let mut third_stream = None;
+        for _ in 0..400 {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => {
+                    third_stream = Some(stream);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        let mut third_stream = match third_stream {
+            Some(stream) => stream,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress low-timeout test could not establish third connection"
+                );
+            }
+        };
+        third_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("third stream read timeout should be set");
+
+        let trailing_noise = vec![b'x'; 8192];
+        second_stream
+            .write_all(request)
+            .expect("second request should be written");
+        second_stream
+            .write_all(&trailing_noise)
+            .expect("second trailing payload noise should be written");
+        third_stream
+            .write_all(request)
+            .expect("third request should be written");
+        third_stream
+            .write_all(&trailing_noise)
+            .expect("third trailing payload noise should be written");
+        first_stream
+            .write_all(request)
+            .expect("first request should be written");
+
+        let mut first_response = String::new();
+        let mut second_response = String::new();
+        let mut third_response = String::new();
+        let _ = first_stream.read_to_string(&mut first_response);
+        let _ = second_stream.read_to_string(&mut second_response);
+        let _ = third_stream.read_to_string(&mut third_response);
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("child wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "max-concurrency burst-ingress low-timeout binary did not exit in expected window"
+                );
+            }
+        };
+
+        let ordered_contract = first_response.contains("HTTP/1.1 200 OK")
+            && first_response.contains("X-Trace-Id: rt-1")
+            && first_response.contains("\r\n\r\nok")
+            && second_response.contains("HTTP/1.1 503 Service Unavailable")
+            && second_response.contains("X-Trace-Id: rt-2")
+            && second_response.contains("Content-Type: text/plain; charset=utf-8")
+            && second_response.contains("Content-Length: 37")
+            && second_response.contains("Connection: close")
+            && second_response.contains("\r\n\r\nserver busy: max concurrency exceeded")
+            && third_response.contains("HTTP/1.1 503 Service Unavailable")
+            && third_response.contains("X-Trace-Id: rt-3")
+            && third_response.contains("Content-Type: text/plain; charset=utf-8")
+            && third_response.contains("Content-Length: 37")
+            && third_response.contains("Connection: close")
+            && third_response.contains("\r\n\r\nserver busy: max concurrency exceeded");
+        let bounded_tail_contract = attempt_started.elapsed() <= Duration::from_millis(1000);
+
+        if status.success() && ordered_contract && bounded_tail_contract {
+            matched = true;
+            break;
+        }
+
+        last_observation = format!(
+            "attempt={attempt}\nfirst_response=\n{}\nsecond_response=\n{}\nthird_response=\n{}",
+            first_response, second_response, third_response
+        );
+    }
+
+    assert!(
+        matched,
+        "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
     );
 }
 
