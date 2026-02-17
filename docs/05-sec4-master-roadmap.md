@@ -2881,6 +2881,32 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S131 HTTP max-concurrency throttle body-delivery socket-close determinism hardening acceptance criteria
+
+- Runtime throttle close path under queue/backlog contention deterministically preserves advertised payload delivery (`Content-Length: 37` plus body bytes) instead of timing-sensitive header-only outcomes.
+- Socket-close sequence for throttle responses is hardened to use bounded graceful write-shutdown + peer-input drain before final close, avoiding close-time reset races in late/burst oneshot contention paths.
+- Runtime e2e late/burst contention coverage requires full throttle body presence alongside existing status/trace/framing assertions.
+
+### M38-S131 tracking (live status)
+
+- [x] Added runtime throttle close hardening helper:
+  - `sec4_rt_finalize_throttle_socket_close(...)`
+- [x] Wired throttle close hardening into all max-concurrency throttle close sites:
+  - queue-boundary overflow path
+  - oneshot pending backlog drain path
+  - oneshot newly-accepted backlog drain path
+- [x] Restored strict payload assertions for race-prone contention tests:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+- [x] Revalidated max-concurrency/runtime contract coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_order_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8193,7 +8219,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S131 HTTP max-concurrency throttle body-delivery socket-close determinism hardening.
+- M38-S132 HTTP max-concurrency throttle close-drain timeout-budget coverage hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8285,9 +8311,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S131 scope for deterministic throttle payload delivery under socket-close timing pressure.
-2. Harden runtime close/drain behavior so throttled clients consistently observe full body payload when framing advertises it.
-3. Publish M38-S131 book chapter and refresh roadmap live-status counts.
+1. Add M38-S132 scope for bounded throttle close-drain timeout behavior under socket-close timing pressure.
+2. Add M38-S132 coverage for bounded close-drain timeout behavior so oneshot contention paths keep deterministic payload delivery without unbounded tail latency.
+3. Publish M38-S132 book chapter and refresh roadmap live-status counts.
 
 ---
 
