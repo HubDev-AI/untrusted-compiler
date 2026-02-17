@@ -1499,6 +1499,9 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
 }
 
 const ORDERED_CONTENTION_SMOKE_BANNER_PREFIX: &str = "[ordered-descriptor-smoke]";
+const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_CASE: &str = "case";
+const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE: &str = "module";
+const ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE: &str = "fixture";
 
 fn ordered_contention_smoke_banner_formatter(
     case_label: &str,
@@ -1506,8 +1509,14 @@ fn ordered_contention_smoke_banner_formatter(
     fixture_name: &str,
 ) -> String {
     format!(
-        "{} case={} module={} fixture={}",
-        ORDERED_CONTENTION_SMOKE_BANNER_PREFIX, case_label, module_name, fixture_name,
+        "{} {}={} {}={} {}={}",
+        ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
+        ORDERED_CONTENTION_SMOKE_BANNER_FIELD_CASE,
+        case_label,
+        ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE,
+        module_name,
+        ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE,
+        fixture_name,
     )
 }
 
@@ -17706,10 +17715,13 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
         assert_eq!(
             formatted_banner,
             format!(
-                "{} case={} module={} fixture={}",
+                "{} {}={} {}={} {}={}",
                 ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
+                ORDERED_CONTENTION_SMOKE_BANNER_FIELD_CASE,
                 expectation.expected_case_label,
+                ORDERED_CONTENTION_SMOKE_BANNER_FIELD_MODULE,
                 expectation.expected_module_name,
+                ORDERED_CONTENTION_SMOKE_BANNER_FIELD_FIXTURE,
                 expectation.expected_fixture_name,
             )
         );
