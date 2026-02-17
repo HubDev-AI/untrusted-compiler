@@ -721,5 +721,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `749-m38-http-max-concurrency-runtime-fallback-clamp-hardening.md`
 - `750-m38-http-max-concurrency-queue-boundary-deterministic-throttle-coverage.md`
 - `751-m38-http-max-concurrency-throttle-security-header-parity-hardening.md`
+- `752-m38-http-max-concurrency-oneshot-late-connection-deterministic-drain-coverage.md`
 
 As milestones progress, chapters will be added and linked from this index.
