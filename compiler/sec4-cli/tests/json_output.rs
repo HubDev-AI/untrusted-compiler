@@ -1480,16 +1480,6 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
     },
 ];
 
-const ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS: [OrderedContentionFixtureDescriptor; 7] = [
-    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundary),
-    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundaryLowTimeout),
-    OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::SecurityHeaderParity),
-    OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainDefault),
-    OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainLowTimeout),
-    OrderedContentionFixtureDescriptor::Burst(BurstContentionFixtureDescriptor::TraceOrderDefault),
-    OrderedContentionFixtureDescriptor::Burst(BurstContentionFixtureDescriptor::TraceOrderLowTimeout),
-];
-
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
     let metadata = ordered_contention_runner_metadata(fixture);
     let binary_path = build_c_bin_fixture(
@@ -17647,8 +17637,8 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_w
         return;
     }
 
-    for fixture in ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS {
-        run_ordered_contention_fixture_descriptor_case(fixture);
+    for expectation in ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS {
+        run_ordered_contention_fixture_descriptor_case(expectation.fixture);
     }
 }
 

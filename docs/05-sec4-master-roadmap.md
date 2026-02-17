@@ -4017,6 +4017,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available`.
 - [x] Removed repeated per-descriptor smoke test bodies in favor of table-driven iteration.
 
+### M38-S224 HTTP max-concurrency ordered-attempt descriptor contract/smoke dual-table unification acceptance criteria
+
+- Ordered descriptor smoke harness reuses the canonical descriptor contract expectation catalog directly.
+- Separate smoke-only descriptor table is removed to eliminate drift between smoke and sanity coverage inputs.
+- Pair/late/burst smoke behavior remains unchanged after table unification.
+
+### M38-S224 tracking (live status)
+
+- [x] Removed `ORDERED_CONTENTION_FIXTURE_SMOKE_DESCRIPTORS`.
+- [x] Migrated ordered smoke harness iteration to `ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS`.
+- [x] Revalidated descriptor sanity + smoke harness coverage after table unification.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9329,7 +9341,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S224 HTTP max-concurrency ordered-attempt descriptor contract/smoke dual-table unification.
+- M38-S225 HTTP max-concurrency ordered-attempt descriptor contract/smoke iterator-helper extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9421,9 +9433,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S224 scope for ordered-attempt descriptor contract/smoke dual-table unification.
-2. Extend ordered helper coverage with descriptor contract/smoke dual-table unification.
-3. Publish M38-S224 chapter and refresh roadmap live-status counts.
+1. Add M38-S225 scope for ordered-attempt descriptor contract/smoke iterator-helper extraction.
+2. Extend ordered helper coverage with descriptor contract/smoke iterator-helper extraction.
+3. Publish M38-S225 chapter and refresh roadmap live-status counts.
 
 ---
 
