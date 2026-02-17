@@ -17673,6 +17673,22 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 }
 
 #[test]
+fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
+    for_each_ordered_contention_runner_metadata_expectation(|expectation| {
+        let banner = ordered_contention_smoke_case_banner(expectation);
+        assert_eq!(
+            banner,
+            format!(
+                "[ordered-descriptor-smoke] case={} module={} fixture={}",
+                expectation.expected_case_label,
+                expectation.expected_module_name,
+                expectation.expected_fixture_name,
+            )
+        );
+    });
+}
+
+#[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available()
 {
     if !clang_available() {
