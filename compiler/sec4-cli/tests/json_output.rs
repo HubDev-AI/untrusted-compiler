@@ -1609,6 +1609,8 @@ struct OrderedContentionSmokeContractAssertionMatrixCase {
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL: &str = "case-banner";
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL: &str =
     "failure-banner";
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL: &str =
+    "not-a-real-smoke-contract-case";
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX: &str =
     "unknown ordered contention smoke contract assertion matrix case label:";
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_KNOWN_MATRIX_CASE_LABELS: [&str; 2] = [
@@ -1700,6 +1702,21 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_
         panic_message, expected_message,
         "panic message should match deterministic unknown-case contract"
     );
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract() {
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL,
+    );
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_case_label_contract_coverage() {
+    for case_label in ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_KNOWN_MATRIX_CASE_LABELS {
+        assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolver_contract(
+            case_label,
+        );
+    }
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract();
 }
 
 fn run_ordered_contention_smoke_expectation_with_failure_context(
@@ -17875,15 +17892,7 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertion_matrix_case_label_contract_coverage(
 ) {
-    for case_label in ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_KNOWN_MATRIX_CASE_LABELS {
-        assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolver_contract(
-            case_label,
-        );
-    }
-
-    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
-        "not-a-real-smoke-contract-case",
-    );
+    assert_ordered_contention_smoke_contract_assertion_matrix_case_label_contract_coverage();
 }
 
 #[test]
