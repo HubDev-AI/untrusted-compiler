@@ -36,12 +36,12 @@ This slice adds that override while preserving deterministic validation and prec
    - Result: CLI value deterministically overrides policy for runtime ingress throttling.
 
 4. Coverage:
-   - Added e2e command test for precedence (`policy=1`, CLI override `2`) that asserts successful handling without `503` throttle responses.
+   - Added e2e command test for precedence (`policy=1`, CLI override `2`) in persistent serve mode that asserts two successful responses without `503` throttles.
    - Added deterministic invalid-input test for zero override.
 
 ## Validation
 
-- `cargo test -p sec4 --test commands run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+- `cargo test -p sec4 --test commands run_command_cli_max_concurrency_overrides_policy_limit`
 - `cargo test -p sec4 --test commands run_command_rejects_zero_max_concurrency_override`
 - `cargo test -p sec4 --test commands`
 - `scripts/test-roadmap-closure-gate-alignment.sh`

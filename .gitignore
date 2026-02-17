@@ -2,5 +2,7 @@
 **/target
 .DS_Store
 /build/
+/.entire/
+/.claude/settings.json
 
 **/build/security_map.json

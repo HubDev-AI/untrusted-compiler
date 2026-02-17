@@ -794,5 +794,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `826-m38-http-max-concurrency-queue-low-timeout-outcome-helper-adoption.md`
 - `827-m38-http-max-concurrency-security-parity-outcome-helper-adoption.md`
 - `828-m38-http-max-concurrency-pair-outcome-helper-consolidation-revalidation.md`
+- `829-m38-http-max-concurrency-queue-security-pair-attempt-assertion-loop-helper-normalization.md`
+- `830-m38-http-max-concurrency-ordered-pair-attempt-outcome-envelope-introduction.md`
+- `831-m38-http-max-concurrency-ordered-triple-attempt-outcome-envelope-introduction.md`
+- `832-m38-http-max-concurrency-late-ordered-pair-outcome-collector-helper-introduction.md`
+- `833-m38-http-max-concurrency-burst-ordered-triple-outcome-collector-helper-introduction.md`
+- `834-m38-http-max-concurrency-ordered-pair-outcome-contract-helper-introduction.md`
+- `835-m38-http-max-concurrency-ordered-triple-outcome-contract-helper-introduction.md`
+- `836-m38-http-max-concurrency-ordered-pair-outcome-observation-formatter-helper-introduction.md`
+- `837-m38-http-max-concurrency-ordered-triple-outcome-observation-formatter-helper-introduction.md`
+- `838-m38-http-max-concurrency-late-burst-assertion-loop-helper-consolidation-revalidation.md`
 
 As milestones progress, chapters will be added and linked from this index.

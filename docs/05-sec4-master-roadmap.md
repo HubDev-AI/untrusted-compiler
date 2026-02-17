@@ -2767,11 +2767,11 @@ Post-alpha track acceptance anchors:
 - [x] Wired CLI override into runtime env bridge key:
   - `SEC4_RT_HTTP_MAX_CONCURRENCY`
 - [x] Added deterministic run-command precedence coverage:
-  - `run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+  - `run_command_cli_max_concurrency_overrides_policy_limit`
 - [x] Added deterministic CLI invalid-input coverage:
   - `run_command_rejects_zero_max_concurrency_override`
 - [x] Revalidated related command/runtime behavior:
-  - `cargo test -p sec4 --test commands run_command_oneshot_cli_max_concurrency_overrides_policy_limit`
+  - `cargo test -p sec4 --test commands run_command_cli_max_concurrency_overrides_policy_limit`
   - `cargo test -p sec4 --test commands run_command_rejects_zero_max_concurrency_override`
   - `cargo test -p sec4 --test commands`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
@@ -3764,6 +3764,116 @@ Post-alpha track acceptance anchors:
 - [x] Revalidated helper-layer contract suite:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
 - [x] Published book chapters `819..828`.
+
+### M38-S202 HTTP max-concurrency queue/security pair-attempt assertion-loop helper normalization acceptance criteria
+
+- Queue/security contention tests share one pair-attempt assertion loop helper path.
+- Pair assertion loop helper centralizes per-attempt spawn/connect/collect/contract envelope logic.
+- Queue/security contention behavior remains deterministic.
+
+### M38-S202 tracking (live status)
+
+- [x] Added `run_pair_contention_attempt_loop(...)`.
+- [x] Migrated queue/security pair-attempt assertions to normalized helper loop.
+
+### M38-S203 HTTP max-concurrency ordered pair-attempt outcome envelope introduction acceptance criteria
+
+- Late staged contention path uses canonical ordered pair-attempt outcome envelope type.
+- Ordered pair envelope stores status plus first/second responses for contract checks.
+- Ordered pair outcome behavior remains deterministic.
+
+### M38-S203 tracking (live status)
+
+- [x] Added `OrderedPairAttemptOutcome`.
+- [x] Added ordered pair contract alias `OrderedPairContract`.
+
+### M38-S204 HTTP max-concurrency ordered triple-attempt outcome envelope introduction acceptance criteria
+
+- Burst staged contention path uses canonical ordered triple-attempt outcome envelope type.
+- Ordered triple envelope stores status plus first/second/third responses for contract checks.
+- Ordered triple outcome behavior remains deterministic.
+
+### M38-S204 tracking (live status)
+
+- [x] Added `OrderedTripleAttemptOutcome`.
+- [x] Added ordered triple contract alias `OrderedTripleContract`.
+
+### M38-S205 HTTP max-concurrency late ordered pair outcome collector helper introduction acceptance criteria
+
+- Late staged contention uses one collector helper to stage backlog and collect ordered pair responses.
+- Late collector helper centralizes child exit wait envelope for staged pair attempts.
+- Late collector behavior remains deterministic.
+
+### M38-S205 tracking (live status)
+
+- [x] Added `collect_late_ordered_pair_attempt_outcome(...)`.
+- [x] Late staged pair attempts now share collector helper path.
+
+### M38-S206 HTTP max-concurrency burst ordered triple outcome collector helper introduction acceptance criteria
+
+- Burst staged contention uses one collector helper to stage backlog and collect ordered triple responses.
+- Burst collector helper centralizes child exit wait envelope for staged triple attempts.
+- Burst collector behavior remains deterministic.
+
+### M38-S206 tracking (live status)
+
+- [x] Added `collect_burst_ordered_triple_attempt_outcome(...)`.
+- [x] Burst staged triple attempts now share collector helper path.
+
+### M38-S207 HTTP max-concurrency ordered pair outcome contract helper introduction acceptance criteria
+
+- Ordered pair contract evaluation uses one helper path.
+- Ordered pair bounded-tail contract conjunction uses one helper path.
+- Late staged pair assertions no longer duplicate inline status/contract conjunction plumbing.
+
+### M38-S207 tracking (live status)
+
+- [x] Added `ordered_pair_outcome_matches_contract(...)`.
+- [x] Added `ordered_pair_outcome_matches_contract_with_bounded_tail(...)`.
+
+### M38-S208 HTTP max-concurrency ordered triple outcome contract helper introduction acceptance criteria
+
+- Ordered triple contract evaluation uses one helper path.
+- Ordered triple bounded-tail contract conjunction uses one helper path.
+- Burst staged triple assertions no longer duplicate inline status/contract conjunction plumbing.
+
+### M38-S208 tracking (live status)
+
+- [x] Added `ordered_triple_outcome_matches_contract(...)`.
+- [x] Added `ordered_triple_outcome_matches_contract_with_bounded_tail(...)`.
+
+### M38-S209 HTTP max-concurrency ordered pair outcome observation formatter helper introduction acceptance criteria
+
+- Ordered pair observation rendering uses one helper path.
+- Late staged pair assertions no longer format observations with inline response tuple plumbing.
+- Ordered pair observation envelopes remain deterministic.
+
+### M38-S209 tracking (live status)
+
+- [x] Added `format_ordered_pair_outcome_observation(...)`.
+- [x] Late staged pair observation updates now use helper formatter.
+
+### M38-S210 HTTP max-concurrency ordered triple outcome observation formatter helper introduction acceptance criteria
+
+- Ordered triple observation rendering uses one helper path.
+- Burst staged triple assertions no longer format observations with inline response tuple plumbing.
+- Ordered triple observation envelopes remain deterministic.
+
+### M38-S210 tracking (live status)
+
+- [x] Added `format_ordered_triple_outcome_observation(...)`.
+- [x] Burst staged triple observation updates now use helper formatter.
+
+### M38-S211 HTTP max-concurrency late/burst assertion-loop helper adoption consolidation revalidation acceptance criteria
+
+- Late/burst staged contention branches use normalized ordered assertion-loop helpers.
+- No regression in late default, late low-timeout, burst default, or burst low-timeout branches.
+- Roadmap/book tracking is refreshed for `M38-S202..M38-S211`.
+
+### M38-S211 tracking (live status)
+
+- [x] Added `run_late_contention_attempt_loop(...)` and `run_burst_contention_attempt_loop(...)`.
+- [x] Migrated late/burst staged assertions to ordered loop helpers and revalidated contracts.
 
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
@@ -9077,7 +9187,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S202 HTTP max-concurrency queue/security pair-attempt assertion-loop helper normalization.
+- M38-S212 HTTP max-concurrency ordered-attempt helper branch-scope contract matrix expansion.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9169,9 +9279,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S202 scope for queue/security pair-attempt assertion-loop helper normalization.
-2. Consolidate queue/security attempt loop contract checks into shared helper paths.
-3. Publish M38-S202 chapter and refresh roadmap live-status counts.
+1. Add M38-S212 scope for ordered-attempt helper branch-scope contract matrix expansion.
+2. Extend ordered helper coverage with branch-scoped contract matrix diagnostics.
+3. Publish M38-S212 chapter and refresh roadmap live-status counts.
 
 ---
 
