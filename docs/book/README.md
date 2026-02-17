@@ -821,5 +821,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `853-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-iterator-failure-context-enrichment.md`
 - `854-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-case-banner-tracing.md`
 - `855-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-banner-contract-coverage.md`
+- `856-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-banner-prefix-constant-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.

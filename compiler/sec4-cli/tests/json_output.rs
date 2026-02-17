@@ -1498,11 +1498,14 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
+const ORDERED_CONTENTION_SMOKE_BANNER_PREFIX: &str = "[ordered-descriptor-smoke]";
+
 fn ordered_contention_smoke_case_banner(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) -> String {
     format!(
-        "[ordered-descriptor-smoke] case={} module={} fixture={}",
+        "{} case={} module={} fixture={}",
+        ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
         expectation.expected_case_label,
         expectation.expected_module_name,
         expectation.expected_fixture_name,
@@ -17679,7 +17682,8 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
         assert_eq!(
             banner,
             format!(
-                "[ordered-descriptor-smoke] case={} module={} fixture={}",
+                "{} case={} module={} fixture={}",
+                ORDERED_CONTENTION_SMOKE_BANNER_PREFIX,
                 expectation.expected_case_label,
                 expectation.expected_module_name,
                 expectation.expected_fixture_name,

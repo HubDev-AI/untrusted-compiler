@@ -4077,6 +4077,18 @@ Post-alpha track acceptance anchors:
 - [x] Added deterministic exact banner-shape assertions for every ordered descriptor expectation.
 - [x] Revalidated sanity + banner-contract + smoke harness coverage pack.
 
+### M38-S229 HTTP max-concurrency ordered-attempt descriptor smoke banner-prefix constant extraction acceptance criteria
+
+- Smoke banner prefix literal is extracted into one canonical constant used by banner rendering and banner-contract coverage assertions.
+- Banner output contract remains unchanged after constant extraction.
+- Table-driven smoke harness logging/failure context continues to emit deterministic banner strings.
+
+### M38-S229 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_BANNER_PREFIX`.
+- [x] Migrated `ordered_contention_smoke_case_banner(...)` to use the shared banner-prefix constant.
+- [x] Migrated banner-contract coverage expected strings to use the shared banner-prefix constant.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9389,7 +9401,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S229 HTTP max-concurrency ordered-attempt descriptor smoke banner-prefix constant extraction.
+- M38-S230 HTTP max-concurrency ordered-attempt descriptor smoke banner formatter helper contract extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9481,9 +9493,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S229 scope for ordered-attempt descriptor smoke banner-prefix constant extraction.
-2. Extend ordered helper coverage with descriptor smoke banner-prefix constant extraction.
-3. Publish M38-S229 chapter and refresh roadmap live-status counts.
+1. Add M38-S230 scope for ordered-attempt descriptor smoke banner formatter helper contract extraction.
+2. Extend ordered helper coverage with descriptor smoke banner formatter helper contract extraction.
+3. Publish M38-S230 chapter and refresh roadmap live-status counts.
 
 ---
 
