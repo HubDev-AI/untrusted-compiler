@@ -1650,6 +1650,18 @@ fn run_ordered_contention_smoke_contract_assertion_matrix_case(
     run_ordered_contention_smoke_contract_assertion_dispatch(matrix_case.assertion);
 }
 
+fn run_ordered_contention_smoke_contract_assertion_matrix_case_label(case_label: &str) {
+    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(case_label);
+    run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolution(
+    case_label: &str,
+) {
+    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(case_label);
+    assert_eq!(matrix_case.case_label, case_label);
+}
+
 fn run_ordered_contention_smoke_expectation_with_failure_context(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
@@ -17815,28 +17827,19 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
-    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+    run_ordered_contention_smoke_contract_assertion_matrix_case_label(
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
     );
-    run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
 }
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertion_matrix_case_label_contract_coverage(
 ) {
-    let case_banner_matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
-        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
-    );
-    assert_eq!(
-        case_banner_matrix_case.case_label,
+    assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolution(
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
     );
 
-    let failure_banner_matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
-        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
-    );
-    assert_eq!(
-        failure_banner_matrix_case.case_label,
+    assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resolution(
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
     );
 
@@ -17861,10 +17864,9 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertio
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
-    let matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+    run_ordered_contention_smoke_contract_assertion_matrix_case_label(
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
     );
-    run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
 }
 
 #[test]
