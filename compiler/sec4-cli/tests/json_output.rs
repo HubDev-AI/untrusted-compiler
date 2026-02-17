@@ -308,6 +308,60 @@ fn exchange_pair_http_requests_and_collect(
     read_two_http_responses(first, second)
 }
 
+struct PairAttemptOutcome {
+    status: ExitStatus,
+    first_response: String,
+    second_response: String,
+}
+
+type PairOutcomeContract = fn(&ExitStatus, &str, &str) -> bool;
+
+fn collect_pair_attempt_outcome(
+    child: &mut Child,
+    first_stream: &mut TcpStream,
+    second_stream: &mut TcpStream,
+    request: &[u8],
+    exit_timeout_message: &str,
+) -> PairAttemptOutcome {
+    let (first_response, second_response) =
+        exchange_pair_http_requests_and_collect(first_stream, second_stream, request);
+    let status = wait_for_child_exit_or_terminate(child, 240, 25, exit_timeout_message);
+    PairAttemptOutcome {
+        status,
+        first_response,
+        second_response,
+    }
+}
+
+fn pair_outcome_matches_contract(
+    outcome: &PairAttemptOutcome,
+    contract: PairOutcomeContract,
+) -> bool {
+    contract(
+        &outcome.status,
+        outcome.first_response.as_str(),
+        outcome.second_response.as_str(),
+    )
+}
+
+fn pair_outcome_matches_contract_with_bounded_tail(
+    outcome: &PairAttemptOutcome,
+    contract: PairOutcomeContract,
+    attempt_started: &Instant,
+    max_tail_millis: u64,
+) -> bool {
+    pair_outcome_matches_contract(outcome, contract)
+        && has_bounded_tail_latency(attempt_started, max_tail_millis)
+}
+
+fn format_pair_outcome_observation(attempt: usize, outcome: &PairAttemptOutcome) -> String {
+    format_two_response_observation(
+        attempt,
+        outcome.first_response.as_str(),
+        outcome.second_response.as_str(),
+    )
+}
+
 fn read_three_http_responses(
     first: &mut TcpStream,
     second: &mut TcpStream,
@@ -16647,22 +16701,20 @@ fn main() effects { net } -> Int {
             "max-concurrency queue-boundary test could not establish second connection",
         );
 
-        let (first_response, second_response) =
-            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
-
-        let status = wait_for_child_exit_or_terminate(
+        let outcome = collect_pair_attempt_outcome(
             &mut child,
-            240,
-            25,
+            &mut first_stream,
+            &mut second_stream,
+            request,
             "max-concurrency queue-boundary binary did not exit in expected window",
         );
 
-        if pair_success_throttle_contract_holds(&status, &first_response, &second_response) {
+        if pair_outcome_matches_contract(&outcome, pair_success_throttle_contract_holds) {
             matched = true;
             break;
         }
 
-        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
+        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
 
     assert!(
@@ -16714,26 +16766,25 @@ fn main() effects { net } -> Int {
             "max-concurrency queue-boundary low-timeout test could not establish second connection",
         );
 
-        let (first_response, second_response) =
-            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
-
-        let status = wait_for_child_exit_or_terminate(
+        let outcome = collect_pair_attempt_outcome(
             &mut child,
-            240,
-            25,
+            &mut first_stream,
+            &mut second_stream,
+            request,
             "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
         );
 
-        let bounded_tail_contract = has_bounded_tail_latency(&attempt_started, 1000);
-
-        if pair_success_throttle_contract_holds(&status, &first_response, &second_response)
-            && bounded_tail_contract
-        {
+        if pair_outcome_matches_contract_with_bounded_tail(
+            &outcome,
+            pair_success_throttle_contract_holds,
+            &attempt_started,
+            1000,
+        ) {
             matched = true;
             break;
         }
 
-        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
+        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
 
     assert!(
@@ -16787,26 +16838,23 @@ fn main() effects { net } -> Int {
             "max-concurrency throttle security-header parity test could not establish second connection",
         );
 
-        let (first_response, second_response) =
-            exchange_pair_http_requests_and_collect(&mut first_stream, &mut second_stream, request);
-
-        let status = wait_for_child_exit_or_terminate(
+        let outcome = collect_pair_attempt_outcome(
             &mut child,
-            240,
-            25,
+            &mut first_stream,
+            &mut second_stream,
+            request,
             "max-concurrency throttle security-header parity binary did not exit in expected window",
         );
 
-        if pair_success_throttle_with_security_header_parity_holds(
-            &status,
-            &first_response,
-            &second_response,
+        if pair_outcome_matches_contract(
+            &outcome,
+            pair_success_throttle_with_security_header_parity_holds,
         ) {
             matched = true;
             break;
         }
 
-        last_observation = format_two_response_observation(attempt, &first_response, &second_response);
+        last_observation = format_pair_outcome_observation(attempt, &outcome);
     }
 
     assert!(

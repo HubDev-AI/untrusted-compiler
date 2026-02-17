@@ -784,5 +784,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `816-m38-http-max-concurrency-security-parity-pair-connect-helper-adoption.md`
 - `817-m38-http-max-concurrency-pair-request-exchange-helper-introduction.md`
 - `818-m38-http-max-concurrency-queue-security-pair-helper-consolidation-revalidation.md`
+- `819-m38-http-max-concurrency-queue-security-pair-outcome-helper-normalization.md`
+- `820-m38-http-max-concurrency-pair-attempt-outcome-envelope-introduction.md`
+- `821-m38-http-max-concurrency-pair-outcome-collector-helper-introduction.md`
+- `822-m38-http-max-concurrency-pair-outcome-contract-dispatch-helper-introduction.md`
+- `823-m38-http-max-concurrency-pair-outcome-bounded-tail-contract-helper-introduction.md`
+- `824-m38-http-max-concurrency-pair-outcome-observation-formatter-helper-introduction.md`
+- `825-m38-http-max-concurrency-queue-default-outcome-helper-adoption.md`
+- `826-m38-http-max-concurrency-queue-low-timeout-outcome-helper-adoption.md`
+- `827-m38-http-max-concurrency-security-parity-outcome-helper-adoption.md`
+- `828-m38-http-max-concurrency-pair-outcome-helper-consolidation-revalidation.md`
 
 As milestones progress, chapters will be added and linked from this index.
