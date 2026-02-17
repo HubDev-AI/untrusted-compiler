@@ -4257,6 +4257,42 @@ Post-alpha track acceptance anchors:
 - [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_KNOWN_MATRIX_CASE_LABELS`.
 - [x] Migrated matrix case-label contract coverage known-label checks to helper-based loop dispatch.
 
+### M38-S244 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label constant extraction acceptance criteria
+
+- Matrix unknown-label sentinel token is extracted into a shared constant.
+- Unknown-label panic assertion coverage consumes the shared unknown-label constant.
+- Unknown-label panic contract behavior remains unchanged after constant extraction.
+
+### M38-S244 tracking (live status)
+
+- [x] Added `ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL`.
+- [x] Migrated matrix unknown-label contract coverage to shared unknown-label constant usage.
+- [x] Revalidated unknown-label panic contract after constant extraction.
+
+### M38-S245 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label contract helper extraction acceptance criteria
+
+- Unknown-label panic contract invocation is centralized behind a dedicated no-arg contract helper.
+- Matrix case-label contract coverage dispatches unknown-label assertions through the helper.
+- Unknown-label contract assertion behavior remains deterministic after helper extraction.
+
+### M38-S245 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_contract()`.
+- [x] Migrated matrix case-label contract coverage unknown-label assertion call to helper dispatch.
+- [x] Revalidated unknown-label contract helper path against deterministic panic-message behavior.
+
+### M38-S246 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix case-label contract-coverage consolidator extraction acceptance criteria
+
+- Matrix case-label contract coverage orchestration is centralized in one dedicated helper.
+- Known-label resolver checks and unknown-label contract checks are dispatched via the consolidator helper.
+- Matrix case-label contract test body delegates fully to consolidator helper execution.
+
+### M38-S246 tracking (live status)
+
+- [x] Added `assert_ordered_contention_smoke_contract_assertion_matrix_case_label_contract_coverage()`.
+- [x] Migrated matrix case-label contract coverage test body to consolidator helper delegation.
+- [x] Revalidated case-label contract coverage after consolidator extraction.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9569,7 +9605,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S244 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label constant extraction.
+- M38-S247 HTTP max-concurrency ordered-attempt descriptor smoke contract matrix unknown-label panic payload assertion helper extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9661,9 +9697,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S244 scope for ordered-attempt descriptor smoke contract matrix unknown-label constant extraction.
-2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label constant extraction.
-3. Publish M38-S244 chapter and refresh roadmap live-status counts.
+1. Add M38-S247 scope for ordered-attempt descriptor smoke contract matrix unknown-label panic payload assertion helper extraction.
+2. Extend ordered helper coverage with descriptor smoke contract matrix unknown-label panic payload assertion helper extraction.
+3. Publish M38-S247 chapter and refresh roadmap live-status counts.
 
 ---
 
