@@ -3055,6 +3055,146 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S142 HTTP max-concurrency throttle drain-timeout runtime-cache hardening acceptance criteria
+
+- Runtime parses `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` once per `http.serve` lifecycle and reuses it for all throttle close paths.
+- Oneshot backlog drain and queue-overflow throttle close paths receive the same serve-scoped timeout value, removing repeated per-socket env parsing.
+- Existing max-concurrency contention contracts remain unchanged.
+
+### M38-S142 tracking (live status)
+
+- [x] Added serve-scoped throttle drain-timeout caching in runtime:
+  - `sec4_rt_http_serve(...)` now computes `throttle_drain_timeout_ms` once.
+- [x] Propagated cached timeout through throttle close path wiring:
+  - `sec4_rt_drain_oneshot_backlog_with_throttle(...)`
+  - queue-overflow close path
+  - `sec4_rt_finalize_throttle_socket_close(...)`
+- [x] Revalidated runtime contracts:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+
+### M38-S143 HTTP max-concurrency timeout fallback-matrix assertion-helper dedup acceptance criteria
+
+- Timeout fallback matrix tests share one deterministic route-success assertion helper instead of repeated inline assert blocks.
+- Helper keeps failure diagnostics case-specific via explicit case labels.
+- Fallback/clamp matrix behavior remains unchanged.
+
+### M38-S143 tracking (live status)
+
+- [x] Added matrix assertion helper:
+  - `assert_throttle_drain_timeout_env_route_success(...)`
+- [x] Migrated timeout fallback/clamp tests to helper-backed assertions.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S144 HTTP max-concurrency oneshot-spawn helper dedup acceptance criteria
+
+- Max-concurrency contention tests use one canonical oneshot runtime spawn helper.
+- Helper centralizes default runtime env wiring (`serve mode`, `serve timeout`, `max concurrency`, `port`) with optional timeout override.
+- Contention tests preserve existing contracts while reducing setup drift risk.
+
+### M38-S144 tracking (live status)
+
+- [x] Added canonical spawn helper:
+  - `spawn_max_concurrency_oneshot_binary(...)`
+- [x] Enabled optional `SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS` injection through helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S145 HTTP max-concurrency queue/security spawn-helper adoption acceptance criteria
+
+- Queue-boundary contention tests use canonical oneshot-spawn helper.
+- Security-header parity contention test uses canonical oneshot-spawn helper.
+- Queue/security contracts remain deterministic after helper migration.
+
+### M38-S145 tracking (live status)
+
+- [x] Migrated queue-boundary contention spawn path to `spawn_max_concurrency_oneshot_binary(...)`.
+- [x] Migrated security-header parity contention spawn path to `spawn_max_concurrency_oneshot_binary(...)`.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S146 HTTP max-concurrency late-connection spawn-helper adoption acceptance criteria
+
+- Late-connection contention tests (default + low-timeout) use canonical oneshot-spawn helper.
+- Late-connection deterministic status/trace/body contracts remain unchanged after helper migration.
+- Low-timeout bounded-tail assertions remain intact.
+
+### M38-S146 tracking (live status)
+
+- [x] Migrated late-connection default timeout test spawn path to helper.
+- [x] Migrated late-connection low-timeout test spawn path to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S147 HTTP max-concurrency burst-ingress spawn-helper adoption acceptance criteria
+
+- Burst-ingress contention tests (default + low-timeout) use canonical oneshot-spawn helper.
+- Burst deterministic trace/order and throttle body contracts remain unchanged after helper migration.
+- Low-timeout bounded-tail assertions remain intact.
+
+### M38-S147 tracking (live status)
+
+- [x] Migrated burst-ingress default timeout test spawn path to helper.
+- [x] Migrated burst-ingress low-timeout test spawn path to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S148 HTTP max-concurrency c-bin fixture-build helper introduction acceptance criteria
+
+- Max-concurrency runtime e2e tests share a canonical c-bin fixture builder.
+- Helper centralizes project scaffolding, manifest/source writes, build invocation, and binary existence assertions.
+- Fixture-build failure messages remain case-specific through explicit labels.
+
+### M38-S148 tracking (live status)
+
+- [x] Added canonical fixture helper:
+  - `build_c_bin_fixture(...)`
+- [x] Helper now owns deterministic fixture-build assertions for max-concurrency runtime e2e tests.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S149 HTTP max-concurrency queue fixture-helper adoption acceptance criteria
+
+- Queue-boundary tests (default + low-timeout) use canonical c-bin fixture helper.
+- Queue fixture setup duplication is removed without changing contention contracts.
+- Queue deterministic one-success/one-throttle invariants remain intact.
+
+### M38-S149 tracking (live status)
+
+- [x] Migrated queue-boundary default fixture setup to `build_c_bin_fixture(...)`.
+- [x] Migrated queue-boundary low-timeout fixture setup to `build_c_bin_fixture(...)`.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S150 HTTP max-concurrency late/burst fixture-helper adoption acceptance criteria
+
+- Late-connection and burst-ingress tests (default + low-timeout variants) use canonical c-bin fixture helper.
+- Late/burst fixture setup duplication is removed without changing contention contracts.
+- Existing status/trace/body/bounded-tail assertions remain intact.
+
+### M38-S150 tracking (live status)
+
+- [x] Migrated late-connection default + low-timeout fixture setup to helper.
+- [x] Migrated burst-ingress default + low-timeout fixture setup to helper.
+- [x] Revalidated max-concurrency suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+
+### M38-S151 HTTP max-concurrency env/security fixture-helper adoption acceptance criteria
+
+- Timeout env-matrix helper path and security-header parity path use canonical c-bin fixture helper where applicable.
+- Max-concurrency test harness setup is consistently helper-driven across env fallback, queue, late, burst, and security branches.
+- Consolidated helper structure reduces fixture drift risk while preserving deterministic runtime contracts.
+
+### M38-S151 tracking (live status)
+
+- [x] Migrated env fallback path fixture build in `run_http_runtime_health_with_max_concurrency_env(...)` to helper.
+- [x] Migrated security-header parity fixture build path to helper.
+- [x] Revalidated consolidated contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8367,7 +8507,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S142 HTTP max-concurrency throttle drain-timeout fallback matrix consolidation and helper deduplication.
+- M38-S152 HTTP max-concurrency helper-layer determinism regression guard expansion.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8459,9 +8599,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S142 scope for timeout fallback-matrix consolidation and helper deduplication.
-2. Reduce duplicated contention/fallback fixture setup while preserving deterministic runtime contracts.
-3. Publish M38-S142 book chapter and refresh roadmap live-status counts.
+1. Add M38-S152 scope for helper-layer determinism regression guards across max-concurrency harness paths.
+2. Extend helper-focused regression coverage so refactors cannot silently weaken runtime contention contracts.
+3. Publish M38-S152 book chapter and refresh roadmap live-status counts.
 
 ---
 

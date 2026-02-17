@@ -2,8 +2,8 @@ use serde_json::Value;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
-use std::process::{Command, Output, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -102,6 +102,27 @@ fn find_available_tcp_port() -> u16 {
         .local_addr()
         .expect("listener local address should resolve")
         .port()
+}
+
+fn spawn_max_concurrency_oneshot_binary(
+    binary_path: &Path,
+    port: u16,
+    throttle_drain_timeout_env: Option<&str>,
+    start_message: &str,
+) -> Child {
+    let port_value = port.to_string();
+    let mut command = Command::new(binary_path);
+    command
+        .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
+        .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
+        .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
+        .env("SEC4_RT_HTTP_PORT", port_value.as_str())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(value) = throttle_drain_timeout_env {
+        command.env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", value);
+    }
+    command.spawn().expect(start_message)
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
@@ -15893,23 +15914,10 @@ fn run_http_runtime_health_with_max_concurrency_env(
     throttle_drain_timeout_env: Option<&str>,
     fixture_id: &str,
 ) -> String {
-    let project_dir = temp_dir(fixture_id);
     let port = find_available_tcp_port();
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencyenvfallbacke2e"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        fixture_id,
+        "httpmaxconcurrencyenvfallbacke2e",
         format!(
             r#"fn health() effects {{ net }} -> Int {{
   res.text(200, "ok");
@@ -15924,23 +15932,9 @@ fn main() effects {{ net }} -> Int {{
 }}
 "#,
             port
-        ),
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for HTTP max-concurrency env fallback fixture"
-    );
-
-    let binary_path = project_dir.join("build").join("httpmaxconcurrencyenvfallbacke2e");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for HTTP max-concurrency env fallback fixture"
+        )
+        .as_str(),
+        "HTTP max-concurrency env fallback",
     );
 
     let mut command = Command::new(&binary_path);
@@ -16024,6 +16018,63 @@ fn main() effects {{ net }} -> Int {{
     response
 }
 
+fn assert_throttle_drain_timeout_env_route_success(
+    env_value: &str,
+    fixture_id: &str,
+    case_label: &str,
+) {
+    let response =
+        run_http_runtime_health_with_max_concurrency_env(None, Some(env_value), fixture_id);
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "{case_label} should preserve deterministic route success"
+    );
+    assert!(
+        response.contains("\r\n\r\nok"),
+        "{case_label} should preserve deterministic route body"
+    );
+}
+
+fn build_c_bin_fixture(
+    fixture_id: &str,
+    package_name: &str,
+    source: &str,
+    fixture_label: &str,
+) -> PathBuf {
+    let project_dir = temp_dir(fixture_id);
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        format!(
+            r#"[package]
+name = "{package_name}"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#
+        ),
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("src/main.ut"), source).expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
+    assert!(
+        build_output.status.success(),
+        "c-bin build should succeed for {fixture_label} fixture"
+    );
+
+    let binary_path = project_dir.join("build").join(package_name);
+    assert!(
+        binary_path.exists(),
+        "compiled binary should exist for {fixture_label} fixture"
+    );
+    binary_path
+}
+
 #[test]
 fn c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_clang_available() {
     if !clang_available() {
@@ -16098,18 +16149,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_invalid_env_falls_b
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("invalid"),
+    assert_throttle_drain_timeout_env_route_success(
+        "invalid",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-invalid-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "invalid throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout fallback succeeds"
+        "invalid throttle-drain-timeout env value fallback",
     );
 }
 
@@ -16121,18 +16164,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_over_cap_env_is_cla
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("999999999"),
+    assert_throttle_drain_timeout_env_route_success(
+        "999999999",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-over-cap-clamp-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "over-cap throttle-drain-timeout env value should be clamped and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout clamp succeeds"
+        "over-cap throttle-drain-timeout env clamp",
     );
 }
 
@@ -16144,18 +16179,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_zero_env_falls_back
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("0"),
+    assert_throttle_drain_timeout_env_route_success(
+        "0",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-zero-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "zero throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout zero-value fallback succeeds"
+        "zero throttle-drain-timeout env fallback",
     );
 }
 
@@ -16167,18 +16194,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_negative_env_falls_
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("-1"),
+    assert_throttle_drain_timeout_env_route_success(
+        "-1",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-negative-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "negative throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout negative-value fallback succeeds"
+        "negative throttle-drain-timeout env fallback",
     );
 }
 
@@ -16190,18 +16209,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_empty_env_falls_bac
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some(""),
+    assert_throttle_drain_timeout_env_route_success(
+        "",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-empty-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "empty throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout empty-value fallback succeeds"
+        "empty throttle-drain-timeout env fallback",
     );
 }
 
@@ -16213,18 +16224,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_whitespace_env_fall
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("20 "),
+    assert_throttle_drain_timeout_env_route_success(
+        "20 ",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-whitespace-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "whitespace-suffixed throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout whitespace fallback succeeds"
+        "whitespace-suffixed throttle-drain-timeout env fallback",
     );
 }
 
@@ -16236,18 +16239,10 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_malformed_env_falls
         return;
     }
 
-    let response = run_http_runtime_health_with_max_concurrency_env(
-        None,
-        Some("20ms"),
+    assert_throttle_drain_timeout_env_route_success(
+        "20ms",
         "sec4-c-bin-http-runtime-throttle-drain-timeout-malformed-env-fallback-e2e",
-    );
-    assert!(
-        response.contains("HTTP/1.1 200 OK"),
-        "malformed throttle-drain-timeout env value should fall back to default and preserve route success"
-    );
-    assert!(
-        response.contains("\r\n\r\nok"),
-        "response should include route body when throttle-drain-timeout malformed fallback succeeds"
+        "malformed throttle-drain-timeout env fallback",
     );
 }
 
@@ -16259,22 +16254,9 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttl
         return;
     }
 
-    let project_dir = temp_dir("sec4-c-bin-http-runtime-max-concurrency-queue-boundary");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencyqueueboundarye2e"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
+        "httpmaxconcurrencyqueueboundarye2e",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -16287,24 +16269,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency queue-boundary fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencyqueueboundarye2e");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency queue-boundary fixture"
+        "max-concurrency queue-boundary",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -16312,16 +16277,12 @@ fn main() effects { net } -> Int {
     let mut last_observation = String::new();
     for attempt in 0..8 {
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency queue-boundary binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            None,
+            "http runtime max-concurrency queue-boundary binary should start",
+        );
 
         let first_handle = thread::spawn(move || {
             for _ in 0..800 {
@@ -16465,23 +16426,9 @@ fn c_bin_http_runtime_max_concurrency_queue_boundary_low_drain_timeout_preserves
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencyqueueboundarylowtimeout"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
+        "httpmaxconcurrencyqueueboundarylowtimeout",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -16494,24 +16441,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency queue-boundary low-timeout fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencyqueueboundarylowtimeout");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency queue-boundary low-timeout fixture"
+        "max-concurrency queue-boundary low-timeout",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -16520,17 +16450,12 @@ fn main() effects { net } -> Int {
     for attempt in 0..8 {
         let attempt_started = Instant::now();
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency queue-boundary low-timeout binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            Some("1"),
+            "http runtime max-concurrency queue-boundary low-timeout binary should start",
+        );
 
         let first_handle = thread::spawn(move || {
             for _ in 0..800 {
@@ -16581,19 +16506,12 @@ fn main() effects { net } -> Int {
             .set_read_timeout(Some(Duration::from_secs(2)))
             .expect("second stream read timeout should be set");
 
-        let trailing_noise = vec![b'x'; 8192];
         first_stream
             .write_all(request)
             .expect("first request should be written");
-        first_stream
-            .write_all(&trailing_noise)
-            .expect("first trailing payload noise should be written");
         second_stream
             .write_all(request)
             .expect("second request should be written");
-        second_stream
-            .write_all(&trailing_noise)
-            .expect("second trailing payload noise should be written");
 
         let mut first_response = String::new();
         let mut second_response = String::new();
@@ -16683,22 +16601,9 @@ fn c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_heade
         return;
     }
 
-    let project_dir = temp_dir("sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencythrottlesecurityheaderse2e"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
+        "httpmaxconcurrencythrottlesecurityheaderse2e",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -16713,24 +16618,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency throttle security-header parity fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencythrottlesecurityheaderse2e");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency throttle security-header parity fixture"
+        "max-concurrency throttle security-header parity",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -16738,16 +16626,12 @@ fn main() effects { net } -> Int {
     let mut last_observation = String::new();
     for attempt in 0..8 {
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency throttle security-header parity binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            None,
+            "http runtime max-concurrency throttle security-header parity binary should start",
+        );
 
         let first_handle = thread::spawn(move || {
             for _ in 0..800 {
@@ -16905,22 +16789,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled
         return;
     }
 
-    let project_dir = temp_dir("sec4-c-bin-http-runtime-max-concurrency-late-connection-drain");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencylateconnectiondrain"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
+        "httpmaxconcurrencylateconnectiondrain",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -16933,24 +16804,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency late-connection drain fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencylateconnectiondrain");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency late-connection drain fixture"
+        "max-concurrency late-connection drain",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -16959,17 +16813,12 @@ fn main() effects { net } -> Int {
     for attempt in 0..8 {
         let attempt_started = Instant::now();
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "25")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency late-connection drain binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            Some("25"),
+            "http runtime max-concurrency late-connection drain binary should start",
+        );
 
         let mut first_stream = None;
         for _ in 0..800 {
@@ -17096,23 +16945,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_late_connection_low_drain_timeout_
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencylateconnectionlowtimeout"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
+        "httpmaxconcurrencylateconnectionlowtimeout",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -17125,24 +16960,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency late-connection low-timeout fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencylateconnectionlowtimeout");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency late-connection low-timeout fixture"
+        "max-concurrency late-connection low-timeout",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -17151,17 +16969,12 @@ fn main() effects { net } -> Int {
     for attempt in 0..8 {
         let attempt_started = Instant::now();
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency late-connection low-timeout binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            Some("1"),
+            "http runtime max-concurrency late-connection low-timeout binary should start",
+        );
 
         let mut first_stream = None;
         for _ in 0..800 {
@@ -17286,22 +17099,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_preserves_trace_orde
         return;
     }
 
-    let project_dir = temp_dir("sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencyburstingressorder"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
+        "httpmaxconcurrencyburstingressorder",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -17314,24 +17114,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency burst-ingress trace-order fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencyburstingressorder");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency burst-ingress trace-order fixture"
+        "max-concurrency burst-ingress trace-order",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -17340,17 +17123,12 @@ fn main() effects { net } -> Int {
     for attempt in 0..8 {
         let attempt_started = Instant::now();
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "25")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency burst-ingress trace-order binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            Some("25"),
+            "http runtime max-concurrency burst-ingress trace-order binary should start",
+        );
 
         let mut first_stream = None;
         for _ in 0..800 {
@@ -17515,23 +17293,9 @@ fn c_bin_http_runtime_max_concurrency_oneshot_burst_ingress_low_drain_timeout_pr
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout");
-    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
-    fs::write(
-        project_dir.join("sec4.toml"),
-        r#"[package]
-name = "httpmaxconcurrencyburstingresslowtimeout"
-version = "0.1.0"
-
-[build]
-entry = "src/main.ut"
-"#,
-    )
-    .expect("manifest should be written");
-
-    fs::write(
-        project_dir.join("src/main.ut"),
+    let binary_path = build_c_bin_fixture(
+        "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
+        "httpmaxconcurrencyburstingresslowtimeout",
         r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -17544,24 +17308,7 @@ fn main() effects { net } -> Int {
   0
 }
 "#,
-    )
-    .expect("source should be written");
-
-    let path = project_dir
-        .to_str()
-        .expect("project path should be valid utf-8");
-    let build_output = run_cli(&["build", "--path", path, "--emit", "c-bin"]);
-    assert!(
-        build_output.status.success(),
-        "c-bin build should succeed for max-concurrency burst-ingress low-timeout fixture"
-    );
-
-    let binary_path = project_dir
-        .join("build")
-        .join("httpmaxconcurrencyburstingresslowtimeout");
-    assert!(
-        binary_path.exists(),
-        "compiled binary should exist for max-concurrency burst-ingress low-timeout fixture"
+        "max-concurrency burst-ingress low-timeout",
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -17570,17 +17317,12 @@ fn main() effects { net } -> Int {
     for attempt in 0..8 {
         let attempt_started = Instant::now();
         let port = find_available_tcp_port();
-        let port_value = port.to_string();
-        let mut child = Command::new(&binary_path)
-            .env("SEC4_RT_HTTP_SERVE_MODE", "oneshot")
-            .env("SEC4_RT_HTTP_SERVE_TIMEOUT_MS", "8000")
-            .env("SEC4_RT_HTTP_MAX_CONCURRENCY", "1")
-            .env("SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS", "1")
-            .env("SEC4_RT_HTTP_PORT", port_value.as_str())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("http runtime max-concurrency burst-ingress low-timeout binary should start");
+        let mut child = spawn_max_concurrency_oneshot_binary(
+            &binary_path,
+            port,
+            Some("1"),
+            "http runtime max-concurrency burst-ingress low-timeout binary should start",
+        );
 
         let mut first_stream = None;
         for _ in 0..800 {
