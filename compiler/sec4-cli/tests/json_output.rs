@@ -1695,18 +1695,45 @@ fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_p
     panic_result.err().expect("panic payload should exist")
 }
 
+fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_actual_panic_message(
+    panic_payload: &(dyn std::any::Any + Send),
+) -> String {
+    panic_payload_message(panic_payload)
+}
+
+fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_expected_panic_message(
+    case_label: &str,
+) -> String {
+    ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+        case_label,
+    )
+}
+
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_equality(
+    panic_message: &str,
+    expected_message: &str,
+) {
+    assert_eq!(
+        panic_message, expected_message,
+        "panic message should match deterministic unknown-case contract"
+    );
+}
+
 fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
     case_label: &str,
     panic_payload: &(dyn std::any::Any + Send),
 ) {
-    let panic_message = panic_payload_message(panic_payload);
+    let panic_message =
+        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_actual_panic_message(
+            panic_payload,
+        );
     let expected_message =
-        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
+        ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_expected_panic_message(
             case_label,
         );
-    assert_eq!(
-        panic_message, expected_message,
-        "panic message should match deterministic unknown-case contract"
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_equality(
+        panic_message.as_str(),
+        expected_message.as_str(),
     );
 }
 
