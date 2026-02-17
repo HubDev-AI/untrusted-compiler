@@ -2839,6 +2839,27 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S129 HTTP max-concurrency oneshot late-connection deterministic drain coverage acceptance criteria
+
+- In oneshot mode with `SEC4_RT_HTTP_MAX_CONCURRENCY=1`, a late second client connection established after the first client is accepted is deterministically drained with a `503` throttle response.
+- Response ordering is deterministic for the late-connection path:
+  - first served client receives `200` with trace `rt-1`,
+  - late backlog client receives `503` with trace `rt-2`.
+- Late-drain throttle envelope remains deterministic:
+  - `Content-Type: text/plain; charset=utf-8`
+  - `Connection: close`
+  - body `server busy: max concurrency exceeded`.
+
+### M38-S129 tracking (live status)
+
+- [x] Added runtime e2e late-connection drain coverage:
+  - `c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+- [x] Locked deterministic ordering for first-served and late-drained clients (`rt-1` success, `rt-2` throttle).
+- [x] Revalidated max-concurrency suite coverage:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_oneshot_late_connection_is_drain_throttled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8151,7 +8172,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S129 HTTP max-concurrency oneshot late-connection deterministic drain coverage.
+- M38-S130 HTTP max-concurrency burst-ingress trace/order deterministic coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8243,9 +8264,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S129 scope for late-connection behavior in oneshot mode after first served request.
-2. Pin deterministic runtime contract for accepted/pending backlog drain paths under max-concurrency pressure.
-3. Publish M38-S129 book chapter and refresh roadmap live-status counts.
+1. Add M38-S130 scope for burst-ingress trace/order behavior under max-concurrency pressure.
+2. Pin deterministic trace-sequence and response-order invariants for multi-client contention bursts.
+3. Publish M38-S130 book chapter and refresh roadmap live-status counts.
 
 ---
 
