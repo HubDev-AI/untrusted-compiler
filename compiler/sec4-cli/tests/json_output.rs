@@ -1498,18 +1498,28 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
+fn ordered_contention_smoke_case_banner(
+    expectation: OrderedContentionRunnerMetadataExpectation,
+) -> String {
+    format!(
+        "[ordered-descriptor-smoke] case={} module={} fixture={}",
+        expectation.expected_case_label,
+        expectation.expected_module_name,
+        expectation.expected_fixture_name,
+    )
+}
+
 fn run_ordered_contention_smoke_expectation_with_failure_context(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
+    let case_banner = ordered_contention_smoke_case_banner(expectation);
+    eprintln!("{case_banner}");
     let run_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         run_ordered_contention_fixture_descriptor_case(expectation.fixture);
     }));
     if let Err(payload) = run_result {
         panic!(
-            "ordered descriptor smoke harness case `{}` ({}) [{}] failed: {}",
-            expectation.expected_case_label,
-            expectation.expected_module_name,
-            expectation.expected_fixture_name,
+            "{case_banner} failed: {}",
             panic_payload_message(payload.as_ref()),
         );
     }

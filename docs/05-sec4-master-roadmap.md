@@ -4053,6 +4053,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `run_ordered_contention_smoke_expectation_with_failure_context(...)`.
 - [x] Migrated ordered smoke harness loop to failure-context wrapped expectation execution.
 
+### M38-S227 HTTP max-concurrency ordered-attempt descriptor smoke harness case-banner tracing acceptance criteria
+
+- Ordered descriptor smoke harness prints deterministic per-case banners before running each table-driven fixture.
+- Case-banner format includes case label, module name, and fixture name for direct correlation with failure context.
+- Existing failure-context enrichment behavior remains unchanged after banner tracing is added.
+
+### M38-S227 tracking (live status)
+
+- [x] Added `ordered_contention_smoke_case_banner(...)`.
+- [x] Added per-expectation case-banner tracing in smoke harness execution.
+- [x] Reused case-banner content in wrapped failure diagnostics.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9365,7 +9377,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S227 HTTP max-concurrency ordered-attempt descriptor smoke harness case-banner tracing.
+- M38-S228 HTTP max-concurrency ordered-attempt descriptor smoke harness banner-contract coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9457,9 +9469,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S227 scope for ordered-attempt descriptor smoke harness case-banner tracing.
-2. Extend ordered helper coverage with descriptor smoke harness case-banner tracing.
-3. Publish M38-S227 chapter and refresh roadmap live-status counts.
+1. Add M38-S228 scope for ordered-attempt descriptor smoke harness banner-contract coverage.
+2. Extend ordered helper coverage with descriptor smoke harness banner-contract coverage.
+3. Publish M38-S228 chapter and refresh roadmap live-status counts.
 
 ---
 
