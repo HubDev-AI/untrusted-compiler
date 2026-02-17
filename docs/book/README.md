@@ -754,5 +754,15 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `786-m38-http-max-concurrency-security-header-parity-helper-adoption.md`
 - `787-m38-http-max-concurrency-late-connection-helper-adoption.md`
 - `788-m38-http-max-concurrency-burst-ingress-helper-adoption.md`
+- `789-m38-http-max-concurrency-connector-thread-helper-normalization.md`
+- `790-m38-http-max-concurrency-parallel-connector-pair-helper-introduction.md`
+- `791-m38-http-max-concurrency-multi-response-read-helper-introduction.md`
+- `792-m38-http-max-concurrency-pair-contract-predicate-helper-introduction.md`
+- `793-m38-http-max-concurrency-security-parity-pair-predicate-helper-adoption.md`
+- `794-m38-http-max-concurrency-oneshot-accept-barrier-helper-introduction.md`
+- `795-m38-http-max-concurrency-late-backlog-staging-helper-adoption.md`
+- `796-m38-http-max-concurrency-burst-backlog-staging-helper-adoption.md`
+- `797-m38-http-max-concurrency-ordered-trace-predicate-helper-adoption.md`
+- `798-m38-http-max-concurrency-bounded-tail-latency-helper-normalization.md`
 
 As milestones progress, chapters will be added and linked from this index.
