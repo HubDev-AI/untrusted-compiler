@@ -7081,6 +7081,46 @@ static void sec4_rt_send_concurrency_throttle_response(
   );
 }
 
+static void sec4_rt_drain_oneshot_backlog_with_throttle(
+    int server_fd,
+    sec4_rt_router_state *router,
+    int *pending_clients,
+    size_t *pending_count,
+    bool *fatal_error
+) {
+  if (router == NULL || pending_clients == NULL || pending_count == NULL) {
+    return;
+  }
+
+  for (size_t i = 0; i < *pending_count; i++) {
+    int client_fd = pending_clients[i];
+    if (client_fd < 0) {
+      continue;
+    }
+    sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    close(client_fd);
+  }
+  *pending_count = 0;
+
+  for (;;) {
+    int client_fd = accept(server_fd, NULL, NULL);
+    if (client_fd < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        break;
+      }
+      if (fatal_error != NULL) {
+        *fatal_error = true;
+      }
+      break;
+    }
+    sec4_rt_send_concurrency_throttle_response(client_fd, router);
+    close(client_fd);
+  }
+}
+
 static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   sec4_rt_reset_request();
   sec4_rt_assign_trace_id();
@@ -10981,6 +11021,13 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
 
   for (;;) {
     if (oneshot && served_request) {
+      sec4_rt_drain_oneshot_backlog_with_throttle(
+          server_fd,
+          slot,
+          pending_clients,
+          &pending_count,
+          &fatal_error
+      );
       break;
     }
 
