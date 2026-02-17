@@ -2820,6 +2820,25 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S128 HTTP max-concurrency throttle-response security-header parity hardening acceptance criteria
+
+- When security-headers middleware is enabled, runtime `503` max-concurrency throttle responses include the same baseline security headers as successful route responses.
+- In oneshot mode, once a request is served, pending and newly-accepted backlog clients are deterministically drained through throttle responses (instead of silent close paths), preserving throttle envelope parity under contention.
+- Coverage proves security-header parity and deterministic success/throttle split in a two-client contention scenario.
+
+### M38-S128 tracking (live status)
+
+- [x] Added runtime oneshot backlog drain helper for deterministic post-success throttle handling:
+  - `sec4_rt_drain_oneshot_backlog_with_throttle(...)`
+- [x] Hardened oneshot serve loop to drain pending/new backlog with throttle after first served request.
+- [x] Added security-header parity e2e test under contention:
+  - `c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+- [x] Revalidated related runtime/backend behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_throttle_response_preserves_security_headers_when_enabled_when_clang_available`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4-core --test c_backend c_backend_emits_runtime_header_and_source`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8132,7 +8151,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S128 HTTP max-concurrency throttle-response security-header parity hardening.
+- M38-S129 HTTP max-concurrency oneshot late-connection deterministic drain coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8224,9 +8243,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S128 scope for security-header parity on max-concurrency throttle responses.
-2. Ensure `503` throttle path carries the same baseline security-header contract as normal/error request responses.
-3. Publish M38-S128 book chapter and refresh roadmap live-status counts.
+1. Add M38-S129 scope for late-connection behavior in oneshot mode after first served request.
+2. Pin deterministic runtime contract for accepted/pending backlog drain paths under max-concurrency pressure.
+3. Publish M38-S129 book chapter and refresh roadmap live-status counts.
 
 ---
 
