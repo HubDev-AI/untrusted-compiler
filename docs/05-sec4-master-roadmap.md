@@ -2797,6 +2797,29 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output run_command_help_lists_runtime_bridge_flags`
   - `scripts/test-roadmap-closure-gate-alignment.sh`
 
+### M38-S127 HTTP max-concurrency queue-boundary deterministic throttle coverage acceptance criteria
+
+- Runtime queue-boundary pressure with `SEC4_RT_HTTP_MAX_CONCURRENCY=1` produces exactly one successful route response and one deterministic `503` throttle response for a two-client concurrent ingress attempt.
+- Throttle response contract is deterministic under queue pressure:
+  - status: `503 Service Unavailable`
+  - trace header: `X-Trace-Id: rt-*`
+  - body: `server busy: max concurrency exceeded`
+  - stable response framing headers (`Content-Type`, `Content-Length`, `Connection`).
+- Coverage is runtime e2e (`c-bin`), not only CLI argument/path validation.
+
+### M38-S127 tracking (live status)
+
+- [x] Added queue-boundary runtime e2e throttle coverage:
+  - `c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+- [x] Locked deterministic success+throttle pair contract for two-client contention:
+  - exactly one `200 OK`
+  - exactly one `503 Service Unavailable`
+  - deterministic throttle envelope assertions (status/body/trace/framing headers)
+- [x] Revalidated related runtime behavior:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_queue_boundary_emits_deterministic_throttle_when_clang_available`
+  - `scripts/test-roadmap-closure-gate-alignment.sh`
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8109,7 +8132,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S127 HTTP max-concurrency queue-boundary deterministic throttle coverage.
+- M38-S128 HTTP max-concurrency throttle-response security-header parity hardening.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -8201,9 +8224,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S127 scope for queue-boundary deterministic throttle behavior under max-concurrency limits.
-2. Pin deterministic throttle ordering and response invariants when accepted-connection pressure exceeds configured concurrency.
-3. Publish M38-S127 book chapter and refresh roadmap live-status counts.
+1. Add M38-S128 scope for security-header parity on max-concurrency throttle responses.
+2. Ensure `503` throttle path carries the same baseline security-header contract as normal/error request responses.
+3. Publish M38-S128 book chapter and refresh roadmap live-status counts.
 
 ---
 
