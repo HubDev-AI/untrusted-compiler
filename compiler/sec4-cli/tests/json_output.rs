@@ -1531,11 +1531,18 @@ fn ordered_contention_smoke_case_banner(
     )
 }
 
-fn ordered_contention_smoke_failure_banner(case_banner: &str, failure_message: &str) -> String {
+fn ordered_contention_smoke_failure_banner_contract_expected(
+    case_banner: &str,
+    failure_message: &str,
+) -> String {
     format!(
         "{case_banner} {} {failure_message}",
         ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX,
     )
+}
+
+fn ordered_contention_smoke_failure_banner(case_banner: &str, failure_message: &str) -> String {
+    ordered_contention_smoke_failure_banner_contract_expected(case_banner, failure_message)
 }
 
 fn ordered_contention_smoke_failure_banner_from_payload(
@@ -17740,10 +17747,8 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
     for_each_ordered_contention_runner_metadata_expectation(|expectation| {
         let case_banner = ordered_contention_smoke_case_banner(expectation);
-        let expected_failure_banner = format!(
-            "{case_banner} {} boom",
-            ORDERED_CONTENTION_SMOKE_FAILURE_SUFFIX,
-        );
+        let expected_failure_banner =
+            ordered_contention_smoke_failure_banner_contract_expected(&case_banner, "boom");
         assert_eq!(
             ordered_contention_smoke_failure_banner(&case_banner, "boom"),
             expected_failure_banner,
