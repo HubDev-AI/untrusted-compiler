@@ -1662,6 +1662,27 @@ fn assert_ordered_contention_smoke_contract_assertion_matrix_case_label_resoluti
     assert_eq!(matrix_case.case_label, case_label);
 }
 
+fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+    case_label: &str,
+) {
+    let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = ordered_contention_smoke_contract_assertion_matrix_case(case_label);
+    }));
+    assert!(panic_result.is_err(), "unknown case label must panic");
+    let panic_payload = panic_result.err().expect("panic payload should exist");
+    let panic_message = panic_payload_message(panic_payload.as_ref());
+    assert!(
+        panic_message.contains(
+            ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX
+        ),
+        "panic message should include matrix unknown-case prefix: {panic_message}"
+    );
+    assert!(
+        panic_message.contains(case_label),
+        "panic message should include unknown case label: {panic_message}"
+    );
+}
+
 fn run_ordered_contention_smoke_expectation_with_failure_context(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
@@ -17843,22 +17864,8 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertio
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
     );
 
-    let unknown_case_label = "not-a-real-smoke-contract-case";
-    let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = ordered_contention_smoke_contract_assertion_matrix_case(unknown_case_label);
-    }));
-    assert!(panic_result.is_err(), "unknown case label must panic");
-    let panic_payload = panic_result.err().expect("panic payload should exist");
-    let panic_message = panic_payload_message(panic_payload.as_ref());
-    assert!(
-        panic_message.contains(
-            ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX
-        ),
-        "panic message should include matrix unknown-case prefix: {panic_message}"
-    );
-    assert!(
-        panic_message.contains(unknown_case_label),
-        "panic message should include unknown case label: {panic_message}"
+    assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic(
+        "not-a-real-smoke-contract-case",
     );
 }
 
