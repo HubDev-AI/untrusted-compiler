@@ -817,5 +817,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `849-m38-http-max-concurrency-ordered-attempt-descriptor-catalog-assertion-table-compaction.md`
 - `850-m38-http-max-concurrency-ordered-attempt-descriptor-table-driven-fixture-smoke-harness-compaction.md`
 - `851-m38-http-max-concurrency-ordered-attempt-descriptor-contract-smoke-dual-table-unification.md`
+- `852-m38-http-max-concurrency-ordered-attempt-descriptor-contract-smoke-iterator-helper-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
