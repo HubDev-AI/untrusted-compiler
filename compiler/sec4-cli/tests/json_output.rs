@@ -910,42 +910,102 @@ fn burst_contention_branch_case(
     }
 }
 
+#[derive(Clone, Copy)]
 enum PairContentionBranchFixture {
     QueueBoundaryDefault,
     QueueBoundaryLowTimeout,
     SecurityHeaderParity,
 }
 
+#[derive(Clone, Copy)]
 enum LateContentionBranchFixture {
     DrainDefault,
     DrainLowTimeout,
 }
 
+#[derive(Clone, Copy)]
 enum BurstContentionBranchFixture {
     TraceOrderDefault,
     TraceOrderLowTimeout,
 }
 
+#[derive(Clone, Copy)]
 enum PairContentionFixtureDescriptor {
     QueueBoundary,
     QueueBoundaryLowTimeout,
     SecurityHeaderParity,
 }
 
+#[derive(Clone, Copy)]
 enum LateContentionFixtureDescriptor {
     DrainDefault,
     DrainLowTimeout,
 }
 
+#[derive(Clone, Copy)]
 enum BurstContentionFixtureDescriptor {
     TraceOrderDefault,
     TraceOrderLowTimeout,
 }
 
+#[derive(Clone, Copy)]
 enum OrderedContentionFixtureDescriptor {
     Pair(PairContentionFixtureDescriptor),
     Late(LateContentionFixtureDescriptor),
     Burst(BurstContentionFixtureDescriptor),
+}
+
+impl PairContentionFixtureDescriptor {
+    const fn as_index(self) -> usize {
+        match self {
+            PairContentionFixtureDescriptor::QueueBoundary => 0,
+            PairContentionFixtureDescriptor::QueueBoundaryLowTimeout => 1,
+            PairContentionFixtureDescriptor::SecurityHeaderParity => 2,
+        }
+    }
+}
+
+impl LateContentionFixtureDescriptor {
+    const fn as_index(self) -> usize {
+        match self {
+            LateContentionFixtureDescriptor::DrainDefault => 0,
+            LateContentionFixtureDescriptor::DrainLowTimeout => 1,
+        }
+    }
+}
+
+impl BurstContentionFixtureDescriptor {
+    const fn as_index(self) -> usize {
+        match self {
+            BurstContentionFixtureDescriptor::TraceOrderDefault => 0,
+            BurstContentionFixtureDescriptor::TraceOrderLowTimeout => 1,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PairContentionFixtureMetadata {
+    fixture_name: &'static str,
+    module_name: &'static str,
+    case_label: &'static str,
+    source: &'static str,
+    branch_fixture: PairContentionBranchFixture,
+}
+
+#[derive(Clone, Copy)]
+struct LateContentionFixtureMetadata {
+    fixture_name: &'static str,
+    module_name: &'static str,
+    case_label: &'static str,
+    branch_fixture: LateContentionBranchFixture,
+}
+
+#[derive(Clone, Copy)]
+struct BurstContentionFixtureMetadata {
+    fixture_name: &'static str,
+    module_name: &'static str,
+    case_label: &'static str,
+    branch_fixture: BurstContentionBranchFixture,
 }
 
 const MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE: &str = r#"fn health() effects { net } -> Int {
@@ -975,6 +1035,60 @@ fn main() effects { net } -> Int {
   0
 }
 "#;
+
+const PAIR_CONTENTION_FIXTURE_METADATA_TABLE: [PairContentionFixtureMetadata; 3] = [
+    PairContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
+        module_name: "httpmaxconcurrencyqueueboundarye2e",
+        case_label: "max-concurrency queue-boundary",
+        source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        branch_fixture: PairContentionBranchFixture::QueueBoundaryDefault,
+    },
+    PairContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
+        module_name: "httpmaxconcurrencyqueueboundarylowtimeout",
+        case_label: "max-concurrency queue-boundary low-timeout",
+        source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+        branch_fixture: PairContentionBranchFixture::QueueBoundaryLowTimeout,
+    },
+    PairContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
+        module_name: "httpmaxconcurrencythrottlesecurityheaderse2e",
+        case_label: "max-concurrency throttle security-header parity",
+        source: MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
+        branch_fixture: PairContentionBranchFixture::SecurityHeaderParity,
+    },
+];
+
+const LATE_CONTENTION_FIXTURE_METADATA_TABLE: [LateContentionFixtureMetadata; 2] = [
+    LateContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
+        module_name: "httpmaxconcurrencylateconnectiondrain",
+        case_label: "max-concurrency late-connection drain",
+        branch_fixture: LateContentionBranchFixture::DrainDefault,
+    },
+    LateContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
+        module_name: "httpmaxconcurrencylateconnectionlowtimeout",
+        case_label: "max-concurrency late-connection low-timeout",
+        branch_fixture: LateContentionBranchFixture::DrainLowTimeout,
+    },
+];
+
+const BURST_CONTENTION_FIXTURE_METADATA_TABLE: [BurstContentionFixtureMetadata; 2] = [
+    BurstContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
+        module_name: "httpmaxconcurrencyburstingressorder",
+        case_label: "max-concurrency burst-ingress trace-order",
+        branch_fixture: BurstContentionBranchFixture::TraceOrderDefault,
+    },
+    BurstContentionFixtureMetadata {
+        fixture_name: "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
+        module_name: "httpmaxconcurrencyburstingresslowtimeout",
+        case_label: "max-concurrency burst-ingress low-timeout",
+        branch_fixture: BurstContentionBranchFixture::TraceOrderLowTimeout,
+    },
+];
 
 fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairContentionBranchCase<'static> {
     match fixture {
@@ -1014,29 +1128,14 @@ fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairC
 fn pair_contention_fixture_descriptor(
     fixture: PairContentionFixtureDescriptor,
 ) -> (&'static str, &'static str, &'static str, &'static str, PairContentionBranchFixture) {
-    match fixture {
-        PairContentionFixtureDescriptor::QueueBoundary => (
-            "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
-            "httpmaxconcurrencyqueueboundarye2e",
-            "max-concurrency queue-boundary",
-            MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-            PairContentionBranchFixture::QueueBoundaryDefault,
-        ),
-        PairContentionFixtureDescriptor::QueueBoundaryLowTimeout => (
-            "sec4-c-bin-http-runtime-max-concurrency-queue-boundary-low-timeout",
-            "httpmaxconcurrencyqueueboundarylowtimeout",
-            "max-concurrency queue-boundary low-timeout",
-            MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-            PairContentionBranchFixture::QueueBoundaryLowTimeout,
-        ),
-        PairContentionFixtureDescriptor::SecurityHeaderParity => (
-            "sec4-c-bin-http-runtime-max-concurrency-throttle-security-headers",
-            "httpmaxconcurrencythrottlesecurityheaderse2e",
-            "max-concurrency throttle security-header parity",
-            MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
-            PairContentionBranchFixture::SecurityHeaderParity,
-        ),
-    }
+    let metadata = PAIR_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
+    (
+        metadata.fixture_name,
+        metadata.module_name,
+        metadata.case_label,
+        metadata.source,
+        metadata.branch_fixture,
+    )
 }
 
 fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateContentionBranchCase<'static> {
@@ -1067,20 +1166,13 @@ fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateC
 fn late_contention_fixture_descriptor(
     fixture: LateContentionFixtureDescriptor,
 ) -> (&'static str, &'static str, &'static str, LateContentionBranchFixture) {
-    match fixture {
-        LateContentionFixtureDescriptor::DrainDefault => (
-            "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
-            "httpmaxconcurrencylateconnectiondrain",
-            "max-concurrency late-connection drain",
-            LateContentionBranchFixture::DrainDefault,
-        ),
-        LateContentionFixtureDescriptor::DrainLowTimeout => (
-            "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
-            "httpmaxconcurrencylateconnectionlowtimeout",
-            "max-concurrency late-connection low-timeout",
-            LateContentionBranchFixture::DrainLowTimeout,
-        ),
-    }
+    let metadata = LATE_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
+    (
+        metadata.fixture_name,
+        metadata.module_name,
+        metadata.case_label,
+        metadata.branch_fixture,
+    )
 }
 
 fn burst_contention_branch_fixture(
@@ -1115,20 +1207,13 @@ fn burst_contention_branch_fixture(
 fn burst_contention_fixture_descriptor(
     fixture: BurstContentionFixtureDescriptor,
 ) -> (&'static str, &'static str, &'static str, BurstContentionBranchFixture) {
-    match fixture {
-        BurstContentionFixtureDescriptor::TraceOrderDefault => (
-            "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-order",
-            "httpmaxconcurrencyburstingressorder",
-            "max-concurrency burst-ingress trace-order",
-            BurstContentionBranchFixture::TraceOrderDefault,
-        ),
-        BurstContentionFixtureDescriptor::TraceOrderLowTimeout => (
-            "sec4-c-bin-http-runtime-max-concurrency-burst-ingress-low-timeout",
-            "httpmaxconcurrencyburstingresslowtimeout",
-            "max-concurrency burst-ingress low-timeout",
-            BurstContentionBranchFixture::TraceOrderLowTimeout,
-        ),
-    }
+    let metadata = BURST_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
+    (
+        metadata.fixture_name,
+        metadata.module_name,
+        metadata.case_label,
+        metadata.branch_fixture,
+    )
 }
 
 fn assert_pair_contention_fixture(

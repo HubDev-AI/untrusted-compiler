@@ -3957,6 +3957,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `run_ordered_contention_fixture_descriptor_case(...)` unified dispatcher helper.
 - [x] Migrated seven ordered branch tests to the unified descriptor-runner assertion-pack path.
 
+### M38-S219 HTTP max-concurrency ordered-attempt descriptor metadata table extraction acceptance criteria
+
+- Pair/late/burst descriptor metadata is backed by canonical static metadata tables.
+- Descriptor lookup helpers resolve metadata through deterministic table indexing rather than repeated match tuple literals.
+- Ordered descriptor-runner behavior and assertion contracts remain unchanged.
+
+### M38-S219 tracking (live status)
+
+- [x] Added pair/late/burst descriptor metadata structs and static metadata tables.
+- [x] Added deterministic descriptor index mapping helpers (`as_index`) for table lookup.
+- [x] Migrated descriptor lookup helpers to metadata-table extraction paths.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9269,7 +9281,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S219 HTTP max-concurrency ordered-attempt descriptor metadata table extraction.
+- M38-S220 HTTP max-concurrency ordered-attempt descriptor table-runner envelope simplification.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9361,9 +9373,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S219 scope for ordered-attempt descriptor metadata table extraction.
-2. Extend ordered helper coverage with descriptor metadata table extraction.
-3. Publish M38-S219 chapter and refresh roadmap live-status counts.
+1. Add M38-S220 scope for ordered-attempt descriptor table-runner envelope simplification.
+2. Extend ordered helper coverage with descriptor table-runner envelope simplification.
+3. Publish M38-S220 chapter and refresh roadmap live-status counts.
 
 ---
 
