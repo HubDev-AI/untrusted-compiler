@@ -1609,6 +1609,8 @@ struct OrderedContentionSmokeContractAssertionMatrixCase {
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL: &str = "case-banner";
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL: &str =
     "failure-banner";
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX: &str =
+    "unknown ordered contention smoke contract assertion matrix case label:";
 
 const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX: [OrderedContentionSmokeContractAssertionMatrixCase;
     2] = [
@@ -1630,7 +1632,10 @@ fn ordered_contention_smoke_contract_assertion_matrix_case(
             return matrix_case;
         }
     }
-    panic!("unknown ordered contention smoke contract assertion matrix case label: {case_label}");
+    panic!(
+        "{} {case_label}",
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX,
+    );
 }
 
 fn run_ordered_contention_smoke_contract_assertion_dispatch(
@@ -17814,6 +17819,44 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
         ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
     );
     run_ordered_contention_smoke_contract_assertion_matrix_case(matrix_case);
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_contract_assertion_matrix_case_label_contract_coverage(
+) {
+    let case_banner_matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
+    );
+    assert_eq!(
+        case_banner_matrix_case.case_label,
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
+    );
+
+    let failure_banner_matrix_case = ordered_contention_smoke_contract_assertion_matrix_case(
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
+    );
+    assert_eq!(
+        failure_banner_matrix_case.case_label,
+        ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_FAILURE_BANNER_CASE_LABEL,
+    );
+
+    let unknown_case_label = "not-a-real-smoke-contract-case";
+    let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = ordered_contention_smoke_contract_assertion_matrix_case(unknown_case_label);
+    }));
+    assert!(panic_result.is_err(), "unknown case label must panic");
+    let panic_payload = panic_result.err().expect("panic payload should exist");
+    let panic_message = panic_payload_message(panic_payload.as_ref());
+    assert!(
+        panic_message.contains(
+            ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_UNKNOWN_MATRIX_CASE_LABEL_PREFIX
+        ),
+        "panic message should include matrix unknown-case prefix: {panic_message}"
+    );
+    assert!(
+        panic_message.contains(unknown_case_label),
+        "panic message should include unknown case label: {panic_message}"
+    );
 }
 
 #[test]
