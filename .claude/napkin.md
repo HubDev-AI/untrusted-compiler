@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-17 | self | Launched two `cargo test` commands in parallel during slice validation, reintroducing build-dir/package-cache lock contention noise. | Run Cargo validations strictly sequentially in this repo; parallelize only read/search commands. |
 | 2026-02-15 | self | Tried validating opaque runtime handles through Untrusted<T> source code by comparing strong types (`HeaderName`, `PathSafe`) against numeric literals, which the typechecker correctly rejects. | For runtime behavior on opaque constructors, add direct C harness tests against `runtime/c/sec4_runtime.c` instead of fighting language-level type safety. |
 | 2026-02-15 | self | Ran two Cargo tests in parallel again while validating ABI updates, causing `Blocking waiting for file lock` noise and slower feedback. | Keep Cargo invocations strictly sequential in this repo; parallelize only read/search tooling. |
 | 2026-02-15 | self | Inserted a new Rust integration test block inside an existing raw-string fixture body, which broke parsing for downstream assertions and produced misleading compile errors (`prefix is unknown`). | When adding long fixture tests in Rust files, immediately verify surrounding raw-string delimiters with `nl -ba` before running cargo tests. |
