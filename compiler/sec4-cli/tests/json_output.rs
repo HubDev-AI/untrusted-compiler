@@ -910,6 +910,111 @@ fn burst_contention_branch_case(
     }
 }
 
+enum PairContentionBranchFixture {
+    QueueBoundaryDefault,
+    QueueBoundaryLowTimeout,
+    SecurityHeaderParity,
+}
+
+enum LateContentionBranchFixture {
+    DrainDefault,
+    DrainLowTimeout,
+}
+
+enum BurstContentionBranchFixture {
+    TraceOrderDefault,
+    TraceOrderLowTimeout,
+}
+
+fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairContentionBranchCase<'static> {
+    match fixture {
+        PairContentionBranchFixture::QueueBoundaryDefault => pair_contention_branch_case(
+            None,
+            "http runtime max-concurrency queue-boundary binary should start",
+            "max-concurrency queue-boundary test could not establish first connection",
+            "max-concurrency queue-boundary test could not establish second connection",
+            "max-concurrency queue-boundary binary did not exit in expected window",
+            pair_success_throttle_contract_holds,
+            None,
+            "max-concurrency queue-boundary run should produce one success and one deterministic throttle response",
+        ),
+        PairContentionBranchFixture::QueueBoundaryLowTimeout => pair_contention_branch_case(
+            Some("1"),
+            "http runtime max-concurrency queue-boundary low-timeout binary should start",
+            "max-concurrency queue-boundary low-timeout test could not establish first connection",
+            "max-concurrency queue-boundary low-timeout test could not establish second connection",
+            "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
+            pair_success_throttle_contract_holds,
+            Some(1000),
+            "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        ),
+        PairContentionBranchFixture::SecurityHeaderParity => pair_contention_branch_case(
+            None,
+            "http runtime max-concurrency throttle security-header parity binary should start",
+            "max-concurrency throttle security-header parity test could not establish first connection",
+            "max-concurrency throttle security-header parity test could not establish second connection",
+            "max-concurrency throttle security-header parity binary did not exit in expected window",
+            pair_success_throttle_with_security_header_parity_holds,
+            None,
+            "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled",
+        ),
+    }
+}
+
+fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateContentionBranchCase<'static> {
+    match fixture {
+        LateContentionBranchFixture::DrainDefault => late_contention_branch_case(
+            Some("25"),
+            "http runtime max-concurrency late-connection drain binary should start",
+            "max-concurrency late-connection drain test could not establish first connection",
+            "max-concurrency late-connection drain test could not establish second connection",
+            "max-concurrency late-connection drain binary did not exit in expected window",
+            4096,
+            1200,
+            "late-connection oneshot path should deterministically drain-throttle backlog client after first served response",
+        ),
+        LateContentionBranchFixture::DrainLowTimeout => late_contention_branch_case(
+            Some("1"),
+            "http runtime max-concurrency late-connection low-timeout binary should start",
+            "max-concurrency late-connection low-timeout test could not establish first connection",
+            "max-concurrency late-connection low-timeout test could not establish second connection",
+            "max-concurrency late-connection low-timeout binary did not exit in expected window",
+            8192,
+            1000,
+            "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        ),
+    }
+}
+
+fn burst_contention_branch_fixture(
+    fixture: BurstContentionBranchFixture,
+) -> BurstContentionBranchCase<'static> {
+    match fixture {
+        BurstContentionBranchFixture::TraceOrderDefault => burst_contention_branch_case(
+            Some("25"),
+            "http runtime max-concurrency burst-ingress trace-order binary should start",
+            "max-concurrency burst-ingress trace-order test could not establish first connection",
+            "max-concurrency burst-ingress trace-order test could not establish second connection",
+            "max-concurrency burst-ingress trace-order test could not establish third connection",
+            "max-concurrency burst-ingress trace-order binary did not exit in expected window",
+            4096,
+            1200,
+            "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle)",
+        ),
+        BurstContentionBranchFixture::TraceOrderLowTimeout => burst_contention_branch_case(
+            Some("1"),
+            "http runtime max-concurrency burst-ingress low-timeout binary should start",
+            "max-concurrency burst-ingress low-timeout test could not establish first connection",
+            "max-concurrency burst-ingress low-timeout test could not establish second connection",
+            "max-concurrency burst-ingress low-timeout test could not establish third connection",
+            "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
+            8192,
+            1000,
+            "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        ),
+    }
+}
+
 fn assert_pair_contention_branch_case(
     binary_path: &Path,
     request: &[u8],
@@ -17122,16 +17227,7 @@ fn main() effects { net } -> Int {
     assert_pair_contention_branch_case(
         &binary_path,
         request,
-        &pair_contention_branch_case(
-            None,
-            "http runtime max-concurrency queue-boundary binary should start",
-            "max-concurrency queue-boundary test could not establish first connection",
-            "max-concurrency queue-boundary test could not establish second connection",
-            "max-concurrency queue-boundary binary did not exit in expected window",
-            pair_success_throttle_contract_holds,
-            None,
-            "max-concurrency queue-boundary run should produce one success and one deterministic throttle response",
-        ),
+        &pair_contention_branch_fixture(PairContentionBranchFixture::QueueBoundaryDefault),
     );
 }
 
@@ -17165,16 +17261,7 @@ fn main() effects { net } -> Int {
     assert_pair_contention_branch_case(
         &binary_path,
         request,
-        &pair_contention_branch_case(
-            Some("1"),
-            "http runtime max-concurrency queue-boundary low-timeout binary should start",
-            "max-concurrency queue-boundary low-timeout test could not establish first connection",
-            "max-concurrency queue-boundary low-timeout test could not establish second connection",
-            "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
-            pair_success_throttle_contract_holds,
-            Some(1000),
-            "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency",
-        ),
+        &pair_contention_branch_fixture(PairContentionBranchFixture::QueueBoundaryLowTimeout),
     );
 }
 
@@ -17210,16 +17297,7 @@ fn main() effects { net } -> Int {
     assert_pair_contention_branch_case(
         &binary_path,
         request,
-        &pair_contention_branch_case(
-            None,
-            "http runtime max-concurrency throttle security-header parity binary should start",
-            "max-concurrency throttle security-header parity test could not establish first connection",
-            "max-concurrency throttle security-header parity test could not establish second connection",
-            "max-concurrency throttle security-header parity binary did not exit in expected window",
-            pair_success_throttle_with_security_header_parity_holds,
-            None,
-            "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled",
-        ),
+        &pair_contention_branch_fixture(PairContentionBranchFixture::SecurityHeaderParity),
     );
 }
 
@@ -17253,16 +17331,7 @@ fn main() effects { net } -> Int {
     assert_late_contention_branch_case(
         &binary_path,
         request,
-        &late_contention_branch_case(
-            Some("25"),
-            "http runtime max-concurrency late-connection drain binary should start",
-            "max-concurrency late-connection drain test could not establish first connection",
-            "max-concurrency late-connection drain test could not establish second connection",
-            "max-concurrency late-connection drain binary did not exit in expected window",
-            4096,
-            1200,
-            "late-connection oneshot path should deterministically drain-throttle backlog client after first served response",
-        ),
+        &late_contention_branch_fixture(LateContentionBranchFixture::DrainDefault),
     );
 }
 
@@ -17296,16 +17365,7 @@ fn main() effects { net } -> Int {
     assert_late_contention_branch_case(
         &binary_path,
         request,
-        &late_contention_branch_case(
-            Some("1"),
-            "http runtime max-concurrency late-connection low-timeout binary should start",
-            "max-concurrency late-connection low-timeout test could not establish first connection",
-            "max-concurrency late-connection low-timeout test could not establish second connection",
-            "max-concurrency late-connection low-timeout binary did not exit in expected window",
-            8192,
-            1000,
-            "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency",
-        ),
+        &late_contention_branch_fixture(LateContentionBranchFixture::DrainLowTimeout),
     );
 }
 
@@ -17339,17 +17399,7 @@ fn main() effects { net } -> Int {
     assert_burst_contention_branch_case(
         &binary_path,
         request,
-        &burst_contention_branch_case(
-            Some("25"),
-            "http runtime max-concurrency burst-ingress trace-order binary should start",
-            "max-concurrency burst-ingress trace-order test could not establish first connection",
-            "max-concurrency burst-ingress trace-order test could not establish second connection",
-            "max-concurrency burst-ingress trace-order test could not establish third connection",
-            "max-concurrency burst-ingress trace-order binary did not exit in expected window",
-            4096,
-            1200,
-            "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle)",
-        ),
+        &burst_contention_branch_fixture(BurstContentionBranchFixture::TraceOrderDefault),
     );
 }
 
@@ -17383,17 +17433,7 @@ fn main() effects { net } -> Int {
     assert_burst_contention_branch_case(
         &binary_path,
         request,
-        &burst_contention_branch_case(
-            Some("1"),
-            "http runtime max-concurrency burst-ingress low-timeout binary should start",
-            "max-concurrency burst-ingress low-timeout test could not establish first connection",
-            "max-concurrency burst-ingress low-timeout test could not establish second connection",
-            "max-concurrency burst-ingress low-timeout test could not establish third connection",
-            "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
-            8192,
-            1000,
-            "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency",
-        ),
+        &burst_contention_branch_fixture(BurstContentionBranchFixture::TraceOrderLowTimeout),
     );
 }
 

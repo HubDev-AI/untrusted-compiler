@@ -3898,6 +3898,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `pair_contention_branch_case(...)`, `late_contention_branch_case(...)`, and `burst_contention_branch_case(...)`.
 - [x] Migrated seven ordered branch assertions to constructor-backed branch-case fixtures.
 
+### M38-S214 HTTP max-concurrency ordered-attempt helper fixture-catalog dispatch normalization acceptance criteria
+
+- Ordered branch fixtures are selected through canonical fixture catalogs instead of per-test literal constructor arguments.
+- Queue/security/late/burst branches dispatch by explicit fixture identifiers.
+- Deterministic contract diagnostics and assertion semantics remain unchanged.
+
+### M38-S214 tracking (live status)
+
+- [x] Added fixture enums: `PairContentionBranchFixture`, `LateContentionBranchFixture`, `BurstContentionBranchFixture`.
+- [x] Added fixture dispatch helpers: `pair_contention_branch_fixture(...)`, `late_contention_branch_fixture(...)`, `burst_contention_branch_fixture(...)`.
+- [x] Migrated seven ordered branch assertions to fixture-catalog dispatch calls.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9210,7 +9222,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S214 HTTP max-concurrency ordered-attempt helper fixture-catalog dispatch normalization.
+- M38-S215 HTTP max-concurrency ordered-attempt fixture catalog assertion-pack revalidation.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9302,9 +9314,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S214 scope for ordered-attempt helper fixture-catalog dispatch normalization.
-2. Extend ordered helper coverage with fixture-catalog dispatch normalization.
-3. Publish M38-S214 chapter and refresh roadmap live-status counts.
+1. Add M38-S215 scope for ordered-attempt fixture catalog assertion-pack revalidation.
+2. Extend ordered helper coverage with fixture-catalog assertion-pack revalidation.
+3. Publish M38-S215 chapter and refresh roadmap live-status counts.
 
 ---
 
