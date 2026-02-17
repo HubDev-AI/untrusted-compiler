@@ -1600,6 +1600,12 @@ fn assert_ordered_contention_smoke_failure_banner_contract_expectation(
     );
 }
 
+fn run_ordered_contention_smoke_contract_assertion_dispatch(
+    assertion: fn(OrderedContentionRunnerMetadataExpectation),
+) {
+    for_each_ordered_contention_runner_metadata_expectation(assertion);
+}
+
 fn run_ordered_contention_smoke_expectation_with_failure_context(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
@@ -17765,14 +17771,14 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
-    for_each_ordered_contention_runner_metadata_expectation(
+    run_ordered_contention_smoke_contract_assertion_dispatch(
         assert_ordered_contention_smoke_case_banner_contract_expectation,
     );
 }
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
-    for_each_ordered_contention_runner_metadata_expectation(
+    run_ordered_contention_smoke_contract_assertion_dispatch(
         assert_ordered_contention_smoke_failure_banner_contract_expectation,
     );
 }
