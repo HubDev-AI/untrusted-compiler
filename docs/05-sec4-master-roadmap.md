@@ -3654,6 +3654,117 @@ Post-alpha track acceptance anchors:
   - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
 - [x] Published book chapters `809..818`.
 
+### M38-S192 HTTP max-concurrency queue/security pair-attempt outcome helper normalization acceptance criteria
+
+- Queue/security contention branches share normalized pair-attempt outcome helper paths.
+- Outcome helper adoption removes repeated status/response handling boilerplate.
+- Queue/security contention behavior remains unchanged.
+
+### M38-S192 tracking (live status)
+
+- [x] Added normalized pair-attempt outcome helper coverage for queue/security branches.
+- [x] Revalidated queue/security contention contracts after helper adoption.
+
+### M38-S193 HTTP max-concurrency pair-attempt outcome envelope introduction acceptance criteria
+
+- Pair attempt outcome uses a canonical envelope type.
+- Envelope stores process status plus first/second responses for contract evaluation.
+- Outcome envelope semantics remain deterministic.
+
+### M38-S193 tracking (live status)
+
+- [x] Added `PairAttemptOutcome`.
+- [x] Added canonical outcome contract alias `PairOutcomeContract`.
+
+### M38-S194 HTTP max-concurrency pair-attempt outcome collector helper introduction acceptance criteria
+
+- Pair attempts use one helper to exchange requests and collect status/responses.
+- Outcome collector centralizes child wait timeout behavior with case-specific diagnostics.
+- Outcome collection behavior remains deterministic.
+
+### M38-S194 tracking (live status)
+
+- [x] Added `collect_pair_attempt_outcome(...)`.
+- [x] Migrated queue/security pair branches to outcome collector helper.
+
+### M38-S195 HTTP max-concurrency pair outcome contract-dispatch helper introduction acceptance criteria
+
+- Pair outcome contract evaluation uses one contract-dispatch helper.
+- Queue/security branches no longer invoke contract functions with inline response tuple plumbing.
+- Contract-dispatch behavior remains deterministic.
+
+### M38-S195 tracking (live status)
+
+- [x] Added `pair_outcome_matches_contract(...)`.
+- [x] Migrated queue default/security parity contract checks to helper.
+
+### M38-S196 HTTP max-concurrency pair outcome bounded-tail contract helper introduction acceptance criteria
+
+- Pair outcome plus bounded-tail checks use one helper.
+- Queue low-timeout branch no longer duplicates bounded-tail conjunction logic.
+- Bounded-tail behavior remains deterministic.
+
+### M38-S196 tracking (live status)
+
+- [x] Added `pair_outcome_matches_contract_with_bounded_tail(...)`.
+- [x] Migrated queue low-timeout contract path to helper.
+
+### M38-S197 HTTP max-concurrency pair outcome observation formatter helper introduction acceptance criteria
+
+- Pair attempt observation rendering uses one helper path.
+- Queue/security branches no longer format observation strings with direct tuple plumbing.
+- Observation envelopes remain deterministic.
+
+### M38-S197 tracking (live status)
+
+- [x] Added `format_pair_outcome_observation(...)`.
+- [x] Migrated queue/security observation updates to helper.
+
+### M38-S198 HTTP max-concurrency queue default outcome helper adoption acceptance criteria
+
+- Queue default branch uses canonical pair outcome helpers for collection/contract/observation.
+- Queue default branch no longer duplicates outcome handling boilerplate.
+- Queue default deterministic contract remains unchanged.
+
+### M38-S198 tracking (live status)
+
+- [x] Migrated queue default outcome handling to pair outcome helpers.
+- [x] Preserved queue default one-success/one-throttle contract.
+
+### M38-S199 HTTP max-concurrency queue low-timeout outcome helper adoption acceptance criteria
+
+- Queue low-timeout branch uses canonical pair outcome helpers for collection/contract/observation.
+- Queue low-timeout branch no longer duplicates outcome+bounded-tail boilerplate.
+- Queue low-timeout deterministic contract remains unchanged.
+
+### M38-S199 tracking (live status)
+
+- [x] Migrated queue low-timeout outcome handling to pair outcome helpers.
+- [x] Preserved queue low-timeout bounded-tail contract.
+
+### M38-S200 HTTP max-concurrency security parity outcome helper adoption acceptance criteria
+
+- Security parity branch uses canonical pair outcome helpers for collection/contract/observation.
+- Security parity branch no longer duplicates outcome handling boilerplate.
+- Security parity deterministic contract remains unchanged.
+
+### M38-S200 tracking (live status)
+
+- [x] Migrated security parity outcome handling to pair outcome helpers.
+- [x] Preserved security parity contract behavior.
+
+### M38-S201 HTTP max-concurrency pair-outcome helper consolidation revalidation acceptance criteria
+
+- Queue/security pair-outcome helper consolidation keeps contention contracts green.
+- No regression in queue default, queue low-timeout, or security parity branches.
+- Roadmap/book tracking is refreshed for `M38-S192..M38-S201`.
+
+### M38-S201 tracking (live status)
+
+- [x] Revalidated helper-layer contract suite:
+  - `cargo test -p sec4 --test json_output c_bin_http_runtime_max_concurrency_`
+- [x] Published book chapters `819..828`.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -8966,7 +9077,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S192 HTTP max-concurrency queue/security pair-attempt outcome helper normalization.
+- M38-S202 HTTP max-concurrency queue/security pair-attempt assertion-loop helper normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9058,9 +9169,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S192 scope for queue/security pair-attempt outcome helper normalization.
-2. Consolidate queue/security pair status + observation handling into shared helper paths.
-3. Publish M38-S192 chapter and refresh roadmap live-status counts.
+1. Add M38-S202 scope for queue/security pair-attempt assertion-loop helper normalization.
+2. Consolidate queue/security attempt loop contract checks into shared helper paths.
+3. Publish M38-S202 chapter and refresh roadmap live-status counts.
 
 ---
 
