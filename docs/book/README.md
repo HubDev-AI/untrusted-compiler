@@ -849,5 +849,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `881-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-payload-contract-helper-extraction.md`
 - `882-m38-http-max-concurrency-ordered-attempt-descriptor-smoke-contract-matrix-unknown-label-panic-orchestration-helper-simplification.md`
 - `883-m37-alpha-tag-gate-execution-evidence-refresh.md`
+- `884-m37-full-alpha-gate-execution-with-tests.md`
 
 As milestones progress, chapters will be added and linked from this index.

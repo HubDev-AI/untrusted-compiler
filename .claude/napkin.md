@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-17 | self | Repeated an accidental `web` tool invocation while checking local command output after a long gate run. | Keep local-verification loops on `functions.exec_command` only; explicitly confirm tool namespace before each follow-up command. |
 | 2026-02-17 | self | Triggered the `web` tool by mistake while inspecting local roadmap content. | Stay on `functions.exec_command`/`apply_patch` for local repository work; use `web` tooling only for explicit external research tasks. |
 | 2026-02-17 | self | Used backticks in a double-quoted `gh pr create --body` shell string, which triggered command substitution and dropped milestone tags from the PR body. | For PR bodies containing backticks or parenthesized identifiers, write body content through a single-quoted heredoc/file and pass `--body-file` to `gh`. |
 | 2026-02-17 | self | Launched two `cargo test` commands in parallel during slice validation, reintroducing build-dir/package-cache lock contention noise. | Run Cargo validations strictly sequentially in this repo; parallelize only read/search commands. |
