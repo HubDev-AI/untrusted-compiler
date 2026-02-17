@@ -88,6 +88,19 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
 4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
 
+### `WASM_START_GATE` status (2026-02-17)
+
+- `OPEN` based on verified closure evidence:
+  - alpha decision record `GO`:
+    - `build/m37-alpha-tag-decision-record.json`
+  - alpha tag created and pushed:
+    - `v0.1.0-alpha.1`
+  - post-tag publish-manifest chain verified:
+    - `scripts/verify-release-promotion-inputs.sh`
+    - `scripts/generate-release-publish-manifest.sh`
+    - `scripts/verify-release-publish-manifest.sh`
+    - `build/release-alpha-gate/publish-manifest.json`
+
 When `WASM_START_GATE` is open, WASM backend + browser runtime profile becomes the highest-priority new feature track, executed first through the browser-to-server promotion milestone plan (M39 below).
 
 ### Post-alpha two-phase backend promotion track (browser -> server)
@@ -373,6 +386,25 @@ Post-alpha track acceptance anchors:
 - [x] Executed `scripts/release-alpha-gate.sh` (with tests) and observed final gate `PASS`.
 - [x] Rebuilt M37-S6/S7/S8 artifacts from full-gate evidence and revalidated `PASS/GO`, `alpha-ready GO`, `GO PASS`.
 - [x] Added book chapter documenting M37-S10 full-gate execution evidence (`docs/book/884-m37-full-alpha-gate-execution-with-tests.md`).
+
+### M37-S11 alpha tag execution + post-tag verification checklist closure acceptance criteria
+
+- Alpha tag is created from the latest `M37-S8` `GO` decision baseline using workflow-compatible naming (`v0.1.0-alpha*`).
+- Post-tag verification chain passes:
+  - release gate evidence refresh,
+  - release promotion input verification,
+  - publish-manifest generation and verification.
+- Alpha closure status is promoted to `WASM_START_GATE` `OPEN` with explicit evidence pointers.
+
+### M37-S11 tracking (live status)
+
+- [x] Created and pushed alpha tag `v0.1.0-alpha.1` from `dev` `HEAD`.
+- [x] Executed post-tag verifier chain:
+  - `scripts/release-alpha-gate.sh --skip-tests`
+  - `scripts/verify-release-promotion-inputs.sh`
+  - `scripts/generate-release-publish-manifest.sh`
+  - `scripts/verify-release-publish-manifest.sh`
+- [x] Added book chapter documenting M37-S11 tag/post-tag closure (`docs/book/885-m37-alpha-tag-execution-and-post-tag-verification-closure.md`).
 
 ### M38-S1 outbound HTTP chunked-body decoding hardening acceptance criteria
 
@@ -9737,7 +9769,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M37-S11 alpha tag execution + post-tag verification checklist closure.
+- M39-S1 browser profile capability fence diagnostics implementation.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9829,9 +9861,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Execute alpha tag creation from the latest `M37-S8` `GO` decision record.
-2. Run post-tag verification (`verify-release-promotion-inputs` + publish-manifest verification) against the tagged artifact set.
-3. Publish alpha closure summary and open `WASM_START_GATE` for `M39` kickoff.
+1. Publish alpha closure summary with `v0.1.0-alpha.1` + post-tag verifier evidence bundle.
+2. Implement `M39-S1` semantic/profile fences for browser target (`db.*`, `secrets.*`, `net.listen`, internal-net sinks forbidden).
+3. Add deterministic golden/CLI coverage for browser profile allow/deny capability diagnostics and publish first M39 chapter.
 
 ---
 
