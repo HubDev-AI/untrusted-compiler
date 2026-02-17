@@ -3969,6 +3969,18 @@ Post-alpha track acceptance anchors:
 - [x] Added deterministic descriptor index mapping helpers (`as_index`) for table lookup.
 - [x] Migrated descriptor lookup helpers to metadata-table extraction paths.
 
+### M38-S220 HTTP max-concurrency ordered-attempt descriptor table-runner envelope simplification acceptance criteria
+
+- Ordered descriptor execution resolves to one runner metadata envelope before fixture build/assertion.
+- Pair/late/burst runner branches share one canonical execute path.
+- Deterministic contention contracts remain unchanged after envelope unification.
+
+### M38-S220 tracking (live status)
+
+- [x] Added `OrderedContentionRunnerMetadata` and `OrderedContentionBranchFixture`.
+- [x] Added `ordered_contention_runner_metadata(...)` envelope resolver.
+- [x] Unified ordered fixture execution into one `run_ordered_contention_fixture_descriptor_case(...)` path.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9281,7 +9293,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S220 HTTP max-concurrency ordered-attempt descriptor table-runner envelope simplification.
+- M38-S221 HTTP max-concurrency ordered-attempt descriptor contract catalog sanity coverage.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9373,9 +9385,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S220 scope for ordered-attempt descriptor table-runner envelope simplification.
-2. Extend ordered helper coverage with descriptor table-runner envelope simplification.
-3. Publish M38-S220 chapter and refresh roadmap live-status counts.
+1. Add M38-S221 scope for ordered-attempt descriptor contract catalog sanity coverage.
+2. Extend ordered helper coverage with descriptor contract catalog sanity coverage.
+3. Publish M38-S221 chapter and refresh roadmap live-status counts.
 
 ---
 
