@@ -1552,7 +1552,7 @@ fn ordered_contention_smoke_failure_banner_from_payload(
     ordered_contention_smoke_failure_banner(case_banner, &panic_payload_message(payload))
 }
 
-fn assert_ordered_contention_smoke_case_banner_contract(
+fn assert_ordered_contention_smoke_case_banner_contract_expectation(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
     let formatted_banner = ordered_contention_smoke_banner_formatter(
@@ -1579,7 +1579,7 @@ fn assert_ordered_contention_smoke_case_banner_contract(
     );
 }
 
-fn assert_ordered_contention_smoke_failure_banner_contract(
+fn assert_ordered_contention_smoke_failure_banner_contract_expectation(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
     let case_banner = ordered_contention_smoke_case_banner(expectation);
@@ -17766,14 +17766,14 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_catalog_sanity_coverage
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage() {
     for_each_ordered_contention_runner_metadata_expectation(
-        assert_ordered_contention_smoke_case_banner_contract,
+        assert_ordered_contention_smoke_case_banner_contract_expectation,
     );
 }
 
 #[test]
 fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
     for_each_ordered_contention_runner_metadata_expectation(
-        assert_ordered_contention_smoke_failure_banner_contract,
+        assert_ordered_contention_smoke_failure_banner_contract_expectation,
     );
 }
 

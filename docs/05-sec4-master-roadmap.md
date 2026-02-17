@@ -4157,9 +4157,21 @@ Post-alpha track acceptance anchors:
 
 ### M38-S235 tracking (live status)
 
-- [x] Added `assert_ordered_contention_smoke_case_banner_contract(...)`.
-- [x] Added `assert_ordered_contention_smoke_failure_banner_contract(...)`.
+- [x] Added `assert_ordered_contention_smoke_case_banner_contract_expectation(...)`.
+- [x] Added `assert_ordered_contention_smoke_failure_banner_contract_expectation(...)`.
 - [x] Migrated case/failure banner contract coverage tests to helper-based assertion dispatch.
+
+### M38-S236 HTTP max-concurrency ordered-attempt descriptor smoke contract helper naming parity cleanup acceptance criteria
+
+- Ordered descriptor smoke contract helper names follow consistent expectation-oriented naming (`*_contract_expectation`).
+- Case and failure contract coverage tests dispatch helpers with naming parity.
+- Banner contract behavior remains unchanged after helper naming cleanup.
+
+### M38-S236 tracking (live status)
+
+- [x] Renamed case-banner contract helper to `assert_ordered_contention_smoke_case_banner_contract_expectation(...)`.
+- [x] Renamed failure-banner contract helper to `assert_ordered_contention_smoke_failure_banner_contract_expectation(...)`.
+- [x] Updated contract coverage test dispatchers to the renamed parity helpers.
 
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
@@ -9473,7 +9485,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S236 HTTP max-concurrency ordered-attempt descriptor smoke contract helper naming parity cleanup.
+- M38-S237 HTTP max-concurrency ordered-attempt descriptor smoke contract helper dispatch consolidator extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9565,9 +9577,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S236 scope for ordered-attempt descriptor smoke contract helper naming parity cleanup.
-2. Extend ordered helper coverage with descriptor smoke contract helper naming parity cleanup.
-3. Publish M38-S236 chapter and refresh roadmap live-status counts.
+1. Add M38-S237 scope for ordered-attempt descriptor smoke contract helper dispatch consolidator extraction.
+2. Extend ordered helper coverage with descriptor smoke contract helper dispatch consolidator extraction.
+3. Publish M38-S237 chapter and refresh roadmap live-status counts.
 
 ---
 
