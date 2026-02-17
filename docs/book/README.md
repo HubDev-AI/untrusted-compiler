@@ -812,5 +812,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `844-m38-http-max-concurrency-ordered-attempt-fixture-descriptor-catalog-normalization.md`
 - `845-m38-http-max-concurrency-ordered-attempt-descriptor-runner-assertion-pack-unification.md`
 - `846-m38-http-max-concurrency-ordered-attempt-descriptor-metadata-table-extraction.md`
+- `847-m38-http-max-concurrency-ordered-attempt-descriptor-table-runner-envelope-simplification.md`
 
 As milestones progress, chapters will be added and linked from this index.

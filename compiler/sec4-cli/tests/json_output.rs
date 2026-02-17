@@ -1008,6 +1008,22 @@ struct BurstContentionFixtureMetadata {
     branch_fixture: BurstContentionBranchFixture,
 }
 
+#[derive(Clone, Copy)]
+enum OrderedContentionBranchFixture {
+    Pair(PairContentionBranchFixture),
+    Late(LateContentionBranchFixture),
+    Burst(BurstContentionBranchFixture),
+}
+
+#[derive(Clone, Copy)]
+struct OrderedContentionRunnerMetadata {
+    fixture_name: &'static str,
+    module_name: &'static str,
+    case_label: &'static str,
+    source: &'static str,
+    branch_fixture: OrderedContentionBranchFixture,
+}
+
 const MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE: &str = r#"fn health() effects { net } -> Int {
   res.text(200, "ok");
   0
@@ -1243,6 +1259,24 @@ fn assert_burst_contention_fixture(
     assert_burst_contention_branch_case(binary_path, request, &case);
 }
 
+fn assert_ordered_contention_branch_fixture(
+    binary_path: &Path,
+    request: &[u8],
+    fixture: OrderedContentionBranchFixture,
+) {
+    match fixture {
+        OrderedContentionBranchFixture::Pair(next) => {
+            assert_pair_contention_fixture(binary_path, request, next)
+        }
+        OrderedContentionBranchFixture::Late(next) => {
+            assert_late_contention_fixture(binary_path, request, next)
+        }
+        OrderedContentionBranchFixture::Burst(next) => {
+            assert_burst_contention_fixture(binary_path, request, next)
+        }
+    }
+}
+
 fn assert_pair_contention_branch_case(
     binary_path: &Path,
     request: &[u8],
@@ -1304,80 +1338,56 @@ fn assert_burst_contention_branch_case(
     }
 }
 
-fn run_pair_contention_fixture_case(
-    fixture_name: &str,
-    module_name: &str,
-    case_label: &str,
-    source: &str,
-    fixture: PairContentionBranchFixture,
-) {
-    let binary_path = build_c_bin_fixture(fixture_name, module_name, source, case_label);
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_pair_contention_fixture(&binary_path, request, fixture);
-}
-
-fn run_late_contention_fixture_case(
-    fixture_name: &str,
-    module_name: &str,
-    case_label: &str,
-    fixture: LateContentionBranchFixture,
-) {
-    let binary_path = build_c_bin_fixture(
-        fixture_name,
-        module_name,
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        case_label,
-    );
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_late_contention_fixture(&binary_path, request, fixture);
-}
-
-fn run_burst_contention_fixture_case(
-    fixture_name: &str,
-    module_name: &str,
-    case_label: &str,
-    fixture: BurstContentionBranchFixture,
-) {
-    let binary_path = build_c_bin_fixture(
-        fixture_name,
-        module_name,
-        MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        case_label,
-    );
-    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    assert_burst_contention_fixture(&binary_path, request, fixture);
-}
-
-fn run_pair_contention_fixture_descriptor_case(fixture: PairContentionFixtureDescriptor) {
-    let (fixture_name, module_name, case_label, source, branch_fixture) =
-        pair_contention_fixture_descriptor(fixture);
-    run_pair_contention_fixture_case(fixture_name, module_name, case_label, source, branch_fixture);
-}
-
-fn run_late_contention_fixture_descriptor_case(fixture: LateContentionFixtureDescriptor) {
-    let (fixture_name, module_name, case_label, branch_fixture) =
-        late_contention_fixture_descriptor(fixture);
-    run_late_contention_fixture_case(fixture_name, module_name, case_label, branch_fixture);
-}
-
-fn run_burst_contention_fixture_descriptor_case(fixture: BurstContentionFixtureDescriptor) {
-    let (fixture_name, module_name, case_label, branch_fixture) =
-        burst_contention_fixture_descriptor(fixture);
-    run_burst_contention_fixture_case(fixture_name, module_name, case_label, branch_fixture);
+fn ordered_contention_runner_metadata(
+    fixture: OrderedContentionFixtureDescriptor,
+) -> OrderedContentionRunnerMetadata {
+    match fixture {
+        OrderedContentionFixtureDescriptor::Pair(next) => {
+            let (fixture_name, module_name, case_label, source, branch_fixture) =
+                pair_contention_fixture_descriptor(next);
+            OrderedContentionRunnerMetadata {
+                fixture_name,
+                module_name,
+                case_label,
+                source,
+                branch_fixture: OrderedContentionBranchFixture::Pair(branch_fixture),
+            }
+        }
+        OrderedContentionFixtureDescriptor::Late(next) => {
+            let (fixture_name, module_name, case_label, branch_fixture) =
+                late_contention_fixture_descriptor(next);
+            OrderedContentionRunnerMetadata {
+                fixture_name,
+                module_name,
+                case_label,
+                source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+                branch_fixture: OrderedContentionBranchFixture::Late(branch_fixture),
+            }
+        }
+        OrderedContentionFixtureDescriptor::Burst(next) => {
+            let (fixture_name, module_name, case_label, branch_fixture) =
+                burst_contention_fixture_descriptor(next);
+            OrderedContentionRunnerMetadata {
+                fixture_name,
+                module_name,
+                case_label,
+                source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
+                branch_fixture: OrderedContentionBranchFixture::Burst(branch_fixture),
+            }
+        }
+    }
 }
 
 fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixtureDescriptor) {
-    match fixture {
-        OrderedContentionFixtureDescriptor::Pair(next) => {
-            run_pair_contention_fixture_descriptor_case(next)
-        }
-        OrderedContentionFixtureDescriptor::Late(next) => {
-            run_late_contention_fixture_descriptor_case(next)
-        }
-        OrderedContentionFixtureDescriptor::Burst(next) => {
-            run_burst_contention_fixture_descriptor_case(next)
-        }
-    }
+    let metadata = ordered_contention_runner_metadata(fixture);
+    let binary_path = build_c_bin_fixture(
+        metadata.fixture_name,
+        metadata.module_name,
+        metadata.source,
+        metadata.case_label,
+    );
+    let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    assert_ordered_contention_branch_fixture(&binary_path, request, metadata.branch_fixture);
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
