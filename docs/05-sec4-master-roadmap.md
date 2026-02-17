@@ -4065,6 +4065,18 @@ Post-alpha track acceptance anchors:
 - [x] Added per-expectation case-banner tracing in smoke harness execution.
 - [x] Reused case-banner content in wrapped failure diagnostics.
 
+### M38-S228 HTTP max-concurrency ordered-attempt descriptor smoke harness banner-contract coverage acceptance criteria
+
+- Ordered descriptor case-banner rendering contract is covered by a dedicated deterministic test.
+- Banner contract assertions run without clang/runtime dependencies.
+- Case-banner shape (`case=... module=... fixture=...`) remains synchronized with smoke harness tracing/failure output.
+
+### M38-S228 tracking (live status)
+
+- [x] Added `c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contract_coverage`.
+- [x] Added deterministic exact banner-shape assertions for every ordered descriptor expectation.
+- [x] Revalidated sanity + banner-contract + smoke harness coverage pack.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9377,7 +9389,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S228 HTTP max-concurrency ordered-attempt descriptor smoke harness banner-contract coverage.
+- M38-S229 HTTP max-concurrency ordered-attempt descriptor smoke banner-prefix constant extraction.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9469,9 +9481,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S228 scope for ordered-attempt descriptor smoke harness banner-contract coverage.
-2. Extend ordered helper coverage with descriptor smoke harness banner-contract coverage.
-3. Publish M38-S228 chapter and refresh roadmap live-status counts.
+1. Add M38-S229 scope for ordered-attempt descriptor smoke banner-prefix constant extraction.
+2. Extend ordered helper coverage with descriptor smoke banner-prefix constant extraction.
+3. Publish M38-S229 chapter and refresh roadmap live-status counts.
 
 ---
 
