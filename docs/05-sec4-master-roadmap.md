@@ -4038,8 +4038,20 @@ Post-alpha track acceptance anchors:
 ### M38-S225 tracking (live status)
 
 - [x] Added `for_each_ordered_contention_runner_metadata_expectation(...)`.
-- [x] Added `for_each_ordered_contention_fixture_descriptor(...)`.
+- [x] Added shared fixture-descriptor traversal path derived from runner metadata expectations.
 - [x] Migrated sanity + smoke harness tests to iterator-helper traversal.
+
+### M38-S226 HTTP max-concurrency ordered-attempt descriptor iterator-helper failure-context enrichment acceptance criteria
+
+- Ordered descriptor smoke harness failures include deterministic case context (label/module/fixture) for table-driven traversal diagnostics.
+- Panic payload extraction is normalized so wrapped smoke failures preserve useful original panic details.
+- Clang-gated ordered smoke harness behavior remains unchanged except enriched failure diagnostics.
+
+### M38-S226 tracking (live status)
+
+- [x] Added `panic_payload_message(...)` normalization helper for wrapped panic payloads.
+- [x] Added `run_ordered_contention_smoke_expectation_with_failure_context(...)`.
+- [x] Migrated ordered smoke harness loop to failure-context wrapped expectation execution.
 
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
@@ -9353,7 +9365,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S226 HTTP max-concurrency ordered-attempt descriptor iterator-helper failure-context enrichment.
+- M38-S227 HTTP max-concurrency ordered-attempt descriptor smoke harness case-banner tracing.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9445,9 +9457,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S226 scope for ordered-attempt descriptor iterator-helper failure-context enrichment.
-2. Extend ordered helper coverage with descriptor iterator-helper failure-context enrichment.
-3. Publish M38-S226 chapter and refresh roadmap live-status counts.
+1. Add M38-S227 scope for ordered-attempt descriptor smoke harness case-banner tracing.
+2. Extend ordered helper coverage with descriptor smoke harness case-banner tracing.
+3. Publish M38-S227 chapter and refresh roadmap live-status counts.
 
 ---
 
