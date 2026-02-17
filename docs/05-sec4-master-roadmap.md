@@ -3875,6 +3875,18 @@ Post-alpha track acceptance anchors:
 - [x] Added `run_late_contention_attempt_loop(...)` and `run_burst_contention_attempt_loop(...)`.
 - [x] Migrated late/burst staged assertions to ordered loop helpers and revalidated contracts.
 
+### M38-S212 HTTP max-concurrency ordered-attempt helper branch-scope contract matrix expansion acceptance criteria
+
+- Ordered queue/late/burst branch assertion arguments are centralized through explicit branch-case structs.
+- Queue boundary, security parity, late, and burst branches call canonical branch-case assertion helpers instead of inline loop invocation blocks.
+- Deterministic failure envelopes (`last_observation` diagnostics) remain unchanged across all migrated branches.
+
+### M38-S212 tracking (live status)
+
+- [x] Added `PairContentionBranchCase`, `LateContentionBranchCase`, and `BurstContentionBranchCase`.
+- [x] Added `assert_pair_contention_branch_case(...)`, `assert_late_contention_branch_case(...)`, and `assert_burst_contention_branch_case(...)`.
+- [x] Migrated seven ordered max-concurrency branch assertions to branch-scope matrix helper calls.
+
 - M17-S1 operator handoff checklist + readiness verifier is now implemented:
   - `docs/book/464-m17-operator-handoff-checklist-and-readiness-verifier.md`
   - `scripts/check-m17-operator-handoff-readiness.sh`
@@ -9187,7 +9199,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M38-S212 HTTP max-concurrency ordered-attempt helper branch-scope contract matrix expansion.
+- M38-S213 HTTP max-concurrency ordered-attempt helper branch-case fixture-constructor normalization.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9279,9 +9291,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Add M38-S212 scope for ordered-attempt helper branch-scope contract matrix expansion.
-2. Extend ordered helper coverage with branch-scoped contract matrix diagnostics.
-3. Publish M38-S212 chapter and refresh roadmap live-status counts.
+1. Add M38-S213 scope for ordered-attempt helper branch-case fixture-constructor normalization.
+2. Extend ordered helper coverage with branch-case fixture-constructor normalization.
+3. Publish M38-S213 chapter and refresh roadmap live-status counts.
 
 ---
 

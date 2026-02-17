@@ -808,6 +808,101 @@ fn run_burst_contention_attempt_loop(
     Some(last_observation)
 }
 
+struct PairContentionBranchCase<'a> {
+    throttle_drain_timeout_env: Option<&'a str>,
+    start_message: &'a str,
+    first_connect_failure_message: &'a str,
+    second_connect_failure_message: &'a str,
+    exit_timeout_message: &'a str,
+    contract: PairOutcomeContract,
+    max_tail_millis: Option<u64>,
+    failure_message: &'a str,
+}
+
+struct LateContentionBranchCase<'a> {
+    throttle_drain_timeout_env: Option<&'a str>,
+    start_message: &'a str,
+    first_connect_failure_message: &'a str,
+    second_connect_failure_message: &'a str,
+    exit_timeout_message: &'a str,
+    trailing_noise_len: usize,
+    max_tail_millis: u64,
+    failure_message: &'a str,
+}
+
+struct BurstContentionBranchCase<'a> {
+    throttle_drain_timeout_env: Option<&'a str>,
+    start_message: &'a str,
+    first_connect_failure_message: &'a str,
+    second_connect_failure_message: &'a str,
+    third_connect_failure_message: &'a str,
+    exit_timeout_message: &'a str,
+    trailing_noise_len: usize,
+    max_tail_millis: u64,
+    failure_message: &'a str,
+}
+
+fn assert_pair_contention_branch_case(
+    binary_path: &Path,
+    request: &[u8],
+    case: &PairContentionBranchCase<'_>,
+) {
+    if let Some(last_observation) = run_pair_contention_attempt_loop(
+        binary_path,
+        request,
+        case.throttle_drain_timeout_env,
+        case.start_message,
+        case.first_connect_failure_message,
+        case.second_connect_failure_message,
+        case.exit_timeout_message,
+        case.contract,
+        case.max_tail_millis,
+    ) {
+        panic!("{}:\n{last_observation}", case.failure_message);
+    }
+}
+
+fn assert_late_contention_branch_case(
+    binary_path: &Path,
+    request: &[u8],
+    case: &LateContentionBranchCase<'_>,
+) {
+    if let Some(last_observation) = run_late_contention_attempt_loop(
+        binary_path,
+        request,
+        case.throttle_drain_timeout_env,
+        case.start_message,
+        case.first_connect_failure_message,
+        case.second_connect_failure_message,
+        case.exit_timeout_message,
+        case.trailing_noise_len,
+        case.max_tail_millis,
+    ) {
+        panic!("{}:\n{last_observation}", case.failure_message);
+    }
+}
+
+fn assert_burst_contention_branch_case(
+    binary_path: &Path,
+    request: &[u8],
+    case: &BurstContentionBranchCase<'_>,
+) {
+    if let Some(last_observation) = run_burst_contention_attempt_loop(
+        binary_path,
+        request,
+        case.throttle_drain_timeout_env,
+        case.start_message,
+        case.first_connect_failure_message,
+        case.second_connect_failure_message,
+        case.third_connect_failure_message,
+        case.exit_timeout_message,
+        case.trailing_noise_len,
+        case.max_tail_millis,
+    ) {
+        panic!("{}:\n{last_observation}", case.failure_message);
+    }
+}
+
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
     let listener =
         TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
@@ -16956,21 +17051,24 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_pair_contention_attempt_loop(
+    assert_pair_contention_branch_case(
         &binary_path,
         request,
-        None,
-        "http runtime max-concurrency queue-boundary binary should start",
-        "max-concurrency queue-boundary test could not establish first connection",
-        "max-concurrency queue-boundary test could not establish second connection",
-        "max-concurrency queue-boundary binary did not exit in expected window",
-        pair_success_throttle_contract_holds,
-        None,
-    ) {
-        panic!(
-            "max-concurrency queue-boundary run should produce one success and one deterministic throttle response:\n{last_observation}"
-        );
-    }
+        &PairContentionBranchCase {
+            throttle_drain_timeout_env: None,
+            start_message: "http runtime max-concurrency queue-boundary binary should start",
+            first_connect_failure_message:
+                "max-concurrency queue-boundary test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency queue-boundary test could not establish second connection",
+            exit_timeout_message:
+                "max-concurrency queue-boundary binary did not exit in expected window",
+            contract: pair_success_throttle_contract_holds,
+            max_tail_millis: None,
+            failure_message:
+                "max-concurrency queue-boundary run should produce one success and one deterministic throttle response",
+        },
+    );
 }
 
 #[test]
@@ -17000,21 +17098,24 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_pair_contention_attempt_loop(
+    assert_pair_contention_branch_case(
         &binary_path,
         request,
-        Some("1"),
-        "http runtime max-concurrency queue-boundary low-timeout binary should start",
-        "max-concurrency queue-boundary low-timeout test could not establish first connection",
-        "max-concurrency queue-boundary low-timeout test could not establish second connection",
-        "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
-        pair_success_throttle_contract_holds,
-        Some(1000),
-    ) {
-        panic!(
-            "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-        );
-    }
+        &PairContentionBranchCase {
+            throttle_drain_timeout_env: Some("1"),
+            start_message: "http runtime max-concurrency queue-boundary low-timeout binary should start",
+            first_connect_failure_message:
+                "max-concurrency queue-boundary low-timeout test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency queue-boundary low-timeout test could not establish second connection",
+            exit_timeout_message:
+                "max-concurrency queue-boundary low-timeout binary did not exit in expected window",
+            contract: pair_success_throttle_contract_holds,
+            max_tail_millis: Some(1000),
+            failure_message:
+                "max-concurrency queue-boundary low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        },
+    );
 }
 
 #[test]
@@ -17046,21 +17147,25 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_pair_contention_attempt_loop(
+    assert_pair_contention_branch_case(
         &binary_path,
         request,
-        None,
-        "http runtime max-concurrency throttle security-header parity binary should start",
-        "max-concurrency throttle security-header parity test could not establish first connection",
-        "max-concurrency throttle security-header parity test could not establish second connection",
-        "max-concurrency throttle security-header parity binary did not exit in expected window",
-        pair_success_throttle_with_security_header_parity_holds,
-        None,
-    ) {
-        panic!(
-            "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled:\n{last_observation}"
-        );
-    }
+        &PairContentionBranchCase {
+            throttle_drain_timeout_env: None,
+            start_message:
+                "http runtime max-concurrency throttle security-header parity binary should start",
+            first_connect_failure_message:
+                "max-concurrency throttle security-header parity test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency throttle security-header parity test could not establish second connection",
+            exit_timeout_message:
+                "max-concurrency throttle security-header parity binary did not exit in expected window",
+            contract: pair_success_throttle_with_security_header_parity_holds,
+            max_tail_millis: None,
+            failure_message:
+                "max-concurrency throttle response should preserve security-header parity with successful responses when security middleware is enabled",
+        },
+    );
 }
 
 #[test]
@@ -17090,21 +17195,24 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_late_contention_attempt_loop(
+    assert_late_contention_branch_case(
         &binary_path,
         request,
-        Some("25"),
-        "http runtime max-concurrency late-connection drain binary should start",
-        "max-concurrency late-connection drain test could not establish first connection",
-        "max-concurrency late-connection drain test could not establish second connection",
-        "max-concurrency late-connection drain binary did not exit in expected window",
-        4096,
-        1200,
-    ) {
-        panic!(
-            "late-connection oneshot path should deterministically drain-throttle backlog client after first served response:\n{last_observation}"
-        );
-    }
+        &LateContentionBranchCase {
+            throttle_drain_timeout_env: Some("25"),
+            start_message: "http runtime max-concurrency late-connection drain binary should start",
+            first_connect_failure_message:
+                "max-concurrency late-connection drain test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency late-connection drain test could not establish second connection",
+            exit_timeout_message:
+                "max-concurrency late-connection drain binary did not exit in expected window",
+            trailing_noise_len: 4096,
+            max_tail_millis: 1200,
+            failure_message:
+                "late-connection oneshot path should deterministically drain-throttle backlog client after first served response",
+        },
+    );
 }
 
 #[test]
@@ -17134,21 +17242,25 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_late_contention_attempt_loop(
+    assert_late_contention_branch_case(
         &binary_path,
         request,
-        Some("1"),
-        "http runtime max-concurrency late-connection low-timeout binary should start",
-        "max-concurrency late-connection low-timeout test could not establish first connection",
-        "max-concurrency late-connection low-timeout test could not establish second connection",
-        "max-concurrency late-connection low-timeout binary did not exit in expected window",
-        8192,
-        1000,
-    ) {
-        panic!(
-            "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-        );
-    }
+        &LateContentionBranchCase {
+            throttle_drain_timeout_env: Some("1"),
+            start_message:
+                "http runtime max-concurrency late-connection low-timeout binary should start",
+            first_connect_failure_message:
+                "max-concurrency late-connection low-timeout test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency late-connection low-timeout test could not establish second connection",
+            exit_timeout_message:
+                "max-concurrency late-connection low-timeout binary did not exit in expected window",
+            trailing_noise_len: 8192,
+            max_tail_millis: 1000,
+            failure_message:
+                "late-connection low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        },
+    );
 }
 
 #[test]
@@ -17178,22 +17290,27 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_burst_contention_attempt_loop(
+    assert_burst_contention_branch_case(
         &binary_path,
         request,
-        Some("25"),
-        "http runtime max-concurrency burst-ingress trace-order binary should start",
-        "max-concurrency burst-ingress trace-order test could not establish first connection",
-        "max-concurrency burst-ingress trace-order test could not establish second connection",
-        "max-concurrency burst-ingress trace-order test could not establish third connection",
-        "max-concurrency burst-ingress trace-order binary did not exit in expected window",
-        4096,
-        1200,
-    ) {
-        panic!(
-            "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle):\n{last_observation}"
-        );
-    }
+        &BurstContentionBranchCase {
+            throttle_drain_timeout_env: Some("25"),
+            start_message:
+                "http runtime max-concurrency burst-ingress trace-order binary should start",
+            first_connect_failure_message:
+                "max-concurrency burst-ingress trace-order test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency burst-ingress trace-order test could not establish second connection",
+            third_connect_failure_message:
+                "max-concurrency burst-ingress trace-order test could not establish third connection",
+            exit_timeout_message:
+                "max-concurrency burst-ingress trace-order binary did not exit in expected window",
+            trailing_noise_len: 4096,
+            max_tail_millis: 1200,
+            failure_message:
+                "oneshot burst-ingress path should preserve deterministic trace/order contract (rt-1 success, rt-2/rt-3 throttle)",
+        },
+    );
 }
 
 #[test]
@@ -17223,22 +17340,27 @@ fn main() effects { net } -> Int {
     );
 
     let request = b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-    if let Some(last_observation) = run_burst_contention_attempt_loop(
+    assert_burst_contention_branch_case(
         &binary_path,
         request,
-        Some("1"),
-        "http runtime max-concurrency burst-ingress low-timeout binary should start",
-        "max-concurrency burst-ingress low-timeout test could not establish first connection",
-        "max-concurrency burst-ingress low-timeout test could not establish second connection",
-        "max-concurrency burst-ingress low-timeout test could not establish third connection",
-        "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
-        8192,
-        1000,
-    ) {
-        panic!(
-            "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency:\n{last_observation}"
-        );
-    }
+        &BurstContentionBranchCase {
+            throttle_drain_timeout_env: Some("1"),
+            start_message:
+                "http runtime max-concurrency burst-ingress low-timeout binary should start",
+            first_connect_failure_message:
+                "max-concurrency burst-ingress low-timeout test could not establish first connection",
+            second_connect_failure_message:
+                "max-concurrency burst-ingress low-timeout test could not establish second connection",
+            third_connect_failure_message:
+                "max-concurrency burst-ingress low-timeout test could not establish third connection",
+            exit_timeout_message:
+                "max-concurrency burst-ingress low-timeout binary did not exit in expected window",
+            trailing_noise_len: 8192,
+            max_tail_millis: 1000,
+            failure_message:
+                "oneshot burst-ingress low-timeout path should preserve deterministic throttle body and bounded tail latency",
+        },
+    );
 }
 
 #[test]
