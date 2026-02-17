@@ -1521,6 +1521,17 @@ fn ordered_contention_smoke_case_banner(
     )
 }
 
+fn ordered_contention_smoke_failure_banner(case_banner: &str, failure_message: &str) -> String {
+    format!("{case_banner} failed: {failure_message}")
+}
+
+fn ordered_contention_smoke_failure_banner_from_payload(
+    case_banner: &str,
+    payload: &(dyn std::any::Any + Send),
+) -> String {
+    ordered_contention_smoke_failure_banner(case_banner, &panic_payload_message(payload))
+}
+
 fn run_ordered_contention_smoke_expectation_with_failure_context(
     expectation: OrderedContentionRunnerMetadataExpectation,
 ) {
@@ -1531,8 +1542,8 @@ fn run_ordered_contention_smoke_expectation_with_failure_context(
     }));
     if let Err(payload) = run_result {
         panic!(
-            "{case_banner} failed: {}",
-            panic_payload_message(payload.as_ref()),
+            "{}",
+            ordered_contention_smoke_failure_banner_from_payload(&case_banner, payload.as_ref()),
         );
     }
 }
@@ -17705,6 +17716,27 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_case_banner_contr
         assert_eq!(
             ordered_contention_smoke_case_banner(expectation),
             formatted_banner,
+        );
+    });
+}
+
+#[test]
+fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_contract_coverage() {
+    for_each_ordered_contention_runner_metadata_expectation(|expectation| {
+        let case_banner = ordered_contention_smoke_case_banner(expectation);
+        let expected_failure_banner = format!("{case_banner} failed: boom");
+        assert_eq!(
+            ordered_contention_smoke_failure_banner(&case_banner, "boom"),
+            expected_failure_banner,
+        );
+
+        let payload = String::from("boom");
+        assert_eq!(
+            ordered_contention_smoke_failure_banner_from_payload(
+                &case_banner,
+                &payload as &(dyn std::any::Any + Send),
+            ),
+            expected_failure_banner,
         );
     });
 }
