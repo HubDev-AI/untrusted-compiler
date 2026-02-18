@@ -9133,7 +9133,8 @@ entry = "src/main.ut"
     fs::write(
         project_dir.join("src/main.ut"),
         r#"fn health() effects { net } -> Int {
-  res.text(200, "pong");
+  let trailer_value = validate.nonEmpty(req.header("X-Trail"));
+  res.text(200, trailer_value);
   0
 }
 
@@ -9235,8 +9236,8 @@ fn main() effects { net } -> Int {
         "response should contain deterministic chunked trailer success status:\n{response}"
     );
     assert!(
-        response.contains("\r\npong"),
-        "response should include route body for chunked trailer request:\n{response}"
+        response.contains("\r\nok"),
+        "response should include trailer-derived body for chunked trailer request:\n{response}"
     );
     assert!(
         response.contains("X-Trace-Id: rt-1"),
