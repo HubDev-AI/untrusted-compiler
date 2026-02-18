@@ -22,5 +22,5 @@ benchmark-suite/services/sec4-lasm/smoke.sh
 ## Notes
 
 - This service exercises the same benchmark contract as `services/sec4` but executes through the LASM backend directly.
-- Current LASM benchmark fixture returns deterministic JSON envelopes for `res.ok`/`res.json` handlers and preserves endpoint status-code contract.
+- Current LASM benchmark fixture materializes request-aware benchmark JSON contracts (`/decode`, `/users`, `/users/:id`) from LASM route schemas while preserving status-code behavior.
 - It is intended for side-by-side C-runtime vs LASM benchmark orchestration.

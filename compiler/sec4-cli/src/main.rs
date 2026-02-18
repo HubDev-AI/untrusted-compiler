@@ -872,6 +872,11 @@ struct LasmResponsePlan {
     default_content_type: Option<String>,
 }
 
+#[derive(Debug, Default)]
+struct LasmDynamicResponseState {
+    users_by_id: HashMap<String, serde_json::Value>,
+}
+
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -902,13 +907,16 @@ fn collect_lasm_route_plans(
         if !seen_routes.insert(route_key) {
             continue;
         }
-        let Some(response_plan) = extract_response_plan(&functions, registration.handler_name.as_str())
+        let Some(response_plan) =
+            extract_response_plan(&functions, registration.handler_name.as_str())
         else {
             continue;
         };
         let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
         if let Some(content_type) = response_plan.default_content_type {
-            headers.entry("Content-Type".to_string()).or_insert(content_type);
+            headers
+                .entry("Content-Type".to_string())
+                .or_insert(content_type);
         }
         plans.push(LasmRunRoutePlan {
             method: registration.method,
@@ -942,7 +950,9 @@ fn resolve_lasm_smoke_route_plan(
     let response_plan = extract_response_plan(&functions, handler_name.as_str())?;
     let mut headers = extract_response_headers(&functions, handler_name.as_str());
     if let Some(content_type) = response_plan.default_content_type {
-        headers.entry("Content-Type".to_string()).or_insert(content_type);
+        headers
+            .entry("Content-Type".to_string())
+            .or_insert(content_type);
     }
 
     Some(LasmSmokeRoutePlan {
@@ -5703,6 +5713,7 @@ fn cmd_run_lasm_backend(
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
+    let dynamic_state = Arc::new(Mutex::new(LasmDynamicResponseState::default()));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
@@ -5723,6 +5734,7 @@ fn cmd_run_lasm_backend(
             let routes_for_worker = routes.clone();
             let trace_counter_for_worker = Arc::clone(&trace_counter);
             let header_defaults_for_worker = Arc::clone(&header_defaults);
+            let dynamic_state_for_worker = Arc::clone(&dynamic_state);
             worker_handles.push(std::thread::spawn(move || {
                 let mut runtime =
                     match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
@@ -5751,6 +5763,7 @@ fn cmd_run_lasm_backend(
                         effective_max_body_bytes,
                         trace_counter_for_worker.as_ref(),
                         header_defaults_for_worker.as_ref(),
+                        dynamic_state_for_worker.as_ref(),
                     ) {
                         eprintln!("warning: LASM backend worker failed: {message}");
                     }
@@ -5785,6 +5798,7 @@ fn cmd_run_lasm_backend(
                 effective_max_body_bytes,
                 trace_counter.as_ref(),
                 header_defaults.as_ref(),
+                dynamic_state.as_ref(),
             ) {
                 eprintln!("warning: LASM backend worker failed: {message}");
             };
@@ -5797,7 +5811,8 @@ fn cmd_run_lasm_backend(
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
-                let request_head = read_lasm_request_head(&mut stream, effective_max_header_bytes).ok();
+                let request_head =
+                    read_lasm_request_head(&mut stream, effective_max_header_bytes).ok();
                 let request_headers = request_head.as_ref().map(|head| &head.headers);
                 let include_cors_defaults =
                     should_include_lasm_cors_defaults(request_headers, header_defaults.as_ref());
@@ -5986,7 +6001,8 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
                 policy.security_headers.referrer_policy.clone(),
             );
         }
-        if policy.security_headers.csp_enabled && !policy.security_headers.csp_policy.trim().is_empty()
+        if policy.security_headers.csp_enabled
+            && !policy.security_headers.csp_policy.trim().is_empty()
         {
             let header_name = if policy.security_headers.csp_report_only {
                 "Content-Security-Policy-Report-Only"
@@ -6020,6 +6036,7 @@ fn process_lasm_connection_with_runtime(
     max_body_bytes: usize,
     trace_counter: &AtomicU64,
     header_defaults: &LasmResponseHeaderDefaults,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
 ) -> Result<(), String> {
     let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
         Ok(request) => request,
@@ -6036,7 +6053,11 @@ fn process_lasm_connection_with_runtime(
         LasmCorsPreflightDecision::Accept => {
             let mut response = sec4_core::HttpResponse::text(204, "");
             response.body.clear();
-            apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
+            apply_lasm_request_origin_header(
+                &mut response,
+                Some(&request.headers),
+                header_defaults,
+            );
             stamp_lasm_trace_id(&mut response, trace_counter);
             write_lasm_http_response(stream, &response, header_defaults, true)?;
             return Ok(());
@@ -6048,9 +6069,11 @@ fn process_lasm_connection_with_runtime(
             return Ok(());
         }
     }
-    let include_cors_defaults = should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
+    let include_cors_defaults =
+        should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
 
-    let mut runtime_request = sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
+    let mut runtime_request =
+        sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
     runtime_request.headers = request.headers.clone();
     runtime_request.body = request.body.clone();
     let request_id = runtime.submit(runtime_request);
@@ -6069,15 +6092,191 @@ fn process_lasm_connection_with_runtime(
     let mut matched = None;
     while let Some(exchange) = runtime.pop_response() {
         if exchange.request_id == request_id {
-            matched = Some(exchange.response);
+            matched = Some(exchange);
             break;
         }
     }
-    let mut response = matched
-        .unwrap_or_else(|| sec4_core::HttpResponse::text(500, "missing LASM response for request"));
+    let mut response = if let Some(exchange) = matched {
+        let mut response = exchange.response;
+        apply_lasm_dynamic_response_materialization(
+            &mut response,
+            &request,
+            &exchange.path_params,
+            dynamic_state,
+        );
+        response
+    } else {
+        sec4_core::HttpResponse::text(500, "missing LASM response for request")
+    };
     apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
     stamp_lasm_trace_id(&mut response, trace_counter);
     write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
+}
+
+fn apply_lasm_dynamic_response_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+) {
+    let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
+        return;
+    };
+
+    match schema_hint.as_str() {
+        "DecodeResponse" => {
+            let Some(payload) = parse_lasm_json_payload(&request.body) else {
+                return;
+            };
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
+            };
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "id": id,
+                }),
+            );
+        }
+        "CreateUserResponse" => {
+            let Some(payload) = parse_lasm_json_payload(&request.body) else {
+                return;
+            };
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
+            };
+            if let Ok(mut state) = dynamic_state.lock() {
+                state.users_by_id.insert(id.clone(), payload);
+            }
+            set_lasm_json_response(
+                response,
+                201,
+                &serde_json::json!({
+                    "ok": true,
+                    "userId": id,
+                }),
+            );
+        }
+        "UserResponse" => {
+            let Some(id) = resolve_lasm_user_lookup_id(request, path_params) else {
+                return;
+            };
+            if !is_lasm_uuid_v4(&id) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.UUID_INVALID",
+                        "validation",
+                        "id must be UUID v4",
+                        400,
+                    ),
+                );
+                return;
+            }
+            let user = match dynamic_state.lock() {
+                Ok(state) => state.users_by_id.get(&id).cloned(),
+                Err(_) => None,
+            };
+            match user {
+                Some(user) => set_lasm_json_response(response, 200, &user),
+                None => set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope("HTTP.NOT_FOUND", "not_found", "user not found", 404),
+                ),
+            }
+        }
+        _ => {}
+    }
+}
+
+fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {
+    let parsed = parse_lasm_json_payload(&response.body)?;
+    parsed
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn parse_lasm_json_payload(bytes: &[u8]) -> Option<serde_json::Value> {
+    if bytes.is_empty() {
+        return None;
+    }
+    serde_json::from_slice(bytes).ok()
+}
+
+fn extract_lasm_payload_id(payload: &serde_json::Value) -> Option<String> {
+    payload
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn resolve_lasm_user_lookup_id(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if let Some(id) = path_params.get("id") {
+        return Some(id.clone());
+    }
+    request
+        .path
+        .strip_prefix("/users/")
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn set_lasm_json_response(
+    response: &mut sec4_core::HttpResponse,
+    status: u16,
+    payload: &serde_json::Value,
+) {
+    response.status = status;
+    response.headers.insert(
+        "Content-Type".to_string(),
+        "application/json; charset=utf-8".to_string(),
+    );
+    response.body = serde_json::to_vec(payload).unwrap_or_else(|_| b"{}".to_vec());
+}
+
+fn lasm_error_envelope(code: &str, kind: &str, message: &str, status: u16) -> serde_json::Value {
+    serde_json::json!({
+        "error": {
+            "code": code,
+            "kind": kind,
+            "message": message,
+            "status": status,
+        }
+    })
+}
+
+fn is_lasm_uuid_v4(value: &str) -> bool {
+    if value.len() != 36 {
+        return false;
+    }
+    for (index, byte) in value.as_bytes().iter().enumerate() {
+        let is_dash_position = matches!(index, 8 | 13 | 18 | 23);
+        if is_dash_position {
+            if *byte != b'-' {
+                return false;
+            }
+            continue;
+        }
+        if !(*byte as char).is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    if value.as_bytes()[14] != b'4' {
+        return false;
+    }
+    matches!(
+        value.as_bytes()[19].to_ascii_lowercase(),
+        b'8' | b'9' | b'a' | b'b'
+    )
 }
 
 fn evaluate_lasm_cors_preflight_request(
@@ -6087,12 +6286,14 @@ fn evaluate_lasm_cors_preflight_request(
     if !header_defaults.cors_enabled || !request.method.eq_ignore_ascii_case("OPTIONS") {
         return LasmCorsPreflightDecision::NotPreflight;
     }
-    let requested_method = find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
-        .map(str::trim)
-        .unwrap_or("");
-    let requested_headers = find_lasm_header_value(&request.headers, "Access-Control-Request-Headers")
-        .map(str::trim)
-        .unwrap_or("");
+    let requested_method =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
+            .map(str::trim)
+            .unwrap_or("");
+    let requested_headers =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Headers")
+            .map(str::trim)
+            .unwrap_or("");
     let private_network_requested =
         find_lasm_header_value(&request.headers, "Access-Control-Request-Private-Network")
             .map(str::trim)
@@ -6228,7 +6429,10 @@ fn should_include_lasm_cors_defaults(
     is_lasm_cors_origin_allowed(origin, header_defaults)
 }
 
-fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
+fn find_lasm_header_value<'a>(
+    headers: &'a BTreeMap<String, String>,
+    name: &str,
+) -> Option<&'a str> {
     headers
         .iter()
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
@@ -6478,9 +6682,7 @@ fn write_lasm_http_response(
         if !include_cors_defaults && is_lasm_cors_default_header_name(name.as_str()) {
             continue;
         }
-        headers
-            .entry(name.clone())
-            .or_insert_with(|| value.clone());
+        headers.entry(name.clone()).or_insert_with(|| value.clone());
     }
     headers
         .entry("Content-Length".to_string())

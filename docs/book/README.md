@@ -887,5 +887,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `919-m39-lasm-smoke-duration-metrics.md`
 - `920-m39-promote-dry-run-planner-baseline.md`
 - `921-m39-promote-apply-composition-root-guard.md`
+- `922-m39-lasm-run-benchmark-contract-response-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.

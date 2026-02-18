@@ -51,8 +51,8 @@ if [ "$decode_status" != "200" ]; then
   echo "sec4-lasm smoke /decode expected 200, got $decode_status" >&2
   exit 1
 fi
-if [ "$(cat /tmp/sec4-lasm-smoke-decode.json 2>/dev/null || true)" != "{\"ok\":true,\"status\":200,\"schema\":\"DecodeResponse\"}" ]; then
-  echo "sec4-lasm smoke /decode expected deterministic JSON envelope body" >&2
+if ! jq -e --arg expected_id "$(jq -r '.id' "$payload")" '.ok == true and .id == $expected_id' /tmp/sec4-lasm-smoke-decode.json >/dev/null; then
+  echo "sec4-lasm smoke /decode expected contract body {ok:true,id:<payload.id>}" >&2
   exit 1
 fi
 
@@ -66,8 +66,8 @@ if [ "$users_post_status" != "201" ]; then
   echo "sec4-lasm smoke /users POST expected 201, got $users_post_status" >&2
   exit 1
 fi
-if [ "$(cat /tmp/sec4-lasm-smoke-users-post.json 2>/dev/null || true)" != "{\"ok\":true,\"status\":201,\"schema\":\"CreateUserResponse\"}" ]; then
-  echo "sec4-lasm smoke /users POST expected deterministic JSON envelope body" >&2
+if ! jq -e --arg expected_id "$(jq -r '.id' "$payload")" '.ok == true and .userId == $expected_id' /tmp/sec4-lasm-smoke-users-post.json >/dev/null; then
+  echo "sec4-lasm smoke /users POST expected contract body {ok:true,userId:<payload.id>}" >&2
   exit 1
 fi
 
@@ -77,8 +77,8 @@ if [ "$users_get_status" != "200" ]; then
   echo "sec4-lasm smoke /users/:id expected 200, got $users_get_status" >&2
   exit 1
 fi
-if [ "$(cat /tmp/sec4-lasm-smoke-users-get.json 2>/dev/null || true)" != "{\"status\":200,\"schema\":\"UserResponse\"}" ]; then
-  echo "sec4-lasm smoke /users/:id expected deterministic JSON response body" >&2
+if ! jq -e --arg expected_id "$user_id" --arg expected_email "$(jq -r '.email' "$payload")" '.id == $expected_id and .email == $expected_email' /tmp/sec4-lasm-smoke-users-get.json >/dev/null; then
+  echo "sec4-lasm smoke /users/:id expected stored user payload with id/email fields" >&2
   exit 1
 fi
 
