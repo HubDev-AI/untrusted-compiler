@@ -5759,6 +5759,7 @@ fn cmd_run_lasm_backend(
                 let _ = drain_lasm_request_head(&mut stream, effective_max_header_bytes);
                 let mut response =
                     sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
+                apply_lasm_request_origin_header(&mut response, None, header_defaults.as_ref());
                 stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
                 let _ = write_lasm_http_response(&mut stream, &response, header_defaults.as_ref(), true);
             }
@@ -5840,7 +5841,7 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
             .filter(|value| !value.is_empty())
             .map(|value| value.to_ascii_lowercase())
             .collect();
-        let allow_origin = if cors_allow_any_origin {
+        cors_default_origin = Some(if cors_allow_any_origin {
             "*".to_string()
         } else {
             policy
@@ -5849,9 +5850,7 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
                 .first()
                 .cloned()
                 .unwrap_or_else(|| "*".to_string())
-        };
-        cors_default_origin = Some(allow_origin.clone());
-        headers.insert("Access-Control-Allow-Origin".to_string(), allow_origin);
+        });
         if policy.cors.allow_credentials {
             headers.insert(
                 "Access-Control-Allow-Credentials".to_string(),
@@ -6154,6 +6153,9 @@ fn resolve_lasm_allow_origin(
     }
     if let Some(request) = request {
         if let Some(origin) = find_lasm_header_value(&request.headers, "Origin") {
+            if header_defaults.cors_allowed_origins.is_empty() {
+                return Some(origin.to_string());
+            }
             if header_defaults
                 .cors_allowed_origins
                 .iter()
@@ -6161,6 +6163,7 @@ fn resolve_lasm_allow_origin(
             {
                 return Some(origin.to_string());
             }
+            return None;
         }
     }
     header_defaults.cors_default_origin.clone()
