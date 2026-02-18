@@ -6909,6 +6909,12 @@ fn read_lasm_http_request(
     let method = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
+    if !is_lasm_http_token(method) {
+        return Err(make_error(
+            400,
+            "invalid request line: invalid method token".to_string(),
+        ));
+    }
     let request_target = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
@@ -6928,6 +6934,12 @@ fn read_lasm_http_request(
         return Err(make_error(
             505,
             format!("unsupported http version: {http_version}"),
+        ));
+    }
+    if request_target != "*" && request_target.contains('#') {
+        return Err(make_error(
+            400,
+            "invalid request target: fragment is not allowed".to_string(),
         ));
     }
 
@@ -7002,12 +7014,24 @@ fn read_lasm_http_request(
                 "invalid header line: missing ':' separator".to_string(),
             ));
         };
-        let name = name_raw.trim();
+        if name_raw != name_raw.trim() {
+            return Err(make_error(
+                400,
+                "invalid header line: whitespace around header name".to_string(),
+            ));
+        }
+        let name = name_raw;
         let value = value_raw.trim();
         if name.is_empty() {
             return Err(make_error(
                 400,
                 "invalid header line: empty header name".to_string(),
+            ));
+        }
+        if !is_lasm_http_token(name) {
+            return Err(make_error(
+                400,
+                "invalid header line: invalid header name token".to_string(),
             ));
         }
         if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
@@ -7149,6 +7173,30 @@ fn parse_lasm_authority(value: &str) -> Option<LasmAuthority> {
     }
 
     Some(LasmAuthority { host, port })
+}
+
+fn is_lasm_http_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.as_bytes().iter().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    *byte,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
+        })
 }
 
 fn parse_lasm_authority_port(value: &str) -> Option<u16> {
