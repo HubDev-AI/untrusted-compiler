@@ -304,6 +304,54 @@ fn promote_dry_run_emits_deterministic_plan_for_valid_project() {
 }
 
 #[test]
+fn promote_dry_run_writes_plan_artifact_when_out_is_provided() {
+    let root = temp_dir("sec4-promote-dry-run-out-artifact");
+    let project_dir = root.join("project");
+    write_minimal_project(&project_dir, "");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let out_path = root.join("reports/promote-plan.json");
+    let out_path_string = out_path
+        .to_str()
+        .expect("artifact path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+        "--out",
+        &out_path_string,
+    ]);
+    assert!(output.status.success(), "promote dry-run should succeed");
+    assert!(
+        out_path.exists(),
+        "promote dry-run should write requested artifact path"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let stdout_json: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run stdout should be valid json");
+    let file_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&out_path).expect("promote dry-run artifact should be readable"),
+    )
+    .expect("promote dry-run artifact should be valid json");
+    assert_eq!(
+        stdout_json, file_json,
+        "promote dry-run stdout and --out artifact should be JSON-equivalent"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     let root = temp_dir("sec4-promote-apply-rewrite");
     let project_dir = root.join("project");

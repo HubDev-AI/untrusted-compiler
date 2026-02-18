@@ -303,7 +303,7 @@ Post-alpha track acceptance anchors:
 
 ### M39-S3 tracking (live status)
 
-- [x] CLI command scaffolding + planner implementation added (`sec4 promote --from browser --to server --dry-run`).
+- [x] CLI command scaffolding + planner implementation added (`sec4 promote --from browser --to server --dry-run [--out <path>]`).
 - [x] Determinism tests for plan artifact added (byte-identical dry-run output across repeated runs on unchanged tree + blocking-precondition coverage).
 - [x] Book chapter documenting S3 implementation added (`docs/book/920-m39-promote-dry-run-planner-baseline.md`).
 

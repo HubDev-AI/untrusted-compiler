@@ -71,6 +71,8 @@ enum Commands {
         to: PromoteTarget,
         #[arg(long, default_value_t = false)]
         dry_run: bool,
+        #[arg(long)]
+        out: Option<PathBuf>,
     },
     LasmSmoke {
         #[arg(long, default_value = ".")]
@@ -396,7 +398,8 @@ fn main() {
             from,
             to,
             dry_run,
-        } => cmd_promote(&path, from, to, dry_run),
+            out,
+        } => cmd_promote(&path, from, to, dry_run, out.as_deref()),
         Commands::LasmSmoke {
             path,
             method,
@@ -5141,7 +5144,13 @@ fn cmd_lint(path: &Path) -> Result<(), i32> {
     )
 }
 
-fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: bool) -> Result<(), i32> {
+fn cmd_promote(
+    path: &Path,
+    from: PromoteTarget,
+    to: PromoteTarget,
+    dry_run: bool,
+    out_path: Option<&Path>,
+) -> Result<(), i32> {
     if from != PromoteTarget::Browser || to != PromoteTarget::Server {
         eprintln!(
             "promote failed: unsupported promotion route `{} -> {}` (only `browser -> server` is available)",
@@ -5297,6 +5306,9 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
     });
 
     if dry_run || blocking_preconditions {
+        if let Some(out_path) = out_path {
+            write_json_artifact(out_path, &plan, "promotion plan")?;
+        }
         println!(
             "{}",
             serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
@@ -5305,6 +5317,9 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
     }
 
     let apply_report = apply_promote_plan(path, &generated_files, &localdb_references, &plan)?;
+    if let Some(out_path) = out_path {
+        write_json_artifact(out_path, &apply_report, "promotion apply report")?;
+    }
     println!(
         "{}",
         serde_json::to_string_pretty(&apply_report)
@@ -5449,6 +5464,30 @@ fn promote_generated_file_content(relative_path: &str) -> &'static str {
         }
         _ => "",
     }
+}
+
+fn write_json_artifact(path: &Path, payload: &serde_json::Value, label: &str) -> Result<(), i32> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(err) = fs::create_dir_all(parent) {
+                eprintln!(
+                    "promote failed: could not create artifact directory `{}`: {err}",
+                    parent.display()
+                );
+                return Err(2);
+            }
+        }
+    }
+    let encoded =
+        serde_json::to_string_pretty(payload).expect("promotion artifact payload should serialize");
+    if let Err(err) = fs::write(path, encoded) {
+        eprintln!(
+            "promote failed: could not write {label} `{}`: {err}",
+            path.display()
+        );
+        return Err(2);
+    }
+    Ok(())
 }
 
 fn precondition_from_diagnostic(project_root: &Path, diagnostic: &Diagnostic) -> PromotePrecondition {

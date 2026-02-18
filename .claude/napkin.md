@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | After evolving `promote` tests from “missing dry-run” to apply/route-guard coverage, chapter `920` still referenced the removed test name. | When command behavior changes invalidate prior test names, update chapter validation lists in the same commit as test renames. |
 | 2026-02-18 | self | Full `cargo test -p sec4 --test commands` run hit a transient oneshot race (`run_command_oneshot_applies_http_header_limit_from_policy` exited before request), which could be mistaken for a regression during promote/apply changes. | When one long-running network integration test flakes, rerun that single test first, then rerun the full target once before treating it as code regression. |
 | 2026-02-18 | self | Added new `lasm-smoke` flags (`--runtime-script`, `--max-request-ms`) before adding direct command coverage, leaving one turn where parse/timeout behavior was unverified. | For every new CLI runtime control flag, add at least one invalid-input test and one behavior assertion test in the same implementation slice. |
 | 2026-02-17 | self | Initial header extractor assumed `res.setHeader` arguments remained literal/wrapper calls; real AST often passes identifier aliases created by earlier `let` bindings. | For AST feature extraction paths, model local binding resolution for identifier arguments in addition to literal/wrapper direct forms. |
