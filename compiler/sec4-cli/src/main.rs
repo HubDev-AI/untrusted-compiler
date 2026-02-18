@@ -9380,6 +9380,12 @@ fn read_lasm_http_chunked_body(
                         message: "invalid chunk trailer: invalid header name token".to_string(),
                     });
                 }
+                if is_lasm_forbidden_chunk_trailer(name_raw) {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "invalid chunk trailer: forbidden trailer header".to_string(),
+                    });
+                }
                 if !is_lasm_http_header_value(value_raw.trim()) {
                     return Err(LasmRequestReadError {
                         status: 400,
@@ -9461,6 +9467,12 @@ fn is_lasm_chunk_extension_quoted_string(value: &str) -> bool {
         index += 1;
     }
     true
+}
+
+fn is_lasm_forbidden_chunk_trailer(name: &str) -> bool {
+    name.eq_ignore_ascii_case("content-length")
+        || name.eq_ignore_ascii_case("transfer-encoding")
+        || name.eq_ignore_ascii_case("host")
 }
 
 fn read_lasm_http_request_head(
