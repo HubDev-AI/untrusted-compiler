@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Accidentally triggered the web tool while in a local-only LASM implementation loop. | Keep LASM/compiler slices strictly on local repository tools (`exec_command`/`apply_patch`) unless external research is explicitly required. |
 | 2026-02-18 | self | Used parallel Cargo validation again for targeted LASM tests and reintroduced package/build lock wait noise. | Run Cargo commands strictly sequential in this repo; parallelize only read/search commands. |
 | 2026-02-18 | self | LASM header-limit response in header-line parse path used a literal string (`{max_header_bytes}`) instead of `format!`, so clients saw unresolved placeholder text. | For deterministic diagnostics carrying runtime limits, assert exact numeric text in tests and use `format!(...)` for every limit-bound message branch. |
 | 2026-02-18 | self | After `gh pr merge`, the CLI repeatedly dropped context back to stale local `dev`, and I almost continued coding on the wrong branch. | After every merge command, immediately verify `git branch --show-current` + `git log -n 1`, then re-anchor on `origin/dev` via a fresh `codex/*` branch before any edits. |

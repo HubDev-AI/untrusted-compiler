@@ -16181,6 +16181,11 @@ fn main() effects { net } -> Int {
         "response should include deterministic runtime-step-budget message:\n{response}"
     );
     assert!(
+        response.contains("\"code\":\"LASM.STEP_BUDGET_EXCEEDED\"")
+            && response.contains("\"kind\":\"internal\""),
+        "response should include deterministic runtime-step-budget code/kind envelope:\n{response}"
+    );
+    assert!(
         response.contains("X-Trace-Id: rt-1"),
         "response should include deterministic trace header:\n{response}"
     );
