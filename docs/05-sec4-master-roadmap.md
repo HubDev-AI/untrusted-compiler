@@ -331,6 +331,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM request parsing now merges duplicate request headers case-insensitively in deterministic arrival order (`Cookie` via `; `, other headers via `, `) while preserving strict `Host`/`Content-Length` conflict checks (`docs/book/960-m39-lasm-request-header-case-insensitive-merge.md`).
 - [x] Added first-class `req.cookie` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`req.cookie(...)` + `{{req.cookie:...}}`) for deterministic cookie-driven handler and response behavior (`docs/book/961-m39-req-cookie-intrinsic-and-lasm-materialization.md`).
 - [x] Added first-class `req.method()` / `req.path()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.method}}`, `{{req.path}}`) for deterministic method/path-driven handler and response behavior (`docs/book/962-m39-req-method-path-intrinsics-and-lasm-placeholders.md`).
+- [x] Added first-class `req.httpVersion()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.httpVersion}}`) for deterministic request-version-aware handler and response behavior (`docs/book/963-m39-req-http-version-intrinsic-and-lasm-placeholder-parity.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

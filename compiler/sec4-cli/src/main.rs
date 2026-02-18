@@ -1694,6 +1694,7 @@ fn parse_lasm_request_text_placeholder(
     match field.as_str() {
         "method" if args.is_empty() => Some("{{req.method}}".to_string()),
         "path" if args.is_empty() => Some("{{req.path}}".to_string()),
+        "httpVersion" if args.is_empty() => Some("{{req.httpVersion}}".to_string()),
         "pathParam" | "header" | "query" | "cookie" => {
             if args.is_empty() {
                 return None;
@@ -2243,6 +2244,7 @@ fn parse_lasm_request_header_placeholder_call(
     match field.as_str() {
         "method" if args.is_empty() => Some("{{req.method}}".to_string()),
         "path" if args.is_empty() => Some("{{req.path}}".to_string()),
+        "httpVersion" if args.is_empty() => Some("{{req.httpVersion}}".to_string()),
         "pathParam" | "header" | "query" | "cookie" => {
             if args.is_empty() {
                 return None;
@@ -6700,6 +6702,7 @@ fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
         || value.contains("{{req.cookie:")
         || value.contains("{{req.method}}")
         || value.contains("{{req.path}}")
+        || value.contains("{{req.httpVersion}}")
 }
 
 fn materialize_lasm_request_placeholders(
@@ -6709,8 +6712,9 @@ fn materialize_lasm_request_placeholders(
 ) -> String {
     let with_method = value.replace("{{req.method}}", request.method.as_str());
     let with_path = with_method.replace("{{req.path}}", request.path.as_str());
+    let with_http_version = with_path.replace("{{req.httpVersion}}", request.http_version.as_str());
     let with_path_params =
-        replace_lasm_response_placeholder_tokens(&with_path, "{{req.pathParam:", |key| {
+        replace_lasm_response_placeholder_tokens(&with_http_version, "{{req.pathParam:", |key| {
             path_params.get(key.trim()).cloned()
         });
     let with_headers =

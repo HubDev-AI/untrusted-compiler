@@ -3241,7 +3241,8 @@ impl<'a> Analyzer<'a> {
             || is_req_header_call(callee_name)
             || is_req_cookie_call(callee_name)
             || is_req_method_call(callee_name)
-            || is_req_path_call(callee_name))
+            || is_req_path_call(callee_name)
+            || is_req_http_version_call(callee_name))
         {
             return;
         }
@@ -3256,11 +3257,16 @@ impl<'a> Analyzer<'a> {
             "req.method"
         } else if is_req_path_call(callee_name) {
             "req.path"
+        } else if is_req_http_version_call(callee_name) {
+            "req.httpVersion"
         } else {
             "req.header"
         };
 
-        if is_req_method_call(callee_name) || is_req_path_call(callee_name) {
+        if is_req_method_call(callee_name)
+            || is_req_path_call(callee_name)
+            || is_req_http_version_call(callee_name)
+        {
             if !args.is_empty() {
                 self.diagnostics.push(
                     Diagnostic::error(
@@ -5829,7 +5835,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
         | "req.header" | "req_cookie" | "req.cookie" | "req_method" | "req.method"
-        | "req_path" | "req.path" => Some(IntrinsicSpec {
+        | "req_path" | "req.path" | "req_http_version" | "req.httpVersion" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
@@ -6418,6 +6424,10 @@ fn is_req_method_call(name: &str) -> bool {
 
 fn is_req_path_call(name: &str) -> bool {
     matches!(name, "req_path" | "req.path")
+}
+
+fn is_req_http_version_call(name: &str) -> bool {
+    matches!(name, "req_http_version" | "req.httpVersion")
 }
 
 fn is_sql_q_call(name: &str) -> bool {
