@@ -5215,6 +5215,14 @@ fn main() effects { net } -> Int {
         response.contains("\"code\":\"JSON.INVALID_SYNTAX\""),
         "response should include deterministic invalid-json error code:\n{response}"
     );
+    assert!(
+        response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic trace id in error envelope:\n{response}"
+    );
+    assert!(
+        response.contains("\"timeMs\":"),
+        "response should include deterministic error timestamp field:\n{response}"
+    );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
@@ -5349,6 +5357,14 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("email must be a valid email string"),
         "response should include deterministic validation message:\n{response}"
+    );
+    assert!(
+        response.contains("\"traceId\":\"rt-1\""),
+        "response should include deterministic trace id in validation envelope:\n{response}"
+    );
+    assert!(
+        response.contains("\"timeMs\":"),
+        "response should include deterministic validation timestamp field:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

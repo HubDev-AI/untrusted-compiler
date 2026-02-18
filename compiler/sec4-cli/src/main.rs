@@ -6038,12 +6038,13 @@ fn process_lasm_connection_with_runtime(
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
 ) -> Result<(), String> {
+    let trace_id = next_lasm_trace_id(trace_counter);
     let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
         Ok(request) => request,
         Err(err) => {
             let mut response = sec4_core::HttpResponse::text(err.status, err.message);
             apply_lasm_request_origin_header(&mut response, None, header_defaults);
-            stamp_lasm_trace_id(&mut response, trace_counter);
+            set_lasm_trace_id(&mut response, trace_id.as_str());
             write_lasm_http_response(stream, &response, header_defaults, true)?;
             return Ok(());
         }
@@ -6058,13 +6059,13 @@ fn process_lasm_connection_with_runtime(
                 Some(&request.headers),
                 header_defaults,
             );
-            stamp_lasm_trace_id(&mut response, trace_counter);
+            set_lasm_trace_id(&mut response, trace_id.as_str());
             write_lasm_http_response(stream, &response, header_defaults, true)?;
             return Ok(());
         }
         LasmCorsPreflightDecision::Reject { status, message } => {
             let mut response = sec4_core::HttpResponse::text(status, message);
-            stamp_lasm_trace_id(&mut response, trace_counter);
+            set_lasm_trace_id(&mut response, trace_id.as_str());
             write_lasm_http_response(stream, &response, header_defaults, false)?;
             return Ok(());
         }
@@ -6084,7 +6085,7 @@ fn process_lasm_connection_with_runtime(
             "run failed: LASM runtime remained active after step budget",
         );
         apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
-        stamp_lasm_trace_id(&mut response, trace_counter);
+        set_lasm_trace_id(&mut response, trace_id.as_str());
         write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)?;
         return Ok(());
     }
@@ -6103,13 +6104,14 @@ fn process_lasm_connection_with_runtime(
             &request,
             &exchange.path_params,
             dynamic_state,
+            trace_id.as_str(),
         );
         response
     } else {
         sec4_core::HttpResponse::text(500, "missing LASM response for request")
     };
     apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
-    stamp_lasm_trace_id(&mut response, trace_counter);
+    set_lasm_trace_id(&mut response, trace_id.as_str());
     write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
 }
 
@@ -6118,6 +6120,7 @@ fn apply_lasm_dynamic_response_materialization(
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
+    trace_id: &str,
 ) {
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;
@@ -6139,6 +6142,7 @@ fn apply_lasm_dynamic_response_materialization(
                             "validation",
                             "invalid JSON payload",
                             400,
+                            trace_id,
                         ),
                     );
                     return;
@@ -6148,7 +6152,7 @@ fn apply_lasm_dynamic_response_materialization(
                 set_lasm_json_response(
                     response,
                     400,
-                    &lasm_error_envelope(code, "validation", message, 400),
+                    &lasm_error_envelope(code, "validation", message, 400, trace_id),
                 );
                 return;
             }
@@ -6179,6 +6183,7 @@ fn apply_lasm_dynamic_response_materialization(
                             "validation",
                             "invalid JSON payload",
                             400,
+                            trace_id,
                         ),
                     );
                     return;
@@ -6188,7 +6193,7 @@ fn apply_lasm_dynamic_response_materialization(
                 set_lasm_json_response(
                     response,
                     400,
-                    &lasm_error_envelope(code, "validation", message, 400),
+                    &lasm_error_envelope(code, "validation", message, 400, trace_id),
                 );
                 return;
             }
@@ -6220,6 +6225,7 @@ fn apply_lasm_dynamic_response_materialization(
                         "validation",
                         "id must be UUID v4",
                         400,
+                        trace_id,
                     ),
                 );
                 return;
@@ -6233,7 +6239,7 @@ fn apply_lasm_dynamic_response_materialization(
                 None => set_lasm_json_response(
                     response,
                     404,
-                    &lasm_error_envelope("HTTP.NOT_FOUND", "not_found", "user not found", 404),
+                    &lasm_error_envelope("HTTP.NOT_FOUND", "not_found", "user not found", 404, trace_id),
                 ),
             }
         }
@@ -6389,13 +6395,21 @@ fn set_lasm_json_response(
     response.body = serde_json::to_vec(payload).unwrap_or_else(|_| b"{}".to_vec());
 }
 
-fn lasm_error_envelope(code: &str, kind: &str, message: &str, status: u16) -> serde_json::Value {
+fn lasm_error_envelope(
+    code: &str,
+    kind: &str,
+    message: &str,
+    status: u16,
+    trace_id: &str,
+) -> serde_json::Value {
     serde_json::json!({
         "error": {
             "code": code,
             "kind": kind,
             "message": message,
             "status": status,
+            "traceId": trace_id,
+            "timeMs": lasm_now_ms(),
         }
     })
 }
@@ -6877,10 +6891,21 @@ fn next_lasm_trace_id(trace_counter: &AtomicU64) -> String {
     format!("rt-{next}")
 }
 
-fn stamp_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_counter: &AtomicU64) {
+fn set_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_id: &str) {
     response
         .headers
-        .insert("X-Trace-Id".to_string(), next_lasm_trace_id(trace_counter));
+        .insert("X-Trace-Id".to_string(), trace_id.to_string());
+}
+
+fn stamp_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_counter: &AtomicU64) {
+    set_lasm_trace_id(response, next_lasm_trace_id(trace_counter).as_str());
+}
+
+fn lasm_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn http_status_text(status: u16) -> &'static str {
