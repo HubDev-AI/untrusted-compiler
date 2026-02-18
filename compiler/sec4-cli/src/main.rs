@@ -1237,13 +1237,23 @@ fn find_latest_route_registration(
         &mut registrations,
         None,
     );
-    registrations
-        .into_iter()
-        .filter(|registration| {
-            registration.method == normalized_method
-                && route_registration_matches_selected_route(registration.path.as_str(), route)
-        })
-        .next_back()
+    let find_latest_by_method = |target_method: &str| {
+        registrations
+            .iter()
+            .rev()
+            .find(|registration| {
+                registration.method == target_method
+                    && route_registration_matches_selected_route(registration.path.as_str(), route)
+            })
+            .cloned()
+    };
+    if let Some(registration) = find_latest_by_method(normalized_method.as_str()) {
+        return Some(registration);
+    }
+    if normalized_method == "HEAD" {
+        return find_latest_by_method("GET");
+    }
+    None
 }
 
 fn route_registration_matches_selected_route(
