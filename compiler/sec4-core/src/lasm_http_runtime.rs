@@ -316,6 +316,18 @@ impl LasmHttpRuntime {
         }
     }
 
+    pub fn reset_transient_state(&mut self) {
+        let now_ms = self.scheduler.now_ms();
+        self.scheduler = LasmAsyncRuntime::with_start_time(now_ms);
+        self.task_to_request.clear();
+        self.task_started_at_ms.clear();
+        self.task_is_head_request.clear();
+        self.task_to_path_params.clear();
+        self.task_to_response.clear();
+        self.pending_requests.clear();
+        self.ready_responses.clear();
+    }
+
     pub fn pop_response(&mut self) -> Option<HttpExchange> {
         self.ready_responses.pop_front()
     }
@@ -1306,5 +1318,60 @@ mod tests {
             second_exchange.response.body,
             b"handler timed out after 10ms"
         );
+    }
+
+    #[test]
+    fn reset_transient_state_clears_active_runtime_queues() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .set_max_in_flight(1)
+            .expect("in-flight limit should be accepted");
+        runtime
+            .set_max_pending(8)
+            .expect("pending limit should be accepted");
+        runtime
+            .register_route(
+                "GET",
+                "/slow",
+                vec![RuntimeAction::Yield, RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        runtime.submit(HttpRequest::new("GET", "/slow"));
+        runtime.submit(HttpRequest::new("GET", "/slow"));
+        let report = runtime.run_until_idle(1);
+        assert!(
+            !report.idle,
+            "runtime should remain active after one-step budget"
+        );
+
+        runtime.reset_transient_state();
+        assert_eq!(
+            runtime.in_flight_request_count(),
+            0,
+            "in-flight requests should clear on reset"
+        );
+        assert_eq!(
+            runtime.pending_request_count(),
+            0,
+            "pending queue should clear on reset"
+        );
+        assert!(
+            runtime.pop_response().is_none(),
+            "ready response queue should clear on reset"
+        );
+
+        let follow_up_request = runtime.submit(HttpRequest::new("GET", "/slow"));
+        let follow_up = runtime.run_until_idle(8);
+        assert!(
+            follow_up.idle,
+            "runtime should execute new requests normally after reset"
+        );
+        let exchange = runtime
+            .pop_response()
+            .expect("follow-up response should be emitted after reset");
+        assert_eq!(exchange.request_id, follow_up_request);
+        assert_eq!(exchange.response.status, 200);
     }
 }
