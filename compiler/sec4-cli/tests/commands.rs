@@ -14689,7 +14689,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_lasm_backend_persists_user_store_when_lasm_db_base_is_set() {
+fn run_command_lasm_backend_persists_user_store_when_db_base_flag_is_set() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-persistence");
     let db_base = project_dir.join("lasm-db");
     let create_port = find_available_tcp_port();
@@ -14750,13 +14750,14 @@ fn main() effects { net } -> Int {
             path,
             "--backend",
             "lasm",
+            "--db-base",
+            db_base_value.as_str(),
             "--oneshot",
             "--port",
             create_port_value.as_str(),
             "--serve-timeout-ms",
             "20000",
         ])
-        .env("SEC4_RT_LASM_DB_BASE", db_base_value.as_str())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -14858,13 +14859,14 @@ fn main() effects { net } -> Int {
             path,
             "--backend",
             "lasm",
+            "--db-base",
+            db_base_value.as_str(),
             "--oneshot",
             "--port",
             read_port_value.as_str(),
             "--serve-timeout-ms",
             "20000",
         ])
-        .env("SEC4_RT_LASM_DB_BASE", db_base_value.as_str())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -23037,6 +23039,39 @@ fn run_command_rejects_max_pending_with_c_backend() {
     assert!(
         stderr.contains("run failed: --max-pending is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only max-pending flag guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_base_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-base-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let db_base = project_dir.join("lasm-db");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--db-base", &db_base_value]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-base is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-base is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-base guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
