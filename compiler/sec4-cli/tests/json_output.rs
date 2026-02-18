@@ -8734,15 +8734,25 @@ fn c_bin_runtime_log_builders_emit_structured_json_when_clang_available() {
         r#"#include "sec4_runtime.h"
 
 int main(void) {
-  int64_t event = sec4_rt_log_event("user.created");
+  int64_t event = sec4_rt_log_event((int64_t)(uintptr_t) "user.created");
   int64_t count = sec4_rt_log_i64(1);
-  int64_t with_count = sec4_rt_log_with_attr(event, "count", count);
-  int64_t redacted = sec4_rt_log_attr_redacted("token");
-  int64_t with_attr = sec4_rt_log_with_attr(with_count, "token", redacted);
-  int64_t with_http = sec4_rt_log_with_http(with_attr, "POST", "/users", 201, 12);
+  int64_t with_count = sec4_rt_log_with_attr(event, (int64_t)(uintptr_t) "count", count);
+  int64_t redacted = sec4_rt_log_attr_redacted((int64_t)(uintptr_t) "token");
+  int64_t with_attr = sec4_rt_log_with_attr(with_count, (int64_t)(uintptr_t) "token", redacted);
+  int64_t with_http = sec4_rt_log_with_http(
+      with_attr,
+      (int64_t)(uintptr_t) "POST",
+      (int64_t)(uintptr_t) "/users",
+      201,
+      12
+  );
   int64_t err = sec4_rt_err_internal((int64_t)(uintptr_t) "boom");
   err = sec4_rt_err_with_path(err, "$.email");
-  err = sec4_rt_err_with_detail(err, "validator", sec4_rt_log_str("validate.email"));
+  err = sec4_rt_err_with_detail(
+      err,
+      "validator",
+      sec4_rt_log_str((int64_t)(uintptr_t) "validate.email")
+  );
   int64_t with_error = sec4_rt_log_with_error(with_http, err);
   sec4_rt_log_info(with_error);
   sec4_rt_log_warn(with_error);
@@ -18671,9 +18681,9 @@ static int64_t validate(void) {{
       (int64_t)(uintptr_t) "Invalid email."
   );
   int64_t with_path = sec4_rt_err_with_path(base, "$.email");
-  int64_t validator = sec4_rt_log_str("validate.email");
+  int64_t validator = sec4_rt_log_str((int64_t)(uintptr_t) "validate.email");
   int64_t with_detail = sec4_rt_err_with_detail(with_path, "validator", validator);
-  int64_t expected = sec4_rt_log_str("Email");
+  int64_t expected = sec4_rt_log_str((int64_t)(uintptr_t) "Email");
   int64_t with_detail2 = sec4_rt_err_with_detail(with_detail, "expected", expected);
   int64_t with_limit = sec4_rt_err_with_limit(with_detail2, "maxJsonDepth", 33, 32);
   int64_t with_dependency = sec4_rt_err_with_dependency(with_limit, "postgres", "query", 1);
