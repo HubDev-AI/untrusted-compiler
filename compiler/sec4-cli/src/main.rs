@@ -9,7 +9,7 @@ use sec4_core::{
     AuditHistoryWindowSummary, AuditReport, AuditSeverity, BackendEmitOutput, BackendKind,
     Diagnostic, Policy,
 };
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -621,12 +621,34 @@ fn cmd_lasm_smoke(
                     format!("handler:{}", route_plan.handler_name),
                 )
             }
-            None => (
-                200,
-                BTreeMap::new(),
-                format!("lasm entry {} ok", entry.name),
-                "entry".to_string(),
-            ),
+            None => {
+                let allowed_methods =
+                    resolve_lasm_smoke_allowed_methods(&program, entry.name.as_str(), route);
+                if let Some(allowed_methods) = allowed_methods {
+                    let selected_has_match = allowed_methods
+                        .iter()
+                        .any(|candidate| candidate == &runtime_route_method);
+                    if !selected_has_match {
+                        let mut headers = BTreeMap::new();
+                        headers.insert("Allow".to_string(), allowed_methods.join(", "));
+                        (405, headers, String::new(), "method-mismatch".to_string())
+                    } else {
+                        (
+                            200,
+                            BTreeMap::new(),
+                            format!("lasm entry {} ok", entry.name),
+                            "entry".to_string(),
+                        )
+                    }
+                } else {
+                    (
+                        200,
+                        BTreeMap::new(),
+                        format!("lasm entry {} ok", entry.name),
+                        "entry".to_string(),
+                    )
+                }
+            }
         };
     let mut response = sec4_core::HttpResponse::text(response_status, response_body);
     response.headers = response_headers;
@@ -1031,6 +1053,46 @@ fn resolve_lasm_smoke_route_plan(
         body: response_plan.body,
         headers,
     })
+}
+
+fn resolve_lasm_smoke_allowed_methods(
+    program: &sec4_core::ast::Program,
+    entry_name: &str,
+    route: &str,
+) -> Option<Vec<String>> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            sec4_core::ast::ItemKind::Function(function) => {
+                Some((function.name.as_str(), function))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let mut visited_functions = HashSet::new();
+    let mut registrations = Vec::new();
+    collect_route_registrations_in_function(
+        &functions,
+        entry_name,
+        &mut visited_functions,
+        &mut registrations,
+        None,
+    );
+
+    let mut methods = BTreeSet::new();
+    for registration in registrations {
+        if route_registration_matches_selected_route(registration.path.as_str(), route) {
+            methods.insert(registration.method);
+        }
+    }
+    if methods.is_empty() {
+        return None;
+    }
+    if methods.contains("GET") {
+        methods.insert("HEAD".to_string());
+    }
+    Some(methods.into_iter().collect())
 }
 
 fn collect_route_registrations_in_function(
