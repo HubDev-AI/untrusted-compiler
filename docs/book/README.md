@@ -952,5 +952,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `984-m39-lasm-run-response-header-helper-parameter-binding.md`
 - `985-m39-lasm-chunk-extension-validation.md`
 - `986-m39-lasm-chunk-trailer-forbidden-header-validation.md`
+- `987-m39-lasm-chunk-trailer-header-merge-for-req-header.md`
 
 As milestones progress, chapters will be added and linked from this index.

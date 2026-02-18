@@ -9256,7 +9256,7 @@ fn read_lasm_http_request(
     max_header_bytes: usize,
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
-    let request_head = read_lasm_http_request_head(reader, max_header_bytes)?;
+    let mut request_head = read_lasm_http_request_head(reader, max_header_bytes)?;
     if !request_head.transfer_encoding_chunked && request_head.content_length > max_body_bytes {
         return Err(LasmRequestReadError {
             status: 413,
@@ -9284,7 +9284,12 @@ fn read_lasm_http_request(
     };
 
     let body = if request_head.transfer_encoding_chunked {
-        read_lasm_http_chunked_body(reader, max_body_bytes, &map_read_error)?
+        read_lasm_http_chunked_body(
+            reader,
+            &mut request_head.headers,
+            max_body_bytes,
+            &map_read_error,
+        )?
     } else {
         let mut body = vec![0u8; request_head.content_length];
         if request_head.content_length > 0 {
@@ -9307,6 +9312,7 @@ fn read_lasm_http_request(
 
 fn read_lasm_http_chunked_body(
     reader: &mut BufReader<TcpStream>,
+    headers: &mut BTreeMap<String, String>,
     max_body_bytes: usize,
     map_read_error: &dyn Fn(&str, std::io::Error) -> LasmRequestReadError,
 ) -> Result<Vec<u8>, LasmRequestReadError> {
@@ -9393,6 +9399,7 @@ fn read_lasm_http_chunked_body(
                             .to_string(),
                     });
                 }
+                insert_lasm_request_header_case_insensitive(headers, name_raw, value_raw.trim());
             }
             return Ok(body);
         }
