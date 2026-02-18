@@ -5317,6 +5317,16 @@ fn cmd_run_lasm_backend(
     };
 
     let mut worker_handles = Vec::new();
+    let mut oneshot_runtime = if oneshot {
+        Some(
+            build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?,
+        )
+    } else {
+        None
+    };
     let worker_sender = if oneshot {
         None
     } else {
@@ -5325,26 +5335,35 @@ fn cmd_run_lasm_backend(
         for _ in 0..effective_max_in_flight {
             let worker_receiver = Arc::clone(&shared_receiver);
             let routes_for_worker = routes.clone();
-            worker_handles.push(std::thread::spawn(move || loop {
-                let next_stream = {
-                    let receiver = match worker_receiver.lock() {
-                        Ok(receiver) => receiver,
-                        Err(_) => return,
+            worker_handles.push(std::thread::spawn(move || {
+                let mut runtime =
+                    match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
+                        Ok(runtime) => runtime,
+                        Err(message) => {
+                            eprintln!("warning: LASM worker bootstrap failed: {message}");
+                            return;
+                        }
                     };
-                    receiver.recv()
-                };
-                let mut stream = match next_stream {
-                    Ok(stream) => stream,
-                    Err(_) => break,
-                };
-                if let Err(message) = process_lasm_connection(
-                    &mut stream,
-                    &routes_for_worker,
-                    effective_timeout_ms,
-                    effective_max_header_bytes,
-                    effective_max_body_bytes,
-                ) {
-                    eprintln!("warning: LASM backend worker failed: {message}");
+                loop {
+                    let next_stream = {
+                        let receiver = match worker_receiver.lock() {
+                            Ok(receiver) => receiver,
+                            Err(_) => return,
+                        };
+                        receiver.recv()
+                    };
+                    let mut stream = match next_stream {
+                        Ok(stream) => stream,
+                        Err(_) => break,
+                    };
+                    if let Err(message) = process_lasm_connection_with_runtime(
+                        &mut stream,
+                        &mut runtime,
+                        effective_max_header_bytes,
+                        effective_max_body_bytes,
+                    ) {
+                        eprintln!("warning: LASM backend worker failed: {message}");
+                    }
                 }
             }));
         }
@@ -5367,10 +5386,11 @@ fn cmd_run_lasm_backend(
         }
 
         if oneshot {
-            if let Err(message) = process_lasm_connection(
+            if let Err(message) = process_lasm_connection_with_runtime(
                 &mut stream,
-                &routes,
-                effective_timeout_ms,
+                oneshot_runtime
+                    .as_mut()
+                    .expect("oneshot runtime should be initialized"),
                 effective_max_header_bytes,
                 effective_max_body_bytes,
             ) {
@@ -5406,24 +5426,10 @@ fn cmd_run_lasm_backend(
     Ok(())
 }
 
-fn process_lasm_connection(
-    stream: &mut TcpStream,
+fn build_lasm_http_runtime(
     routes: &[LasmRunRoutePlan],
     timeout_ms: u64,
-    max_header_bytes: usize,
-    max_body_bytes: usize,
-) -> Result<(), String> {
-    let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
-        Ok(request) => request,
-        Err(err) => {
-            write_lasm_http_response(
-                stream,
-                &sec4_core::HttpResponse::text(err.status, err.message),
-            )?;
-            return Ok(());
-        }
-    };
-
+) -> Result<sec4_core::LasmHttpRuntime, String> {
     let mut runtime = sec4_core::LasmHttpRuntime::default();
     runtime
         .set_max_in_flight(1)
@@ -5449,6 +5455,26 @@ fn process_lasm_connection(
             )
             .map_err(|message| format!("could not register LASM route: {message}"))?;
     }
+
+    Ok(runtime)
+}
+
+fn process_lasm_connection_with_runtime(
+    stream: &mut TcpStream,
+    runtime: &mut sec4_core::LasmHttpRuntime,
+    max_header_bytes: usize,
+    max_body_bytes: usize,
+) -> Result<(), String> {
+    let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
+        Ok(request) => request,
+        Err(err) => {
+            write_lasm_http_response(
+                stream,
+                &sec4_core::HttpResponse::text(err.status, err.message),
+            )?;
+            return Ok(());
+        }
+    };
 
     let mut runtime_request = sec4_core::HttpRequest::new(request.method, request.path);
     runtime_request.headers = request.headers;
