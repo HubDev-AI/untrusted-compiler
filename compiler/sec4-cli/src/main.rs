@@ -5252,6 +5252,8 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
         "server/db/schema.sql".to_string(),
         "server/deploy/sec4.server.toml".to_string(),
         "server/reports/promote-plan.json".to_string(),
+        "server/sec4.policy".to_string(),
+        "server/sec4.toml".to_string(),
         "server/src/main.ut".to_string(),
         "server/src/repo/db_repo.ut".to_string(),
     ];
@@ -5429,6 +5431,10 @@ fn apply_promote_plan(
 
 fn promote_generated_file_content(relative_path: &str) -> &'static str {
     match relative_path {
+        "server/sec4.toml" => {
+            "[package]\nname = \"promoted-server\"\nversion = \"0.1.0\"\n\n[build]\nentry = \"src/main.ut\"\nprofile = \"server\"\n"
+        }
+        "server/sec4.policy" => "",
         "server/src/main.ut" => {
             "use repo.db_repo;\n\nfn main() -> Int {\n  // Generated server composition root.\n  0\n}\n"
         }

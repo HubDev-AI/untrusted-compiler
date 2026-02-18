@@ -17,6 +17,8 @@ Files:
    - preserves non-root module files unchanged
    - reports skipped non-root references under `guardedSkippedReferences`
 3. Apply mode generates deterministic scaffold files:
+   - `server/sec4.toml`
+   - `server/sec4.policy`
    - `server/src/main.ut`
    - `server/src/repo/db_repo.ut`
    - `server/db/schema.sql`
@@ -24,6 +26,9 @@ Files:
 4. Apply mode writes deterministic report artifact:
    - `server/reports/promote-plan.json`
 5. Unsupported route pairs (for example `server -> browser`) still fail deterministically with usage-style exit code.
+6. End-to-end fixture proves promoted scaffold is immediately usable as a standalone project:
+   - `sec4 check --path <project>/server` succeeds
+   - `sec4 run --path <project>/server` succeeds
 
 ## Why
 
@@ -38,3 +43,4 @@ New/updated coverage:
 
 - `promote_apply_rewrites_composition_root_and_generates_scaffold`
 - `promote_rejects_unsupported_route_pair`
+- `promote_e2e_apply_generates_server_project_that_checks_and_runs`

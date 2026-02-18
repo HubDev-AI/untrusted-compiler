@@ -369,6 +369,15 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     );
     assert!(
         parsed
+            .get("generatedFiles")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|files| files.iter().any(|entry| {
+                entry.as_str() == Some("server/sec4.toml")
+            })),
+        "apply report should include generated standalone server manifest"
+    );
+    assert!(
+        parsed
             .get("guardedSkippedReferences")
             .and_then(serde_json::Value::as_array)
             .is_some_and(|items| items.iter().any(|item| {
@@ -403,6 +412,60 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
     assert_eq!(
         parsed, report_json,
         "stdout report and written report artifact should be byte-equivalent JSON payloads"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_e2e_apply_generates_server_project_that_checks_and_runs() {
+    let root = temp_dir("sec4-promote-e2e-server-scaffold");
+    let project_dir = root.join("project");
+    write_minimal_project(&project_dir, "");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let dry_run = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(dry_run.status.success(), "promote dry-run should succeed");
+
+    let apply = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+    ]);
+    assert!(apply.status.success(), "promote apply should succeed");
+
+    let server_project_path = project_dir.join("server");
+    let server_project_path_string = server_project_path
+        .to_str()
+        .expect("server project path should be valid utf-8")
+        .to_string();
+
+    let check_output = run_cli(&["check", "--path", &server_project_path_string]);
+    assert!(
+        check_output.status.success(),
+        "generated server scaffold should pass sec4 check"
+    );
+
+    let run_output = run_cli(&["run", "--path", &server_project_path_string]);
+    assert!(
+        run_output.status.success(),
+        "generated server scaffold should run successfully"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
