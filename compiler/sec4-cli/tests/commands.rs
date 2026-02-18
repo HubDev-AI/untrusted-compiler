@@ -5781,6 +5781,10 @@ fn main() effects { net } -> Int {
         "parser failure response should contain deterministic envelope code/kind:\n{response}"
     );
     assert!(
+        !response.contains("Access-Control-Allow-Origin:"),
+        "parser failures should suppress default CORS headers:\n{response}"
+    );
+    assert!(
         response.contains("X-Trace-Id: rt-1"),
         "response should include deterministic trace header:\n{response}"
     );
