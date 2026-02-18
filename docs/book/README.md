@@ -947,5 +947,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `979-m39-lasm-serve-wrapper-middleware-propagation.md`
 - `980-m39-lasm-helper-side-effect-router-argument-resolution.md`
 - `981-m39-lasm-run-duplicate-route-latest-wins-parity.md`
+- `982-m39-lasm-run-latest-response-write-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
