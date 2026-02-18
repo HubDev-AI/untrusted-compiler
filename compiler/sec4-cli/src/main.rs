@@ -922,12 +922,16 @@ fn collect_lasm_route_plans(
         None,
     );
     let mut plans = Vec::new();
-    let mut seen_routes = HashSet::new();
-    for registration in registrations {
+    let mut latest_route_registrations = HashMap::new();
+    for (index, registration) in registrations.into_iter().enumerate() {
         let route_key = format!("{} {}", registration.method, registration.path);
-        if !seen_routes.insert(route_key) {
-            continue;
-        }
+        latest_route_registrations.insert(route_key, (index, registration));
+    }
+    let mut registration_entries = latest_route_registrations
+        .into_values()
+        .collect::<Vec<(usize, LasmRouteRegistration)>>();
+    registration_entries.sort_by_key(|(index, _)| *index);
+    for (_, registration) in registration_entries {
         let Some(response_plan) =
             extract_response_plan(&functions, registration.handler_name.as_str())
         else {
