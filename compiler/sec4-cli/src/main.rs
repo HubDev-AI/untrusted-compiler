@@ -1237,11 +1237,24 @@ fn find_route_handler_name_in_function(
     visited: &mut HashSet<String>,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
-    if !visited.insert(function_name.to_string()) {
+    if visited.contains(function_name) {
         return None;
     }
-    let function = functions.get(function_name)?;
-    find_route_handler_name_in_block(functions, &function.body, method, route, visited, bindings)
+    visited.insert(function_name.to_string());
+    let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
+        return None;
+    };
+    let handler = find_route_handler_name_in_block(
+        functions,
+        &function.body,
+        method,
+        route,
+        visited,
+        bindings,
+    );
+    visited.remove(function_name);
+    handler
 }
 
 fn find_route_handler_name_in_block(

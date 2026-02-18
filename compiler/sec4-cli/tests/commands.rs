@@ -1286,6 +1286,54 @@ fn lasm_smoke_command_supports_bound_route_and_handler_aliases() {
 }
 
 #[test]
+fn lasm_smoke_command_revisits_helper_route_registration_with_distinct_bindings() {
+    let root = temp_dir("sec4-lasm-smoke-helper-revisit-bindings");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should exist");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-helper-revisit-bindings\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"helper route\");\n  0\n}\n\nfn register_route(router: Router, path: String) effects { net } -> Int {\n  http.get(router, path, health);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  register_route(router, \"/first\");\n  register_route(router, \"/second\");\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/second",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "lasm-smoke command should succeed for repeated helper registration bindings"
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:health"),
+        "lasm-smoke output should resolve helper handler origin after revisiting helper:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=helper route"),
+        "lasm-smoke output should include helper route body from second registration:\n{stdout}"
+    );
+}
+
+#[test]
 fn lasm_smoke_command_extracts_res_ok_status_and_body() {
     let root = temp_dir("sec4-lasm-smoke-res-ok");
     let project_dir = root.join("project");
