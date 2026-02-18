@@ -1801,20 +1801,28 @@ fn extract_response_plan(
     function_name: &str,
 ) -> Option<LasmResponsePlan> {
     let mut visited = HashSet::new();
-    extract_response_plan_in_function(functions, function_name, &mut visited)
+    extract_response_plan_in_function(functions, function_name, &mut visited, None)
 }
 
 fn extract_response_plan_in_function(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     visited: &mut HashSet<String>,
+    seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
 ) -> Option<LasmResponsePlan> {
-    if !visited.insert(function_name.to_string()) {
+    if visited.contains(function_name) {
         return None;
     }
-    let function = functions.get(function_name)?;
-    let mut bindings = HashMap::new();
-    extract_response_plan_in_block(functions, &function.body, visited, &mut bindings)
+    visited.insert(function_name.to_string());
+    let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
+        return None;
+    };
+    let mut bindings = seed_bindings.unwrap_or_default();
+    let response =
+        extract_response_plan_in_block(functions, &function.body, visited, &mut bindings);
+    visited.remove(function_name);
+    response
 }
 
 fn extract_response_plan_in_block(
@@ -1886,9 +1894,14 @@ fn extract_response_plan_in_expr(
                 return Some(response);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
-                if let Some(response) =
-                    extract_response_plan_in_function(functions, function_name, visited)
-                {
+                let call_bindings =
+                    collect_response_plan_call_bindings(functions, function_name, args, bindings);
+                if let Some(response) = extract_response_plan_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    Some(call_bindings),
+                ) {
                     return Some(response);
                 }
             }
@@ -1947,6 +1960,23 @@ fn extract_response_plan_in_expr(
         | sec4_core::ast::ExprKind::String(_)
         | sec4_core::ast::ExprKind::Bool(_) => None,
     }
+}
+
+fn collect_response_plan_call_bindings(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> HashMap<String, sec4_core::ast::Expr> {
+    let mut call_bindings = HashMap::new();
+    let Some(function) = functions.get(function_name) else {
+        return call_bindings;
+    };
+    for (param, arg) in function.params.iter().zip(args.iter()) {
+        let resolved = resolve_response_expr(arg, bindings, 0).unwrap_or_else(|| arg.clone());
+        call_bindings.insert(param.name.clone(), resolved);
+    }
+    call_bindings
 }
 
 fn extract_auth_requirement(
