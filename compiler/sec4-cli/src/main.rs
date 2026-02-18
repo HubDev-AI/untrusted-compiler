@@ -6970,6 +6970,12 @@ fn read_lasm_http_request(
                 "transfer-encoding is not supported".to_string(),
             ));
         }
+        if name.eq_ignore_ascii_case("expect") && !value.is_empty() {
+            return Err(make_error(
+                417,
+                "expect header is not supported".to_string(),
+            ));
+        }
         if name.eq_ignore_ascii_case("content-length") {
             let parsed = value.parse::<usize>().map_err(|_| {
                 make_error(
@@ -7157,6 +7163,7 @@ fn http_status_text(status: u16) -> &'static str {
         401 => "Unauthorized",
         403 => "Forbidden",
         400 => "Bad Request",
+        417 => "Expectation Failed",
         408 => "Request Timeout",
         405 => "Method Not Allowed",
         431 => "Request Header Fields Too Large",
