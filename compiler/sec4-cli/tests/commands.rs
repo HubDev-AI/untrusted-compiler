@@ -105,9 +105,25 @@ fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
     fs::write(project_dir.join("sec4.policy"), policy_source).expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn main() -> Int {\n  0\n}\n",
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
     )
     .expect("entry should be written");
+}
+
+fn write_manifest_with_profile(project_dir: &PathBuf, profile: &str) {
+    fs::write(
+        project_dir.join("sec4.toml"),
+        format!(
+            "[package]\n\
+name = \"commands-fixture\"\n\
+version = \"0.1.0\"\n\
+\n\
+[build]\n\
+entry = \"src/main.ut\"\n\
+profile = \"{profile}\"\n"
+        ),
+    )
+    .expect("manifest should be written");
 }
 
 #[test]
@@ -187,6 +203,932 @@ fn init_then_check_succeeds() {
     assert!(
         stdout.contains("check succeeded"),
         "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_for_multi_file_module_project() {
+    let root = temp_dir("sec4-check-multi-file-pass");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/auth")).expect("src/auth should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"multi-file-pass\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use auth.validate;\n\nfn main() -> Int {\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/auth/validate.ut"),
+        "fn is_valid() -> Bool {\n  true\n}\n",
+    )
+    .expect("module should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed for multi-file project"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_multi_file_module_is_missing() {
+    let root = temp_dir("sec4-check-multi-file-missing");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"multi-file-missing\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use auth.validate;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when imported module is missing"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("M0303"),
+        "missing-module diagnostic code should be reported:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_multi_file_module_graph_has_cycle() {
+    let root = temp_dir("sec4-check-multi-file-cycle");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"multi-file-cycle\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use a;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/a.ut"),
+        "use b;\n\nfn a_fn() -> Int {\n  0\n}\n",
+    )
+    .expect("a module should be written");
+    fs::write(
+        project_dir.join("src/b.ut"),
+        "use a;\n\nfn b_fn() -> Int {\n  0\n}\n",
+    )
+    .expect("b module should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when module graph has a cycle"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("M0305"),
+        "cycle diagnostic code should be reported:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn build_emit_lasm_outputs_lasm_text() {
+    let root = temp_dir("sec4-build-emit-lasm");
+    let project_dir = root.join("lasm-project");
+    write_minimal_project(&project_dir, "");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["build", "--path", &project_path, "--emit", "lasm"]);
+    assert!(
+        output.status.success(),
+        "build --emit lasm should succeed for minimal project"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains(".lasm v0"),
+        "lasm output should contain LASM version header:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(".entry main params=0 ret=Int"),
+        "lasm output should include deterministic entrypoint contract:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(".fn main"),
+        "lasm output should contain lowered function:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ret 0"),
+        "lasm output should contain lowered return operation:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn build_emit_lasm_json_outputs_machine_readable_lasm() {
+    let root = temp_dir("sec4-build-emit-lasm-json");
+    let project_dir = root.join("lasm-json-project");
+    write_minimal_project(&project_dir, "");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["build", "--path", &project_path, "--emit", "lasm-json"]);
+    assert!(
+        output.status.success(),
+        "build --emit lasm-json should succeed for minimal project"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-json output should be valid json");
+    assert_eq!(
+        parsed.get("version").and_then(serde_json::Value::as_str),
+        Some("v0"),
+        "lasm-json should include version marker"
+    );
+    assert_eq!(
+        parsed
+            .get("entry")
+            .and_then(|entry| entry.get("name"))
+            .and_then(serde_json::Value::as_str),
+        Some("main"),
+        "lasm-json should include explicit entrypoint"
+    );
+    assert!(
+        parsed
+            .get("functions")
+            .and_then(serde_json::Value::as_array)
+            .map(|functions| {
+                functions.iter().any(|function| {
+                    function
+                        .get("name")
+                        .and_then(serde_json::Value::as_str)
+                        .map(|name| name == "main")
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false),
+        "lasm-json should include lowered main function:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn build_emit_c_succeeds_for_multi_file_module_project() {
+    let root = temp_dir("sec4-build-emit-c-multi-file");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src/lib")).expect("src/lib should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"multi-file-build\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use lib.helper;\n\nfn main() -> Int {\n  helper();\n  0\n}\n",
+    )
+    .expect("entry should be written");
+    fs::write(
+        project_dir.join("src/lib/helper.ut"),
+        "fn helper() -> Int {\n  0\n}\n",
+    )
+    .expect("module should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["build", "--path", &project_path, "--emit", "c"]);
+    assert!(
+        output.status.success(),
+        "build --emit c should succeed for multi-file project"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("int main(void);"),
+        "generated C should contain lowered main function symbol:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("int64_t helper(void);"),
+        "generated C should contain lowered helper function symbol from imported module:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_serves_multi_file_module_route_and_exits() {
+    if !clang_available() {
+        eprintln!("skipping run-command multi-file oneshot integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-oneshot-multi-file");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src/api")).expect("src/api directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runoneshotmultifilecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"use api.health;
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("entry should be written");
+    fs::write(
+        project_dir.join("src/api/health.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.setHeader(headers.name("X-From-Module"), headers.value("1"));
+  res.text(200, "pong from module");
+  0
+}
+"#,
+    )
+    .expect("module route should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--tls-backend",
+            "auto",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command multi-file oneshot test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command multi-file oneshot process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command multi-file oneshot process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-From-Module: 1"),
+        "response should include module-defined header:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong from module"),
+        "response should include module-defined body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_runs_in_memory_runtime_with_compiled_entrypoint() {
+    let root = temp_dir("sec4-lasm-smoke-pass");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-pass\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--requests",
+        "5",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("lasm smoke succeeded:"),
+        "lasm-smoke output should report success summary:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("requests=5"),
+        "lasm-smoke output should include requested execution count:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ok=5") && stdout.contains("errors=0"),
+        "lasm-smoke output should include deterministic success/error counts:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("entry=main"),
+        "lasm-smoke output should include selected entrypoint:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("origin=handler:health"),
+        "lasm-smoke output should include matched handler origin:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=200"),
+        "lasm-smoke output should include extracted handler status:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=smoke body"),
+        "lasm-smoke output should include extracted handler response body:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_resolves_routes_and_response_through_helper_calls() {
+    let root = temp_dir("sec4-lasm-smoke-helper-call-graph");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-helper-call-graph\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn emit_error() effects { net } -> Int {\n  res.text(503, \"helper response\");\n  0\n}\n\nfn health() effects { net } -> Int {\n  emit_error();\n  0\n}\n\nfn register_routes(router: Router) effects { net } -> Int {\n  http.get(router, \"/probe\", health);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  register_routes(router);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--requests",
+        "3",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:health"),
+        "lasm-smoke output should include matched handler origin:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=helper response"),
+        "lasm-smoke output should include helper-extracted response body:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=503"),
+        "lasm-smoke output should include helper-extracted status:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ok=0") && stdout.contains("errors=3"),
+        "lasm-smoke output should classify helper-derived 5xx responses as errors:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_extracts_res_ok_status_and_body() {
+    let root = temp_dir("sec4-lasm-smoke-res-ok");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-res-ok\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn create_user() effects { net } -> Int {\n  res.ok(201, \"CreateUserResponse\", 1);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.post(router, \"/users\", create_user);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "POST",
+        "--route",
+        "/users",
+        "--requests",
+        "2",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:create_user"),
+        "lasm-smoke output should include matched handler origin:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=201"),
+        "lasm-smoke output should include extracted res.ok status:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=ok response"),
+        "lasm-smoke output should include res.ok-derived body marker:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ok=2") && stdout.contains("errors=0"),
+        "lasm-smoke output should classify res.ok status as success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_emits_json_summary_when_requested() {
+    let root = temp_dir("sec4-lasm-smoke-json-summary");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-json-summary\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  let name = headers.name(\"X-Test\");\n  let value = headers.value(\"active\");\n  res.setHeader(name, value);\n  res.ok(201, \"CreateUserResponse\", 1);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.post(router, \"/users\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "POST",
+        "--route",
+        "/users",
+        "--requests",
+        "2",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed.get("ok").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "lasm-smoke json should signal success"
+    );
+    assert_eq!(
+        parsed.get("origin").and_then(serde_json::Value::as_str),
+        Some("handler:health"),
+        "lasm-smoke json should include resolved handler origin"
+    );
+    assert_eq!(
+        parsed.get("status").and_then(serde_json::Value::as_u64),
+        Some(201),
+        "lasm-smoke json should include extracted status code"
+    );
+    assert_eq!(
+        parsed.get("okCount").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "lasm-smoke json should include success count"
+    );
+    assert_eq!(
+        parsed.get("errorCount").and_then(serde_json::Value::as_u64),
+        Some(0),
+        "lasm-smoke json should include error count"
+    );
+    assert_eq!(
+        parsed
+            .get("headers")
+            .and_then(|headers| headers.get("X-Test"))
+            .and_then(serde_json::Value::as_str),
+        Some("active"),
+        "lasm-smoke json should include extracted response headers"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_captures_path_params_with_request_path_override() {
+    let root = temp_dir("sec4-lasm-smoke-path-params");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-path-params\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn get_user() effects { net } -> Int {\n  res.text(200, \"user\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/users/:id\", get_user);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/users/:id",
+        "--request-path",
+        "/users/42",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed
+            .get("requestPath")
+            .and_then(serde_json::Value::as_str),
+        Some("/users/42"),
+        "lasm-smoke json should report resolved request path"
+    );
+    assert_eq!(
+        parsed
+            .get("pathParams")
+            .and_then(|params| params.get("id"))
+            .and_then(serde_json::Value::as_str),
+        Some("42"),
+        "lasm-smoke json should include captured path parameter values"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_zero_step_budget() {
+    let root = temp_dir("sec4-lasm-smoke-zero-budget");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-zero-budget\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["lasm-smoke", "--path", &project_path, "--max-steps", "0"]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail with zero step budget"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("--max-steps must be >= 1"),
+        "lasm-smoke failure should mention invalid step budget:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_zero_request_count() {
+    let root = temp_dir("sec4-lasm-smoke-zero-requests");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-zero-requests\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["lasm-smoke", "--path", &project_path, "--requests", "0"]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail with zero request count"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("--requests must be >= 1"),
+        "lasm-smoke failure should mention invalid request count:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_fails_when_step_budget_is_too_low_for_batch() {
+    let root = temp_dir("sec4-lasm-smoke-step-budget-too-low");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-step-budget-too-low\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--requests",
+        "8",
+        "--max-steps",
+        "1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail when step budget is too low for request batch"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("runtime remained active after step budget"),
+        "lasm-smoke should emit deterministic step-budget failure:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_zero_max_in_flight() {
+    let root = temp_dir("sec4-lasm-smoke-zero-max-in-flight");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-zero-max-in-flight\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--max-in-flight",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail for zero max in-flight limit"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "invalid max in-flight should return deterministic usage-style exit code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("invalid max in-flight limit: must be >= 1"),
+        "lasm-smoke failure should mention deterministic max in-flight guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_reports_effective_max_in_flight_in_text_summary() {
+    let root = temp_dir("sec4-lasm-smoke-reports-max-in-flight");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-reports-max-in-flight\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--max-in-flight",
+        "1",
+        "--requests",
+        "2",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("maxInFlight=1"),
+        "lasm-smoke text summary should include effective max in-flight limit:\n{stdout}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -276,6 +1218,169 @@ fn main() -> Int {
     assert!(
         stdout.contains("check succeeded"),
         "check output should confirm success:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_browser_profile_uses_server_only_intrinsics() {
+    let root = temp_dir("sec4-check-browser-profile-deny");
+    let project_dir = root.join("browser-profile-deny-project");
+    write_minimal_project(
+        &project_dir,
+        r#"[net.internal]
+enabled = true
+"#,
+    );
+    write_manifest_with_profile(&project_dir, "browser");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn do_work(db: DbCap, secrets: SecretsCap, internal: InternalNetCap, internal_url: InternalUrl) effects { db.write, net, secrets.read } -> Int {
+  let q = sql.q("SELECT 1", 1);
+  db.exec(db, q);
+  secrets.get(secrets, "API_KEY");
+  httpClient.getInternal(internal, internal_url);
+  http.serve(8080, http.router());
+  0
+}
+
+fn main() -> Int {
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when browser profile uses server-only intrinsics"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("database intrinsics are disabled in browser profile"),
+        "failure should include db browser-profile diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("secrets intrinsics are disabled in browser profile"),
+        "failure should include secrets browser-profile diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("internal network intrinsics are disabled in browser profile"),
+        "failure should include internal-net browser-profile diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("inbound network listener is disabled in browser profile"),
+        "failure should include inbound-listener browser-profile diagnostic:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_succeeds_when_browser_profile_uses_allowed_public_net_intrinsics() {
+    let root = temp_dir("sec4-check-browser-profile-allow");
+    let project_dir = root.join("browser-profile-allow-project");
+    write_minimal_project(&project_dir, "");
+    write_manifest_with_profile(&project_dir, "browser");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn main() effects { net } -> Int {
+  let raw = req.query("https://api.example.com/users");
+  url.public(raw);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "check should succeed when browser profile uses allowed intrinsics"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_manifest_profile_is_invalid() {
+    let root = temp_dir("sec4-check-invalid-manifest-profile");
+    let project_dir = root.join("invalid-manifest-profile-project");
+    write_minimal_project(&project_dir, "");
+    write_manifest_with_profile(&project_dir, "mobile");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when manifest build.profile is invalid"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("M0005"),
+        "failure should include deterministic manifest profile code:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("build.profile must be one of `server` or `browser`"),
+        "failure should include invalid profile guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn check_fails_when_browser_profile_uses_server_capability_types_and_constructors() {
+    let root = temp_dir("sec4-check-browser-profile-server-cap-types");
+    let project_dir = root.join("browser-profile-server-cap-types-project");
+    write_minimal_project(&project_dir, "");
+    write_manifest_with_profile(&project_dir, "browser");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn use_db_cap(cap: DbCap) -> Int {
+  0
+}
+
+fn main() -> Int {
+  DbCap();
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["check", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "check should fail when browser profile uses server capability types/constructors"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("server-only capability type is disabled in browser profile"),
+        "failure should include server capability type fence diagnostic:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("server-only capability constructor is disabled in browser profile"),
+        "failure should include server capability constructor fence diagnostic:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -1006,9 +2111,10 @@ report_only = false
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
     assert!(
-        stdout.contains(
-            "test summary: static_passed=2, static_failed=0, runtime_passed=2, runtime_failed=0"
-        ),
+        stdout.contains("test summary: discovered=2")
+            && stdout.contains(
+                "static_passed=2, static_failed=0, runtime_passed=2, runtime_failed=0, skipped_non_entry=0"
+            ),
         "test summary should report all tests passing:\n{stdout}"
     );
 
@@ -1044,9 +2150,10 @@ report_only = false
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
     assert!(
-        stdout.contains(
-            "test summary: static_passed=0, static_failed=1, runtime_passed=0, runtime_failed=0"
-        ),
+        stdout.contains("test summary: discovered=1")
+            && stdout.contains(
+                "static_passed=0, static_failed=1, runtime_passed=0, runtime_failed=0, skipped_non_entry=0"
+            ),
         "test summary should report one static failing test:\n{stdout}"
     );
 
@@ -1098,9 +2205,10 @@ report_only = false
 
     let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
     assert!(
-        stdout.contains(
-            "test summary: static_passed=2, static_failed=0, runtime_passed=1, runtime_failed=1"
-        ),
+        stdout.contains("test summary: discovered=2")
+            && stdout.contains(
+                "static_passed=2, static_failed=0, runtime_passed=1, runtime_failed=1, skipped_non_entry=0"
+            ),
         "test summary should report one runtime failing test:\n{stdout}"
     );
 
@@ -1108,6 +2216,143 @@ report_only = false
     assert!(
         stderr.contains("tests/fail.ut"),
         "runtime failure should reference the failing test file:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn test_command_supports_multi_file_test_modules() {
+    if !clang_available() {
+        eprintln!("skipping test-command module graph integration test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-test-command-modules");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = true
+report_only = false
+"#,
+    );
+    fs::create_dir_all(project_dir.join("tests/shared"))
+        .expect("nested test module directory should exist");
+    fs::write(
+        project_dir.join("tests/main.ut"),
+        "use shared.helper;\n\nfn main() -> Int {\n  helper();\n  0\n}\n",
+    )
+    .expect("test entry should be written");
+    fs::write(
+        project_dir.join("tests/shared/helper.ut"),
+        "fn helper() -> Int {\n  0\n}\n",
+    )
+    .expect("helper module should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["test", "--path", &project_path]);
+    assert!(
+        output.status.success(),
+        "test command should succeed for module-based test entry"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("test summary: discovered=2")
+            && stdout.contains(
+                "static_passed=1, static_failed=0, runtime_passed=1, runtime_failed=0, skipped_non_entry=1"
+            ),
+        "test summary should report one module-based test passing:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn test_command_reports_missing_module_in_test_graph() {
+    let project_dir = temp_dir("sec4-test-command-module-missing");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = true
+report_only = false
+"#,
+    );
+    fs::create_dir_all(project_dir.join("tests")).expect("tests directory should exist");
+    fs::write(
+        project_dir.join("tests/main.ut"),
+        "use shared.missing;\n\nfn main() -> Int {\n  0\n}\n",
+    )
+    .expect("test entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["test", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "test command should fail when imported test module is missing"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("test summary: discovered=1")
+            && stdout.contains(
+                "static_passed=0, static_failed=1, runtime_passed=0, runtime_failed=0, skipped_non_entry=0"
+            ),
+        "test summary should report one static failing test:\n{stdout}"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("M0303") && stderr.contains("missing module: shared.missing"),
+        "missing module diagnostic should be surfaced deterministically:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn test_command_fails_when_no_runnable_test_entrypoints_exist() {
+    let project_dir = temp_dir("sec4-test-command-no-main-entries");
+    write_minimal_project(
+        &project_dir,
+        r#"[security_headers.csp]
+enabled = true
+report_only = false
+"#,
+    );
+    fs::create_dir_all(project_dir.join("tests/shared"))
+        .expect("shared test module directory should exist");
+    fs::write(
+        project_dir.join("tests/shared/helper.ut"),
+        "fn helper() -> Int {\n  0\n}\n",
+    )
+    .expect("helper module should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&["test", "--path", &project_path]);
+    assert!(
+        !output.status.success(),
+        "test command should fail when no runnable `main` test entries exist"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "missing runnable test entries should fail with deterministic code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("no runnable test entrypoints found"),
+        "failure should clearly explain missing runnable test entries:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
@@ -1720,7 +2965,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command cors private-network policy process did not exit in expected window");
+            panic!(
+                "run command cors private-network policy process did not exit in expected window"
+            );
         }
     };
 
@@ -1900,7 +3147,9 @@ fn main() effects { net } -> Int {
 #[test]
 fn run_command_oneshot_applies_security_headers_hsts_and_csp_from_policy() {
     if !clang_available() {
-        eprintln!("skipping run-command security-headers hsts/csp policy test: clang not available");
+        eprintln!(
+            "skipping run-command security-headers hsts/csp policy test: clang not available"
+        );
         return;
     }
 
@@ -2045,7 +3294,9 @@ fn main() effects { net } -> Int {
         "response should include policy-driven HSTS max-age header:\n{response}"
     );
     assert!(
-        response.contains("Content-Security-Policy-Report-Only: default-src 'none'; frame-ancestors 'none'"),
+        response.contains(
+            "Content-Security-Policy-Report-Only: default-src 'none'; frame-ancestors 'none'"
+        ),
         "response should include policy-driven CSP report-only header:\n{response}"
     );
     assert!(
@@ -2550,7 +3801,14 @@ fn main() effects { net } -> Int {
         .expect("project path should be valid utf-8");
     let port_value = port.to_string();
     let mut child = Command::new(cli_bin())
-        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -2684,7 +3942,14 @@ fn main() effects { net } -> Int {
         .expect("project path should be valid utf-8");
     let port_value = port.to_string();
     let mut child = Command::new(cli_bin())
-        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -2829,7 +4094,14 @@ fn main() effects { net } -> Int {
         .expect("project path should be valid utf-8");
     let port_value = port.to_string();
     let mut child = Command::new(cli_bin())
-        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -3141,7 +4413,14 @@ fn main() effects { net } -> Int {
         .expect("project path should be valid utf-8");
     let port_value = port.to_string();
     let mut child = Command::new(cli_bin())
-        .args(["run", "--path", path, "--oneshot", "--port", port_value.as_str()])
+        .args([
+            "run",
+            "--path",
+            path,
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -4139,9 +5418,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!(
-                "run command dns-resolution policy process did not exit in expected window"
-            );
+            panic!("run command dns-resolution policy process did not exit in expected window");
         }
     };
 
@@ -4281,9 +5558,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!(
-                "run command ssrf block-toggle policy process did not exit in expected window"
-            );
+            panic!("run command ssrf block-toggle policy process did not exit in expected window");
         }
     };
 

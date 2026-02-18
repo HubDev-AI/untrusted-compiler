@@ -6,6 +6,12 @@
 
 int64_t sec4_rt_identity_i64(int64_t value);
 bool sec4_rt_identity_bool(bool value);
+int64_t sec4_rt_ctx(void);
+int64_t sec4_rt_db_cap(void);
+int64_t sec4_rt_fs_cap(void);
+int64_t sec4_rt_net_cap(void);
+int64_t sec4_rt_internal_net_cap(void);
+int64_t sec4_rt_secrets_cap(void);
 int64_t sec4_rt_time_now(void);
 void sec4_rt_log_any(int64_t event);
 void sec4_rt_log_info(int64_t event);
@@ -38,7 +44,7 @@ int64_t sec4_rt_req_header(const char *name);
 int64_t sec4_rt_res_json(int64_t schema, int64_t value);
 int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value);
 int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta);
-int64_t sec4_rt_res_html();
+int64_t sec4_rt_res_html(int64_t html);
 int64_t sec4_rt_res_text(int64_t status, const char *body);
 int64_t sec4_rt_set_header(int64_t name, int64_t value);
 int64_t sec4_rt_cookie_build(const char *name, const char *value);
@@ -65,7 +71,15 @@ int64_t sec4_rt_sanitize_html(int64_t input);
 int64_t sec4_rt_url_public(int64_t input);
 int64_t sec4_rt_url_internal(int64_t input);
 int64_t sec4_rt_path_under(int64_t base, int64_t input);
-int64_t sec4_rt_path_base(const char *input);
+int64_t sec4_rt_path_base_literal(const char *input);
+int64_t sec4_rt_path_base_handle(int64_t input);
+#define sec4_rt_path_base(input)                                              \
+  _Generic(                                                                   \
+      (input),                                                                \
+      const char *: sec4_rt_path_base_literal,                                \
+      char *: sec4_rt_path_base_literal,                                      \
+      default: sec4_rt_path_base_handle                                       \
+  )((input))
 int64_t sec4_rt_headers_name(const char *input);
 int64_t sec4_rt_headers_value(const char *input);
 int64_t sec4_rt_http_router(void);

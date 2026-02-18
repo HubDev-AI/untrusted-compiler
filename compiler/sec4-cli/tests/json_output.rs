@@ -730,11 +730,17 @@ fn run_late_contention_attempt_loop(
         let (attempt_started, port, mut child) =
             spawn_staged_contention_attempt(binary_path, throttle_drain_timeout_env, start_message);
 
-        let mut first_stream =
-            connect_staged_first_stream_or_terminate(&mut child, port, first_connect_failure_message);
+        let mut first_stream = connect_staged_first_stream_or_terminate(
+            &mut child,
+            port,
+            first_connect_failure_message,
+        );
         wait_for_oneshot_accept_barrier();
-        let mut second_stream =
-            connect_staged_second_stream_or_terminate(&mut child, port, second_connect_failure_message);
+        let mut second_stream = connect_staged_second_stream_or_terminate(
+            &mut child,
+            port,
+            second_connect_failure_message,
+        );
 
         let outcome = collect_late_ordered_pair_attempt_outcome(
             &mut child,
@@ -776,13 +782,22 @@ fn run_burst_contention_attempt_loop(
         let (attempt_started, port, mut child) =
             spawn_staged_contention_attempt(binary_path, throttle_drain_timeout_env, start_message);
 
-        let mut first_stream =
-            connect_staged_first_stream_or_terminate(&mut child, port, first_connect_failure_message);
+        let mut first_stream = connect_staged_first_stream_or_terminate(
+            &mut child,
+            port,
+            first_connect_failure_message,
+        );
         wait_for_oneshot_accept_barrier();
-        let mut second_stream =
-            connect_staged_second_stream_or_terminate(&mut child, port, second_connect_failure_message);
-        let mut third_stream =
-            connect_staged_third_stream_or_terminate(&mut child, port, third_connect_failure_message);
+        let mut second_stream = connect_staged_second_stream_or_terminate(
+            &mut child,
+            port,
+            second_connect_failure_message,
+        );
+        let mut third_stream = connect_staged_third_stream_or_terminate(
+            &mut child,
+            port,
+            third_connect_failure_message,
+        );
 
         let outcome = collect_burst_ordered_triple_attempt_outcome(
             &mut child,
@@ -1106,7 +1121,9 @@ const BURST_CONTENTION_FIXTURE_METADATA_TABLE: [BurstContentionFixtureMetadata; 
     },
 ];
 
-fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairContentionBranchCase<'static> {
+fn pair_contention_branch_fixture(
+    fixture: PairContentionBranchFixture,
+) -> PairContentionBranchCase<'static> {
     match fixture {
         PairContentionBranchFixture::QueueBoundaryDefault => pair_contention_branch_case(
             None,
@@ -1143,7 +1160,13 @@ fn pair_contention_branch_fixture(fixture: PairContentionBranchFixture) -> PairC
 
 fn pair_contention_fixture_descriptor(
     fixture: PairContentionFixtureDescriptor,
-) -> (&'static str, &'static str, &'static str, &'static str, PairContentionBranchFixture) {
+) -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    PairContentionBranchFixture,
+) {
     let metadata = PAIR_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
     (
         metadata.fixture_name,
@@ -1154,7 +1177,9 @@ fn pair_contention_fixture_descriptor(
     )
 }
 
-fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateContentionBranchCase<'static> {
+fn late_contention_branch_fixture(
+    fixture: LateContentionBranchFixture,
+) -> LateContentionBranchCase<'static> {
     match fixture {
         LateContentionBranchFixture::DrainDefault => late_contention_branch_case(
             Some("25"),
@@ -1181,7 +1206,12 @@ fn late_contention_branch_fixture(fixture: LateContentionBranchFixture) -> LateC
 
 fn late_contention_fixture_descriptor(
     fixture: LateContentionFixtureDescriptor,
-) -> (&'static str, &'static str, &'static str, LateContentionBranchFixture) {
+) -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    LateContentionBranchFixture,
+) {
     let metadata = LATE_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
     (
         metadata.fixture_name,
@@ -1222,7 +1252,12 @@ fn burst_contention_branch_fixture(
 
 fn burst_contention_fixture_descriptor(
     fixture: BurstContentionFixtureDescriptor,
-) -> (&'static str, &'static str, &'static str, BurstContentionBranchFixture) {
+) -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    BurstContentionBranchFixture,
+) {
     let metadata = BURST_CONTENTION_FIXTURE_METADATA_TABLE[fixture.as_index()];
     (
         metadata.fixture_name,
@@ -1404,15 +1439,19 @@ struct OrderedContentionRunnerMetadataExpectation {
     expected_branch_fixture: OrderedContentionBranchFixture,
 }
 
-const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerMetadataExpectation; 7] = [
+const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS:
+    [OrderedContentionRunnerMetadataExpectation; 7] = [
     OrderedContentionRunnerMetadataExpectation {
-        fixture: OrderedContentionFixtureDescriptor::Pair(PairContentionFixtureDescriptor::QueueBoundary),
+        fixture: OrderedContentionFixtureDescriptor::Pair(
+            PairContentionFixtureDescriptor::QueueBoundary,
+        ),
         expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-queue-boundary",
         expected_module_name: "httpmaxconcurrencyqueueboundarye2e",
         expected_case_label: "max-concurrency queue-boundary",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryDefault),
+        expected_branch_fixture: OrderedContentionBranchFixture::Pair(
+            PairContentionBranchFixture::QueueBoundaryDefault,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
         fixture: OrderedContentionFixtureDescriptor::Pair(
@@ -1422,8 +1461,9 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
         expected_module_name: "httpmaxconcurrencyqueueboundarylowtimeout",
         expected_case_label: "max-concurrency queue-boundary low-timeout",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::QueueBoundaryLowTimeout),
+        expected_branch_fixture: OrderedContentionBranchFixture::Pair(
+            PairContentionBranchFixture::QueueBoundaryLowTimeout,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
         fixture: OrderedContentionFixtureDescriptor::Pair(
@@ -1433,28 +1473,34 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
         expected_module_name: "httpmaxconcurrencythrottlesecurityheaderse2e",
         expected_case_label: "max-concurrency throttle security-header parity",
         expected_source: MAX_CONCURRENCY_SECURITY_HEADERS_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Pair(PairContentionBranchFixture::SecurityHeaderParity),
+        expected_branch_fixture: OrderedContentionBranchFixture::Pair(
+            PairContentionBranchFixture::SecurityHeaderParity,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
-        fixture: OrderedContentionFixtureDescriptor::Late(LateContentionFixtureDescriptor::DrainDefault),
+        fixture: OrderedContentionFixtureDescriptor::Late(
+            LateContentionFixtureDescriptor::DrainDefault,
+        ),
         expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-drain",
         expected_module_name: "httpmaxconcurrencylateconnectiondrain",
         expected_case_label: "max-concurrency late-connection drain",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainDefault),
+        expected_branch_fixture: OrderedContentionBranchFixture::Late(
+            LateContentionBranchFixture::DrainDefault,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
         fixture: OrderedContentionFixtureDescriptor::Late(
             LateContentionFixtureDescriptor::DrainLowTimeout,
         ),
-        expected_fixture_name: "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
+        expected_fixture_name:
+            "sec4-c-bin-http-runtime-max-concurrency-late-connection-low-timeout",
         expected_module_name: "httpmaxconcurrencylateconnectionlowtimeout",
         expected_case_label: "max-concurrency late-connection low-timeout",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Late(LateContentionBranchFixture::DrainLowTimeout),
+        expected_branch_fixture: OrderedContentionBranchFixture::Late(
+            LateContentionBranchFixture::DrainLowTimeout,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
         fixture: OrderedContentionFixtureDescriptor::Burst(
@@ -1464,8 +1510,9 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
         expected_module_name: "httpmaxconcurrencyburstingressorder",
         expected_case_label: "max-concurrency burst-ingress trace-order",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderDefault),
+        expected_branch_fixture: OrderedContentionBranchFixture::Burst(
+            BurstContentionBranchFixture::TraceOrderDefault,
+        ),
     },
     OrderedContentionRunnerMetadataExpectation {
         fixture: OrderedContentionFixtureDescriptor::Burst(
@@ -1475,8 +1522,9 @@ const ORDERED_CONTENTION_RUNNER_METADATA_EXPECTATIONS: [OrderedContentionRunnerM
         expected_module_name: "httpmaxconcurrencyburstingresslowtimeout",
         expected_case_label: "max-concurrency burst-ingress low-timeout",
         expected_source: MAX_CONCURRENCY_SIMPLE_HEALTH_ROUTER_SOURCE,
-        expected_branch_fixture:
-            OrderedContentionBranchFixture::Burst(BurstContentionBranchFixture::TraceOrderLowTimeout),
+        expected_branch_fixture: OrderedContentionBranchFixture::Burst(
+            BurstContentionBranchFixture::TraceOrderLowTimeout,
+        ),
     },
 ];
 
@@ -1627,8 +1675,8 @@ fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_m
     )
 }
 
-const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX: [OrderedContentionSmokeContractAssertionMatrixCase;
-    2] = [
+const ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_MATRIX:
+    [OrderedContentionSmokeContractAssertionMatrixCase; 2] = [
     OrderedContentionSmokeContractAssertionMatrixCase {
         case_label: ORDERED_CONTENTION_SMOKE_CONTRACT_ASSERTION_CASE_BANNER_CASE_LABEL,
         assertion: assert_ordered_contention_smoke_case_banner_contract_expectation,
@@ -1704,9 +1752,7 @@ fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_actual_
 fn ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_expected_panic_message(
     case_label: &str,
 ) -> String {
-    ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(
-        case_label,
-    )
+    ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message(case_label)
 }
 
 fn assert_ordered_contention_smoke_contract_assertion_matrix_unknown_case_label_panic_message_equality(
@@ -1800,8 +1846,7 @@ fn run_ordered_contention_fixture_descriptor_case(fixture: OrderedContentionFixt
 }
 
 fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
-    let listener =
-        TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
     listener
         .set_nonblocking(true)
         .expect("oneshot server nonblocking setup should work");
@@ -2067,7 +2112,8 @@ fn spawn_one_shot_http_chunked_with_trailers_server(body: &str) -> (u16, thread:
     (port, handle)
 }
 
-fn spawn_one_shot_http_chunked_missing_trailer_terminator_server() -> (u16, thread::JoinHandle<()>) {
+fn spawn_one_shot_http_chunked_missing_trailer_terminator_server() -> (u16, thread::JoinHandle<()>)
+{
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .expect("chunked missing terminator oneshot server bind should work");
     listener
@@ -2090,7 +2136,9 @@ fn spawn_one_shot_http_chunked_missing_trailer_terminator_server() -> (u16, thre
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
-                Err(err) => panic!("chunked missing terminator oneshot server accept failed: {err}"),
+                Err(err) => {
+                    panic!("chunked missing terminator oneshot server accept failed: {err}")
+                }
             }
         };
 
@@ -2516,7 +2564,9 @@ fn spawn_one_shot_http_invalid_header_section_server() -> (u16, thread::JoinHand
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("invalid header-section oneshot server timed out waiting for client");
+                        panic!(
+                            "invalid header-section oneshot server timed out waiting for client"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -2882,7 +2932,9 @@ fn spawn_one_shot_http_duplicate_content_length_equal_server() -> (u16, thread::
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("duplicate content-length equal server timed out waiting for client");
+                        panic!(
+                            "duplicate content-length equal server timed out waiting for client"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -2979,8 +3031,7 @@ fn spawn_one_shot_http_server_with_response_delay(
     body: &str,
     delay: Duration,
 ) -> (u16, thread::JoinHandle<()>) {
-    let listener =
-        TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("oneshot server bind should work");
     listener
         .set_nonblocking(true)
         .expect("oneshot server nonblocking setup should work");
@@ -3073,8 +3124,7 @@ fn spawn_one_shot_http_redirect_chain_server(
                     break;
                 }
                 request.extend_from_slice(&buffer[..bytes]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
-                {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
                     break;
                 }
             }
@@ -3141,7 +3191,9 @@ fn spawn_one_shot_http_monotonic_redirect_server(
                     Ok((stream, _)) => break stream,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         if Instant::now() >= deadline {
-                            panic!("monotonic redirect oneshot server timed out waiting for request");
+                            panic!(
+                                "monotonic redirect oneshot server timed out waiting for request"
+                            );
                         }
                         thread::sleep(Duration::from_millis(10));
                     }
@@ -3159,8 +3211,7 @@ fn spawn_one_shot_http_monotonic_redirect_server(
                     break;
                 }
                 request.extend_from_slice(&buffer[..bytes]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
-                {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
                     break;
                 }
             }
@@ -3200,7 +3251,9 @@ fn spawn_one_shot_http_relative_redirect_server() -> (u16, thread::JoinHandle<()
                     Ok((stream, _)) => break stream,
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         if Instant::now() >= deadline {
-                            panic!("relative redirect oneshot server timed out waiting for request");
+                            panic!(
+                                "relative redirect oneshot server timed out waiting for request"
+                            );
                         }
                         thread::sleep(Duration::from_millis(10));
                     }
@@ -3218,8 +3271,7 @@ fn spawn_one_shot_http_relative_redirect_server() -> (u16, thread::JoinHandle<()
                     break;
                 }
                 request.extend_from_slice(&buffer[..bytes]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
-                {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
                     break;
                 }
             }
@@ -3439,7 +3491,9 @@ fn spawn_one_shot_http_invalid_query_percent_redirect_server() -> (u16, thread::
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("query-percent redirect oneshot server timed out waiting for request");
+                        panic!(
+                            "query-percent redirect oneshot server timed out waiting for request"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -3491,7 +3545,9 @@ fn spawn_one_shot_http_invalid_query_separator_redirect_server() -> (u16, thread
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("query-separator redirect oneshot server timed out waiting for request");
+                        panic!(
+                            "query-separator redirect oneshot server timed out waiting for request"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -3543,7 +3599,9 @@ fn spawn_one_shot_http_scope_invalid_redirect_server() -> (u16, thread::JoinHand
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("scope-invalid redirect oneshot server timed out waiting for request");
+                        panic!(
+                            "scope-invalid redirect oneshot server timed out waiting for request"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -3649,7 +3707,9 @@ fn spawn_one_shot_http_invalid_scheme_redirect_server() -> (u16, thread::JoinHan
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("invalid-scheme redirect oneshot server timed out waiting for request");
+                        panic!(
+                            "invalid-scheme redirect oneshot server timed out waiting for request"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -3721,8 +3781,7 @@ fn spawn_one_shot_http_redirect_cycle_server() -> (u16, thread::JoinHandle<()>) 
                     break;
                 }
                 request.extend_from_slice(&buffer[..bytes]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
-                {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
                     break;
                 }
             }
@@ -3780,22 +3839,23 @@ fn spawn_one_shot_http_absolute_redirect_upper_host_server() -> (u16, thread::Jo
                         }
                         thread::sleep(Duration::from_millis(10));
                     }
-                    Err(err) => panic!("absolute redirect upper-host oneshot server accept failed: {err}"),
+                    Err(err) => {
+                        panic!("absolute redirect upper-host oneshot server accept failed: {err}")
+                    }
                 }
             };
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
             loop {
-                let bytes = stream
-                    .read(&mut buffer)
-                    .expect("absolute redirect upper-host oneshot server request read should succeed");
+                let bytes = stream.read(&mut buffer).expect(
+                    "absolute redirect upper-host oneshot server request read should succeed",
+                );
                 if bytes == 0 {
                     break;
                 }
                 request.extend_from_slice(&buffer[..bytes]);
-                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096
-                {
+                if request.windows(4).any(|window| window == b"\r\n\r\n") || request.len() >= 4096 {
                     break;
                 }
             }
@@ -3827,17 +3887,17 @@ fn spawn_one_shot_http_absolute_redirect_upper_host_server() -> (u16, thread::Jo
             }
             response_head.push_str("\r\n");
 
-            stream
-                .write_all(response_head.as_bytes())
-                .expect("absolute redirect upper-host oneshot server response headers should write");
+            stream.write_all(response_head.as_bytes()).expect(
+                "absolute redirect upper-host oneshot server response headers should write",
+            );
             if !payload.is_empty() {
-                stream
-                    .write_all(payload)
-                    .expect("absolute redirect upper-host oneshot server response body should write");
+                stream.write_all(payload).expect(
+                    "absolute redirect upper-host oneshot server response body should write",
+                );
             }
-            stream
-                .flush()
-                .expect("absolute redirect upper-host oneshot server response flush should succeed");
+            stream.flush().expect(
+                "absolute redirect upper-host oneshot server response flush should succeed",
+            );
             served += 1;
         }
     });
@@ -3920,7 +3980,9 @@ fn spawn_one_shot_http_ipv6_malformed_redirect_server(
                 Ok((stream, _)) => break stream,
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
-                        panic!("malformed ipv6 redirect oneshot server timed out waiting for request");
+                        panic!(
+                            "malformed ipv6 redirect oneshot server timed out waiting for request"
+                        );
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -8278,13 +8340,20 @@ fn build_emit_c_bin_compiles_binary_when_clang_available() {
 
     let binary_path = hello_path.join("build").join("hello");
     assert!(binary_path.exists(), "compiled binary should exist");
+    let copied_runtime_header = hello_path.join("build").join("sec4_runtime.h");
+    let copied_runtime_source = hello_path.join("build").join("sec4_runtime.c");
+    let canonical_runtime_header = workspace_root()
+        .join("runtime")
+        .join("c")
+        .join("sec4_runtime.h");
+    let canonical_runtime_source = workspace_root()
+        .join("runtime")
+        .join("c")
+        .join("sec4_runtime.c");
     assert!(
-        hello_path.join("build").join("sec4_runtime.h").exists(),
-        "runtime header should exist"
-    );
-    assert!(
-        hello_path.join("build").join("sec4_runtime.c").exists(),
-        "runtime source should exist"
+        (copied_runtime_header.exists() && copied_runtime_source.exists())
+            || (canonical_runtime_header.exists() && canonical_runtime_source.exists()),
+        "runtime sources should be available either in build/ fallback or canonical runtime/c"
     );
 
     let run = Command::new(&binary_path)
@@ -8718,7 +8787,9 @@ int main(void) {
         "structured log output should include attrs block:\n{stderr}"
     );
     assert!(
-        stderr.contains("\"http\":{\"method\":\"POST\",\"path\":\"/users\",\"status\":201,\"latencyMs\":12}"),
+        stderr.contains(
+            "\"http\":{\"method\":\"POST\",\"path\":\"/users\",\"status\":201,\"latencyMs\":12}"
+        ),
         "structured log output should include http metadata:\n{stderr}"
     );
     assert!(
@@ -8727,7 +8798,8 @@ int main(void) {
             && stderr.contains("\"message\":\"boom\"")
             && stderr.contains("\"status\":500")
             && stderr.contains("\"path\":\"$.email\"")
-            && stderr.contains("\"details\":[{\"key\":\"validator\",\"value\":\"validate.email\"}]"),
+            && stderr
+                .contains("\"details\":[{\"key\":\"validator\",\"value\":\"validate.email\"}]"),
         "structured log output should include structured error attachment:\n{stderr}"
     );
     assert!(
@@ -9197,6 +9269,7 @@ enabled = true
     fs::write(
         project_dir.join("src/main.ut"),
         r#"fn gates(input: Untrusted<String>, base: PathSafe) effects { net } -> Int {
+  let baseRaw = validate.nonEmpty(input);
   validate.headerValue(input);
   validate.email(input);
   validate.uuid(input);
@@ -9206,6 +9279,7 @@ enabled = true
   url.public(input);
   url.internal(input);
   path.under(base, input);
+  path.base(baseRaw);
   path.base("/tmp/base");
   headers.name("X-Test");
   headers.value("ok");
@@ -9239,6 +9313,7 @@ fn main() -> Int {
     assert!(generated_c.contains("sec4_rt_url_public(input)"));
     assert!(generated_c.contains("sec4_rt_url_internal(input)"));
     assert!(generated_c.contains("sec4_rt_path_under(base, input)"));
+    assert!(generated_c.contains("sec4_rt_path_base(baseRaw)"));
     assert!(generated_c.contains("sec4_rt_path_base(\"/tmp/base\")"));
     assert!(generated_c.contains("sec4_rt_headers_name(\"X-Test\")"));
     assert!(generated_c.contains("sec4_rt_headers_value(\"ok\")"));
@@ -9395,6 +9470,9 @@ int main(void) {
   if (sec4_rt_path_base("/tmp/base") == 0) { return 15; }
   if (sec4_rt_path_base("tmp/base") != 0) { return 16; }
   if (sec4_rt_path_base("/tmp/../base") != 0) { return 17; }
+  int64_t tracked_base = sec4_rt_req_query("/tmp/tracked-base");
+  if (sec4_rt_path_base(tracked_base) == 0) { return 18; }
+  if (sec4_rt_path_base(INT64_C(1234567)) != 0) { return 19; }
   return 0;
 }
 "#,
@@ -9425,6 +9503,189 @@ int main(void) {
     assert!(
         run.status.success(),
         "runtime path/header guard harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_req_query_decodes_percent_encoded_values_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime req.query decode test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-req-query-decode");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-req-query-decode");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+  g_sec4_rt_request.has_request = true;
+  strncpy(
+      g_sec4_rt_request.path,
+      "/probe?encoded=a%2Fb%3Ac&plus=hello+world&na%6De=from+encoded+key&bad=bad%zz",
+      sizeof(g_sec4_rt_request.path) - 1
+  );
+  g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
+
+  int64_t encoded = sec4_rt_req_query("encoded");
+  const char *encoded_value = sec4_rt_lookup_tracked_value(encoded);
+  if (encoded_value == NULL || strcmp(encoded_value, "a/b:c") != 0) { return 11; }
+
+  int64_t plus = sec4_rt_req_query("plus");
+  const char *plus_value = sec4_rt_lookup_tracked_value(plus);
+  if (plus_value == NULL || strcmp(plus_value, "hello world") != 0) { return 12; }
+
+  int64_t encoded_key = sec4_rt_req_query("name");
+  const char *encoded_key_value = sec4_rt_lookup_tracked_value(encoded_key);
+  if (encoded_key_value == NULL || strcmp(encoded_key_value, "from encoded key") != 0) { return 13; }
+
+  int64_t bad = sec4_rt_req_query("bad");
+  const char *bad_value = sec4_rt_lookup_tracked_value(bad);
+  if (bad_value == NULL || strcmp(bad_value, "bad%zz") != 0) { return 14; }
+
+  int64_t missing = sec4_rt_req_query("missing");
+  const char *missing_value = sec4_rt_lookup_tracked_value(missing);
+  if (missing_value == NULL || strcmp(missing_value, "missing") != 0) { return 15; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime req.query decode harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime req.query decode harness should exit successfully"
+    );
+}
+
+#[test]
+fn c_bin_runtime_req_path_param_decodes_percent_encoded_values_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime req.pathParam decode test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-req-path-param-decode");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-req-path-param-decode");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+  g_sec4_rt_request.has_request = true;
+  strncpy(
+      g_sec4_rt_request.matched_route_pattern,
+      "/users/:id/items/:name",
+      sizeof(g_sec4_rt_request.matched_route_pattern) - 1
+  );
+  g_sec4_rt_request.matched_route_pattern[sizeof(g_sec4_rt_request.matched_route_pattern) - 1] = '\0';
+  strncpy(
+      g_sec4_rt_request.route_path,
+      "/users/a%2Fb/items/hello+world",
+      sizeof(g_sec4_rt_request.route_path) - 1
+  );
+  g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
+
+  int64_t id = sec4_rt_req_path_param("id");
+  const char *id_value = sec4_rt_lookup_tracked_value(id);
+  if (id_value == NULL || strcmp(id_value, "a/b") != 0) { return 11; }
+
+  int64_t name = sec4_rt_req_path_param("name");
+  const char *name_value = sec4_rt_lookup_tracked_value(name);
+  if (name_value == NULL || strcmp(name_value, "hello world") != 0) { return 12; }
+
+  strncpy(
+      g_sec4_rt_request.route_path,
+      "/users/bad%zz/items/raw%2",
+      sizeof(g_sec4_rt_request.route_path) - 1
+  );
+  g_sec4_rt_request.route_path[sizeof(g_sec4_rt_request.route_path) - 1] = '\0';
+
+  int64_t bad_id = sec4_rt_req_path_param("id");
+  const char *bad_id_value = sec4_rt_lookup_tracked_value(bad_id);
+  if (bad_id_value == NULL || strcmp(bad_id_value, "bad%zz") != 0) { return 13; }
+
+  int64_t bad_name = sec4_rt_req_path_param("name");
+  const char *bad_name_value = sec4_rt_lookup_tracked_value(bad_name);
+  if (bad_name_value == NULL || strcmp(bad_name_value, "raw%2") != 0) { return 14; }
+
+  int64_t missing = sec4_rt_req_path_param("missing");
+  const char *missing_value = sec4_rt_lookup_tracked_value(missing);
+  if (missing_value == NULL || strcmp(missing_value, "missing") != 0) { return 15; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime req.pathParam decode harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime req.pathParam decode harness should exit successfully"
     );
 }
 
@@ -9922,7 +10183,9 @@ int main(void) {
 fn c_bin_runtime_url_public_resolve_dns_policy_invalid_returns_deterministic_code_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime url resolve-dns policy-invalid test: clang not available");
+        eprintln!(
+            "skipping c-bin runtime url resolve-dns policy-invalid test: clang not available"
+        );
         return;
     }
 
@@ -11823,8 +12086,12 @@ int main(void) {
         .expect("runtime chunked trailers server should exit cleanly");
 
     assert_eq!(
-        fs::read_to_string(fs_base.join("internal-net").join("chunked-trailers-body.txt"))
-            .expect("chunked trailers decoded response should be written"),
+        fs::read_to_string(
+            fs_base
+                .join("internal-net")
+                .join("chunked-trailers-body.txt")
+        )
+        .expect("chunked trailers decoded response should be written"),
         "internal-trailer-body"
     );
 }
@@ -12046,7 +12313,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_invalid_status_line_returns_deterministic_code_when_clang_available() {
+fn c_bin_runtime_internal_get_invalid_status_line_returns_deterministic_code_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping c-bin runtime invalid status-line test: clang not available");
         return;
@@ -12386,7 +12654,8 @@ int main(void) {
         "runtime header whitespace harness should compile successfully"
     );
 
-    let (internal_port, server_handle) = spawn_one_shot_http_header_whitespace_before_colon_server();
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_header_whitespace_before_colon_server();
     let internal_url = format!("http://127.0.0.1:{internal_port}/internal-header-whitespace");
 
     let run = Command::new(&binary_path)
@@ -12548,8 +12817,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_invalid_content_type_returns_deterministic_code_when_clang_available(
-) {
+fn c_bin_runtime_internal_get_invalid_content_type_returns_deterministic_code_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping c-bin runtime invalid content-type test: clang not available");
         return;
@@ -12620,7 +12889,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_unsupported_version_returns_deterministic_code_when_clang_available() {
+fn c_bin_runtime_internal_get_unsupported_version_returns_deterministic_code_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping c-bin runtime unsupported-version test: clang not available");
         return;
@@ -12691,7 +12961,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_invalid_header_line_returns_deterministic_code_when_clang_available() {
+fn c_bin_runtime_internal_get_invalid_header_line_returns_deterministic_code_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping c-bin runtime invalid header-line test: clang not available");
         return;
@@ -12762,7 +13033,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_get_invalid_retry_after_returns_deterministic_code_when_clang_available() {
+fn c_bin_runtime_internal_get_invalid_retry_after_returns_deterministic_code_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping c-bin runtime invalid retry-after test: clang not available");
         return;
@@ -12966,7 +13238,8 @@ int main(void) {
         "runtime duplicate content-length equal harness should compile successfully"
     );
 
-    let (internal_port, server_handle) = spawn_one_shot_http_duplicate_content_length_equal_server();
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_duplicate_content_length_equal_server();
     let internal_url = format!("http://127.0.0.1:{internal_port}/internal-content-length-equal");
 
     let run = Command::new(&binary_path)
@@ -12983,8 +13256,12 @@ int main(void) {
         .join()
         .expect("runtime duplicate content-length equal server should exit cleanly");
     assert_eq!(
-        fs::read_to_string(fs_base.join("internal-net").join("content-length-equal.txt"))
-            .expect("duplicate content-length equal body should be written"),
+        fs::read_to_string(
+            fs_base
+                .join("internal-net")
+                .join("content-length-equal.txt")
+        )
+        .expect("duplicate content-length equal body should be written"),
         "test"
     );
 }
@@ -13048,8 +13325,7 @@ int main(void) {
 
     let (internal_port, server_handle) =
         spawn_one_shot_http_duplicate_content_length_conflict_server();
-    let internal_url =
-        format!("http://127.0.0.1:{internal_port}/internal-content-length-conflict");
+    let internal_url = format!("http://127.0.0.1:{internal_port}/internal-content-length-conflict");
 
     let run = Command::new(&binary_path)
         .env("SEC4_RT_ALLOW_INTERNAL_NET", "1")
@@ -13145,8 +13421,12 @@ int main(void) {
         .join()
         .expect("runtime relative redirect normalize server should exit cleanly");
     assert_eq!(
-        fs::read_to_string(fs_base.join("internal-net").join("redirect-relative-body.txt"))
-            .expect("relative redirect response body should be written"),
+        fs::read_to_string(
+            fs_base
+                .join("internal-net")
+                .join("redirect-relative-body.txt")
+        )
+        .expect("relative redirect response body should be written"),
         "internal-relative-body"
     );
 }
@@ -13377,7 +13657,9 @@ int main(void) {
 fn c_bin_runtime_internal_get_redirect_query_percent_invalid_returns_deterministic_code_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime redirect query-percent invalid test: clang not available");
+        eprintln!(
+            "skipping c-bin runtime redirect query-percent invalid test: clang not available"
+        );
         return;
     }
 
@@ -13428,7 +13710,8 @@ int main(void) {
         "runtime redirect query-percent invalid harness should compile successfully"
     );
 
-    let (internal_port, server_handle) = spawn_one_shot_http_invalid_query_percent_redirect_server();
+    let (internal_port, server_handle) =
+        spawn_one_shot_http_invalid_query_percent_redirect_server();
     let internal_url = format!("http://127.0.0.1:{internal_port}/internal-start");
 
     let run = Command::new(&binary_path)
@@ -13608,8 +13891,7 @@ fn c_bin_runtime_internal_get_redirect_scope_revalidation_disabled_returns_deter
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-runtime-c-internal-net-redirect-scope-revalidation-disabled");
+    let project_dir = temp_dir("sec4-runtime-c-internal-net-redirect-scope-revalidation-disabled");
     let harness_path = project_dir.join("harness.c");
     let binary_path = project_dir.join("runtime-internal-net-redirect-scope-revalidation-disabled");
 
@@ -13671,18 +13953,16 @@ int main(void) {
         run.status.success(),
         "runtime redirect scope-revalidation-disabled harness should exit successfully"
     );
-    server_handle.join().expect(
-        "runtime redirect scope-revalidation-disabled server should exit cleanly",
-    );
+    server_handle
+        .join()
+        .expect("runtime redirect scope-revalidation-disabled server should exit cleanly");
 }
 
 #[test]
 fn c_bin_runtime_internal_get_redirect_location_missing_returns_deterministic_code_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!(
-            "skipping c-bin runtime redirect missing-location test: clang not available"
-        );
+        eprintln!("skipping c-bin runtime redirect missing-location test: clang not available");
         return;
     }
 
@@ -13817,7 +14097,9 @@ int main(void) {
 fn c_bin_runtime_redirect_resolver_allows_https_to_http_downgrade_when_enabled_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime redirect downgrade-allow resolver test: clang not available");
+        eprintln!(
+            "skipping c-bin runtime redirect downgrade-allow resolver test: clang not available"
+        );
         return;
     }
 
@@ -14176,9 +14458,9 @@ int main(void) {
             run.status.success(),
             "runtime public redirect request diagnostics parity harness should exit successfully for {expected_code}"
         );
-        server_handle
-            .join()
-            .expect("runtime public redirect request diagnostics parity server should exit cleanly");
+        server_handle.join().expect(
+            "runtime public redirect request diagnostics parity server should exit cleanly",
+        );
     }
 }
 
@@ -14458,7 +14740,8 @@ fn c_bin_runtime_internal_get_redirect_allow_downgrade_policy_invalid_returns_de
     let project_dir =
         temp_dir("sec4-runtime-c-internal-net-redirect-allow-downgrade-policy-invalid");
     let harness_path = project_dir.join("harness.c");
-    let binary_path = project_dir.join("runtime-internal-net-redirect-allow-downgrade-policy-invalid");
+    let binary_path =
+        project_dir.join("runtime-internal-net-redirect-allow-downgrade-policy-invalid");
 
     let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -14666,14 +14949,19 @@ int main(void) {
         .join()
         .expect("runtime absolute redirect upper-host server should exit cleanly");
     assert_eq!(
-        fs::read_to_string(fs_base.join("internal-net").join("redirect-absolute-body.txt"))
-            .expect("absolute redirect response body should be written"),
+        fs::read_to_string(
+            fs_base
+                .join("internal-net")
+                .join("redirect-absolute-body.txt")
+        )
+        .expect("absolute redirect response body should be written"),
         "internal-absolute-body"
     );
 }
 
 #[test]
-fn c_bin_runtime_internal_get_redirect_host_invalid_returns_deterministic_code_when_clang_available() {
+fn c_bin_runtime_internal_get_redirect_host_invalid_returns_deterministic_code_when_clang_available(
+) {
     if !clang_available() {
         eprintln!("skipping c-bin runtime redirect host invalid test: clang not available");
         return;
@@ -14986,7 +15274,9 @@ int main(void) {
 #[test]
 fn c_bin_runtime_internal_get_redirect_cap_limit_returns_deterministic_code_when_clang_available() {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime internal-net redirect cap-limit test: clang not available");
+        eprintln!(
+            "skipping c-bin runtime internal-net redirect cap-limit test: clang not available"
+        );
         return;
     }
 
@@ -15057,8 +15347,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_https_self_signed_fails_tls_verify_without_insecure_override_when_openssl_backend_available()
-{
+fn c_bin_runtime_internal_https_self_signed_fails_tls_verify_without_insecure_override_when_openssl_backend_available(
+) {
     if !clang_with_openssl_available() {
         eprintln!(
             "skipping c-bin runtime internal-net https tls-verify failure test: clang/OpenSSL headers/libs unavailable"
@@ -15313,7 +15603,9 @@ fn c_bin_runtime_internal_https_roundtrip_succeeds_with_openssl_backend_when_ava
         return;
     }
     if !openssl_cli_available() {
-        eprintln!("skipping c-bin runtime internal-net https roundtrip test: openssl CLI unavailable");
+        eprintln!(
+            "skipping c-bin runtime internal-net https roundtrip test: openssl CLI unavailable"
+        );
         return;
     }
 
@@ -15892,9 +16184,7 @@ int main(void) {
 fn c_bin_runtime_wrapper_invalid_handle_diagnostics_parity_between_public_and_internal_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!(
-            "skipping c-bin runtime wrapper invalid-handle parity test: clang not available"
-        );
+        eprintln!("skipping c-bin runtime wrapper invalid-handle parity test: clang not available");
         return;
     }
 
@@ -16243,15 +16533,7 @@ int main(void) {
     assert!(binary_path.exists(), "compiled binary should exist");
 
     let invalid_tokens = [
-        "maybe",
-        "enabled",
-        "t",
-        "y",
-        "2",
-        "-1",
-        "true-ish",
-        " allow ",
-        "YES!",
+        "maybe", "enabled", "t", "y", "2", "-1", "true-ish", " allow ", "YES!",
     ];
     let internal_urls = ["http://127.0.0.1/internal-a", "http://localhost/internal-b"];
 
@@ -16355,7 +16637,8 @@ int main(void) {
 }
 
 #[test]
-fn c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available() {
+fn c_bin_runtime_internal_policy_empty_or_whitespace_tokens_fallback_to_deny_when_clang_available()
+{
     if !clang_available() {
         eprintln!(
             "skipping c-bin runtime internal-policy empty/whitespace-token fallback test: clang not available"
@@ -17752,7 +18035,9 @@ entry = "src/main.ut"
 #[test]
 fn c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_clang_available() {
     if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency invalid-env fallback test: clang not available");
+        eprintln!(
+            "skipping http runtime max-concurrency invalid-env fallback test: clang not available"
+        );
         return;
     }
 
@@ -17774,7 +18059,9 @@ fn c_bin_http_runtime_max_concurrency_invalid_env_falls_back_to_default_when_cla
 #[test]
 fn c_bin_http_runtime_max_concurrency_empty_env_falls_back_to_default_when_clang_available() {
     if !clang_available() {
-        eprintln!("skipping http runtime max-concurrency empty-env fallback test: clang not available");
+        eprintln!(
+            "skipping http runtime max-concurrency empty-env fallback test: clang not available"
+        );
         return;
     }
 
@@ -17834,7 +18121,9 @@ fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_invalid_env_falls_b
 fn c_bin_http_runtime_max_concurrency_throttle_drain_timeout_over_cap_env_is_clamped_when_clang_available(
 ) {
     if !clang_available() {
-        eprintln!("skipping http runtime throttle-drain-timeout over-cap clamp test: clang not available");
+        eprintln!(
+            "skipping http runtime throttle-drain-timeout over-cap clamp test: clang not available"
+        );
         return;
     }
 
@@ -17955,8 +18244,8 @@ fn c_bin_http_runtime_max_concurrency_ordered_descriptor_smoke_failure_banner_co
 }
 
 #[test]
-fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available()
-{
+fn c_bin_http_runtime_max_concurrency_ordered_descriptor_fixture_smoke_harness_when_clang_available(
+) {
     if !clang_available() {
         eprintln!(
             "skipping http runtime max-concurrency ordered descriptor smoke harness test: clang not available"
@@ -18042,14 +18331,14 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime err.internal harness exited before request with status: {status}"
-            );
+            panic!("http runtime err.internal harness exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
-                    .write_all(b"GET /boom HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .write_all(
+                        b"GET /boom HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
                     .expect("request should be written");
                 let mut body = String::new();
                 stream
@@ -18338,9 +18627,7 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime err.with* harness exited before request with status: {status}"
-            );
+            panic!("http runtime err.with* harness exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
@@ -18413,8 +18700,9 @@ int main(void) {{
         "response should include limit field:\n{response}"
     );
     assert!(
-        response
-            .contains("\"dependency\":{\"service\":\"postgres\",\"operation\":\"query\",\"retryable\":true}"),
+        response.contains(
+            "\"dependency\":{\"service\":\"postgres\",\"operation\":\"query\",\"retryable\":true}"
+        ),
         "response should include dependency field:\n{response}"
     );
     assert!(
@@ -18496,9 +18784,7 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime auth.require harness exited before request with status: {status}"
-            );
+            panic!("http runtime auth.require harness exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
@@ -18638,9 +18924,7 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!(
-                "http runtime time.now harness exited before request with status: {status}"
-            );
+            panic!("http runtime time.now harness exited before request with status: {status}");
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
@@ -19139,7 +19423,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_applies_security_headers_csp_report_only_when_enabled() {
     if !clang_available() {
-        eprintln!("skipping http runtime security-headers csp report-only e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime security-headers csp report-only e2e test: clang not available"
+        );
         return;
     }
 
@@ -19279,7 +19565,8 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 200 status line"
     );
     assert!(
-        response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        response
+            .contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
         "response should include CSP report-only header"
     );
     assert!(
@@ -19440,7 +19727,8 @@ fn main() effects {{ net }} -> Int {{
         "invalid csp report-only env value should fall back to enforce-mode header"
     );
     assert!(
-        !response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        !response
+            .contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
         "invalid csp report-only env value should not switch response to report-only header"
     );
 }
@@ -19455,8 +19743,7 @@ fn c_bin_http_runtime_applies_security_headers_csp_policy_invalid_env_falls_back
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-security-headers-csp-policy-fallback-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-csp-policy-fallback-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -19614,8 +19901,7 @@ fn c_bin_http_runtime_applies_security_headers_csp_enabled_invalid_env_falls_bac
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-security-headers-csp-enabled-fallback-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-csp-enabled-fallback-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -19756,7 +20042,8 @@ fn main() effects {{ net }} -> Int {{
         "invalid csp enabled env value should keep CSP enabled with enforce-mode header"
     );
     assert!(
-        !response.contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
+        !response
+            .contains("Content-Security-Policy-Report-Only: default-src 'self'; object-src 'none'"),
         "invalid csp enabled env value should not alter report-only disabled behavior"
     );
 }
@@ -19899,7 +20186,8 @@ fn main() effects {{ net }} -> Int {{
         "response should contain 200 status line"
     );
     assert!(
-        response.contains("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"),
+        response
+            .contains("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload"),
         "response should include hsts header with configured max-age/subdomains/preload"
     );
 }
@@ -20366,7 +20654,8 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
-fn c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled() {
+fn c_bin_http_runtime_applies_security_headers_hsts_invalid_max_age_falls_back_to_default_when_enabled(
+) {
     if !clang_available() {
         eprintln!(
             "skipping http runtime security-headers hsts fallback e2e test: clang not available"
@@ -20527,7 +20816,8 @@ fn main() effects { net } -> Int {
         "negative max-age case should return 200 status line"
     );
     assert!(
-        negative_response.contains("Strict-Transport-Security: max-age=15552000; includeSubDomains"),
+        negative_response
+            .contains("Strict-Transport-Security: max-age=15552000; includeSubDomains"),
         "negative max-age should fall back to deterministic default hsts max-age"
     );
     assert!(
@@ -20697,8 +20987,7 @@ fn c_bin_http_runtime_applies_security_headers_referrer_policy_invalid_env_falls
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-security-headers-referrer-fallback-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-referrer-fallback-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -20849,8 +21138,7 @@ fn c_bin_http_runtime_applies_security_headers_x_content_type_options_invalid_en
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-security-headers-nosniff-fallback-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-security-headers-nosniff-fallback-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -21286,7 +21574,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_applies_security_headers_on_auth_reject_when_enabled() {
     if !clang_available() {
-        eprintln!("skipping http runtime security-headers auth reject e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime security-headers auth reject e2e test: clang not available"
+        );
         return;
     }
 
@@ -21387,7 +21677,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime security-headers auth reject e2e test could not connect to server");
+            panic!(
+                "http runtime security-headers auth reject e2e test could not connect to server"
+            );
         }
     };
 
@@ -21439,7 +21731,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_applies_security_headers_on_csrf_reject_when_enabled() {
     if !clang_available() {
-        eprintln!("skipping http runtime security-headers csrf reject e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime security-headers csrf reject e2e test: clang not available"
+        );
         return;
     }
 
@@ -21541,7 +21835,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime security-headers csrf reject e2e test could not connect to server");
+            panic!(
+                "http runtime security-headers csrf reject e2e test could not connect to server"
+            );
         }
     };
 
@@ -22642,7 +22938,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP auth cookie-name fallback runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpauthcookienamefallbacke2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpauthcookienamefallbacke2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP auth cookie-name fallback runtime e2e fixture"
@@ -22710,7 +23008,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime auth cookie-name fallback e2e binary did not exit in expected window");
+            panic!(
+                "http runtime auth cookie-name fallback e2e binary did not exit in expected window"
+            );
         }
     };
 
@@ -22729,7 +23029,8 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
-fn c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_when_clang_available() {
+fn c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_when_clang_available()
+{
     if !clang_available() {
         eprintln!("skipping http runtime auth.requireRole cookie e2e test: clang not available");
         return;
@@ -22862,7 +23163,8 @@ int main(void) {{
     );
     assert!(
         response.contains("\"code\":\"AUTH.FORBIDDEN\"")
-            && response.contains("\"message\":\"Authenticated cookie principal missing required role\""),
+            && response
+                .contains("\"message\":\"Authenticated cookie principal missing required role\""),
         "response should include deterministic cookie-role forbidden error envelope payload"
     );
 }
@@ -23430,7 +23732,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_without_requested_method_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight missing-method e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight missing-method e2e test: clang not available"
+        );
         return;
     }
 
@@ -23529,7 +23833,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight missing-method e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight missing-method e2e test could not connect to server"
+            );
         }
     };
 
@@ -23573,7 +23879,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_without_origin_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight missing-origin e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight missing-origin e2e test: clang not available"
+        );
         return;
     }
 
@@ -23672,7 +23980,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight missing-origin e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight missing-origin e2e test could not connect to server"
+            );
         }
     };
 
@@ -23712,7 +24022,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_with_invalid_origin_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight invalid-origin e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight invalid-origin e2e test: clang not available"
+        );
         return;
     }
 
@@ -23811,7 +24123,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight invalid-origin e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight invalid-origin e2e test could not connect to server"
+            );
         }
     };
 
@@ -23952,7 +24266,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight duplicate-origin e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight duplicate-origin e2e test could not connect to server"
+            );
         }
     };
 
@@ -24042,7 +24358,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight body-reject runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightbodyrejecte2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightbodyrejecte2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight body-reject runtime e2e fixture"
@@ -24133,7 +24451,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_with_cookie_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight cookie-header e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight cookie-header e2e test: clang not available"
+        );
         return;
     }
 
@@ -24232,7 +24552,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight cookie-header e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight cookie-header e2e test could not connect to server"
+            );
         }
     };
 
@@ -24282,8 +24604,7 @@ fn c_bin_http_runtime_rejects_cors_preflight_with_authorization_header() {
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-cors-preflight-authorization-header-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-authorization-header-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -24493,7 +24814,9 @@ fn main() effects {{ net }} -> Int {{
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("http runtime cors preflight invalid private-network header e2e binary should start");
+        .expect(
+            "http runtime cors preflight invalid private-network header e2e binary should start",
+        );
 
     let mut response = None;
     for _ in 0..240 {
@@ -24732,8 +25055,7 @@ fn c_bin_http_runtime_allows_cors_preflight_with_private_network_header_when_pol
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-cors-preflight-private-network-allow-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-preflight-private-network-allow-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -24940,7 +25262,9 @@ fn main() effects {{ net }} -> Int {{
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("http runtime cors preflight duplicate private-network header e2e binary should start");
+        .expect(
+            "http runtime cors preflight duplicate private-network header e2e binary should start",
+        );
 
     let mut response = None;
     for _ in 0..240 {
@@ -25224,7 +25548,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors invalid-origin non-preflight runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsinvalidoriginrequeste2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsinvalidoriginrequeste2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors invalid-origin non-preflight runtime e2e fixture"
@@ -25371,7 +25697,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors requested-method non-preflight runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsrequestedmethodrequeste2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsrequestedmethodrequeste2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors requested-method non-preflight runtime e2e fixture"
@@ -25518,7 +25846,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors requested-headers non-preflight runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsrequestedheadersrequeste2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsrequestedheadersrequeste2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors requested-headers non-preflight runtime e2e fixture"
@@ -25619,7 +25949,8 @@ fn c_bin_http_runtime_rejects_cors_non_preflight_with_duplicate_requested_method
         return;
     }
 
-    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-duplicate-requested-method-request-e2e");
+    let project_dir =
+        temp_dir("sec4-c-bin-http-runtime-cors-duplicate-requested-method-request-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -25964,7 +26295,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors private-network non-preflight runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsprivatenetworkrequeste2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsprivatenetworkrequeste2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors private-network non-preflight runtime e2e fixture"
@@ -26126,7 +26459,9 @@ fn main() effects {{ net }} -> Int {{
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("http runtime cors duplicate private-network non-preflight e2e binary should start");
+        .expect(
+            "http runtime cors duplicate private-network non-preflight e2e binary should start",
+        );
 
     let mut response = None;
     for _ in 0..240 {
@@ -26209,7 +26544,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_when_requested_method_is_not_allowed() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight disallowed-method e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight disallowed-method e2e test: clang not available"
+        );
         return;
     }
 
@@ -26259,7 +26596,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight disallowed-method runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightmethoddenye2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightmethoddenye2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight disallowed-method runtime e2e fixture"
@@ -26402,7 +26741,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight invalid-method-token runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightmethodinvalide2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightmethodinvalide2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight invalid-method-token runtime e2e fixture"
@@ -26547,7 +26888,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight duplicate-requested-method runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightmethodduplicatee2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightmethodduplicatee2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight duplicate-requested-method runtime e2e fixture"
@@ -26794,7 +27137,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_allows_cors_preflight_when_requested_headers_are_allowed() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight allowed-headers e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight allowed-headers e2e test: clang not available"
+        );
         return;
     }
 
@@ -26844,7 +27189,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight allowed-headers runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightallowedheaderse2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightallowedheaderse2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight allowed-headers runtime e2e fixture"
@@ -26891,7 +27238,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight allowed-headers e2e test could not connect to server");
+            panic!(
+                "http runtime cors preflight allowed-headers e2e test could not connect to server"
+            );
         }
     };
 
@@ -26931,7 +27280,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_rejects_cors_preflight_when_requested_header_is_not_allowed() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors preflight disallowed-header e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors preflight disallowed-header e2e test: clang not available"
+        );
         return;
     }
 
@@ -26981,7 +27332,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight disallowed-header runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightheaderdenye2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightheaderdenye2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight disallowed-header runtime e2e fixture"
@@ -27124,7 +27477,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight invalid-headers-token runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightheaderinvalide2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightheaderinvalide2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight invalid-headers-token runtime e2e fixture"
@@ -27271,7 +27626,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight empty-requested-headers runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightheaderemptye2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightheaderemptye2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight empty-requested-headers runtime e2e fixture"
@@ -27418,7 +27775,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight duplicate-requested-headers runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightheaderduplicatee2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightheaderduplicatee2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight duplicate-requested-headers runtime e2e fixture"
@@ -27567,7 +27926,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors preflight auth/csrf runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorspreflightauthcsrfe2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorspreflightauthcsrfe2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors preflight auth/csrf runtime e2e fixture"
@@ -27633,7 +27994,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors preflight auth/csrf e2e binary did not exit in expected window");
+            panic!(
+                "http runtime cors preflight auth/csrf e2e binary did not exit in expected window"
+            );
         }
     };
 
@@ -27797,10 +28160,12 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
-fn c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled(
-) {
+fn c_bin_http_runtime_applies_cors_allowed_origins_invalid_env_falls_back_to_wildcard_when_enabled()
+{
     if !clang_available() {
-        eprintln!("skipping http runtime cors allowed-origins fallback e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors allowed-origins fallback e2e test: clang not available"
+        );
         return;
     }
 
@@ -27903,7 +28268,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors allowed-origins fallback e2e test could not connect to server");
+            panic!(
+                "http runtime cors allowed-origins fallback e2e test could not connect to server"
+            );
         }
     };
 
@@ -28014,7 +28381,9 @@ fn main() effects {{ net }} -> Int {{
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("http runtime cors allowed-origins missing-scheme fallback e2e binary should start");
+        .expect(
+            "http runtime cors allowed-origins missing-scheme fallback e2e binary should start",
+        );
 
     let mut response = None;
     for _ in 0..240 {
@@ -28093,7 +28462,8 @@ fn main() effects {{ net }} -> Int {{
 }
 
 #[test]
-fn c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled() {
+fn c_bin_http_runtime_applies_cors_allowed_origins_allowlist_matching_request_origin_when_enabled()
+{
     if !clang_available() {
         eprintln!("skipping http runtime cors allowed-origins allowlist match e2e test: clang not available");
         return;
@@ -28391,12 +28761,13 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_cors_wildcard_with_allow_credentials_env_suppresses_credentials_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors wildcard credentials guard e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors wildcard credentials guard e2e test: clang not available"
+        );
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-cors-wildcard-credentials-guard-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-wildcard-credentials-guard-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -28493,7 +28864,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors wildcard credentials guard e2e test could not connect to server");
+            panic!(
+                "http runtime cors wildcard credentials guard e2e test could not connect to server"
+            );
         }
     };
 
@@ -28539,12 +28912,13 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_cors_non_wildcard_with_allow_credentials_env_emits_credentials_header() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors non-wildcard credentials e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors non-wildcard credentials e2e test: clang not available"
+        );
         return;
     }
 
-    let project_dir =
-        temp_dir("sec4-c-bin-http-runtime-cors-non-wildcard-credentials-e2e");
+    let project_dir = temp_dir("sec4-c-bin-http-runtime-cors-non-wildcard-credentials-e2e");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -28641,7 +29015,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors non-wildcard credentials e2e test could not connect to server");
+            panic!(
+                "http runtime cors non-wildcard credentials e2e test could not connect to server"
+            );
         }
     };
 
@@ -28688,7 +29064,9 @@ fn main() effects {{ net }} -> Int {{
 fn c_bin_http_runtime_applies_cors_allow_credentials_invalid_env_falls_back_to_disabled_when_enabled(
 ) {
     if !clang_available() {
-        eprintln!("skipping http runtime cors allow-credentials fallback e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors allow-credentials fallback e2e test: clang not available"
+        );
         return;
     }
 
@@ -28788,7 +29166,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors allow-credentials fallback e2e test could not connect to server");
+            panic!(
+                "http runtime cors allow-credentials fallback e2e test could not connect to server"
+            );
         }
     };
 
@@ -28833,7 +29213,9 @@ fn main() effects {{ net }} -> Int {{
 fn c_bin_http_runtime_applies_cors_require_vary_origin_invalid_env_falls_back_to_disabled_when_origin_is_non_wildcard(
 ) {
     if !clang_available() {
-        eprintln!("skipping http runtime cors require-vary-origin fallback e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors require-vary-origin fallback e2e test: clang not available"
+        );
         return;
     }
 
@@ -29442,7 +29824,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors methods/headers env runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsmethodsheadersenve2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsmethodsheadersenve2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors methods/headers env runtime e2e fixture"
@@ -29510,7 +29894,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors methods/headers env e2e binary did not exit in expected window");
+            panic!(
+                "http runtime cors methods/headers env e2e binary did not exit in expected window"
+            );
         }
     };
 
@@ -29531,7 +29917,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_cors_methods_and_headers_invalid_env_fall_back_to_defaults() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors methods/headers fallback e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors methods/headers fallback e2e test: clang not available"
+        );
         return;
     }
 
@@ -29581,7 +29969,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors methods/headers fallback runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsmethodsheadersfallbacke2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsmethodsheadersfallbacke2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors methods/headers fallback runtime e2e fixture"
@@ -29630,7 +30020,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors methods/headers fallback e2e test could not connect to server");
+            panic!(
+                "http runtime cors methods/headers fallback e2e test could not connect to server"
+            );
         }
     };
 
@@ -29720,7 +30112,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors exposed-headers env runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsexposedheadersenve2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsexposedheadersenve2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors exposed-headers env runtime e2e fixture"
@@ -29787,7 +30181,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors exposed-headers env e2e binary did not exit in expected window");
+            panic!(
+                "http runtime cors exposed-headers env e2e binary did not exit in expected window"
+            );
         }
     };
 
@@ -29808,7 +30204,9 @@ fn main() effects {{ net }} -> Int {{
 #[test]
 fn c_bin_http_runtime_cors_exposed_headers_invalid_env_fall_back_to_absent_when_enabled() {
     if !clang_available() {
-        eprintln!("skipping http runtime cors exposed-headers fallback e2e test: clang not available");
+        eprintln!(
+            "skipping http runtime cors exposed-headers fallback e2e test: clang not available"
+        );
         return;
     }
 
@@ -29858,7 +30256,9 @@ fn main() effects {{ net }} -> Int {{
         "c-bin build should succeed for HTTP cors exposed-headers fallback runtime e2e fixture"
     );
 
-    let binary_path = project_dir.join("build").join("httpcorsexposedheadersfallbacke2e");
+    let binary_path = project_dir
+        .join("build")
+        .join("httpcorsexposedheadersfallbacke2e");
     assert!(
         binary_path.exists(),
         "compiled binary should exist for HTTP cors exposed-headers fallback runtime e2e fixture"
@@ -29906,7 +30306,9 @@ fn main() effects {{ net }} -> Int {{
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("http runtime cors exposed-headers fallback e2e test could not connect to server");
+            panic!(
+                "http runtime cors exposed-headers fallback e2e test could not connect to server"
+            );
         }
     };
 
@@ -32267,7 +32669,9 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!("runtime secret reveal deny harness exited before request with status: {status}");
+            panic!(
+                "runtime secret reveal deny harness exited before request with status: {status}"
+            );
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
@@ -32417,7 +32821,9 @@ int main(void) {{
             .try_wait()
             .expect("child wait should succeed while connecting")
         {
-            panic!("runtime secret reveal allow harness exited before request with status: {status}");
+            panic!(
+                "runtime secret reveal allow harness exited before request with status: {status}"
+            );
         }
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {

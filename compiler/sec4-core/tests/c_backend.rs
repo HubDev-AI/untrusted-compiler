@@ -102,7 +102,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains(
         "int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta);"
     ));
-    assert!(header.contains("int64_t sec4_rt_res_html();"));
+    assert!(header.contains("int64_t sec4_rt_res_html(int64_t html);"));
     assert!(header.contains("int64_t sec4_rt_res_text(int64_t status, const char *body);"));
     assert!(header.contains("int64_t sec4_rt_set_header(int64_t name, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_cookie_build(const char *name, const char *value);"));
@@ -130,7 +130,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_url_public(int64_t input);"));
     assert!(header.contains("int64_t sec4_rt_url_internal(int64_t input);"));
     assert!(header.contains("int64_t sec4_rt_path_under(int64_t base, int64_t input);"));
-    assert!(header.contains("int64_t sec4_rt_path_base(const char *input);"));
+    assert!(header.contains("int64_t sec4_rt_path_base_literal(const char *input);"));
+    assert!(header.contains("int64_t sec4_rt_path_base_handle(int64_t input);"));
+    assert!(header.contains("#define sec4_rt_path_base(input)"));
     assert!(header.contains("int64_t sec4_rt_headers_name(const char *input);"));
     assert!(header.contains("int64_t sec4_rt_headers_value(const char *input);"));
     assert!(header.contains("int64_t sec4_rt_http_router(void);"));
@@ -198,7 +200,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains(
         "int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta)"
     ));
-    assert!(source.contains("int64_t sec4_rt_res_html()"));
+    assert!(source.contains("int64_t sec4_rt_res_html(int64_t html)"));
     assert!(source.contains("int64_t sec4_rt_res_text(int64_t status, const char *body)"));
     assert!(source.contains("int64_t sec4_rt_set_header(int64_t name, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_cookie_build(const char *name, const char *value)"));
@@ -227,7 +229,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_url_public(int64_t input)"));
     assert!(source.contains("int64_t sec4_rt_url_internal(int64_t input)"));
     assert!(source.contains("int64_t sec4_rt_path_under(int64_t base, int64_t input)"));
-    assert!(source.contains("int64_t sec4_rt_path_base(const char *input)"));
+    assert!(source.contains("int64_t sec4_rt_path_base_literal(const char *input)"));
+    assert!(source.contains("int64_t sec4_rt_path_base_handle(int64_t input)"));
     assert!(source.contains("int64_t sec4_rt_headers_name(const char *input)"));
     assert!(source.contains("int64_t sec4_rt_headers_value(const char *input)"));
     assert!(source.contains("int64_t sec4_rt_http_router(void)"));

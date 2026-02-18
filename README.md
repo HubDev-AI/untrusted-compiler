@@ -77,6 +77,14 @@ Manual live run:
 cargo run -p sec4 -- run --path examples/hello-api
 ```
 
+Larger walkthrough example (runnable + compile-checked capability slice):
+
+```bash
+cargo run -p sec4 -- run --path examples/showcase-api
+```
+
+See `examples/showcase-api/README.md` for detailed route checks and DB/FS/NET capability notes.
+
 Deterministic one-request run (helpful for scripted checks):
 
 ```bash
@@ -99,6 +107,47 @@ Optional runtime port override (useful for parallel local runs):
 
 ```bash
 cargo run -p sec4 -- run --path examples/hello-api --port 18080
+```
+
+## Test relevance and cleanup path
+
+The repo has two test tiers:
+
+- **Implementation/runtime confidence** (compiler, runtime behavior, CLI semantics).
+- **Milestone/governance contracts** (closure packets, roadmap/CI wiring invariants).
+
+## Implementation-first mode (2026-02-17 lock)
+
+Execution is now explicitly implementation-first:
+
+- each normal PR should include real runtime/compiler/CLI logic movement,
+- targeted behavior tests come before broad governance loops,
+- full governance/closure suites are run once near PR completion (or in CI), not repeatedly during every edit cycle.
+
+Reference: `docs/book/887-m38-implementation-first-execution-mode-lock.md`.
+
+For daily implementation work, run the focused suite:
+
+```bash
+scripts/test-alpha-implementation-fast.sh
+```
+
+To inspect current test volume and category split:
+
+```bash
+scripts/print-test-inventory.sh
+```
+
+JSON output (for automation/reporting):
+
+```bash
+scripts/print-test-inventory.sh --json
+```
+
+Full governance/closure contract suite (same bundle used by naming-lock CI):
+
+```bash
+scripts/run-naming-lock-contract-suite.sh --dry-run
 ```
 
 Then in another terminal:

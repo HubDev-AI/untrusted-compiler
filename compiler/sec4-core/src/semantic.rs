@@ -279,11 +279,28 @@ impl Catalog {
 struct Analyzer<'a> {
     catalog: Catalog,
     policy: Policy,
+    profile: SemanticProfile,
     callable_forward_summaries: HashMap<String, String>,
     value_origins: HashMap<String, String>,
     diagnostics: Vec<Diagnostic>,
     interrupt: &'a dyn InterruptSignal,
     interrupted: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SemanticProfile {
+    Server,
+    Browser,
+}
+
+impl SemanticProfile {
+    fn from_manifest_profile(profile: &str) -> Self {
+        if profile == "browser" {
+            Self::Browser
+        } else {
+            Self::Server
+        }
+    }
 }
 
 pub fn analyze_program(program: &Program) -> Result<(), Vec<Diagnostic>> {
@@ -302,8 +319,16 @@ pub fn analyze_program_with_policy(
     program: &Program,
     policy: &Policy,
 ) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy_and_profile(program, policy, "server")
+}
+
+pub fn analyze_program_with_policy_and_profile(
+    program: &Program,
+    policy: &Policy,
+    profile: &str,
+) -> Result<(), Vec<Diagnostic>> {
     let interrupt = NeverInterrupt;
-    analyze_program_with_policy_and_interrupt(program, policy, &interrupt)
+    analyze_program_with_policy_profile_and_interrupt(program, policy, profile, &interrupt)
 }
 
 pub fn analyze_program_with_policy_and_interrupt(
@@ -311,9 +336,19 @@ pub fn analyze_program_with_policy_and_interrupt(
     policy: &Policy,
     interrupt: &dyn InterruptSignal,
 ) -> Result<(), Vec<Diagnostic>> {
+    analyze_program_with_policy_profile_and_interrupt(program, policy, "server", interrupt)
+}
+
+pub fn analyze_program_with_policy_profile_and_interrupt(
+    program: &Program,
+    policy: &Policy,
+    profile: &str,
+    interrupt: &dyn InterruptSignal,
+) -> Result<(), Vec<Diagnostic>> {
     let mut analyzer = Analyzer {
         catalog: Catalog::new(),
         policy: policy.clone(),
+        profile: SemanticProfile::from_manifest_profile(profile),
         callable_forward_summaries: HashMap::new(),
         value_origins: HashMap::new(),
         diagnostics: Vec::new(),
@@ -1902,6 +1937,9 @@ impl<'a> Analyzer<'a> {
         self.enforce_json_encode_helper_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_text_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_res_html_signature(callee_name, span.clone(), args, arg_types);
+        if self.enforce_browser_profile_call_fence(callee_name, span.clone()) {
+            return;
+        }
         self.enforce_header_cookie_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_header_builder_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_cookie_build_signature(callee_name, span.clone(), args, arg_types);
@@ -3731,6 +3769,56 @@ impl<'a> Analyzer<'a> {
         );
     }
 
+    fn enforce_browser_profile_call_fence(&mut self, callee_name: &str, span: Span) -> bool {
+        if self.profile != SemanticProfile::Browser {
+            return false;
+        }
+
+        let (message, note) = if is_db_exec_call(callee_name)
+            || is_db_exec_tx_call(callee_name)
+            || is_db_query_one_call(callee_name)
+            || is_db_tx_call(callee_name)
+            || is_sql_q_call(callee_name)
+        {
+            (
+                "database intrinsics are disabled in browser profile",
+                "browser profile forbids `db.*` and `sql.q`; use browser-local adapters or remote API calls",
+            )
+        } else if is_secret_get_call(callee_name)
+            || is_secret_redact_call(callee_name)
+            || is_secret_reveal_call(callee_name)
+        {
+            (
+                "secrets intrinsics are disabled in browser profile",
+                "browser profile forbids `secrets.*`; browser builds do not provide trusted app-secret sources",
+            )
+        } else if is_http_serve_call(callee_name) {
+            (
+                "inbound network listener is disabled in browser profile",
+                "browser profile forbids `http.serve`; use exported handler entrypoints in browser builds",
+            )
+        } else if is_net_internal_call(callee_name) || is_url_internal_gate(callee_name) {
+            (
+                "internal network intrinsics are disabled in browser profile",
+                "browser profile forbids internal-net sinks (`httpClient.getInternal`, `url.internal`)",
+            )
+        } else {
+            return false;
+        };
+
+        self.diagnostics.push(
+            Diagnostic::error("E2002", message, span)
+                .with_tag("security")
+                .with_tag("policy")
+                .with_note(format!(
+                    "`{callee_name}` is not available when `[build].profile = \"browser\"`"
+                ))
+                .with_note(note)
+                .with_note("switch to `[build].profile = \"server\"` for server-side capability access"),
+        );
+        true
+    }
+
     fn enforce_fs_sink_call_shapes(
         &mut self,
         callee_name: &str,
@@ -5271,6 +5359,27 @@ impl<'a> Analyzer<'a> {
     fn resolve_type_expr(&mut self, expr: &TypeExpr, span: Span) -> Type {
         match &expr.kind {
             TypeExprKind::Named { name, args } => {
+                if self.profile == SemanticProfile::Browser
+                    && is_server_only_capability_type_name(name)
+                {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2002",
+                            "server-only capability type is disabled in browser profile",
+                            expr.span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("policy")
+                        .with_note(format!(
+                            "type `{name}` is not available when `[build].profile = \"browser\"`"
+                        ))
+                        .with_note(
+                            "switch to `[build].profile = \"server\"` for server capability types",
+                        ),
+                    );
+                    return Type::Unknown;
+                }
+
                 if !self.catalog.is_known_type_name(name) {
                     self.diagnostics.push(
                         Diagnostic::error("N3001", "unknown type", span)
@@ -5381,6 +5490,40 @@ impl<'a> Analyzer<'a> {
                 }
                 let err = self.analyze_expr(&args[0], env, used_effects, callable_aliases);
                 Some(Type::result(Type::Unknown, err))
+            }
+            "Ctx" | "DbCap" | "FsCap" | "NetCap" | "InternalNetCap" | "SecretsCap" => {
+                if self.profile == SemanticProfile::Browser {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2002",
+                            "server-only capability constructor is disabled in browser profile",
+                            span.clone(),
+                        )
+                        .with_tag("security")
+                        .with_tag("policy")
+                        .with_note(format!(
+                            "constructor `{name}()` is not available when `[build].profile = \"browser\"`"
+                        ))
+                        .with_note(
+                            "switch to `[build].profile = \"server\"` for server capability constructors",
+                        ),
+                    );
+                    for arg in args {
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
+                    }
+                    return Some(Type::Unknown);
+                }
+
+                if !args.is_empty() {
+                    self.diagnostics.push(
+                        Diagnostic::error("T3103", "constructor argument count mismatch", span)
+                            .with_note(format!("`{name}` expects 0 arguments")),
+                    );
+                    for arg in args {
+                        self.analyze_expr(arg, env, used_effects, callable_aliases);
+                    }
+                }
+                Some(Type::named(name))
             }
             _ => None,
         }
@@ -5985,6 +6128,13 @@ fn capability_namespace_alias_for_type_name(name: &str) -> Option<&'static str> 
         "SecretsCap" => Some("secrets"),
         _ => None,
     }
+}
+
+fn is_server_only_capability_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Ctx" | "DbCap" | "FsCap" | "NetCap" | "InternalNetCap" | "SecretsCap"
+    )
 }
 
 fn is_intrinsic_namespace(name: &str) -> bool {
