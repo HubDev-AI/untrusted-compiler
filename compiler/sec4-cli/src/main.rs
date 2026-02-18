@@ -7020,6 +7020,13 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    let max_requests_per_connection = match resolve_lasm_max_requests_per_connection() {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    };
     let overflow_probe_timeout_ms =
         match resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms) {
             Ok(value) => value,
@@ -7104,6 +7111,7 @@ fn cmd_run_lasm_backend(
                         &mut runtime,
                         effective_max_header_bytes,
                         effective_max_body_bytes,
+                        max_requests_per_connection,
                         runtime_step_budget,
                         true,
                         trace_counter_for_worker.as_ref(),
@@ -7153,6 +7161,7 @@ fn cmd_run_lasm_backend(
                     .expect("oneshot runtime should be initialized"),
                 effective_max_header_bytes,
                 effective_max_body_bytes,
+                max_requests_per_connection,
                 runtime_step_budget,
                 false,
                 trace_counter.as_ref(),
@@ -7489,12 +7498,14 @@ fn process_lasm_connection_with_runtime(
     runtime: &mut sec4_core::LasmHttpRuntime,
     max_header_bytes: usize,
     max_body_bytes: usize,
+    max_requests_per_connection: usize,
     runtime_step_budget: usize,
     allow_keep_alive: bool,
     trace_counter: &AtomicU64,
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
 ) -> Result<(), String> {
+    let mut responses_written = 0usize;
     let mut request_reader = BufReader::new(
         stream
             .try_clone()
@@ -7536,7 +7547,9 @@ fn process_lasm_connection_with_runtime(
                 }
             };
 
-        let close_connection = !allow_keep_alive || lasm_should_close_connection(&request);
+        let close_connection = !allow_keep_alive
+            || lasm_should_close_connection(&request)
+            || responses_written.saturating_add(1) >= max_requests_per_connection;
         let omit_body = request.method.eq_ignore_ascii_case("HEAD");
 
         match evaluate_lasm_cors_preflight_request(&request, header_defaults) {
@@ -7561,6 +7574,7 @@ fn process_lasm_connection_with_runtime(
                 if close_connection {
                     return Ok(());
                 }
+                responses_written = responses_written.saturating_add(1);
                 continue;
             }
             LasmCorsPreflightDecision::Reject { status, message } => {
@@ -7577,6 +7591,7 @@ fn process_lasm_connection_with_runtime(
                 if close_connection {
                     return Ok(());
                 }
+                responses_written = responses_written.saturating_add(1);
                 continue;
             }
         }
@@ -7650,6 +7665,7 @@ fn process_lasm_connection_with_runtime(
         if close_connection {
             return Ok(());
         }
+        responses_written = responses_written.saturating_add(1);
     }
 }
 
@@ -7693,6 +7709,26 @@ fn resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms: u64) -> Result<u
         );
     }
     Ok(parsed.min(effective_timeout_ms).max(1))
+}
+
+fn resolve_lasm_max_requests_per_connection() -> Result<usize, String> {
+    const DEFAULT_MAX_REQUESTS: usize = 256;
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS") else {
+        return Ok(DEFAULT_MAX_REQUESTS);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(DEFAULT_MAX_REQUESTS);
+    }
+    let parsed = value.parse::<usize>().map_err(|_| {
+        "invalid SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS: expected usize >= 1".to_string()
+    })?;
+    if parsed == 0 {
+        return Err(
+            "invalid SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS: expected usize >= 1".to_string(),
+        );
+    }
+    Ok(parsed)
 }
 
 fn apply_lasm_dynamic_response_materialization(
