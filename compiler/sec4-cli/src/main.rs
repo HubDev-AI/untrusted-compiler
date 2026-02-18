@@ -9039,6 +9039,7 @@ struct LasmParsedRequestHead {
     query_params: BTreeMap<String, String>,
     headers: BTreeMap<String, String>,
     content_length: usize,
+    transfer_encoding_chunked: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -9092,7 +9093,7 @@ fn read_lasm_http_request(
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
     let request_head = read_lasm_http_request_head(reader, max_header_bytes)?;
-    if request_head.content_length > max_body_bytes {
+    if !request_head.transfer_encoding_chunked && request_head.content_length > max_body_bytes {
         return Err(LasmRequestReadError {
             status: 413,
             message: format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
@@ -9118,12 +9119,17 @@ fn read_lasm_http_request(
         },
     };
 
-    let mut body = vec![0u8; request_head.content_length];
-    if request_head.content_length > 0 {
-        reader
-            .read_exact(&mut body)
-            .map_err(|err| map_read_error("reading request body", err))?;
-    }
+    let body = if request_head.transfer_encoding_chunked {
+        read_lasm_http_chunked_body(reader, max_body_bytes, &map_read_error)?
+    } else {
+        let mut body = vec![0u8; request_head.content_length];
+        if request_head.content_length > 0 {
+            reader
+                .read_exact(&mut body)
+                .map_err(|err| map_read_error("reading request body", err))?;
+        }
+        body
+    };
 
     Ok(LasmRunRequest {
         method: request_head.method,
@@ -9133,6 +9139,106 @@ fn read_lasm_http_request(
         headers: request_head.headers,
         body,
     })
+}
+
+fn read_lasm_http_chunked_body(
+    reader: &mut BufReader<TcpStream>,
+    max_body_bytes: usize,
+    map_read_error: &dyn Fn(&str, std::io::Error) -> LasmRequestReadError,
+) -> Result<Vec<u8>, LasmRequestReadError> {
+    let mut body = Vec::new();
+    let mut chunk_size_line = String::new();
+    loop {
+        chunk_size_line.clear();
+        let read = reader
+            .read_line(&mut chunk_size_line)
+            .map_err(|err| map_read_error("reading chunk size", err))?;
+        if read == 0 {
+            return Err(LasmRequestReadError {
+                status: 400,
+                message: "incomplete request while reading chunk size".to_string(),
+            });
+        }
+        let raw_size = chunk_size_line.trim_end_matches(['\r', '\n']);
+        let size_token = raw_size.split(';').next().unwrap_or("").trim();
+        if size_token.is_empty() {
+            return Err(LasmRequestReadError {
+                status: 400,
+                message: "invalid transfer-encoding chunk size".to_string(),
+            });
+        }
+        let chunk_size =
+            usize::from_str_radix(size_token, 16).map_err(|_| LasmRequestReadError {
+                status: 400,
+                message: "invalid transfer-encoding chunk size".to_string(),
+            })?;
+        if chunk_size == 0 {
+            let mut trailer_line = String::new();
+            loop {
+                trailer_line.clear();
+                let trailer_read = reader
+                    .read_line(&mut trailer_line)
+                    .map_err(|err| map_read_error("reading chunk trailer", err))?;
+                if trailer_read == 0 {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "incomplete request while reading chunk trailer".to_string(),
+                    });
+                }
+                if trailer_line == "\r\n" || trailer_line == "\n" {
+                    break;
+                }
+                let trailer = trailer_line.trim_end_matches(['\r', '\n']);
+                let Some((name_raw, value_raw)) = trailer.split_once(':') else {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "invalid chunk trailer: missing ':' separator".to_string(),
+                    });
+                };
+                if name_raw != name_raw.trim() {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "invalid chunk trailer: whitespace around header name".to_string(),
+                    });
+                }
+                if !is_lasm_http_token(name_raw) {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "invalid chunk trailer: invalid header name token".to_string(),
+                    });
+                }
+                if !is_lasm_http_header_value(value_raw.trim()) {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "invalid chunk trailer: invalid header value character"
+                            .to_string(),
+                    });
+                }
+            }
+            return Ok(body);
+        }
+        if body.len().saturating_add(chunk_size) > max_body_bytes {
+            return Err(LasmRequestReadError {
+                status: 413,
+                message: format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
+            });
+        }
+        let start = body.len();
+        body.resize(start + chunk_size, 0);
+        reader
+            .read_exact(&mut body[start..])
+            .map_err(|err| map_read_error("reading chunk body", err))?;
+        let mut chunk_crlf = [0u8; 2];
+        reader
+            .read_exact(&mut chunk_crlf)
+            .map_err(|err| map_read_error("reading chunk terminator", err))?;
+        if chunk_crlf != [b'\r', b'\n'] {
+            return Err(LasmRequestReadError {
+                status: 400,
+                message: "invalid transfer-encoding chunk framing".to_string(),
+            });
+        }
+    }
 }
 
 fn read_lasm_http_request_head(
@@ -9247,6 +9353,7 @@ fn read_lasm_http_request_head(
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
     let mut parsed_content_length: Option<usize> = None;
+    let mut transfer_encoding_chunked = false;
     let mut parsed_host_header: Option<LasmAuthority> = None;
 
     let mut header_line = String::new();
@@ -9302,10 +9409,24 @@ fn read_lasm_http_request_head(
             ));
         }
         if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
-            return Err(make_error(
-                501,
-                "transfer-encoding is not supported".to_string(),
-            ));
+            let mut encodings = value
+                .split(',')
+                .map(str::trim)
+                .filter(|encoding| !encoding.is_empty());
+            if !encodings.any(|encoding| encoding.eq_ignore_ascii_case("chunked"))
+                || value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|encoding| !encoding.is_empty())
+                    .count()
+                    != 1
+            {
+                return Err(make_error(
+                    501,
+                    "transfer-encoding is not supported".to_string(),
+                ));
+            }
+            transfer_encoding_chunked = true;
         }
         if name.eq_ignore_ascii_case("expect") && !value.is_empty() {
             return Err(make_error(
@@ -9345,6 +9466,13 @@ fn read_lasm_http_request_head(
         insert_lasm_request_header_case_insensitive(&mut headers, name, value);
     }
 
+    if transfer_encoding_chunked && parsed_content_length.is_some() {
+        return Err(make_error(
+            400,
+            "conflicting content-length and transfer-encoding headers".to_string(),
+        ));
+    }
+
     if http_version.eq_ignore_ascii_case("HTTP/1.1") && parsed_host_header.is_none() {
         return Err(make_error(400, "missing host header".to_string()));
     }
@@ -9368,6 +9496,7 @@ fn read_lasm_http_request_head(
         query_params,
         headers,
         content_length,
+        transfer_encoding_chunked,
     })
 }
 

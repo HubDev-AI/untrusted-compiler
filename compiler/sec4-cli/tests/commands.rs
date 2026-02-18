@@ -8713,7 +8713,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_oneshot_lasm_backend_returns_501_for_transfer_encoding() {
+fn run_command_oneshot_lasm_backend_accepts_chunked_transfer_encoding() {
     let project_dir = temp_dir("sec4-run-command-lasm-transfer-encoding");
     let port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
@@ -8773,14 +8773,16 @@ fn main() effects { net } -> Int {
             .try_wait()
             .expect("run command wait should succeed while connecting")
         {
-            panic!("run command exited before transfer-encoding request with status: {status}");
+            panic!(
+                "run command exited before chunked transfer-encoding request with status: {status}"
+            );
         }
 
         match TcpStream::connect(("127.0.0.1", port)) {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"POST /health HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\npong\r\n0\r\n\r\n",
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\npong\r\n0\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();
@@ -8799,7 +8801,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM transfer-encoding test could not connect to server");
+            panic!("run command LASM chunked transfer-encoding test could not connect to server");
         }
     };
 
@@ -8818,21 +8820,21 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM transfer-encoding process did not exit in expected window");
+            panic!("run command LASM chunked transfer-encoding process did not exit in expected window");
         }
     };
 
     assert!(
         status.success(),
-        "run command LASM transfer-encoding process should exit successfully"
+        "run command LASM chunked transfer-encoding process should exit successfully"
     );
     assert!(
-        response.contains("HTTP/1.1 501 Not Implemented"),
-        "response should contain deterministic transfer-encoding status:\n{response}"
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain deterministic chunked transfer-encoding status:\n{response}"
     );
     assert!(
-        response.contains("transfer-encoding is not supported"),
-        "response should include deterministic transfer-encoding message:\n{response}"
+        response.contains("\r\npong"),
+        "response should include route body for chunked transfer-encoding request:\n{response}"
     );
     assert!(
         response.contains("X-Trace-Id: rt-1"),
