@@ -3239,7 +3239,9 @@ impl<'a> Analyzer<'a> {
         if !(is_req_query_call(callee_name)
             || is_req_path_param_call(callee_name)
             || is_req_header_call(callee_name)
-            || is_req_cookie_call(callee_name))
+            || is_req_cookie_call(callee_name)
+            || is_req_method_call(callee_name)
+            || is_req_path_call(callee_name))
         {
             return;
         }
@@ -3250,9 +3252,29 @@ impl<'a> Analyzer<'a> {
             "req.pathParam"
         } else if is_req_cookie_call(callee_name) {
             "req.cookie"
+        } else if is_req_method_call(callee_name) {
+            "req.method"
+        } else if is_req_path_call(callee_name) {
+            "req.path"
         } else {
             "req.header"
         };
+
+        if is_req_method_call(callee_name) || is_req_path_call(callee_name) {
+            if !args.is_empty() {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E4001",
+                        format!("{call_name} expects no arguments"),
+                        span,
+                    )
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note(format!("use `{call_name}()`")),
+                );
+            }
+            return;
+        }
 
         if args.len() != 1 {
             self.diagnostics.push(
@@ -5806,7 +5828,8 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             return_ty: IntrinsicReturnTy::UntrustedBytes,
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
-        | "req.header" | "req_cookie" | "req.cookie" => Some(IntrinsicSpec {
+        | "req.header" | "req_cookie" | "req.cookie" | "req_method" | "req.method"
+        | "req_path" | "req.path" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
@@ -6387,6 +6410,14 @@ fn is_req_header_call(name: &str) -> bool {
 
 fn is_req_cookie_call(name: &str) -> bool {
     matches!(name, "req_cookie" | "req.cookie")
+}
+
+fn is_req_method_call(name: &str) -> bool {
+    matches!(name, "req_method" | "req.method")
+}
+
+fn is_req_path_call(name: &str) -> bool {
+    matches!(name, "req_path" | "req.path")
 }
 
 fn is_sql_q_call(name: &str) -> bool {

@@ -7414,8 +7414,9 @@ fn composeRoute() effects { net } -> Int {
   let echo_name = headers.name(validate.nonEmpty(req.query("header_name")));
   let trace_value = validate.headerValue(req.query("trace"));
   res.setHeader(echo_name, trace_value);
+  res.setHeader(headers.name("X-Method-Echo"), headers.value(validate.nonEmpty(req.method())));
   res.setHeader(headers.name("X-Request-Id-Echo"), headers.value(validate.nonEmpty(req.header("X-Request-Id"))));
-  res.text(200, "id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
+  res.text(200, "method={{req.method}};path={{req.path}};id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
   0
 }
 
@@ -7706,12 +7707,18 @@ fn main() effects { net } -> Int {
         "/compose response should materialize query-driven placeholder for response header:\n{compose_response}"
     );
     assert!(
+        compose_response.contains("X-Method-Echo: GET"),
+        "/compose response should materialize request method for response header:\n{compose_response}"
+    );
+    assert!(
         compose_response.contains("X-Request-Id-Echo: req-99"),
         "/compose response should materialize request-header placeholder for response header:\n{compose_response}"
     );
     assert!(
-        compose_response.contains("\r\n\r\nid=user-7;trace=q+7 ok;requestId=req-99"),
-        "/compose response should materialize mixed literal and request-derived placeholders in body:\n{compose_response}"
+        compose_response.contains(
+            "\r\n\r\nmethod=GET;path=/compose/user-7;id=user-7;trace=q+7 ok;requestId=req-99",
+        ),
+        "/compose response should materialize method/path and request-derived placeholders in body:\n{compose_response}"
     );
     assert!(
         compose_invalid_name_response.contains("HTTP/1.1 200 OK"),
@@ -7722,12 +7729,18 @@ fn main() effects { net } -> Int {
         "/compose invalid-name response should drop dynamic headers whose materialized names fail header-name grammar:\n{compose_invalid_name_response}"
     );
     assert!(
+        compose_invalid_name_response.contains("X-Method-Echo: GET"),
+        "/compose invalid-name response should keep valid request-method response header:\n{compose_invalid_name_response}"
+    );
+    assert!(
         compose_invalid_name_response.contains("X-Request-Id-Echo: req-100"),
         "/compose invalid-name response should keep valid static response headers:\n{compose_invalid_name_response}"
     );
     assert!(
-        compose_invalid_name_response.contains("\r\n\r\nid=user-8;trace=q+8 ok;requestId=req-100"),
-        "/compose invalid-name response should keep dynamic body materialization intact:\n{compose_invalid_name_response}"
+        compose_invalid_name_response.contains(
+            "\r\n\r\nmethod=GET;path=/compose/user-8;id=user-8;trace=q+8 ok;requestId=req-100",
+        ),
+        "/compose invalid-name response should keep method/path and dynamic body materialization intact:\n{compose_invalid_name_response}"
     );
     assert!(
         query_invalid_escape_response.contains("HTTP/1.1 200 OK"),

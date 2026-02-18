@@ -9329,6 +9329,26 @@ int64_t sec4_rt_req_cookie(const char *name) {
   return sec4_rt_track_string_value(value, UINT64_C(0x34343));
 }
 
+int64_t sec4_rt_req_method(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.method[0] != '\0') {
+    value = g_sec4_rt_request.method;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x35353));
+}
+
+int64_t sec4_rt_req_path(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request) {
+    if (g_sec4_rt_request.route_path[0] != '\0') {
+      value = g_sec4_rt_request.route_path;
+    } else if (g_sec4_rt_request.path[0] != '\0') {
+      value = g_sec4_rt_request.path;
+    }
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x36363));
+}
+
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;

@@ -8842,6 +8842,8 @@ entry = "src/main.ut"
   req.pathParam("id");
   req.header("authorization");
   req.cookie("session");
+  req.method();
+  req.path();
   req.json(schema);
   0
 }
@@ -8880,6 +8882,8 @@ fn main() -> Int {
     assert!(generated_c.contains("sec4_rt_req_path_param(\"id\")"));
     assert!(generated_c.contains("sec4_rt_req_header(\"authorization\")"));
     assert!(generated_c.contains("sec4_rt_req_cookie(\"session\")"));
+    assert!(generated_c.contains("sec4_rt_req_method()"));
+    assert!(generated_c.contains("sec4_rt_req_path()"));
     assert!(generated_c.contains("sec4_rt_req_json(schema)"));
     assert!(generated_c.contains("sec4_rt_res_json(schema, 1)"));
     assert!(generated_c.contains("sec4_rt_res_ok(201, schema, 1)"));

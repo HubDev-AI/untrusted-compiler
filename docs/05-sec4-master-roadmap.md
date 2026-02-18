@@ -330,6 +330,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM dynamic response-header materialization now rejects empty materialized header values (including split dynamic `Set-Cookie` lines), preserving deterministic non-empty sink parity while keeping existing control-character validation intact (`docs/book/959-m39-lasm-dynamic-response-header-non-empty-value-parity.md`).
 - [x] LASM request parsing now merges duplicate request headers case-insensitively in deterministic arrival order (`Cookie` via `; `, other headers via `, `) while preserving strict `Host`/`Content-Length` conflict checks (`docs/book/960-m39-lasm-request-header-case-insensitive-merge.md`).
 - [x] Added first-class `req.cookie` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`req.cookie(...)` + `{{req.cookie:...}}`) for deterministic cookie-driven handler and response behavior (`docs/book/961-m39-req-cookie-intrinsic-and-lasm-materialization.md`).
+- [x] Added first-class `req.method()` / `req.path()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.method}}`, `{{req.path}}`) for deterministic method/path-driven handler and response behavior (`docs/book/962-m39-req-method-path-intrinsics-and-lasm-placeholders.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
