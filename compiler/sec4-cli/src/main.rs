@@ -5815,12 +5815,31 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
     let cors_enabled = policy.cors.enabled;
     let mut cors_allow_any_origin = false;
     let mut cors_allowed_origins = Vec::new();
+    let mut cors_allowed_methods = Vec::new();
+    let mut cors_allowed_headers = Vec::new();
     let mut cors_default_origin = None;
+    let cors_allow_private_network = policy.cors.allow_private_network;
     if cors_enabled {
         cors_allow_any_origin = policy.cors.has_wildcard_origin();
         if !cors_allow_any_origin {
             cors_allowed_origins = policy.cors.allowed_origins.clone();
         }
+        cors_allowed_methods = policy
+            .cors
+            .allowed_methods
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_uppercase())
+            .collect();
+        cors_allowed_headers = policy
+            .cors
+            .allowed_headers
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_ascii_lowercase())
+            .collect();
         let allow_origin = if cors_allow_any_origin {
             "*".to_string()
         } else {
@@ -5916,6 +5935,9 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
         cors_enabled,
         cors_allow_any_origin,
         cors_allowed_origins,
+        cors_allowed_methods,
+        cors_allowed_headers,
+        cors_allow_private_network,
         cors_default_origin,
         headers,
     }
@@ -6001,6 +6023,14 @@ fn evaluate_lasm_cors_preflight_request(
     let requested_method = find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
         .map(str::trim)
         .unwrap_or("");
+    let requested_headers = find_lasm_header_value(&request.headers, "Access-Control-Request-Headers")
+        .map(str::trim)
+        .unwrap_or("");
+    let private_network_requested =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Private-Network")
+            .map(str::trim)
+            .map(|value| value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
     let origin = find_lasm_header_value(&request.headers, "Origin")
         .map(str::trim)
         .unwrap_or("");
@@ -6019,10 +6049,34 @@ fn evaluate_lasm_cors_preflight_request(
             message: "cors preflight origin invalid",
         };
     }
+    if !is_lasm_cors_origin_allowed(origin, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight origin not allowed",
+        };
+    }
     if requested_method.is_empty() {
         return LasmCorsPreflightDecision::Reject {
             status: 400,
             message: "cors preflight missing requested method",
+        };
+    }
+    if !is_lasm_cors_requested_method_allowed(requested_method, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight method not allowed",
+        };
+    }
+    if !are_lasm_cors_requested_headers_allowed(requested_headers, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight headers not allowed",
+        };
+    }
+    if private_network_requested && !header_defaults.cors_allow_private_network {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight private network not allowed",
         };
     }
     LasmCorsPreflightDecision::Accept
@@ -6036,6 +6090,50 @@ fn is_lasm_cors_origin_value_valid(origin: &str) -> bool {
         return false;
     }
     origin.starts_with("http://") || origin.starts_with("https://")
+}
+
+fn is_lasm_cors_origin_allowed(origin: &str, header_defaults: &LasmResponseHeaderDefaults) -> bool {
+    if header_defaults.cors_allow_any_origin || header_defaults.cors_allowed_origins.is_empty() {
+        return true;
+    }
+    header_defaults
+        .cors_allowed_origins
+        .iter()
+        .any(|allowed| allowed == origin)
+}
+
+fn is_lasm_cors_requested_method_allowed(
+    requested_method: &str,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if header_defaults.cors_allowed_methods.is_empty() {
+        return true;
+    }
+    let normalized = requested_method.trim().to_ascii_uppercase();
+    header_defaults
+        .cors_allowed_methods
+        .iter()
+        .any(|allowed| allowed == &normalized)
+}
+
+fn are_lasm_cors_requested_headers_allowed(
+    requested_headers: &str,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if requested_headers.is_empty() || header_defaults.cors_allowed_headers.is_empty() {
+        return true;
+    }
+    requested_headers
+        .split(',')
+        .map(str::trim)
+        .filter(|header| !header.is_empty())
+        .all(|header| {
+            let normalized = header.to_ascii_lowercase();
+            header_defaults
+                .cors_allowed_headers
+                .iter()
+                .any(|allowed| allowed == &normalized)
+        })
 }
 
 fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
@@ -6126,6 +6224,9 @@ struct LasmResponseHeaderDefaults {
     cors_enabled: bool,
     cors_allow_any_origin: bool,
     cors_allowed_origins: Vec<String>,
+    cors_allowed_methods: Vec<String>,
+    cors_allowed_headers: Vec<String>,
+    cors_allow_private_network: bool,
     cors_default_origin: Option<String>,
     headers: BTreeMap<String, String>,
 }
@@ -6315,6 +6416,8 @@ fn http_status_text(status: u16) -> &'static str {
         200 => "OK",
         201 => "Created",
         204 => "No Content",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         400 => "Bad Request",
         413 => "Payload Too Large",
         404 => "Not Found",

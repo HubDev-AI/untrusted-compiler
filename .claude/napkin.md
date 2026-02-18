@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Added a LASM regression test but initially forgot `--backend lasm`, which exercised the default backend path and produced a misleading failure during LASM validation. | For backend-specific command tests, always set `--backend` explicitly and align the test name/fixture intent with that backend. |
+| 2026-02-18 | self | Added LASM preflight `403` rejection assertions before checking LASM status-text mapping; runtime emitted fallback reason phrase (`Status`) because `http_status_text` lacked `403`. | When introducing new deterministic HTTP status paths, extend shared status-text mapping in the same change so response-line assertions remain stable. |
 | 2026-02-18 | self | I launched two Cargo tests in parallel with `multi_tool_use.parallel` during LASM validation, despite repo guidance and existing napkin rules to keep Cargo runs serial. | Keep all Cargo commands strictly sequential; use parallel tool calls only for read/search operations. |
 | 2026-02-18 | self | Repeated the same Cargo multi-filter mistake again during LASM validation (`cargo test ... <filter1> <filter2>`). | Use one filter per `cargo test` invocation and avoid batching filter names in a single command; script explicit sequential runs. |
 | 2026-02-18 | self | Repeated the same Cargo filter misuse while validating LASM slices by passing two test filters to one `cargo test` command. | Keep LASM test validation commands one-filter-per-invocation and run multi-filter checks as explicit sequential commands only. |
