@@ -916,5 +916,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `948-m39-lasm-query-percent-decoding-parity.md`
 - `949-m39-lasm-response-header-placeholder-materialization.md`
 - `950-m39-lasm-dynamic-set-cookie-placeholder-materialization.md`
+- `951-m39-lasm-multi-set-cookie-emission.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1944,7 +1944,7 @@ fn extract_response_headers_in_expr(
                 headers.insert(name, value);
             }
             if let Some(cookie) = match_res_add_cookie_call(callee, args, bindings) {
-                headers.insert("Set-Cookie".to_string(), cookie);
+                append_lasm_set_cookie_header(headers, cookie.as_str());
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
                 extract_response_headers_in_function(functions, function_name, visited, headers);
@@ -2016,6 +2016,21 @@ fn extract_response_headers_in_expr(
         | sec4_core::ast::ExprKind::Number(_)
         | sec4_core::ast::ExprKind::String(_)
         | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
+}
+
+fn append_lasm_set_cookie_header(headers: &mut BTreeMap<String, String>, cookie: &str) {
+    let key = "Set-Cookie".to_string();
+    match headers.get_mut(&key) {
+        Some(existing) => {
+            if !existing.is_empty() {
+                existing.push('\n');
+            }
+            existing.push_str(cookie);
+        }
+        None => {
+            headers.insert(key, cookie.to_string());
+        }
     }
 }
 
@@ -7658,6 +7673,18 @@ fn write_lasm_http_response(
     let status_text = http_status_text(response.status);
     let mut response_head = format!("HTTP/1.1 {} {}\r\n", response.status, status_text);
     for (name, value) in headers {
+        if name.eq_ignore_ascii_case("Set-Cookie") {
+            for cookie_value in value.split('\n') {
+                if cookie_value.is_empty() {
+                    continue;
+                }
+                response_head.push_str(name.as_str());
+                response_head.push_str(": ");
+                response_head.push_str(cookie_value);
+                response_head.push_str("\r\n");
+            }
+            continue;
+        }
         response_head.push_str(name.as_str());
         response_head.push_str(": ");
         response_head.push_str(value.as_str());

@@ -7536,7 +7536,9 @@ entry = "src/main.ut"
         project_dir.join("src/main.ut"),
         r#"fn health() effects { net } -> Int {
   let cookie_value = cookie.build("session", validate.nonEmpty(req.query("session")));
+  let mode_cookie = cookie.build("mode", "active");
   res.addCookie(cookie_value);
+  res.addCookie(mode_cookie);
   res.text(200, "pong");
   0
 }
@@ -7642,7 +7644,11 @@ fn main() effects { net } -> Int {
     );
     assert!(
         response.contains("Set-Cookie: session=demo+token"),
-        "response should include deterministic set-cookie header:\n{response}"
+        "response should include query-derived set-cookie header:\n{response}"
+    );
+    assert!(
+        response.contains("Set-Cookie: mode=active"),
+        "response should include additional set-cookie header when multiple cookies are added:\n{response}"
     );
     assert!(
         response.contains("Access-Control-Expose-Headers: x-trace-id,x-showcase"),
