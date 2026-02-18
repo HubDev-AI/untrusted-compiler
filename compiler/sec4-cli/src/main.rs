@@ -1679,6 +1679,7 @@ fn parse_lasm_request_text_placeholder(
     match field.as_str() {
         "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
         "header" => Some(format!("{{{{req.header:{key}}}}}")),
+        "query" => Some(format!("{{{{req.query:{key}}}}}")),
         _ => None,
     }
 }
@@ -6492,16 +6493,23 @@ fn apply_lasm_text_placeholder_materialization(
         return;
     }
     let original = String::from_utf8_lossy(&response.body);
-    if !original.contains("{{req.pathParam:") && !original.contains("{{req.header:") {
+    if !original.contains("{{req.pathParam:")
+        && !original.contains("{{req.header:")
+        && !original.contains("{{req.query:")
+    {
         return;
     }
     let with_path_params =
         replace_lasm_response_placeholder_tokens(&original, "{{req.pathParam:", |key| {
             path_params.get(key.trim()).cloned()
         });
-    let materialized =
+    let with_headers =
         replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
             find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
+        });
+    let materialized =
+        replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
+            request.query_params.get(key.trim()).cloned()
         });
     if materialized != original {
         response.body = materialized.into_bytes();
@@ -6993,6 +7001,7 @@ struct LasmRunRequest {
     method: String,
     http_version: String,
     path: String,
+    query_params: BTreeMap<String, String>,
     headers: BTreeMap<String, String>,
     body: Vec<u8>,
 }
@@ -7002,6 +7011,7 @@ struct LasmParsedRequestHead {
     method: String,
     http_version: String,
     path: String,
+    query_params: BTreeMap<String, String>,
     headers: BTreeMap<String, String>,
     content_length: usize,
 }
@@ -7088,6 +7098,7 @@ fn read_lasm_http_request(
         method: request_head.method,
         http_version: request_head.http_version,
         path: request_head.path,
+        query_params: request_head.query_params,
         headers: request_head.headers,
         body,
     })
@@ -7317,15 +7328,13 @@ fn read_lasm_http_request_head(
         }
     }
 
-    let path = normalized_target
-        .split_once('?')
-        .map(|(path, _)| path)
-        .unwrap_or(normalized_target);
+    let (path, query_params) = split_lasm_path_and_query(normalized_target);
 
     Ok(LasmParsedRequestHead {
         method: method.to_ascii_uppercase(),
         http_version: http_version.to_string(),
-        path: path.to_string(),
+        path,
+        query_params,
         headers,
         content_length,
     })
@@ -7437,6 +7446,26 @@ fn lasm_authority_matches_absolute_form(
         _ => None,
     };
     host.port.or(default_port) == request_target.port.or(default_port)
+}
+
+fn split_lasm_path_and_query(target: &str) -> (String, BTreeMap<String, String>) {
+    let mut query_params = BTreeMap::new();
+    let Some((path, query)) = target.split_once('?') else {
+        return (target.to_string(), query_params);
+    };
+
+    for segment in query.split('&') {
+        if segment.is_empty() {
+            continue;
+        }
+        let (key, value) = segment.split_once('=').unwrap_or((segment, ""));
+        if key.trim().is_empty() {
+            continue;
+        }
+        query_params.insert(key.to_string(), value.to_string());
+    }
+
+    (path.to_string(), query_params)
 }
 
 fn write_lasm_http_response(
