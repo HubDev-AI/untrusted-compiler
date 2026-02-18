@@ -1717,6 +1717,20 @@ fn is_lasm_validate_non_empty_call(callee: &sec4_core::ast::Expr) -> bool {
     }
 }
 
+fn is_lasm_validate_header_value_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => name == "validate_header_value",
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "headerValue"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref name) if name == "validate"
+                )
+        }
+        _ => false,
+    }
+}
+
 fn match_res_html_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
@@ -2139,6 +2153,12 @@ fn extract_header_gate_literal(
                     return Some(value);
                 }
                 if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+                    return extract_header_gate_literal(&args[0], expected_gate, bindings);
+                }
+                if expected_gate == "value"
+                    && is_lasm_validate_header_value_call(callee)
+                    && !args.is_empty()
+                {
                     return extract_header_gate_literal(&args[0], expected_gate, bindings);
                 }
             }

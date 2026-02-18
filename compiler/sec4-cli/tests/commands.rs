@@ -7274,7 +7274,8 @@ fn queryRoute() effects { net } -> Int {
 
 fn composeRoute() effects { net } -> Int {
   let echo_name = headers.name(validate.nonEmpty(req.query("header_name")));
-  res.setHeader(echo_name, headers.value(validate.nonEmpty(req.query("trace"))));
+  let trace_value = validate.headerValue(req.query("trace"));
+  res.setHeader(echo_name, trace_value);
   res.setHeader(headers.name("X-Request-Id-Echo"), headers.value(validate.nonEmpty(req.header("X-Request-Id"))));
   res.text(200, "id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
   0

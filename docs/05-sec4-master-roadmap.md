@@ -325,6 +325,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM response writer now normalizes/merges headers case-insensitively before default injection and trace/header upserts, preventing duplicate semantic headers like `Content-Type`/`content-type` and preserving deterministic override behavior (`docs/book/954-m39-lasm-case-insensitive-response-header-merge.md`).
 - [x] LASM response writer now always upserts `Content-Length` from actual response body size (case-insensitive), overriding user-supplied `content-length` header values to prevent invalid framing while preserving deterministic header output (`docs/book/955-m39-lasm-content-length-upsert-correctness.md`).
 - [x] LASM dynamic response header materialization now validates emitted header names/values using HTTP token/value constraints and drops invalid materialized headers deterministically (preventing control-character header injection via query/path/header-derived placeholders) (`docs/book/956-m39-lasm-dynamic-response-header-validation-hardening.md`).
+- [x] LASM response-header extraction now unwraps `validate.headerValue(...)` wrappers (including request-derived arguments) when materializing dynamic headers, so direct typed-header flows (`res.setHeader(..., validate.headerValue(req.query(...)))`) execute with deterministic placeholder behavior (`docs/book/957-m39-lasm-validate-header-value-placeholder-extraction.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
