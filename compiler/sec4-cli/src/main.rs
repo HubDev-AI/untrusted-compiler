@@ -997,7 +997,7 @@ fn resolve_lasm_smoke_route_plan(
             _ => None,
         })
         .collect::<HashMap<_, _>>();
-    let handler_name = find_route_handler_name(&functions, entry_name, method, route)?;
+    let handler_name = find_latest_route_handler_name(&functions, entry_name, method, route)?;
     let response_plan = extract_response_plan(&functions, handler_name.as_str())?;
     let mut headers = extract_response_headers(&functions, handler_name.as_str());
     if let Some(content_type) = response_plan.default_content_type {
@@ -1210,252 +1210,29 @@ fn collect_route_registrations_in_expr(
     }
 }
 
-fn find_route_handler_name(
+fn find_latest_route_handler_name(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     entry_name: &str,
     method: &str,
     route: &str,
 ) -> Option<String> {
     let normalized_method = method.trim().to_ascii_uppercase();
-    let mut visited = HashSet::new();
-    let mut bindings = HashMap::new();
-    find_route_handler_name_in_function(
+    let mut visited_functions = HashSet::new();
+    let mut registrations = Vec::new();
+    collect_route_registrations_in_function(
         functions,
         entry_name,
-        normalized_method.as_str(),
-        route,
-        &mut visited,
-        &mut bindings,
-    )
-}
-
-fn find_route_handler_name_in_function(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    function_name: &str,
-    method: &str,
-    route: &str,
-    visited: &mut HashSet<String>,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<String> {
-    if visited.contains(function_name) {
-        return None;
-    }
-    visited.insert(function_name.to_string());
-    let Some(function) = functions.get(function_name) else {
-        visited.remove(function_name);
-        return None;
-    };
-    let handler = find_route_handler_name_in_block(
-        functions,
-        &function.body,
-        method,
-        route,
-        visited,
-        bindings,
+        &mut visited_functions,
+        &mut registrations,
+        None,
     );
-    visited.remove(function_name);
-    handler
-}
-
-fn find_route_handler_name_in_block(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    block: &sec4_core::ast::Block,
-    method: &str,
-    route: &str,
-    visited: &mut HashSet<String>,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<String> {
-    for statement in &block.statements {
-        if let Some(handler_name) =
-            find_route_handler_name_in_stmt(functions, statement, method, route, visited, bindings)
-        {
-            return Some(handler_name);
-        }
-    }
-    if let Some(tail) = &block.tail {
-        return find_route_handler_name_in_expr(functions, tail, method, route, visited, bindings);
-    }
-    None
-}
-
-fn find_route_handler_name_in_stmt(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    statement: &sec4_core::ast::Stmt,
-    method: &str,
-    route: &str,
-    visited: &mut HashSet<String>,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<String> {
-    match &statement.kind {
-        sec4_core::ast::StmtKind::Let { name, value, .. } => {
-            if let Some(handler_name) =
-                find_route_handler_name_in_expr(functions, value, method, route, visited, bindings)
-            {
-                return Some(handler_name);
-            }
-            bindings.insert(name.clone(), value.clone());
-            None
-        }
-        sec4_core::ast::StmtKind::Return { value } => value.as_ref().and_then(|entry| {
-            find_route_handler_name_in_expr(functions, entry, method, route, visited, bindings)
-        }),
-        sec4_core::ast::StmtKind::Expr { expr } => {
-            find_route_handler_name_in_expr(functions, expr, method, route, visited, bindings)
-        }
-    }
-}
-
-fn find_route_handler_name_in_expr(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    expr: &sec4_core::ast::Expr,
-    method: &str,
-    route: &str,
-    visited: &mut HashSet<String>,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<String> {
-    match &expr.kind {
-        sec4_core::ast::ExprKind::Call { callee, args } => {
-            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
-                .unwrap_or_else(|| callee.as_ref().clone());
-            if let Some(handler_name) = match_route_registration_call(
-                functions,
-                &resolved_callee,
-                args,
-                method,
-                route,
-                bindings,
-            ) {
-                return Some(handler_name);
-            }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
-                let mut callee_bindings = collect_route_registration_call_bindings(
-                    functions,
-                    function_name,
-                    args,
-                    bindings,
-                );
-                if let Some(handler_name) = find_route_handler_name_in_function(
-                    functions,
-                    function_name,
-                    method,
-                    route,
-                    visited,
-                    &mut callee_bindings,
-                ) {
-                    return Some(handler_name);
-                }
-            }
-            if let Some(handler_name) =
-                find_route_handler_name_in_expr(functions, callee, method, route, visited, bindings)
-            {
-                return Some(handler_name);
-            }
-            for argument in args {
-                if let Some(handler_name) = find_route_handler_name_in_expr(
-                    functions, argument, method, route, visited, bindings,
-                ) {
-                    return Some(handler_name);
-                }
-            }
-            None
-        }
-        sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            find_route_handler_name_in_expr(functions, expr, method, route, visited, bindings)
-        }
-        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            find_route_handler_name_in_expr(functions, left, method, route, visited, bindings)
-                .or_else(|| {
-                    find_route_handler_name_in_expr(
-                        functions, right, method, route, visited, bindings,
-                    )
-                })
-        }
-        sec4_core::ast::ExprKind::Member { object, .. } => {
-            find_route_handler_name_in_expr(functions, object, method, route, visited, bindings)
-        }
-        sec4_core::ast::ExprKind::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            find_route_handler_name_in_expr(functions, condition, method, route, visited, bindings)
-                .or_else(|| {
-                    let mut then_bindings = bindings.clone();
-                    find_route_handler_name_in_block(
-                        functions,
-                        then_branch,
-                        method,
-                        route,
-                        visited,
-                        &mut then_bindings,
-                    )
-                })
-                .or_else(|| {
-                    else_branch.as_ref().and_then(|entry| {
-                        let mut else_bindings = bindings.clone();
-                        find_route_handler_name_in_expr(
-                            functions,
-                            entry,
-                            method,
-                            route,
-                            visited,
-                            &mut else_bindings,
-                        )
-                    })
-                })
-        }
-        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            if let Some(handler_name) = find_route_handler_name_in_expr(
-                functions, scrutinee, method, route, visited, bindings,
-            ) {
-                return Some(handler_name);
-            }
-            for arm in arms {
-                let mut arm_bindings = bindings.clone();
-                if let Some(handler_name) = find_route_handler_name_in_expr(
-                    functions,
-                    &arm.value,
-                    method,
-                    route,
-                    visited,
-                    &mut arm_bindings,
-                ) {
-                    return Some(handler_name);
-                }
-            }
-            None
-        }
-        sec4_core::ast::ExprKind::Block(block) => {
-            let mut block_bindings = bindings.clone();
-            find_route_handler_name_in_block(
-                functions,
-                block,
-                method,
-                route,
-                visited,
-                &mut block_bindings,
-            )
-        }
-        sec4_core::ast::ExprKind::Identifier(_)
-        | sec4_core::ast::ExprKind::Number(_)
-        | sec4_core::ast::ExprKind::String(_)
-        | sec4_core::ast::ExprKind::Bool(_) => None,
-    }
-}
-
-fn match_route_registration_call(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    callee: &sec4_core::ast::Expr,
-    args: &[sec4_core::ast::Expr],
-    method: &str,
-    route: &str,
-    bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<String> {
-    let registration = match_route_registration_details(functions, callee, args, bindings)?;
-    if registration.method != method || registration.path != route {
-        return None;
-    }
-    Some(registration.handler_name)
+    registrations
+        .into_iter()
+        .filter(|registration| {
+            registration.method == normalized_method && registration.path == route
+        })
+        .map(|registration| registration.handler_name)
+        .next_back()
 }
 
 fn match_route_registration_details(
