@@ -70,6 +70,8 @@ enum Commands {
         serve_timeout_ms: Option<u64>,
         #[arg(long)]
         max_runtime_steps: Option<u64>,
+        #[arg(long)]
+        max_keep_alive_requests: Option<u64>,
         #[arg(long, value_enum, default_value_t = RunBackend::C)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -409,6 +411,7 @@ fn main() {
             max_pending,
             serve_timeout_ms,
             max_runtime_steps,
+            max_keep_alive_requests,
             backend,
             tls_backend,
         } => cmd_run(
@@ -421,6 +424,7 @@ fn main() {
             max_pending,
             serve_timeout_ms,
             max_runtime_steps,
+            max_keep_alive_requests,
             backend,
             tls_backend,
         ),
@@ -6538,6 +6542,7 @@ fn cmd_run(
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
+    max_keep_alive_requests: Option<u64>,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
@@ -6565,8 +6570,16 @@ fn cmd_run(
         eprintln!("run failed: --max-runtime-steps must be >= 1");
         return Err(2);
     }
+    if max_keep_alive_requests == Some(0) {
+        eprintln!("run failed: --max-keep-alive-requests must be >= 1");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && max_runtime_steps.is_some() {
         eprintln!("run failed: --max-runtime-steps is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && max_keep_alive_requests.is_some() {
+        eprintln!("run failed: --max-keep-alive-requests is only supported with --backend lasm");
         return Err(2);
     }
 
@@ -6598,6 +6611,7 @@ fn cmd_run(
             max_pending,
             serve_timeout_ms,
             max_runtime_steps,
+            max_keep_alive_requests,
         );
     }
 
@@ -6925,6 +6939,7 @@ fn cmd_run_lasm_backend(
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
+    max_keep_alive_requests: Option<u64>,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -7020,13 +7035,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let max_requests_per_connection = match resolve_lasm_max_requests_per_connection() {
-        Ok(value) => value,
-        Err(message) => {
-            eprintln!("run failed: {message}");
-            return Err(2);
-        }
-    };
+    let max_requests_per_connection =
+        match resolve_lasm_max_requests_per_connection(max_keep_alive_requests) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let overflow_probe_timeout_ms =
         match resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms) {
             Ok(value) => value,
@@ -7711,8 +7727,19 @@ fn resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms: u64) -> Result<u
     Ok(parsed.min(effective_timeout_ms).max(1))
 }
 
-fn resolve_lasm_max_requests_per_connection() -> Result<usize, String> {
+fn resolve_lasm_max_requests_per_connection(
+    explicit_override: Option<u64>,
+) -> Result<usize, String> {
     const DEFAULT_MAX_REQUESTS: usize = 256;
+    if let Some(value) = explicit_override {
+        let parsed = usize::try_from(value).map_err(|_| {
+            "invalid --max-keep-alive-requests: exceeds platform limits".to_string()
+        })?;
+        if parsed == 0 {
+            return Err("invalid --max-keep-alive-requests: expected usize >= 1".to_string());
+        }
+        return Ok(parsed);
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS") else {
         return Ok(DEFAULT_MAX_REQUESTS);
     };

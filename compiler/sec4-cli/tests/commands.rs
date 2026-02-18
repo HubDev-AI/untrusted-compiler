@@ -14864,6 +14864,135 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_cli_keep_alive_override_takes_precedence_over_env() {
+    let project_dir = temp_dir("sec4-run-command-lasm-keep-alive-cli-override");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmkeepaliveclioverridecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+            "--max-keep-alive-requests",
+            "2",
+        ])
+        .env("SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut stream = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before keep-alive connect with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(next) => {
+                stream = Some(next);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let mut stream = match stream {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM keep-alive cli override test could not connect to server");
+        }
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("keep-alive stream read timeout should be configurable");
+
+    stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("first keep-alive request should be written");
+    let mut reader = BufReader::new(&mut stream);
+    let first_response = read_http_response(&mut reader);
+    assert!(
+        first_response.contains("HTTP/1.1 200 OK"),
+        "first response should be successful:\n{first_response}"
+    );
+    assert!(
+        first_response.contains("Connection: keep-alive"),
+        "first response should stay keep-alive when CLI override is higher:\n{first_response}"
+    );
+    assert!(
+        first_response.ends_with("\r\n\r\npong"),
+        "first response should include expected body:\n{first_response}"
+    );
+
+    reader
+        .get_mut()
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("second keep-alive request should be written");
+    let second_response = read_http_response(&mut reader);
+    assert!(
+        second_response.contains("HTTP/1.1 200 OK"),
+        "second response should be successful:\n{second_response}"
+    );
+    assert!(
+        second_response.contains("Connection: close"),
+        "second response should close after CLI max-keep-alive-requests limit is reached:\n{second_response}"
+    );
+    assert!(
+        second_response.ends_with("\r\n\r\npong"),
+        "second response should include expected body:\n{second_response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_supports_pipelined_requests_on_single_socket() {
     let project_dir = temp_dir("sec4-run-command-lasm-pipelined-requests");
     let port = find_available_tcp_port();
@@ -19571,6 +19700,42 @@ fn run_command_rejects_max_runtime_steps_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_max_keep_alive_requests_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-max-keep-alive-requests-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--max-keep-alive-requests",
+        "2",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --max-keep-alive-requests is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --max-keep-alive-requests is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only keep-alive flag guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_serve_timeout_ms_override() {
     let project_dir = temp_dir("sec4-run-command-zero-serve-timeout");
     let project_path = project_dir
@@ -19649,6 +19814,40 @@ fn run_command_rejects_zero_max_pending_override() {
     assert!(
         stderr.contains("run failed: --max-pending must be >= 1"),
         "stderr should include deterministic max-pending validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_max_keep_alive_requests_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-max-keep-alive-requests");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--max-keep-alive-requests",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --max-keep-alive-requests override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-keep-alive-requests must be >= 1"),
+        "stderr should include deterministic max-keep-alive-requests validation message:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
