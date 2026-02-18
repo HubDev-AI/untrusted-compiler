@@ -326,7 +326,7 @@ Post-alpha track acceptance anchors:
 
 - [x] Apply rewrite engine implemented with composition-root-only rewrite guard (`sec4 promote --from browser --to server` rewrites only `src/main.ut`).
 - [x] Scaffold generator + deterministic report implemented (generated `server/*` baseline files + `server/reports/promote-plan.json` apply report).
-- [ ] End-to-end promotion fixture (browser -> server) added and green.
+- [x] End-to-end promotion fixture (browser -> server) added and green (`promote_e2e_apply_generates_server_project_that_checks_and_runs`).
 - [x] Book chapter documenting S4 implementation baseline added (`docs/book/921-m39-promote-apply-composition-root-guard.md`).
 
 ### Readiness estimate (live)
