@@ -896,5 +896,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `928-m39-lasm-overload-json-error-envelope.md`
 - `929-m39-lasm-head-body-omission-parity.md`
 - `930-m39-lasm-request-line-version-hardening.md`
+- `931-m39-lasm-worker-keep-alive-support.md`
 
 As milestones progress, chapters will be added and linked from this index.

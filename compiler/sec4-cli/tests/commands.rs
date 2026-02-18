@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -93,6 +93,44 @@ fn localhost_dot_resolves() -> bool {
         .to_socket_addrs()
         .map(|mut addrs| addrs.next().is_some())
         .unwrap_or(false)
+}
+
+fn read_http_response(reader: &mut BufReader<&mut TcpStream>) -> String {
+    let mut header_lines = Vec::new();
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        let read = reader
+            .read_line(&mut line)
+            .expect("response header line should be readable");
+        if read == 0 {
+            break;
+        }
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+        let trimmed = line.trim_end_matches(['\r', '\n']).to_string();
+        if let Some((name, value)) = trimmed.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                content_length = value
+                    .trim()
+                    .parse::<usize>()
+                    .expect("content-length should parse as usize");
+            }
+        }
+        header_lines.push(trimmed);
+    }
+
+    let mut body = vec![0u8; content_length];
+    if content_length > 0 {
+        reader
+            .read_exact(&mut body)
+            .expect("response body should be readable");
+    }
+    let mut response = header_lines.join("\r\n");
+    response.push_str("\r\n\r\n");
+    response.push_str(String::from_utf8_lossy(&body).as_ref());
+    response
 }
 
 fn write_minimal_project(project_dir: &PathBuf, policy_source: &str) {
@@ -6448,6 +6486,132 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("server busy: max concurrency reached"),
         "response should include deterministic concurrency-limit body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_supports_keep_alive_for_multiple_requests() {
+    let project_dir = temp_dir("sec4-run-command-lasm-keep-alive");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmkeepalivecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut stream = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before keep-alive connect with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(next) => {
+                stream = Some(next);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let mut stream = match stream {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM keep-alive test could not connect to server");
+        }
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("keep-alive stream read timeout should be configurable");
+
+    stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("first keep-alive request should be written");
+    let mut reader = BufReader::new(&mut stream);
+    let first_response = read_http_response(&mut reader);
+    assert!(
+        first_response.contains("HTTP/1.1 200 OK"),
+        "first response should be successful:\n{first_response}"
+    );
+    assert!(
+        first_response.contains("Connection: keep-alive"),
+        "first response should keep connection open:\n{first_response}"
+    );
+    assert!(
+        first_response.ends_with("\r\n\r\npong"),
+        "first response should include expected body:\n{first_response}"
+    );
+
+    reader
+        .get_mut()
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .expect("second keep-alive request should be written");
+    let second_response = read_http_response(&mut reader);
+    assert!(
+        second_response.contains("HTTP/1.1 200 OK"),
+        "second response should be successful:\n{second_response}"
+    );
+    assert!(
+        second_response.contains("Connection: close"),
+        "second response should close the connection:\n{second_response}"
+    );
+    assert!(
+        second_response.ends_with("\r\n\r\npong"),
+        "second response should include expected body:\n{second_response}"
     );
 
     let _ = child.kill();

@@ -5761,6 +5761,7 @@ fn cmd_run_lasm_backend(
                         &mut runtime,
                         effective_max_header_bytes,
                         effective_max_body_bytes,
+                        true,
                         trace_counter_for_worker.as_ref(),
                         header_defaults_for_worker.as_ref(),
                         dynamic_state_for_worker.as_ref(),
@@ -5796,6 +5797,7 @@ fn cmd_run_lasm_backend(
                     .expect("oneshot runtime should be initialized"),
                 effective_max_header_bytes,
                 effective_max_body_bytes,
+                false,
                 trace_counter.as_ref(),
                 header_defaults.as_ref(),
                 dynamic_state.as_ref(),
@@ -5845,6 +5847,7 @@ fn cmd_run_lasm_backend(
                     header_defaults.as_ref(),
                     include_cors_defaults,
                     omit_body,
+                    true,
                 );
             }
             Err(TrySendError::Disconnected(_stream)) => {
@@ -6050,56 +6053,125 @@ fn process_lasm_connection_with_runtime(
     runtime: &mut sec4_core::LasmHttpRuntime,
     max_header_bytes: usize,
     max_body_bytes: usize,
+    allow_keep_alive: bool,
     trace_counter: &AtomicU64,
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
 ) -> Result<(), String> {
-    let trace_id = next_lasm_trace_id(trace_counter);
-    let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
-        Ok(request) => request,
-        Err(err) => {
-            let mut response = sec4_core::HttpResponse::text(err.status, err.message);
-            apply_lasm_request_origin_header(&mut response, None, header_defaults);
-            set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, true, false)?;
-            return Ok(());
+    loop {
+        let trace_id = next_lasm_trace_id(trace_counter);
+        let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
+            Ok(request) => request,
+            Err(err) => {
+                if err.status == 400 && err.message == "empty request" {
+                    return Ok(());
+                }
+                let mut response = sec4_core::HttpResponse::text(err.status, err.message);
+                apply_lasm_request_origin_header(&mut response, None, header_defaults);
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                write_lasm_http_response(stream, &response, header_defaults, true, false, true)?;
+                return Ok(());
+            }
+        };
+
+        let close_connection = !allow_keep_alive || lasm_should_close_connection(&request);
+        let omit_body = request.method.eq_ignore_ascii_case("HEAD");
+
+        match evaluate_lasm_cors_preflight_request(&request, header_defaults) {
+            LasmCorsPreflightDecision::NotPreflight => {}
+            LasmCorsPreflightDecision::Accept => {
+                let mut response = sec4_core::HttpResponse::text(204, "");
+                response.body.clear();
+                apply_lasm_request_origin_header(
+                    &mut response,
+                    Some(&request.headers),
+                    header_defaults,
+                );
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                write_lasm_http_response(
+                    stream,
+                    &response,
+                    header_defaults,
+                    true,
+                    false,
+                    close_connection,
+                )?;
+                if close_connection {
+                    return Ok(());
+                }
+                continue;
+            }
+            LasmCorsPreflightDecision::Reject { status, message } => {
+                let mut response = sec4_core::HttpResponse::text(status, message);
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                write_lasm_http_response(
+                    stream,
+                    &response,
+                    header_defaults,
+                    false,
+                    false,
+                    close_connection,
+                )?;
+                if close_connection {
+                    return Ok(());
+                }
+                continue;
+            }
         }
-    };
-    match evaluate_lasm_cors_preflight_request(&request, header_defaults) {
-        LasmCorsPreflightDecision::NotPreflight => {}
-        LasmCorsPreflightDecision::Accept => {
-            let mut response = sec4_core::HttpResponse::text(204, "");
-            response.body.clear();
+        let include_cors_defaults =
+            should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
+
+        let mut runtime_request =
+            sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
+        runtime_request.headers = request.headers.clone();
+        runtime_request.body = request.body.clone();
+        let request_id = runtime.submit(runtime_request);
+        let report = runtime.run_until_idle(65_536);
+        if !report.idle {
+            let mut response = sec4_core::HttpResponse::text(
+                500,
+                "run failed: LASM runtime remained active after step budget",
+            );
             apply_lasm_request_origin_header(
                 &mut response,
                 Some(&request.headers),
                 header_defaults,
             );
             set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, true, false)?;
-            return Ok(());
+            write_lasm_http_response(
+                stream,
+                &response,
+                header_defaults,
+                include_cors_defaults,
+                omit_body,
+                close_connection,
+            )?;
+            if close_connection {
+                return Ok(());
+            }
+            continue;
         }
-        LasmCorsPreflightDecision::Reject { status, message } => {
-            let mut response = sec4_core::HttpResponse::text(status, message);
-            set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, false, false)?;
-            return Ok(());
-        }
-    }
-    let include_cors_defaults =
-        should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
 
-    let mut runtime_request =
-        sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
-    runtime_request.headers = request.headers.clone();
-    runtime_request.body = request.body.clone();
-    let request_id = runtime.submit(runtime_request);
-    let report = runtime.run_until_idle(65_536);
-    if !report.idle {
-        let mut response = sec4_core::HttpResponse::text(
-            500,
-            "run failed: LASM runtime remained active after step budget",
-        );
+        let mut matched = None;
+        while let Some(exchange) = runtime.pop_response() {
+            if exchange.request_id == request_id {
+                matched = Some(exchange);
+                break;
+            }
+        }
+        let mut response = if let Some(exchange) = matched {
+            let mut response = exchange.response;
+            apply_lasm_dynamic_response_materialization(
+                &mut response,
+                &request,
+                &exchange.path_params,
+                dynamic_state,
+                trace_id.as_str(),
+            );
+            response
+        } else {
+            sec4_core::HttpResponse::text(500, "missing LASM response for request")
+        };
         apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
         set_lasm_trace_id(&mut response, trace_id.as_str());
         write_lasm_http_response(
@@ -6107,40 +6179,13 @@ fn process_lasm_connection_with_runtime(
             &response,
             header_defaults,
             include_cors_defaults,
-            request.method.eq_ignore_ascii_case("HEAD"),
+            omit_body,
+            close_connection,
         )?;
-        return Ok(());
-    }
-
-    let mut matched = None;
-    while let Some(exchange) = runtime.pop_response() {
-        if exchange.request_id == request_id {
-            matched = Some(exchange);
-            break;
+        if close_connection {
+            return Ok(());
         }
     }
-    let mut response = if let Some(exchange) = matched {
-        let mut response = exchange.response;
-        apply_lasm_dynamic_response_materialization(
-            &mut response,
-            &request,
-            &exchange.path_params,
-            dynamic_state,
-            trace_id.as_str(),
-        );
-        response
-    } else {
-        sec4_core::HttpResponse::text(500, "missing LASM response for request")
-    };
-    apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
-    set_lasm_trace_id(&mut response, trace_id.as_str());
-    write_lasm_http_response(
-        stream,
-        &response,
-        header_defaults,
-        include_cors_defaults,
-        request.method.eq_ignore_ascii_case("HEAD"),
-    )
 }
 
 fn apply_lasm_dynamic_response_materialization(
@@ -6666,6 +6711,18 @@ fn find_lasm_header_value<'a>(
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
 }
 
+fn lasm_should_close_connection(request: &LasmRunRequest) -> bool {
+    if let Some(connection) = find_lasm_header_value(&request.headers, "Connection") {
+        if connection.eq_ignore_ascii_case("close") {
+            return true;
+        }
+        if connection.eq_ignore_ascii_case("keep-alive") {
+            return false;
+        }
+    }
+    request.http_version.eq_ignore_ascii_case("HTTP/1.0")
+}
+
 fn resolve_lasm_allow_origin(
     request_headers: Option<&BTreeMap<String, String>>,
     header_defaults: &LasmResponseHeaderDefaults,
@@ -6753,6 +6810,7 @@ fn read_lasm_request_head(
 #[derive(Debug, Clone)]
 struct LasmRunRequest {
     method: String,
+    http_version: String,
     path: String,
     headers: BTreeMap<String, String>,
     body: Vec<u8>,
@@ -6914,6 +6972,7 @@ fn read_lasm_http_request(
 
     Ok(LasmRunRequest {
         method: method.to_ascii_uppercase(),
+        http_version: http_version.to_string(),
         path: path.to_string(),
         headers,
         body,
@@ -6926,6 +6985,7 @@ fn write_lasm_http_response(
     header_defaults: &LasmResponseHeaderDefaults,
     include_cors_defaults: bool,
     omit_body: bool,
+    close_connection: bool,
 ) -> Result<(), String> {
     let mut headers = response.headers.clone();
     if !include_cors_defaults {
@@ -6940,9 +7000,14 @@ fn write_lasm_http_response(
     headers
         .entry("Content-Length".to_string())
         .or_insert_with(|| response.body.len().to_string());
-    headers
-        .entry("Connection".to_string())
-        .or_insert_with(|| "close".to_string());
+    headers.insert(
+        "Connection".to_string(),
+        if close_connection {
+            "close".to_string()
+        } else {
+            "keep-alive".to_string()
+        },
+    );
     headers
         .entry("Content-Type".to_string())
         .or_insert_with(|| "text/plain; charset=utf-8".to_string());
