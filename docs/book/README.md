@@ -926,5 +926,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `958-m39-lasm-dynamic-header-name-grammar-parity.md`
 - `959-m39-lasm-dynamic-response-header-non-empty-value-parity.md`
 - `960-m39-lasm-request-header-case-insensitive-merge.md`
+- `961-m39-req-cookie-intrinsic-and-lasm-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.

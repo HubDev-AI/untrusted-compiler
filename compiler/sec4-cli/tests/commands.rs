@@ -7403,6 +7403,13 @@ fn queryRoute() effects { net } -> Int {
   0
 }
 
+fn cookieRoute() effects { net } -> Int {
+  let session = validate.nonEmpty(req.cookie("session"));
+  res.setHeader(headers.name("X-Session-Echo"), headers.value(session));
+  res.text(200, "cookie={{req.cookie:session}}");
+  0
+}
+
 fn composeRoute() effects { net } -> Int {
   let echo_name = headers.name(validate.nonEmpty(req.query("header_name")));
   let trace_value = validate.headerValue(req.query("trace"));
@@ -7417,6 +7424,7 @@ fn main() effects { net } -> Int {
   http.get(router, "/users/:id", userRoute);
   http.get(router, "/request-id", headerRoute);
   http.get(router, "/query", queryRoute);
+  http.get(router, "/cookie", cookieRoute);
   http.get(router, "/compose/:id", composeRoute);
   http.serve(8080, router);
   0
@@ -7537,6 +7545,34 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut cookie_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /cookie HTTP/1.1\r\nHost: localhost\r\nCookie: mode=active; session=sess-42\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/cookie request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/cookie response should be readable");
+                cookie_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let cookie_response = match cookie_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /cookie request");
+        }
+    };
+
     let mut compose_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -7648,6 +7684,18 @@ fn main() effects { net } -> Int {
     assert!(
         query_response.contains("\r\n\r\nq+7 ok"),
         "/query response should materialize request query value in body:\n{query_response}"
+    );
+    assert!(
+        cookie_response.contains("HTTP/1.1 200 OK"),
+        "/cookie response should contain 200 status line:\n{cookie_response}"
+    );
+    assert!(
+        cookie_response.contains("X-Session-Echo: sess-42"),
+        "/cookie response should materialize request cookie in response header:\n{cookie_response}"
+    );
+    assert!(
+        cookie_response.contains("\r\n\r\ncookie=sess-42"),
+        "/cookie response should materialize request cookie in response body:\n{cookie_response}"
     );
     assert!(
         compose_response.contains("HTTP/1.1 200 OK"),
