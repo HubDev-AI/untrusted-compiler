@@ -592,15 +592,29 @@ fn cmd_lasm_smoke(
     let mut ok_count = 0usize;
     let mut error_count = 0usize;
     let mut status_counts: BTreeMap<u16, usize> = BTreeMap::new();
+    let mut min_duration_ms: Option<u64> = None;
+    let mut max_duration_ms: Option<u64> = None;
+    let mut total_duration_ms: u128 = 0;
     let mut first_request_id = None;
     let mut first_response_id = None;
     let mut first_status = None;
+    let mut first_duration_ms = None;
     let mut first_path_params = None;
     let mut first_headers = None;
     let mut first_body = None;
     while let Some(exchange) = runtime.pop_response() {
+        let duration_ms = exchange.duration_ms();
         response_count += 1;
         *status_counts.entry(exchange.response.status).or_insert(0) += 1;
+        min_duration_ms = Some(match min_duration_ms {
+            Some(current) => current.min(duration_ms),
+            None => duration_ms,
+        });
+        max_duration_ms = Some(match max_duration_ms {
+            Some(current) => current.max(duration_ms),
+            None => duration_ms,
+        });
+        total_duration_ms = total_duration_ms.saturating_add(duration_ms as u128);
         if exchange.response.status < 400 {
             ok_count += 1;
         } else {
@@ -610,6 +624,7 @@ fn cmd_lasm_smoke(
             first_request_id = Some(exchange.request_id);
             first_response_id = Some(exchange.request_id);
             first_status = Some(exchange.response.status);
+            first_duration_ms = Some(duration_ms);
             first_path_params = Some(exchange.path_params.clone());
             first_headers = Some(exchange.response.headers.clone());
             first_body = Some(String::from_utf8_lossy(&exchange.response.body).to_string());
@@ -633,6 +648,14 @@ fn cmd_lasm_smoke(
         );
         return Err(1);
     }
+
+    let min_duration_ms = min_duration_ms.unwrap_or(0);
+    let max_duration_ms = max_duration_ms.unwrap_or(0);
+    let avg_duration_ms = if response_count == 0 {
+        0
+    } else {
+        (total_duration_ms / response_count as u128) as u64
+    };
 
     let first_path_params = first_path_params.unwrap_or_default();
     let first_path_params_text = if first_path_params.is_empty() {
@@ -663,7 +686,7 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} steps={} nowMs={} status={} pathParams={} headerCount={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
@@ -675,9 +698,13 @@ fn cmd_lasm_smoke(
                 ok_count,
                 error_count,
                 status_counts_text,
+                min_duration_ms,
+                max_duration_ms,
+                avg_duration_ms,
                 report.steps,
                 report.now_ms,
                 first_status.unwrap_or(0),
+                first_duration_ms.unwrap_or(0),
                 first_path_params_text,
                 first_headers.len(),
                 first_body
@@ -701,9 +728,15 @@ fn cmd_lasm_smoke(
                     .iter()
                     .map(|(status, count)| (status.to_string(), *count))
                     .collect::<BTreeMap<String, usize>>(),
+                "durationMs": {
+                    "min": min_duration_ms,
+                    "max": max_duration_ms,
+                    "avg": avg_duration_ms
+                },
                 "steps": report.steps,
                 "nowMs": report.now_ms,
                 "status": first_status.unwrap_or(0),
+                "firstDurationMs": first_duration_ms.unwrap_or(0),
                 "pathParams": first_path_params,
                 "headers": first_headers,
                 "body": first_body,
