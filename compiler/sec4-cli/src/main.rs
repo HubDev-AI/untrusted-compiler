@@ -878,6 +878,12 @@ struct LasmAuthRequirement {
     required_role: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct LasmRouteMiddlewareRequirements {
+    require_auth: bool,
+    require_csrf: bool,
+}
+
 #[derive(Debug, Default)]
 struct LasmDynamicResponseState {
     users_by_id: HashMap<String, serde_json::Value>,
@@ -885,6 +891,7 @@ struct LasmDynamicResponseState {
 
 const LASM_INTERNAL_AUTH_REQUIRE_HEADER: &str = "X-Sec4-Internal-Auth-Require";
 const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Require-Role";
+const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
@@ -908,6 +915,7 @@ fn collect_lasm_route_plans(
         &mut visited_functions,
         &mut registrations,
     );
+    let middleware_requirements = extract_route_middleware_requirements(&functions, entry_name);
 
     let mut plans = Vec::new();
     let mut seen_routes = HashSet::new();
@@ -924,7 +932,7 @@ fn collect_lasm_route_plans(
         let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
         let auth_requirement =
             extract_auth_requirement(&functions, registration.handler_name.as_str());
-        if auth_requirement.require_auth {
+        if middleware_requirements.require_auth || auth_requirement.require_auth {
             headers.insert(
                 LASM_INTERNAL_AUTH_REQUIRE_HEADER.to_string(),
                 "1".to_string(),
@@ -934,6 +942,12 @@ fn collect_lasm_route_plans(
             headers.insert(
                 LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER.to_string(),
                 required_role,
+            );
+        }
+        if middleware_requirements.require_csrf {
+            headers.insert(
+                LASM_INTERNAL_CSRF_REQUIRE_HEADER.to_string(),
+                "1".to_string(),
             );
         }
         if let Some(content_type) = response_plan.default_content_type {
@@ -1628,6 +1642,288 @@ fn extract_auth_requirement(
     let mut visited = HashSet::new();
     extract_auth_requirement_in_function(functions, function_name, &mut visited, &mut requirement);
     requirement
+}
+
+fn extract_route_middleware_requirements(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    entry_name: &str,
+) -> LasmRouteMiddlewareRequirements {
+    let mut requirements = LasmRouteMiddlewareRequirements::default();
+    let mut visited = HashSet::new();
+    extract_route_middleware_requirements_in_function(
+        functions,
+        entry_name,
+        &mut visited,
+        &mut requirements,
+    );
+    requirements
+}
+
+fn extract_route_middleware_requirements_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    requirements: &mut LasmRouteMiddlewareRequirements,
+) {
+    if !visited.insert(function_name.to_string()) {
+        return;
+    }
+    let Some(function) = functions.get(function_name) else {
+        return;
+    };
+    let mut bindings = HashMap::new();
+    extract_route_middleware_requirements_in_block(
+        functions,
+        &function.body,
+        visited,
+        requirements,
+        &mut bindings,
+    );
+}
+
+fn extract_route_middleware_requirements_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    requirements: &mut LasmRouteMiddlewareRequirements,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    for statement in &block.statements {
+        extract_route_middleware_requirements_in_stmt(
+            functions,
+            statement,
+            visited,
+            requirements,
+            bindings,
+        );
+    }
+    if let Some(tail) = &block.tail {
+        extract_route_middleware_requirements_in_expr(
+            functions,
+            tail,
+            visited,
+            requirements,
+            bindings,
+        );
+    }
+}
+
+fn extract_route_middleware_requirements_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    requirements: &mut LasmRouteMiddlewareRequirements,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                value,
+                visited,
+                requirements,
+                bindings,
+            );
+            bindings.insert(name.clone(), value.clone());
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                extract_route_middleware_requirements_in_expr(
+                    functions,
+                    value,
+                    visited,
+                    requirements,
+                    bindings,
+                );
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                expr,
+                visited,
+                requirements,
+                bindings,
+            );
+        }
+    }
+}
+
+fn extract_route_middleware_requirements_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    requirements: &mut LasmRouteMiddlewareRequirements,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if match_auth_middleware_call(callee, bindings) {
+                requirements.require_auth = true;
+            }
+            if match_csrf_middleware_call(callee, bindings) {
+                requirements.require_csrf = true;
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                extract_route_middleware_requirements_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    requirements,
+                );
+            }
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                callee,
+                visited,
+                requirements,
+                bindings,
+            );
+            for argument in args {
+                extract_route_middleware_requirements_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    requirements,
+                    bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                expr,
+                visited,
+                requirements,
+                bindings,
+            )
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                left,
+                visited,
+                requirements,
+                bindings,
+            );
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                right,
+                visited,
+                requirements,
+                bindings,
+            );
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                object,
+                visited,
+                requirements,
+                bindings,
+            )
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                condition,
+                visited,
+                requirements,
+                bindings,
+            );
+            let mut then_bindings = bindings.clone();
+            extract_route_middleware_requirements_in_block(
+                functions,
+                then_branch,
+                visited,
+                requirements,
+                &mut then_bindings,
+            );
+            if let Some(else_branch) = else_branch {
+                let mut else_bindings = bindings.clone();
+                extract_route_middleware_requirements_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    requirements,
+                    &mut else_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            extract_route_middleware_requirements_in_expr(
+                functions,
+                scrutinee,
+                visited,
+                requirements,
+                bindings,
+            );
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                extract_route_middleware_requirements_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    requirements,
+                    &mut arm_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            extract_route_middleware_requirements_in_block(
+                functions,
+                block,
+                visited,
+                requirements,
+                &mut block_bindings,
+            );
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
+}
+
+fn match_auth_middleware_call(
+    callee: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> bool {
+    let resolved = resolve_route_registration_expr(callee, bindings, 0);
+    match resolved.as_ref().map(|expr| &expr.kind) {
+        Some(sec4_core::ast::ExprKind::Identifier(name)) => name == "withAuth",
+        Some(sec4_core::ast::ExprKind::Member { object, field }) => {
+            if let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind {
+                namespace == "auth" && field == "withAuth"
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
+}
+
+fn match_csrf_middleware_call(
+    callee: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> bool {
+    let resolved = resolve_route_registration_expr(callee, bindings, 0);
+    match resolved.as_ref().map(|expr| &expr.kind) {
+        Some(sec4_core::ast::ExprKind::Identifier(name)) => name == "withCsrf",
+        Some(sec4_core::ast::ExprKind::Member { object, field }) => {
+            if let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind {
+                namespace == "csrf" && field == "withCsrf"
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
 }
 
 fn extract_auth_requirement_in_function(
@@ -6403,6 +6699,23 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
     } else {
         "session".to_string()
     };
+    let csrf_enabled = policy.csrf.enabled && !policy.csrf.mode.trim().eq_ignore_ascii_case("off");
+    let csrf_cookie_name = if !policy.csrf.cookie_name.trim().is_empty()
+        && is_lasm_response_header_name_valid(policy.csrf.cookie_name.trim())
+    {
+        policy.csrf.cookie_name.trim().to_string()
+    } else {
+        "csrf".to_string()
+    };
+    let csrf_header_name = if !policy.csrf.header_name.trim().is_empty()
+        && is_lasm_response_header_name_valid(policy.csrf.header_name.trim())
+    {
+        policy.csrf.header_name.trim().to_string()
+    } else {
+        "X-CSRF-Token".to_string()
+    };
+    let csrf_protected_methods =
+        normalize_lasm_csrf_protected_methods(policy.csrf.protected_methods.as_slice());
     let mut cors_allow_any_origin = false;
     let mut cors_allowed_origins = Vec::new();
     let mut cors_allow_any_method = false;
@@ -6548,6 +6861,10 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
         cors_default_origin,
         auth_mode,
         auth_cookie_name,
+        csrf_enabled,
+        csrf_cookie_name,
+        csrf_header_name,
+        csrf_protected_methods,
         headers,
     }
 }
@@ -6733,6 +7050,11 @@ fn apply_lasm_dynamic_response_materialization(
         header_defaults,
         trace_id,
     ) {
+        clear_lasm_internal_response_markers(response);
+        return;
+    }
+    if apply_lasm_csrf_requirement_enforcement(response, request, header_defaults, trace_id) {
+        clear_lasm_internal_response_markers(response);
         return;
     }
 
@@ -6975,6 +7297,52 @@ fn apply_lasm_auth_requirement_enforcement(
     false
 }
 
+fn apply_lasm_csrf_requirement_enforcement(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    header_defaults: &LasmResponseHeaderDefaults,
+    trace_id: &str,
+) -> bool {
+    let requires_csrf = response
+        .headers
+        .remove(LASM_INTERNAL_CSRF_REQUIRE_HEADER)
+        .is_some();
+    if !requires_csrf || !header_defaults.csrf_enabled {
+        return false;
+    }
+    if !lasm_is_csrf_protected_method(
+        request.method.as_str(),
+        header_defaults.csrf_protected_methods.as_slice(),
+    ) {
+        return false;
+    }
+
+    let csrf_header =
+        find_lasm_header_value(&request.headers, header_defaults.csrf_header_name.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+    let csrf_cookie =
+        find_lasm_cookie_value(&request.headers, header_defaults.csrf_cookie_name.as_str())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+    if csrf_header.is_none() || csrf_cookie.is_none() || csrf_header != csrf_cookie.as_deref() {
+        set_lasm_json_response(
+            response,
+            403,
+            &lasm_error_envelope(
+                "AUTH.CSRF_TOKEN_INVALID",
+                "auth",
+                "CSRF token missing or invalid",
+                403,
+                trace_id,
+            ),
+        );
+        return true;
+    }
+
+    false
+}
+
 fn normalize_lasm_auth_mode(mode: &str) -> &str {
     let mode = mode.trim();
     if mode.eq_ignore_ascii_case("off") {
@@ -6995,6 +7363,38 @@ fn lasm_auth_mode_allows_token(mode: &str) -> bool {
 
 fn lasm_auth_mode_allows_cookie(mode: &str) -> bool {
     mode.eq_ignore_ascii_case("cookie") || mode.eq_ignore_ascii_case("mixed")
+}
+
+fn normalize_lasm_csrf_protected_methods(methods: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in methods {
+        let method = value.trim().to_ascii_uppercase();
+        if method.is_empty() {
+            continue;
+        }
+        if !normalized.contains(&method) {
+            normalized.push(method);
+        }
+    }
+    if normalized
+        .iter()
+        .any(|method| matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE"))
+    {
+        normalized
+    } else {
+        vec![
+            "POST".to_string(),
+            "PUT".to_string(),
+            "PATCH".to_string(),
+            "DELETE".to_string(),
+        ]
+    }
+}
+
+fn lasm_is_csrf_protected_method(method: &str, protected_methods: &[String]) -> bool {
+    protected_methods
+        .iter()
+        .any(|entry| entry.eq_ignore_ascii_case(method))
 }
 
 fn lasm_auth_unauthorized_message(mode: &str) -> &'static str {
@@ -7141,6 +7541,14 @@ fn apply_lasm_header_placeholder_materialization(
         materialized_headers.insert(materialized_name, materialized_value);
     }
     response.headers = materialized_headers;
+}
+
+fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) {
+    response.headers.remove(LASM_INTERNAL_AUTH_REQUIRE_HEADER);
+    response
+        .headers
+        .remove(LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER);
+    response.headers.remove(LASM_INTERNAL_CSRF_REQUIRE_HEADER);
 }
 
 fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
@@ -7741,6 +8149,10 @@ struct LasmResponseHeaderDefaults {
     cors_default_origin: Option<String>,
     auth_mode: String,
     auth_cookie_name: String,
+    csrf_enabled: bool,
+    csrf_cookie_name: String,
+    csrf_header_name: String,
+    csrf_protected_methods: Vec<String>,
     headers: BTreeMap<String, String>,
 }
 

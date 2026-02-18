@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Re-ran two post-format cargo command tests in parallel and hit build-directory lock contention again. | Keep all cargo validations strictly sequential in this repo, including quick post-format rechecks. |
 | 2026-02-18 | self | Triggered a `web.run` call while in a local-only LASM implementation pass. | Keep LASM/compiler implementation turns strictly on local shell/apply_patch tooling; use web tools only for explicit external research. |
 | 2026-02-18 | self | Kicked off two Cargo validations in parallel (`multi_tool_use.parallel`) and immediately hit package/build lock contention noise again. | Keep Cargo runs strictly sequential in this repo; reserve parallel tool calls for read/search or non-Cargo commands. |
 | 2026-02-18 | self | Tried adding a command-level `auth.requireRole` integration using `auth.requireRole(1, role)` and hit semantic constraint `E4001` (`Ctx` required), causing a red test iteration. | Before adding command integration for auth helpers, confirm handler-call signature constraints (`Ctx` availability in route handlers) and prefer runtime harness coverage when handler ABI cannot supply required types. |

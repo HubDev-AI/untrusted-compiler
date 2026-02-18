@@ -939,5 +939,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `971-m39-c-runtime-string-handle-literal-abi-bridge-for-auth-csp-sql-helpers.md`
 - `972-m39-ctx-current-intrinsic-runtime-bridge.md`
 - `973-m39-lasm-auth-helper-enforcement-with-ctx-current.md`
+- `974-m39-lasm-auth-csrf-middleware-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
