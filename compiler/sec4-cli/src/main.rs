@@ -7109,8 +7109,7 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
         if let Err(err) = stream.set_nodelay(true) {
-            eprintln!("run failed: LASM backend could not enable TCP_NODELAY: {err}");
-            return Err(2);
+            eprintln!("warning: LASM backend could not enable TCP_NODELAY: {err}");
         }
 
         if oneshot {
