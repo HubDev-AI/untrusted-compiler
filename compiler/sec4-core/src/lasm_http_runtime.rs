@@ -66,6 +66,7 @@ struct PatternRoute {
 #[derive(Debug, Clone)]
 struct PendingRequest {
     request_id: u64,
+    request_started_at_ms: u64,
     actions: Vec<RuntimeAction>,
     path_params: BTreeMap<String, String>,
     response: HttpResponse,
@@ -171,6 +172,8 @@ impl LasmHttpRuntime {
             return Err("invalid max request duration: must be >= 1ms".to_string());
         }
         self.max_request_duration_ms = Some(limit_ms);
+        self.cancel_timed_out_tasks();
+        self.drain_pending_requests();
         Ok(())
     }
 
@@ -282,8 +285,15 @@ impl LasmHttpRuntime {
     }
 
     fn enqueue_or_start_request(&mut self, request_id: u64, route: ResolvedRoutePlan) {
+        let request_started_at_ms = self.scheduler.now_ms();
         if self.can_start_request_now() {
-            self.start_request_task(request_id, route.actions, route.path_params, route.response);
+            self.start_request_task(
+                request_id,
+                request_started_at_ms,
+                route.actions,
+                route.path_params,
+                route.response,
+            );
             return;
         }
 
@@ -298,6 +308,7 @@ impl LasmHttpRuntime {
 
         self.pending_requests.push_back(PendingRequest {
             request_id,
+            request_started_at_ms,
             actions: route.actions,
             path_params: route.path_params,
             response: route.response,
@@ -307,13 +318,15 @@ impl LasmHttpRuntime {
     fn start_request_task(
         &mut self,
         request_id: u64,
+        request_started_at_ms: u64,
         actions: Vec<RuntimeAction>,
         path_params: BTreeMap<String, String>,
         response: HttpResponse,
     ) {
         let task_id = self.scheduler.spawn_scripted(actions);
         self.task_to_request.insert(task_id, request_id);
-        self.task_started_at_ms.insert(task_id, self.scheduler.now_ms());
+        self.task_started_at_ms
+            .insert(task_id, request_started_at_ms);
         self.task_to_path_params.insert(task_id, path_params);
         self.task_to_response.insert(task_id, response);
     }
@@ -323,8 +336,17 @@ impl LasmHttpRuntime {
             let Some(pending) = self.pending_requests.pop_front() else {
                 break;
             };
+            if self.is_request_timed_out(pending.request_started_at_ms) {
+                self.ready_responses.push_back(HttpExchange {
+                    request_id: pending.request_id,
+                    path_params: pending.path_params,
+                    response: self.timeout_response(),
+                });
+                continue;
+            }
             self.start_request_task(
                 pending.request_id,
+                pending.request_started_at_ms,
                 pending.actions,
                 pending.path_params,
                 pending.response,
@@ -1023,5 +1045,52 @@ mod tests {
             runtime.pop_response().is_none(),
             "cancelled task should not later emit an additional completion response"
         );
+    }
+
+    #[test]
+    fn pending_request_timeout_is_evaluated_from_submit_time() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .set_max_in_flight(1)
+            .expect("in-flight limit should be accepted");
+        runtime
+            .set_max_request_duration_ms(10)
+            .expect("max request duration should be accepted");
+        runtime
+            .register_route(
+                "GET",
+                "/slow",
+                vec![RuntimeAction::SleepMs(20), RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let first_request = runtime.submit(HttpRequest::new("GET", "/slow"));
+        let second_request = runtime.submit(HttpRequest::new("GET", "/slow"));
+        assert_eq!(
+            runtime.pending_request_count(),
+            1,
+            "second request should be queued while first request is in flight"
+        );
+
+        let report = runtime.run_until_idle(16);
+        assert!(report.idle, "runtime should drain after timeout responses");
+        assert_eq!(
+            report.now_ms, 20,
+            "queued request should timeout from original submit time and avoid extra task execution"
+        );
+
+        let first_exchange = runtime
+            .pop_response()
+            .expect("first request response should be available");
+        let second_exchange = runtime
+            .pop_response()
+            .expect("second request response should be available");
+        assert_eq!(first_exchange.request_id, first_request);
+        assert_eq!(second_exchange.request_id, second_request);
+        assert_eq!(first_exchange.response.status, 504);
+        assert_eq!(second_exchange.response.status, 504);
+        assert_eq!(first_exchange.response.body, b"handler timed out after 10ms");
+        assert_eq!(second_exchange.response.body, b"handler timed out after 10ms");
     }
 }

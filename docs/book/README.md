@@ -883,5 +883,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `915-m39-lasm-runtime-task-cancellation-baseline.md`
 - `916-m39-lasm-http-runtime-request-timeout-enforcement.md`
 - `917-m39-lasm-smoke-runtime-script-and-timeout-flag.md`
+- `918-m39-lasm-http-runtime-timeout-from-submit-time.md`
 
 As milestones progress, chapters will be added and linked from this index.
