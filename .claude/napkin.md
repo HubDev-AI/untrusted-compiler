@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Repeated the same Cargo multi-filter mistake again during LASM validation (`cargo test ... <filter1> <filter2>`). | Use one filter per `cargo test` invocation and avoid batching filter names in a single command; script explicit sequential runs. |
 | 2026-02-18 | self | Repeated the same Cargo filter misuse while validating LASM slices by passing two test filters to one `cargo test` command. | Keep LASM test validation commands one-filter-per-invocation and run multi-filter checks as explicit sequential commands only. |
 | 2026-02-18 | self | While adding LASM route alias resolution, identifier resolution required bindings for every identifier and broke direct handler references (`http.get(router, \"/x\", health)`), causing route discovery to return empty and `run --backend lasm` to exit early. | In alias resolvers, keep unbound identifiers as valid literals (fallback to the original identifier) and only recurse when a binding exists. |
 | 2026-02-18 | self | Triggered a web search tool call during a local-only LASM implementation loop while gathering code context. | Keep LASM/compiler slices strictly on local shell/apply_patch tooling; use web tooling only when external research is explicitly required. |

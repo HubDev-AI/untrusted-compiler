@@ -5763,6 +5763,7 @@ fn process_lasm_connection_with_runtime(
         }
     };
 
+    let request_method = request.method.clone();
     let mut runtime_request = sec4_core::HttpRequest::new(request.method, request.path);
     runtime_request.headers = request.headers;
     runtime_request.body = request.body;
@@ -5786,8 +5787,11 @@ fn process_lasm_connection_with_runtime(
             break;
         }
     }
-    let response = matched
+    let mut response = matched
         .unwrap_or_else(|| sec4_core::HttpResponse::text(500, "missing LASM response for request"));
+    if request_method.eq_ignore_ascii_case("HEAD") {
+        response.body.clear();
+    }
     write_lasm_http_response(stream, &response)
 }
 
