@@ -1286,6 +1286,54 @@ fn lasm_smoke_command_supports_bound_route_and_handler_aliases() {
 }
 
 #[test]
+fn lasm_smoke_command_revisits_helper_route_registration_with_distinct_bindings() {
+    let root = temp_dir("sec4-lasm-smoke-helper-revisit-bindings");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should exist");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-helper-revisit-bindings\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"helper route\");\n  0\n}\n\nfn register_route(router: Router, path: String) effects { net } -> Int {\n  http.get(router, path, health);\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  register_route(router, \"/first\");\n  register_route(router, \"/second\");\n  0\n}\n",
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/second",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "lasm-smoke command should succeed for repeated helper registration bindings"
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("origin=handler:health"),
+        "lasm-smoke output should resolve helper handler origin after revisiting helper:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=helper route"),
+        "lasm-smoke output should include helper route body from second registration:\n{stdout}"
+    );
+}
+
+#[test]
 fn lasm_smoke_command_extracts_res_ok_status_and_body() {
     let root = temp_dir("sec4-lasm-smoke-res-ok");
     let project_dir = root.join("project");
@@ -4369,6 +4417,142 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_resolves_alias_route_registration_helper_call() {
+    let project_dir = temp_dir("sec4-run-command-lasm-alias-route-helper");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmaliasroutehelpercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn register_routes(router: Router) effects { net } -> Int {
+  http.get(router, "/health", health);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let register = register_routes;
+  register(router);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM alias route helper test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM alias route helper process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM alias route helper process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_enforces_auth_require_role_with_ctx_current() {
     let project_dir = temp_dir("sec4-run-command-lasm-ctx-current-auth-require-role");
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
@@ -4824,6 +5008,396 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_resolves_alias_response_helper_call() {
+    let project_dir = temp_dir("sec4-run-command-lasm-alias-response-helper");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmaliasresponsehelpercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn emit(status: Int, body: String) effects { net } -> Int {
+  res.text(status, body);
+  0
+}
+
+fn secure() effects { net } -> Int {
+  let send = emit;
+  send(201, "alias-body");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", secure);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            project_dir
+                .to_str()
+                .expect("project path should be valid utf-8"),
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            &port.to_string(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+    let mut child = output;
+
+    let mut response = None;
+    for _ in 0..600 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM alias response helper test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM alias response helper process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM alias response helper process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "response should contain aliased helper status:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nalias-body"),
+        "response should contain aliased helper body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_lasm_backend_materializes_alias_req_query_in_res_text() {
+    let project_dir = temp_dir("sec4-run-command-lasm-alias-req-query-res-text");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmaliasreqqueryrestextcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn secure() effects { net } -> Int {
+  let query = req.query;
+  let nonEmpty = validate.nonEmpty;
+  let name = nonEmpty(query("name"));
+  res.text(200, name);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/secure", secure);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            project_dir
+                .to_str()
+                .expect("project path should be valid utf-8"),
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            &port.to_string(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+    let mut child = output;
+
+    let mut response = None;
+    for _ in 0..600 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /secure?name=alice HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM alias req.query res.text test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM alias req.query res.text process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM alias req.query res.text process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nalice"),
+        "response should contain materialized aliased req.query body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_lasm_backend_resolves_alias_response_set_header_call() {
+    let project_dir = temp_dir("sec4-run-command-lasm-alias-response-set-header");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmaliasresponsesetheadercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn secure() effects { net } -> Int {
+  let set = res.setHeader;
+  set(headers.name("X-Alias"), headers.value("ok"));
+  res.text(200, "secure");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/secure", secure);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            project_dir
+                .to_str()
+                .expect("project path should be valid utf-8"),
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            &port.to_string(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+    let mut child = output;
+
+    let mut response = None;
+    for _ in 0..600 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /secure HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM alias response setHeader test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM alias response setHeader process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM alias response setHeader process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain expected status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Alias: ok"),
+        "response should contain aliased setHeader materialization:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nsecure"),
+        "response should contain expected body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_enforces_auth_with_auth_middleware() {
     let project_dir = temp_dir("sec4-run-command-lasm-auth-middleware");
     let port = find_available_tcp_port();
@@ -4942,6 +5516,144 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("HTTP/1.1 401 Unauthorized"),
         "response should contain 401 status line when auth middleware rejects request:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"AUTH.UNAUTHORIZED\"")
+            && response.contains("\"message\":\"Authorization header missing or invalid\""),
+        "response should include deterministic auth middleware error envelope:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_lasm_backend_enforces_auth_middleware_from_alias_helper_callee() {
+    let project_dir = temp_dir("sec4-run-command-lasm-auth-middleware-alias-helper");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmauthmiddlewarealiashelpercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn apply_auth(router: Router, cfg: AuthConfig) effects { net } -> Router {
+  auth.withAuth(router, cfg)
+}
+
+fn secure() effects { net } -> Int {
+  res.text(200, "secure");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let authCfg = auth.fromPolicy();
+  let wrap = apply_auth;
+  let router = wrap(router, authCfg);
+  http.get(router, "/secure", secure);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /secure HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM auth middleware alias-helper test could not connect to server"
+            );
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM auth middleware alias-helper process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM auth middleware alias-helper process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 401 Unauthorized"),
+        "response should contain 401 status line when helper-wrapped auth middleware rejects request:\n{response}"
     );
     assert!(
         response.contains("\"code\":\"AUTH.UNAUTHORIZED\"")
