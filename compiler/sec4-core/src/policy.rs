@@ -105,6 +105,7 @@ pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
     pub max_concurrency: i64,
     pub max_pending: i64,
+    pub overflow_probe_timeout_ms: i64,
     pub max_keep_alive_requests: i64,
     pub max_runtime_steps: i64,
     pub max_header_bytes: i64,
@@ -271,6 +272,7 @@ impl Default for Policy {
                 max_body_bytes: 4_096,
                 max_concurrency: 256,
                 max_pending: 256,
+                overflow_probe_timeout_ms: 50,
                 max_keep_alive_requests: 256,
                 max_runtime_steps: 65_536,
                 max_header_bytes: 8_191,
@@ -453,6 +455,8 @@ struct HttpSection {
     max_concurrency: Option<i64>,
     #[serde(default)]
     max_pending: Option<i64>,
+    #[serde(default)]
+    overflow_probe_timeout_ms: Option<i64>,
     #[serde(default)]
     max_keep_alive_requests: Option<i64>,
     #[serde(default)]
@@ -897,6 +901,21 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_pending = max_pending;
+            }
+        }
+
+        if let Some(overflow_probe_timeout_ms) = section.overflow_probe_timeout_ms {
+            if overflow_probe_timeout_ms < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.overflow_probe_timeout_ms",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.overflow_probe_timeout_ms must be >= 1"),
+                );
+            } else {
+                policy.http.overflow_probe_timeout_ms = overflow_probe_timeout_ms;
             }
         }
 
