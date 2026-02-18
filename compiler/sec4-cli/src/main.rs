@@ -7047,14 +7047,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_header_bytes = max_header_bytes.unwrap_or(policy_max_header_bytes);
-    let effective_max_header_bytes = match usize::try_from(effective_max_header_bytes) {
-        Ok(value) => value,
-        Err(_) => {
-            eprintln!("run failed: effective max header bytes exceeds platform limits");
-            return Err(2);
-        }
-    };
+    let effective_max_header_bytes =
+        match resolve_lasm_max_header_bytes(max_header_bytes, policy_max_header_bytes) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let policy_max_body_bytes = match u64::try_from(policy.http.max_body_bytes) {
         Ok(value) => value,
         Err(_) => {
@@ -7062,14 +7062,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_body_bytes = max_body_bytes.unwrap_or(policy_max_body_bytes);
-    let effective_max_body_bytes = match usize::try_from(effective_max_body_bytes) {
-        Ok(value) => value,
-        Err(_) => {
-            eprintln!("run failed: effective max body bytes exceeds platform limits");
-            return Err(2);
-        }
-    };
+    let effective_max_body_bytes =
+        match resolve_lasm_max_body_bytes(max_body_bytes, policy_max_body_bytes) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let policy_max_runtime_steps = match u64::try_from(policy.http.max_runtime_steps) {
         Ok(value) => value,
         Err(_) => {
@@ -7833,6 +7833,72 @@ fn resolve_lasm_max_pending(
         .map_err(|_| "invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string())?;
     if parsed == 0 {
         return Err("invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
+}
+
+fn resolve_lasm_max_header_bytes(
+    explicit_override: Option<u64>,
+    policy_default: u64,
+) -> Result<usize, String> {
+    if let Some(value) = explicit_override {
+        let parsed = usize::try_from(value)
+            .map_err(|_| "invalid --max-header-bytes: exceeds platform limits".to_string())?;
+        if parsed == 0 {
+            return Err("invalid --max-header-bytes: expected usize >= 1".to_string());
+        }
+        return Ok(parsed);
+    }
+    let policy_default = usize::try_from(policy_default)
+        .map_err(|_| "policy http.max_header_bytes exceeds platform limits".to_string())?;
+    if policy_default == 0 {
+        return Err("policy http.max_header_bytes must be >= 1".to_string());
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_HEADER_BYTES") else {
+        return Ok(policy_default);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(policy_default);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_MAX_HEADER_BYTES: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_MAX_HEADER_BYTES: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
+}
+
+fn resolve_lasm_max_body_bytes(
+    explicit_override: Option<u64>,
+    policy_default: u64,
+) -> Result<usize, String> {
+    if let Some(value) = explicit_override {
+        let parsed = usize::try_from(value)
+            .map_err(|_| "invalid --max-body-bytes: exceeds platform limits".to_string())?;
+        if parsed == 0 {
+            return Err("invalid --max-body-bytes: expected usize >= 1".to_string());
+        }
+        return Ok(parsed);
+    }
+    let policy_default = usize::try_from(policy_default)
+        .map_err(|_| "policy http.max_body_bytes exceeds platform limits".to_string())?;
+    if policy_default == 0 {
+        return Err("policy http.max_body_bytes must be >= 1".to_string());
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_BODY_BYTES") else {
+        return Ok(policy_default);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(policy_default);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_MAX_BODY_BYTES: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_MAX_BODY_BYTES: expected usize >= 1".to_string());
     }
     Ok(parsed)
 }

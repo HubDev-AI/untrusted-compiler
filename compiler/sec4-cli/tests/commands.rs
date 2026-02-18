@@ -20497,6 +20497,140 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_rejects_zero_lasm_max_header_bytes_env_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-lasm-max-header-bytes-env");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmmaxheaderbytesenvcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+        ])
+        .env("SEC4_RT_LASM_MAX_HEADER_BYTES", "0")
+        .output()
+        .expect("sec4 CLI should run");
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero SEC4_RT_LASM_MAX_HEADER_BYTES override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-env status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: invalid SEC4_RT_LASM_MAX_HEADER_BYTES: expected usize >= 1"),
+        "stderr should include deterministic env max-header-bytes validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_lasm_max_body_bytes_env_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-lasm-max-body-bytes-env");
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmmaxbodybytesenvcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+        ])
+        .env("SEC4_RT_LASM_MAX_BODY_BYTES", "0")
+        .output()
+        .expect("sec4 CLI should run");
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero SEC4_RT_LASM_MAX_BODY_BYTES override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-env status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: invalid SEC4_RT_LASM_MAX_BODY_BYTES: expected usize >= 1"),
+        "stderr should include deterministic env max-body-bytes validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_max_concurrency_override() {
     let project_dir = temp_dir("sec4-run-command-zero-max-concurrency");
     let project_path = project_dir
