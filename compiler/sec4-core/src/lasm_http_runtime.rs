@@ -77,7 +77,10 @@ pub struct LasmHttpRuntime {
     exact_routes: HashMap<(String, String), RoutePlan>,
     pattern_routes: Vec<PatternRoute>,
     max_in_flight: Option<usize>,
+    max_pending: Option<usize>,
+    max_request_duration_ms: Option<u64>,
     task_to_request: HashMap<TaskId, u64>,
+    task_started_at_ms: HashMap<TaskId, u64>,
     task_to_path_params: HashMap<TaskId, BTreeMap<String, String>>,
     task_to_response: HashMap<TaskId, HttpResponse>,
     pending_requests: VecDeque<PendingRequest>,
@@ -98,7 +101,10 @@ impl LasmHttpRuntime {
             exact_routes: HashMap::new(),
             pattern_routes: Vec::new(),
             max_in_flight: None,
+            max_pending: None,
+            max_request_duration_ms: None,
             task_to_request: HashMap::new(),
+            task_started_at_ms: HashMap::new(),
             task_to_path_params: HashMap::new(),
             task_to_response: HashMap::new(),
             pending_requests: VecDeque::new(),
@@ -148,6 +154,30 @@ impl LasmHttpRuntime {
         self.drain_pending_requests();
     }
 
+    pub fn set_max_pending(&mut self, limit: usize) -> Result<(), String> {
+        if limit == 0 {
+            return Err("invalid max pending limit: must be >= 1".to_string());
+        }
+        self.max_pending = Some(limit);
+        Ok(())
+    }
+
+    pub fn clear_max_pending(&mut self) {
+        self.max_pending = None;
+    }
+
+    pub fn set_max_request_duration_ms(&mut self, limit_ms: u64) -> Result<(), String> {
+        if limit_ms == 0 {
+            return Err("invalid max request duration: must be >= 1ms".to_string());
+        }
+        self.max_request_duration_ms = Some(limit_ms);
+        Ok(())
+    }
+
+    pub fn clear_max_request_duration_ms(&mut self) {
+        self.max_request_duration_ms = None;
+    }
+
     pub fn in_flight_request_count(&self) -> usize {
         self.task_to_request.len()
     }
@@ -188,13 +218,20 @@ impl LasmHttpRuntime {
                 let Some(request_id) = self.task_to_request.remove(&completed.task_id) else {
                     continue;
                 };
+                let started_at_ms = self
+                    .task_started_at_ms
+                    .remove(&completed.task_id)
+                    .unwrap_or_else(|| self.scheduler.now_ms());
 
                 let path_params = self
                     .task_to_path_params
                     .remove(&completed.task_id)
                     .unwrap_or_default();
 
-                let response = if completed.code == 0 {
+                let response = if self.is_request_timed_out(started_at_ms) {
+                    self.task_to_response.remove(&completed.task_id);
+                    self.timeout_response()
+                } else if completed.code == 0 {
                     self.task_to_response
                         .remove(&completed.task_id)
                         .unwrap_or_else(|| HttpResponse::text(500, "missing response plan"))
@@ -213,6 +250,7 @@ impl LasmHttpRuntime {
                 });
             }
 
+            self.cancel_timed_out_tasks();
             self.drain_pending_requests();
             if self.pending_requests.is_empty() && !self.scheduler.has_live_tasks() {
                 break;
@@ -249,6 +287,15 @@ impl LasmHttpRuntime {
             return;
         }
 
+        if self.max_pending_reached() {
+            self.ready_responses.push_back(HttpExchange {
+                request_id,
+                path_params: route.path_params,
+                response: HttpResponse::text(503, "runtime queue full"),
+            });
+            return;
+        }
+
         self.pending_requests.push_back(PendingRequest {
             request_id,
             actions: route.actions,
@@ -266,6 +313,7 @@ impl LasmHttpRuntime {
     ) {
         let task_id = self.scheduler.spawn_scripted(actions);
         self.task_to_request.insert(task_id, request_id);
+        self.task_started_at_ms.insert(task_id, self.scheduler.now_ms());
         self.task_to_path_params.insert(task_id, path_params);
         self.task_to_response.insert(task_id, response);
     }
@@ -281,6 +329,56 @@ impl LasmHttpRuntime {
                 pending.path_params,
                 pending.response,
             );
+        }
+    }
+
+    fn max_pending_reached(&self) -> bool {
+        self.max_pending
+            .map(|limit| self.pending_requests.len() >= limit)
+            .unwrap_or(false)
+    }
+
+    fn is_request_timed_out(&self, started_at_ms: u64) -> bool {
+        self.max_request_duration_ms
+            .map(|limit| self.scheduler.now_ms().saturating_sub(started_at_ms) >= limit)
+            .unwrap_or(false)
+    }
+
+    fn timeout_response(&self) -> HttpResponse {
+        let limit_ms = self.max_request_duration_ms.unwrap_or(0);
+        HttpResponse::text(504, format!("handler timed out after {limit_ms}ms"))
+    }
+
+    fn cancel_timed_out_tasks(&mut self) {
+        if self.max_request_duration_ms.is_none() {
+            return;
+        }
+        let now_ms = self.scheduler.now_ms();
+        let mut timed_out = Vec::new();
+        for (task_id, started_at_ms) in &self.task_started_at_ms {
+            if self
+                .max_request_duration_ms
+                .is_some_and(|limit| now_ms.saturating_sub(*started_at_ms) >= limit)
+            {
+                timed_out.push(*task_id);
+            }
+        }
+
+        for task_id in timed_out {
+            let cancelled = self.scheduler.cancel_task(task_id);
+            let Some(request_id) = self.task_to_request.remove(&task_id) else {
+                continue;
+            };
+            self.task_started_at_ms.remove(&task_id);
+            let path_params = self.task_to_path_params.remove(&task_id).unwrap_or_default();
+            self.task_to_response.remove(&task_id);
+            if cancelled {
+                self.ready_responses.push_back(HttpExchange {
+                    request_id,
+                    path_params,
+                    response: self.timeout_response(),
+                });
+            }
         }
     }
 
@@ -765,6 +863,165 @@ mod tests {
         assert_eq!(
             second_exchange.request_id, second_request,
             "second queued request should complete deterministically after first"
+        );
+    }
+
+    #[test]
+    fn set_max_pending_rejects_zero() {
+        let mut runtime = LasmHttpRuntime::default();
+        let error = runtime
+            .set_max_pending(0)
+            .expect_err("zero max pending limit should be rejected");
+        assert!(
+            error.contains("must be >= 1"),
+            "error should include deterministic non-zero guidance: {error}"
+        );
+    }
+
+    #[test]
+    fn queue_overflow_returns_deterministic_503_response() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .set_max_in_flight(1)
+            .expect("in-flight limit should be accepted");
+        runtime
+            .set_max_pending(1)
+            .expect("pending queue limit should be accepted");
+        runtime
+            .register_route(
+                "GET",
+                "/users/:id",
+                vec![RuntimeAction::Yield, RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let first_request = runtime.submit(HttpRequest::new("GET", "/users/1"));
+        let second_request = runtime.submit(HttpRequest::new("GET", "/users/2"));
+        let third_request = runtime.submit(HttpRequest::new("GET", "/users/3"));
+        assert_eq!(
+            runtime.pending_request_count(),
+            1,
+            "one request should be queued up to configured pending limit"
+        );
+
+        let overflow_exchange = runtime
+            .pop_response()
+            .expect("overflow response should be emitted immediately");
+        assert_eq!(
+            overflow_exchange.request_id, third_request,
+            "overflow response should map to the rejected request id"
+        );
+        assert_eq!(
+            overflow_exchange.response.status, 503,
+            "overflow should emit deterministic queue-full 503"
+        );
+        assert_eq!(
+            overflow_exchange.response.body,
+            b"runtime queue full",
+            "overflow response should include deterministic queue-full body"
+        );
+        assert_eq!(
+            overflow_exchange.path_params.get("id").map(String::as_str),
+            Some("3"),
+            "overflow response should preserve resolved path params for observability"
+        );
+
+        let report = runtime.run_until_idle(4);
+        assert!(
+            report.idle,
+            "runtime should still drain in-flight + pending requests after overflow"
+        );
+
+        let first_exchange = runtime
+            .pop_response()
+            .expect("first accepted request should complete");
+        let second_exchange = runtime
+            .pop_response()
+            .expect("second accepted request should complete");
+        assert_eq!(first_exchange.request_id, first_request);
+        assert_eq!(second_exchange.request_id, second_request);
+        assert_eq!(first_exchange.response.status, 200);
+        assert_eq!(second_exchange.response.status, 200);
+    }
+
+    #[test]
+    fn set_max_request_duration_rejects_zero() {
+        let mut runtime = LasmHttpRuntime::default();
+        let error = runtime
+            .set_max_request_duration_ms(0)
+            .expect_err("zero max request duration should be rejected");
+        assert!(
+            error.contains("must be >= 1ms"),
+            "error should include deterministic non-zero millisecond guidance: {error}"
+        );
+    }
+
+    #[test]
+    fn completed_request_exceeding_timeout_maps_to_504() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .set_max_request_duration_ms(10)
+            .expect("max request duration should be accepted");
+        runtime
+            .register_route(
+                "GET",
+                "/slow",
+                vec![RuntimeAction::SleepMs(25), RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let request_id = runtime.submit(HttpRequest::new("GET", "/slow"));
+        let report = runtime.run_until_idle(8);
+        assert!(report.idle, "runtime should become idle after timeout mapping");
+
+        let exchange = runtime
+            .pop_response()
+            .expect("timeout-mapped response should be emitted");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 504);
+        assert_eq!(exchange.response.body, b"handler timed out after 10ms");
+    }
+
+    #[test]
+    fn live_request_exceeding_timeout_is_cancelled_and_emits_504() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .set_max_request_duration_ms(10)
+            .expect("max request duration should be accepted");
+        runtime
+            .register_route(
+                "GET",
+                "/slow",
+                vec![
+                    RuntimeAction::SleepMs(25),
+                    RuntimeAction::Yield,
+                    RuntimeAction::Complete(0),
+                ],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let request_id = runtime.submit(HttpRequest::new("GET", "/slow"));
+        let report = runtime.run_until_idle(2);
+        assert!(
+            report.idle,
+            "runtime should cancel timed-out in-flight task and become idle"
+        );
+
+        let exchange = runtime
+            .pop_response()
+            .expect("timed-out cancelled request should emit response");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 504);
+        assert_eq!(exchange.response.body, b"handler timed out after 10ms");
+
+        let follow_up = runtime.run_until_idle(4);
+        assert!(follow_up.idle, "runtime should remain idle after cancellation");
+        assert!(
+            runtime.pop_response().is_none(),
+            "cancelled task should not later emit an additional completion response"
         );
     }
 }

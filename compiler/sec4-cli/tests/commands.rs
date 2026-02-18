@@ -1135,6 +1135,411 @@ fn lasm_smoke_command_reports_effective_max_in_flight_in_text_summary() {
 }
 
 #[test]
+fn lasm_smoke_command_rejects_zero_max_pending() {
+    let root = temp_dir("sec4-lasm-smoke-zero-max-pending");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-zero-max-pending\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--max-pending",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail for zero max pending limit"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "invalid max pending should return deterministic usage-style exit code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("invalid max pending limit: must be >= 1"),
+        "lasm-smoke failure should mention deterministic max pending guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_zero_max_request_ms() {
+    let root = temp_dir("sec4-lasm-smoke-zero-max-request-ms");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-zero-max-request-ms\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--max-request-ms",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail for zero max request duration"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "invalid max request duration should return deterministic usage-style exit code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("invalid max request duration: must be >= 1ms"),
+        "lasm-smoke failure should mention deterministic max request duration guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_rejects_invalid_runtime_script_segments() {
+    let root = temp_dir("sec4-lasm-smoke-invalid-runtime-script");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-invalid-runtime-script\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--runtime-script",
+        "yield,unknown:1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail for invalid runtime-script segments"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "invalid runtime-script should return deterministic usage-style exit code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("invalid --runtime-script segment `unknown:1`"),
+        "lasm-smoke failure should identify invalid runtime-script segment:\n{stderr}"
+    );
+
+    let empty_script_output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--runtime-script",
+        " ,  , ",
+    ]);
+    assert!(
+        !empty_script_output.status.success(),
+        "lasm-smoke should fail when runtime-script yields no actions"
+    );
+    assert_eq!(
+        empty_script_output.status.code(),
+        Some(2),
+        "empty runtime-script should return deterministic usage-style exit code"
+    );
+    let empty_stderr = String::from_utf8(empty_script_output.stderr).expect("stderr should be utf-8");
+    assert!(
+        empty_stderr.contains("invalid --runtime-script: expected at least one action segment"),
+        "lasm-smoke failure should mention empty runtime-script guidance:\n{empty_stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_reports_queue_overflow_with_max_pending_limit() {
+    let root = temp_dir("sec4-lasm-smoke-max-pending-overflow");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-max-pending-overflow\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--max-in-flight",
+        "1",
+        "--max-pending",
+        "1",
+        "--requests",
+        "3",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        output.status.success(),
+        "lasm-smoke command should still succeed with overflow responses counted"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed.get("maxInFlight").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "json summary should include effective max in-flight limit"
+    );
+    assert_eq!(
+        parsed.get("maxPending").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "json summary should include effective max pending limit"
+    );
+    assert_eq!(
+        parsed.get("okCount").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "overflow scenario should keep two accepted responses successful"
+    );
+    assert_eq!(
+        parsed.get("errorCount").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "overflow scenario should include one deterministic error response"
+    );
+    assert_eq!(
+        parsed
+            .get("statusCounts")
+            .and_then(|counts| counts.get("200"))
+            .and_then(serde_json::Value::as_u64),
+        Some(2),
+        "statusCounts should include successful response count"
+    );
+    assert_eq!(
+        parsed
+            .get("statusCounts")
+            .and_then(|counts| counts.get("503"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "statusCounts should include overflow response count"
+    );
+    assert_eq!(
+        parsed.get("status").and_then(serde_json::Value::as_u64),
+        Some(503),
+        "first emitted response should be deterministic queue-full overflow"
+    );
+    assert_eq!(
+        parsed.get("body").and_then(serde_json::Value::as_str),
+        Some("runtime queue full"),
+        "overflow response body should be deterministic"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_reports_timeout_status_with_max_request_ms() {
+    let root = temp_dir("sec4-lasm-smoke-max-request-timeout");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-max-request-timeout\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--runtime-script",
+        "sleep:25,complete:0",
+        "--max-request-ms",
+        "10",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        output.status.success(),
+        "lasm-smoke should succeed and report timeout response when fail-on-errors is disabled"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed.get("maxRequestMs").and_then(serde_json::Value::as_u64),
+        Some(10),
+        "json summary should include effective max request duration"
+    );
+    assert_eq!(
+        parsed.get("okCount").and_then(serde_json::Value::as_u64),
+        Some(0),
+        "timeout scenario should emit no successful responses"
+    );
+    assert_eq!(
+        parsed.get("errorCount").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "timeout scenario should emit one deterministic error response"
+    );
+    assert_eq!(
+        parsed
+            .get("statusCounts")
+            .and_then(|counts| counts.get("504"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "statusCounts should include timeout status count"
+    );
+    assert_eq!(
+        parsed.get("status").and_then(serde_json::Value::as_u64),
+        Some(504),
+        "first emitted response should be deterministic timeout status"
+    );
+    assert_eq!(
+        parsed.get("body").and_then(serde_json::Value::as_str),
+        Some("handler timed out after 10ms"),
+        "timeout response body should include deterministic limit details"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_fail_on_errors_turns_overflow_into_failure() {
+    let root = temp_dir("sec4-lasm-smoke-fail-on-errors");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-fail-on-errors\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--max-in-flight",
+        "1",
+        "--max-pending",
+        "1",
+        "--requests",
+        "3",
+        "--max-steps",
+        "64",
+        "--fail-on-errors",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail when --fail-on-errors is enabled and overflow emits 503"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "fail-on-errors should produce deterministic runtime failure code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("error responses observed with --fail-on-errors")
+            && stderr.contains("statusCounts=200:2,503:1"),
+        "fail-on-errors should report deterministic error summary with status distribution:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_fails_when_internal_net_is_disabled_by_policy() {
     let root = temp_dir("sec4-check-internal-net-disabled");
     let project_dir = root.join("policy-disabled-project");

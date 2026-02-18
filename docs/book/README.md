@@ -879,5 +879,9 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `911-m39-test-command-module-graph-entrypoint-filtering.md`
 - `912-m39-lasm-http-runtime-max-in-flight-queue.md`
 - `913-m39-lasm-smoke-max-in-flight-flag.md`
+- `914-m39-lasm-http-runtime-max-pending-backpressure.md`
+- `915-m39-lasm-runtime-task-cancellation-baseline.md`
+- `916-m39-lasm-http-runtime-request-timeout-enforcement.md`
+- `917-m39-lasm-smoke-runtime-script-and-timeout-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.

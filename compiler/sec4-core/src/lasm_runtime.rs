@@ -88,6 +88,18 @@ impl LasmAsyncRuntime {
         !self.tasks.is_empty()
     }
 
+    pub fn live_task_count(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub fn cancel_task(&mut self, task_id: TaskId) -> bool {
+        if self.tasks.remove(&task_id).is_none() {
+            return false;
+        }
+        self.ready.retain(|entry| *entry != task_id);
+        true
+    }
+
     pub fn run_until_idle(&mut self, max_steps: usize) -> RunReport {
         let mut steps = 0usize;
 
@@ -169,7 +181,7 @@ impl LasmAsyncRuntime {
 
 #[cfg(test)]
 mod tests {
-    use super::{LasmAsyncRuntime, RuntimeAction};
+    use super::{LasmAsyncRuntime, RuntimeAction, TaskId};
 
     #[test]
     fn runtime_runs_tasks_until_idle_and_collects_exit_codes() {
@@ -214,5 +226,30 @@ mod tests {
         assert!(!report.idle, "runtime should not be idle when budget is exhausted");
         assert!(runtime.has_live_tasks(), "task should still be live after partial run");
         assert!(runtime.completed().is_empty(), "task should not complete within limited steps");
+    }
+
+    #[test]
+    fn cancel_task_removes_live_task_without_completion() {
+        let mut runtime = LasmAsyncRuntime::with_start_time(0);
+        let task = runtime.spawn_scripted(vec![
+            RuntimeAction::SleepMs(25),
+            RuntimeAction::Complete(7),
+        ]);
+        assert_eq!(runtime.live_task_count(), 1, "task should be live before cancel");
+
+        let cancelled = runtime.cancel_task(task);
+        assert!(cancelled, "existing task cancellation should return true");
+        assert_eq!(runtime.live_task_count(), 0, "cancelled task should be removed");
+
+        let report = runtime.run_until_idle(8);
+        assert!(report.idle, "runtime should remain idle after cancelled task");
+        assert!(
+            runtime.completed().is_empty(),
+            "cancelled task should not produce completion record"
+        );
+        assert!(
+            !runtime.cancel_task(TaskId(999)),
+            "cancelling unknown task should return false"
+        );
     }
 }
