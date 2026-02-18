@@ -948,7 +948,14 @@ fn collect_route_registrations_in_function(
     let Some(function) = functions.get(function_name) else {
         return;
     };
-    collect_route_registrations_in_block(functions, &function.body, visited, registrations);
+    let mut local_bindings = HashMap::new();
+    collect_route_registrations_in_block(
+        functions,
+        &function.body,
+        visited,
+        registrations,
+        &mut local_bindings,
+    );
 }
 
 fn collect_route_registrations_in_block(
@@ -956,12 +963,13 @@ fn collect_route_registrations_in_block(
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
     registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     for statement in &block.statements {
-        collect_route_registrations_in_stmt(functions, statement, visited, registrations);
+        collect_route_registrations_in_stmt(functions, statement, visited, registrations, bindings);
     }
     if let Some(tail) = &block.tail {
-        collect_route_registrations_in_expr(functions, tail, visited, registrations);
+        collect_route_registrations_in_expr(functions, tail, visited, registrations, bindings);
     }
 }
 
@@ -970,18 +978,26 @@ fn collect_route_registrations_in_stmt(
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
     registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     match &statement.kind {
-        sec4_core::ast::StmtKind::Let { value, .. } => {
-            collect_route_registrations_in_expr(functions, value, visited, registrations)
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            collect_route_registrations_in_expr(functions, value, visited, registrations, bindings);
+            bindings.insert(name.clone(), value.clone());
         }
         sec4_core::ast::StmtKind::Return { value } => {
             if let Some(value) = value {
-                collect_route_registrations_in_expr(functions, value, visited, registrations);
+                collect_route_registrations_in_expr(
+                    functions,
+                    value,
+                    visited,
+                    registrations,
+                    bindings,
+                );
             }
         }
         sec4_core::ast::StmtKind::Expr { expr } => {
-            collect_route_registrations_in_expr(functions, expr, visited, registrations)
+            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings)
         }
     }
 }
@@ -991,10 +1007,11 @@ fn collect_route_registrations_in_expr(
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
     registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(registration) = match_route_registration_details(callee, args) {
+            if let Some(registration) = match_route_registration_details(callee, args, bindings) {
                 registrations.push(registration);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
@@ -1005,40 +1022,92 @@ fn collect_route_registrations_in_expr(
                     registrations,
                 );
             }
-            collect_route_registrations_in_expr(functions, callee, visited, registrations);
+            collect_route_registrations_in_expr(
+                functions,
+                callee,
+                visited,
+                registrations,
+                bindings,
+            );
             for argument in args {
-                collect_route_registrations_in_expr(functions, argument, visited, registrations);
+                collect_route_registrations_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    registrations,
+                    bindings,
+                );
             }
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            collect_route_registrations_in_expr(functions, expr, visited, registrations)
+            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            collect_route_registrations_in_expr(functions, left, visited, registrations);
-            collect_route_registrations_in_expr(functions, right, visited, registrations);
+            collect_route_registrations_in_expr(functions, left, visited, registrations, bindings);
+            collect_route_registrations_in_expr(functions, right, visited, registrations, bindings);
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
-            collect_route_registrations_in_expr(functions, object, visited, registrations)
+            collect_route_registrations_in_expr(functions, object, visited, registrations, bindings)
         }
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            collect_route_registrations_in_expr(functions, condition, visited, registrations);
-            collect_route_registrations_in_block(functions, then_branch, visited, registrations);
+            collect_route_registrations_in_expr(
+                functions,
+                condition,
+                visited,
+                registrations,
+                bindings,
+            );
+            let mut then_bindings = bindings.clone();
+            collect_route_registrations_in_block(
+                functions,
+                then_branch,
+                visited,
+                registrations,
+                &mut then_bindings,
+            );
             if let Some(else_branch) = else_branch {
-                collect_route_registrations_in_expr(functions, else_branch, visited, registrations);
+                let mut else_bindings = bindings.clone();
+                collect_route_registrations_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    registrations,
+                    &mut else_bindings,
+                );
             }
         }
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            collect_route_registrations_in_expr(functions, scrutinee, visited, registrations);
+            collect_route_registrations_in_expr(
+                functions,
+                scrutinee,
+                visited,
+                registrations,
+                bindings,
+            );
             for arm in arms {
-                collect_route_registrations_in_expr(functions, &arm.value, visited, registrations);
+                let mut arm_bindings = bindings.clone();
+                collect_route_registrations_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    registrations,
+                    &mut arm_bindings,
+                );
             }
         }
         sec4_core::ast::ExprKind::Block(block) => {
-            collect_route_registrations_in_block(functions, block, visited, registrations)
+            let mut block_bindings = bindings.clone();
+            collect_route_registrations_in_block(
+                functions,
+                block,
+                visited,
+                registrations,
+                &mut block_bindings,
+            )
         }
         sec4_core::ast::ExprKind::Identifier(_)
         | sec4_core::ast::ExprKind::Number(_)
@@ -1210,7 +1279,7 @@ fn match_route_registration_call(
     method: &str,
     route: &str,
 ) -> Option<String> {
-    let registration = match_route_registration_details(callee, args)?;
+    let registration = match_route_registration_details(callee, args, &HashMap::new())?;
     if registration.method != method || registration.path != route {
         return None;
     }
@@ -1220,6 +1289,7 @@ fn match_route_registration_call(
 fn match_route_registration_details(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmRouteRegistration> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
@@ -1248,17 +1318,55 @@ fn match_route_registration_details(
         return None;
     };
 
-    let sec4_core::ast::ExprKind::String(route_path) = &args[route_arg_index].kind else {
-        return None;
-    };
-    let sec4_core::ast::ExprKind::Identifier(handler_name) = &args[handler_arg_index].kind else {
-        return None;
-    };
+    let route_path = extract_route_path_literal(&args[route_arg_index], bindings)?;
+    let handler_name = extract_handler_identifier(&args[handler_arg_index], bindings)?;
     Some(LasmRouteRegistration {
         method: route_method.to_string(),
-        path: route_path.clone(),
-        handler_name: handler_name.clone(),
+        path: route_path,
+        handler_name,
     })
+}
+
+fn extract_route_path_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_route_registration_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::String(path) = &resolved.kind else {
+        return None;
+    };
+    Some(path.clone())
+}
+
+fn extract_handler_identifier(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_route_registration_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::Identifier(name) = &resolved.kind else {
+        return None;
+    };
+    Some(name.clone())
+}
+
+fn resolve_route_registration_expr(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<sec4_core::ast::Expr> {
+    if depth > 32 {
+        return None;
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(bound) = bindings.get(name) {
+                resolve_route_registration_expr(bound, bindings, depth + 1)
+            } else {
+                Some(expr.clone())
+            }
+        }
+        _ => Some(expr.clone()),
+    }
 }
 
 fn extract_response_plan(
@@ -1616,6 +1724,9 @@ fn extract_response_headers_in_expr(
             if let Some((name, value)) = match_res_set_header_call(callee, args, bindings) {
                 headers.insert(name, value);
             }
+            if let Some(cookie) = match_res_add_cookie_call(callee, args, bindings) {
+                headers.insert("Set-Cookie".to_string(), cookie);
+            }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
                 extract_response_headers_in_function(functions, function_name, visited, headers);
             }
@@ -1711,12 +1822,69 @@ fn match_res_set_header_call(
     Some((name, value))
 }
 
+fn match_res_add_cookie_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    if args.is_empty() {
+        return None;
+    }
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "res" || field != "addCookie" {
+        return None;
+    }
+    extract_cookie_literal(&args[0], bindings)
+}
+
 fn extract_header_binding_literal(
     expr: &sec4_core::ast::Expr,
     bindings: &HashMap<String, String>,
 ) -> Option<String> {
     extract_header_gate_literal(expr, "name", bindings)
         .or_else(|| extract_header_gate_literal(expr, "value", bindings))
+        .or_else(|| extract_cookie_literal(expr, bindings))
+}
+
+fn extract_cookie_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+                return None;
+            };
+            let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+                return None;
+            };
+            if namespace != "cookie" || field != "build" || args.len() < 2 {
+                return None;
+            }
+            let name = extract_string_literal_or_binding(&args[0], bindings)?;
+            let value = extract_string_literal_or_binding(&args[1], bindings)?;
+            Some(format!("{name}={value}"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_string_literal_or_binding(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        _ => None,
+    }
 }
 
 fn extract_header_gate_literal(

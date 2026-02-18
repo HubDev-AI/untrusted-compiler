@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | While adding LASM route alias resolution, identifier resolution required bindings for every identifier and broke direct handler references (`http.get(router, \"/x\", health)`), causing route discovery to return empty and `run --backend lasm` to exit early. | In alias resolvers, keep unbound identifiers as valid literals (fallback to the original identifier) and only recurse when a binding exists. |
 | 2026-02-18 | self | Triggered a web search tool call during a local-only LASM implementation loop while gathering code context. | Keep LASM/compiler slices strictly on local shell/apply_patch tooling; use web tooling only when external research is explicitly required. |
 | 2026-02-18 | self | After moving LASM run to a bounded worker pool, I kept the old saturation test assumption (`2nd` connection should get `503`); with queue capacity present, overload shifted to the `3rd` connection. | When concurrency architecture changes (direct reject -> queued workers), update overload tests to reflect worker+queue capacity, not old immediate-reject behavior. |
 | 2026-02-18 | self | Repeated Cargo CLI misuse by passing multiple bare test filters in one `cargo test` invocation during LASM validation. | Keep one test filter per `cargo test` command (or run the whole target) and script sequential invocations explicitly. |
