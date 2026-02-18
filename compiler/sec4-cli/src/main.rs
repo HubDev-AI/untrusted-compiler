@@ -9622,7 +9622,7 @@ fn read_lasm_http_request_head(
         if consumed > max_header_bytes {
             return Err(make_error(
                 431,
-                "request headers exceed configured limit ({max_header_bytes} bytes)".to_string(),
+                format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
             ));
         }
         if header_line == "\r\n" || header_line == "\n" {

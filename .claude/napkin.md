@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | LASM header-limit response in header-line parse path used a literal string (`{max_header_bytes}`) instead of `format!`, so clients saw unresolved placeholder text. | For deterministic diagnostics carrying runtime limits, assert exact numeric text in tests and use `format!(...)` for every limit-bound message branch. |
 | 2026-02-18 | self | After `gh pr merge`, the CLI repeatedly dropped context back to stale local `dev`, and I almost continued coding on the wrong branch. | After every merge command, immediately verify `git branch --show-current` + `git log -n 1`, then re-anchor on `origin/dev` via a fresh `codex/*` branch before any edits. |
 | 2026-02-18 | self | While patching a LASM chunk-trailer test by broad pattern, I accidentally modified an unrelated `run_command_oneshot_serves_request_and_exits` fixture and caused a misleading failure. | Scope test edits by anchoring on the exact test-function name block before patching (function-level context, not generic snippet matches). |
 | 2026-02-18 | self | Repeated a bad validation habit by launching multiple Cargo test commands in parallel during LASM checks, which again caused build-lock waiting noise. | Keep Cargo execution strictly sequential in this repo and use parallel tool calls only for read/search commands. |
