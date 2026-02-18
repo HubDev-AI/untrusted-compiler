@@ -6990,6 +6990,15 @@ fn read_lasm_http_request(
         headers.insert(name.to_string(), value.to_string());
     }
 
+    if http_version.eq_ignore_ascii_case("HTTP/1.1") {
+        let has_host = headers
+            .iter()
+            .any(|(name, value)| name.eq_ignore_ascii_case("host") && !value.trim().is_empty());
+        if !has_host {
+            return Err(make_error(400, "missing host header".to_string()));
+        }
+    }
+
     if content_length > max_body_bytes {
         return Err(make_error(
             413,

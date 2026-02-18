@@ -899,5 +899,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `931-m39-lasm-worker-keep-alive-support.md`
 - `932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`
 - `933-m39-lasm-conflicting-content-length-rejection.md`
+- `934-m39-lasm-http11-host-header-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
