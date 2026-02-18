@@ -2000,6 +2000,50 @@ fn lasm_smoke_command_materializes_request_header_when_request_header_flag_is_se
 }
 
 #[test]
+fn lasm_smoke_command_rejects_request_header_content_length_body_mismatch() {
+    let root = temp_dir("sec4-lasm-smoke-request-header-content-length-mismatch");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-request-header-content-length-mismatch\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--request-body",
+        "abc",
+        "--request-header",
+        "Content-Length: 1",
+    ]);
+    assert!(
+        !output.status.success(),
+        "lasm-smoke should fail when request-header content-length mismatches request body bytes"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("content-length does not match request body bytes (3)"),
+        "lasm-smoke mismatch failure should mention deterministic content-length mismatch details:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_zero_step_budget() {
     let root = temp_dir("sec4-lasm-smoke-zero-budget");
     let project_dir = root.join("project");
