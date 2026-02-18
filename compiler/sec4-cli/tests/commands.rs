@@ -7237,6 +7237,153 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_materializes_req_placeholders_in_res_text() {
+    let project_dir = temp_dir("sec4-run-command-lasm-req-placeholders");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmreqplaceholdercommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn userRoute() effects { net } -> Int {
+  let id = validate.nonEmpty(req.pathParam("id"));
+  res.text(200, id);
+  0
+}
+
+fn headerRoute() effects { net } -> Int {
+  let request_id = validate.nonEmpty(req.header("X-Request-Id"));
+  res.text(200, request_id);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/users/:id", userRoute);
+  http.get(router, "/request-id", headerRoute);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut user_response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before /users request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /users/42 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/users request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/users response should be readable");
+                user_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let user_response = match user_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /users request");
+        }
+    };
+
+    let mut header_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /request-id HTTP/1.1\r\nHost: localhost\r\nX-Request-Id: req-42\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/request-id request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/request-id response should be readable");
+                header_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let header_response = match header_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /request-id request");
+        }
+    };
+
+    assert!(
+        user_response.contains("HTTP/1.1 200 OK"),
+        "/users response should contain 200 status line:\n{user_response}"
+    );
+    assert!(
+        user_response.contains("\r\n\r\n42"),
+        "/users response should materialize path param in body:\n{user_response}"
+    );
+    assert!(
+        header_response.contains("HTTP/1.1 200 OK"),
+        "/request-id response should contain 200 status line:\n{header_response}"
+    );
+    assert!(
+        header_response.contains("\r\n\r\nreq-42"),
+        "/request-id response should materialize request header in body:\n{header_response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_emits_set_cookie_from_add_cookie() {
     let project_dir = temp_dir("sec4-run-command-lasm-set-cookie");
     let port = find_available_tcp_port();

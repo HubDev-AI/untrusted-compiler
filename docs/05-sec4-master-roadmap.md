@@ -314,6 +314,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM parser failure responses now suppress default CORS headers, keeping malformed-request failure paths deterministic and non-permissive while preserving trace + structured error envelope metadata (`docs/book/943-m39-lasm-parser-error-cors-suppression.md`).
 - [x] LASM overload-path request handling now reuses strict request-head parsing so malformed overflow requests return deterministic parser envelopes (while no-data timeout probes still fall back to deterministic busy `503`) (`docs/book/944-m39-lasm-overflow-parser-hardening.md`).
 - [x] LASM shared request-head parsing now rejects control characters in header values with deterministic `400` diagnostics (`invalid header line: invalid header value character`), keeping normal and overload parser behavior aligned (`docs/book/945-m39-lasm-header-value-character-validation.md`).
+- [x] LASM overload probing now uses bounded short read timeouts to avoid long accept-loop stalls under queue saturation, and `res.text(...)` runtime materialization now supports request-derived placeholders from `req.pathParam`/`req.header` (including `validate.nonEmpty(...)` wrappers) for deterministic dynamic response bodies (`docs/book/946-m39-lasm-overload-probe-timeout-and-req-placeholder-materialization.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
