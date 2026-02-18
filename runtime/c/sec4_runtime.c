@@ -136,6 +136,7 @@ typedef struct {
   bool has_request;
   char trace_id[32];
   char method[8];
+  char http_version[16];
   char path[SEC4_RT_MAX_PATH_BYTES];
   char route_path[SEC4_RT_MAX_PATH_BYTES];
   char matched_route_pattern[SEC4_RT_MAX_PATH_BYTES];
@@ -7506,7 +7507,8 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
 
   char method[8] = {0};
   char path[SEC4_RT_MAX_PATH_BYTES] = {0};
-  if (sscanf(request, "%7s %255s", method, path) != 2) {
+  char http_version[16] = {0};
+  if (sscanf(request, "%7s %255s %15s", method, path, http_version) != 3) {
     const char *body = "bad request";
     const char *final_headers = sec4_rt_merge_three_headers(
         NULL,
@@ -7612,6 +7614,12 @@ static void sec4_rt_handle_client(int socket_fd, sec4_rt_router_state *router) {
   g_sec4_rt_request.has_request = true;
   strncpy(g_sec4_rt_request.method, method, sizeof(g_sec4_rt_request.method) - 1);
   g_sec4_rt_request.method[sizeof(g_sec4_rt_request.method) - 1] = '\0';
+  strncpy(
+      g_sec4_rt_request.http_version,
+      http_version,
+      sizeof(g_sec4_rt_request.http_version) - 1
+  );
+  g_sec4_rt_request.http_version[sizeof(g_sec4_rt_request.http_version) - 1] = '\0';
   strncpy(g_sec4_rt_request.path, request_target, sizeof(g_sec4_rt_request.path) - 1);
   g_sec4_rt_request.path[sizeof(g_sec4_rt_request.path) - 1] = '\0';
   strncpy(g_sec4_rt_request.route_path, path, sizeof(g_sec4_rt_request.route_path) - 1);
@@ -9347,6 +9355,14 @@ int64_t sec4_rt_req_path(void) {
     }
   }
   return sec4_rt_track_string_value(value, UINT64_C(0x36363));
+}
+
+int64_t sec4_rt_req_http_version(void) {
+  const char *value = "";
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.http_version[0] != '\0') {
+    value = g_sec4_rt_request.http_version;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x37373));
 }
 
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
