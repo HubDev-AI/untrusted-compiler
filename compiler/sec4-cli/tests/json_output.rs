@@ -9600,6 +9600,88 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_req_header_and_cookie_merge_duplicate_headers_when_clang_available() {
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime req.header/cookie duplicate merge test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-req-header-cookie-duplicate-merge");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-req-header-cookie-duplicate-merge");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.c"
+#include <string.h>
+
+int main(void) {
+  memset(&g_sec4_rt_request, 0, sizeof(g_sec4_rt_request));
+  g_sec4_rt_request.has_request = true;
+  const char *raw_headers =
+      "GET /health HTTP/1.1\r\n"
+      "Host: localhost\r\n"
+      "X-Request-Id: req-1\r\n"
+      "x-request-id: req-2\r\n"
+      "Cookie: mode=alpha\r\n"
+      "cookie: session=sess-42\r\n"
+      "\r\n";
+  strncpy(g_sec4_rt_request.raw_headers, raw_headers, sizeof(g_sec4_rt_request.raw_headers) - 1);
+  g_sec4_rt_request.raw_headers[sizeof(g_sec4_rt_request.raw_headers) - 1] = '\0';
+  g_sec4_rt_request.raw_headers_len = strlen(g_sec4_rt_request.raw_headers);
+
+  int64_t request_id = sec4_rt_req_header("X-Request-Id");
+  const char *request_id_value = sec4_rt_lookup_tracked_value(request_id);
+  if (request_id_value == NULL || strcmp(request_id_value, "req-1, req-2") != 0) { return 11; }
+
+  int64_t mode = sec4_rt_req_cookie("mode");
+  const char *mode_value = sec4_rt_lookup_tracked_value(mode);
+  if (mode_value == NULL || strcmp(mode_value, "alpha") != 0) { return 12; }
+
+  int64_t session = sec4_rt_req_cookie("session");
+  const char *session_value = sec4_rt_lookup_tracked_value(session);
+  if (session_value == NULL || strcmp(session_value, "sess-42") != 0) { return 13; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime req.header/cookie duplicate merge harness should compile successfully"
+    );
+
+    assert!(binary_path.exists(), "compiled binary should exist");
+
+    let run = Command::new(&binary_path)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime req.header/cookie duplicate merge harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_req_path_param_decodes_percent_encoded_values_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime req.pathParam decode test: clang not available");
