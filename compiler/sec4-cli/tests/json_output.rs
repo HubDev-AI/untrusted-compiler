@@ -9612,7 +9612,9 @@ int main(void) {
 #[test]
 fn c_bin_runtime_req_header_and_cookie_merge_duplicate_headers_when_clang_available() {
     if !clang_available() {
-        eprintln!("skipping c-bin runtime req.header/cookie duplicate merge test: clang not available");
+        eprintln!(
+            "skipping c-bin runtime req.header/cookie duplicate merge test: clang not available"
+        );
         return;
     }
 
@@ -17419,7 +17421,8 @@ entry = "src/main.ut"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        r#"fn enforceAuth(ctx: Ctx) -> Int {
+        r#"fn enforceAuth() effects { net } -> Int {
+  let ctx = ctx.current();
   auth.require(ctx);
   auth.requireRole(ctx, "admin");
   0
@@ -17443,6 +17446,7 @@ fn main() -> Int {
 
     let generated_c = fs::read_to_string(project_dir.join("build").join("generated.c"))
         .expect("read generated C");
+    assert!(generated_c.contains("sec4_rt_ctx_current()"));
     assert!(generated_c.contains("sec4_rt_auth_require(ctx)"));
     assert!(generated_c.contains("sec4_rt_auth_require_role(ctx, \"admin\")"));
 

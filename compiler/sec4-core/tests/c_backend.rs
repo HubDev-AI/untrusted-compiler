@@ -83,7 +83,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_log_bool(int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_log_redacted(int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_log_attr_redacted(int64_t value);"));
-    assert!(header.contains("int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value);"));
+    assert!(header
+        .contains("int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_log_with_http("));
     assert!(header.contains("int64_t sec4_rt_log_with_error(int64_t event, int64_t error);"));
     assert!(header.contains("int64_t sec4_rt_req_json(int64_t schema);"));
@@ -123,8 +124,11 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_http_get_internal(int64_t net, int64_t url);"));
     assert!(header.contains("int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name);"));
     assert!(header.contains("int64_t sec4_rt_secret_redact(int64_t secret_value);"));
-    assert!(header.contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value);"));
-    assert!(header.contains("bool sec4_rt_crypto_ct_eq(int64_t left_secret, int64_t right_secret);"));
+    assert!(header
+        .contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value);"));
+    assert!(
+        header.contains("bool sec4_rt_crypto_ct_eq(int64_t left_secret, int64_t right_secret);")
+    );
     assert!(header.contains("int64_t sec4_rt_validate_header_value(int64_t input);"));
     assert!(header.contains("int64_t sec4_rt_validate_email(int64_t input);"));
     assert!(header.contains("int64_t sec4_rt_validate_uuid(int64_t input);"));
@@ -149,23 +153,33 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_with_auth(int64_t router, int64_t cfg);"));
     assert!(header.contains("int64_t sec4_rt_sec_default_headers(void);"));
     assert!(header.contains("int64_t sec4_rt_sec_csp(void);"));
-    assert!(header.contains("int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value);"));
+    assert!(header
+        .contains("int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_cors_from_policy(void);"));
     assert!(header.contains("int64_t sec4_rt_cors_origin(int64_t origin);"));
     assert!(header.contains("int64_t sec4_rt_csrf_from_policy(void);"));
     assert!(header.contains("int64_t sec4_rt_csrf_issue_token(int64_t ctx);"));
     assert!(header.contains("int64_t sec4_rt_auth_from_policy(void);"));
+    assert!(header.contains("int64_t sec4_rt_ctx_current(void);"));
     assert!(header.contains("int64_t sec4_rt_auth_require(int64_t ctx);"));
-    assert!(header.contains("int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role);"));
+    assert!(
+        header.contains("int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role);")
+    );
     assert!(header.contains("int64_t sec4_rt_err_validation(int64_t code, int64_t message);"));
-    assert!(header.contains("int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status);"));
+    assert!(
+        header.contains("int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status);")
+    );
     assert!(header.contains("int64_t sec4_rt_err_not_found(int64_t code, int64_t message);"));
     assert!(header.contains("int64_t sec4_rt_err_conflict(int64_t code, int64_t message);"));
-    assert!(header.contains("int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit);"));
+    assert!(header
+        .contains("int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit);"));
     assert!(header.contains("int64_t sec4_rt_err_internal(int64_t message);"));
     assert!(header.contains("int64_t sec4_rt_err_with_path(int64_t error, int64_t path);"));
-    assert!(header.contains("int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value);"));
-    assert!(header.contains("int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max);"));
+    assert!(header
+        .contains("int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value);"));
+    assert!(header.contains(
+        "int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max);"
+    ));
     assert!(header.contains("int64_t sec4_rt_err_with_dependency("));
     assert!(header.contains("int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause);"));
 
@@ -185,7 +199,9 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_log_bool(int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_log_redacted(int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_log_attr_redacted(int64_t value)"));
-    assert!(source.contains("int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value)"));
+    assert!(
+        source.contains("int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value)")
+    );
     assert!(source.contains("int64_t sec4_rt_log_with_http("));
     assert!(source.contains("int64_t sec4_rt_log_with_error(int64_t event, int64_t error)"));
     assert!(source.contains("int64_t sec4_rt_req_json(int64_t schema)"));
@@ -217,16 +233,17 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_db_exec(int64_t db, int64_t query)"));
     assert!(source.contains("int64_t sec4_rt_db_tx(int64_t db)"));
     assert!(source.contains("int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query)"));
-    assert!(source.contains(
-        "int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema)"
-    ));
+    assert!(source
+        .contains("int64_t sec4_rt_db_query_one(int64_t db, int64_t query, int64_t row_schema)"));
     assert!(source.contains("int64_t sec4_rt_fs_read(int64_t fs, int64_t path)"));
     assert!(source.contains("int64_t sec4_rt_fs_write(int64_t fs, int64_t path, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_http_get(int64_t net, int64_t url)"));
     assert!(source.contains("int64_t sec4_rt_http_get_internal(int64_t net, int64_t url)"));
     assert!(source.contains("int64_t sec4_rt_secret_get(int64_t secrets_cap, const char *name)"));
     assert!(source.contains("int64_t sec4_rt_secret_redact(int64_t secret_value)"));
-    assert!(source.contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value)"));
+    assert!(
+        source.contains("int64_t sec4_rt_secret_reveal(int64_t secrets_cap, int64_t secret_value)")
+    );
     assert!(source.contains("bool sec4_rt_crypto_ct_eq(int64_t left_secret, int64_t right_secret)"));
     assert!(source.contains("int64_t sec4_rt_validate_header_value(int64_t input)"));
     assert!(source.contains("int64_t sec4_rt_validate_email(int64_t input)"));
@@ -251,23 +268,33 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_with_auth(int64_t router, int64_t cfg)"));
     assert!(source.contains("int64_t sec4_rt_sec_default_headers(void)"));
     assert!(source.contains("int64_t sec4_rt_sec_csp(void)"));
-    assert!(source.contains("int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value)"));
+    assert!(source
+        .contains("int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_cors_from_policy(void)"));
     assert!(source.contains("int64_t sec4_rt_cors_origin(int64_t origin)"));
     assert!(source.contains("int64_t sec4_rt_csrf_from_policy(void)"));
     assert!(source.contains("int64_t sec4_rt_csrf_issue_token(int64_t ctx)"));
     assert!(source.contains("int64_t sec4_rt_auth_from_policy(void)"));
+    assert!(source.contains("int64_t sec4_rt_ctx_current(void)"));
     assert!(source.contains("int64_t sec4_rt_auth_require(int64_t ctx)"));
-    assert!(source.contains("int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role)"));
+    assert!(
+        source.contains("int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role)")
+    );
     assert!(source.contains("int64_t sec4_rt_err_validation(int64_t code, int64_t message)"));
-    assert!(source.contains("int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status)"));
+    assert!(
+        source.contains("int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status)")
+    );
     assert!(source.contains("int64_t sec4_rt_err_not_found(int64_t code, int64_t message)"));
     assert!(source.contains("int64_t sec4_rt_err_conflict(int64_t code, int64_t message)"));
-    assert!(source.contains("int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit)"));
+    assert!(source
+        .contains("int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit)"));
     assert!(source.contains("int64_t sec4_rt_err_internal(int64_t message)"));
     assert!(source.contains("int64_t sec4_rt_err_with_path(int64_t error, int64_t path)"));
-    assert!(source.contains("int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value)"));
-    assert!(source.contains("int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max)"));
+    assert!(source
+        .contains("int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value)"));
+    assert!(source.contains(
+        "int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max)"
+    ));
     assert!(source.contains("int64_t sec4_rt_err_with_dependency("));
     assert!(source.contains("int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause)"));
 }
@@ -660,7 +687,8 @@ fn main() effects { net } -> Int {
 #[test]
 fn c_backend_rewrites_auth_requirement_intrinsics_to_runtime_symbols() {
     let source = r#"
-fn enforceAuth(ctx: Ctx) -> Int {
+fn enforceAuth() effects { net } -> Int {
+  let ctx = ctx.current();
   auth.require(ctx);
   auth.requireRole(ctx, "admin");
   0
@@ -675,6 +703,7 @@ fn main() -> Int {
     let mir = lower_program_to_mir(&program);
     let c = emit_c_program(&mir);
 
+    assert!(c.contains("sec4_rt_ctx_current()"));
     assert!(c.contains("(void)(sec4_rt_auth_require(ctx));"));
     assert!(c.contains("(void)(sec4_rt_auth_require_role(ctx, \"admin\"));"));
 }

@@ -340,6 +340,7 @@ Post-alpha track acceptance anchors:
 - [x] C runtime `log.*` string-accepting helpers now accept tracked handles (with literal fallback) across event/key/value/method/path logging surfaces, closing string ABI gaps for structured logging flows in native execution (`docs/book/969-m39-c-runtime-string-handle-literal-abi-bridge-for-log-helpers.md`).
 - [x] C runtime `err.with*` enrichment helpers now accept tracked string handles (with literal fallback + deterministic default field names), enabling dynamic error-path/detail/limit/dependency enrichment in native runtime paths (`docs/book/970-m39-c-runtime-string-handle-literal-abi-bridge-for-err-with-helpers.md`).
 - [x] C runtime `sql.q`, `sec.cspAdd`, and `auth.requireRole` now accept tracked string handles (with literal fallback), closing remaining high-use string ABI mismatch points across DB/security/auth helper surfaces (`docs/book/971-m39-c-runtime-string-handle-literal-abi-bridge-for-auth-csp-sql-helpers.md`).
+- [x] Added first-class `ctx.current()` intrinsic bridge across semantic typing/call-shape enforcement, C backend lowering, and runtime ABI (`sec4_rt_ctx_current`), enabling route handlers to obtain `Ctx` directly for `auth.require(...)` / `auth.requireRole(...)` flows in native run paths (`docs/book/972-m39-ctx-current-intrinsic-runtime-bridge.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

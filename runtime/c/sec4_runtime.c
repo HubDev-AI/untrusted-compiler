@@ -8535,6 +8535,15 @@ int64_t sec4_rt_ctx(void) {
   return SEC4_RT_CTX_HANDLE;
 }
 
+int64_t sec4_rt_ctx_current(void) {
+  if (g_sec4_rt_request.has_request && g_sec4_rt_request.trace_id[0] != '\0') {
+    int64_t trace_handle =
+        sec4_rt_nonzero_handle_from_string(g_sec4_rt_request.trace_id, UINT64_C(0x6EC5007));
+    return sec4_rt_handle_from_two(SEC4_RT_CTX_HANDLE, trace_handle, UINT64_C(0x6EC5008));
+  }
+  return SEC4_RT_CTX_HANDLE;
+}
+
 int64_t sec4_rt_db_cap(void) {
   return SEC4_RT_DB_CAP_HANDLE;
 }

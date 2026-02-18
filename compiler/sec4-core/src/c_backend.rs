@@ -238,14 +238,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("req_method(", "__SEC4_INTRINSIC_REQ_METHOD__(");
     lowered = lowered.replace("req.path(", "__SEC4_INTRINSIC_REQ_PATH__(");
     lowered = lowered.replace("req_path(", "__SEC4_INTRINSIC_REQ_PATH__(");
-    lowered = lowered.replace(
-        "req.httpVersion(",
-        "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(",
-    );
-    lowered = lowered.replace(
-        "req_http_version(",
-        "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(",
-    );
+    lowered = lowered.replace("req.httpVersion(", "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(");
+    lowered = lowered.replace("req_http_version(", "__SEC4_INTRINSIC_REQ_HTTP_VERSION__(");
     lowered = lowered.replace("res.json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res_json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res.okMeta(", "__SEC4_INTRINSIC_RES_OK_META__(");
@@ -383,6 +377,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("csrf_from_policy(", "__SEC4_INTRINSIC_CSRF_FROM_POLICY__(");
     lowered = lowered.replace("auth.fromPolicy(", "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(");
     lowered = lowered.replace("auth_from_policy(", "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(");
+    lowered = lowered.replace("ctx.current(", "__SEC4_INTRINSIC_CTX_CURRENT__(");
+    lowered = lowered.replace("ctx_current(", "__SEC4_INTRINSIC_CTX_CURRENT__(");
     lowered = lowered.replace("auth.requireRole(", "__SEC4_INTRINSIC_AUTH_REQUIRE_ROLE__(");
     lowered = lowered.replace(
         "auth_require_role(",
@@ -426,10 +422,7 @@ fn lower_c_expr(expr: &str) -> String {
         "__SEC4_CONSTRUCTOR_INTERNAL_NET_CAP__(",
         "sec4_rt_internal_net_cap(",
     );
-    lowered = lowered.replace(
-        "__SEC4_CONSTRUCTOR_SECRETS_CAP__(",
-        "sec4_rt_secrets_cap(",
-    );
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_SECRETS_CAP__(", "sec4_rt_secrets_cap(");
     lowered = lowered.replace("__SEC4_INTRINSIC_TIME_NOW__(", "sec4_rt_time_now(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_INFO__(", "sec4_rt_log_info(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_WARN__(", "sec4_rt_log_warn(");
@@ -578,6 +571,7 @@ fn lower_c_expr(expr: &str) -> String {
         "__SEC4_INTRINSIC_AUTH_FROM_POLICY__(",
         "sec4_rt_auth_from_policy(",
     );
+    lowered = lowered.replace("__SEC4_INTRINSIC_CTX_CURRENT__(", "sec4_rt_ctx_current(");
     lowered = lowered.replace("__SEC4_INTRINSIC_AUTH_REQUIRE__(", "sec4_rt_auth_require(");
     lowered = lowered.replace(
         "__SEC4_INTRINSIC_AUTH_REQUIRE_ROLE__(",
