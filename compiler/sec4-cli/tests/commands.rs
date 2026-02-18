@@ -3629,7 +3629,9 @@ fn main() effects { net } -> Int {
         "response should include CORS allow-origin header:\n{response}"
     );
     assert!(
-        response.contains("Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"),
+        response.contains(
+            "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+        ),
         "response should include security policy header:\n{response}"
     );
     assert!(
@@ -4090,8 +4092,9 @@ fn main() effects { net } -> Int {
         "response should include policy-derived HSTS header:\n{response}"
     );
     assert!(
-        response
-            .contains("Content-Security-Policy-Report-Only: default-src 'none'; frame-ancestors 'none'"),
+        response.contains(
+            "Content-Security-Policy-Report-Only: default-src 'none'; frame-ancestors 'none'"
+        ),
         "response should include policy-derived report-only CSP header:\n{response}"
     );
 
@@ -4374,7 +4377,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM CORS origin-selection process did not exit in expected window");
+            panic!(
+                "run command LASM CORS origin-selection process did not exit in expected window"
+            );
         }
     };
 
@@ -5481,7 +5486,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM non-json content-type process did not exit in expected window");
+            panic!(
+                "run command LASM non-json content-type process did not exit in expected window"
+            );
         }
     };
 
@@ -6189,6 +6196,171 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_overflow_head_omits_response_body() {
+    let project_dir = temp_dir("sec4-run-command-lasm-overflow-head-bodyless");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmoverflowheadbodylesscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--max-pending",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut held = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before opening held connection with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n")
+                    .expect("held partial request should be written");
+                held = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _held_stream = match held {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish held connection for LASM overflow HEAD test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut queued = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => {
+                queued = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _queued_stream = match queued {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish queued connection for LASM overflow HEAD test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"HEAD /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("overflow HEAD request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("overflow HEAD response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM overflow HEAD test could not connect overflow client");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 503 Service Unavailable"),
+        "response should contain deterministic service unavailable status:\n{response}"
+    );
+    assert!(
+        response.contains("Content-Type: application/json; charset=utf-8"),
+        "response should keep deterministic JSON content-type on overload HEAD response:\n{response}"
+    );
+    assert!(
+        response.contains("Content-Length: "),
+        "response should include deterministic content length header:\n{response}"
+    );
+    let body = response
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or("");
+    assert!(
+        body.is_empty(),
+        "overflow HEAD response body must be empty:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_overflow_omits_cors_headers_for_disallowed_origin() {
     let project_dir = temp_dir("sec4-run-command-lasm-overflow-cors-origin-disallowed");
     let port = find_available_tcp_port();
@@ -6304,7 +6476,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("could not establish queued connection for LASM overflow disallowed-origin test");
+            panic!(
+                "could not establish queued connection for LASM overflow disallowed-origin test"
+            );
         }
     };
 
@@ -6471,7 +6645,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("could not establish first queued connection for LASM max-pending override test");
+            panic!(
+                "could not establish first queued connection for LASM max-pending override test"
+            );
         }
     };
 
@@ -6490,7 +6666,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("could not establish second queued connection for LASM max-pending override test");
+            panic!(
+                "could not establish second queued connection for LASM max-pending override test"
+            );
         }
     };
 

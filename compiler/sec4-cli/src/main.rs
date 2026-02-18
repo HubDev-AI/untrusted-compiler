@@ -5814,6 +5814,10 @@ fn cmd_run_lasm_backend(
                 let request_head =
                     read_lasm_request_head(&mut stream, effective_max_header_bytes).ok();
                 let request_headers = request_head.as_ref().map(|head| &head.headers);
+                let omit_body = request_head
+                    .as_ref()
+                    .map(|head| head.method.eq_ignore_ascii_case("HEAD"))
+                    .unwrap_or(false);
                 let include_cors_defaults =
                     should_include_lasm_cors_defaults(request_headers, header_defaults.as_ref());
                 let trace_id = next_lasm_trace_id(trace_counter.as_ref());
@@ -5840,6 +5844,7 @@ fn cmd_run_lasm_backend(
                     &response,
                     header_defaults.as_ref(),
                     include_cors_defaults,
+                    omit_body,
                 );
             }
             Err(TrySendError::Disconnected(_stream)) => {
@@ -6056,7 +6061,7 @@ fn process_lasm_connection_with_runtime(
             let mut response = sec4_core::HttpResponse::text(err.status, err.message);
             apply_lasm_request_origin_header(&mut response, None, header_defaults);
             set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, true)?;
+            write_lasm_http_response(stream, &response, header_defaults, true, false)?;
             return Ok(());
         }
     };
@@ -6071,13 +6076,13 @@ fn process_lasm_connection_with_runtime(
                 header_defaults,
             );
             set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, true)?;
+            write_lasm_http_response(stream, &response, header_defaults, true, false)?;
             return Ok(());
         }
         LasmCorsPreflightDecision::Reject { status, message } => {
             let mut response = sec4_core::HttpResponse::text(status, message);
             set_lasm_trace_id(&mut response, trace_id.as_str());
-            write_lasm_http_response(stream, &response, header_defaults, false)?;
+            write_lasm_http_response(stream, &response, header_defaults, false, false)?;
             return Ok(());
         }
     }
@@ -6097,7 +6102,13 @@ fn process_lasm_connection_with_runtime(
         );
         apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
         set_lasm_trace_id(&mut response, trace_id.as_str());
-        write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)?;
+        write_lasm_http_response(
+            stream,
+            &response,
+            header_defaults,
+            include_cors_defaults,
+            request.method.eq_ignore_ascii_case("HEAD"),
+        )?;
         return Ok(());
     }
 
@@ -6123,7 +6134,13 @@ fn process_lasm_connection_with_runtime(
     };
     apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
     set_lasm_trace_id(&mut response, trace_id.as_str());
-    write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
+    write_lasm_http_response(
+        stream,
+        &response,
+        header_defaults,
+        include_cors_defaults,
+        request.method.eq_ignore_ascii_case("HEAD"),
+    )
 }
 
 fn apply_lasm_dynamic_response_materialization(
@@ -6278,7 +6295,13 @@ fn apply_lasm_dynamic_response_materialization(
                 None => set_lasm_json_response(
                     response,
                     404,
-                    &lasm_error_envelope("HTTP.NOT_FOUND", "not_found", "user not found", 404, trace_id),
+                    &lasm_error_envelope(
+                        "HTTP.NOT_FOUND",
+                        "not_found",
+                        "user not found",
+                        404,
+                        trace_id,
+                    ),
                 ),
             }
         }
@@ -6346,10 +6369,16 @@ fn validate_lasm_benchmark_user_payload(
     }
 
     let Some(tags) = payload.get("tags").and_then(serde_json::Value::as_array) else {
-        return Some(("VALIDATION.INVALID", "tags must be an array of length <= 16"));
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must be an array of length <= 16",
+        ));
     };
     if tags.len() > 16 {
-        return Some(("VALIDATION.INVALID", "tags must be an array of length <= 16"));
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must be an array of length <= 16",
+        ));
     }
     if tags.iter().any(|tag| {
         let Some(value) = tag.as_str() else {
@@ -6689,6 +6718,7 @@ fn read_lasm_request_head(
     let mut consumed = 0usize;
     let mut line = String::new();
     let mut is_first_line = true;
+    let mut method = String::new();
     let mut headers = BTreeMap::new();
     loop {
         line.clear();
@@ -6707,13 +6737,17 @@ fn read_lasm_request_head(
         }
         if is_first_line {
             is_first_line = false;
+            method = line
+                .split_once(' ')
+                .map(|(parsed_method, _)| parsed_method.trim().to_ascii_uppercase())
+                .unwrap_or_default();
             continue;
         }
         if let Some((name, value)) = line.split_once(':') {
             headers.insert(name.trim().to_string(), value.trim().to_string());
         }
     }
-    Ok(LasmRequestHead { headers })
+    Ok(LasmRequestHead { method, headers })
 }
 
 #[derive(Debug, Clone)]
@@ -6726,6 +6760,7 @@ struct LasmRunRequest {
 
 #[derive(Debug, Clone)]
 struct LasmRequestHead {
+    method: String,
     headers: BTreeMap<String, String>,
 }
 
@@ -6872,6 +6907,7 @@ fn write_lasm_http_response(
     response: &sec4_core::HttpResponse,
     header_defaults: &LasmResponseHeaderDefaults,
     include_cors_defaults: bool,
+    omit_body: bool,
 ) -> Result<(), String> {
     let mut headers = response.headers.clone();
     if !include_cors_defaults {
@@ -6905,9 +6941,11 @@ fn write_lasm_http_response(
     stream
         .write_all(response_head.as_bytes())
         .map_err(|err| format!("could not write response headers: {err}"))?;
-    stream
-        .write_all(&response.body)
-        .map_err(|err| format!("could not write response body: {err}"))?;
+    if !omit_body {
+        stream
+            .write_all(&response.body)
+            .map_err(|err| format!("could not write response body: {err}"))?;
+    }
     stream
         .flush()
         .map_err(|err| format!("could not flush response stream: {err}"))?;
