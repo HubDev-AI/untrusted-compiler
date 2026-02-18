@@ -854,6 +854,7 @@ struct LasmRouteRegistration {
     method: String,
     path: String,
     handler_name: String,
+    router_binding: Option<String>,
     require_auth_middleware: bool,
     require_csrf_middleware: bool,
 }
@@ -1075,7 +1076,6 @@ fn collect_route_registrations_in_stmt(
         }
         sec4_core::ast::StmtKind::Expr { expr } => {
             collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings);
-            maybe_apply_router_middleware_call_binding(functions, expr, bindings);
         }
     }
 }
@@ -1089,6 +1089,7 @@ fn collect_route_registrations_in_expr(
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
+            maybe_apply_router_middleware_call_binding(functions, expr, bindings, registrations);
             if let Some(registration) =
                 match_route_registration_details(functions, callee, args, bindings)
             {
@@ -1466,10 +1467,16 @@ fn match_route_registration_details(
 
     let route_path = extract_route_path_literal(&args[route_arg_index], bindings)?;
     let handler_name = extract_handler_identifier(&args[handler_arg_index], bindings)?;
+    let router_binding = if args.len() >= 3 {
+        extract_router_binding_target(&args[0], bindings, 0)
+    } else {
+        None
+    };
     Some(LasmRouteRegistration {
         method: route_method.to_string(),
         path: route_path,
         handler_name,
+        router_binding,
         require_auth_middleware: middleware_requirements.require_auth,
         require_csrf_middleware: middleware_requirements.require_csrf,
     })
@@ -1649,14 +1656,20 @@ fn maybe_apply_router_middleware_call_binding(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+    registrations: &mut [LasmRouteRegistration],
 ) {
     let sec4_core::ast::ExprKind::Call { callee, args } = &expr.kind else {
         return;
     };
-    let applies_middleware = if match_auth_middleware_call(callee, bindings)
-        || match_csrf_middleware_call(callee, bindings)
-    {
-        true
+    let mut requirements = LasmRouteMiddlewareRequirements::default();
+    if match_auth_middleware_call(callee, bindings) {
+        requirements.require_auth = true;
+    }
+    if match_csrf_middleware_call(callee, bindings) {
+        requirements.require_csrf = true;
+    }
+    if requirements.require_auth || requirements.require_csrf {
+        // no-op; direct middleware calls already captured above
     } else if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
         let helper_requirements = extract_router_middleware_requirements_from_function_call(
             functions,
@@ -1665,11 +1678,10 @@ fn maybe_apply_router_middleware_call_binding(
             bindings,
             1,
         );
-        helper_requirements.require_auth || helper_requirements.require_csrf
-    } else {
-        false
-    };
-    if !applies_middleware {
+        requirements.require_auth = helper_requirements.require_auth;
+        requirements.require_csrf = helper_requirements.require_csrf;
+    }
+    if !requirements.require_auth && !requirements.require_csrf {
         return;
     }
 
@@ -1677,6 +1689,12 @@ fn maybe_apply_router_middleware_call_binding(
         .first()
         .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
     if let Some(name) = first_name {
+        for registration in registrations.iter_mut() {
+            if registration.router_binding.as_deref() == Some(name.as_str()) {
+                registration.require_auth_middleware |= requirements.require_auth;
+                registration.require_csrf_middleware |= requirements.require_csrf;
+            }
+        }
         bindings.insert(name, expr.clone());
     }
 }
