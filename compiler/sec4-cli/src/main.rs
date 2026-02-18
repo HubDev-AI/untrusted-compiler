@@ -5194,7 +5194,7 @@ fn cmd_promote(
         Ok(manifest) => Some(manifest),
         Err(diagnostics) => {
             for diagnostic in diagnostics {
-                preconditions.push(precondition_from_diagnostic(path, &diagnostic));
+                preconditions.push(precondition_from_diagnostic(path, &diagnostic, true));
             }
             None
         }
@@ -5203,7 +5203,7 @@ fn cmd_promote(
     if let Some(manifest) = manifest.as_ref() {
         if let Err(diagnostics) = analyze_entry(path, manifest) {
             for diagnostic in diagnostics {
-                preconditions.push(precondition_from_diagnostic(path, &diagnostic));
+                preconditions.push(precondition_from_diagnostic(path, &diagnostic, false));
             }
         }
     }
@@ -5490,14 +5490,31 @@ fn write_json_artifact(path: &Path, payload: &serde_json::Value, label: &str) ->
     Ok(())
 }
 
-fn precondition_from_diagnostic(project_root: &Path, diagnostic: &Diagnostic) -> PromotePrecondition {
+fn precondition_from_diagnostic(
+    project_root: &Path,
+    diagnostic: &Diagnostic,
+    force_blocking: bool,
+) -> PromotePrecondition {
+    let severity = if force_blocking || promote_diagnostic_blocks_plan(diagnostic) {
+        "error".to_string()
+    } else {
+        "warning".to_string()
+    };
     PromotePrecondition {
         code: format!("DIAG.{}", diagnostic.code),
-        severity: diagnostic.severity.to_string(),
+        severity,
         message: diagnostic.message.clone(),
         file: Some(project_relative_path(project_root, &diagnostic.span.file)),
         line: Some(diagnostic.span.start_line),
     }
+}
+
+fn promote_diagnostic_blocks_plan(diagnostic: &Diagnostic) -> bool {
+    let code = diagnostic.code.as_str();
+    if code.starts_with('P') || code.starts_with('C') {
+        return true;
+    }
+    false
 }
 
 fn project_relative_path(project_root: &Path, file: &Path) -> String {

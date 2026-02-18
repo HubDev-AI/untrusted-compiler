@@ -625,6 +625,69 @@ fn promote_dry_run_reports_blocking_preconditions_for_invalid_project() {
 }
 
 #[test]
+fn promote_dry_run_treats_semantic_diagnostics_as_non_blocking_warnings() {
+    let root = temp_dir("sec4-promote-semantic-warning-non-blocking");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-semantic-warning\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main() -> Int {\n  missing();\n  0\n}\n",
+    )
+    .expect("semantic-warning source should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        output.status.success(),
+        "promote dry-run should stay non-blocking for semantic diagnostics"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "semantic diagnostics should not block promotion planning"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|code| code.starts_with("DIAG.") && code != "PROMOTE.P9303")
+                    && item.get("severity").and_then(serde_json::Value::as_str)
+                        == Some("warning")
+                    && item.get("message").and_then(serde_json::Value::as_str)
+                        == Some("unknown function or constructor")
+            })),
+        "semantic diagnostics should be reported as warning preconditions"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_succeeds_for_multi_file_module_project() {
     let root = temp_dir("sec4-check-multi-file-pass");
     let project_dir = root.join("project");

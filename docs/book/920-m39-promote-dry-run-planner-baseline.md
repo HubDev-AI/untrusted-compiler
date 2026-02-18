@@ -24,7 +24,8 @@ Files:
    - `ready` flag
 5. Planner records compile/validation diagnostics as deterministic promotion preconditions (`DIAG.<code>`).
 6. Planner emits deterministic warning when no `localdb` references are present (`PROMOTE.P9303`) to highlight potential storage rewrite no-op scenarios.
-7. Blocking preconditions still emit the plan artifact and return non-zero exit for CI safety.
+7. Semantic diagnostics from entry analysis are tracked as non-blocking warning preconditions for planning continuity; parser/structural diagnostics remain blocking.
+8. Blocking preconditions still emit the plan artifact and return non-zero exit for CI safety.
 
 ## Why
 
@@ -41,3 +42,4 @@ New coverage:
 - `promote_dry_run_writes_plan_artifact_when_out_is_provided`
 - `promote_rejects_unsupported_route_pair`
 - `promote_dry_run_reports_blocking_preconditions_for_invalid_project`
+- `promote_dry_run_treats_semantic_diagnostics_as_non_blocking_warnings`
