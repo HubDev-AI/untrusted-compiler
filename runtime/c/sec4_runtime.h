@@ -17,19 +17,19 @@ void sec4_rt_log_any(int64_t event);
 void sec4_rt_log_info(int64_t event);
 void sec4_rt_log_warn(int64_t event);
 void sec4_rt_log_error(int64_t event);
-int64_t sec4_rt_log_event(const char *event_name);
-int64_t sec4_rt_log_field(const char *key, int64_t value);
+int64_t sec4_rt_log_event(int64_t event_name);
+int64_t sec4_rt_log_field(int64_t key, int64_t value);
 int64_t sec4_rt_log_obj(int64_t field);
-int64_t sec4_rt_log_str(const char *value);
+int64_t sec4_rt_log_str(int64_t value);
 int64_t sec4_rt_log_i64(int64_t value);
 int64_t sec4_rt_log_bool(int64_t value);
-int64_t sec4_rt_log_redacted(const char *value);
-int64_t sec4_rt_log_attr_redacted(const char *value);
-int64_t sec4_rt_log_with_attr(int64_t event, const char *key, int64_t value);
+int64_t sec4_rt_log_redacted(int64_t value);
+int64_t sec4_rt_log_attr_redacted(int64_t value);
+int64_t sec4_rt_log_with_attr(int64_t event, int64_t key, int64_t value);
 int64_t sec4_rt_log_with_http(
     int64_t event,
-    const char *method,
-    const char *path,
+    int64_t method,
+    int64_t path,
     int64_t status,
     int64_t duration_ms
 );
