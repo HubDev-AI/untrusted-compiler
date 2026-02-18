@@ -9324,12 +9324,21 @@ fn read_lasm_http_chunked_body(
             });
         }
         let raw_size = chunk_size_line.trim_end_matches(['\r', '\n']);
-        let size_token = raw_size.split(';').next().unwrap_or("").trim();
+        let mut size_and_extensions = raw_size.split(';');
+        let size_token = size_and_extensions.next().unwrap_or("").trim();
         if size_token.is_empty() {
             return Err(LasmRequestReadError {
                 status: 400,
                 message: "invalid transfer-encoding chunk size".to_string(),
             });
+        }
+        for extension in size_and_extensions {
+            if !is_lasm_valid_chunk_extension(extension) {
+                return Err(LasmRequestReadError {
+                    status: 400,
+                    message: "invalid transfer-encoding chunk extension".to_string(),
+                });
+            }
         }
         let chunk_size =
             usize::from_str_radix(size_token, 16).map_err(|_| LasmRequestReadError {
@@ -9403,6 +9412,55 @@ fn read_lasm_http_chunked_body(
             });
         }
     }
+}
+
+fn is_lasm_valid_chunk_extension(extension: &str) -> bool {
+    let trimmed = extension.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let (name_raw, value_raw) = match trimmed.split_once('=') {
+        Some((name, value)) => (name.trim(), Some(value.trim())),
+        None => (trimmed, None),
+    };
+    if name_raw.is_empty() || !is_lasm_http_token(name_raw) {
+        return false;
+    }
+    let Some(value) = value_raw else {
+        return true;
+    };
+    if value.is_empty() {
+        return false;
+    }
+    is_lasm_http_token(value) || is_lasm_chunk_extension_quoted_string(value)
+}
+
+fn is_lasm_chunk_extension_quoted_string(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 2 || bytes.first() != Some(&b'"') || bytes.last() != Some(&b'"') {
+        return false;
+    }
+    let mut index = 1usize;
+    while index + 1 < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\\' {
+            index += 1;
+            if index + 1 >= bytes.len() {
+                return false;
+            }
+            let escaped = bytes[index];
+            if escaped < 0x20 || escaped == 0x7f {
+                return false;
+            }
+            index += 1;
+            continue;
+        }
+        if byte == b'"' || byte < 0x20 || byte == 0x7f {
+            return false;
+        }
+        index += 1;
+    }
+    true
 }
 
 fn read_lasm_http_request_head(

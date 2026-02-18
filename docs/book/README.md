@@ -950,5 +950,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `982-m39-lasm-run-latest-response-write-parity.md`
 - `983-m39-lasm-run-response-helper-parameter-binding.md`
 - `984-m39-lasm-run-response-header-helper-parameter-binding.md`
+- `985-m39-lasm-chunk-extension-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.
