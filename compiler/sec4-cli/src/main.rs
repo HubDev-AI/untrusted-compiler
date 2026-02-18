@@ -6363,7 +6363,7 @@ fn read_lasm_http_request(
         consumed = consumed.saturating_add(read);
         if consumed > max_header_bytes {
             return Err(make_error(
-                400,
+                431,
                 "request headers exceed configured limit ({max_header_bytes} bytes)".to_string(),
             ));
         }
@@ -6504,6 +6504,7 @@ fn http_status_text(status: u16) -> &'static str {
         400 => "Bad Request",
         408 => "Request Timeout",
         405 => "Method Not Allowed",
+        431 => "Request Header Fields Too Large",
         413 => "Payload Too Large",
         404 => "Not Found",
         500 => "Internal Server Error",
