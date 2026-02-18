@@ -69,6 +69,8 @@ enum Commands {
         #[arg(long)]
         serve_timeout_ms: Option<u64>,
         #[arg(long)]
+        overflow_probe_timeout_ms: Option<u64>,
+        #[arg(long)]
         max_runtime_steps: Option<u64>,
         #[arg(long)]
         max_keep_alive_requests: Option<u64>,
@@ -410,6 +412,7 @@ fn main() {
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
             backend,
@@ -423,6 +426,7 @@ fn main() {
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
             backend,
@@ -6541,6 +6545,7 @@ fn cmd_run(
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    overflow_probe_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     backend: RunBackend,
@@ -6566,6 +6571,10 @@ fn cmd_run(
         eprintln!("run failed: --serve-timeout-ms must be >= 1");
         return Err(2);
     }
+    if overflow_probe_timeout_ms == Some(0) {
+        eprintln!("run failed: --overflow-probe-timeout-ms must be >= 1");
+        return Err(2);
+    }
     if max_runtime_steps == Some(0) {
         eprintln!("run failed: --max-runtime-steps must be >= 1");
         return Err(2);
@@ -6580,6 +6589,10 @@ fn cmd_run(
     }
     if backend != RunBackend::Lasm && max_keep_alive_requests.is_some() {
         eprintln!("run failed: --max-keep-alive-requests is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && overflow_probe_timeout_ms.is_some() {
+        eprintln!("run failed: --overflow-probe-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
 
@@ -6610,6 +6623,7 @@ fn cmd_run(
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
         );
@@ -6938,6 +6952,7 @@ fn cmd_run_lasm_backend(
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    overflow_probe_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
 ) -> Result<(), i32> {
@@ -7043,14 +7058,16 @@ fn cmd_run_lasm_backend(
                 return Err(2);
             }
         };
-    let overflow_probe_timeout_ms =
-        match resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms) {
-            Ok(value) => value,
-            Err(message) => {
-                eprintln!("run failed: {message}");
-                return Err(2);
-            }
-        };
+    let overflow_probe_timeout_ms = match resolve_lasm_overflow_probe_timeout_ms(
+        overflow_probe_timeout_ms,
+        effective_timeout_ms,
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    };
 
     let routes = collect_lasm_route_plans(&program, entry.name.as_str());
     if routes.is_empty() {
@@ -7707,8 +7724,17 @@ fn resolve_lasm_runtime_step_budget(explicit_override: Option<u64>) -> Result<us
     Ok(parsed)
 }
 
-fn resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms: u64) -> Result<u64, String> {
+fn resolve_lasm_overflow_probe_timeout_ms(
+    explicit_override: Option<u64>,
+    effective_timeout_ms: u64,
+) -> Result<u64, String> {
     let fallback = effective_timeout_ms.min(50).max(1);
+    if let Some(value) = explicit_override {
+        if value == 0 {
+            return Err("invalid --overflow-probe-timeout-ms: expected u64 >= 1".to_string());
+        }
+        return Ok(value.min(effective_timeout_ms).max(1));
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS") else {
         return Ok(fallback);
     };

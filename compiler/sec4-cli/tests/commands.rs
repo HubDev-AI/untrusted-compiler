@@ -19736,6 +19736,42 @@ fn run_command_rejects_max_keep_alive_requests_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_overflow_probe_timeout_ms_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-overflow-probe-timeout-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--overflow-probe-timeout-ms",
+        "20",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --overflow-probe-timeout-ms is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --overflow-probe-timeout-ms is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only overflow-probe flag guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_serve_timeout_ms_override() {
     let project_dir = temp_dir("sec4-run-command-zero-serve-timeout");
     let project_path = project_dir
@@ -19848,6 +19884,40 @@ fn run_command_rejects_zero_max_keep_alive_requests_override() {
     assert!(
         stderr.contains("run failed: --max-keep-alive-requests must be >= 1"),
         "stderr should include deterministic max-keep-alive-requests validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_overflow_probe_timeout_ms_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-overflow-probe-timeout");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--overflow-probe-timeout-ms",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --overflow-probe-timeout-ms override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --overflow-probe-timeout-ms must be >= 1"),
+        "stderr should include deterministic overflow-probe-timeout-ms validation message:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

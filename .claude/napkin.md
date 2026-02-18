@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Read LASM code state from a stale divergent local branch and attempted to patch a bug that was already fixed on `origin/dev`, causing avoidable patch failure churn. | After each merge cycle, switch to a fresh `codex/*` branch from `origin/dev` and re-read the exact target section before patching. |
+| 2026-02-18 | self | Triggered `web.run` while in a local-only compiler/runtime pass. | Keep LASM/compiler implementation turns strictly on local shell/apply_patch tooling and avoid web calls unless external research is explicitly required. |
 | 2026-02-18 | self | While adding a new CLI flag test, I patched against an outdated context block and `apply_patch` failed once. | Before inserting new tests, locate the current anchor with `rg -n` + `sed` and patch against live surrounding lines. |
 | 2026-02-18 | self | Assumed lasm-smoke would materialize response placeholders automatically after adding `--request-body`; responses still emitted literal `{{req.body}}` tokens because smoke path didn’t run placeholder materialization on exchanges. | When adding new request-derived placeholder sources in smoke mode, wire `apply_lasm_text_placeholder_materialization` + `apply_lasm_header_placeholder_materialization` into the smoke response loop using a synthesized request context. |
 | 2026-02-18 | self | Triggered `web.run` while implementing local-only `lasm-smoke` queue defaulting logic. | Keep local code slices strictly on repository tooling and treat web tools as disabled unless external verification is explicitly requested. |
