@@ -9957,6 +9957,53 @@ static bool sec4_rt_db_parse_record_line(
   return true;
 }
 
+static bool sec4_rt_lock_file(FILE *file, short lock_type) {
+  if (file == NULL) {
+    return false;
+  }
+
+  int fd = fileno(file);
+  if (fd < 0) {
+    return false;
+  }
+
+  struct flock lock;
+  memset(&lock, 0, sizeof(lock));
+  lock.l_type = lock_type;
+  lock.l_whence = SEEK_SET;
+  lock.l_start = 0;
+  lock.l_len = 0;
+
+  for (;;) {
+    if (fcntl(fd, F_SETLKW, &lock) == 0) {
+      return true;
+    }
+    if (errno != EINTR) {
+      return false;
+    }
+  }
+}
+
+static bool sec4_rt_unlock_file(FILE *file) {
+  if (file == NULL) {
+    return false;
+  }
+
+  int fd = fileno(file);
+  if (fd < 0) {
+    return false;
+  }
+
+  struct flock lock;
+  memset(&lock, 0, sizeof(lock));
+  lock.l_type = F_UNLCK;
+  lock.l_whence = SEEK_SET;
+  lock.l_start = 0;
+  lock.l_len = 0;
+
+  return fcntl(fd, F_SETLK, &lock) == 0;
+}
+
 static sec4_rt_db_result sec4_rt_db_append_record(
     int64_t db_handle,
     int64_t query_handle,
@@ -10007,10 +10054,20 @@ static sec4_rt_db_result sec4_rt_db_append_record(
   if (file == NULL) {
     return SEC4_RT_DB_RESULT_IO;
   }
+  if (!sec4_rt_lock_file(file, F_WRLCK)) {
+    fclose(file);
+    return SEC4_RT_DB_RESULT_IO;
+  }
 
   bool io_failed = false;
   size_t line_len = (size_t) written;
   if (fwrite(line, 1, line_len, file) != line_len) {
+    io_failed = true;
+  }
+  if (fflush(file) != 0) {
+    io_failed = true;
+  }
+  if (!sec4_rt_unlock_file(file)) {
     io_failed = true;
   }
   if (fclose(file) != 0) {
@@ -10052,6 +10109,10 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
     if (errno == ENOENT) {
       return SEC4_RT_DB_RESULT_NOT_FOUND;
     }
+    return SEC4_RT_DB_RESULT_IO;
+  }
+  if (!sec4_rt_lock_file(file, F_RDLCK)) {
+    fclose(file);
     return SEC4_RT_DB_RESULT_IO;
   }
 
@@ -10100,6 +10161,9 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
   }
 
   if (ferror(file) != 0) {
+    io_failed = true;
+  }
+  if (!sec4_rt_unlock_file(file)) {
     io_failed = true;
   }
   if (fclose(file) != 0) {
