@@ -63,6 +63,8 @@ enum Commands {
         #[arg(long)]
         max_concurrency: Option<u64>,
         #[arg(long)]
+        max_pending: Option<u64>,
+        #[arg(long)]
         serve_timeout_ms: Option<u64>,
         #[arg(long, value_enum, default_value_t = RunBackend::C)]
         backend: RunBackend,
@@ -395,6 +397,7 @@ fn main() {
             oneshot,
             max_body_bytes,
             max_concurrency,
+            max_pending,
             serve_timeout_ms,
             backend,
             tls_backend,
@@ -404,6 +407,7 @@ fn main() {
             oneshot,
             max_body_bytes,
             max_concurrency,
+            max_pending,
             serve_timeout_ms,
             backend,
             tls_backend,
@@ -5188,6 +5192,7 @@ fn cmd_run(
     oneshot: bool,
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
+    max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
@@ -5198,6 +5203,10 @@ fn cmd_run(
     }
     if max_concurrency == Some(0) {
         eprintln!("run failed: --max-concurrency must be >= 1");
+        return Err(2);
+    }
+    if max_pending == Some(0) {
+        eprintln!("run failed: --max-pending must be >= 1");
         return Err(2);
     }
     if serve_timeout_ms == Some(0) {
@@ -5229,6 +5238,7 @@ fn cmd_run(
             oneshot,
             max_body_bytes,
             max_concurrency,
+            max_pending,
             serve_timeout_ms,
         );
     }
@@ -5544,6 +5554,7 @@ fn cmd_run_lasm_backend(
     oneshot: bool,
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
+    max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
@@ -5576,6 +5587,18 @@ fn cmd_run_lasm_backend(
         }
         Err(_) => {
             eprintln!("run failed: effective max concurrency exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let effective_max_pending = max_pending.unwrap_or(effective_max_in_flight as u64);
+    let effective_max_pending = match usize::try_from(effective_max_pending) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: effective max pending must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: effective max pending exceeds platform limits");
             return Err(2);
         }
     };
@@ -5651,7 +5674,7 @@ fn cmd_run_lasm_backend(
     let worker_sender = if oneshot {
         None
     } else {
-        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_in_flight);
+        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_pending);
         let shared_receiver = Arc::new(Mutex::new(receiver));
         for _ in 0..effective_max_in_flight {
             let worker_receiver = Arc::clone(&shared_receiver);

@@ -4725,6 +4725,177 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_honors_max_pending_override_before_overflow() {
+    let project_dir = temp_dir("sec4-run-command-lasm-max-pending-override");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmmaxpendingoverridecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--max-pending",
+            "2",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut held = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before opening held connection with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n")
+                    .expect("held partial request should be written");
+                held = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _held_stream = match held {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish held connection for LASM max-pending override test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut queued_a = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => {
+                queued_a = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _queued_a_stream = match queued_a {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish first queued connection for LASM max-pending override test");
+        }
+    };
+
+    let mut queued_b = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => {
+                queued_b = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _queued_b_stream = match queued_b {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish second queued connection for LASM max-pending override test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM max-pending override test could not connect overflow client");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 503 Service Unavailable"),
+        "response should contain deterministic service unavailable status after max-pending override queue is saturated:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-"),
+        "response should include deterministic trace header prefix:\n{response}"
+    );
+    assert!(
+        response.contains("server busy: max concurrency reached"),
+        "response should include deterministic saturation body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_openssl_backend_serves_request_and_exits() {
     if !clang_available() {
         eprintln!("skipping run-command openssl oneshot test: clang not available");
@@ -8312,6 +8483,34 @@ fn run_command_rejects_zero_max_concurrency_override() {
     assert!(
         stderr.contains("run failed: --max-concurrency must be >= 1"),
         "stderr should include deterministic max-concurrency validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_max_pending_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-max-pending");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-pending", "0"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --max-pending override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-pending must be >= 1"),
+        "stderr should include deterministic max-pending validation message:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
