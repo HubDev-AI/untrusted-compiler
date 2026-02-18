@@ -1630,12 +1630,71 @@ fn match_res_text_call(
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
-    let body = parse_string_literal(&args[1], bindings)?;
+    let body = parse_lasm_res_text_body(&args[1], bindings)?;
     Some(LasmResponsePlan {
         status,
         body,
         default_content_type: Some("text/plain; charset=utf-8".to_string()),
     })
+}
+
+fn parse_lasm_res_text_body(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    if let Some(literal) = parse_string_literal(expr, bindings) {
+        return Some(literal);
+    }
+    let resolved = resolve_response_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::Call { callee, args } = &resolved.kind else {
+        return None;
+    };
+    if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings) {
+        return Some(placeholder);
+    }
+    if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+        return parse_lasm_res_text_body(&args[0], bindings);
+    }
+    None
+}
+
+fn parse_lasm_request_text_placeholder(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "req" || args.is_empty() {
+        return None;
+    }
+    let key = parse_string_literal(&args[0], bindings)?;
+    if key.trim().is_empty() {
+        return None;
+    }
+    match field.as_str() {
+        "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
+        "header" => Some(format!("{{{{req.header:{key}}}}}")),
+        _ => None,
+    }
+}
+
+fn is_lasm_validate_non_empty_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => name == "validate_non_empty",
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "nonEmpty"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref name) if name == "validate"
+                )
+        }
+        _ => false,
+    }
 }
 
 fn match_res_html_call(
@@ -5813,6 +5872,11 @@ fn cmd_run_lasm_backend(
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
+                // Keep overflow probing bounded so saturated accept loops do not block
+                // for the full request timeout waiting on slow clients.
+                let probe_timeout_ms = effective_timeout_ms.min(50).max(1);
+                let _ = stream
+                    .set_read_timeout(Some(std::time::Duration::from_millis(probe_timeout_ms)));
                 let trace_id = next_lasm_trace_id(trace_counter.as_ref());
                 match read_lasm_request_head(&mut stream, effective_max_header_bytes) {
                     Ok(request_head) => {
@@ -6258,6 +6322,8 @@ fn apply_lasm_dynamic_response_materialization(
     dynamic_state: &Mutex<LasmDynamicResponseState>,
     trace_id: &str,
 ) {
+    apply_lasm_text_placeholder_materialization(response, request, path_params);
+
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;
     };
@@ -6415,6 +6481,59 @@ fn apply_lasm_dynamic_response_materialization(
         }
         _ => {}
     }
+}
+
+fn apply_lasm_text_placeholder_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) {
+    if response.body.is_empty() {
+        return;
+    }
+    let original = String::from_utf8_lossy(&response.body);
+    if !original.contains("{{req.pathParam:") && !original.contains("{{req.header:") {
+        return;
+    }
+    let with_path_params =
+        replace_lasm_response_placeholder_tokens(&original, "{{req.pathParam:", |key| {
+            path_params.get(key.trim()).cloned()
+        });
+    let materialized =
+        replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
+            find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
+        });
+    if materialized != original {
+        response.body = materialized.into_bytes();
+    }
+}
+
+fn replace_lasm_response_placeholder_tokens(
+    body: &str,
+    prefix: &str,
+    resolve: impl Fn(&str) -> Option<String>,
+) -> String {
+    let mut output = String::with_capacity(body.len());
+    let mut rest = body;
+    loop {
+        let Some(start) = rest.find(prefix) else {
+            output.push_str(rest);
+            break;
+        };
+        output.push_str(&rest[..start]);
+        let value_start = start + prefix.len();
+        let after_value_start = &rest[value_start..];
+        let Some(value_end) = after_value_start.find("}}") else {
+            output.push_str(&rest[start..]);
+            break;
+        };
+        let token_value = &after_value_start[..value_end];
+        if let Some(value) = resolve(token_value) {
+            output.push_str(value.as_str());
+        }
+        rest = &after_value_start[value_end + 2..];
+    }
+    output
 }
 
 fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
