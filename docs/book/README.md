@@ -903,5 +903,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `935-m39-lasm-request-target-normalization.md`
 - `936-m39-lasm-conflicting-host-header-rejection.md`
 - `937-m39-lasm-expect-header-rejection.md`
+- `938-m39-lasm-absolute-form-host-parity-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

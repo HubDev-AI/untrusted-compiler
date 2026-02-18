@@ -6925,6 +6925,40 @@ fn read_lasm_http_request(
         ));
     }
 
+    let mut absolute_authority: Option<&str> = None;
+    let normalized_target = if request_target == "*" {
+        request_target
+    } else if request_target.starts_with('/') {
+        request_target
+    } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
+        let (_, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
+            make_error(
+                400,
+                "invalid request target: malformed absolute-form".to_string(),
+            )
+        })?;
+        let authority_end = authority_and_path
+            .find(['/', '?'])
+            .unwrap_or(authority_and_path.len());
+        let authority = &authority_and_path[..authority_end];
+        if authority.is_empty() {
+            return Err(make_error(
+                400,
+                "invalid request target: missing authority".to_string(),
+            ));
+        }
+        absolute_authority = Some(authority);
+        if authority_end < authority_and_path.len()
+            && authority_and_path.as_bytes()[authority_end] == b'/'
+        {
+            &authority_and_path[authority_end..]
+        } else {
+            "/"
+        }
+    } else {
+        return Err(make_error(400, "invalid request target".to_string()));
+    };
+
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
     let mut parsed_content_length: Option<usize> = None;
@@ -7015,6 +7049,20 @@ fn read_lasm_http_request(
             return Err(make_error(400, "missing host header".to_string()));
         }
     }
+    if let (Some(authority), Some(host)) = (
+        absolute_authority,
+        parsed_host_header
+            .as_deref()
+            .map(str::trim)
+            .filter(|host| !host.is_empty()),
+    ) {
+        if !host.eq_ignore_ascii_case(authority) {
+            return Err(make_error(
+                400,
+                "host header does not match request target authority".to_string(),
+            ));
+        }
+    }
 
     if content_length > max_body_bytes {
         return Err(make_error(
@@ -7029,32 +7077,6 @@ fn read_lasm_http_request(
             .read_exact(&mut body)
             .map_err(|err| map_read_error("reading request body", err))?;
     }
-
-    let normalized_target = if request_target == "*" {
-        request_target
-    } else if request_target.starts_with('/') {
-        request_target
-    } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
-        let (_, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
-            make_error(
-                400,
-                "invalid request target: malformed absolute-form".to_string(),
-            )
-        })?;
-        if authority_and_path.is_empty() || authority_and_path.starts_with('/') {
-            return Err(make_error(
-                400,
-                "invalid request target: missing authority".to_string(),
-            ));
-        }
-        if let Some(path_index) = authority_and_path.find('/') {
-            &authority_and_path[path_index..]
-        } else {
-            "/"
-        }
-    } else {
-        return Err(make_error(400, "invalid request target".to_string()));
-    };
 
     let path = normalized_target
         .split_once('?')

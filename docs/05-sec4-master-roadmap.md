@@ -306,6 +306,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
 - [x] LASM parser now rejects conflicting duplicate `Host` headers deterministically (`400 Bad Request`, `conflicting host headers`) to prevent ambiguous HTTP/1.1 host resolution (`docs/book/936-m39-lasm-conflicting-host-header-rejection.md`).
 - [x] LASM parser now rejects unsupported `Expect` request headers deterministically (`417 Expectation Failed`, `expect header is not supported`) to keep request-body negotiation semantics explicit (`docs/book/937-m39-lasm-expect-header-rejection.md`).
+- [x] LASM parser now enforces absolute-form authority and `Host` header parity (`400 Bad Request` on mismatch) to prevent ambiguous host resolution when proxy-style request targets are used (`docs/book/938-m39-lasm-absolute-form-host-parity-enforcement.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
