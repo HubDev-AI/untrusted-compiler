@@ -92,6 +92,8 @@ enum Commands {
         route: String,
         #[arg(long)]
         request_path: Option<String>,
+        #[arg(long = "request-header")]
+        request_header: Vec<String>,
         #[arg(long)]
         request_body: Option<String>,
         #[arg(long)]
@@ -426,6 +428,7 @@ fn main() {
             method,
             route,
             request_path,
+            request_header,
             request_body,
             max_in_flight,
             max_pending,
@@ -440,6 +443,7 @@ fn main() {
             &method,
             &route,
             request_path.as_deref(),
+            request_header.as_slice(),
             request_body.as_deref(),
             max_in_flight,
             max_pending,
@@ -513,6 +517,7 @@ fn cmd_lasm_smoke(
     method: &str,
     route: &str,
     request_path: Option<&str>,
+    request_headers: &[String],
     request_body: Option<&str>,
     max_in_flight: Option<usize>,
     max_pending: Option<usize>,
@@ -571,6 +576,13 @@ fn cmd_lasm_smoke(
         eprintln!("lasm-smoke failed: --request-path must not be empty when provided");
         return Err(2);
     }
+    let request_headers = match parse_lasm_smoke_request_headers(request_headers) {
+        Ok(headers) => headers,
+        Err(message) => {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+    };
     let request_body = request_body.unwrap_or_default();
 
     let runtime_actions = if let Some(script) = runtime_script {
@@ -675,12 +687,13 @@ fn cmd_lasm_smoke(
         http_version: "HTTP/1.1".to_string(),
         path: smoke_request_path,
         query_params: smoke_query_params,
-        headers: BTreeMap::new(),
+        headers: request_headers.clone(),
         body: request_body.as_bytes().to_vec(),
     };
 
     for _ in 0..requests {
         let mut request = sec4_core::HttpRequest::new(method, request_path);
+        request.headers = request_headers.clone();
         request.body = request_body.as_bytes().to_vec();
         runtime.submit(request);
     }
@@ -802,7 +815,7 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
@@ -810,6 +823,7 @@ fn cmd_lasm_smoke(
                 runtime_route_method,
                 runtime_route_path,
                 requests,
+                request_headers.len(),
                 max_in_flight_text,
                 max_pending_text,
                 max_request_ms_text,
@@ -842,6 +856,8 @@ fn cmd_lasm_smoke(
                 "maxPending": effective_max_pending,
                 "maxRequestMs": effective_max_request_ms,
                 "requestPath": request_path,
+                "requestHeaderCount": request_headers.len(),
+                "requestHeaders": request_headers,
                 "requestBodyBytes": request_body.len(),
                 "okCount": ok_count,
                 "errorCount": error_count,
@@ -906,6 +922,55 @@ fn parse_lasm_runtime_script(script: &str) -> Result<Vec<sec4_core::RuntimeActio
         return Err("invalid --runtime-script: expected at least one action segment".to_string());
     }
     Ok(actions)
+}
+
+fn parse_lasm_smoke_request_headers(
+    request_headers: &[String],
+) -> Result<BTreeMap<String, String>, String> {
+    let mut parsed = BTreeMap::new();
+    for raw_header in request_headers {
+        let header = raw_header.trim();
+        if header.is_empty() {
+            return Err("invalid --request-header value: expected NAME:VALUE".to_string());
+        }
+        let Some((name_raw, value_raw)) = header.split_once(':') else {
+            return Err(format!(
+                "invalid --request-header value `{header}`: missing ':' separator"
+            ));
+        };
+        if name_raw != name_raw.trim() {
+            return Err(format!(
+                "invalid --request-header value `{header}`: whitespace around header name"
+            ));
+        }
+        let name = name_raw.trim();
+        if name.is_empty() {
+            return Err(format!(
+                "invalid --request-header value `{header}`: empty header name"
+            ));
+        }
+        if !is_lasm_http_token(name) {
+            return Err(format!(
+                "invalid --request-header value `{header}`: invalid header name token"
+            ));
+        }
+        let value = value_raw.trim();
+        if !is_lasm_http_header_value(value) {
+            return Err(format!(
+                "invalid --request-header value `{header}`: invalid header value character"
+            ));
+        }
+        if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
+            return Err(
+                "invalid --request-header value: transfer-encoding is not supported".to_string(),
+            );
+        }
+        if name.eq_ignore_ascii_case("expect") && !value.is_empty() {
+            return Err("invalid --request-header value: expect is not supported".to_string());
+        }
+        insert_lasm_request_header_case_insensitive(&mut parsed, name, value);
+    }
+    Ok(parsed)
 }
 
 #[derive(Debug, Clone)]
