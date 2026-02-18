@@ -5977,6 +5977,7 @@ fn process_lasm_connection_with_runtime(
             return Ok(());
         }
     }
+    let include_cors_defaults = should_include_lasm_cors_defaults(Some(&request), header_defaults);
 
     let request_method = request.method.clone();
     let mut runtime_request = sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
@@ -5991,7 +5992,7 @@ fn process_lasm_connection_with_runtime(
         );
         apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
         stamp_lasm_trace_id(&mut response, trace_counter);
-        write_lasm_http_response(stream, &response, header_defaults, true)?;
+        write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)?;
         return Ok(());
     }
 
@@ -6009,7 +6010,7 @@ fn process_lasm_connection_with_runtime(
     }
     apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
     stamp_lasm_trace_id(&mut response, trace_counter);
-    write_lasm_http_response(stream, &response, header_defaults, true)
+    write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
 }
 
 fn evaluate_lasm_cors_preflight_request(
@@ -6133,6 +6134,25 @@ fn are_lasm_cors_requested_headers_allowed(
                 .iter()
                 .any(|allowed| allowed == &normalized)
         })
+}
+
+fn should_include_lasm_cors_defaults(
+    request: Option<&LasmRunRequest>,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if !header_defaults.cors_enabled {
+        return false;
+    }
+    let Some(request) = request else {
+        return true;
+    };
+    let Some(origin) = find_lasm_header_value(&request.headers, "Origin").map(str::trim) else {
+        return true;
+    };
+    if origin.is_empty() {
+        return true;
+    }
+    is_lasm_cors_origin_allowed(origin, header_defaults)
 }
 
 fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {

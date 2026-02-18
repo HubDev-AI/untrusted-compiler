@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | After hardening LASM to suppress CORS defaults for disallowed origins, I initially kept a test assertion expecting `Vary: Origin`, which contradicted the new suppression policy. | When tightening header-suppression behavior, align assertions with the selected policy boundary (full CORS suppression vs partial suppression) before rerunning broad suites. |
 | 2026-02-18 | self | Added a LASM regression test but initially forgot `--backend lasm`, which exercised the default backend path and produced a misleading failure during LASM validation. | For backend-specific command tests, always set `--backend` explicitly and align the test name/fixture intent with that backend. |
 | 2026-02-18 | self | Added LASM preflight `403` rejection assertions before checking LASM status-text mapping; runtime emitted fallback reason phrase (`Status`) because `http_status_text` lacked `403`. | When introducing new deterministic HTTP status paths, extend shared status-text mapping in the same change so response-line assertions remain stable. |
 | 2026-02-18 | self | I launched two Cargo tests in parallel with `multi_tool_use.parallel` during LASM validation, despite repo guidance and existing napkin rules to keep Cargo runs serial. | Keep all Cargo commands strictly sequential; use parallel tool calls only for read/search operations. |

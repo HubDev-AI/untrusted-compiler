@@ -4152,6 +4152,9 @@ entry = "src/main.ut"
         r#"[cors]
 enabled = true
 allowed_origins = ["https://frontend-a.example", "https://frontend-b.example"]
+allow_credentials = true
+allowed_methods = ["GET", "POST"]
+allowed_headers = ["x-auth-token"]
 require_vary_origin = true
 "#,
     )
@@ -4408,8 +4411,16 @@ fn main() effects { net } -> Int {
         "response should not emit allow-origin header for disallowed request origin:\n{response}"
     );
     assert!(
-        response.contains("Vary: Origin"),
-        "response should keep vary-origin semantics with allowlist policy:\n{response}"
+        !response.contains("Access-Control-Allow-Credentials:"),
+        "response should not emit other CORS allow headers for disallowed request origin:\n{response}"
+    );
+    assert!(
+        !response.contains("Access-Control-Allow-Methods:"),
+        "response should not emit CORS method defaults for disallowed request origin:\n{response}"
+    );
+    assert!(
+        !response.contains("Vary: Origin"),
+        "response should omit vary-origin when cors headers are suppressed for disallowed origin:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
