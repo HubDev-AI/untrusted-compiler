@@ -1985,7 +1985,13 @@ fn extract_auth_requirement(
 ) -> LasmAuthRequirement {
     let mut requirement = LasmAuthRequirement::default();
     let mut visited = HashSet::new();
-    extract_auth_requirement_in_function(functions, function_name, &mut visited, &mut requirement);
+    extract_auth_requirement_in_function(
+        functions,
+        function_name,
+        &mut visited,
+        &mut requirement,
+        None,
+    );
     requirement
 }
 
@@ -2030,14 +2036,17 @@ fn extract_auth_requirement_in_function(
     function_name: &str,
     visited: &mut HashSet<String>,
     requirement: &mut LasmAuthRequirement,
+    seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
 ) {
-    if !visited.insert(function_name.to_string()) {
+    if visited.contains(function_name) {
         return;
     }
+    visited.insert(function_name.to_string());
     let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
         return;
     };
-    let mut bindings = HashMap::new();
+    let mut bindings = seed_bindings.unwrap_or_default();
     extract_auth_requirement_in_block(
         functions,
         &function.body,
@@ -2045,6 +2054,7 @@ fn extract_auth_requirement_in_function(
         requirement,
         &mut bindings,
     );
+    visited.remove(function_name);
 }
 
 fn extract_auth_requirement_in_block(
@@ -2101,11 +2111,18 @@ fn extract_auth_requirement_in_expr(
                 }
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                let call_bindings = collect_auth_requirement_call_bindings(
+                    functions,
+                    function_name,
+                    args,
+                    bindings,
+                );
                 extract_auth_requirement_in_function(
                     functions,
                     function_name,
                     visited,
                     requirement,
+                    Some(call_bindings),
                 );
             }
             extract_auth_requirement_in_expr(functions, callee, visited, requirement, bindings);
@@ -2182,6 +2199,24 @@ fn extract_auth_requirement_in_expr(
         | sec4_core::ast::ExprKind::String(_)
         | sec4_core::ast::ExprKind::Bool(_) => {}
     }
+}
+
+fn collect_auth_requirement_call_bindings(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> HashMap<String, sec4_core::ast::Expr> {
+    let mut call_bindings = HashMap::new();
+    let Some(function) = functions.get(function_name) else {
+        return call_bindings;
+    };
+    for (param, arg) in function.params.iter().zip(args.iter()) {
+        let resolved =
+            resolve_route_registration_expr(arg, bindings, 0).unwrap_or_else(|| arg.clone());
+        call_bindings.insert(param.name.clone(), resolved);
+    }
+    call_bindings
 }
 
 fn match_auth_requirement_call(
