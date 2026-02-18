@@ -2133,7 +2133,7 @@ fn extract_header_gate_literal(
         sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
         sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if expected_gate == "value" {
+            if expected_gate == "value" || expected_gate == "name" {
                 if let Some(value) = parse_lasm_request_header_placeholder_call(callee, args, bindings)
                 {
                     return Some(value);
@@ -2151,7 +2151,7 @@ fn extract_header_gate_literal(
             if namespace != "headers" || field != expected_gate || args.is_empty() {
                 return None;
             }
-            if expected_gate == "value" {
+            if expected_gate == "value" || expected_gate == "name" {
                 return extract_header_gate_literal(&args[0], expected_gate, bindings)
                     .or_else(|| extract_lasm_request_header_placeholder(&args[0], bindings, 0));
             }
@@ -6604,18 +6604,8 @@ fn apply_lasm_text_placeholder_materialization(
     if !contains_lasm_request_placeholder_tokens(original.as_ref()) {
         return;
     }
-    let with_path_params =
-        replace_lasm_response_placeholder_tokens(&original, "{{req.pathParam:", |key| {
-            path_params.get(key.trim()).cloned()
-        });
-    let with_headers =
-        replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
-            find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
-        });
     let materialized =
-        replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
-            request.query_params.get(key.trim()).cloned()
-        });
+        materialize_lasm_request_placeholders(original.as_ref(), request, path_params);
     if materialized != original {
         response.body = materialized.into_bytes();
     }
@@ -6626,32 +6616,56 @@ fn apply_lasm_header_placeholder_materialization(
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
 ) {
-    for value in response.headers.values_mut() {
-        if !contains_lasm_request_placeholder_tokens(value.as_str()) {
+    let mut materialized_headers = BTreeMap::new();
+    for (name, value) in std::mem::take(&mut response.headers) {
+        let materialized_name = if contains_lasm_request_placeholder_tokens(name.as_str()) {
+            materialize_lasm_request_placeholders(name.as_str(), request, path_params)
+        } else {
+            name
+        };
+        if materialized_name.trim().is_empty() {
             continue;
         }
-        let with_path_params =
-            replace_lasm_response_placeholder_tokens(value, "{{req.pathParam:", |key| {
-                path_params.get(key.trim()).cloned()
-            });
-        let with_headers =
-            replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
-                find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
-            });
-        let materialized =
-            replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
-                request.query_params.get(key.trim()).cloned()
-            });
-        if materialized != *value {
-            *value = materialized;
+        let materialized_value = if contains_lasm_request_placeholder_tokens(value.as_str()) {
+            materialize_lasm_request_placeholders(value.as_str(), request, path_params)
+        } else {
+            value
+        };
+        if materialized_name.eq_ignore_ascii_case("Set-Cookie") {
+            for cookie in materialized_value.split('\n') {
+                if cookie.is_empty() {
+                    continue;
+                }
+                append_lasm_set_cookie_header(&mut materialized_headers, cookie);
+            }
+            continue;
         }
+        materialized_headers.insert(materialized_name, materialized_value);
     }
+    response.headers = materialized_headers;
 }
 
 fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
     value.contains("{{req.pathParam:")
         || value.contains("{{req.header:")
         || value.contains("{{req.query:")
+}
+
+fn materialize_lasm_request_placeholders(
+    value: &str,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) -> String {
+    let with_path_params = replace_lasm_response_placeholder_tokens(value, "{{req.pathParam:", |key| {
+        path_params.get(key.trim()).cloned()
+    });
+    let with_headers =
+        replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
+            find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
+        });
+    replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
+        request.query_params.get(key.trim()).cloned()
+    })
 }
 
 fn replace_lasm_response_placeholder_tokens(
