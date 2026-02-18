@@ -53,6 +53,68 @@ Roadmap impact:
   - `benchmark-suite/scripts/update_trend_note_from_ci.sh` supports `--prefer-local` and auto-fallback when remote artifact fetch fails.
 - Alpha smoke is currently green (`cargo test -p sec4 --test alpha_smoke`).
 - Runtime + CLI have moved beyond placeholder behavior for HTTP serving, request validation, FS/DB/NET intrinsics, and core command flows (`init/check/build/run/test/fmt/lint`), but strict no-stub alpha criteria are not fully satisfied yet.
+- `c-bin` compile path now prefers canonical runtime sources from `runtime/c/` with deterministic build-folder fallback when canonical files are unavailable.
+
+## Execution Mode Lock (2026-02-17)
+
+Implementation work is now explicitly prioritized over repeated governance loops.
+
+Operating rules:
+
+1. Normal PRs must include real runtime/compiler/CLI behavior movement.
+2. During coding loops, run focused implementation checks first:
+   - `sec4 check/build/run` for touched scope,
+   - targeted Rust tests around changed behavior.
+3. Full governance suites (naming-lock/closure bundles) run once near PR completion (or in CI), not after every incremental edit.
+4. Gate-only/test-only churn without logic movement is out-of-policy unless fixing a concrete broken contract.
+
+Reference chapter:
+
+- `docs/book/887-m38-implementation-first-execution-mode-lock.md`
+
+## Alpha Scope Reset Addendum (2026-02-17)
+
+This addendum is the canonical delivery lock for current execution. It exists to avoid repeated scope re-negotiation in chat threads.
+
+Operating rules:
+
+1. Window lock (through March 17, 2026): backend no-stub alpha completion only.
+2. Implementation priority: real runtime/compiler logic and authoring usability, with multi-file module support prioritized over non-critical analyzers.
+3. `M39-S2` Composition Contract Analyzer is deferred until after the alpha checkpoint unless browser-to-server promotion work becomes immediately blocking.
+4. Test cadence remains implementation-first:
+   - run targeted behavior tests for changed logic during coding,
+   - run broad governance/closure suites near PR completion or in CI.
+5. Scope decisions must be recorded in both this roadmap and a book chapter in the same PR.
+
+Checkpoint criteria for continuing this execution mode:
+
+1. Fresh clone `sec4 init -> sec4 check -> sec4 build --emit c-bin -> sec4 run` works locally and in CI.
+2. Showcase app path validates DB/FS/NET behavior without branch-local patches.
+3. Main branch CI stays green for at least 10 consecutive days.
+4. No alpha-critical runtime/compiler placeholder paths remain.
+
+## Backend Engine Transition Lock (2026-02-17)
+
+This section resolves backend-engine direction explicitly.
+
+1. Current C runtime is the alpha reference engine for correctness/conformance, not the final high-concurrency server engine.
+2. C runtime work stays limited to:
+   - alpha-critical correctness fixes,
+   - deterministic behavior guarantees,
+   - no broad new architecture investment beyond what is required for no-stub alpha.
+3. LASM async backend bootstrap starts on February 18, 2026 as a parallel track.
+4. Through the March 17, 2026 checkpoint window, execution split is:
+   - 70% alpha closure + multi-file module delivery (`M39-S2A`),
+   - 30% LASM async bootstrap (`M39-S2B`).
+5. Browser execution does not depend on socket-based C runtime semantics:
+   - browser target uses WASM + browser host ABI profile,
+   - server concurrency evolution is owned by LASM async runtime track.
+
+Checkpoint decision rule (March 17, 2026):
+
+1. If alpha criteria are green, continue release hardening and increase LASM allocation.
+2. If LASM bootstrap shows viable concurrent request handling, begin migration planning from C reference runtime to LASM server runtime.
+3. If LASM bootstrap misses viability criteria, keep C as alpha reference runtime while continuing LASM in bounded slices.
 
 ## No-Stub Alpha Readiness (2026-02-15)
 
@@ -151,11 +213,19 @@ Post-alpha track acceptance anchors:
 
 ### M39-S1 tracking (live status)
 
-- [ ] Profile capability fence diagnostics implemented in semantic layer.
-- [ ] Golden/compiler command tests added for allowed + forbidden capability cases.
-- [ ] Book chapter documenting S1 implementation added.
+- [x] Profile capability fence diagnostics implemented in semantic layer.
+- [x] Browser profile now also blocks server-only capability types/constructors:
+  - type positions (`Ctx`, `DbCap`, `FsCap`, `NetCap`, `InternalNetCap`, `SecretsCap`)
+  - constructor calls (`Ctx()`, `DbCap()`, `FsCap()`, `NetCap()`, `InternalNetCap()`, `SecretsCap()`)
+- [x] CLI coverage added for allow/deny profile behavior:
+  - `check_fails_when_browser_profile_uses_server_only_intrinsics`
+  - `check_succeeds_when_browser_profile_uses_allowed_public_net_intrinsics`
+  - `check_fails_when_browser_profile_uses_server_capability_types_and_constructors`
+- [x] Book chapter documenting S1 implementation added:
+  - `docs/book/891-m39-browser-profile-capability-fence-diagnostics.md`
+  - `docs/book/892-m39-browser-profile-capability-type-and-constructor-fences.md`
 
-### M39-S2 composition contract analyzer acceptance criteria
+### M39-S2 composition contract analyzer acceptance criteria (deferred by scope reset)
 
 - Analyzer enforces promotion-ready architecture contract:
   - target-agnostic domain module
@@ -166,9 +236,57 @@ Post-alpha track acceptance anchors:
 
 ### M39-S2 tracking (live status)
 
+- [ ] Deferred until post-alpha scope window unless promotion pipeline is blocked by missing analyzer guarantees.
 - [ ] Composition contract analyzer implemented.
 - [ ] Fixture coverage added for pass/fail composition graphs.
 - [ ] Book chapter documenting S2 implementation added.
+
+### M39-S2A multi-file module system acceptance criteria (alpha-priority replacement slice)
+
+- Project code can be split across multiple `.ut` files with deterministic module resolution from project root.
+- Module references remain explicit (`use`/imports) with stable path rules that survive folder/file renames via deterministic diagnostics.
+- Resolver emits deterministic errors for:
+  - missing modules/files,
+  - ambiguous module targets,
+  - cyclic module dependencies.
+- Single-file projects remain valid with unchanged behavior.
+
+### M39-S2A tracking (live status)
+
+- [x] Module graph resolver implemented for project-local modules.
+- [x] Deterministic cycle detection + diagnostics implemented.
+- [x] CLI/integration fixture coverage added for multi-file pass/fail cases.
+- [x] Book chapter documenting scope-reset and multi-file priority added (`docs/book/893-m39-alpha-scope-reset-and-multi-file-priority.md`).
+- [x] Book chapter documenting resolver implementation added (`docs/book/896-m39-multi-file-module-resolver-implementation.md`).
+- [x] Build/run integration coverage locked for multi-file modules (`docs/book/900-m39-multi-file-build-and-run-pipeline-lock.md`).
+- [x] `sec4 test` now resolves module graphs per test entry (from `tests/` root), supports helper modules without standalone execution, fails deterministically when no runnable `fn main` entries exist, emits close-match suggestions for missing module imports, and reports deterministic discovery/skip counts (`docs/book/911-m39-test-command-module-graph-entrypoint-filtering.md`).
+
+### M39-S2B LASM async backend bootstrap acceptance criteria (parallel lane)
+
+- New backend target surface is introduced without breaking existing C target flows.
+- Runtime execution model supports evented/concurrent request handling (not one-thread-per-request).
+- Deterministic envelope parity is preserved for core response/error contracts.
+- Benchmark smoke includes a LASM lane for baseline concurrency sanity.
+
+### M39-S2B tracking (live status)
+
+- [x] Backend target skeleton + compile-path wiring added for LASM bootstrap.
+- [x] Async runtime core loop prototype added (reactor/scheduler baseline).
+- [x] Minimal HTTP request/response path running on LASM runtime baseline.
+- [x] Book chapter documenting C-runtime role and LASM transition plan added (`docs/book/894-m39-c-runtime-role-and-lasm-async-transition-plan.md`).
+- [x] sec4 capacity-probe benchmark tooling added for early scale evidence (`benchmark-suite/scripts/run_sec4_capacity_probe.sh`, chapter `docs/book/895-m39-sec4-capacity-probe-tooling.md`).
+- [x] LASM deterministic entrypoint contract metadata added for runtime bootstrap (`docs/book/897-m39-lasm-entrypoint-contract-baseline.md`).
+- [x] LASM async scheduler core loop baseline added (`docs/book/898-m39-lasm-async-runtime-core-loop-baseline.md`).
+- [x] LASM in-memory HTTP baseline added on scheduler runtime (`docs/book/899-m39-lasm-http-runtime-baseline.md`).
+- [x] CLI `lasm-smoke` command executes compiled entrypoint through LASM runtime baseline (`docs/book/901-m39-cli-lasm-smoke-command.md`).
+- [x] CLI `lasm-smoke` route/response extraction now resolves through helper call graphs (route registration + `res.text/res.html/res.json/res.ok/res.okMeta` helpers) (`docs/book/903-m39-lasm-smoke-helper-call-graph-route-resolution.md`).
+- [x] CLI `lasm-smoke` now supports machine-readable `--format json` summaries alongside text output (`docs/book/904-m39-lasm-smoke-json-summary-output.md`).
+- [x] LASM HTTP runtime now supports parameterized route matching (`/users/:id`) with exact-route-first resolution, captured path-parameter propagation into exchanges, query/fragment-insensitive request matching, and deterministic `HEAD -> GET` fallback when HEAD is not explicitly registered (`docs/book/905-m39-lasm-http-runtime-parameterized-route-matching.md`, `docs/book/907-m39-lasm-http-runtime-request-path-normalization.md`, `docs/book/908-m39-lasm-http-runtime-head-fallback.md`).
+- [x] LASM HTTP runtime pattern route overrides now follow deterministic latest-registration-wins semantics (aligned with exact-route overwrite behavior) (`docs/book/910-m39-lasm-http-runtime-pattern-override-order.md`).
+- [x] LASM HTTP runtime now supports deterministic max in-flight concurrency gating with FIFO pending-request queue drain semantics (`set_max_in_flight` / `clear_max_in_flight`) (`docs/book/912-m39-lasm-http-runtime-max-in-flight-queue.md`).
+- [x] CLI `lasm-smoke` now supports `--request-path` and emits captured `pathParams` in text/json summaries (`docs/book/906-m39-lasm-smoke-request-path-and-path-param-summary.md`).
+- [x] CLI `lasm-smoke` now supports `--max-in-flight` for exercising LASM runtime concurrency gating from command line, with deterministic rejection for zero values and explicit `maxInFlight` summary visibility (`docs/book/913-m39-lasm-smoke-max-in-flight-flag.md`).
+- [x] CLI `lasm-smoke` now extracts static response headers from handler call graphs (`res.setHeader`) including typed header gate wrappers and local let-bindings (`docs/book/909-m39-lasm-smoke-response-header-extraction.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
@@ -9769,7 +9887,7 @@ M13-S1 go/no-go note:
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
 ### Next planned slice
-- M39-S1 browser profile capability fence diagnostics implementation.
+- M39-S2A multi-file module system implementation (project-local module graph + deterministic resolution diagnostics).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
@@ -9861,9 +9979,9 @@ Day 14:
 
 ## 7. Immediate Next Actions (Start Here)
 
-1. Publish alpha closure summary with `v0.1.0-alpha.1` + post-tag verifier evidence bundle.
-2. Implement `M39-S1` semantic/profile fences for browser target (`db.*`, `secrets.*`, `net.listen`, internal-net sinks forbidden).
-3. Add deterministic golden/CLI coverage for browser profile allow/deny capability diagnostics and publish first M39 chapter.
+1. Keep execution in the alpha scope-reset mode (`implementation-first`, targeted tests, governance suites at PR end/CI).
+2. Implement `M39-S2A` project-local multi-file module resolver with deterministic missing/ambiguous module diagnostics.
+3. Start `M39-S2B` LASM async backend bootstrap lane (target skeleton + runtime loop baseline) with bounded weekly allocation.
 
 ---
 

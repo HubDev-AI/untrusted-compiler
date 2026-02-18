@@ -53,6 +53,9 @@
 #define SEC4_RT_MAX_HTTP_MAX_CONCURRENCY 4096
 #define SEC4_RT_DEFAULT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 20
 #define SEC4_RT_MAX_HTTP_THROTTLE_DRAIN_TIMEOUT_MS 1000
+#define SEC4_RT_DEFAULT_HTTP_ACCEPT_RATE_LIMIT_RPS 0
+#define SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS 1000000
+#define SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST 1000000
 #define SEC4_RT_MAX_DB_QUERIES 256
 #define SEC4_RT_MAX_DB_TXS 256
 #define SEC4_RT_MAX_LOG_VALUES 256
@@ -70,6 +73,12 @@
 #define SEC4_RT_POLICY_SECURITY_HEADERS_HANDLE INT64_C(0x6EC4002)
 #define SEC4_RT_POLICY_CSRF_HANDLE INT64_C(0x6EC4003)
 #define SEC4_RT_POLICY_AUTH_HANDLE INT64_C(0x6EC4004)
+#define SEC4_RT_CTX_HANDLE INT64_C(0x6EC5001)
+#define SEC4_RT_DB_CAP_HANDLE INT64_C(0x6EC5002)
+#define SEC4_RT_FS_CAP_HANDLE INT64_C(0x6EC5003)
+#define SEC4_RT_NET_CAP_HANDLE INT64_C(0x6EC5004)
+#define SEC4_RT_INTERNAL_NET_CAP_HANDLE INT64_C(0x6EC5005)
+#define SEC4_RT_SECRETS_CAP_HANDLE INT64_C(0x6EC5006)
 
 typedef int64_t (*sec4_rt_handler_fn)(void);
 
@@ -265,6 +274,15 @@ typedef struct {
   bool has_cause;
   int64_t cause_handle;
 } sec4_rt_error_state;
+
+typedef struct {
+  bool enabled;
+  int64_t refill_rps;
+  int64_t burst;
+  int64_t tokens_milli;
+  int64_t burst_milli;
+  int64_t last_refill_ms;
+} sec4_rt_http_accept_rate_limiter;
 
 typedef enum {
   SEC4_RT_IPV6_URL_HOST_NOT_BRACKETED = 0,
@@ -1098,6 +1116,57 @@ static void sec4_rt_error_append_detail_entry(
   }
 }
 
+static int sec4_rt_query_hex_nibble(char value) {
+  if (value >= '0' && value <= '9') {
+    return value - '0';
+  }
+  if (value >= 'a' && value <= 'f') {
+    return 10 + (value - 'a');
+  }
+  if (value >= 'A' && value <= 'F') {
+    return 10 + (value - 'A');
+  }
+  return -1;
+}
+
+static bool sec4_rt_query_decode_component(
+    const char *input,
+    size_t input_len,
+    char *out,
+    size_t out_size
+) {
+  if (input == NULL || out == NULL || out_size == 0) {
+    return false;
+  }
+
+  size_t written = 0;
+  for (size_t i = 0; i < input_len; i++) {
+    char decoded = input[i];
+    if (decoded == '+') {
+      decoded = ' ';
+    } else if (decoded == '%') {
+      if (i + 2 >= input_len) {
+        return false;
+      }
+      int high = sec4_rt_query_hex_nibble(input[i + 1]);
+      int low = sec4_rt_query_hex_nibble(input[i + 2]);
+      if (high < 0 || low < 0) {
+        return false;
+      }
+      decoded = (char) ((high << 4) | low);
+      i += 2;
+    }
+
+    if (written + 1 < out_size) {
+      out[written] = decoded;
+      written += 1;
+    }
+  }
+
+  out[written] = '\0';
+  return true;
+}
+
 static bool sec4_rt_extract_query_value(
     const char *path,
     const char *name,
@@ -1126,9 +1195,27 @@ static bool sec4_rt_extract_query_value(
     const char *key_end = equals != NULL ? equals : segment_end;
 
     size_t this_key_len = (size_t) (key_end - segment_start);
-    if (this_key_len == key_len && strncmp(segment_start, name, key_len) == 0) {
+    bool key_matches =
+        this_key_len == key_len && strncmp(segment_start, name, key_len) == 0;
+    if (!key_matches) {
+      char decoded_key[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+      if (sec4_rt_query_decode_component(
+              segment_start,
+              this_key_len,
+              decoded_key,
+              sizeof(decoded_key)
+          ) && strcmp(decoded_key, name) == 0) {
+        key_matches = true;
+      }
+    }
+
+    if (key_matches) {
       const char *value_start = equals != NULL ? equals + 1 : key_end;
       size_t value_len = (size_t) (segment_end - value_start);
+      if (sec4_rt_query_decode_component(value_start, value_len, out, out_size)) {
+        return true;
+      }
+
       if (value_len >= out_size) {
         value_len = out_size - 1;
       }
@@ -1242,6 +1329,10 @@ static bool sec4_rt_extract_path_param(
     size_t q_len = (size_t) (q - q_start);
     if (p_len > 1 && p_start[0] == ':') {
       if (p_len - 1 == target_len && strncmp(p_start + 1, name, target_len) == 0) {
+        if (sec4_rt_query_decode_component(q_start, q_len, out, out_size)) {
+          return out[0] != '\0';
+        }
+
         size_t copy_len = q_len;
         if (copy_len >= out_size) {
           copy_len = out_size - 1;
@@ -6964,6 +7055,97 @@ static size_t sec4_rt_http_max_concurrency_limit(void) {
   return (size_t) parsed;
 }
 
+static int64_t sec4_rt_http_accept_rate_limit_rps(void) {
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_ACCEPT_RATE_LIMIT_RPS",
+      SEC4_RT_DEFAULT_HTTP_ACCEPT_RATE_LIMIT_RPS
+  );
+  if (parsed <= 0) {
+    return 0;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS) {
+    parsed = SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_RPS;
+  }
+  return parsed;
+}
+
+static int64_t sec4_rt_http_accept_rate_limit_burst(int64_t rps_limit) {
+  if (rps_limit <= 0) {
+    return 0;
+  }
+  int64_t parsed = sec4_rt_parse_env_i64(
+      "SEC4_RT_HTTP_ACCEPT_RATE_LIMIT_BURST",
+      rps_limit
+  );
+  if (parsed <= 0) {
+    parsed = rps_limit;
+  }
+  if (parsed > SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST) {
+    parsed = SEC4_RT_MAX_HTTP_ACCEPT_RATE_LIMIT_BURST;
+  }
+  return parsed;
+}
+
+static void sec4_rt_http_accept_rate_limiter_init(
+    sec4_rt_http_accept_rate_limiter *limiter,
+    int64_t rps_limit,
+    int64_t burst_limit
+) {
+  if (limiter == NULL) {
+    return;
+  }
+  memset(limiter, 0, sizeof(*limiter));
+  if (rps_limit <= 0 || burst_limit <= 0) {
+    return;
+  }
+  limiter->enabled = true;
+  limiter->refill_rps = rps_limit;
+  limiter->burst = burst_limit;
+  limiter->tokens_milli = burst_limit * 1000;
+  limiter->burst_milli = burst_limit * 1000;
+  limiter->last_refill_ms = sec4_rt_time_now();
+}
+
+static void sec4_rt_http_accept_rate_limiter_refill(
+    sec4_rt_http_accept_rate_limiter *limiter
+) {
+  if (limiter == NULL || !limiter->enabled) {
+    return;
+  }
+  int64_t now_ms = sec4_rt_time_now();
+  if (now_ms <= limiter->last_refill_ms) {
+    return;
+  }
+  int64_t elapsed_ms = now_ms - limiter->last_refill_ms;
+  limiter->last_refill_ms = now_ms;
+  if (elapsed_ms <= 0 || limiter->refill_rps <= 0) {
+    return;
+  }
+  int64_t add_milli = elapsed_ms * limiter->refill_rps;
+  if (add_milli <= 0) {
+    return;
+  }
+  if (limiter->tokens_milli > limiter->burst_milli - add_milli) {
+    limiter->tokens_milli = limiter->burst_milli;
+  } else {
+    limiter->tokens_milli += add_milli;
+  }
+}
+
+static bool sec4_rt_http_accept_rate_limiter_consume(
+    sec4_rt_http_accept_rate_limiter *limiter
+) {
+  if (limiter == NULL || !limiter->enabled) {
+    return true;
+  }
+  sec4_rt_http_accept_rate_limiter_refill(limiter);
+  if (limiter->tokens_milli < 1000) {
+    return false;
+  }
+  limiter->tokens_milli -= 1000;
+  return true;
+}
+
 static int64_t sec4_rt_http_throttle_drain_timeout_ms(void) {
   int64_t parsed = sec4_rt_parse_env_i64(
       "SEC4_RT_HTTP_THROTTLE_DRAIN_TIMEOUT_MS",
@@ -7144,6 +7326,40 @@ static void sec4_rt_send_concurrency_throttle_response(
   (void) sec4_rt_send_response_with_extra_headers(
       socket_fd,
       503,
+      "text/plain; charset=utf-8",
+      body,
+      strlen(body),
+      final_headers
+  );
+}
+
+static void sec4_rt_send_rate_limit_throttle_response(
+    int socket_fd,
+    sec4_rt_router_state *router
+) {
+  sec4_rt_reset_request();
+  sec4_rt_assign_trace_id();
+  sec4_rt_reset_response();
+
+  char security_headers_buffer[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  char merged_headers[SEC4_RT_MAX_RESPONSE_EXTRA_HEADERS_BYTES];
+  const char *security_headers = sec4_rt_security_headers_block(
+      router,
+      security_headers_buffer,
+      sizeof(security_headers_buffer)
+  );
+  const char *retry_after_headers = "Retry-After: 1\r\n";
+  const char *final_headers = sec4_rt_merge_three_headers(
+      retry_after_headers,
+      NULL,
+      security_headers,
+      merged_headers,
+      sizeof(merged_headers)
+  );
+  const char *body = "rate limited: too many inbound requests";
+  (void) sec4_rt_send_response_with_extra_headers(
+      socket_fd,
+      429,
       "text/plain; charset=utf-8",
       body,
       strlen(body),
@@ -8215,6 +8431,30 @@ bool sec4_rt_identity_bool(bool value) {
   return value;
 }
 
+int64_t sec4_rt_ctx(void) {
+  return SEC4_RT_CTX_HANDLE;
+}
+
+int64_t sec4_rt_db_cap(void) {
+  return SEC4_RT_DB_CAP_HANDLE;
+}
+
+int64_t sec4_rt_fs_cap(void) {
+  return SEC4_RT_FS_CAP_HANDLE;
+}
+
+int64_t sec4_rt_net_cap(void) {
+  return SEC4_RT_NET_CAP_HANDLE;
+}
+
+int64_t sec4_rt_internal_net_cap(void) {
+  return SEC4_RT_INTERNAL_NET_CAP_HANDLE;
+}
+
+int64_t sec4_rt_secrets_cap(void) {
+  return SEC4_RT_SECRETS_CAP_HANDLE;
+}
+
 int64_t sec4_rt_time_now(void) {
   struct timeval tv;
   if (gettimeofday(&tv, NULL) == 0) {
@@ -9152,8 +9392,19 @@ int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64
   return 0;
 }
 
-int64_t sec4_rt_res_html() {
-  sec4_rt_store_response(200, "text/html; charset=utf-8", "<html></html>");
+int64_t sec4_rt_res_html(int64_t html) {
+  const char *html_body = sec4_rt_lookup_tracked_value(html);
+  if (html_body == NULL) {
+    sec4_rt_store_std_error_response(
+        400,
+        "HTML.BODY_INVALID",
+        "validation",
+        "res.html requires tracked HtmlSafe input"
+    );
+    return 1;
+  }
+
+  sec4_rt_store_response(200, "text/html; charset=utf-8", html_body);
   return 0;
 }
 
@@ -10967,7 +11218,7 @@ int64_t sec4_rt_path_under(int64_t base, int64_t input) {
   return handle;
 }
 
-int64_t sec4_rt_path_base(const char *input) {
+int64_t sec4_rt_path_base_literal(const char *input) {
   char normalized[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
   if (!sec4_rt_normalize_absolute_path(input, normalized, sizeof(normalized))) {
     sec4_rt_store_std_error_response(
@@ -10990,6 +11241,31 @@ int64_t sec4_rt_path_base(const char *input) {
     return 0;
   }
   return handle;
+}
+
+int64_t sec4_rt_path_base_handle(int64_t input) {
+  if (input == 0) {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.BASE_INVALID",
+        "validation",
+        "path.base requires tracked string input"
+    );
+    return 0;
+  }
+
+  const char *raw = sec4_rt_lookup_tracked_value(input);
+  if (raw == NULL || raw[0] == '\0') {
+    sec4_rt_store_std_error_response(
+        400,
+        "PATH.BASE_INVALID",
+        "validation",
+        "path.base requires tracked string input"
+    );
+    return 0;
+  }
+
+  return sec4_rt_path_base_literal(raw);
 }
 
 int64_t sec4_rt_headers_name(const char *input) {
@@ -11083,6 +11359,16 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
     timeout_ms = SEC4_RT_DEFAULT_ONESHOT_TIMEOUT_MS;
   }
   int64_t throttle_drain_timeout_ms = sec4_rt_http_throttle_drain_timeout_ms();
+  int64_t accept_rate_limit_rps = sec4_rt_http_accept_rate_limit_rps();
+  int64_t accept_rate_limit_burst = sec4_rt_http_accept_rate_limit_burst(
+      accept_rate_limit_rps
+  );
+  sec4_rt_http_accept_rate_limiter accept_rate_limiter;
+  sec4_rt_http_accept_rate_limiter_init(
+      &accept_rate_limiter,
+      accept_rate_limit_rps,
+      accept_rate_limit_burst
+  );
 
   size_t max_concurrency = sec4_rt_http_max_concurrency_limit();
   int *pending_clients = (int *) calloc(max_concurrency, sizeof(int));
@@ -11151,6 +11437,13 @@ int64_t sec4_rt_http_serve(int64_t port, int64_t router) {
 
       if (pending_count >= max_concurrency) {
         sec4_rt_send_concurrency_throttle_response(client_fd, slot);
+        sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
+        close(client_fd);
+        continue;
+      }
+
+      if (!sec4_rt_http_accept_rate_limiter_consume(&accept_rate_limiter)) {
+        sec4_rt_send_rate_limit_throttle_response(client_fd, slot);
         sec4_rt_finalize_throttle_socket_close(client_fd, throttle_drain_timeout_ms);
         close(client_fd);
         continue;

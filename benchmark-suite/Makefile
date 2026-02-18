@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,node,go,rust
@@ -9,6 +9,8 @@ STEP_SUMMARY ?= results/summaries/$(IMPL)-$(ENDPOINT)-step.json
 STEP_ANALYSIS ?= results/summaries/$(IMPL)-$(ENDPOINT)-step-analysis.json
 STEP_MATRIX ?= results/summaries/step-matrix.json
 ARTIFACT_MANIFEST ?= results/artifact-manifest.json
+CAPACITY_ENDPOINT ?= ping
+CAPACITY_TARGET_REQUESTS ?= 1000000
 
 help:
 	@echo "Targets:"
@@ -32,6 +34,7 @@ help:
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
+	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  artifact-manifest Build deterministic artifact manifest from results/"
 	@echo "  verify-bundle Verify expected benchmark bundle artifacts for IMPLS/ENDPOINTS"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -103,6 +106,9 @@ bench-full:
 bench-full-dry:
 	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
+sec4-capacity-probe:
+	scripts/run_sec4_capacity_probe.sh --endpoint "$(CAPACITY_ENDPOINT)" --target-requests "$(CAPACITY_TARGET_REQUESTS)"
+
 artifact-manifest:
 	scripts/build_artifact_manifest.sh results "$(ARTIFACT_MANIFEST)"
 
@@ -128,6 +134,7 @@ publish-report:
 	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json
 
 test-scripts:
+	scripts/test_run_sec4_capacity_probe.sh
 	scripts/test_wrk2_summary.sh
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh

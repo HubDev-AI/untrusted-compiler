@@ -61,16 +61,20 @@ Measure end-to-end service behavior across identical implementations:
 13. Run full combined suite (fixed + step + combined publish):
    - `make -C benchmark-suite bench-full-dry`
    - `make -C benchmark-suite bench-full`
-14. Build deterministic artifact manifest:
+14. Run sec4 capacity probe (1M-request threshold + peak RSS):
+   - `make -C benchmark-suite sec4-capacity-probe`
+   - override endpoint and target requests:
+     - `make -C benchmark-suite sec4-capacity-probe CAPACITY_ENDPOINT=ping CAPACITY_TARGET_REQUESTS=1000000`
+15. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
-15. Verify benchmark bundle completeness:
+16. Verify benchmark bundle completeness:
    - `make -C benchmark-suite verify-bundle IMPLS=sec4,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
-16. Validate benchmark helper scripts:
+17. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-17. Validate cross-impl service contract parity:
+18. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-18. Stop DB:
+19. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -103,3 +107,4 @@ Measure end-to-end service behavior across identical implementations:
 - Full-suite runner chains fixed-target matrix + step matrix and republishes `results/benchmark-report.md` with both standard and step-load signals.
 - Full-suite runner also emits `results/artifact-manifest.json` (sha256 + size per artifact, excluding logs).
 - `verify_benchmark_bundle.sh` checks required artifacts/JSON validity and verifies sha256 hashes against `artifact-manifest.json` for selected IMPLS/ENDPOINTS.
+- `run_sec4_capacity_probe.sh` builds/starts sec4 benchmark service, runs one load profile, samples peak RSS, and writes `results/summaries/sec4-capacity-probe.json` with pass/fail against request threshold.

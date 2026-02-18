@@ -9,5 +9,6 @@ hash = "pkg_d790854f799ed213"
 
 [build]
 entry = "src/main.ut"
-hash = "bld_c296953574b87ffb"
-manifest_hash = "man_d92032e779cfe665"
+profile = "server"
+hash = "bld_c560535abda06e76"
+manifest_hash = "man_86ad5946f797462c"

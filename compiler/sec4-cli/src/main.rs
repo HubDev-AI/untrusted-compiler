@@ -9,7 +9,7 @@ use sec4_core::{
     AuditHistoryWindowSummary, AuditReport, AuditSeverity, BackendEmitOutput, BackendKind,
     Diagnostic, Policy,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -61,6 +61,24 @@ enum Commands {
         serve_timeout_ms: Option<u64>,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
+    },
+    LasmSmoke {
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long, default_value = "/health")]
+        route: String,
+        #[arg(long)]
+        request_path: Option<String>,
+        #[arg(long)]
+        max_in_flight: Option<usize>,
+        #[arg(long, default_value_t = 1)]
+        requests: usize,
+        #[arg(long, default_value_t = 128)]
+        max_steps: usize,
+        #[arg(long, value_enum, default_value_t = LasmSmokeOutputFormat::Text)]
+        format: LasmSmokeOutputFormat,
     },
     Check {
         #[arg(long, default_value = ".")]
@@ -146,6 +164,8 @@ enum BuildEmitTarget {
     MirJson,
     C,
     CBin,
+    Lasm,
+    LasmJson,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -176,6 +196,12 @@ enum ReplayEffectsMode {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum ReplayOutputFormat {
+    Text,
+    Json,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum LasmSmokeOutputFormat {
     Text,
     Json,
 }
@@ -326,6 +352,25 @@ fn main() {
             serve_timeout_ms,
             tls_backend,
         ),
+        Commands::LasmSmoke {
+            path,
+            method,
+            route,
+            request_path,
+            max_in_flight,
+            requests,
+            max_steps,
+            format,
+        } => cmd_lasm_smoke(
+            &path,
+            &method,
+            &route,
+            request_path.as_deref(),
+            max_in_flight,
+            requests,
+            max_steps,
+            format,
+        ),
         Commands::Test { path } => cmd_test(&path),
         Commands::Fmt { path } => cmd_fmt(&path),
         Commands::Lint { path } => cmd_lint(&path),
@@ -382,6 +427,873 @@ fn cmd_audit(args: AuditArgs) -> Result<(), i32> {
         args.write_report.as_deref(),
         args.fail_on.as_deref(),
     )
+}
+
+fn cmd_lasm_smoke(
+    path: &Path,
+    method: &str,
+    route: &str,
+    request_path: Option<&str>,
+    max_in_flight: Option<usize>,
+    requests: usize,
+    max_steps: usize,
+    format: LasmSmokeOutputFormat,
+) -> Result<(), i32> {
+    if requests == 0 {
+        eprintln!("lasm-smoke failed: --requests must be >= 1");
+        return Err(2);
+    }
+    if max_steps == 0 {
+        eprintln!("lasm-smoke failed: --max-steps must be >= 1");
+        return Err(2);
+    }
+
+    let manifest = match sec4_core::validate_project(path) {
+        Ok(manifest) => manifest,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+
+    let program = match analyze_entry(path, &manifest) {
+        Ok(program) => program,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+
+    let mir = sec4_core::lower_program_to_mir(&program);
+    let lasm_program = sec4_core::lower_mir_to_lasm(&mir);
+    let Some(entry) = lasm_program.entry.as_ref() else {
+        eprintln!("lasm-smoke failed: compiled program does not expose an entrypoint");
+        return Err(1);
+    };
+
+    let method = method.trim();
+    if method.is_empty() {
+        eprintln!("lasm-smoke failed: --method must not be empty");
+        return Err(2);
+    }
+
+    let route = route.trim();
+    if route.is_empty() {
+        eprintln!("lasm-smoke failed: --route must not be empty");
+        return Err(2);
+    }
+    let request_path = request_path.unwrap_or(route).trim();
+    if request_path.is_empty() {
+        eprintln!("lasm-smoke failed: --request-path must not be empty when provided");
+        return Err(2);
+    }
+
+    let mut runtime = sec4_core::LasmHttpRuntime::default();
+    let mut effective_max_in_flight = None;
+    if let Some(limit) = max_in_flight {
+        if let Err(message) = runtime.set_max_in_flight(limit) {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+        effective_max_in_flight = Some(limit);
+    }
+    let (response_status, response_headers, response_body, response_origin) =
+        match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
+            Some(route_plan) => (
+                route_plan.status,
+                route_plan.headers,
+                route_plan.body,
+                format!("handler:{}", route_plan.handler_name),
+            ),
+            None => (
+                200,
+                BTreeMap::new(),
+                format!("lasm entry {} ok", entry.name),
+                "entry".to_string(),
+            ),
+        };
+    let mut response = sec4_core::HttpResponse::text(response_status, response_body);
+    response.headers = response_headers;
+    if let Err(message) = runtime.register_route(
+        method,
+        route,
+        vec![
+            sec4_core::RuntimeAction::Yield,
+            sec4_core::RuntimeAction::Complete(0),
+        ],
+        response,
+    ) {
+        eprintln!("lasm-smoke failed: {message}");
+        return Err(1);
+    }
+
+    for _ in 0..requests {
+        runtime.submit(sec4_core::HttpRequest::new(method, request_path));
+    }
+    let report = runtime.run_until_idle(max_steps);
+    if !report.idle {
+        eprintln!(
+            "lasm-smoke failed: runtime remained active after step budget ({max_steps}); in_flight={} pending={}",
+            runtime.in_flight_request_count(),
+            runtime.pending_request_count()
+        );
+        return Err(1);
+    }
+
+    let mut response_count = 0usize;
+    let mut ok_count = 0usize;
+    let mut error_count = 0usize;
+    let mut first_request_id = None;
+    let mut first_response_id = None;
+    let mut first_status = None;
+    let mut first_path_params = None;
+    let mut first_headers = None;
+    let mut first_body = None;
+    while let Some(exchange) = runtime.pop_response() {
+        response_count += 1;
+        if exchange.response.status < 400 {
+            ok_count += 1;
+        } else {
+            error_count += 1;
+        }
+        if first_request_id.is_none() {
+            first_request_id = Some(exchange.request_id);
+            first_response_id = Some(exchange.request_id);
+            first_status = Some(exchange.response.status);
+            first_path_params = Some(exchange.path_params.clone());
+            first_headers = Some(exchange.response.headers.clone());
+            first_body = Some(String::from_utf8_lossy(&exchange.response.body).to_string());
+        }
+    }
+
+    if response_count != requests {
+        eprintln!("lasm-smoke failed: expected {requests} responses, received {response_count}");
+        return Err(1);
+    }
+
+    let first_path_params = first_path_params.unwrap_or_default();
+    let first_path_params_text = if first_path_params.is_empty() {
+        "-".to_string()
+    } else {
+        first_path_params
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let first_headers = first_headers.unwrap_or_default();
+    let first_body = first_body.unwrap_or_default();
+    match format {
+        LasmSmokeOutputFormat::Text => {
+            let max_in_flight_text = effective_max_in_flight
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            println!(
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} ok={} errors={} steps={} nowMs={} status={} pathParams={} headerCount={} body={}",
+                first_request_id.unwrap_or(0),
+                first_response_id.unwrap_or(0),
+                entry.name,
+                response_origin,
+                requests,
+                max_in_flight_text,
+                ok_count,
+                error_count,
+                report.steps,
+                report.now_ms,
+                first_status.unwrap_or(0),
+                first_path_params_text,
+                first_headers.len(),
+                first_body
+            );
+        }
+        LasmSmokeOutputFormat::Json => {
+            let payload = serde_json::json!({
+                "ok": true,
+                "requestId": first_request_id.unwrap_or(0),
+                "responseRequestId": first_response_id.unwrap_or(0),
+                "entry": entry.name,
+                "origin": response_origin,
+                "requests": requests,
+                "maxInFlight": effective_max_in_flight,
+                "requestPath": request_path,
+                "okCount": ok_count,
+                "errorCount": error_count,
+                "steps": report.steps,
+                "nowMs": report.now_ms,
+                "status": first_status.unwrap_or(0),
+                "pathParams": first_path_params,
+                "headers": first_headers,
+                "body": first_body,
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("lasm-smoke payload should serialize as JSON")
+            );
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct LasmSmokeRoutePlan {
+    handler_name: String,
+    status: u16,
+    body: String,
+    headers: BTreeMap<String, String>,
+}
+
+fn resolve_lasm_smoke_route_plan(
+    program: &sec4_core::ast::Program,
+    entry_name: &str,
+    method: &str,
+    route: &str,
+) -> Option<LasmSmokeRoutePlan> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            sec4_core::ast::ItemKind::Function(function) => {
+                Some((function.name.as_str(), function))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let handler_name = find_route_handler_name(&functions, entry_name, method, route)?;
+    let (status, body) = extract_response_plan(&functions, handler_name.as_str())?;
+    let headers = extract_response_headers(&functions, handler_name.as_str());
+
+    Some(LasmSmokeRoutePlan {
+        handler_name,
+        status,
+        body,
+        headers,
+    })
+}
+
+fn find_route_handler_name(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    entry_name: &str,
+    method: &str,
+    route: &str,
+) -> Option<String> {
+    let normalized_method = method.trim().to_ascii_uppercase();
+    let mut visited = HashSet::new();
+    find_route_handler_name_in_function(
+        functions,
+        entry_name,
+        normalized_method.as_str(),
+        route,
+        &mut visited,
+    )
+}
+
+fn find_route_handler_name_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    method: &str,
+    route: &str,
+    visited: &mut HashSet<String>,
+) -> Option<String> {
+    if !visited.insert(function_name.to_string()) {
+        return None;
+    }
+    let function = functions.get(function_name)?;
+    find_route_handler_name_in_block(functions, &function.body, method, route, visited)
+}
+
+fn find_route_handler_name_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    method: &str,
+    route: &str,
+    visited: &mut HashSet<String>,
+) -> Option<String> {
+    for statement in &block.statements {
+        if let Some(handler_name) =
+            find_route_handler_name_in_stmt(functions, statement, method, route, visited)
+        {
+            return Some(handler_name);
+        }
+    }
+    if let Some(tail) = &block.tail {
+        return find_route_handler_name_in_expr(functions, tail, method, route, visited);
+    }
+    None
+}
+
+fn find_route_handler_name_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    method: &str,
+    route: &str,
+    visited: &mut HashSet<String>,
+) -> Option<String> {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { value, .. } => {
+            find_route_handler_name_in_expr(functions, value, method, route, visited)
+        }
+        sec4_core::ast::StmtKind::Return { value } => value.as_ref().and_then(|entry| {
+            find_route_handler_name_in_expr(functions, entry, method, route, visited)
+        }),
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            find_route_handler_name_in_expr(functions, expr, method, route, visited)
+        }
+    }
+}
+
+fn find_route_handler_name_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    method: &str,
+    route: &str,
+    visited: &mut HashSet<String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(handler_name) = match_route_registration_call(callee, args, method, route) {
+                return Some(handler_name);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                if let Some(handler_name) = find_route_handler_name_in_function(
+                    functions,
+                    function_name,
+                    method,
+                    route,
+                    visited,
+                ) {
+                    return Some(handler_name);
+                }
+            }
+            if let Some(handler_name) =
+                find_route_handler_name_in_expr(functions, callee, method, route, visited)
+            {
+                return Some(handler_name);
+            }
+            for argument in args {
+                if let Some(handler_name) =
+                    find_route_handler_name_in_expr(functions, argument, method, route, visited)
+                {
+                    return Some(handler_name);
+                }
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            find_route_handler_name_in_expr(functions, expr, method, route, visited)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            find_route_handler_name_in_expr(functions, left, method, route, visited).or_else(|| {
+                find_route_handler_name_in_expr(functions, right, method, route, visited)
+            })
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            find_route_handler_name_in_expr(functions, object, method, route, visited)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => find_route_handler_name_in_expr(functions, condition, method, route, visited)
+            .or_else(|| {
+                find_route_handler_name_in_block(functions, then_branch, method, route, visited)
+            })
+            .or_else(|| {
+                else_branch.as_ref().and_then(|entry| {
+                    find_route_handler_name_in_expr(functions, entry, method, route, visited)
+                })
+            }),
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            if let Some(handler_name) =
+                find_route_handler_name_in_expr(functions, scrutinee, method, route, visited)
+            {
+                return Some(handler_name);
+            }
+            for arm in arms {
+                if let Some(handler_name) =
+                    find_route_handler_name_in_expr(functions, &arm.value, method, route, visited)
+                {
+                    return Some(handler_name);
+                }
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            find_route_handler_name_in_block(functions, block, method, route, visited)
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => None,
+    }
+}
+
+fn match_route_registration_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    method: &str,
+    route: &str,
+) -> Option<String> {
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "http" {
+        return None;
+    }
+    let route_method = match field.as_str() {
+        "get" => "GET",
+        "post" => "POST",
+        "put" => "PUT",
+        "patch" => "PATCH",
+        "delete" => "DELETE",
+        "options" => "OPTIONS",
+        "head" => "HEAD",
+        _ => return None,
+    };
+    if route_method != method {
+        return None;
+    }
+
+    let (route_arg_index, handler_arg_index) = if args.len() >= 3 {
+        (1usize, 2usize)
+    } else if args.len() >= 2 {
+        (0usize, 1usize)
+    } else {
+        return None;
+    };
+
+    let sec4_core::ast::ExprKind::String(route_path) = &args[route_arg_index].kind else {
+        return None;
+    };
+    if route_path != route {
+        return None;
+    }
+
+    let sec4_core::ast::ExprKind::Identifier(handler_name) = &args[handler_arg_index].kind else {
+        return None;
+    };
+    Some(handler_name.clone())
+}
+
+fn extract_response_plan(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+) -> Option<(u16, String)> {
+    let mut visited = HashSet::new();
+    extract_response_plan_in_function(functions, function_name, &mut visited)
+}
+
+fn extract_response_plan_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+) -> Option<(u16, String)> {
+    if !visited.insert(function_name.to_string()) {
+        return None;
+    }
+    let function = functions.get(function_name)?;
+    extract_response_plan_in_block(functions, &function.body, visited)
+}
+
+fn extract_response_plan_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+) -> Option<(u16, String)> {
+    for statement in &block.statements {
+        if let Some(response) = extract_response_plan_in_stmt(functions, statement, visited) {
+            return Some(response);
+        }
+    }
+    if let Some(tail) = &block.tail {
+        return extract_response_plan_in_expr(functions, tail, visited);
+    }
+    None
+}
+
+fn extract_response_plan_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+) -> Option<(u16, String)> {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { value, .. } => {
+            extract_response_plan_in_expr(functions, value, visited)
+        }
+        sec4_core::ast::StmtKind::Return { value } => value
+            .as_ref()
+            .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited)),
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            extract_response_plan_in_expr(functions, expr, visited)
+        }
+    }
+}
+
+fn extract_response_plan_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+) -> Option<(u16, String)> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(response) = match_response_helper_call(callee, args) {
+                return Some(response);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                if let Some(response) =
+                    extract_response_plan_in_function(functions, function_name, visited)
+                {
+                    return Some(response);
+                }
+            }
+            if let Some(response) = extract_response_plan_in_expr(functions, callee, visited) {
+                return Some(response);
+            }
+            for argument in args {
+                if let Some(response) = extract_response_plan_in_expr(functions, argument, visited)
+                {
+                    return Some(response);
+                }
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            extract_response_plan_in_expr(functions, expr, visited)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            extract_response_plan_in_expr(functions, left, visited)
+                .or_else(|| extract_response_plan_in_expr(functions, right, visited))
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            extract_response_plan_in_expr(functions, object, visited)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => extract_response_plan_in_expr(functions, condition, visited)
+            .or_else(|| extract_response_plan_in_block(functions, then_branch, visited))
+            .or_else(|| {
+                else_branch
+                    .as_ref()
+                    .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited))
+            }),
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            if let Some(response) = extract_response_plan_in_expr(functions, scrutinee, visited) {
+                return Some(response);
+            }
+            for arm in arms {
+                if let Some(response) =
+                    extract_response_plan_in_expr(functions, &arm.value, visited)
+                {
+                    return Some(response);
+                }
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            extract_response_plan_in_block(functions, block, visited)
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => None,
+    }
+}
+
+fn match_response_helper_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+) -> Option<(u16, String)> {
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "res" {
+        return None;
+    }
+
+    match field.as_str() {
+        "text" => match_res_text_call(args),
+        "html" => match_res_html_call(args),
+        "json" => match_res_json_call(args),
+        "ok" => match_res_ok_call(args),
+        "okMeta" => match_res_ok_meta_call(args),
+        _ => None,
+    }
+}
+
+fn match_res_text_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+    if args.len() < 2 {
+        return None;
+    }
+    let status = parse_status_literal(&args[0])?;
+    let sec4_core::ast::ExprKind::String(body) = &args[1].kind else {
+        return None;
+    };
+    Some((status, body.clone()))
+}
+
+fn match_res_html_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+    if args.len() != 1 {
+        return None;
+    }
+    let body = match &args[0].kind {
+        sec4_core::ast::ExprKind::String(entry) => entry.clone(),
+        _ => "<html></html>".to_string(),
+    };
+    Some((200, body))
+}
+
+fn match_res_json_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+    let status = match args.len() {
+        2 => 200,
+        length if length >= 3 => parse_status_literal(&args[0])?,
+        _ => return None,
+    };
+    Some((status, "json response".to_string()))
+}
+
+fn match_res_ok_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+    if args.len() < 3 {
+        return None;
+    }
+    let status = parse_status_literal(&args[0])?;
+    Some((status, "ok response".to_string()))
+}
+
+fn match_res_ok_meta_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+    if args.len() < 4 {
+        return None;
+    }
+    let status = parse_status_literal(&args[0])?;
+    Some((status, "ok response".to_string()))
+}
+
+fn parse_status_literal(expr: &sec4_core::ast::Expr) -> Option<u16> {
+    let sec4_core::ast::ExprKind::Number(status_literal) = &expr.kind else {
+        return None;
+    };
+    status_literal.parse::<u16>().ok()
+}
+
+fn extract_response_headers(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+) -> BTreeMap<String, String> {
+    let mut headers = BTreeMap::new();
+    let mut visited = HashSet::new();
+    extract_response_headers_in_function(functions, function_name, &mut visited, &mut headers);
+    headers
+}
+
+fn extract_response_headers_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    headers: &mut BTreeMap<String, String>,
+) {
+    if !visited.insert(function_name.to_string()) {
+        return;
+    }
+    let Some(function) = functions.get(function_name) else {
+        return;
+    };
+    let mut local_bindings = HashMap::new();
+    extract_response_headers_in_block(
+        functions,
+        &function.body,
+        visited,
+        headers,
+        &mut local_bindings,
+    );
+}
+
+fn extract_response_headers_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    headers: &mut BTreeMap<String, String>,
+    bindings: &mut HashMap<String, String>,
+) {
+    for statement in &block.statements {
+        extract_response_headers_in_stmt(functions, statement, visited, headers, bindings);
+    }
+    if let Some(tail) = &block.tail {
+        extract_response_headers_in_expr(functions, tail, visited, headers, bindings);
+    }
+}
+
+fn extract_response_headers_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    headers: &mut BTreeMap<String, String>,
+    bindings: &mut HashMap<String, String>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            if let Some(binding_value) = extract_header_binding_literal(value, bindings) {
+                bindings.insert(name.clone(), binding_value);
+            }
+            extract_response_headers_in_expr(functions, value, visited, headers, bindings)
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                extract_response_headers_in_expr(functions, value, visited, headers, bindings);
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            extract_response_headers_in_expr(functions, expr, visited, headers, bindings)
+        }
+    }
+}
+
+fn extract_response_headers_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    headers: &mut BTreeMap<String, String>,
+    bindings: &mut HashMap<String, String>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some((name, value)) = match_res_set_header_call(callee, args, bindings) {
+                headers.insert(name, value);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                extract_response_headers_in_function(functions, function_name, visited, headers);
+            }
+            extract_response_headers_in_expr(functions, callee, visited, headers, bindings);
+            for argument in args {
+                extract_response_headers_in_expr(functions, argument, visited, headers, bindings);
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            extract_response_headers_in_expr(functions, expr, visited, headers, bindings)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            extract_response_headers_in_expr(functions, left, visited, headers, bindings);
+            extract_response_headers_in_expr(functions, right, visited, headers, bindings);
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            extract_response_headers_in_expr(functions, object, visited, headers, bindings)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            extract_response_headers_in_expr(functions, condition, visited, headers, bindings);
+            let mut then_bindings = bindings.clone();
+            extract_response_headers_in_block(
+                functions,
+                then_branch,
+                visited,
+                headers,
+                &mut then_bindings,
+            );
+            if let Some(else_branch) = else_branch {
+                let mut else_bindings = bindings.clone();
+                extract_response_headers_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    headers,
+                    &mut else_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            extract_response_headers_in_expr(functions, scrutinee, visited, headers, bindings);
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                extract_response_headers_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    headers,
+                    &mut arm_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            extract_response_headers_in_block(
+                functions,
+                block,
+                visited,
+                headers,
+                &mut block_bindings,
+            )
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
+}
+
+fn match_res_set_header_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, String>,
+) -> Option<(String, String)> {
+    if args.len() < 2 {
+        return None;
+    }
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "res" || field != "setHeader" {
+        return None;
+    }
+    let name = extract_header_gate_literal(&args[0], "name", bindings)?;
+    let value = extract_header_gate_literal(&args[1], "value", bindings)?;
+    Some((name, value))
+}
+
+fn extract_header_binding_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    extract_header_gate_literal(expr, "name", bindings)
+        .or_else(|| extract_header_gate_literal(expr, "value", bindings))
+}
+
+fn extract_header_gate_literal(
+    expr: &sec4_core::ast::Expr,
+    expected_gate: &str,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+                return None;
+            };
+            let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+                return None;
+            };
+            if namespace != "headers" || field != expected_gate || args.is_empty() {
+                return None;
+            }
+            let sec4_core::ast::ExprKind::String(value) = &args[0].kind else {
+                return None;
+            };
+            Some(value.clone())
+        }
+        _ => None,
+    }
 }
 
 fn cmd_replay_check(
@@ -3078,7 +3990,8 @@ version = \"0.1.0\"\n\
 edition = \"2026\"\n\
 \n\
 [build]\n\
-entry = \"src/main.ut\"\n"
+entry = \"src/main.ut\"\n\
+profile = \"server\"\n"
     );
     let policy_body = "[policy]\n\
 name = \"default-secure\"\n\
@@ -3185,7 +4098,10 @@ fn cmd_build(
     sbom: bool,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
-    let mir_json_mode = matches!(emit, Some(BuildEmitTarget::MirJson));
+    let structured_emit_mode = matches!(
+        emit,
+        Some(BuildEmitTarget::MirJson | BuildEmitTarget::LasmJson)
+    );
     match sec4_core::validate_project(path) {
         Ok(manifest) => {
             let program = match analyze_entry(path, &manifest) {
@@ -3245,17 +4161,28 @@ fn cmd_build(
             };
 
             let mir = emit.map(|_| sec4_core::lower_program_to_mir(&program));
-            let backend_emit = if matches!(emit, Some(BuildEmitTarget::C | BuildEmitTarget::CBin)) {
-                Some(emit_program_with_backend(
-                    BackendKind::C,
+            let backend_emit = match emit {
+                Some(BuildEmitTarget::C | BuildEmitTarget::CBin) => {
+                    Some(emit_program_with_backend(
+                        BackendKind::C,
+                        mir.as_ref()
+                            .expect("MIR should be lowered when emit target is set"),
+                    ))
+                }
+                Some(BuildEmitTarget::Lasm) => Some(emit_program_with_backend(
+                    BackendKind::Lasm,
                     mir.as_ref()
                         .expect("MIR should be lowered when emit target is set"),
-                ))
-            } else {
-                None
+                )),
+                Some(BuildEmitTarget::LasmJson) => Some(emit_program_with_backend(
+                    BackendKind::LasmJson,
+                    mir.as_ref()
+                        .expect("MIR should be lowered when emit target is set"),
+                )),
+                _ => None,
             };
 
-            if !mir_json_mode {
+            if !structured_emit_mode {
                 println!(
                     "build succeeded (M3 effects): package={}, entry={}",
                     manifest.package.name,
@@ -3311,6 +4238,16 @@ fn cmd_build(
                     println!("generated c source: {}", c_path.display());
                     println!("compiled binary: {}", bin_path.display());
                 }
+                Some(BuildEmitTarget::Lasm) | Some(BuildEmitTarget::LasmJson) => {
+                    println!(
+                        "{}",
+                        backend_emit
+                            .as_ref()
+                            .expect("backend output should be available for lasm emit target")
+                            .source
+                            .as_str()
+                    );
+                }
                 None => {}
             }
             Ok(())
@@ -3351,23 +4288,36 @@ fn compile_c_binary(
         }
     };
 
-    let runtime_header_path = build_dir.join("sec4_runtime.h");
-    if let Err(err) = fs::write(&runtime_header_path, runtime_assets.header) {
-        eprintln!(
-            "could not write runtime header `{}`: {err}",
-            runtime_header_path.display()
-        );
-        return Err(2);
-    }
+    let (runtime_source_path, runtime_include_dir) = match canonical_runtime_sources() {
+        Some(source_path) => {
+            let include_dir = source_path
+                .parent()
+                .expect("runtime source should have parent directory")
+                .to_path_buf();
+            (source_path, include_dir)
+        }
+        None => {
+            let runtime_header_path = build_dir.join("sec4_runtime.h");
+            if let Err(err) = fs::write(&runtime_header_path, runtime_assets.header) {
+                eprintln!(
+                    "could not write runtime header `{}`: {err}",
+                    runtime_header_path.display()
+                );
+                return Err(2);
+            }
 
-    let runtime_source_path = build_dir.join("sec4_runtime.c");
-    if let Err(err) = fs::write(&runtime_source_path, runtime_assets.source) {
-        eprintln!(
-            "could not write runtime source `{}`: {err}",
-            runtime_source_path.display()
-        );
-        return Err(2);
-    }
+            let runtime_source_path = build_dir.join("sec4_runtime.c");
+            if let Err(err) = fs::write(&runtime_source_path, runtime_assets.source) {
+                eprintln!(
+                    "could not write runtime source `{}`: {err}",
+                    runtime_source_path.display()
+                );
+                return Err(2);
+            }
+
+            (runtime_source_path, build_dir.to_path_buf())
+        }
+    };
 
     let binary_path = build_dir.join(package_name);
 
@@ -3380,7 +4330,7 @@ fn compile_c_binary(
             .arg("-O2")
             .arg("-Wno-int-conversion")
             .arg("-I")
-            .arg(&build_dir);
+            .arg(&runtime_include_dir);
         if with_openssl {
             clang.arg("-DSEC4_RT_ENABLE_OPENSSL_TLS");
         }
@@ -3465,6 +4415,21 @@ fn compile_c_binary(
     }
 
     Ok((c_path, binary_path))
+}
+
+fn canonical_runtime_sources() -> Option<PathBuf> {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())?
+        .to_path_buf();
+    let runtime_dir = repo_root.join("runtime").join("c");
+    let header = runtime_dir.join("sec4_runtime.h");
+    let source = runtime_dir.join("sec4_runtime.c");
+    if header.exists() && source.exists() {
+        Some(source)
+    } else {
+        None
+    }
 }
 
 fn cmd_check(path: &Path, emit: Option<EmitTarget>) -> Result<(), i32> {
@@ -3591,7 +4556,11 @@ fn cmd_run(
     );
     cmd.env(
         "SEC4_RT_ALLOW_INTERNAL_NET",
-        if policy.net_internal.enabled { "1" } else { "0" },
+        if policy.net_internal.enabled {
+            "1"
+        } else {
+            "0"
+        },
     );
     cmd.env(
         "SEC4_RT_NET_INTERNAL_ALLOWED_DOMAINS",
@@ -3611,7 +4580,11 @@ fn cmd_run(
     );
     cmd.env(
         "SEC4_RT_NET_SSRF_BLOCK_LOOPBACK",
-        if policy.net_ssrf.block_loopback { "1" } else { "0" },
+        if policy.net_ssrf.block_loopback {
+            "1"
+        } else {
+            "0"
+        },
     );
     cmd.env(
         "SEC4_RT_NET_SSRF_BLOCK_LINK_LOCAL",
@@ -3639,7 +4612,11 @@ fn cmd_run(
     );
     cmd.env(
         "SEC4_RT_NET_SSRF_RESOLVE_DNS",
-        if policy.net_ssrf.resolve_dns { "1" } else { "0" },
+        if policy.net_ssrf.resolve_dns {
+            "1"
+        } else {
+            "0"
+        },
     );
     cmd.env("SEC4_RT_JSON_MAX_BYTES", policy.json.max_bytes.to_string());
     cmd.env("SEC4_RT_JSON_MAX_DEPTH", policy.json.max_depth.to_string());
@@ -3866,14 +4843,22 @@ fn cmd_test(path: &Path) -> Result<(), i32> {
 
     let tests_root = path.join("tests");
     let test_entries = collect_ut_files(&tests_root)?;
+    let discovered_tests = test_entries.len();
     let mut static_passed = 0usize;
     let mut static_failed = 0usize;
     let mut runtime_passed = 0usize;
     let mut runtime_failed = 0usize;
+    let mut runnable_entries = 0usize;
+    let mut skipped_non_entry = 0usize;
 
     for (test_index, test_entry) in test_entries.iter().enumerate() {
-        match analyze_test_entry(&test_entry, &policy) {
+        match analyze_test_entry(&tests_root, &test_entry, &policy) {
             Ok(program) => {
+                if !program_declares_main(&program) {
+                    skipped_non_entry += 1;
+                    continue;
+                }
+                runnable_entries += 1;
                 static_passed += 1;
                 match compile_and_execute_test_entry(path, test_entry, test_index, &program) {
                     Ok(()) => runtime_passed += 1,
@@ -3887,8 +4872,16 @@ fn cmd_test(path: &Path) -> Result<(), i32> {
         }
     }
 
+    if runnable_entries == 0 && static_failed == 0 {
+        eprintln!(
+            "test failed: no runnable test entrypoints found under `{}` (expected at least one `fn main`)",
+            tests_root.display()
+        );
+        return Err(1);
+    }
+
     println!(
-        "test summary: static_passed={static_passed}, static_failed={static_failed}, runtime_passed={runtime_passed}, runtime_failed={runtime_failed}"
+        "test summary: discovered={discovered_tests}, static_passed={static_passed}, static_failed={static_failed}, runtime_passed={runtime_passed}, runtime_failed={runtime_failed}, skipped_non_entry={skipped_non_entry}"
     );
     if static_failed == 0 && runtime_failed == 0 {
         Ok(())
@@ -3990,7 +4983,10 @@ fn collect_ut_files_recursive(path: &Path, files: &mut Vec<PathBuf>) -> Result<(
         match entry {
             Ok(entry) => children.push(entry.path()),
             Err(err) => {
-                eprintln!("could not read directory entry under `{}`: {err}", path.display());
+                eprintln!(
+                    "could not read directory entry under `{}`: {err}",
+                    path.display()
+                );
                 return Err(2);
             }
         }
@@ -4014,20 +5010,24 @@ fn is_ut_file(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("ut"))
 }
 
-fn analyze_test_entry(path: &Path, policy: &Policy) -> Result<sec4_core::ast::Program, Vec<Diagnostic>> {
-    let source = fs::read_to_string(path).map_err(|err| {
-        vec![
-            Diagnostic::error(
-                "C0004",
-                "could not read test entry source file",
-                sec4_core::Span::point(path.to_path_buf(), 1, 1),
-            )
-            .with_note(err.to_string()),
-        ]
-    })?;
+fn analyze_test_entry(
+    source_root: &Path,
+    entry_path: &Path,
+    policy: &Policy,
+) -> Result<sec4_core::ast::Program, Vec<Diagnostic>> {
+    let resolved = sec4_core::resolve_modules_from_entry(source_root, entry_path)?;
+    let mut combined_items = Vec::new();
 
-    let source_for_parser = strip_allow_annotations(&source);
-    let program = parse_source(path, &source_for_parser)?;
+    for module in resolved.modules {
+        let source_for_parser = strip_allow_annotations(&module.source_without_uses);
+        let parsed = parse_source(&module.file_path, &source_for_parser)?;
+        combined_items.extend(parsed.items);
+    }
+
+    let program = sec4_core::ast::Program {
+        items: combined_items,
+        span: sec4_core::Span::point(entry_path.to_path_buf(), 1, 1),
+    };
     analyze_program_with_policy(&program, policy)?;
     Ok(program)
 }
@@ -4082,6 +5082,15 @@ fn compile_and_execute_test_entry(
         }
         Err(1)
     }
+}
+
+fn program_declares_main(program: &sec4_core::ast::Program) -> bool {
+    program.items.iter().any(|item| {
+        matches!(
+            &item.kind,
+            sec4_core::ast::ItemKind::Function(function) if function.name == "main"
+        )
+    })
 }
 
 fn format_ut_source(source: &str) -> String {

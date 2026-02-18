@@ -177,6 +177,12 @@ fn runtime_identity_for_return_type(type_name: Option<&str>) -> Option<&'static 
 
 fn lower_c_expr(expr: &str) -> String {
     let mut lowered = expr.to_string();
+    lowered = lowered.replace("InternalNetCap(", "__SEC4_CONSTRUCTOR_INTERNAL_NET_CAP__(");
+    lowered = lowered.replace("SecretsCap(", "__SEC4_CONSTRUCTOR_SECRETS_CAP__(");
+    lowered = lowered.replace("NetCap(", "__SEC4_CONSTRUCTOR_NET_CAP__(");
+    lowered = lowered.replace("DbCap(", "__SEC4_CONSTRUCTOR_DB_CAP__(");
+    lowered = lowered.replace("FsCap(", "__SEC4_CONSTRUCTOR_FS_CAP__(");
+    lowered = lowered.replace("Ctx(", "__SEC4_CONSTRUCTOR_CTX__(");
     lowered = lowered.replace("time.now(", "__SEC4_INTRINSIC_TIME_NOW__(");
     lowered = lowered.replace("time_now(", "__SEC4_INTRINSIC_TIME_NOW__(");
     lowered = lowered.replace("log.info(", "__SEC4_INTRINSIC_LOG_INFO__(");
@@ -398,6 +404,18 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("err_internal(", "__SEC4_INTRINSIC_ERR_INTERNAL__(");
     lowered = lowered.replace("err.auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
     lowered = lowered.replace("err_auth(", "__SEC4_INTRINSIC_ERR_AUTH__(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_CTX__(", "sec4_rt_ctx(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_DB_CAP__(", "sec4_rt_db_cap(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_FS_CAP__(", "sec4_rt_fs_cap(");
+    lowered = lowered.replace("__SEC4_CONSTRUCTOR_NET_CAP__(", "sec4_rt_net_cap(");
+    lowered = lowered.replace(
+        "__SEC4_CONSTRUCTOR_INTERNAL_NET_CAP__(",
+        "sec4_rt_internal_net_cap(",
+    );
+    lowered = lowered.replace(
+        "__SEC4_CONSTRUCTOR_SECRETS_CAP__(",
+        "sec4_rt_secrets_cap(",
+    );
     lowered = lowered.replace("__SEC4_INTRINSIC_TIME_NOW__(", "sec4_rt_time_now(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_INFO__(", "sec4_rt_log_info(");
     lowered = lowered.replace("__SEC4_INTRINSIC_LOG_WARN__(", "sec4_rt_log_warn(");

@@ -851,5 +851,33 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `883-m37-alpha-tag-gate-execution-evidence-refresh.md`
 - `884-m37-full-alpha-gate-execution-with-tests.md`
 - `885-m37-alpha-tag-execution-and-post-tag-verification-closure.md`
+- `886-m38-showcase-api-example-with-runnable-http-and-capability-slices.md`
+- `887-m38-implementation-first-execution-mode-lock.md`
+- `888-m38-runtime-req-query-percent-decoding.md`
+- `889-m38-path-base-handle-runtime-compatibility.md`
+- `890-m38-runtime-req-path-param-percent-decoding.md`
+- `891-m39-browser-profile-capability-fence-diagnostics.md`
+- `892-m39-browser-profile-capability-type-and-constructor-fences.md`
+- `893-m39-alpha-scope-reset-and-multi-file-priority.md`
+- `894-m39-c-runtime-role-and-lasm-async-transition-plan.md`
+- `895-m39-sec4-capacity-probe-tooling.md`
+- `896-m39-multi-file-module-resolver-implementation.md`
+- `897-m39-lasm-entrypoint-contract-baseline.md`
+- `898-m39-lasm-async-runtime-core-loop-baseline.md`
+- `899-m39-lasm-http-runtime-baseline.md`
+- `900-m39-multi-file-build-and-run-pipeline-lock.md`
+- `901-m39-cli-lasm-smoke-command.md`
+- `902-m39-c-bin-canonical-runtime-source-selection.md`
+- `903-m39-lasm-smoke-helper-call-graph-route-resolution.md`
+- `904-m39-lasm-smoke-json-summary-output.md`
+- `905-m39-lasm-http-runtime-parameterized-route-matching.md`
+- `906-m39-lasm-smoke-request-path-and-path-param-summary.md`
+- `907-m39-lasm-http-runtime-request-path-normalization.md`
+- `908-m39-lasm-http-runtime-head-fallback.md`
+- `909-m39-lasm-smoke-response-header-extraction.md`
+- `910-m39-lasm-http-runtime-pattern-override-order.md`
+- `911-m39-test-command-module-graph-entrypoint-filtering.md`
+- `912-m39-lasm-http-runtime-max-in-flight-queue.md`
+- `913-m39-lasm-smoke-max-in-flight-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.
