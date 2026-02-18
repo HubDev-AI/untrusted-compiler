@@ -15,6 +15,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -5238,7 +5240,6 @@ fn cmd_run_lasm_backend(
         return Err(1);
     };
 
-    let mut runtime = sec4_core::LasmHttpRuntime::default();
     let policy_max_in_flight = match u64::try_from(policy.http.max_concurrency) {
         Ok(value) => value,
         Err(_) => {
@@ -5247,10 +5248,17 @@ fn cmd_run_lasm_backend(
         }
     };
     let effective_max_in_flight = max_concurrency.unwrap_or(policy_max_in_flight);
-    if let Err(message) = runtime.set_max_in_flight(effective_max_in_flight as usize) {
-        eprintln!("run failed: {message}");
-        return Err(2);
-    }
+    let effective_max_in_flight = match usize::try_from(effective_max_in_flight) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: effective max concurrency must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: effective max concurrency exceeds platform limits");
+            return Err(2);
+        }
+    };
     let policy_timeout_ms = match u64::try_from(policy.http.default_timeout_ms) {
         Ok(value) => value,
         Err(_) => {
@@ -5259,10 +5267,6 @@ fn cmd_run_lasm_backend(
         }
     };
     let effective_timeout_ms = serve_timeout_ms.unwrap_or(policy_timeout_ms);
-    if let Err(message) = runtime.set_max_request_duration_ms(effective_timeout_ms) {
-        eprintln!("run failed: {message}");
-        return Err(2);
-    }
     let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
         Ok(value) => value,
         Err(_) => {
@@ -5301,23 +5305,6 @@ fn cmd_run_lasm_backend(
         );
         return Err(1);
     }
-    for route in routes {
-        let mut response = sec4_core::HttpResponse::text(route.status, route.body);
-        response.headers = route.headers;
-        if let Err(message) = runtime.register_route(
-            route.method.as_str(),
-            route.path.as_str(),
-            vec![
-                sec4_core::RuntimeAction::Yield,
-                sec4_core::RuntimeAction::Complete(0),
-            ],
-            response,
-        ) {
-            eprintln!("run failed: {message}");
-            return Err(1);
-        }
-    }
-
     let listen_port = port.unwrap_or(8080);
     let listener = match TcpListener::bind(("127.0.0.1", listen_port)) {
         Ok(listener) => listener,
@@ -5330,6 +5317,8 @@ fn cmd_run_lasm_backend(
     };
 
     let mut handled_requests = 0usize;
+    let active_workers = Arc::new(AtomicUsize::new(0));
+    let mut worker_handles = Vec::new();
     for incoming in listener.incoming() {
         let mut stream = match incoming {
             Ok(stream) => stream,
@@ -5345,58 +5334,143 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
 
-        let request = match read_lasm_http_request(
-            &mut stream,
-            effective_max_header_bytes,
-            effective_max_body_bytes,
-        ) {
-            Ok(request) => request,
-            Err(err) => {
-                let _ = write_lasm_http_response(
-                    &mut stream,
-                    &sec4_core::HttpResponse::text(err.status, err.message),
-                );
-                handled_requests += 1;
-                if oneshot && handled_requests >= 1 {
-                    break;
-                }
-                continue;
-            }
-        };
-
-        let mut runtime_request =
-            sec4_core::HttpRequest::new(request.method.as_str(), request.path.as_str());
-        runtime_request.headers = request.headers;
-        runtime_request.body = request.body;
-        let request_id = runtime.submit(runtime_request);
-        let report = runtime.run_until_idle(65_536);
-        if !report.idle {
-            eprintln!("run failed: LASM runtime remained active after step budget");
-            return Err(1);
-        }
-
-        let mut matched = None;
-        while let Some(exchange) = runtime.pop_response() {
-            if exchange.request_id == request_id {
-                matched = Some(exchange.response);
+        if active_workers.load(Ordering::SeqCst) >= effective_max_in_flight {
+            let _ = write_lasm_http_response(
+                &mut stream,
+                &sec4_core::HttpResponse::text(503, "server busy: max concurrency reached"),
+            );
+            handled_requests += 1;
+            if oneshot && handled_requests >= 1 {
                 break;
             }
+            reap_finished_lasm_worker_threads(&mut worker_handles);
+            continue;
         }
-        let response = matched.unwrap_or_else(|| {
-            sec4_core::HttpResponse::text(500, "missing LASM response for request")
-        });
-        if let Err(message) = write_lasm_http_response(&mut stream, &response) {
-            eprintln!("run failed: LASM backend write response error: {message}");
-            return Err(2);
-        }
+
+        active_workers.fetch_add(1, Ordering::SeqCst);
+        let active_workers_guard = Arc::clone(&active_workers);
+        let routes_for_worker = routes.clone();
+        worker_handles.push(std::thread::spawn(move || {
+            let _guard = ActiveLasmWorker {
+                active_workers: active_workers_guard,
+            };
+            if let Err(message) = process_lasm_connection(
+                &mut stream,
+                &routes_for_worker,
+                effective_timeout_ms,
+                effective_max_header_bytes,
+                effective_max_body_bytes,
+            ) {
+                eprintln!("warning: LASM backend worker failed: {message}");
+            }
+        }));
 
         handled_requests += 1;
         if oneshot && handled_requests >= 1 {
             break;
         }
+        reap_finished_lasm_worker_threads(&mut worker_handles);
+    }
+
+    for handle in worker_handles {
+        let _ = handle.join();
     }
 
     Ok(())
+}
+
+struct ActiveLasmWorker {
+    active_workers: Arc<AtomicUsize>,
+}
+
+impl Drop for ActiveLasmWorker {
+    fn drop(&mut self) {
+        self.active_workers.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn reap_finished_lasm_worker_threads(handles: &mut Vec<std::thread::JoinHandle<()>>) {
+    let mut index = 0usize;
+    while index < handles.len() {
+        if handles[index].is_finished() {
+            let handle = handles.swap_remove(index);
+            let _ = handle.join();
+        } else {
+            index += 1;
+        }
+    }
+}
+
+fn process_lasm_connection(
+    stream: &mut TcpStream,
+    routes: &[LasmRunRoutePlan],
+    timeout_ms: u64,
+    max_header_bytes: usize,
+    max_body_bytes: usize,
+) -> Result<(), String> {
+    let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
+        Ok(request) => request,
+        Err(err) => {
+            write_lasm_http_response(
+                stream,
+                &sec4_core::HttpResponse::text(err.status, err.message),
+            )?;
+            return Ok(());
+        }
+    };
+
+    let mut runtime = sec4_core::LasmHttpRuntime::default();
+    runtime
+        .set_max_in_flight(1)
+        .map_err(|message| format!("could not configure LASM runtime max in-flight: {message}"))?;
+    runtime
+        .set_max_request_duration_ms(timeout_ms)
+        .map_err(|message| {
+            format!("could not configure LASM runtime request timeout: {message}")
+        })?;
+
+    for route in routes {
+        let mut response = sec4_core::HttpResponse::text(route.status, route.body.clone());
+        response.headers = route.headers.clone();
+        runtime
+            .register_route(
+                route.method.as_str(),
+                route.path.as_str(),
+                vec![
+                    sec4_core::RuntimeAction::Yield,
+                    sec4_core::RuntimeAction::Complete(0),
+                ],
+                response,
+            )
+            .map_err(|message| format!("could not register LASM route: {message}"))?;
+    }
+
+    let mut runtime_request = sec4_core::HttpRequest::new(request.method, request.path);
+    runtime_request.headers = request.headers;
+    runtime_request.body = request.body;
+    let request_id = runtime.submit(runtime_request);
+    let report = runtime.run_until_idle(65_536);
+    if !report.idle {
+        write_lasm_http_response(
+            stream,
+            &sec4_core::HttpResponse::text(
+                500,
+                "run failed: LASM runtime remained active after step budget",
+            ),
+        )?;
+        return Ok(());
+    }
+
+    let mut matched = None;
+    while let Some(exchange) = runtime.pop_response() {
+        if exchange.request_id == request_id {
+            matched = Some(exchange.response);
+            break;
+        }
+    }
+    let response = matched
+        .unwrap_or_else(|| sec4_core::HttpResponse::text(500, "missing LASM response for request"));
+    write_lasm_http_response(stream, &response)
 }
 
 #[derive(Debug, Clone)]

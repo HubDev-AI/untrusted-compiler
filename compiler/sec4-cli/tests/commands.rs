@@ -284,9 +284,9 @@ fn promote_dry_run_emits_deterministic_plan_for_valid_project() {
         parsed
             .get("generatedFiles")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|files| files.iter().any(|entry| {
-                entry.as_str() == Some("server/src/repo/db_repo.ut")
-            })),
+            .is_some_and(|files| files
+                .iter()
+                .any(|entry| { entry.as_str() == Some("server/src/repo/db_repo.ut") })),
         "promotion plan should include deterministic generated scaffold files"
     );
     assert!(
@@ -410,18 +410,18 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
         parsed
             .get("generatedFiles")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|files| files.iter().any(|entry| {
-                entry.as_str() == Some("server/src/repo/db_repo.ut")
-            })),
+            .is_some_and(|files| files
+                .iter()
+                .any(|entry| { entry.as_str() == Some("server/src/repo/db_repo.ut") })),
         "apply report should list deterministic generated scaffold files"
     );
     assert!(
         parsed
             .get("generatedFiles")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|files| files.iter().any(|entry| {
-                entry.as_str() == Some("server/sec4.toml")
-            })),
+            .is_some_and(|files| files
+                .iter()
+                .any(|entry| { entry.as_str() == Some("server/sec4.toml") })),
         "apply report should include generated standalone server manifest"
     );
     assert!(
@@ -429,14 +429,13 @@ fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
             .get("guardedSkippedReferences")
             .and_then(serde_json::Value::as_array)
             .is_some_and(|items| items.iter().any(|item| {
-                item.get("file").and_then(serde_json::Value::as_str)
-                    == Some("src/feature/util.ut")
+                item.get("file").and_then(serde_json::Value::as_str) == Some("src/feature/util.ut")
             })),
         "apply report should include guard-skipped localdb references outside composition root"
     );
 
-    let main_source =
-        fs::read_to_string(project_dir.join("src/main.ut")).expect("rewritten main source should exist");
+    let main_source = fs::read_to_string(project_dir.join("src/main.ut"))
+        .expect("rewritten main source should exist");
     assert!(
         main_source.contains("// db.main"),
         "apply rewrite should replace localdb token in composition root:\n{main_source}"
@@ -676,8 +675,7 @@ fn promote_dry_run_treats_semantic_diagnostics_as_non_blocking_warnings() {
                 item.get("code")
                     .and_then(serde_json::Value::as_str)
                     .is_some_and(|code| code.starts_with("DIAG.") && code != "PROMOTE.P9303")
-                    && item.get("severity").and_then(serde_json::Value::as_str)
-                        == Some("warning")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("warning")
                     && item.get("message").and_then(serde_json::Value::as_str)
                         == Some("unknown function or constructor")
             })),
@@ -1634,13 +1632,7 @@ fn lasm_smoke_command_rejects_zero_max_pending() {
         .to_str()
         .expect("project path should be valid utf-8")
         .to_string();
-    let output = run_cli(&[
-        "lasm-smoke",
-        "--path",
-        &project_path,
-        "--max-pending",
-        "0",
-    ]);
+    let output = run_cli(&["lasm-smoke", "--path", &project_path, "--max-pending", "0"]);
     assert!(
         !output.status.success(),
         "lasm-smoke should fail for zero max pending limit"
@@ -1767,7 +1759,8 @@ fn lasm_smoke_command_rejects_invalid_runtime_script_segments() {
         Some(2),
         "empty runtime-script should return deterministic usage-style exit code"
     );
-    let empty_stderr = String::from_utf8(empty_script_output.stderr).expect("stderr should be utf-8");
+    let empty_stderr =
+        String::from_utf8(empty_script_output.stderr).expect("stderr should be utf-8");
     assert!(
         empty_stderr.contains("invalid --runtime-script: expected at least one action segment"),
         "lasm-smoke failure should mention empty runtime-script guidance:\n{empty_stderr}"
@@ -1825,7 +1818,9 @@ fn lasm_smoke_command_reports_queue_overflow_with_max_pending_limit() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
     assert_eq!(
-        parsed.get("maxInFlight").and_then(serde_json::Value::as_u64),
+        parsed
+            .get("maxInFlight")
+            .and_then(serde_json::Value::as_u64),
         Some(1),
         "json summary should include effective max in-flight limit"
     );
@@ -1923,7 +1918,9 @@ fn lasm_smoke_command_reports_timeout_status_with_max_request_ms() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
     assert_eq!(
-        parsed.get("maxRequestMs").and_then(serde_json::Value::as_u64),
+        parsed
+            .get("maxRequestMs")
+            .and_then(serde_json::Value::as_u64),
         Some(10),
         "json summary should include effective max request duration"
     );
@@ -2099,7 +2096,9 @@ fn lasm_smoke_command_reports_duration_stats_in_json_summary() {
         "duration avg should be deterministic for scripted sleep"
     );
     assert_eq!(
-        parsed.get("firstDurationMs").and_then(serde_json::Value::as_u64),
+        parsed
+            .get("firstDurationMs")
+            .and_then(serde_json::Value::as_u64),
         Some(7),
         "firstDurationMs should align with deterministic scripted duration"
     );
@@ -3833,6 +3832,131 @@ fn main() effects { net } -> Int {
         "response should include deterministic body-limit error body:\n{response}"
     );
 
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_returns_503_when_concurrency_limit_is_reached() {
+    let project_dir = temp_dir("sec4-run-command-lasm-concurrency-limit");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmconcurrencylimitcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut held = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before opening held connection with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n")
+                    .expect("held partial request should be written");
+                held = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _held_stream = match held {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish held connection for LASM concurrency-limit test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM concurrency-limit test could not connect second client");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 503 Service Unavailable"),
+        "response should contain deterministic service unavailable status:\n{response}"
+    );
+    assert!(
+        response.contains("server busy: max concurrency reached"),
+        "response should include deterministic concurrency-limit body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
 
