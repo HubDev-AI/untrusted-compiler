@@ -296,6 +296,7 @@ Post-alpha track acceptance anchors:
 - [x] Benchmark default implementation sets now include `sec4-lasm` across preflight/comparison/step/full-suite orchestration and Makefile defaults, so LASM benchmark coverage is exercised by default (`docs/book/925-m39-benchmark-default-impl-set-includes-sec4-lasm.md`).
 - [x] LASM dynamic validation errors now include benchmark-style envelope metadata parity (`traceId` + `timeMs`) using one request-scoped trace id shared across header/body paths (`docs/book/926-m39-lasm-trace-and-error-envelope-parity.md`).
 - [x] LASM decode/create materialization now rejects non-JSON content-type payloads deterministically (`400 HTTP.BAD_REQUEST`, `content-type must be application/json`) while preserving empty-body fallback compatibility (`docs/book/927-m39-lasm-json-content-type-enforcement.md`).
+- [x] LASM non-oneshot overload path now returns deterministic JSON error envelopes (`HTTP.SERVICE_UNAVAILABLE`) with trace metadata instead of plain-text overload bodies (`docs/book/928-m39-lasm-overload-json-error-envelope.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

@@ -5816,14 +5816,25 @@ fn cmd_run_lasm_backend(
                 let request_headers = request_head.as_ref().map(|head| &head.headers);
                 let include_cors_defaults =
                     should_include_lasm_cors_defaults(request_headers, header_defaults.as_ref());
-                let mut response =
-                    sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
+                let trace_id = next_lasm_trace_id(trace_counter.as_ref());
+                let mut response = sec4_core::HttpResponse::text(503, "");
+                set_lasm_json_response(
+                    &mut response,
+                    503,
+                    &lasm_error_envelope(
+                        "HTTP.SERVICE_UNAVAILABLE",
+                        "internal",
+                        "server busy: max concurrency reached",
+                        503,
+                        trace_id.as_str(),
+                    ),
+                );
                 apply_lasm_request_origin_header(
                     &mut response,
                     request_headers,
                     header_defaults.as_ref(),
                 );
-                stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
+                set_lasm_trace_id(&mut response, trace_id.as_str());
                 let _ = write_lasm_http_response(
                     &mut stream,
                     &response,
@@ -6923,10 +6934,6 @@ fn set_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_id: &str) {
     response
         .headers
         .insert("X-Trace-Id".to_string(), trace_id.to_string());
-}
-
-fn stamp_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_counter: &AtomicU64) {
-    set_lasm_trace_id(response, next_lasm_trace_id(trace_counter).as_str());
 }
 
 fn lasm_now_ms() -> u64 {

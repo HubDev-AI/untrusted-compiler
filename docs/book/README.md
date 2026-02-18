@@ -893,5 +893,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `925-m39-benchmark-default-impl-set-includes-sec4-lasm.md`
 - `926-m39-lasm-trace-and-error-envelope-parity.md`
 - `927-m39-lasm-json-content-type-enforcement.md`
+- `928-m39-lasm-overload-json-error-envelope.md`
 
 As milestones progress, chapters will be added and linked from this index.

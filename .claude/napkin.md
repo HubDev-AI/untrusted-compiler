@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | After switching LASM trace stamping to request-scoped ids, I left `stamp_lasm_trace_id(...)` unused, surfaced by a compiler dead-code warning during command-test validation. | When refactoring shared helpers, run a quick symbol-use sweep (`rg helper_name`) after first compile and remove obsolete wrappers in the same slice. |
 | 2026-02-18 | self | Used `cargo fmt -p sec4 -- compiler/sec4-cli/src/main.rs`, which reformatted unrelated `compiler/sec4-cli/tests/commands.rs` lines and created avoidable diff noise. | For focused LASM slices, format only touched files with `rustfmt <file>` (or manually avoid crate-wide formatting) to prevent unrelated churn. |
 | 2026-02-18 | self | Ran LASM validation with parallel cargo commands again (`multi_tool_use.parallel`), which reintroduced package/build lock waits and violates the repo's serial-cargo rule. | Keep all cargo test/build commands strictly sequential in this repo; use parallel tool calls only for read/search or non-cargo shell checks. |
 | 2026-02-18 | self | Tried cleaning transient benchmark artifacts with `rm -rf` (`benchmark-suite/services/sec4-lasm/build`) and the command was blocked by policy. | For generated cleanup in this environment, remove files with non-destructive edits (`apply_patch`/targeted deletes) and then `rmdir` empty directories. |
