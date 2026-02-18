@@ -1642,6 +1642,59 @@ fn lasm_smoke_command_matches_parameterized_registration_with_concrete_route_sel
 }
 
 #[test]
+fn lasm_smoke_command_head_method_falls_back_to_get_registration() {
+    let root = temp_dir("sec4-lasm-smoke-head-fallback-get-route");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-head-fallback-get-route\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(204, \"healthy\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/health\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "HEAD",
+        "--route",
+        "/health",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(
+        stdout.contains("origin=handler:health"),
+        "lasm-smoke output should resolve HEAD request through GET registration when HEAD route is absent:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=204"),
+        "lasm-smoke output should include handler-extracted status from GET fallback:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("statusCounts=204:1"),
+        "lasm-smoke output should count fallback response status deterministically:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_zero_step_budget() {
     let root = temp_dir("sec4-lasm-smoke-zero-budget");
     let project_dir = root.join("project");
