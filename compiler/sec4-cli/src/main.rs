@@ -7013,10 +7013,36 @@ fn read_lasm_http_request(
             .map_err(|err| map_read_error("reading request body", err))?;
     }
 
-    let path = request_target
+    let normalized_target = if request_target == "*" {
+        request_target
+    } else if request_target.starts_with('/') {
+        request_target
+    } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
+        let (_, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
+            make_error(
+                400,
+                "invalid request target: malformed absolute-form".to_string(),
+            )
+        })?;
+        if authority_and_path.is_empty() || authority_and_path.starts_with('/') {
+            return Err(make_error(
+                400,
+                "invalid request target: missing authority".to_string(),
+            ));
+        }
+        if let Some(path_index) = authority_and_path.find('/') {
+            &authority_and_path[path_index..]
+        } else {
+            "/"
+        }
+    } else {
+        return Err(make_error(400, "invalid request target".to_string()));
+    };
+
+    let path = normalized_target
         .split_once('?')
         .map(|(path, _)| path)
-        .unwrap_or(request_target);
+        .unwrap_or(normalized_target);
 
     Ok(LasmRunRequest {
         method: method.to_ascii_uppercase(),

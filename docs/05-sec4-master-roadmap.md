@@ -303,6 +303,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM worker runtime now reuses a persistent buffered request reader per connection (supporting pipelined request parsing), interprets comma-delimited `Connection` tokens deterministically, and rejects unsupported `Transfer-Encoding` with deterministic `501 Not Implemented` responses (`docs/book/932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
+- [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
