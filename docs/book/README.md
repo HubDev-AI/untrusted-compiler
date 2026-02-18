@@ -933,5 +933,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `965-m39-lasm-req-cookie-case-insensitive-lookup-parity.md`
 - `966-m39-c-runtime-req-header-cookie-duplicate-merge-parity.md`
 - `967-m39-c-runtime-string-handle-literal-abi-bridge-for-res-headers-cookies.md`
+- `968-m39-c-runtime-string-handle-literal-abi-bridge-for-err-helpers.md`
 
 As milestones progress, chapters will be added and linked from this index.

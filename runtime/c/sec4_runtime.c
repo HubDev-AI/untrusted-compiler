@@ -12301,52 +12301,62 @@ int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
   return sec4_rt_handle_from_two(auth_handle, role_handle, UINT64_C(0xB2020));
 }
 
-int64_t sec4_rt_err_validation(const char *code, const char *message) {
+int64_t sec4_rt_err_validation(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       400,
-      code != NULL ? code : "VALIDATION.BAD_REQUEST",
+      code_value != NULL ? code_value : "VALIDATION.BAD_REQUEST",
       "validation",
-      message != NULL ? message : "validation failed",
+      message_value != NULL ? message_value : "validation failed",
       UINT64_C(0xC3001)
   );
 }
 
-int64_t sec4_rt_err_auth(const char *code, const char *message, int64_t status) {
+int64_t sec4_rt_err_auth(int64_t code, int64_t message, int64_t status) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   int64_t resolved_status = status > 0 ? status : 401;
   return sec4_rt_emit_error_handle(
       resolved_status,
-      code != NULL ? code : "AUTH.UNAUTHORIZED",
+      code_value != NULL ? code_value : "AUTH.UNAUTHORIZED",
       "auth",
-      message != NULL ? message : "authorization failed",
+      message_value != NULL ? message_value : "authorization failed",
       UINT64_C(0xC3002)
   );
 }
 
-int64_t sec4_rt_err_not_found(const char *code, const char *message) {
+int64_t sec4_rt_err_not_found(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       404,
-      code != NULL ? code : "RESOURCE.NOT_FOUND",
+      code_value != NULL ? code_value : "RESOURCE.NOT_FOUND",
       "not_found",
-      message != NULL ? message : "resource not found",
+      message_value != NULL ? message_value : "resource not found",
       UINT64_C(0xC3003)
   );
 }
 
-int64_t sec4_rt_err_conflict(const char *code, const char *message) {
+int64_t sec4_rt_err_conflict(int64_t code, int64_t message) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       409,
-      code != NULL ? code : "RESOURCE.CONFLICT",
+      code_value != NULL ? code_value : "RESOURCE.CONFLICT",
       "conflict",
-      message != NULL ? message : "conflict",
+      message_value != NULL ? message_value : "conflict",
       UINT64_C(0xC3004)
   );
 }
 
-int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t limit) {
-  const char *resolved_message = message != NULL ? message : "rate limit exceeded";
+int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit) {
+  const char *code_value = sec4_rt_resolve_tracked_or_literal_string(code);
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
+  const char *resolved_message = message_value != NULL ? message_value : "rate limit exceeded";
   int64_t error_handle = sec4_rt_emit_error_handle(
       429,
-      code != NULL ? code : "LIMIT.RATE",
+      code_value != NULL ? code_value : "LIMIT.RATE",
       "rate_limit",
       resolved_message,
       UINT64_C(0xC3005)
@@ -12367,12 +12377,13 @@ int64_t sec4_rt_err_rate_limit(const char *code, const char *message, int64_t li
   return next;
 }
 
-int64_t sec4_rt_err_internal(const char *message) {
+int64_t sec4_rt_err_internal(int64_t message) {
+  const char *message_value = sec4_rt_resolve_tracked_or_literal_string(message);
   return sec4_rt_emit_error_handle(
       500,
       "INTERNAL.ERROR",
       "internal",
-      message != NULL ? message : "internal error",
+      message_value != NULL ? message_value : "internal error",
       UINT64_C(0xC3007)
   );
 }
