@@ -6125,6 +6125,84 @@ static bool sec4_rt_parse_header_value(
   return false;
 }
 
+static bool sec4_rt_parse_header_value_merged(
+    const char *request,
+    size_t request_len,
+    const char *name,
+    char *value,
+    size_t value_size
+) {
+  if (value == NULL || value_size == 0) {
+    return false;
+  }
+  value[0] = '\0';
+  if (request == NULL || request_len == 0 || name == NULL || name[0] == '\0') {
+    return false;
+  }
+
+  size_t name_len = strlen(name);
+  const char *cursor = request;
+  const char *request_end = request + request_len;
+  bool found = false;
+  bool keep_first_only = strcasecmp(name, "host") == 0 || strcasecmp(name, "content-length") == 0;
+  const char *separator = strcasecmp(name, "cookie") == 0 ? "; " : ", ";
+  size_t separator_len = strlen(separator);
+
+  while (cursor < request_end) {
+    const char *line_end = strstr(cursor, "\r\n");
+    if (line_end == NULL || line_end > request_end) {
+      break;
+    }
+    if (line_end == cursor) {
+      break;
+    }
+
+    if ((size_t) (line_end - cursor) > name_len && strncasecmp(cursor, name, name_len) == 0
+        && cursor[name_len] == ':') {
+      const char *start = cursor + name_len + 1;
+      while (start < line_end && isspace((unsigned char) *start)) {
+        start += 1;
+      }
+      const char *end = line_end;
+      while (end > start && isspace((unsigned char) *(end - 1))) {
+        end -= 1;
+      }
+      size_t len = (size_t) (end - start);
+
+      if (!found) {
+        size_t copy_len = len;
+        if (copy_len >= value_size) {
+          copy_len = value_size - 1;
+        }
+        memcpy(value, start, copy_len);
+        value[copy_len] = '\0';
+        found = true;
+      } else if (!keep_first_only) {
+        size_t current_len = strlen(value);
+        if (current_len < value_size - 1) {
+          size_t available = value_size - 1 - current_len;
+          size_t copy_separator_len = separator_len < available ? separator_len : available;
+          memcpy(value + current_len, separator, copy_separator_len);
+          current_len += copy_separator_len;
+          value[current_len] = '\0';
+
+          if (current_len < value_size - 1) {
+            available = value_size - 1 - current_len;
+            size_t copy_len = len < available ? len : available;
+            memcpy(value + current_len, start, copy_len);
+            current_len += copy_len;
+            value[current_len] = '\0';
+          }
+        }
+      }
+    }
+
+    cursor = line_end + 2;
+  }
+
+  return found;
+}
+
 static size_t sec4_rt_count_header_occurrences(
     const char *request,
     size_t request_len,
@@ -9306,7 +9384,7 @@ int64_t sec4_rt_req_header(const char *name) {
   const char *value = name;
   if (g_sec4_rt_request.has_request
       && g_sec4_rt_request.raw_headers_len > 0
-      && sec4_rt_parse_header_value(
+      && sec4_rt_parse_header_value_merged(
           g_sec4_rt_request.raw_headers,
           g_sec4_rt_request.raw_headers_len,
           name,
@@ -9324,7 +9402,7 @@ int64_t sec4_rt_req_cookie(const char *name) {
   const char *value = name;
   if (g_sec4_rt_request.has_request
       && g_sec4_rt_request.raw_headers_len > 0
-      && sec4_rt_parse_header_value(
+      && sec4_rt_parse_header_value_merged(
           g_sec4_rt_request.raw_headers,
           g_sec4_rt_request.raw_headers_len,
           "Cookie",
