@@ -1823,17 +1823,18 @@ fn extract_response_plan_in_block(
     visited: &mut HashSet<String>,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<LasmResponsePlan> {
+    let mut response = None;
     for statement in &block.statements {
-        if let Some(response) =
-            extract_response_plan_in_stmt(functions, statement, visited, bindings)
-        {
-            return Some(response);
+        if let Some(next) = extract_response_plan_in_stmt(functions, statement, visited, bindings) {
+            response = Some(next);
         }
     }
     if let Some(tail) = &block.tail {
-        return extract_response_plan_in_expr(functions, tail, visited, bindings);
+        if let Some(next) = extract_response_plan_in_expr(functions, tail, visited, bindings) {
+            response = Some(next);
+        }
     }
-    None
+    response
 }
 
 fn extract_response_plan_in_stmt(
@@ -1869,6 +1870,18 @@ fn extract_response_plan_in_expr(
 ) -> Option<LasmResponsePlan> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
+            let mut response = None;
+            if let Some(next) = extract_response_plan_in_expr(functions, callee, visited, bindings)
+            {
+                response = Some(next);
+            }
+            for argument in args {
+                if let Some(next) =
+                    extract_response_plan_in_expr(functions, argument, visited, bindings)
+                {
+                    response = Some(next);
+                }
+            }
             if let Some(response) = match_response_helper_call(callee, args, bindings) {
                 return Some(response);
             }
@@ -1879,26 +1892,17 @@ fn extract_response_plan_in_expr(
                     return Some(response);
                 }
             }
-            if let Some(response) =
-                extract_response_plan_in_expr(functions, callee, visited, bindings)
-            {
-                return Some(response);
-            }
-            for argument in args {
-                if let Some(response) =
-                    extract_response_plan_in_expr(functions, argument, visited, bindings)
-                {
-                    return Some(response);
-                }
-            }
-            None
+            response
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
             extract_response_plan_in_expr(functions, expr, visited, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            extract_response_plan_in_expr(functions, left, visited, bindings)
-                .or_else(|| extract_response_plan_in_expr(functions, right, visited, bindings))
+            let mut response = extract_response_plan_in_expr(functions, left, visited, bindings);
+            if let Some(next) = extract_response_plan_in_expr(functions, right, visited, bindings) {
+                response = Some(next);
+            }
+            response
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
             extract_response_plan_in_expr(functions, object, visited, bindings)
