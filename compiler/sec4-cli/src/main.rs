@@ -891,6 +891,8 @@ struct LasmDynamicResponseState {
 
 const LASM_INTERNAL_AUTH_REQUIRE_HEADER: &str = "X-Sec4-Internal-Auth-Require";
 const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Require-Role";
+const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
+    "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 
 fn collect_lasm_route_plans(
@@ -932,9 +934,15 @@ fn collect_lasm_route_plans(
         let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
         let auth_requirement =
             extract_auth_requirement(&functions, registration.handler_name.as_str());
-        if middleware_requirements.require_auth || auth_requirement.require_auth {
+        if auth_requirement.require_auth {
             headers.insert(
                 LASM_INTERNAL_AUTH_REQUIRE_HEADER.to_string(),
+                "1".to_string(),
+            );
+        }
+        if middleware_requirements.require_auth {
+            headers.insert(
+                LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER.to_string(),
                 "1".to_string(),
             );
         }
@@ -6691,8 +6699,18 @@ fn build_lasm_http_runtime(
 fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDefaults {
     let mut headers = BTreeMap::new();
     let cors_enabled = policy.cors.enabled;
-    let auth_mode = normalize_lasm_auth_mode(policy.auth.mode.as_str()).to_string();
-    let auth_cookie_name = if !policy.auth.cookie_name.trim().is_empty()
+    let auth_mode = lasm_effective_auth_mode(policy.auth.mode.as_str());
+    let auth_cookie_name = if let Ok(value) = std::env::var("SEC4_RT_AUTH_COOKIE_NAME") {
+        if !value.trim().is_empty() && is_lasm_response_header_name_valid(value.trim()) {
+            value.trim().to_string()
+        } else if !policy.auth.cookie_name.trim().is_empty()
+            && is_lasm_response_header_name_valid(policy.auth.cookie_name.trim())
+        {
+            policy.auth.cookie_name.trim().to_string()
+        } else {
+            "session".to_string()
+        }
+    } else if !policy.auth.cookie_name.trim().is_empty()
         && is_lasm_response_header_name_valid(policy.auth.cookie_name.trim())
     {
         policy.auth.cookie_name.trim().to_string()
@@ -7227,9 +7245,13 @@ fn apply_lasm_auth_requirement_enforcement(
     header_defaults: &LasmResponseHeaderDefaults,
     trace_id: &str,
 ) -> bool {
-    let requires_auth = response
+    let requires_auth_helper = response
         .headers
         .remove(LASM_INTERNAL_AUTH_REQUIRE_HEADER)
+        .is_some();
+    let requires_auth_middleware = response
+        .headers
+        .remove(LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER)
         .is_some();
     let required_role = response
         .headers
@@ -7249,11 +7271,14 @@ fn apply_lasm_auth_requirement_enforcement(
                 value
             }
         });
-    if !requires_auth && required_role.is_none() {
+    if !requires_auth_helper && !requires_auth_middleware && required_role.is_none() {
         return false;
     }
 
     let auth_mode = normalize_lasm_auth_mode(header_defaults.auth_mode.as_str());
+    if auth_mode.eq_ignore_ascii_case("off") && !requires_auth_helper && required_role.is_none() {
+        return false;
+    }
     let Some((subject, used_bearer)) = lasm_collect_auth_subject(
         request,
         auth_mode,
@@ -7355,6 +7380,23 @@ fn normalize_lasm_auth_mode(mode: &str) -> &str {
         return "mixed";
     }
     "token"
+}
+
+fn is_lasm_supported_auth_mode(mode: &str) -> bool {
+    let mode = mode.trim();
+    mode.eq_ignore_ascii_case("off")
+        || mode.eq_ignore_ascii_case("token")
+        || mode.eq_ignore_ascii_case("cookie")
+        || mode.eq_ignore_ascii_case("mixed")
+}
+
+fn lasm_effective_auth_mode(policy_mode: &str) -> String {
+    if let Ok(env_mode) = std::env::var("SEC4_RT_AUTH_MODE") {
+        if is_lasm_supported_auth_mode(env_mode.as_str()) {
+            return normalize_lasm_auth_mode(env_mode.as_str()).to_string();
+        }
+    }
+    normalize_lasm_auth_mode(policy_mode).to_string()
 }
 
 fn lasm_auth_mode_allows_token(mode: &str) -> bool {
@@ -7548,6 +7590,9 @@ fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) 
     response
         .headers
         .remove(LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER);
+    response
+        .headers
+        .remove(LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER);
     response.headers.remove(LASM_INTERNAL_CSRF_REQUIRE_HEADER);
 }
 
