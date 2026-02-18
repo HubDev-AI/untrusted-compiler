@@ -872,10 +872,19 @@ struct LasmResponsePlan {
     default_content_type: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct LasmAuthRequirement {
+    require_auth: bool,
+    required_role: Option<String>,
+}
+
 #[derive(Debug, Default)]
 struct LasmDynamicResponseState {
     users_by_id: HashMap<String, serde_json::Value>,
 }
+
+const LASM_INTERNAL_AUTH_REQUIRE_HEADER: &str = "X-Sec4-Internal-Auth-Require";
+const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Require-Role";
 
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
@@ -913,6 +922,20 @@ fn collect_lasm_route_plans(
             continue;
         };
         let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
+        let auth_requirement =
+            extract_auth_requirement(&functions, registration.handler_name.as_str());
+        if auth_requirement.require_auth {
+            headers.insert(
+                LASM_INTERNAL_AUTH_REQUIRE_HEADER.to_string(),
+                "1".to_string(),
+            );
+        }
+        if let Some(required_role) = auth_requirement.required_role {
+            headers.insert(
+                LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER.to_string(),
+                required_role,
+            );
+        }
         if let Some(content_type) = response_plan.default_content_type {
             headers
                 .entry("Content-Type".to_string())
@@ -1597,6 +1620,221 @@ fn extract_response_plan_in_expr(
     }
 }
 
+fn extract_auth_requirement(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+) -> LasmAuthRequirement {
+    let mut requirement = LasmAuthRequirement::default();
+    let mut visited = HashSet::new();
+    extract_auth_requirement_in_function(functions, function_name, &mut visited, &mut requirement);
+    requirement
+}
+
+fn extract_auth_requirement_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    requirement: &mut LasmAuthRequirement,
+) {
+    if !visited.insert(function_name.to_string()) {
+        return;
+    }
+    let Some(function) = functions.get(function_name) else {
+        return;
+    };
+    let mut bindings = HashMap::new();
+    extract_auth_requirement_in_block(
+        functions,
+        &function.body,
+        visited,
+        requirement,
+        &mut bindings,
+    );
+}
+
+fn extract_auth_requirement_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    requirement: &mut LasmAuthRequirement,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    for statement in &block.statements {
+        extract_auth_requirement_in_stmt(functions, statement, visited, requirement, bindings);
+    }
+    if let Some(tail) = &block.tail {
+        extract_auth_requirement_in_expr(functions, tail, visited, requirement, bindings);
+    }
+}
+
+fn extract_auth_requirement_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    requirement: &mut LasmAuthRequirement,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            extract_auth_requirement_in_expr(functions, value, visited, requirement, bindings);
+            bindings.insert(name.clone(), value.clone());
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                extract_auth_requirement_in_expr(functions, value, visited, requirement, bindings);
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            extract_auth_requirement_in_expr(functions, expr, visited, requirement, bindings);
+        }
+    }
+}
+
+fn extract_auth_requirement_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    requirement: &mut LasmAuthRequirement,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(call_requirement) = match_auth_requirement_call(callee, args, bindings) {
+                requirement.require_auth |= call_requirement.require_auth;
+                if let Some(required_role) = call_requirement.required_role {
+                    requirement.required_role = Some(required_role);
+                }
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                extract_auth_requirement_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    requirement,
+                );
+            }
+            extract_auth_requirement_in_expr(functions, callee, visited, requirement, bindings);
+            for argument in args {
+                extract_auth_requirement_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    requirement,
+                    bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            extract_auth_requirement_in_expr(functions, expr, visited, requirement, bindings)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            extract_auth_requirement_in_expr(functions, left, visited, requirement, bindings);
+            extract_auth_requirement_in_expr(functions, right, visited, requirement, bindings);
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            extract_auth_requirement_in_expr(functions, object, visited, requirement, bindings)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            extract_auth_requirement_in_expr(functions, condition, visited, requirement, bindings);
+            let mut then_bindings = bindings.clone();
+            extract_auth_requirement_in_block(
+                functions,
+                then_branch,
+                visited,
+                requirement,
+                &mut then_bindings,
+            );
+            if let Some(else_branch) = else_branch {
+                let mut else_bindings = bindings.clone();
+                extract_auth_requirement_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    requirement,
+                    &mut else_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            extract_auth_requirement_in_expr(functions, scrutinee, visited, requirement, bindings);
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                extract_auth_requirement_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    requirement,
+                    &mut arm_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            extract_auth_requirement_in_block(
+                functions,
+                block,
+                visited,
+                requirement,
+                &mut block_bindings,
+            );
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
+}
+
+fn match_auth_requirement_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmAuthRequirement> {
+    let mut is_require = false;
+    let mut is_require_role = false;
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            is_require = name == "auth_require";
+            is_require_role = name == "auth_require_role";
+        }
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            if let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind {
+                if namespace == "auth" {
+                    is_require = field == "require";
+                    is_require_role = field == "requireRole";
+                }
+            }
+        }
+        _ => {}
+    }
+
+    if is_require {
+        return Some(LasmAuthRequirement {
+            require_auth: true,
+            required_role: None,
+        });
+    }
+
+    if is_require_role {
+        let required_role = args
+            .get(1)
+            .and_then(|expr| parse_lasm_res_text_template(expr, bindings, 0))
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "role".to_string());
+        return Some(LasmAuthRequirement {
+            require_auth: true,
+            required_role: Some(required_role),
+        });
+    }
+
+    None
+}
+
 fn match_response_helper_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
@@ -1659,8 +1897,7 @@ fn parse_lasm_res_text_template(
     let resolved = resolve_response_expr(expr, bindings, depth)?;
     match &resolved.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings)
-            {
+            if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings) {
                 return Some(placeholder);
             }
             if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
@@ -1668,7 +1905,9 @@ fn parse_lasm_res_text_template(
             }
             None
         }
-        sec4_core::ast::ExprKind::Binary { op, left, right } if *op == sec4_core::ast::BinaryOp::Add => {
+        sec4_core::ast::ExprKind::Binary { op, left, right }
+            if *op == sec4_core::ast::BinaryOp::Add =>
+        {
             let lhs = parse_lasm_res_text_template(left, bindings, depth + 1)?;
             let rhs = parse_lasm_res_text_template(right, bindings, depth + 1)?;
             Some(format!("{lhs}{rhs}"))
@@ -2160,7 +2399,8 @@ fn extract_header_gate_literal(
         sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
         sec4_core::ast::ExprKind::Call { callee, args } => {
             if expected_gate == "value" || expected_gate == "name" {
-                if let Some(value) = parse_lasm_request_header_placeholder_call(callee, args, bindings)
+                if let Some(value) =
+                    parse_lasm_request_header_placeholder_call(callee, args, bindings)
                 {
                     return Some(value);
                 }
@@ -6155,6 +6395,14 @@ fn build_lasm_http_runtime(
 fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDefaults {
     let mut headers = BTreeMap::new();
     let cors_enabled = policy.cors.enabled;
+    let auth_mode = normalize_lasm_auth_mode(policy.auth.mode.as_str()).to_string();
+    let auth_cookie_name = if !policy.auth.cookie_name.trim().is_empty()
+        && is_lasm_response_header_name_valid(policy.auth.cookie_name.trim())
+    {
+        policy.auth.cookie_name.trim().to_string()
+    } else {
+        "session".to_string()
+    };
     let mut cors_allow_any_origin = false;
     let mut cors_allowed_origins = Vec::new();
     let mut cors_allow_any_method = false;
@@ -6298,6 +6546,8 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
         cors_allowed_headers,
         cors_allow_private_network,
         cors_default_origin,
+        auth_mode,
+        auth_cookie_name,
         headers,
     }
 }
@@ -6444,6 +6694,7 @@ fn process_lasm_connection_with_runtime(
                 &mut response,
                 &request,
                 &exchange.path_params,
+                header_defaults,
                 dynamic_state,
                 trace_id.as_str(),
             );
@@ -6471,9 +6722,20 @@ fn apply_lasm_dynamic_response_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
+    header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
     trace_id: &str,
 ) {
+    if apply_lasm_auth_requirement_enforcement(
+        response,
+        request,
+        path_params,
+        header_defaults,
+        trace_id,
+    ) {
+        return;
+    }
+
     apply_lasm_text_placeholder_materialization(response, request, path_params);
     apply_lasm_header_placeholder_materialization(response, request, path_params);
 
@@ -6634,6 +6896,192 @@ fn apply_lasm_dynamic_response_materialization(
         }
         _ => {}
     }
+}
+
+fn apply_lasm_auth_requirement_enforcement(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    header_defaults: &LasmResponseHeaderDefaults,
+    trace_id: &str,
+) -> bool {
+    let requires_auth = response
+        .headers
+        .remove(LASM_INTERNAL_AUTH_REQUIRE_HEADER)
+        .is_some();
+    let required_role = response
+        .headers
+        .remove(LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER)
+        .map(|template| {
+            if contains_lasm_request_placeholder_tokens(template.as_str()) {
+                materialize_lasm_request_placeholders(template.as_str(), request, path_params)
+            } else {
+                template
+            }
+        })
+        .map(|value| value.trim().to_string())
+        .map(|value| {
+            if value.is_empty() {
+                "role".to_string()
+            } else {
+                value
+            }
+        });
+    if !requires_auth && required_role.is_none() {
+        return false;
+    }
+
+    let auth_mode = normalize_lasm_auth_mode(header_defaults.auth_mode.as_str());
+    let Some((subject, used_bearer)) = lasm_collect_auth_subject(
+        request,
+        auth_mode,
+        header_defaults.auth_cookie_name.as_str(),
+    ) else {
+        set_lasm_json_response(
+            response,
+            401,
+            &lasm_error_envelope(
+                "AUTH.UNAUTHORIZED",
+                "auth",
+                lasm_auth_unauthorized_message(auth_mode),
+                401,
+                trace_id,
+            ),
+        );
+        return true;
+    };
+
+    if let Some(required_role) = required_role {
+        let has_required_role = if used_bearer {
+            lasm_bearer_token_has_role(subject.as_str(), required_role.as_str())
+        } else {
+            lasm_auth_cookie_has_role(&request.headers, required_role.as_str())
+        };
+        if !has_required_role {
+            let message = if used_bearer {
+                "Authorization token missing required role"
+            } else {
+                "Authenticated cookie principal missing required role"
+            };
+            set_lasm_json_response(
+                response,
+                403,
+                &lasm_error_envelope("AUTH.FORBIDDEN", "auth", message, 403, trace_id),
+            );
+            return true;
+        }
+    }
+
+    false
+}
+
+fn normalize_lasm_auth_mode(mode: &str) -> &str {
+    let mode = mode.trim();
+    if mode.eq_ignore_ascii_case("off") {
+        return "off";
+    }
+    if mode.eq_ignore_ascii_case("cookie") {
+        return "cookie";
+    }
+    if mode.eq_ignore_ascii_case("mixed") {
+        return "mixed";
+    }
+    "token"
+}
+
+fn lasm_auth_mode_allows_token(mode: &str) -> bool {
+    mode.eq_ignore_ascii_case("token") || mode.eq_ignore_ascii_case("mixed")
+}
+
+fn lasm_auth_mode_allows_cookie(mode: &str) -> bool {
+    mode.eq_ignore_ascii_case("cookie") || mode.eq_ignore_ascii_case("mixed")
+}
+
+fn lasm_auth_unauthorized_message(mode: &str) -> &'static str {
+    if lasm_auth_mode_allows_token(mode) && lasm_auth_mode_allows_cookie(mode) {
+        return "Authorization header or session cookie missing or invalid";
+    }
+    if lasm_auth_mode_allows_cookie(mode) {
+        return "Session cookie missing or invalid";
+    }
+    "Authorization header missing or invalid"
+}
+
+fn lasm_collect_auth_subject(
+    request: &LasmRunRequest,
+    mode: &str,
+    auth_cookie_name: &str,
+) -> Option<(String, bool)> {
+    if lasm_auth_mode_allows_token(mode) {
+        if let Some(auth_header) = find_lasm_header_value(&request.headers, "Authorization") {
+            if lasm_is_valid_bearer_auth(auth_header) {
+                return Some((auth_header.to_string(), true));
+            }
+        }
+    }
+
+    if lasm_auth_mode_allows_cookie(mode) {
+        if let Some(session_cookie) = find_lasm_cookie_value(&request.headers, auth_cookie_name) {
+            if !session_cookie.trim().is_empty() {
+                return Some((session_cookie, false));
+            }
+        }
+    }
+
+    None
+}
+
+fn lasm_is_valid_bearer_auth(auth_header: &str) -> bool {
+    let bytes = auth_header.as_bytes();
+    bytes.len() > 7 && bytes[..7].eq_ignore_ascii_case(b"Bearer ") && !bytes[7..].is_empty()
+}
+
+fn lasm_bearer_token_has_role(auth_header: &str, required_role: &str) -> bool {
+    if !lasm_is_valid_bearer_auth(auth_header) || required_role.trim().is_empty() {
+        return false;
+    }
+    let token = &auth_header[7..];
+    let required_role = required_role.trim();
+    let mut cursor = 0usize;
+    while let Some(found_at) = token[cursor..].find(required_role) {
+        let start = cursor + found_at;
+        let end = start + required_role.len();
+        let before = if start == 0 {
+            ' '
+        } else {
+            token.as_bytes()[start - 1] as char
+        };
+        let after = if end >= token.len() {
+            '\0'
+        } else {
+            token.as_bytes()[end] as char
+        };
+        let before_ok = matches!(before, ' ' | ',' | ':' | '=' | ';');
+        let after_ok = matches!(after, '\0' | ' ' | ',' | ':' | '=' | ';');
+        if before_ok && after_ok {
+            return true;
+        }
+        cursor = start + 1;
+    }
+    false
+}
+
+fn lasm_auth_cookie_has_role(headers: &BTreeMap<String, String>, required_role: &str) -> bool {
+    let required_role = required_role.trim();
+    if required_role.is_empty() {
+        return false;
+    }
+    if let Some(role_cookie) = find_lasm_cookie_value(headers, "role") {
+        if role_cookie.trim() == required_role {
+            return true;
+        }
+    }
+    if let Some(role_header) = find_lasm_header_value(headers, "X-Role") {
+        if role_header.trim() == required_role {
+            return true;
+        }
+    }
+    false
 }
 
 fn apply_lasm_text_placeholder_materialization(
@@ -7149,7 +7597,10 @@ fn find_lasm_cookie_value(headers: &BTreeMap<String, String>, cookie_name: &str)
     })
 }
 
-fn parse_lasm_cookie_header_value<'a>(cookie_header: &'a str, cookie_name: &str) -> Option<&'a str> {
+fn parse_lasm_cookie_header_value<'a>(
+    cookie_header: &'a str,
+    cookie_name: &str,
+) -> Option<&'a str> {
     let cookie_name = cookie_name.trim();
     if cookie_name.is_empty() {
         return None;
@@ -7288,6 +7739,8 @@ struct LasmResponseHeaderDefaults {
     cors_allowed_headers: Vec<String>,
     cors_allow_private_network: bool,
     cors_default_origin: Option<String>,
+    auth_mode: String,
+    auth_cookie_name: String,
     headers: BTreeMap<String, String>,
 }
 
@@ -7889,7 +8342,9 @@ fn normalize_lasm_response_headers_case_insensitive(
 ) -> BTreeMap<String, String> {
     let mut normalized = BTreeMap::new();
     for (name, value) in headers {
-        if let Some(existing_key) = find_lasm_header_key_case_insensitive(&normalized, name.as_str()) {
+        if let Some(existing_key) =
+            find_lasm_header_key_case_insensitive(&normalized, name.as_str())
+        {
             normalized.insert(existing_key, value);
         } else {
             normalized.insert(name, value);
@@ -7903,7 +8358,9 @@ fn upsert_lasm_header_case_insensitive(
     canonical_name: String,
     value: String,
 ) {
-    if let Some(existing_key) = find_lasm_header_key_case_insensitive(headers, canonical_name.as_str()) {
+    if let Some(existing_key) =
+        find_lasm_header_key_case_insensitive(headers, canonical_name.as_str())
+    {
         headers.insert(existing_key, value);
         return;
     }
