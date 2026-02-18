@@ -6981,18 +6981,25 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_in_flight = max_concurrency.unwrap_or(policy_max_in_flight);
-    let effective_max_in_flight = match usize::try_from(effective_max_in_flight) {
+    let policy_max_in_flight = match usize::try_from(policy_max_in_flight) {
         Ok(value) if value >= 1 => value,
         Ok(_) => {
-            eprintln!("run failed: effective max concurrency must be >= 1");
+            eprintln!("run failed: policy http.max_concurrency must be >= 1");
             return Err(2);
         }
         Err(_) => {
-            eprintln!("run failed: effective max concurrency exceeds platform limits");
+            eprintln!("run failed: policy http.max_concurrency exceeds platform limits");
             return Err(2);
         }
     };
+    let effective_max_in_flight =
+        match resolve_lasm_max_in_flight(max_concurrency, policy_max_in_flight) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let policy_max_pending = match u64::try_from(policy.http.max_pending) {
         Ok(value) => value,
         Err(_) => {
@@ -7000,15 +7007,21 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_pending = max_pending.unwrap_or(policy_max_pending);
-    let effective_max_pending = match usize::try_from(effective_max_pending) {
+    let policy_max_pending = match usize::try_from(policy_max_pending) {
         Ok(value) if value >= 1 => value,
         Ok(_) => {
-            eprintln!("run failed: effective max pending must be >= 1");
+            eprintln!("run failed: policy http.max_pending must be >= 1");
             return Err(2);
         }
         Err(_) => {
-            eprintln!("run failed: effective max pending exceeds platform limits");
+            eprintln!("run failed: policy http.max_pending exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let effective_max_pending = match resolve_lasm_max_pending(max_pending, policy_max_pending) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
             return Err(2);
         }
     };
@@ -7763,6 +7776,62 @@ fn process_lasm_connection_with_runtime(
         }
         responses_written = responses_written.saturating_add(1);
     }
+}
+
+fn resolve_lasm_max_in_flight(
+    explicit_override: Option<u64>,
+    policy_default: usize,
+) -> Result<usize, String> {
+    if let Some(value) = explicit_override {
+        let parsed = usize::try_from(value)
+            .map_err(|_| "invalid --max-concurrency: exceeds platform limits".to_string())?;
+        if parsed == 0 {
+            return Err("invalid --max-concurrency: expected usize >= 1".to_string());
+        }
+        return Ok(parsed);
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_IN_FLIGHT") else {
+        return Ok(policy_default);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(policy_default);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_MAX_IN_FLIGHT: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_MAX_IN_FLIGHT: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
+}
+
+fn resolve_lasm_max_pending(
+    explicit_override: Option<u64>,
+    policy_default: usize,
+) -> Result<usize, String> {
+    if let Some(value) = explicit_override {
+        let parsed = usize::try_from(value)
+            .map_err(|_| "invalid --max-pending: exceeds platform limits".to_string())?;
+        if parsed == 0 {
+            return Err("invalid --max-pending: expected usize >= 1".to_string());
+        }
+        return Ok(parsed);
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_PENDING") else {
+        return Ok(policy_default);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(policy_default);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
 }
 
 fn resolve_lasm_runtime_step_budget(
