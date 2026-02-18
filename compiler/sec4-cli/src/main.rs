@@ -8271,6 +8271,136 @@ fn apply_lasm_dynamic_response_materialization(
                 }),
             );
         }
+        "UpdateUserResponse" => {
+            let Some(path_id) = resolve_lasm_user_lookup_id(request, path_params) else {
+                return;
+            };
+            if !is_lasm_uuid_v4(&path_id) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.UUID_INVALID",
+                        "validation",
+                        "id must be UUID v4",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            if request.body.is_empty() && !lasm_request_expects_json(request) {
+                return;
+            }
+            if !request.body.is_empty() && !lasm_request_expects_json(request) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "HTTP.BAD_REQUEST",
+                        "validation",
+                        "content-type must be application/json",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let payload = match parse_lasm_json_payload(&request.body) {
+                Some(payload) => payload,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "JSON.INVALID_SYNTAX",
+                            "validation",
+                            "invalid JSON payload",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            if let Some((code, message)) = validate_lasm_benchmark_user_payload(&payload) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(code, "validation", message, 400, trace_id),
+                );
+                return;
+            }
+            let Some(payload_id) = extract_lasm_payload_id(&payload) else {
+                return;
+            };
+            if payload_id != path_id {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.UUID_MISMATCH",
+                        "validation",
+                        "path id must match payload id",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let updated = match dynamic_state.lock() {
+                Ok(mut state) => {
+                    if !state.users_by_id.contains_key(&path_id) {
+                        false
+                    } else {
+                        state.users_by_id.insert(path_id.clone(), payload);
+                        if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
+                            eprintln!(
+                                "warning: LASM dynamic users store persistence failed: {message}"
+                            );
+                        }
+                        true
+                    }
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            if updated {
+                set_lasm_json_response(
+                    response,
+                    200,
+                    &serde_json::json!({
+                        "ok": true,
+                        "userId": path_id,
+                        "updated": true,
+                    }),
+                );
+            } else {
+                set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope(
+                        "HTTP.NOT_FOUND",
+                        "not_found",
+                        "user not found",
+                        404,
+                        trace_id,
+                    ),
+                );
+            }
+        }
         "UserResponse" => {
             let Some(id) = resolve_lasm_user_lookup_id(request, path_params) else {
                 return;
