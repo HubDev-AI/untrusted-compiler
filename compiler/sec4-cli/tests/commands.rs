@@ -304,10 +304,26 @@ fn promote_dry_run_emits_deterministic_plan_for_valid_project() {
 }
 
 #[test]
-fn promote_fails_without_dry_run() {
-    let root = temp_dir("sec4-promote-missing-dry-run");
+fn promote_apply_rewrites_composition_root_and_generates_scaffold() {
+    let root = temp_dir("sec4-promote-apply-rewrite");
     let project_dir = root.join("project");
-    write_minimal_project(&project_dir, "");
+    fs::create_dir_all(project_dir.join("src/feature")).expect("src/feature should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-apply\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "use feature.util;\n\nfn main() -> Int {\n  // localdb.main\n  if is_valid() {\n    0\n  } else {\n    1\n  }\n}\n",
+    )
+    .expect("main should be written");
+    fs::write(
+        project_dir.join("src/feature/util.ut"),
+        "// localdb.module\nfn is_valid() -> Bool {\n  true\n}\n",
+    )
+    .expect("feature module should be written");
     let project_path = project_dir
         .to_str()
         .expect("project path should be valid utf-8")
@@ -323,19 +339,109 @@ fn promote_fails_without_dry_run() {
         "server",
     ]);
     assert!(
+        output.status.success(),
+        "promote apply should succeed for valid browser->server project"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote apply should emit valid json report");
+    assert!(
+        parsed.get("mode").and_then(serde_json::Value::as_str) == Some("apply"),
+        "promote apply should emit apply-mode report"
+    );
+    assert_eq!(
+        parsed
+            .get("compositionRewrite")
+            .and_then(|rewrite| rewrite.get("rewrites"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "composition-root rewrite should replace localdb references in src/main.ut only"
+    );
+    assert!(
+        parsed
+            .get("generatedFiles")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|files| files.iter().any(|entry| {
+                entry.as_str() == Some("server/src/repo/db_repo.ut")
+            })),
+        "apply report should list deterministic generated scaffold files"
+    );
+    assert!(
+        parsed
+            .get("guardedSkippedReferences")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("file").and_then(serde_json::Value::as_str)
+                    == Some("src/feature/util.ut")
+            })),
+        "apply report should include guard-skipped localdb references outside composition root"
+    );
+
+    let main_source =
+        fs::read_to_string(project_dir.join("src/main.ut")).expect("rewritten main source should exist");
+    assert!(
+        main_source.contains("// db.main"),
+        "apply rewrite should replace localdb token in composition root:\n{main_source}"
+    );
+    let module_source = fs::read_to_string(project_dir.join("src/feature/util.ut"))
+        .expect("feature module source should remain readable");
+    assert!(
+        module_source.contains("// localdb.module"),
+        "composition-root guard should preserve module files outside src/main.ut:\n{module_source}"
+    );
+
+    let report_path = project_dir.join("server/reports/promote-plan.json");
+    assert!(
+        report_path.exists(),
+        "promote apply should write deterministic report artifact"
+    );
+    let report_source =
+        fs::read_to_string(&report_path).expect("promote apply report should be readable");
+    let report_json: serde_json::Value = serde_json::from_str(&report_source)
+        .expect("promote apply report file should be valid json");
+    assert_eq!(
+        parsed, report_json,
+        "stdout report and written report artifact should be byte-equivalent JSON payloads"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_rejects_unsupported_route_pair() {
+    let root = temp_dir("sec4-promote-unsupported-route");
+    let project_dir = root.join("project");
+    write_minimal_project(&project_dir, "");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "server",
+        "--to",
+        "browser",
+        "--dry-run",
+    ]);
+    assert!(
         !output.status.success(),
-        "promote without --dry-run should fail deterministically"
+        "promote should reject unsupported route pair deterministically"
     );
     assert_eq!(
         output.status.code(),
         Some(2),
-        "missing --dry-run should produce deterministic usage-style exit code"
+        "unsupported route should produce deterministic usage-style exit code"
     );
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("apply mode is not implemented yet"),
-        "promote failure should include deterministic guidance for missing --dry-run:\n{stderr}"
+        stderr.contains("only `browser -> server` is available"),
+        "unsupported route error should include deterministic guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");

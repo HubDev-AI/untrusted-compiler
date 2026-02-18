@@ -324,10 +324,10 @@ Post-alpha track acceptance anchors:
 
 ### M39-S4 tracking (live status)
 
-- [ ] Apply rewrite engine implemented with composition-root-only rewrite guard.
-- [ ] Scaffold generator + deterministic report implemented.
+- [x] Apply rewrite engine implemented with composition-root-only rewrite guard (`sec4 promote --from browser --to server` rewrites only `src/main.ut`).
+- [x] Scaffold generator + deterministic report implemented (generated `server/*` baseline files + `server/reports/promote-plan.json` apply report).
 - [ ] End-to-end promotion fixture (browser -> server) added and green.
-- [ ] Book chapter documenting S4 implementation added.
+- [x] Book chapter documenting S4 implementation baseline added (`docs/book/921-m39-promote-apply-composition-root-guard.md`).
 
 ### Readiness estimate (live)
 

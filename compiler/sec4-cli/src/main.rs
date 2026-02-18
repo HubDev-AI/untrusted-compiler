@@ -5142,11 +5142,6 @@ fn cmd_lint(path: &Path) -> Result<(), i32> {
 }
 
 fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: bool) -> Result<(), i32> {
-    if !dry_run {
-        eprintln!("promote failed: apply mode is not implemented yet; rerun with --dry-run");
-        return Err(2);
-    }
-
     if from != PromoteTarget::Browser || to != PromoteTarget::Server {
         eprintln!(
             "promote failed: unsupported promotion route `{} -> {}` (only `browser -> server` is available)",
@@ -5213,6 +5208,18 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
             line: None,
         });
     }
+    if localdb_references
+        .iter()
+        .any(|reference| reference.file != "src/main.ut")
+    {
+        preconditions.push(PromotePrecondition {
+            code: "PROMOTE.P9304".to_string(),
+            severity: "warning".to_string(),
+            message: "localdb references outside src/main.ut are preserved by composition-root-only rewrite guard".to_string(),
+            file: Some("src/main.ut".to_string()),
+            line: Some(1),
+        });
+    }
 
     preconditions.sort_by(|left, right| {
         (
@@ -5242,16 +5249,17 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
         })
         .collect::<Vec<_>>();
     let generated_files = vec![
-        "server/db/schema.sql",
-        "server/deploy/sec4.server.toml",
-        "server/reports/promote-plan.json",
-        "server/src/main.ut",
-        "server/src/repo/db_repo.ut",
+        "server/db/schema.sql".to_string(),
+        "server/deploy/sec4.server.toml".to_string(),
+        "server/reports/promote-plan.json".to_string(),
+        "server/src/main.ut".to_string(),
+        "server/src/repo/db_repo.ut".to_string(),
     ];
+    let mode = if dry_run { "dry-run" } else { "apply-precheck" };
 
     let plan = serde_json::json!({
         "version": "0.1",
-        "mode": "dry-run",
+        "mode": mode,
         "from": promote_target_label(from),
         "to": promote_target_label(to),
         "scannedSources": scanned_sources,
@@ -5286,22 +5294,154 @@ fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: boo
         "ready": !blocking_preconditions
     });
 
+    if dry_run || blocking_preconditions {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
+        );
+        return if blocking_preconditions { Err(1) } else { Ok(()) };
+    }
+
+    let apply_report = apply_promote_plan(path, &generated_files, &localdb_references, &plan)?;
     println!(
         "{}",
-        serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
+        serde_json::to_string_pretty(&apply_report)
+            .expect("promotion apply report should serialize as JSON")
     );
 
-    if blocking_preconditions {
-        Err(1)
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
 
 fn promote_target_label(target: PromoteTarget) -> &'static str {
     match target {
         PromoteTarget::Browser => "browser",
         PromoteTarget::Server => "server",
+    }
+}
+
+fn apply_promote_plan(
+    project_root: &Path,
+    generated_files: &[String],
+    localdb_references: &[PromoteBindingReference],
+    precheck_plan: &serde_json::Value,
+) -> Result<serde_json::Value, i32> {
+    let composition_root = project_root.join("src/main.ut");
+    let source = match fs::read_to_string(&composition_root) {
+        Ok(source) => source,
+        Err(err) => {
+            eprintln!(
+                "promote failed: could not read composition root `{}`: {err}",
+                composition_root.display()
+            );
+            return Err(2);
+        }
+    };
+
+    let rewrite_count = source.matches("localdb.").count();
+    let rewritten_source = source.replace("localdb.", "db.");
+    if rewritten_source != source {
+        if let Err(err) = fs::write(&composition_root, rewritten_source) {
+            eprintln!(
+                "promote failed: could not rewrite composition root `{}`: {err}",
+                composition_root.display()
+            );
+            return Err(2);
+        }
+    }
+
+    let mut scaffold_written = Vec::new();
+    for generated in generated_files {
+        if generated == "server/reports/promote-plan.json" {
+            continue;
+        }
+        let generated_path = project_root.join(generated);
+        let Some(parent) = generated_path.parent() else {
+            continue;
+        };
+        if let Err(err) = fs::create_dir_all(parent) {
+            eprintln!(
+                "promote failed: could not create scaffold directory `{}`: {err}",
+                parent.display()
+            );
+            return Err(2);
+        }
+        let content = promote_generated_file_content(generated);
+        if let Err(err) = fs::write(&generated_path, content) {
+            eprintln!(
+                "promote failed: could not write scaffold file `{}`: {err}",
+                generated_path.display()
+            );
+            return Err(2);
+        }
+        scaffold_written.push(generated.clone());
+    }
+
+    let guarded_references = localdb_references
+        .iter()
+        .filter(|reference| reference.file != "src/main.ut")
+        .map(|reference| {
+            serde_json::json!({
+                "file": reference.file,
+                "line": reference.line
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let report_rel_path = "server/reports/promote-plan.json";
+    let report_path = project_root.join(report_rel_path);
+    if let Some(parent) = report_path.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            eprintln!(
+                "promote failed: could not create report directory `{}`: {err}",
+                parent.display()
+            );
+            return Err(2);
+        }
+    }
+
+    let report = serde_json::json!({
+        "version": "0.1",
+        "mode": "apply",
+        "from": "browser",
+        "to": "server",
+        "compositionRewrite": {
+            "file": "src/main.ut",
+            "rewrites": rewrite_count
+        },
+        "guardedSkippedReferences": guarded_references,
+        "generatedFiles": scaffold_written,
+        "reportPath": report_rel_path,
+        "precheckPlan": precheck_plan
+    });
+    if let Err(err) = fs::write(
+        &report_path,
+        serde_json::to_string_pretty(&report).expect("promote apply report should serialize"),
+    ) {
+        eprintln!(
+            "promote failed: could not write apply report `{}`: {err}",
+            report_path.display()
+        );
+        return Err(2);
+    }
+
+    Ok(report)
+}
+
+fn promote_generated_file_content(relative_path: &str) -> &'static str {
+    match relative_path {
+        "server/src/main.ut" => {
+            "use repo.db_repo;\n\nfn main() -> Int {\n  // Generated server composition root.\n  0\n}\n"
+        }
+        "server/src/repo/db_repo.ut" => {
+            "fn fetch_by_id(id: Int) -> Int {\n  // Generated baseline server repository adapter placeholder.\n  id\n}\n"
+        }
+        "server/db/schema.sql" => {
+            "-- Generated schema baseline for promoted server target.\nCREATE TABLE IF NOT EXISTS app_items (\n  id INTEGER PRIMARY KEY,\n  created_at_ms BIGINT NOT NULL\n);\n"
+        }
+        "server/deploy/sec4.server.toml" => {
+            "[server]\nentry = \"server/src/main.ut\"\nprofile = \"server\"\n"
+        }
+        _ => "",
     }
 }
 

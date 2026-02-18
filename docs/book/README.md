@@ -886,5 +886,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `918-m39-lasm-http-runtime-timeout-from-submit-time.md`
 - `919-m39-lasm-smoke-duration-metrics.md`
 - `920-m39-promote-dry-run-planner-baseline.md`
+- `921-m39-promote-apply-composition-root-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.
