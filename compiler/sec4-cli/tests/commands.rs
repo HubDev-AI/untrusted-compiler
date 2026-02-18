@@ -1293,8 +1293,8 @@ fn lasm_smoke_command_extracts_res_ok_status_and_body() {
         "lasm-smoke output should include extracted res.ok status:\n{stdout}"
     );
     assert!(
-        stdout.contains("body=ok response"),
-        "lasm-smoke output should include res.ok-derived body marker:\n{stdout}"
+        stdout.contains("body={\"ok\":true,\"status\":201,\"schema\":\"CreateUserResponse\"}"),
+        "lasm-smoke output should include deterministic res.ok envelope body:\n{stdout}"
     );
     assert!(
         stdout.contains("ok=2") && stdout.contains("errors=0"),
@@ -5082,8 +5082,8 @@ fn main() effects { net } -> Int {
         "response should include deterministic trace header:\n{response}"
     );
     assert!(
-        response.contains("\r\n\r\nok response"),
-        "response should include deterministic res.ok body marker:\n{response}"
+        response.contains("\r\n\r\n{\"ok\":true,\"status\":201,\"schema\":\"CreateUserResponse\"}"),
+        "response should include deterministic res.ok JSON envelope body:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

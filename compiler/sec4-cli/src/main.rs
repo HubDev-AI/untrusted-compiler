@@ -1653,9 +1653,13 @@ fn match_res_json_call(
         length if length >= 3 => parse_status_literal(&args[0], bindings)?,
         _ => return None,
     };
+    let schema = match args.len() {
+        2 => parse_string_literal(&args[0], bindings),
+        _ => parse_string_literal(&args[1], bindings),
+    };
     Some(LasmResponsePlan {
         status,
-        body: "json response".to_string(),
+        body: build_lasm_json_response_body(status, schema.as_deref()),
         default_content_type: Some("application/json; charset=utf-8".to_string()),
     })
 }
@@ -1668,9 +1672,10 @@ fn match_res_ok_call(
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
+    let schema = parse_string_literal(&args[1], bindings);
     Some(LasmResponsePlan {
         status,
-        body: "ok response".to_string(),
+        body: build_lasm_ok_response_body(status, schema.as_deref()),
         default_content_type: Some("application/json; charset=utf-8".to_string()),
     })
 }
@@ -1683,9 +1688,10 @@ fn match_res_ok_meta_call(
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
+    let schema = parse_string_literal(&args[1], bindings);
     Some(LasmResponsePlan {
         status,
-        body: "ok response".to_string(),
+        body: build_lasm_ok_response_body(status, schema.as_deref()),
         default_content_type: Some("application/json; charset=utf-8".to_string()),
     })
 }
@@ -1710,6 +1716,41 @@ fn parse_string_literal(
         return None;
     };
     Some(value.clone())
+}
+
+fn build_lasm_json_response_body(status: u16, schema: Option<&str>) -> String {
+    match schema {
+        Some(schema_name) => format!(
+            "{{\"status\":{status},\"schema\":\"{}\"}}",
+            escape_json_string(schema_name)
+        ),
+        None => format!("{{\"status\":{status}}}"),
+    }
+}
+
+fn build_lasm_ok_response_body(status: u16, schema: Option<&str>) -> String {
+    match schema {
+        Some(schema_name) => format!(
+            "{{\"ok\":true,\"status\":{status},\"schema\":\"{}\"}}",
+            escape_json_string(schema_name)
+        ),
+        None => format!("{{\"ok\":true,\"status\":{status}}}"),
+    }
+}
+
+fn escape_json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn resolve_response_expr(
