@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--impls sec4,node,go,rust,c] [--dry-run-only]" >&2
+  echo "usage: $0 [--impls sec4,sec4-lasm,node,go,rust,c] [--dry-run-only]" >&2
 }
 
 impls_csv="sec4,node,go,rust,c"
@@ -40,7 +40,7 @@ done
 
 is_supported_impl() {
   case "$1" in
-    sec4|node|go|rust|c) return 0 ;;
+    sec4|sec4-lasm|node|go|rust|c) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -92,6 +92,9 @@ for raw_impl in "${impls[@]}"; do
     sec4)
       check_cmd "cargo" "Untrusted<T> compiler runner" || missing=1
       check_cmd "cc" "C compiler for Untrusted<T> runtime link" || missing=1
+      ;;
+    sec4-lasm)
+      check_cmd "cargo" "Untrusted<T> compiler runner" || missing=1
       ;;
     node)
       check_cmd "node" "Node benchmark service" || missing=1
