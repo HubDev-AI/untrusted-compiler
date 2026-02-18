@@ -4409,7 +4409,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"POST /health HTTP/1.1\r\nHost: localhost\r\nExpect: 100-continue\r\nConnection: close\r\n\r\n",
+                        b"POST /health HTTP/1.1\r\nHost: localhost\r\nExpect: 100-continue\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();
@@ -8606,6 +8606,168 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("server busy: max concurrency reached"),
         "response should include deterministic concurrency-limit body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_overflow_path_returns_parse_error_for_malformed_request() {
+    let project_dir = temp_dir("sec4-run-command-lasm-overflow-parse-error");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmoverflowparseerrorcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--max-pending",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut held = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before opening held connection with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n")
+                    .expect("held partial request should be written");
+                held = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _held_stream = match held {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish held connection for LASM overflow-parse-error test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut queued = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => {
+                queued = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _queued_stream = match queued {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish queued connection for LASM overflow-parse-error test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
+    let mut response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"G@T /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("overflow malformed request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("overflow response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM overflow-parse-error test could not connect overflow client");
+        }
+    };
+
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "overflow parser response should contain deterministic bad-request status:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"HTTP.BAD_REQUEST\"")
+            && response.contains("\"kind\":\"validation\""),
+        "overflow parser response should include deterministic code/kind:\n{response}"
+    );
+    assert!(
+        response.contains("invalid request line: invalid method token"),
+        "overflow parser response should include deterministic parser message:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-"),
+        "overflow parser response should include deterministic trace header:\n{response}"
     );
 
     let _ = child.kill();
