@@ -2331,10 +2331,14 @@ fn parse_lasm_res_text_template(
     let resolved = resolve_response_expr(expr, bindings, depth)?;
     match &resolved.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings) {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(placeholder) =
+                parse_lasm_request_text_placeholder(&resolved_callee, args, bindings)
+            {
                 return Some(placeholder);
             }
-            if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+            if is_lasm_validate_non_empty_call(&resolved_callee) && !args.is_empty() {
                 return parse_lasm_res_text_template(&args[0], bindings, depth + 1);
             }
             None
