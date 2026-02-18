@@ -887,5 +887,18 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `919-m39-lasm-smoke-duration-metrics.md`
 - `920-m39-promote-dry-run-planner-baseline.md`
 - `921-m39-promote-apply-composition-root-guard.md`
+- `922-m39-lasm-run-benchmark-contract-response-materialization.md`
+- `923-m39-lasm-run-benchmark-response-validation-hardening.md`
+- `924-m39-lasm-benchmark-payload-validation-parity.md`
+- `925-m39-benchmark-default-impl-set-includes-sec4-lasm.md`
+- `926-m39-lasm-trace-and-error-envelope-parity.md`
+- `927-m39-lasm-json-content-type-enforcement.md`
+- `928-m39-lasm-overload-json-error-envelope.md`
+- `929-m39-lasm-head-body-omission-parity.md`
+- `930-m39-lasm-request-line-version-hardening.md`
+- `931-m39-lasm-worker-keep-alive-support.md`
+- `932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`
+- `933-m39-lasm-conflicting-content-length-rejection.md`
+- `934-m39-lasm-http11-host-header-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.

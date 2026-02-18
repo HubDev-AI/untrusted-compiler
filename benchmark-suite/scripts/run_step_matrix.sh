@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,node,go,rust,c] [--endpoints ping,decode,users-post,users-get]
+usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get]
 
 Runs step-load benchmark profiles for each implementation/endpoint and emits
 step analysis artifacts plus a cross-implementation step matrix.
@@ -11,7 +11,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="sec4,node,go,rust"
+impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 
 while [ "$#" -gt 0 ]; do
@@ -67,7 +67,7 @@ IFS=',' read -r -a endpoints <<< "$endpoints_csv"
 
 is_supported_impl() {
   case "$1" in
-    sec4|node|go|rust|c) return 0 ;;
+    sec4|sec4-lasm|node|go|rust|c) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -118,6 +118,12 @@ start_service() {
         cd "$service_dir"
         ./build.sh >/dev/null
         PORT="$bench_port" ./sec4-bench-server
+      ) >"$log_file" 2>&1 &
+      ;;
+    sec4-lasm)
+      (
+        cd "$service_dir"
+        cargo run -q -p sec4 -- run --path "$service_dir" --backend lasm --port "$bench_port" --serve-timeout-ms 20000
       ) >"$log_file" 2>&1 &
       ;;
     node)

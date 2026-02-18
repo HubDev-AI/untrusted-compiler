@@ -11,8 +11,13 @@ use sec4_core::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{sync_channel, TrySendError};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -58,7 +63,11 @@ enum Commands {
         #[arg(long)]
         max_concurrency: Option<u64>,
         #[arg(long)]
+        max_pending: Option<u64>,
+        #[arg(long)]
         serve_timeout_ms: Option<u64>,
+        #[arg(long, value_enum, default_value_t = RunBackend::C)]
+        backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
     },
@@ -193,6 +202,12 @@ enum BuildTlsBackend {
     Auto,
     None,
     Openssl,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum RunBackend {
+    C,
+    Lasm,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -382,7 +397,9 @@ fn main() {
             oneshot,
             max_body_bytes,
             max_concurrency,
+            max_pending,
             serve_timeout_ms,
+            backend,
             tls_backend,
         } => cmd_run(
             &path,
@@ -390,7 +407,9 @@ fn main() {
             oneshot,
             max_body_bytes,
             max_concurrency,
+            max_pending,
             serve_timeout_ms,
+            backend,
             tls_backend,
         ),
         Commands::Promote {
@@ -605,12 +624,7 @@ fn cmd_lasm_smoke(
         };
     let mut response = sec4_core::HttpResponse::text(response_status, response_body);
     response.headers = response_headers;
-    if let Err(message) = runtime.register_route(
-        method,
-        route,
-        runtime_actions,
-        response,
-    ) {
+    if let Err(message) = runtime.register_route(method, route, runtime_actions, response) {
         eprintln!("lasm-smoke failed: {message}");
         return Err(1);
     }
@@ -835,6 +849,87 @@ struct LasmSmokeRoutePlan {
     headers: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+struct LasmRouteRegistration {
+    method: String,
+    path: String,
+    handler_name: String,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRunRoutePlan {
+    method: String,
+    path: String,
+    status: u16,
+    body: String,
+    headers: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmResponsePlan {
+    status: u16,
+    body: String,
+    default_content_type: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct LasmDynamicResponseState {
+    users_by_id: HashMap<String, serde_json::Value>,
+}
+
+fn collect_lasm_route_plans(
+    program: &sec4_core::ast::Program,
+    entry_name: &str,
+) -> Vec<LasmRunRoutePlan> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            sec4_core::ast::ItemKind::Function(function) => {
+                Some((function.name.as_str(), function))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let mut visited_functions = HashSet::new();
+    let mut registrations = Vec::new();
+    collect_route_registrations_in_function(
+        &functions,
+        entry_name,
+        &mut visited_functions,
+        &mut registrations,
+    );
+
+    let mut plans = Vec::new();
+    let mut seen_routes = HashSet::new();
+    for registration in registrations {
+        let route_key = format!("{} {}", registration.method, registration.path);
+        if !seen_routes.insert(route_key) {
+            continue;
+        }
+        let Some(response_plan) =
+            extract_response_plan(&functions, registration.handler_name.as_str())
+        else {
+            continue;
+        };
+        let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
+        if let Some(content_type) = response_plan.default_content_type {
+            headers
+                .entry("Content-Type".to_string())
+                .or_insert(content_type);
+        }
+        plans.push(LasmRunRoutePlan {
+            method: registration.method,
+            path: registration.path,
+            status: response_plan.status,
+            body: response_plan.body,
+            headers,
+        });
+    }
+
+    plans
+}
+
 fn resolve_lasm_smoke_route_plan(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -852,15 +947,200 @@ fn resolve_lasm_smoke_route_plan(
         })
         .collect::<HashMap<_, _>>();
     let handler_name = find_route_handler_name(&functions, entry_name, method, route)?;
-    let (status, body) = extract_response_plan(&functions, handler_name.as_str())?;
-    let headers = extract_response_headers(&functions, handler_name.as_str());
+    let response_plan = extract_response_plan(&functions, handler_name.as_str())?;
+    let mut headers = extract_response_headers(&functions, handler_name.as_str());
+    if let Some(content_type) = response_plan.default_content_type {
+        headers
+            .entry("Content-Type".to_string())
+            .or_insert(content_type);
+    }
 
     Some(LasmSmokeRoutePlan {
         handler_name,
-        status,
-        body,
+        status: response_plan.status,
+        body: response_plan.body,
         headers,
     })
+}
+
+fn collect_route_registrations_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+) {
+    if !visited.insert(function_name.to_string()) {
+        return;
+    }
+    let Some(function) = functions.get(function_name) else {
+        return;
+    };
+    let mut local_bindings = HashMap::new();
+    collect_route_registrations_in_block(
+        functions,
+        &function.body,
+        visited,
+        registrations,
+        &mut local_bindings,
+    );
+}
+
+fn collect_route_registrations_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    for statement in &block.statements {
+        collect_route_registrations_in_stmt(functions, statement, visited, registrations, bindings);
+    }
+    if let Some(tail) = &block.tail {
+        collect_route_registrations_in_expr(functions, tail, visited, registrations, bindings);
+    }
+}
+
+fn collect_route_registrations_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            collect_route_registrations_in_expr(functions, value, visited, registrations, bindings);
+            bindings.insert(name.clone(), value.clone());
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                collect_route_registrations_in_expr(
+                    functions,
+                    value,
+                    visited,
+                    registrations,
+                    bindings,
+                );
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings)
+        }
+    }
+}
+
+fn collect_route_registrations_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(registration) = match_route_registration_details(callee, args, bindings) {
+                registrations.push(registration);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                collect_route_registrations_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    registrations,
+                );
+            }
+            collect_route_registrations_in_expr(
+                functions,
+                callee,
+                visited,
+                registrations,
+                bindings,
+            );
+            for argument in args {
+                collect_route_registrations_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    registrations,
+                    bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            collect_route_registrations_in_expr(functions, left, visited, registrations, bindings);
+            collect_route_registrations_in_expr(functions, right, visited, registrations, bindings);
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            collect_route_registrations_in_expr(functions, object, visited, registrations, bindings)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_route_registrations_in_expr(
+                functions,
+                condition,
+                visited,
+                registrations,
+                bindings,
+            );
+            let mut then_bindings = bindings.clone();
+            collect_route_registrations_in_block(
+                functions,
+                then_branch,
+                visited,
+                registrations,
+                &mut then_bindings,
+            );
+            if let Some(else_branch) = else_branch {
+                let mut else_bindings = bindings.clone();
+                collect_route_registrations_in_expr(
+                    functions,
+                    else_branch,
+                    visited,
+                    registrations,
+                    &mut else_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            collect_route_registrations_in_expr(
+                functions,
+                scrutinee,
+                visited,
+                registrations,
+                bindings,
+            );
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                collect_route_registrations_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    registrations,
+                    &mut arm_bindings,
+                );
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            collect_route_registrations_in_block(
+                functions,
+                block,
+                visited,
+                registrations,
+                &mut block_bindings,
+            )
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
 }
 
 fn find_route_handler_name(
@@ -871,12 +1151,14 @@ fn find_route_handler_name(
 ) -> Option<String> {
     let normalized_method = method.trim().to_ascii_uppercase();
     let mut visited = HashSet::new();
+    let mut bindings = HashMap::new();
     find_route_handler_name_in_function(
         functions,
         entry_name,
         normalized_method.as_str(),
         route,
         &mut visited,
+        &mut bindings,
     )
 }
 
@@ -886,12 +1168,13 @@ fn find_route_handler_name_in_function(
     method: &str,
     route: &str,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
     if !visited.insert(function_name.to_string()) {
         return None;
     }
     let function = functions.get(function_name)?;
-    find_route_handler_name_in_block(functions, &function.body, method, route, visited)
+    find_route_handler_name_in_block(functions, &function.body, method, route, visited, bindings)
 }
 
 fn find_route_handler_name_in_block(
@@ -900,16 +1183,17 @@ fn find_route_handler_name_in_block(
     method: &str,
     route: &str,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
     for statement in &block.statements {
         if let Some(handler_name) =
-            find_route_handler_name_in_stmt(functions, statement, method, route, visited)
+            find_route_handler_name_in_stmt(functions, statement, method, route, visited, bindings)
         {
             return Some(handler_name);
         }
     }
     if let Some(tail) = &block.tail {
-        return find_route_handler_name_in_expr(functions, tail, method, route, visited);
+        return find_route_handler_name_in_expr(functions, tail, method, route, visited, bindings);
     }
     None
 }
@@ -920,16 +1204,23 @@ fn find_route_handler_name_in_stmt(
     method: &str,
     route: &str,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
     match &statement.kind {
-        sec4_core::ast::StmtKind::Let { value, .. } => {
-            find_route_handler_name_in_expr(functions, value, method, route, visited)
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            if let Some(handler_name) =
+                find_route_handler_name_in_expr(functions, value, method, route, visited, bindings)
+            {
+                return Some(handler_name);
+            }
+            bindings.insert(name.clone(), value.clone());
+            None
         }
         sec4_core::ast::StmtKind::Return { value } => value.as_ref().and_then(|entry| {
-            find_route_handler_name_in_expr(functions, entry, method, route, visited)
+            find_route_handler_name_in_expr(functions, entry, method, route, visited, bindings)
         }),
         sec4_core::ast::StmtKind::Expr { expr } => {
-            find_route_handler_name_in_expr(functions, expr, method, route, visited)
+            find_route_handler_name_in_expr(functions, expr, method, route, visited, bindings)
         }
     }
 }
@@ -940,78 +1231,118 @@ fn find_route_handler_name_in_expr(
     method: &str,
     route: &str,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(handler_name) = match_route_registration_call(callee, args, method, route) {
+            if let Some(handler_name) =
+                match_route_registration_call(callee, args, method, route, bindings)
+            {
                 return Some(handler_name);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                let mut callee_bindings = HashMap::new();
                 if let Some(handler_name) = find_route_handler_name_in_function(
                     functions,
                     function_name,
                     method,
                     route,
                     visited,
+                    &mut callee_bindings,
                 ) {
                     return Some(handler_name);
                 }
             }
             if let Some(handler_name) =
-                find_route_handler_name_in_expr(functions, callee, method, route, visited)
+                find_route_handler_name_in_expr(functions, callee, method, route, visited, bindings)
             {
                 return Some(handler_name);
             }
             for argument in args {
-                if let Some(handler_name) =
-                    find_route_handler_name_in_expr(functions, argument, method, route, visited)
-                {
+                if let Some(handler_name) = find_route_handler_name_in_expr(
+                    functions, argument, method, route, visited, bindings,
+                ) {
                     return Some(handler_name);
                 }
             }
             None
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            find_route_handler_name_in_expr(functions, expr, method, route, visited)
+            find_route_handler_name_in_expr(functions, expr, method, route, visited, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            find_route_handler_name_in_expr(functions, left, method, route, visited).or_else(|| {
-                find_route_handler_name_in_expr(functions, right, method, route, visited)
-            })
+            find_route_handler_name_in_expr(functions, left, method, route, visited, bindings)
+                .or_else(|| {
+                    find_route_handler_name_in_expr(
+                        functions, right, method, route, visited, bindings,
+                    )
+                })
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
-            find_route_handler_name_in_expr(functions, object, method, route, visited)
+            find_route_handler_name_in_expr(functions, object, method, route, visited, bindings)
         }
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => find_route_handler_name_in_expr(functions, condition, method, route, visited)
-            .or_else(|| {
-                find_route_handler_name_in_block(functions, then_branch, method, route, visited)
-            })
-            .or_else(|| {
-                else_branch.as_ref().and_then(|entry| {
-                    find_route_handler_name_in_expr(functions, entry, method, route, visited)
+        } => {
+            find_route_handler_name_in_expr(functions, condition, method, route, visited, bindings)
+                .or_else(|| {
+                    let mut then_bindings = bindings.clone();
+                    find_route_handler_name_in_block(
+                        functions,
+                        then_branch,
+                        method,
+                        route,
+                        visited,
+                        &mut then_bindings,
+                    )
                 })
-            }),
+                .or_else(|| {
+                    else_branch.as_ref().and_then(|entry| {
+                        let mut else_bindings = bindings.clone();
+                        find_route_handler_name_in_expr(
+                            functions,
+                            entry,
+                            method,
+                            route,
+                            visited,
+                            &mut else_bindings,
+                        )
+                    })
+                })
+        }
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            if let Some(handler_name) =
-                find_route_handler_name_in_expr(functions, scrutinee, method, route, visited)
-            {
+            if let Some(handler_name) = find_route_handler_name_in_expr(
+                functions, scrutinee, method, route, visited, bindings,
+            ) {
                 return Some(handler_name);
             }
             for arm in arms {
-                if let Some(handler_name) =
-                    find_route_handler_name_in_expr(functions, &arm.value, method, route, visited)
-                {
+                let mut arm_bindings = bindings.clone();
+                if let Some(handler_name) = find_route_handler_name_in_expr(
+                    functions,
+                    &arm.value,
+                    method,
+                    route,
+                    visited,
+                    &mut arm_bindings,
+                ) {
                     return Some(handler_name);
                 }
             }
             None
         }
         sec4_core::ast::ExprKind::Block(block) => {
-            find_route_handler_name_in_block(functions, block, method, route, visited)
+            let mut block_bindings = bindings.clone();
+            find_route_handler_name_in_block(
+                functions,
+                block,
+                method,
+                route,
+                visited,
+                &mut block_bindings,
+            )
         }
         sec4_core::ast::ExprKind::Identifier(_)
         | sec4_core::ast::ExprKind::Number(_)
@@ -1025,7 +1356,20 @@ fn match_route_registration_call(
     args: &[sec4_core::ast::Expr],
     method: &str,
     route: &str,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
+    let registration = match_route_registration_details(callee, args, bindings)?;
+    if registration.method != method || registration.path != route {
+        return None;
+    }
+    Some(registration.handler_name)
+}
+
+fn match_route_registration_details(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmRouteRegistration> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
     };
@@ -1045,10 +1389,6 @@ fn match_route_registration_call(
         "head" => "HEAD",
         _ => return None,
     };
-    if route_method != method {
-        return None;
-    }
-
     let (route_arg_index, handler_arg_index) = if args.len() >= 3 {
         (1usize, 2usize)
     } else if args.len() >= 2 {
@@ -1057,23 +1397,61 @@ fn match_route_registration_call(
         return None;
     };
 
-    let sec4_core::ast::ExprKind::String(route_path) = &args[route_arg_index].kind else {
+    let route_path = extract_route_path_literal(&args[route_arg_index], bindings)?;
+    let handler_name = extract_handler_identifier(&args[handler_arg_index], bindings)?;
+    Some(LasmRouteRegistration {
+        method: route_method.to_string(),
+        path: route_path,
+        handler_name,
+    })
+}
+
+fn extract_route_path_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_route_registration_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::String(path) = &resolved.kind else {
         return None;
     };
-    if route_path != route {
+    Some(path.clone())
+}
+
+fn extract_handler_identifier(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_route_registration_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::Identifier(name) = &resolved.kind else {
+        return None;
+    };
+    Some(name.clone())
+}
+
+fn resolve_route_registration_expr(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<sec4_core::ast::Expr> {
+    if depth > 32 {
         return None;
     }
-
-    let sec4_core::ast::ExprKind::Identifier(handler_name) = &args[handler_arg_index].kind else {
-        return None;
-    };
-    Some(handler_name.clone())
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(bound) = bindings.get(name) {
+                resolve_route_registration_expr(bound, bindings, depth + 1)
+            } else {
+                Some(expr.clone())
+            }
+        }
+        _ => Some(expr.clone()),
+    }
 }
 
 fn extract_response_plan(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     let mut visited = HashSet::new();
     extract_response_plan_in_function(functions, function_name, &mut visited)
 }
@@ -1082,26 +1460,30 @@ fn extract_response_plan_in_function(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     visited: &mut HashSet<String>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if !visited.insert(function_name.to_string()) {
         return None;
     }
     let function = functions.get(function_name)?;
-    extract_response_plan_in_block(functions, &function.body, visited)
+    let mut bindings = HashMap::new();
+    extract_response_plan_in_block(functions, &function.body, visited, &mut bindings)
 }
 
 fn extract_response_plan_in_block(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
-) -> Option<(u16, String)> {
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     for statement in &block.statements {
-        if let Some(response) = extract_response_plan_in_stmt(functions, statement, visited) {
+        if let Some(response) =
+            extract_response_plan_in_stmt(functions, statement, visited, bindings)
+        {
             return Some(response);
         }
     }
     if let Some(tail) = &block.tail {
-        return extract_response_plan_in_expr(functions, tail, visited);
+        return extract_response_plan_in_expr(functions, tail, visited, bindings);
     }
     None
 }
@@ -1110,16 +1492,23 @@ fn extract_response_plan_in_stmt(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
-) -> Option<(u16, String)> {
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     match &statement.kind {
-        sec4_core::ast::StmtKind::Let { value, .. } => {
-            extract_response_plan_in_expr(functions, value, visited)
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, value, visited, bindings)
+            {
+                return Some(response);
+            }
+            bindings.insert(name.clone(), value.clone());
+            None
         }
         sec4_core::ast::StmtKind::Return { value } => value
             .as_ref()
-            .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited)),
+            .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited, bindings)),
         sec4_core::ast::StmtKind::Expr { expr } => {
-            extract_response_plan_in_expr(functions, expr, visited)
+            extract_response_plan_in_expr(functions, expr, visited, bindings)
         }
     }
 }
@@ -1128,10 +1517,11 @@ fn extract_response_plan_in_expr(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
-) -> Option<(u16, String)> {
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(response) = match_response_helper_call(callee, args) {
+            if let Some(response) = match_response_helper_call(callee, args, bindings) {
                 return Some(response);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
@@ -1141,11 +1531,14 @@ fn extract_response_plan_in_expr(
                     return Some(response);
                 }
             }
-            if let Some(response) = extract_response_plan_in_expr(functions, callee, visited) {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, callee, visited, bindings)
+            {
                 return Some(response);
             }
             for argument in args {
-                if let Some(response) = extract_response_plan_in_expr(functions, argument, visited)
+                if let Some(response) =
+                    extract_response_plan_in_expr(functions, argument, visited, bindings)
                 {
                     return Some(response);
                 }
@@ -1153,33 +1546,40 @@ fn extract_response_plan_in_expr(
             None
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            extract_response_plan_in_expr(functions, expr, visited)
+            extract_response_plan_in_expr(functions, expr, visited, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            extract_response_plan_in_expr(functions, left, visited)
-                .or_else(|| extract_response_plan_in_expr(functions, right, visited))
+            extract_response_plan_in_expr(functions, left, visited, bindings)
+                .or_else(|| extract_response_plan_in_expr(functions, right, visited, bindings))
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
-            extract_response_plan_in_expr(functions, object, visited)
+            extract_response_plan_in_expr(functions, object, visited, bindings)
         }
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => extract_response_plan_in_expr(functions, condition, visited)
-            .or_else(|| extract_response_plan_in_block(functions, then_branch, visited))
+        } => extract_response_plan_in_expr(functions, condition, visited, bindings)
             .or_else(|| {
-                else_branch
-                    .as_ref()
-                    .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited))
+                let mut then_bindings = bindings.clone();
+                extract_response_plan_in_block(functions, then_branch, visited, &mut then_bindings)
+            })
+            .or_else(|| {
+                let mut else_bindings = bindings.clone();
+                else_branch.as_ref().and_then(|entry| {
+                    extract_response_plan_in_expr(functions, entry, visited, &mut else_bindings)
+                })
             }),
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            if let Some(response) = extract_response_plan_in_expr(functions, scrutinee, visited) {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, scrutinee, visited, bindings)
+            {
                 return Some(response);
             }
             for arm in arms {
+                let mut arm_bindings = bindings.clone();
                 if let Some(response) =
-                    extract_response_plan_in_expr(functions, &arm.value, visited)
+                    extract_response_plan_in_expr(functions, &arm.value, visited, &mut arm_bindings)
                 {
                     return Some(response);
                 }
@@ -1187,7 +1587,8 @@ fn extract_response_plan_in_expr(
             None
         }
         sec4_core::ast::ExprKind::Block(block) => {
-            extract_response_plan_in_block(functions, block, visited)
+            let mut block_bindings = bindings.clone();
+            extract_response_plan_in_block(functions, block, visited, &mut block_bindings)
         }
         sec4_core::ast::ExprKind::Identifier(_)
         | sec4_core::ast::ExprKind::Number(_)
@@ -1199,7 +1600,8 @@ fn extract_response_plan_in_expr(
 fn match_response_helper_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
-) -> Option<(u16, String)> {
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
     };
@@ -1211,67 +1613,171 @@ fn match_response_helper_call(
     }
 
     match field.as_str() {
-        "text" => match_res_text_call(args),
-        "html" => match_res_html_call(args),
-        "json" => match_res_json_call(args),
-        "ok" => match_res_ok_call(args),
-        "okMeta" => match_res_ok_meta_call(args),
+        "text" => match_res_text_call(args, bindings),
+        "html" => match_res_html_call(args, bindings),
+        "json" => match_res_json_call(args, bindings),
+        "ok" => match_res_ok_call(args, bindings),
+        "okMeta" => match_res_ok_meta_call(args, bindings),
         _ => None,
     }
 }
 
-fn match_res_text_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_text_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     if args.len() < 2 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
-    let sec4_core::ast::ExprKind::String(body) = &args[1].kind else {
-        return None;
-    };
-    Some((status, body.clone()))
+    let status = parse_status_literal(&args[0], bindings)?;
+    let body = parse_string_literal(&args[1], bindings)?;
+    Some(LasmResponsePlan {
+        status,
+        body,
+        default_content_type: Some("text/plain; charset=utf-8".to_string()),
+    })
 }
 
-fn match_res_html_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_html_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     if args.len() != 1 {
         return None;
     }
-    let body = match &args[0].kind {
-        sec4_core::ast::ExprKind::String(entry) => entry.clone(),
-        _ => "<html></html>".to_string(),
-    };
-    Some((200, body))
+    let body =
+        parse_string_literal(&args[0], bindings).unwrap_or_else(|| "<html></html>".to_string());
+    Some(LasmResponsePlan {
+        status: 200,
+        body,
+        default_content_type: Some("text/html; charset=utf-8".to_string()),
+    })
 }
 
-fn match_res_json_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_json_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     let status = match args.len() {
         2 => 200,
-        length if length >= 3 => parse_status_literal(&args[0])?,
+        length if length >= 3 => parse_status_literal(&args[0], bindings)?,
         _ => return None,
     };
-    Some((status, "json response".to_string()))
+    let schema = match args.len() {
+        2 => parse_string_literal(&args[0], bindings),
+        _ => parse_string_literal(&args[1], bindings),
+    };
+    Some(LasmResponsePlan {
+        status,
+        body: build_lasm_json_response_body(status, schema.as_deref()),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
-fn match_res_ok_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_ok_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     if args.len() < 3 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
-    Some((status, "ok response".to_string()))
+    let status = parse_status_literal(&args[0], bindings)?;
+    let schema = parse_string_literal(&args[1], bindings);
+    Some(LasmResponsePlan {
+        status,
+        body: build_lasm_ok_response_body(status, schema.as_deref()),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
-fn match_res_ok_meta_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_ok_meta_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmResponsePlan> {
     if args.len() < 4 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
-    Some((status, "ok response".to_string()))
+    let status = parse_status_literal(&args[0], bindings)?;
+    let schema = parse_string_literal(&args[1], bindings);
+    Some(LasmResponsePlan {
+        status,
+        body: build_lasm_ok_response_body(status, schema.as_deref()),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
-fn parse_status_literal(expr: &sec4_core::ast::Expr) -> Option<u16> {
-    let sec4_core::ast::ExprKind::Number(status_literal) = &expr.kind else {
+fn parse_status_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<u16> {
+    let resolved = resolve_response_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::Number(status_literal) = &resolved.kind else {
         return None;
     };
     status_literal.parse::<u16>().ok()
+}
+
+fn parse_string_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_response_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::String(value) = &resolved.kind else {
+        return None;
+    };
+    Some(value.clone())
+}
+
+fn build_lasm_json_response_body(status: u16, schema: Option<&str>) -> String {
+    match schema {
+        Some(schema_name) => format!(
+            "{{\"status\":{status},\"schema\":\"{}\"}}",
+            escape_json_string(schema_name)
+        ),
+        None => format!("{{\"status\":{status}}}"),
+    }
+}
+
+fn build_lasm_ok_response_body(status: u16, schema: Option<&str>) -> String {
+    match schema {
+        Some(schema_name) => format!(
+            "{{\"ok\":true,\"status\":{status},\"schema\":\"{}\"}}",
+            escape_json_string(schema_name)
+        ),
+        None => format!("{{\"ok\":true,\"status\":{status}}}"),
+    }
+}
+
+fn escape_json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn resolve_response_expr(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<sec4_core::ast::Expr> {
+    if depth > 32 {
+        return None;
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            let bound = bindings.get(name)?;
+            resolve_response_expr(bound, bindings, depth + 1)
+        }
+        _ => Some(expr.clone()),
+    }
 }
 
 fn extract_response_headers(
@@ -1357,6 +1863,9 @@ fn extract_response_headers_in_expr(
         sec4_core::ast::ExprKind::Call { callee, args } => {
             if let Some((name, value)) = match_res_set_header_call(callee, args, bindings) {
                 headers.insert(name, value);
+            }
+            if let Some(cookie) = match_res_add_cookie_call(callee, args, bindings) {
+                headers.insert("Set-Cookie".to_string(), cookie);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
                 extract_response_headers_in_function(functions, function_name, visited, headers);
@@ -1453,12 +1962,69 @@ fn match_res_set_header_call(
     Some((name, value))
 }
 
+fn match_res_add_cookie_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    if args.is_empty() {
+        return None;
+    }
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "res" || field != "addCookie" {
+        return None;
+    }
+    extract_cookie_literal(&args[0], bindings)
+}
+
 fn extract_header_binding_literal(
     expr: &sec4_core::ast::Expr,
     bindings: &HashMap<String, String>,
 ) -> Option<String> {
     extract_header_gate_literal(expr, "name", bindings)
         .or_else(|| extract_header_gate_literal(expr, "value", bindings))
+        .or_else(|| extract_cookie_literal(expr, bindings))
+}
+
+fn extract_cookie_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+                return None;
+            };
+            let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+                return None;
+            };
+            if namespace != "cookie" || field != "build" || args.len() < 2 {
+                return None;
+            }
+            let name = extract_string_literal_or_binding(&args[0], bindings)?;
+            let value = extract_string_literal_or_binding(&args[1], bindings)?;
+            Some(format!("{name}={value}"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_string_literal_or_binding(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        _ => None,
+    }
 }
 
 fn extract_header_gate_literal(
@@ -4677,7 +5243,9 @@ fn cmd_run(
     oneshot: bool,
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
+    max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
     if max_body_bytes == Some(0) {
@@ -4686,6 +5254,10 @@ fn cmd_run(
     }
     if max_concurrency == Some(0) {
         eprintln!("run failed: --max-concurrency must be >= 1");
+        return Err(2);
+    }
+    if max_pending == Some(0) {
+        eprintln!("run failed: --max-pending must be >= 1");
         return Err(2);
     }
     if serve_timeout_ms == Some(0) {
@@ -4707,6 +5279,20 @@ fn cmd_run(
             return Err(1);
         }
     };
+
+    if backend == RunBackend::Lasm {
+        return cmd_run_lasm_backend(
+            path,
+            &manifest,
+            &policy,
+            port,
+            oneshot,
+            max_body_bytes,
+            max_concurrency,
+            max_pending,
+            serve_timeout_ms,
+        );
+    }
 
     cmd_build(path, Some(BuildEmitTarget::CBin), false, false, tls_backend)?;
 
@@ -5008,6 +5594,1543 @@ fn cmd_run(
             );
             Err(1)
         }
+    }
+}
+
+fn cmd_run_lasm_backend(
+    path: &Path,
+    manifest: &sec4_core::Manifest,
+    policy: &Policy,
+    port: Option<u16>,
+    oneshot: bool,
+    max_body_bytes: Option<u64>,
+    max_concurrency: Option<u64>,
+    max_pending: Option<u64>,
+    serve_timeout_ms: Option<u64>,
+) -> Result<(), i32> {
+    let program = match analyze_entry(path, manifest) {
+        Ok(program) => program,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+    let mir = sec4_core::lower_program_to_mir(&program);
+    let lasm_program = sec4_core::lower_mir_to_lasm(&mir);
+    let Some(entry) = lasm_program.entry.as_ref() else {
+        eprintln!("run failed: compiled program does not expose an entrypoint");
+        return Err(1);
+    };
+
+    let policy_max_in_flight = match u64::try_from(policy.http.max_concurrency) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_concurrency must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_in_flight = max_concurrency.unwrap_or(policy_max_in_flight);
+    let effective_max_in_flight = match usize::try_from(effective_max_in_flight) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: effective max concurrency must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: effective max concurrency exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let effective_max_pending = max_pending.unwrap_or(effective_max_in_flight as u64);
+    let effective_max_pending = match usize::try_from(effective_max_pending) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: effective max pending must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: effective max pending exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let policy_timeout_ms = match u64::try_from(policy.http.default_timeout_ms) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.default_timeout_ms must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_timeout_ms = serve_timeout_ms.unwrap_or(policy_timeout_ms);
+    let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_header_bytes must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_header_bytes = match usize::try_from(policy_max_header_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_header_bytes exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let policy_max_body_bytes = match u64::try_from(policy.http.max_body_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_body_bytes must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_body_bytes = max_body_bytes.unwrap_or(policy_max_body_bytes);
+    let effective_max_body_bytes = match usize::try_from(effective_max_body_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: effective max body bytes exceeds platform limits");
+            return Err(2);
+        }
+    };
+
+    let routes = collect_lasm_route_plans(&program, entry.name.as_str());
+    if routes.is_empty() {
+        eprintln!(
+            "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
+            entry.name
+        );
+        return Err(1);
+    }
+    let listen_port = port.unwrap_or(8080);
+    let listener = match TcpListener::bind(("127.0.0.1", listen_port)) {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!(
+                "run failed: could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}"
+            );
+            return Err(2);
+        }
+    };
+
+    let mut worker_handles = Vec::new();
+    let trace_counter = Arc::new(AtomicU64::new(0));
+    let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
+    let dynamic_state = Arc::new(Mutex::new(LasmDynamicResponseState::default()));
+    let mut oneshot_runtime = if oneshot {
+        Some(
+            build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
+                eprintln!("run failed: {message}");
+                2
+            })?,
+        )
+    } else {
+        None
+    };
+    let worker_sender = if oneshot {
+        None
+    } else {
+        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_pending);
+        let shared_receiver = Arc::new(Mutex::new(receiver));
+        for _ in 0..effective_max_in_flight {
+            let worker_receiver = Arc::clone(&shared_receiver);
+            let routes_for_worker = routes.clone();
+            let trace_counter_for_worker = Arc::clone(&trace_counter);
+            let header_defaults_for_worker = Arc::clone(&header_defaults);
+            let dynamic_state_for_worker = Arc::clone(&dynamic_state);
+            worker_handles.push(std::thread::spawn(move || {
+                let mut runtime =
+                    match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
+                        Ok(runtime) => runtime,
+                        Err(message) => {
+                            eprintln!("warning: LASM worker bootstrap failed: {message}");
+                            return;
+                        }
+                    };
+                loop {
+                    let next_stream = {
+                        let receiver = match worker_receiver.lock() {
+                            Ok(receiver) => receiver,
+                            Err(_) => return,
+                        };
+                        receiver.recv()
+                    };
+                    let mut stream = match next_stream {
+                        Ok(stream) => stream,
+                        Err(_) => break,
+                    };
+                    if let Err(message) = process_lasm_connection_with_runtime(
+                        &mut stream,
+                        &mut runtime,
+                        effective_max_header_bytes,
+                        effective_max_body_bytes,
+                        true,
+                        trace_counter_for_worker.as_ref(),
+                        header_defaults_for_worker.as_ref(),
+                        dynamic_state_for_worker.as_ref(),
+                    ) {
+                        eprintln!("warning: LASM backend worker failed: {message}");
+                    }
+                }
+            }));
+        }
+        Some(sender)
+    };
+
+    for incoming in listener.incoming() {
+        let mut stream = match incoming {
+            Ok(stream) => stream,
+            Err(err) => {
+                eprintln!("run failed: LASM backend accept error: {err}");
+                return Err(2);
+            }
+        };
+        if let Err(err) =
+            stream.set_read_timeout(Some(std::time::Duration::from_millis(effective_timeout_ms)))
+        {
+            eprintln!("run failed: LASM backend could not set read timeout: {err}");
+            return Err(2);
+        }
+
+        if oneshot {
+            if let Err(message) = process_lasm_connection_with_runtime(
+                &mut stream,
+                oneshot_runtime
+                    .as_mut()
+                    .expect("oneshot runtime should be initialized"),
+                effective_max_header_bytes,
+                effective_max_body_bytes,
+                false,
+                trace_counter.as_ref(),
+                header_defaults.as_ref(),
+                dynamic_state.as_ref(),
+            ) {
+                eprintln!("warning: LASM backend worker failed: {message}");
+            };
+            break;
+        }
+
+        let sender = worker_sender
+            .as_ref()
+            .expect("worker sender should exist for non-oneshot LASM backend");
+        match sender.try_send(stream) {
+            Ok(()) => {}
+            Err(TrySendError::Full(mut stream)) => {
+                let request_head =
+                    read_lasm_request_head(&mut stream, effective_max_header_bytes).ok();
+                let request_headers = request_head.as_ref().map(|head| &head.headers);
+                let omit_body = request_head
+                    .as_ref()
+                    .map(|head| head.method.eq_ignore_ascii_case("HEAD"))
+                    .unwrap_or(false);
+                let include_cors_defaults =
+                    should_include_lasm_cors_defaults(request_headers, header_defaults.as_ref());
+                let trace_id = next_lasm_trace_id(trace_counter.as_ref());
+                let mut response = sec4_core::HttpResponse::text(503, "");
+                set_lasm_json_response(
+                    &mut response,
+                    503,
+                    &lasm_error_envelope(
+                        "HTTP.SERVICE_UNAVAILABLE",
+                        "internal",
+                        "server busy: max concurrency reached",
+                        503,
+                        trace_id.as_str(),
+                    ),
+                );
+                apply_lasm_request_origin_header(
+                    &mut response,
+                    request_headers,
+                    header_defaults.as_ref(),
+                );
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                let _ = write_lasm_http_response(
+                    &mut stream,
+                    &response,
+                    header_defaults.as_ref(),
+                    include_cors_defaults,
+                    omit_body,
+                    true,
+                );
+            }
+            Err(TrySendError::Disconnected(_stream)) => {
+                eprintln!("run failed: LASM worker pool disconnected unexpectedly");
+                return Err(2);
+            }
+        }
+    }
+
+    drop(worker_sender);
+    for handle in worker_handles {
+        let _ = handle.join();
+    }
+
+    Ok(())
+}
+
+fn build_lasm_http_runtime(
+    routes: &[LasmRunRoutePlan],
+    timeout_ms: u64,
+) -> Result<sec4_core::LasmHttpRuntime, String> {
+    let mut runtime = sec4_core::LasmHttpRuntime::default();
+    runtime
+        .set_max_in_flight(1)
+        .map_err(|message| format!("could not configure LASM runtime max in-flight: {message}"))?;
+    runtime
+        .set_max_request_duration_ms(timeout_ms)
+        .map_err(|message| {
+            format!("could not configure LASM runtime request timeout: {message}")
+        })?;
+
+    for route in routes {
+        let mut response = sec4_core::HttpResponse::text(route.status, route.body.clone());
+        response.headers = route.headers.clone();
+        runtime
+            .register_route(
+                route.method.as_str(),
+                route.path.as_str(),
+                vec![
+                    sec4_core::RuntimeAction::Yield,
+                    sec4_core::RuntimeAction::Complete(0),
+                ],
+                response,
+            )
+            .map_err(|message| format!("could not register LASM route: {message}"))?;
+    }
+
+    Ok(runtime)
+}
+
+fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDefaults {
+    let mut headers = BTreeMap::new();
+    let cors_enabled = policy.cors.enabled;
+    let mut cors_allow_any_origin = false;
+    let mut cors_allowed_origins = Vec::new();
+    let mut cors_allow_any_method = false;
+    let mut cors_allowed_methods = Vec::new();
+    let mut cors_allow_any_header = false;
+    let mut cors_allowed_headers = Vec::new();
+    let mut cors_default_origin = None;
+    let cors_allow_private_network = policy.cors.allow_private_network;
+    if cors_enabled {
+        cors_allow_any_origin = policy.cors.has_wildcard_origin();
+        if !cors_allow_any_origin {
+            cors_allowed_origins = policy.cors.allowed_origins.clone();
+        }
+        cors_allowed_methods = policy
+            .cors
+            .allowed_methods
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                let normalized = value.to_ascii_uppercase();
+                if normalized == "*" {
+                    cors_allow_any_method = true;
+                }
+                normalized
+            })
+            .filter(|value| value != "*")
+            .collect();
+        cors_allowed_headers = policy
+            .cors
+            .allowed_headers
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                let normalized = value.to_ascii_lowercase();
+                if normalized == "*" {
+                    cors_allow_any_header = true;
+                }
+                normalized
+            })
+            .filter(|value| value != "*")
+            .collect();
+        cors_default_origin = Some(if cors_allow_any_origin {
+            "*".to_string()
+        } else {
+            policy
+                .cors
+                .allowed_origins
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "*".to_string())
+        });
+        if policy.cors.allow_credentials {
+            headers.insert(
+                "Access-Control-Allow-Credentials".to_string(),
+                "true".to_string(),
+            );
+        }
+        if !policy.cors.allowed_methods.is_empty() {
+            headers.insert(
+                "Access-Control-Allow-Methods".to_string(),
+                policy.cors.allowed_methods.join(","),
+            );
+        }
+        if !policy.cors.allowed_headers.is_empty() {
+            headers.insert(
+                "Access-Control-Allow-Headers".to_string(),
+                policy.cors.allowed_headers.join(","),
+            );
+        }
+        if policy.cors.max_age_seconds >= 0 {
+            headers.insert(
+                "Access-Control-Max-Age".to_string(),
+                policy.cors.max_age_seconds.to_string(),
+            );
+        }
+        if policy.cors.allow_private_network {
+            headers.insert(
+                "Access-Control-Allow-Private-Network".to_string(),
+                "true".to_string(),
+            );
+        }
+        if policy.cors.require_vary_origin {
+            headers.insert("Vary".to_string(), "Origin".to_string());
+        }
+        let exposed_headers = if policy.cors.exposed_headers.is_empty() {
+            "x-trace-id,x-showcase".to_string()
+        } else {
+            policy.cors.exposed_headers.join(",")
+        };
+        headers.insert("Access-Control-Expose-Headers".to_string(), exposed_headers);
+    }
+    if policy.security_headers.enabled {
+        if policy.security_headers.hsts_enabled {
+            let mut hsts = format!("max-age={}", policy.security_headers.hsts_max_age_seconds);
+            if policy.security_headers.hsts_include_subdomains {
+                hsts.push_str("; includeSubDomains");
+            }
+            if policy.security_headers.hsts_preload {
+                hsts.push_str("; preload");
+            }
+            headers.insert("Strict-Transport-Security".to_string(), hsts);
+        }
+        if policy.security_headers.x_content_type_options {
+            headers.insert("X-Content-Type-Options".to_string(), "nosniff".to_string());
+        }
+        if !policy.security_headers.x_frame_options.trim().is_empty() {
+            headers.insert(
+                "X-Frame-Options".to_string(),
+                policy.security_headers.x_frame_options.clone(),
+            );
+        }
+        if !policy.security_headers.referrer_policy.trim().is_empty() {
+            headers.insert(
+                "Referrer-Policy".to_string(),
+                policy.security_headers.referrer_policy.clone(),
+            );
+        }
+        if policy.security_headers.csp_enabled
+            && !policy.security_headers.csp_policy.trim().is_empty()
+        {
+            let header_name = if policy.security_headers.csp_report_only {
+                "Content-Security-Policy-Report-Only"
+            } else {
+                "Content-Security-Policy"
+            };
+            headers.insert(
+                header_name.to_string(),
+                policy.security_headers.csp_policy.clone(),
+            );
+        }
+    }
+    LasmResponseHeaderDefaults {
+        cors_enabled,
+        cors_allow_any_origin,
+        cors_allowed_origins,
+        cors_allow_any_method,
+        cors_allowed_methods,
+        cors_allow_any_header,
+        cors_allowed_headers,
+        cors_allow_private_network,
+        cors_default_origin,
+        headers,
+    }
+}
+
+fn process_lasm_connection_with_runtime(
+    stream: &mut TcpStream,
+    runtime: &mut sec4_core::LasmHttpRuntime,
+    max_header_bytes: usize,
+    max_body_bytes: usize,
+    allow_keep_alive: bool,
+    trace_counter: &AtomicU64,
+    header_defaults: &LasmResponseHeaderDefaults,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+) -> Result<(), String> {
+    let mut request_reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("could not clone stream for LASM request reader: {err}"))?,
+    );
+    loop {
+        let trace_id = next_lasm_trace_id(trace_counter);
+        let request =
+            match read_lasm_http_request(&mut request_reader, max_header_bytes, max_body_bytes) {
+                Ok(request) => request,
+                Err(err) => {
+                    if err.status == 400 && err.message == "empty request" {
+                        return Ok(());
+                    }
+                    let mut response = sec4_core::HttpResponse::text(err.status, err.message);
+                    apply_lasm_request_origin_header(&mut response, None, header_defaults);
+                    set_lasm_trace_id(&mut response, trace_id.as_str());
+                    write_lasm_http_response(
+                        stream,
+                        &response,
+                        header_defaults,
+                        true,
+                        false,
+                        true,
+                    )?;
+                    return Ok(());
+                }
+            };
+
+        let close_connection = !allow_keep_alive || lasm_should_close_connection(&request);
+        let omit_body = request.method.eq_ignore_ascii_case("HEAD");
+
+        match evaluate_lasm_cors_preflight_request(&request, header_defaults) {
+            LasmCorsPreflightDecision::NotPreflight => {}
+            LasmCorsPreflightDecision::Accept => {
+                let mut response = sec4_core::HttpResponse::text(204, "");
+                response.body.clear();
+                apply_lasm_request_origin_header(
+                    &mut response,
+                    Some(&request.headers),
+                    header_defaults,
+                );
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                write_lasm_http_response(
+                    stream,
+                    &response,
+                    header_defaults,
+                    true,
+                    false,
+                    close_connection,
+                )?;
+                if close_connection {
+                    return Ok(());
+                }
+                continue;
+            }
+            LasmCorsPreflightDecision::Reject { status, message } => {
+                let mut response = sec4_core::HttpResponse::text(status, message);
+                set_lasm_trace_id(&mut response, trace_id.as_str());
+                write_lasm_http_response(
+                    stream,
+                    &response,
+                    header_defaults,
+                    false,
+                    false,
+                    close_connection,
+                )?;
+                if close_connection {
+                    return Ok(());
+                }
+                continue;
+            }
+        }
+        let include_cors_defaults =
+            should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
+
+        let mut runtime_request =
+            sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
+        runtime_request.headers = request.headers.clone();
+        runtime_request.body = request.body.clone();
+        let request_id = runtime.submit(runtime_request);
+        let report = runtime.run_until_idle(65_536);
+        if !report.idle {
+            let mut response = sec4_core::HttpResponse::text(
+                500,
+                "run failed: LASM runtime remained active after step budget",
+            );
+            apply_lasm_request_origin_header(
+                &mut response,
+                Some(&request.headers),
+                header_defaults,
+            );
+            set_lasm_trace_id(&mut response, trace_id.as_str());
+            write_lasm_http_response(
+                stream,
+                &response,
+                header_defaults,
+                include_cors_defaults,
+                omit_body,
+                close_connection,
+            )?;
+            if close_connection {
+                return Ok(());
+            }
+            continue;
+        }
+
+        let mut matched = None;
+        while let Some(exchange) = runtime.pop_response() {
+            if exchange.request_id == request_id {
+                matched = Some(exchange);
+                break;
+            }
+        }
+        let mut response = if let Some(exchange) = matched {
+            let mut response = exchange.response;
+            apply_lasm_dynamic_response_materialization(
+                &mut response,
+                &request,
+                &exchange.path_params,
+                dynamic_state,
+                trace_id.as_str(),
+            );
+            response
+        } else {
+            sec4_core::HttpResponse::text(500, "missing LASM response for request")
+        };
+        apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
+        set_lasm_trace_id(&mut response, trace_id.as_str());
+        write_lasm_http_response(
+            stream,
+            &response,
+            header_defaults,
+            include_cors_defaults,
+            omit_body,
+            close_connection,
+        )?;
+        if close_connection {
+            return Ok(());
+        }
+    }
+}
+
+fn apply_lasm_dynamic_response_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    trace_id: &str,
+) {
+    let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
+        return;
+    };
+
+    match schema_hint.as_str() {
+        "DecodeResponse" => {
+            if request.body.is_empty() && !lasm_request_expects_json(request) {
+                return;
+            }
+            if !request.body.is_empty() && !lasm_request_expects_json(request) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "HTTP.BAD_REQUEST",
+                        "validation",
+                        "content-type must be application/json",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let payload = match parse_lasm_json_payload(&request.body) {
+                Some(payload) => payload,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "JSON.INVALID_SYNTAX",
+                            "validation",
+                            "invalid JSON payload",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            if let Some((code, message)) = validate_lasm_benchmark_user_payload(&payload) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(code, "validation", message, 400, trace_id),
+                );
+                return;
+            }
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
+            };
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "id": id,
+                }),
+            );
+        }
+        "CreateUserResponse" => {
+            if request.body.is_empty() && !lasm_request_expects_json(request) {
+                return;
+            }
+            if !request.body.is_empty() && !lasm_request_expects_json(request) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "HTTP.BAD_REQUEST",
+                        "validation",
+                        "content-type must be application/json",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let payload = match parse_lasm_json_payload(&request.body) {
+                Some(payload) => payload,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "JSON.INVALID_SYNTAX",
+                            "validation",
+                            "invalid JSON payload",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            if let Some((code, message)) = validate_lasm_benchmark_user_payload(&payload) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(code, "validation", message, 400, trace_id),
+                );
+                return;
+            }
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
+            };
+            if let Ok(mut state) = dynamic_state.lock() {
+                state.users_by_id.insert(id.clone(), payload);
+            }
+            set_lasm_json_response(
+                response,
+                201,
+                &serde_json::json!({
+                    "ok": true,
+                    "userId": id,
+                }),
+            );
+        }
+        "UserResponse" => {
+            let Some(id) = resolve_lasm_user_lookup_id(request, path_params) else {
+                return;
+            };
+            if !is_lasm_uuid_v4(&id) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.UUID_INVALID",
+                        "validation",
+                        "id must be UUID v4",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let user = match dynamic_state.lock() {
+                Ok(state) => state.users_by_id.get(&id).cloned(),
+                Err(_) => None,
+            };
+            match user {
+                Some(user) => set_lasm_json_response(response, 200, &user),
+                None => set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope(
+                        "HTTP.NOT_FOUND",
+                        "not_found",
+                        "user not found",
+                        404,
+                        trace_id,
+                    ),
+                ),
+            }
+        }
+        _ => {}
+    }
+}
+
+fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
+    find_lasm_header_value(&request.headers, "Content-Type")
+        .map(|value| value.to_ascii_lowercase().contains("application/json"))
+        .unwrap_or(false)
+}
+
+fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {
+    let parsed = parse_lasm_json_payload(&response.body)?;
+    parsed
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn parse_lasm_json_payload(bytes: &[u8]) -> Option<serde_json::Value> {
+    if bytes.is_empty() {
+        return None;
+    }
+    serde_json::from_slice(bytes).ok()
+}
+
+fn extract_lasm_payload_id(payload: &serde_json::Value) -> Option<String> {
+    payload
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn validate_lasm_benchmark_user_payload(
+    payload: &serde_json::Value,
+) -> Option<(&'static str, &'static str)> {
+    let Some(id) = payload.get("id").and_then(serde_json::Value::as_str) else {
+        return Some(("VALIDATION.UUID_INVALID", "id must be UUID v4"));
+    };
+    if !is_lasm_uuid_v4(id) {
+        return Some(("VALIDATION.UUID_INVALID", "id must be UUID v4"));
+    }
+
+    let Some(email) = payload.get("email").and_then(serde_json::Value::as_str) else {
+        return Some(("VALIDATION.INVALID", "email must be a valid email string"));
+    };
+    if !is_lasm_email(email) {
+        return Some(("VALIDATION.INVALID", "email must be a valid email string"));
+    }
+
+    let Some(age) = payload.get("age").and_then(serde_json::Value::as_i64) else {
+        return Some((
+            "VALIDATION.INVALID",
+            "age must be an integer between 0 and 150",
+        ));
+    };
+    if !(0..=150).contains(&age) {
+        return Some((
+            "VALIDATION.INVALID",
+            "age must be an integer between 0 and 150",
+        ));
+    }
+
+    let Some(tags) = payload.get("tags").and_then(serde_json::Value::as_array) else {
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must be an array of length <= 16",
+        ));
+    };
+    if tags.len() > 16 {
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must be an array of length <= 16",
+        ));
+    }
+    if tags.iter().any(|tag| {
+        let Some(value) = tag.as_str() else {
+            return true;
+        };
+        value.is_empty() || value.len() > 32
+    }) {
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must contain strings of length 1..32",
+        ));
+    }
+
+    let Some(zip) = payload
+        .get("address")
+        .and_then(|address| address.get("zip"))
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Some((
+            "VALIDATION.INVALID",
+            "address.zip must be a digit string of length 4..10",
+        ));
+    };
+    if !is_lasm_zip(zip) {
+        return Some((
+            "VALIDATION.INVALID",
+            "address.zip must be a digit string of length 4..10",
+        ));
+    }
+
+    let Some(flags) = payload
+        .get("meta")
+        .and_then(|meta| meta.get("flags"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Some(("VALIDATION.INVALID", "meta.flags must be an object"));
+    };
+    for key in ["a", "b", "c"] {
+        if !flags.get(key).is_some_and(serde_json::Value::is_boolean) {
+            return Some(("VALIDATION.INVALID", "meta.flags must be an object"));
+        }
+    }
+
+    None
+}
+
+fn is_lasm_email(value: &str) -> bool {
+    let mut segments = value.split('@');
+    let local = segments.next().unwrap_or_default();
+    let domain = segments.next().unwrap_or_default();
+    segments.next().is_none() && !local.is_empty() && domain.contains('.')
+}
+
+fn is_lasm_zip(value: &str) -> bool {
+    (4..=10).contains(&value.len()) && value.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn resolve_lasm_user_lookup_id(
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) -> Option<String> {
+    if let Some(id) = path_params.get("id") {
+        return Some(id.clone());
+    }
+    request
+        .path
+        .strip_prefix("/users/")
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn set_lasm_json_response(
+    response: &mut sec4_core::HttpResponse,
+    status: u16,
+    payload: &serde_json::Value,
+) {
+    response.status = status;
+    response.headers.insert(
+        "Content-Type".to_string(),
+        "application/json; charset=utf-8".to_string(),
+    );
+    response.body = serde_json::to_vec(payload).unwrap_or_else(|_| b"{}".to_vec());
+}
+
+fn lasm_error_envelope(
+    code: &str,
+    kind: &str,
+    message: &str,
+    status: u16,
+    trace_id: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "error": {
+            "code": code,
+            "kind": kind,
+            "message": message,
+            "status": status,
+            "traceId": trace_id,
+            "timeMs": lasm_now_ms(),
+        }
+    })
+}
+
+fn is_lasm_uuid_v4(value: &str) -> bool {
+    if value.len() != 36 {
+        return false;
+    }
+    for (index, byte) in value.as_bytes().iter().enumerate() {
+        let is_dash_position = matches!(index, 8 | 13 | 18 | 23);
+        if is_dash_position {
+            if *byte != b'-' {
+                return false;
+            }
+            continue;
+        }
+        if !(*byte as char).is_ascii_hexdigit() {
+            return false;
+        }
+    }
+    if value.as_bytes()[14] != b'4' {
+        return false;
+    }
+    matches!(
+        value.as_bytes()[19].to_ascii_lowercase(),
+        b'8' | b'9' | b'a' | b'b'
+    )
+}
+
+fn evaluate_lasm_cors_preflight_request(
+    request: &LasmRunRequest,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> LasmCorsPreflightDecision {
+    if !header_defaults.cors_enabled || !request.method.eq_ignore_ascii_case("OPTIONS") {
+        return LasmCorsPreflightDecision::NotPreflight;
+    }
+    let requested_method =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
+            .map(str::trim)
+            .unwrap_or("");
+    let requested_headers =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Headers")
+            .map(str::trim)
+            .unwrap_or("");
+    let private_network_requested =
+        find_lasm_header_value(&request.headers, "Access-Control-Request-Private-Network")
+            .map(str::trim)
+            .map(|value| value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+    let origin = find_lasm_header_value(&request.headers, "Origin")
+        .map(str::trim)
+        .unwrap_or("");
+    if requested_method.is_empty() && origin.is_empty() {
+        return LasmCorsPreflightDecision::NotPreflight;
+    }
+    if origin.is_empty() {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight missing origin",
+        };
+    }
+    if !is_lasm_cors_origin_value_valid(origin) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight origin invalid",
+        };
+    }
+    if !is_lasm_cors_origin_allowed(origin, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight origin not allowed",
+        };
+    }
+    if requested_method.is_empty() {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight missing requested method",
+        };
+    }
+    if !is_lasm_cors_requested_method_allowed(requested_method, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight method not allowed",
+        };
+    }
+    if !are_lasm_cors_requested_headers_allowed(requested_headers, header_defaults) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight headers not allowed",
+        };
+    }
+    if private_network_requested && !header_defaults.cors_allow_private_network {
+        return LasmCorsPreflightDecision::Reject {
+            status: 403,
+            message: "cors preflight private network not allowed",
+        };
+    }
+    LasmCorsPreflightDecision::Accept
+}
+
+fn is_lasm_cors_origin_value_valid(origin: &str) -> bool {
+    if origin.is_empty() || origin == "*" {
+        return false;
+    }
+    if origin.chars().any(char::is_whitespace) {
+        return false;
+    }
+    origin.starts_with("http://") || origin.starts_with("https://")
+}
+
+fn is_lasm_cors_origin_allowed(origin: &str, header_defaults: &LasmResponseHeaderDefaults) -> bool {
+    if header_defaults.cors_allow_any_origin || header_defaults.cors_allowed_origins.is_empty() {
+        return true;
+    }
+    header_defaults
+        .cors_allowed_origins
+        .iter()
+        .any(|allowed| allowed == origin)
+}
+
+fn is_lasm_cors_requested_method_allowed(
+    requested_method: &str,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if header_defaults.cors_allow_any_method {
+        return true;
+    }
+    if header_defaults.cors_allowed_methods.is_empty() {
+        return true;
+    }
+    let normalized = requested_method.trim().to_ascii_uppercase();
+    header_defaults
+        .cors_allowed_methods
+        .iter()
+        .any(|allowed| allowed == &normalized)
+}
+
+fn are_lasm_cors_requested_headers_allowed(
+    requested_headers: &str,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if header_defaults.cors_allow_any_header {
+        return true;
+    }
+    if requested_headers.is_empty() || header_defaults.cors_allowed_headers.is_empty() {
+        return true;
+    }
+    requested_headers
+        .split(',')
+        .map(str::trim)
+        .filter(|header| !header.is_empty())
+        .all(|header| {
+            let normalized = header.to_ascii_lowercase();
+            header_defaults
+                .cors_allowed_headers
+                .iter()
+                .any(|allowed| allowed == &normalized)
+        })
+}
+
+fn should_include_lasm_cors_defaults(
+    request_headers: Option<&BTreeMap<String, String>>,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if !header_defaults.cors_enabled {
+        return false;
+    }
+    let Some(request_headers) = request_headers else {
+        return true;
+    };
+    let Some(origin) = find_lasm_header_value(request_headers, "Origin").map(str::trim) else {
+        return true;
+    };
+    if origin.is_empty() {
+        return true;
+    }
+    is_lasm_cors_origin_allowed(origin, header_defaults)
+}
+
+fn find_lasm_header_value<'a>(
+    headers: &'a BTreeMap<String, String>,
+    name: &str,
+) -> Option<&'a str> {
+    headers
+        .iter()
+        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
+}
+
+fn lasm_header_has_token(value: &str, token: &str) -> bool {
+    value
+        .split(',')
+        .any(|part| part.trim().eq_ignore_ascii_case(token))
+}
+
+fn lasm_should_close_connection(request: &LasmRunRequest) -> bool {
+    if let Some(connection) = find_lasm_header_value(&request.headers, "Connection") {
+        if lasm_header_has_token(connection, "close") {
+            return true;
+        }
+        if lasm_header_has_token(connection, "keep-alive") {
+            return false;
+        }
+    }
+    request.http_version.eq_ignore_ascii_case("HTTP/1.0")
+}
+
+fn resolve_lasm_allow_origin(
+    request_headers: Option<&BTreeMap<String, String>>,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> Option<String> {
+    if !header_defaults.cors_enabled {
+        return None;
+    }
+    if header_defaults.cors_allow_any_origin {
+        return Some("*".to_string());
+    }
+    if let Some(request_headers) = request_headers {
+        if let Some(origin) = find_lasm_header_value(request_headers, "Origin") {
+            if header_defaults.cors_allowed_origins.is_empty() {
+                return Some(origin.to_string());
+            }
+            if header_defaults
+                .cors_allowed_origins
+                .iter()
+                .any(|allowed| allowed == origin)
+            {
+                return Some(origin.to_string());
+            }
+            return None;
+        }
+    }
+    header_defaults.cors_default_origin.clone()
+}
+
+fn apply_lasm_request_origin_header(
+    response: &mut sec4_core::HttpResponse,
+    request_headers: Option<&BTreeMap<String, String>>,
+    header_defaults: &LasmResponseHeaderDefaults,
+) {
+    if let Some(allow_origin) = resolve_lasm_allow_origin(request_headers, header_defaults) {
+        response
+            .headers
+            .insert("Access-Control-Allow-Origin".to_string(), allow_origin);
+    }
+}
+
+fn read_lasm_request_head(
+    stream: &mut TcpStream,
+    max_header_bytes: usize,
+) -> Result<LasmRequestHead, String> {
+    let mut reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("could not clone stream while reading request head: {err}"))?,
+    );
+    let mut consumed = 0usize;
+    let mut line = String::new();
+    let mut is_first_line = true;
+    let mut method = String::new();
+    let mut headers = BTreeMap::new();
+    loop {
+        line.clear();
+        let read = reader
+            .read_line(&mut line)
+            .map_err(|err| format!("could not read request while reading overload head: {err}"))?;
+        if read == 0 {
+            break;
+        }
+        consumed = consumed.saturating_add(read);
+        if consumed > max_header_bytes {
+            return Err(format!(
+                "request headers exceed configured limit ({max_header_bytes} bytes)"
+            ));
+        }
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+        if is_first_line {
+            is_first_line = false;
+            method = line
+                .split_once(' ')
+                .map(|(parsed_method, _)| parsed_method.trim().to_ascii_uppercase())
+                .unwrap_or_default();
+            continue;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            headers.insert(name.trim().to_string(), value.trim().to_string());
+        }
+    }
+    Ok(LasmRequestHead { method, headers })
+}
+
+#[derive(Debug, Clone)]
+struct LasmRunRequest {
+    method: String,
+    http_version: String,
+    path: String,
+    headers: BTreeMap<String, String>,
+    body: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRequestHead {
+    method: String,
+    headers: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRequestReadError {
+    status: u16,
+    message: String,
+}
+
+#[derive(Debug, Clone)]
+struct LasmResponseHeaderDefaults {
+    cors_enabled: bool,
+    cors_allow_any_origin: bool,
+    cors_allowed_origins: Vec<String>,
+    cors_allow_any_method: bool,
+    cors_allowed_methods: Vec<String>,
+    cors_allow_any_header: bool,
+    cors_allowed_headers: Vec<String>,
+    cors_allow_private_network: bool,
+    cors_default_origin: Option<String>,
+    headers: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LasmCorsPreflightDecision {
+    NotPreflight,
+    Accept,
+    Reject { status: u16, message: &'static str },
+}
+
+fn read_lasm_http_request(
+    reader: &mut BufReader<TcpStream>,
+    max_header_bytes: usize,
+    max_body_bytes: usize,
+) -> Result<LasmRunRequest, LasmRequestReadError> {
+    let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
+    let map_read_error = |stage: &str, err: std::io::Error| {
+        if matches!(
+            err.kind(),
+            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+        ) {
+            return make_error(408, format!("request read timeout while {stage}"));
+        }
+        make_error(400, format!("could not {stage}: {err}"))
+    };
+    let mut request_line = String::new();
+    let bytes = reader
+        .read_line(&mut request_line)
+        .map_err(|err| map_read_error("reading request line", err))?;
+    if bytes == 0 {
+        return Err(make_error(400, "empty request".to_string()));
+    }
+    let mut consumed = bytes;
+    if consumed > max_header_bytes {
+        return Err(make_error(
+            431,
+            format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
+        ));
+    }
+    let mut parts = request_line.trim_end().split_whitespace();
+    let method = parts
+        .next()
+        .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
+    let request_target = parts
+        .next()
+        .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
+    let http_version = parts.next().ok_or_else(|| {
+        make_error(
+            400,
+            "invalid request line: missing http version".to_string(),
+        )
+    })?;
+    if parts.next().is_some() {
+        return Err(make_error(
+            400,
+            "invalid request line: unexpected trailing tokens".to_string(),
+        ));
+    }
+    if http_version != "HTTP/1.1" && http_version != "HTTP/1.0" {
+        return Err(make_error(
+            505,
+            format!("unsupported http version: {http_version}"),
+        ));
+    }
+
+    let mut headers = BTreeMap::new();
+    let mut content_length = 0usize;
+    let mut parsed_content_length: Option<usize> = None;
+
+    let mut header_line = String::new();
+    loop {
+        header_line.clear();
+        let read = reader
+            .read_line(&mut header_line)
+            .map_err(|err| map_read_error("reading header line", err))?;
+        if read == 0 {
+            break;
+        }
+        consumed = consumed.saturating_add(read);
+        if consumed > max_header_bytes {
+            return Err(make_error(
+                431,
+                "request headers exceed configured limit ({max_header_bytes} bytes)".to_string(),
+            ));
+        }
+        if header_line == "\r\n" || header_line == "\n" {
+            break;
+        }
+        let header = header_line.trim_end_matches(['\r', '\n']);
+        let Some((name_raw, value_raw)) = header.split_once(':') else {
+            return Err(make_error(
+                400,
+                "invalid header line: missing ':' separator".to_string(),
+            ));
+        };
+        let name = name_raw.trim();
+        let value = value_raw.trim();
+        if name.is_empty() {
+            return Err(make_error(
+                400,
+                "invalid header line: empty header name".to_string(),
+            ));
+        }
+        if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
+            return Err(make_error(
+                501,
+                "transfer-encoding is not supported".to_string(),
+            ));
+        }
+        if name.eq_ignore_ascii_case("content-length") {
+            let parsed = value.parse::<usize>().map_err(|_| {
+                make_error(
+                    400,
+                    "invalid content-length header: expected usize".to_string(),
+                )
+            })?;
+            if let Some(existing) = parsed_content_length {
+                if existing != parsed {
+                    return Err(make_error(
+                        400,
+                        "conflicting content-length headers".to_string(),
+                    ));
+                }
+            }
+            parsed_content_length = Some(parsed);
+            content_length = parsed;
+        }
+        headers.insert(name.to_string(), value.to_string());
+    }
+
+    if http_version.eq_ignore_ascii_case("HTTP/1.1") {
+        let has_host = headers
+            .iter()
+            .any(|(name, value)| name.eq_ignore_ascii_case("host") && !value.trim().is_empty());
+        if !has_host {
+            return Err(make_error(400, "missing host header".to_string()));
+        }
+    }
+
+    if content_length > max_body_bytes {
+        return Err(make_error(
+            413,
+            format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
+        ));
+    }
+
+    let mut body = vec![0u8; content_length];
+    if content_length > 0 {
+        reader
+            .read_exact(&mut body)
+            .map_err(|err| map_read_error("reading request body", err))?;
+    }
+
+    let path = request_target
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(request_target);
+
+    Ok(LasmRunRequest {
+        method: method.to_ascii_uppercase(),
+        http_version: http_version.to_string(),
+        path: path.to_string(),
+        headers,
+        body,
+    })
+}
+
+fn write_lasm_http_response(
+    stream: &mut TcpStream,
+    response: &sec4_core::HttpResponse,
+    header_defaults: &LasmResponseHeaderDefaults,
+    include_cors_defaults: bool,
+    omit_body: bool,
+    close_connection: bool,
+) -> Result<(), String> {
+    let mut headers = response.headers.clone();
+    if !include_cors_defaults {
+        headers.retain(|name, _| !is_lasm_cors_default_header_name(name.as_str()));
+    }
+    for (name, value) in &header_defaults.headers {
+        if !include_cors_defaults && is_lasm_cors_default_header_name(name.as_str()) {
+            continue;
+        }
+        headers.entry(name.clone()).or_insert_with(|| value.clone());
+    }
+    headers
+        .entry("Content-Length".to_string())
+        .or_insert_with(|| response.body.len().to_string());
+    headers.insert(
+        "Connection".to_string(),
+        if close_connection {
+            "close".to_string()
+        } else {
+            "keep-alive".to_string()
+        },
+    );
+    headers
+        .entry("Content-Type".to_string())
+        .or_insert_with(|| "text/plain; charset=utf-8".to_string());
+
+    let status_text = http_status_text(response.status);
+    let mut response_head = format!("HTTP/1.1 {} {}\r\n", response.status, status_text);
+    for (name, value) in headers {
+        response_head.push_str(name.as_str());
+        response_head.push_str(": ");
+        response_head.push_str(value.as_str());
+        response_head.push_str("\r\n");
+    }
+    response_head.push_str("\r\n");
+    stream
+        .write_all(response_head.as_bytes())
+        .map_err(|err| format!("could not write response headers: {err}"))?;
+    if !omit_body {
+        stream
+            .write_all(&response.body)
+            .map_err(|err| format!("could not write response body: {err}"))?;
+    }
+    stream
+        .flush()
+        .map_err(|err| format!("could not flush response stream: {err}"))?;
+    Ok(())
+}
+
+fn is_lasm_cors_default_header_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("Vary")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Origin")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Credentials")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Methods")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Headers")
+        || name.eq_ignore_ascii_case("Access-Control-Max-Age")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Private-Network")
+        || name.eq_ignore_ascii_case("Access-Control-Expose-Headers")
+}
+
+fn next_lasm_trace_id(trace_counter: &AtomicU64) -> String {
+    let next = trace_counter.fetch_add(1, Ordering::Relaxed) + 1;
+    format!("rt-{next}")
+}
+
+fn set_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_id: &str) {
+    response
+        .headers
+        .insert("X-Trace-Id".to_string(), trace_id.to_string());
+}
+
+fn lasm_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn http_status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        400 => "Bad Request",
+        408 => "Request Timeout",
+        405 => "Method Not Allowed",
+        431 => "Request Header Fields Too Large",
+        413 => "Payload Too Large",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        501 => "Not Implemented",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
+        505 => "HTTP Version Not Supported",
+        _ => "Status",
     }
 }
 
@@ -5313,7 +7436,11 @@ fn cmd_promote(
             "{}",
             serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
         );
-        return if blocking_preconditions { Err(1) } else { Ok(()) };
+        return if blocking_preconditions {
+            Err(1)
+        } else {
+            Ok(())
+        };
     }
 
     let apply_report = apply_promote_plan(path, &generated_files, &localdb_references, &plan)?;

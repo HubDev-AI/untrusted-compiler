@@ -1,5 +1,5 @@
 use crate::lasm_runtime::{LasmAsyncRuntime, RunReport, RuntimeAction, TaskId};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
@@ -76,6 +76,7 @@ struct PatternRoute {
 struct PendingRequest {
     request_id: u64,
     request_started_at_ms: u64,
+    is_head_request: bool,
     actions: Vec<RuntimeAction>,
     path_params: BTreeMap<String, String>,
     response: HttpResponse,
@@ -91,6 +92,7 @@ pub struct LasmHttpRuntime {
     max_request_duration_ms: Option<u64>,
     task_to_request: HashMap<TaskId, u64>,
     task_started_at_ms: HashMap<TaskId, u64>,
+    task_is_head_request: HashMap<TaskId, bool>,
     task_to_path_params: HashMap<TaskId, BTreeMap<String, String>>,
     task_to_response: HashMap<TaskId, HttpResponse>,
     pending_requests: VecDeque<PendingRequest>,
@@ -115,6 +117,7 @@ impl LasmHttpRuntime {
             max_request_duration_ms: None,
             task_to_request: HashMap::new(),
             task_started_at_ms: HashMap::new(),
+            task_is_head_request: HashMap::new(),
             task_to_path_params: HashMap::new(),
             task_to_response: HashMap::new(),
             pending_requests: VecDeque::new(),
@@ -202,17 +205,31 @@ impl LasmHttpRuntime {
         let request_id = self.next_request_id;
         self.next_request_id += 1;
         let request_started_at_ms = self.scheduler.now_ms();
+        let is_head_request = request.method.trim().eq_ignore_ascii_case("HEAD");
 
         if let Some(route) = self.resolve_route_plan(request.method.as_str(), request.path.as_str())
         {
-            self.enqueue_or_start_request(request_id, request_started_at_ms, route);
+            self.enqueue_or_start_request(request_id, request_started_at_ms, is_head_request, route);
         } else {
+            let allowed_methods = self.resolve_allowed_methods_for_path(request.path.as_str());
+            let mut response = if allowed_methods.is_empty() {
+                HttpResponse::text(404, "route not found")
+            } else {
+                let mut response = HttpResponse::text(405, "method not allowed");
+                response
+                    .headers
+                    .insert("Allow".to_string(), allowed_methods.join(", "));
+                response
+            };
+            if is_head_request {
+                response.body.clear();
+            }
             self.ready_responses.push_back(HttpExchange {
                 request_id,
                 request_started_at_ms,
                 response_ready_at_ms: request_started_at_ms,
                 path_params: BTreeMap::new(),
-                response: HttpResponse::text(404, "route not found"),
+                response,
             });
         }
 
@@ -243,7 +260,7 @@ impl LasmHttpRuntime {
                     .remove(&completed.task_id)
                     .unwrap_or_default();
 
-                let response = if self.is_request_timed_out(started_at_ms) {
+                let mut response = if self.is_request_timed_out(started_at_ms) {
                     self.task_to_response.remove(&completed.task_id);
                     self.timeout_response()
                 } else if completed.code == 0 {
@@ -257,6 +274,13 @@ impl LasmHttpRuntime {
                         format!("handler exited with status {}", completed.code),
                     )
                 };
+                if self
+                    .task_is_head_request
+                    .remove(&completed.task_id)
+                    .unwrap_or(false)
+                {
+                    response.body.clear();
+                }
 
                 self.ready_responses.push_back(HttpExchange {
                     request_id,
@@ -302,12 +326,14 @@ impl LasmHttpRuntime {
         &mut self,
         request_id: u64,
         request_started_at_ms: u64,
+        is_head_request: bool,
         route: ResolvedRoutePlan,
     ) {
         if self.can_start_request_now() {
             self.start_request_task(
                 request_id,
                 request_started_at_ms,
+                is_head_request,
                 route.actions,
                 route.path_params,
                 route.response,
@@ -316,12 +342,16 @@ impl LasmHttpRuntime {
         }
 
         if self.max_pending_reached() {
+            let mut response = HttpResponse::text(503, "runtime queue full");
+            if is_head_request {
+                response.body.clear();
+            }
             self.ready_responses.push_back(HttpExchange {
                 request_id,
                 request_started_at_ms,
                 response_ready_at_ms: self.scheduler.now_ms(),
                 path_params: route.path_params,
-                response: HttpResponse::text(503, "runtime queue full"),
+                response,
             });
             return;
         }
@@ -329,6 +359,7 @@ impl LasmHttpRuntime {
         self.pending_requests.push_back(PendingRequest {
             request_id,
             request_started_at_ms,
+            is_head_request,
             actions: route.actions,
             path_params: route.path_params,
             response: route.response,
@@ -339,6 +370,7 @@ impl LasmHttpRuntime {
         &mut self,
         request_id: u64,
         request_started_at_ms: u64,
+        is_head_request: bool,
         actions: Vec<RuntimeAction>,
         path_params: BTreeMap<String, String>,
         response: HttpResponse,
@@ -347,6 +379,7 @@ impl LasmHttpRuntime {
         self.task_to_request.insert(task_id, request_id);
         self.task_started_at_ms
             .insert(task_id, request_started_at_ms);
+        self.task_is_head_request.insert(task_id, is_head_request);
         self.task_to_path_params.insert(task_id, path_params);
         self.task_to_response.insert(task_id, response);
     }
@@ -357,18 +390,23 @@ impl LasmHttpRuntime {
                 break;
             };
             if self.is_request_timed_out(pending.request_started_at_ms) {
+                let mut response = self.timeout_response();
+                if pending.is_head_request {
+                    response.body.clear();
+                }
                 self.ready_responses.push_back(HttpExchange {
                     request_id: pending.request_id,
                     request_started_at_ms: pending.request_started_at_ms,
                     response_ready_at_ms: self.scheduler.now_ms(),
                     path_params: pending.path_params,
-                    response: self.timeout_response(),
+                    response,
                 });
                 continue;
             }
             self.start_request_task(
                 pending.request_id,
                 pending.request_started_at_ms,
+                pending.is_head_request,
                 pending.actions,
                 pending.path_params,
                 pending.response,
@@ -417,14 +455,19 @@ impl LasmHttpRuntime {
                 continue;
             };
             let path_params = self.task_to_path_params.remove(&task_id).unwrap_or_default();
+            let is_head_request = self.task_is_head_request.remove(&task_id).unwrap_or(false);
             self.task_to_response.remove(&task_id);
             if cancelled {
+                let mut response = self.timeout_response();
+                if is_head_request {
+                    response.body.clear();
+                }
                 self.ready_responses.push_back(HttpExchange {
                     request_id,
                     request_started_at_ms: started_at_ms,
                     response_ready_at_ms: self.scheduler.now_ms(),
                     path_params,
-                    response: self.timeout_response(),
+                    response,
                 });
             }
         }
@@ -493,6 +536,42 @@ impl LasmHttpRuntime {
             }
         }
         None
+    }
+
+    fn resolve_allowed_methods_for_path(&self, path: &str) -> Vec<String> {
+        let request_match_path = normalized_request_match_path(path);
+        let request_segments = split_request_segments(request_match_path);
+        let mut methods = BTreeSet::new();
+
+        for ((method, route_path), _route) in &self.exact_routes {
+            if route_path == request_match_path {
+                methods.insert(method.clone());
+            }
+        }
+
+        for route in &self.pattern_routes {
+            if route.pattern_segments.len() != request_segments.len() {
+                continue;
+            }
+            let mut matches = true;
+            for (pattern, request) in route.pattern_segments.iter().zip(request_segments.iter()) {
+                if let RouteSegment::Literal(literal) = pattern {
+                    if literal != request {
+                        matches = false;
+                        break;
+                    }
+                }
+            }
+            if matches {
+                methods.insert(route.method.clone());
+            }
+        }
+
+        if methods.contains("GET") {
+            methods.insert("HEAD".to_string());
+        }
+
+        methods.into_iter().collect()
     }
 }
 
@@ -583,6 +662,42 @@ mod tests {
             "missing route should not emit path params"
         );
         assert_eq!(exchange.response.status, 404);
+    }
+
+    #[test]
+    fn method_mismatch_returns_405_with_allow_header_without_scheduler_work() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .register_route(
+                "GET",
+                "/health",
+                vec![RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let request_id = runtime.submit(HttpRequest::new("POST", "/health"));
+        let report = runtime.run_until_idle(16);
+        assert!(
+            report.idle,
+            "runtime should stay idle for method mismatch route response"
+        );
+
+        let exchange = runtime
+            .pop_response()
+            .expect("method mismatch should emit immediate response");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 405);
+        let allow = exchange
+            .response
+            .headers
+            .get("Allow")
+            .map(String::as_str)
+            .unwrap_or("");
+        assert_eq!(
+            allow, "GET, HEAD",
+            "method mismatch response should include deterministic allow header with HEAD fallback for GET routes"
+        );
     }
 
     #[test]
@@ -765,7 +880,26 @@ mod tests {
         let exchange = runtime.pop_response().expect("response should be ready");
         assert_eq!(exchange.request_id, request_id);
         assert_eq!(exchange.response.status, 200);
-        assert_eq!(exchange.response.body, b"ok");
+        assert!(
+            exchange.response.body.is_empty(),
+            "HEAD fallback responses should omit body bytes"
+        );
+    }
+
+    #[test]
+    fn head_missing_route_returns_404_without_body() {
+        let mut runtime = LasmHttpRuntime::default();
+        let request_id = runtime.submit(HttpRequest::new("HEAD", "/missing"));
+        let report = runtime.run_until_idle(16);
+        assert!(report.idle, "runtime should stay idle for missing HEAD route");
+
+        let exchange = runtime.pop_response().expect("response should be ready");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 404);
+        assert!(
+            exchange.response.body.is_empty(),
+            "HEAD missing-route responses should omit body bytes"
+        );
     }
 
     #[test]

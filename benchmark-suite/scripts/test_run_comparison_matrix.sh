@@ -83,6 +83,16 @@ if ! grep -q 'build_report.sh sec4 .*baselines/sec-audit/default-secure-prod.hel
   exit 1
 fi
 
+sec4_lasm_out="$($root_dir/scripts/run_comparison_matrix.sh --dry-run --impls sec4-lasm)"
+if ! grep -q '=== impl=sec4-lasm ===' <<<"$sec4_lasm_out"; then
+  echo "missing sec4-lasm implementation header" >&2
+  exit 1
+fi
+if ! grep -q 'build_report.sh sec4-lasm .*baselines/sec-audit/default-secure-prod.hello.json' <<<"$sec4_lasm_out"; then
+  echo "expected sec4-lasm report command to include sec4 audit artifact" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_comparison_matrix.sh" --dry-run --impls unknown >/dev/null 2>&1; then
   echo "expected unsupported implementation to fail" >&2
   exit 1
