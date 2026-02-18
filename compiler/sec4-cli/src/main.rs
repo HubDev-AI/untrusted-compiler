@@ -9583,6 +9583,12 @@ fn read_lasm_http_request_head(
             "invalid request line: trailing whitespace is not allowed".to_string(),
         ));
     }
+    if request_line.contains('\t') {
+        return Err(make_error(
+            400,
+            "invalid request line: tab separators are not allowed".to_string(),
+        ));
+    }
     let mut parts = request_line.split_whitespace();
     let method = parts
         .next()
