@@ -961,5 +961,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `993-m39-lasm-keep-alive-accounting-on-runtime-step-failure.md`
 - `994-m39-lasm-absolute-form-scheme-case-insensitive-parsing.md`
 - `995-m39-lasm-runtime-reset-after-step-budget-exhaustion.md`
+- `996-m39-lasm-absolute-form-query-only-normalization.md`
 
 As milestones progress, chapters will be added and linked from this index.

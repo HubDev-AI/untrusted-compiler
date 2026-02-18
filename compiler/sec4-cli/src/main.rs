@@ -9601,9 +9601,9 @@ fn read_lasm_http_request_head(
 
     let mut absolute_authority: Option<(&str, LasmAuthority)> = None;
     let normalized_target = if request_target == "*" {
-        request_target
+        std::borrow::Cow::Borrowed(request_target)
     } else if request_target.starts_with('/') {
-        request_target
+        std::borrow::Cow::Borrowed(request_target)
     } else if request_target.contains("://") {
         let (scheme_raw, authority_and_path) =
             request_target.split_once("://").ok_or_else(|| {
@@ -9636,12 +9636,17 @@ fn read_lasm_http_request_head(
             )
         })?;
         absolute_authority = Some((scheme, parsed_authority));
-        if authority_end < authority_and_path.len()
-            && authority_and_path.as_bytes()[authority_end] == b'/'
-        {
-            &authority_and_path[authority_end..]
+        if authority_end < authority_and_path.len() {
+            let separator = authority_and_path.as_bytes()[authority_end];
+            if separator == b'/' {
+                std::borrow::Cow::Borrowed(&authority_and_path[authority_end..])
+            } else if separator == b'?' {
+                std::borrow::Cow::Owned(format!("/{}", &authority_and_path[authority_end..]))
+            } else {
+                std::borrow::Cow::Borrowed("/")
+            }
         } else {
-            "/"
+            std::borrow::Cow::Borrowed("/")
         }
     } else {
         return Err(make_error(400, "invalid request target".to_string()));
@@ -9793,7 +9798,7 @@ fn read_lasm_http_request_head(
         }
     }
 
-    let (path, query_params) = split_lasm_path_and_query(normalized_target);
+    let (path, query_params) = split_lasm_path_and_query(normalized_target.as_ref());
 
     Ok(LasmParsedRequestHead {
         method: method.to_ascii_uppercase(),
