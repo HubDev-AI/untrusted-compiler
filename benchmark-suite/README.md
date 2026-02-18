@@ -83,7 +83,7 @@ Measure end-to-end service behavior across identical implementations:
 - Use constant-rate load for primary comparisons.
 - Prefer `wrk2` for non-dry-run profile execution; `wrk` fallback is supported with explicit warning and non-constant-rate posture.
 - Keep fairness controls from `docs/book/71-benchmarking-and-comparison-spec.md`.
-- `services/sec4`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
+- `services/sec4`, `services/sec4-lasm`, `services/node`, `services/go`, `services/rust`, and `services/c` include runnable baseline contract services.
 - Orchestrator embeds `sec4 audit` data into `sec4-report.json` when baseline artifact is available.
 - For quick local loops, override profile runtime via env vars:
   - `BENCH_THREADS`, `BENCH_CONNECTIONS`, `BENCH_DURATION`

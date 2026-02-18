@@ -144,11 +144,7 @@ fi
 
 start_service() {
   local impl="$1"
-  local service_impl="$impl"
-  if [ "$impl" = "sec4-lasm" ]; then
-    service_impl="sec4"
-  fi
-  local service_dir="${root_dir}/services/${service_impl}"
+  local service_dir="${root_dir}/services/${impl}"
   local log_file="${raw_dir}/${impl}-service.log"
   if [ ! -d "$service_dir" ]; then
     echo "service directory not found for impl=${impl}: ${service_dir}" >&2

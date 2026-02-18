@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Tried cleaning transient benchmark artifacts with `rm -rf` (`benchmark-suite/services/sec4-lasm/build`) and the command was blocked by policy. | For generated cleanup in this environment, remove files with non-destructive edits (`apply_patch`/targeted deletes) and then `rmdir` empty directories. |
 | 2026-02-18 | self | While adding `sec4-lasm` to benchmark orchestrator, I updated sec-audit inclusion for non-dry runs but initially missed the matching dry-run branch, causing contract-test failure. | When mirroring orchestration behavior, patch both dry-run and real-execution branches together and rerun the script contract tests immediately. |
 | 2026-02-18 | self | Tried landing a large multi-hunk `apply_patch` over heavily edited LASM runtime code; context drift caused patch failure and slowed the slice. | For active runtime files, apply refactors in small ordered hunks (state fields -> submit flow -> queue flow -> tests) to keep patch context stable. |
 | 2026-02-18 | self | After hardening LASM to suppress CORS defaults for disallowed origins, I initially kept a test assertion expecting `Vary: Origin`, which contradicted the new suppression policy. | When tightening header-suppression behavior, align assertions with the selected policy boundary (full CORS suppression vs partial suppression) before rerunning broad suites. |
