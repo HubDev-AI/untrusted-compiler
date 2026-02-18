@@ -954,5 +954,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `986-m39-lasm-chunk-trailer-forbidden-header-validation.md`
 - `987-m39-lasm-chunk-trailer-header-merge-for-req-header.md`
 - `988-m39-lasm-chunk-trailer-header-limit-enforcement.md`
+- `989-m39-lasm-chunk-size-line-header-limit-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
