@@ -1,6 +1,8 @@
 use crate::lasm_runtime::{LasmAsyncRuntime, RunReport, RuntimeAction, TaskId};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
+const INTERNAL_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
     pub method: String,
@@ -221,7 +223,7 @@ impl LasmHttpRuntime {
         } else {
             let allowed_methods = self.resolve_allowed_methods_for_path(request.path.as_str());
             let mut response = if allowed_methods.is_empty() {
-                HttpResponse::text(404, "route not found")
+                internal_error_response(404, "route not found", "HTTP.NOT_FOUND")
             } else if request.method.trim().eq_ignore_ascii_case("OPTIONS") {
                 let mut response = HttpResponse::text(204, "");
                 response
@@ -229,7 +231,8 @@ impl LasmHttpRuntime {
                     .insert("Allow".to_string(), allowed_methods.join(", "));
                 response
             } else {
-                let mut response = HttpResponse::text(405, "method not allowed");
+                let mut response =
+                    internal_error_response(405, "method not allowed", "HTTP.METHOD_NOT_ALLOWED");
                 response
                     .headers
                     .insert("Allow".to_string(), allowed_methods.join(", "));
@@ -280,12 +283,19 @@ impl LasmHttpRuntime {
                 } else if completed.code == 0 {
                     self.task_to_response
                         .remove(&completed.task_id)
-                        .unwrap_or_else(|| HttpResponse::text(500, "missing response plan"))
+                        .unwrap_or_else(|| {
+                            internal_error_response(
+                                500,
+                                "missing response plan",
+                                "LASM.MISSING_RESPONSE_PLAN",
+                            )
+                        })
                 } else {
                     self.task_to_response.remove(&completed.task_id);
-                    HttpResponse::text(
+                    internal_error_response(
                         500,
                         format!("handler exited with status {}", completed.code),
+                        "LASM.HANDLER_EXIT_NONZERO",
                     )
                 };
                 if self
@@ -368,7 +378,8 @@ impl LasmHttpRuntime {
         }
 
         if self.max_pending_reached() {
-            let mut response = HttpResponse::text(503, "runtime queue full");
+            let mut response =
+                internal_error_response(503, "runtime queue full", "HTTP.SERVICE_UNAVAILABLE");
             if is_head_request {
                 response.body.clear();
             }
@@ -454,7 +465,8 @@ impl LasmHttpRuntime {
             let Some(pending) = self.pending_requests.pop_back() else {
                 break;
             };
-            let mut response = HttpResponse::text(503, "runtime queue full");
+            let mut response =
+                internal_error_response(503, "runtime queue full", "HTTP.SERVICE_UNAVAILABLE");
             if pending.is_head_request {
                 response.body.clear();
             }
@@ -476,7 +488,11 @@ impl LasmHttpRuntime {
 
     fn timeout_response(&self) -> HttpResponse {
         let limit_ms = self.max_request_duration_ms.unwrap_or(0);
-        HttpResponse::text(504, format!("handler timed out after {limit_ms}ms"))
+        internal_error_response(
+            504,
+            format!("handler timed out after {limit_ms}ms"),
+            "HTTP.GATEWAY_TIMEOUT",
+        )
     }
 
     fn cancel_timed_out_tasks(&mut self) {
@@ -684,6 +700,14 @@ fn split_request_segments(path: &str) -> Vec<String> {
         .collect()
 }
 
+fn internal_error_response(status: u16, body: impl Into<String>, code: &str) -> HttpResponse {
+    let mut response = HttpResponse::text(status, body);
+    response
+        .headers
+        .insert(INTERNAL_ERROR_CODE_HEADER.to_string(), code.to_string());
+    response
+}
+
 fn normalized_request_match_path(path: &str) -> &str {
     let mut end = path.len();
     if let Some(index) = path.find('?') {
@@ -697,7 +721,7 @@ fn normalized_request_match_path(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{HttpRequest, HttpResponse, LasmHttpRuntime};
+    use super::{HttpRequest, HttpResponse, LasmHttpRuntime, INTERNAL_ERROR_CODE_HEADER};
     use crate::lasm_runtime::RuntimeAction;
 
     #[test]
@@ -1204,6 +1228,15 @@ mod tests {
             "overflow response should include deterministic queue-full body"
         );
         assert_eq!(
+            overflow_exchange
+                .response
+                .headers
+                .get(INTERNAL_ERROR_CODE_HEADER)
+                .map(String::as_str),
+            Some("HTTP.SERVICE_UNAVAILABLE"),
+            "overflow response should include deterministic internal error code header"
+        );
+        assert_eq!(
             overflow_exchange.path_params.get("id").map(String::as_str),
             Some("3"),
             "overflow response should preserve resolved path params for observability"
@@ -1267,6 +1300,15 @@ mod tests {
         assert_eq!(exchange.request_id, request_id);
         assert_eq!(exchange.response.status, 504);
         assert_eq!(exchange.response.body, b"handler timed out after 10ms");
+        assert_eq!(
+            exchange
+                .response
+                .headers
+                .get(INTERNAL_ERROR_CODE_HEADER)
+                .map(String::as_str),
+            Some("HTTP.GATEWAY_TIMEOUT"),
+            "timeout response should include deterministic internal error code header"
+        );
     }
 
     #[test]
@@ -1361,8 +1403,26 @@ mod tests {
             b"handler timed out after 10ms"
         );
         assert_eq!(
+            first_exchange
+                .response
+                .headers
+                .get(INTERNAL_ERROR_CODE_HEADER)
+                .map(String::as_str),
+            Some("HTTP.GATEWAY_TIMEOUT"),
+            "first timeout response should include deterministic internal error code header"
+        );
+        assert_eq!(
             second_exchange.response.body,
             b"handler timed out after 10ms"
+        );
+        assert_eq!(
+            second_exchange
+                .response
+                .headers
+                .get(INTERNAL_ERROR_CODE_HEADER)
+                .map(String::as_str),
+            Some("HTTP.GATEWAY_TIMEOUT"),
+            "second timeout response should include deterministic internal error code header"
         );
     }
 
