@@ -607,10 +607,12 @@ fn cmd_lasm_smoke(
         }
         effective_max_request_ms = Some(limit);
     }
+    let mut runtime_route_method = method.trim().to_ascii_uppercase();
     let mut runtime_route_path = route.to_string();
     let (response_status, response_headers, response_body, response_origin) =
         match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
             Some(route_plan) => {
+                runtime_route_method = route_plan.route_method.clone();
                 runtime_route_path = route_plan.route_path.clone();
                 (
                     route_plan.status,
@@ -629,7 +631,7 @@ fn cmd_lasm_smoke(
     let mut response = sec4_core::HttpResponse::text(response_status, response_body);
     response.headers = response_headers;
     if let Err(message) = runtime.register_route(
-        method,
+        runtime_route_method.as_str(),
         runtime_route_path.as_str(),
         runtime_actions,
         response,
@@ -749,11 +751,13 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
                 response_origin,
+                runtime_route_method,
+                runtime_route_path,
                 requests,
                 max_in_flight_text,
                 max_pending_text,
@@ -780,6 +784,8 @@ fn cmd_lasm_smoke(
                 "responseRequestId": first_response_id.unwrap_or(0),
                 "entry": entry.name,
                 "origin": response_origin,
+                "resolvedRouteMethod": runtime_route_method,
+                "resolvedRoutePath": runtime_route_path,
                 "requests": requests,
                 "maxInFlight": effective_max_in_flight,
                 "maxPending": effective_max_pending,
@@ -853,6 +859,7 @@ fn parse_lasm_runtime_script(script: &str) -> Result<Vec<sec4_core::RuntimeActio
 #[derive(Debug, Clone)]
 struct LasmSmokeRoutePlan {
     handler_name: String,
+    route_method: String,
     route_path: String,
     status: u16,
     body: String,
@@ -1018,6 +1025,7 @@ fn resolve_lasm_smoke_route_plan(
 
     Some(LasmSmokeRoutePlan {
         handler_name: registration.handler_name,
+        route_method: registration.method,
         route_path: registration.path,
         status: response_plan.status,
         body: response_plan.body,
