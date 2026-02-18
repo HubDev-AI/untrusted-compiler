@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Triggered an empty `web.run` call mid-slice while working in a local-only LASM/runtime loop. | Keep local implementation turns strictly on shell/apply_patch tooling and avoid invoking `web` namespace unless external research is explicitly required. |
 | 2026-02-18 | self | Applied a source patch through `exec_command` heredoc instead of using the dedicated `apply_patch` tool, adding avoidable workflow noise. | Use the `apply_patch` tool directly for file edits and reserve `exec_command` for read/run operations. |
 | 2026-02-18 | self | Triggered the web tool again while checking local LASM tests, even though the slice required no external lookup. | Stay strictly on local shell/tools for compiler/runtime slices and treat web calls as forbidden unless the task explicitly needs external sources. |
 | 2026-02-18 | self | Ran a branch-switch Git command in parallel with another Git query, which created `.git/index.lock` contention and blocked branch creation. | Never parallelize mutating Git operations; run `switch/merge/commit/rebase` sequentially and keep parallel calls for read-only commands. |
