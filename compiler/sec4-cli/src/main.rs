@@ -2134,6 +2134,10 @@ fn extract_header_gate_literal(
             if namespace != "headers" || field != expected_gate || args.is_empty() {
                 return None;
             }
+            if expected_gate == "value" {
+                return extract_header_gate_literal(&args[0], expected_gate, bindings)
+                    .or_else(|| extract_lasm_request_header_placeholder(&args[0], bindings, 0));
+            }
             let sec4_core::ast::ExprKind::String(value) = &args[0].kind else {
                 return None;
             };

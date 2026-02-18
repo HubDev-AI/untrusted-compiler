@@ -7273,8 +7273,8 @@ fn queryRoute() effects { net } -> Int {
 }
 
 fn composeRoute() effects { net } -> Int {
-  res.setHeader(headers.name("X-Trace-Echo"), headers.value("{{req.query:trace}}"));
-  res.setHeader(headers.name("X-Request-Id-Echo"), headers.value("{{req.header:X-Request-Id}}"));
+  res.setHeader(headers.name("X-Trace-Echo"), headers.value(validate.nonEmpty(req.query("trace"))));
+  res.setHeader(headers.name("X-Request-Id-Echo"), headers.value(validate.nonEmpty(req.header("X-Request-Id"))));
   res.text(200, "id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
   0
 }
