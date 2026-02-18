@@ -6125,11 +6125,40 @@ fn apply_lasm_dynamic_response_materialization(
 
     match schema_hint.as_str() {
         "DecodeResponse" => {
-            let Some(payload) = parse_lasm_json_payload(&request.body) else {
+            if request.body.is_empty() && !lasm_request_expects_json(request) {
                 return;
+            }
+            let payload = match parse_lasm_json_payload(&request.body) {
+                Some(payload) => payload,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "JSON.INVALID_SYNTAX",
+                            "validation",
+                            "invalid JSON payload",
+                            400,
+                        ),
+                    );
+                    return;
+                }
             };
-            let Some(id) = extract_lasm_payload_id(&payload) else {
-                return;
+            let id = match extract_lasm_payload_id(&payload) {
+                Some(id) if is_lasm_uuid_v4(&id) => id,
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "VALIDATION.UUID_INVALID",
+                            "validation",
+                            "id must be UUID v4",
+                            400,
+                        ),
+                    );
+                    return;
+                }
             };
             set_lasm_json_response(
                 response,
@@ -6141,11 +6170,40 @@ fn apply_lasm_dynamic_response_materialization(
             );
         }
         "CreateUserResponse" => {
-            let Some(payload) = parse_lasm_json_payload(&request.body) else {
+            if request.body.is_empty() && !lasm_request_expects_json(request) {
                 return;
+            }
+            let payload = match parse_lasm_json_payload(&request.body) {
+                Some(payload) => payload,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "JSON.INVALID_SYNTAX",
+                            "validation",
+                            "invalid JSON payload",
+                            400,
+                        ),
+                    );
+                    return;
+                }
             };
-            let Some(id) = extract_lasm_payload_id(&payload) else {
-                return;
+            let id = match extract_lasm_payload_id(&payload) {
+                Some(id) if is_lasm_uuid_v4(&id) => id,
+                _ => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "VALIDATION.UUID_INVALID",
+                            "validation",
+                            "id must be UUID v4",
+                            400,
+                        ),
+                    );
+                    return;
+                }
             };
             if let Ok(mut state) = dynamic_state.lock() {
                 state.users_by_id.insert(id.clone(), payload);
@@ -6191,6 +6249,12 @@ fn apply_lasm_dynamic_response_materialization(
         }
         _ => {}
     }
+}
+
+fn lasm_request_expects_json(request: &LasmRunRequest) -> bool {
+    find_lasm_header_value(&request.headers, "Content-Type")
+        .map(|value| value.to_ascii_lowercase().contains("application/json"))
+        .unwrap_or(false)
 }
 
 fn extract_lasm_response_schema_hint(response: &sec4_core::HttpResponse) -> Option<String> {

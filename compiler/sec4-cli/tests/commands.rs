@@ -5090,6 +5090,136 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_returns_400_for_invalid_json_payload() {
+    let project_dir = temp_dir("sec4-run-command-lasm-invalid-json");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasminvalidjsoncommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn createUser() effects { net } -> Int {
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 1\r\nConnection: close\r\n\r\n{",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM invalid-json test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM invalid-json process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM invalid-json process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 400 Bad Request"),
+        "response should contain invalid-json status line:\n{response}"
+    );
+    assert!(
+        response.contains("Content-Type: application/json; charset=utf-8"),
+        "response should include deterministic JSON content-type:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"JSON.INVALID_SYNTAX\""),
+        "response should include deterministic invalid-json error code:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_head_request_omits_response_body() {
     let project_dir = temp_dir("sec4-run-command-lasm-head-body");
     let port = find_available_tcp_port();

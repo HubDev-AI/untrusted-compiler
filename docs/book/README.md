@@ -888,5 +888,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `920-m39-promote-dry-run-planner-baseline.md`
 - `921-m39-promote-apply-composition-root-guard.md`
 - `922-m39-lasm-run-benchmark-contract-response-materialization.md`
+- `923-m39-lasm-run-benchmark-response-validation-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
