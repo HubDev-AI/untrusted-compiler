@@ -14689,6 +14689,267 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_persists_user_store_when_lasm_db_base_is_set() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-persistence");
+    let db_base = project_dir.join("lasm-db");
+    let create_port = find_available_tcp_port();
+    let read_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpersistencecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn createUser() effects { net } -> Int {
+  res.ok(201, "CreateUserResponse", 0);
+  0
+}
+
+fn getUser() effects { net } -> Int {
+  res.json(200, "UserResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  http.get(router, "/users/:id", getUser);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let user_id = "123e4567-e89b-42d3-a456-426614174000";
+    let create_payload = format!(
+        "{{\"id\":\"{user_id}\",\"email\":\"user@example.com\",\"age\":30,\"tags\":[\"core\"],\"address\":{{\"zip\":\"12345\"}},\"meta\":{{\"flags\":{{\"a\":true,\"b\":false,\"c\":true}}}}}}"
+    );
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let create_port_value = create_port.to_string();
+    let mut create_child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            create_port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env("SEC4_RT_LASM_DB_BASE", db_base_value.as_str())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run create command should start");
+
+    let mut create_response = None;
+    for _ in 0..800 {
+        if let Some(status) = create_child
+            .try_wait()
+            .expect("create run command wait should succeed while connecting")
+        {
+            panic!("create run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", create_port)) {
+            Ok(mut stream) => {
+                let request = format!(
+                    "POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    create_payload.len(),
+                    create_payload
+                );
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("create request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("create response should be readable");
+                create_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let create_response = match create_response {
+        Some(response) => response,
+        None => {
+            let _ = create_child.kill();
+            let _ = create_child.wait();
+            panic!("run command LASM db persistence create flow could not connect to server");
+        }
+    };
+
+    let mut create_status = None;
+    for _ in 0..240 {
+        match create_child
+            .try_wait()
+            .expect("create run command wait should succeed")
+        {
+            Some(next) => {
+                create_status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let create_status = match create_status {
+        Some(status) => status,
+        None => {
+            let _ = create_child.kill();
+            let _ = create_child.wait();
+            panic!(
+                "run command LASM db persistence create process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        create_status.success(),
+        "run command LASM db persistence create process should exit successfully"
+    );
+    assert!(
+        create_response.contains("HTTP/1.1 201 Created"),
+        "create response should contain deterministic 201 status:\n{create_response}"
+    );
+    assert!(
+        create_response.contains("\"userId\":\"123e4567-e89b-42d3-a456-426614174000\""),
+        "create response should include deterministic user id:\n{create_response}"
+    );
+
+    let users_store_path = db_base.join("users.json");
+    let persisted_store = fs::read_to_string(&users_store_path)
+        .expect("LASM db persistence should write users store file");
+    assert!(
+        persisted_store.contains(user_id),
+        "persisted users store should include created user id:\n{persisted_store}"
+    );
+    assert!(
+        persisted_store.contains("\"email\": \"user@example.com\""),
+        "persisted users store should include created user payload:\n{persisted_store}"
+    );
+
+    let read_port_value = read_port.to_string();
+    let mut read_child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            read_port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env("SEC4_RT_LASM_DB_BASE", db_base_value.as_str())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run read command should start");
+
+    let mut read_response = None;
+    for _ in 0..800 {
+        if let Some(status) = read_child
+            .try_wait()
+            .expect("read run command wait should succeed while connecting")
+        {
+            panic!("read run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", read_port)) {
+            Ok(mut stream) => {
+                let request = format!(
+                    "GET /users/{user_id} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+                );
+                stream
+                    .write_all(request.as_bytes())
+                    .expect("read request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("read response should be readable");
+                read_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let read_response = match read_response {
+        Some(response) => response,
+        None => {
+            let _ = read_child.kill();
+            let _ = read_child.wait();
+            panic!("run command LASM db persistence read flow could not connect to server");
+        }
+    };
+
+    let mut read_status = None;
+    for _ in 0..240 {
+        match read_child
+            .try_wait()
+            .expect("read run command wait should succeed")
+        {
+            Some(next) => {
+                read_status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let read_status = match read_status {
+        Some(status) => status,
+        None => {
+            let _ = read_child.kill();
+            let _ = read_child.wait();
+            panic!("run command LASM db persistence read process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        read_status.success(),
+        "run command LASM db persistence read process should exit successfully"
+    );
+    assert!(
+        read_response.contains("HTTP/1.1 200 OK"),
+        "read response should contain deterministic 200 status:\n{read_response}"
+    );
+    assert!(
+        read_response.contains("\"id\":\"123e4567-e89b-42d3-a456-426614174000\""),
+        "read response should include persisted user id:\n{read_response}"
+    );
+    assert!(
+        read_response.contains("\"email\":\"user@example.com\""),
+        "read response should include persisted user payload:\n{read_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_merges_header_names_case_insensitively() {
     let project_dir = temp_dir("sec4-run-command-lasm-header-case-merge");
     let port = find_available_tcp_port();
