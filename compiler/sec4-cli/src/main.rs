@@ -1069,7 +1069,8 @@ fn collect_route_registrations_in_stmt(
             }
         }
         sec4_core::ast::StmtKind::Expr { expr } => {
-            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings)
+            collect_route_registrations_in_expr(functions, expr, visited, registrations, bindings);
+            maybe_apply_router_middleware_call_binding(functions, expr, bindings);
         }
     }
 }
@@ -1083,7 +1084,9 @@ fn collect_route_registrations_in_expr(
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(registration) = match_route_registration_details(callee, args, bindings) {
+            if let Some(registration) =
+                match_route_registration_details(functions, callee, args, bindings)
+            {
                 registrations.push(registration);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
@@ -1281,7 +1284,7 @@ fn find_route_handler_name_in_expr(
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
             if let Some(handler_name) =
-                match_route_registration_call(callee, args, method, route, bindings)
+                match_route_registration_call(functions, callee, args, method, route, bindings)
             {
                 return Some(handler_name);
             }
@@ -1397,13 +1400,14 @@ fn find_route_handler_name_in_expr(
 }
 
 fn match_route_registration_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
     method: &str,
     route: &str,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
-    let registration = match_route_registration_details(callee, args, bindings)?;
+    let registration = match_route_registration_details(functions, callee, args, bindings)?;
     if registration.method != method || registration.path != route {
         return None;
     }
@@ -1411,6 +1415,7 @@ fn match_route_registration_call(
 }
 
 fn match_route_registration_details(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
@@ -1442,7 +1447,7 @@ fn match_route_registration_details(
         return None;
     };
     let middleware_requirements = if args.len() >= 3 {
-        extract_router_middleware_requirements(&args[0], bindings, 0)
+        extract_router_middleware_requirements(functions, &args[0], bindings, 0)
     } else {
         LasmRouteMiddlewareRequirements::default()
     };
@@ -1459,6 +1464,7 @@ fn match_route_registration_details(
 }
 
 fn extract_router_middleware_requirements(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
     depth: usize,
@@ -1469,7 +1475,12 @@ fn extract_router_middleware_requirements(
     match &expr.kind {
         sec4_core::ast::ExprKind::Identifier(name) => {
             if let Some(bound) = bindings.get(name) {
-                return extract_router_middleware_requirements(bound, bindings, depth + 1);
+                return extract_router_middleware_requirements(
+                    functions,
+                    bound,
+                    bindings,
+                    depth + 1,
+                );
             }
             LasmRouteMiddlewareRequirements::default()
         }
@@ -1481,15 +1492,156 @@ fn extract_router_middleware_requirements(
             if match_csrf_middleware_call(callee, bindings) {
                 requirements.require_csrf = true;
             }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                let wrapper_requirements =
+                    extract_router_middleware_requirements_from_function_call(
+                        functions,
+                        function_name,
+                        args,
+                        depth + 1,
+                    );
+                requirements.require_auth |= wrapper_requirements.require_auth;
+                requirements.require_csrf |= wrapper_requirements.require_csrf;
+            }
             if let Some(base_router_expr) = args.first() {
-                let base_requirements =
-                    extract_router_middleware_requirements(base_router_expr, bindings, depth + 1);
+                let base_requirements = extract_router_middleware_requirements(
+                    functions,
+                    base_router_expr,
+                    bindings,
+                    depth + 1,
+                );
                 requirements.require_auth |= base_requirements.require_auth;
                 requirements.require_csrf |= base_requirements.require_csrf;
             }
             requirements
         }
         _ => LasmRouteMiddlewareRequirements::default(),
+    }
+}
+
+fn extract_router_middleware_requirements_from_function_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    call_args: &[sec4_core::ast::Expr],
+    depth: usize,
+) -> LasmRouteMiddlewareRequirements {
+    if depth > 32 {
+        return LasmRouteMiddlewareRequirements::default();
+    }
+    let Some(function) = functions.get(function_name) else {
+        return LasmRouteMiddlewareRequirements::default();
+    };
+    let mut bindings = HashMap::new();
+    for (param, arg) in function.params.iter().zip(call_args.iter()) {
+        bindings.insert(param.name.clone(), arg.clone());
+    }
+    extract_router_middleware_requirements_from_block(
+        functions,
+        &function.body,
+        &mut bindings,
+        depth + 1,
+    )
+}
+
+fn extract_router_middleware_requirements_from_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> LasmRouteMiddlewareRequirements {
+    let mut accumulated = LasmRouteMiddlewareRequirements::default();
+    for statement in &block.statements {
+        match &statement.kind {
+            sec4_core::ast::StmtKind::Let { name, value, .. } => {
+                bindings.insert(name.clone(), value.clone());
+            }
+            sec4_core::ast::StmtKind::Return { value } => {
+                if let Some(value) = value {
+                    let mut result = extract_router_middleware_requirements(
+                        functions,
+                        value,
+                        bindings,
+                        depth + 1,
+                    );
+                    result.require_auth |= accumulated.require_auth;
+                    result.require_csrf |= accumulated.require_csrf;
+                    return result;
+                }
+                return accumulated;
+            }
+            sec4_core::ast::StmtKind::Expr { expr } => {
+                if let sec4_core::ast::ExprKind::Call { callee, args } = &expr.kind {
+                    let direct_auth = match_auth_middleware_call(callee, bindings);
+                    let direct_csrf = match_csrf_middleware_call(callee, bindings);
+                    let helper_requirements =
+                        if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                            extract_router_middleware_requirements_from_function_call(
+                                functions,
+                                function_name.as_str(),
+                                args,
+                                depth + 1,
+                            )
+                        } else {
+                            LasmRouteMiddlewareRequirements::default()
+                        };
+                    let applies_auth = direct_auth || helper_requirements.require_auth;
+                    let applies_csrf = direct_csrf || helper_requirements.require_csrf;
+                    if applies_auth || applies_csrf {
+                        accumulated.require_auth |= applies_auth;
+                        accumulated.require_csrf |= applies_csrf;
+                        let first_name = args
+                            .first()
+                            .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
+                        if let Some(name) = first_name {
+                            bindings.insert(name, expr.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(tail) = &block.tail {
+        let mut result =
+            extract_router_middleware_requirements(functions, tail, bindings, depth + 1);
+        result.require_auth |= accumulated.require_auth;
+        result.require_csrf |= accumulated.require_csrf;
+        return result;
+    }
+    accumulated
+}
+
+fn maybe_apply_router_middleware_call_binding(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) {
+    let sec4_core::ast::ExprKind::Call { callee, args } = &expr.kind else {
+        return;
+    };
+    let applies_middleware = if match_auth_middleware_call(callee, bindings)
+        || match_csrf_middleware_call(callee, bindings)
+    {
+        true
+    } else if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+        let helper_requirements = extract_router_middleware_requirements_from_function_call(
+            functions,
+            function_name.as_str(),
+            args,
+            1,
+        );
+        helper_requirements.require_auth || helper_requirements.require_csrf
+    } else {
+        false
+    };
+    if !applies_middleware {
+        return;
+    }
+
+    let first_name = args
+        .first()
+        .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
+    if let Some(name) = first_name {
+        bindings.insert(name, expr.clone());
     }
 }
 
@@ -1533,6 +1685,25 @@ fn resolve_route_registration_expr(
         }
         _ => Some(expr.clone()),
     }
+}
+
+fn extract_router_binding_target(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    let sec4_core::ast::ExprKind::Identifier(name) = &expr.kind else {
+        return None;
+    };
+    if let Some(bound) = bindings.get(name) {
+        if let Some(inner) = extract_router_binding_target(bound, bindings, depth + 1) {
+            return Some(inner);
+        }
+    }
+    Some(name.clone())
 }
 
 fn extract_response_plan(
