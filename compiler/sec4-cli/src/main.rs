@@ -1642,20 +1642,39 @@ fn parse_lasm_res_text_body(
     expr: &sec4_core::ast::Expr,
     bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
+    parse_lasm_res_text_template(expr, bindings, 0)
+}
+
+fn parse_lasm_res_text_template(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
     if let Some(literal) = parse_string_literal(expr, bindings) {
         return Some(literal);
     }
-    let resolved = resolve_response_expr(expr, bindings, 0)?;
-    let sec4_core::ast::ExprKind::Call { callee, args } = &resolved.kind else {
-        return None;
-    };
-    if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings) {
-        return Some(placeholder);
+    let resolved = resolve_response_expr(expr, bindings, depth)?;
+    match &resolved.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(placeholder) = parse_lasm_request_text_placeholder(callee, args, bindings)
+            {
+                return Some(placeholder);
+            }
+            if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+                return parse_lasm_res_text_template(&args[0], bindings, depth + 1);
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Binary { op, left, right } if *op == sec4_core::ast::BinaryOp::Add => {
+            let lhs = parse_lasm_res_text_template(left, bindings, depth + 1)?;
+            let rhs = parse_lasm_res_text_template(right, bindings, depth + 1)?;
+            Some(format!("{lhs}{rhs}"))
+        }
+        _ => None,
     }
-    if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
-        return parse_lasm_res_text_body(&args[0], bindings);
-    }
-    None
 }
 
 fn parse_lasm_request_text_placeholder(
@@ -2048,6 +2067,7 @@ fn extract_header_binding_literal(
 ) -> Option<String> {
     extract_header_gate_literal(expr, "name", bindings)
         .or_else(|| extract_header_gate_literal(expr, "value", bindings))
+        .or_else(|| extract_lasm_request_header_placeholder(expr, bindings, 0))
         .or_else(|| extract_cookie_literal(expr, bindings))
 }
 
@@ -2096,6 +2116,15 @@ fn extract_header_gate_literal(
         sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
         sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
         sec4_core::ast::ExprKind::Call { callee, args } => {
+            if expected_gate == "value" {
+                if let Some(value) = parse_lasm_request_header_placeholder_call(callee, args, bindings)
+                {
+                    return Some(value);
+                }
+                if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+                    return extract_header_gate_literal(&args[0], expected_gate, bindings);
+                }
+            }
             let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
                 return None;
             };
@@ -2110,6 +2139,63 @@ fn extract_header_gate_literal(
             };
             Some(value.clone())
         }
+        _ => None,
+    }
+}
+
+fn extract_lasm_request_header_placeholder(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, String>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            let value = bindings.get(name)?;
+            if contains_lasm_request_placeholder_tokens(value.as_str()) {
+                Some(value.clone())
+            } else {
+                None
+            }
+        }
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(value) = parse_lasm_request_header_placeholder_call(callee, args, bindings)
+            {
+                return Some(value);
+            }
+            if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
+                return extract_lasm_request_header_placeholder(&args[0], bindings, depth + 1);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_lasm_request_header_placeholder_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, String>,
+) -> Option<String> {
+    let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+        return None;
+    };
+    let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
+        return None;
+    };
+    if namespace != "req" || args.is_empty() {
+        return None;
+    }
+    let key = extract_string_literal_or_binding(&args[0], bindings)?;
+    if key.trim().is_empty() {
+        return None;
+    }
+    match field.as_str() {
+        "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
+        "header" => Some(format!("{{{{req.header:{key}}}}}")),
+        "query" => Some(format!("{{{{req.query:{key}}}}}")),
         _ => None,
     }
 }
@@ -6324,6 +6410,7 @@ fn apply_lasm_dynamic_response_materialization(
     trace_id: &str,
 ) {
     apply_lasm_text_placeholder_materialization(response, request, path_params);
+    apply_lasm_header_placeholder_materialization(response, request, path_params);
 
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;
@@ -6493,10 +6580,7 @@ fn apply_lasm_text_placeholder_materialization(
         return;
     }
     let original = String::from_utf8_lossy(&response.body);
-    if !original.contains("{{req.pathParam:")
-        && !original.contains("{{req.header:")
-        && !original.contains("{{req.query:")
-    {
+    if !contains_lasm_request_placeholder_tokens(original.as_ref()) {
         return;
     }
     let with_path_params =
@@ -6514,6 +6598,39 @@ fn apply_lasm_text_placeholder_materialization(
     if materialized != original {
         response.body = materialized.into_bytes();
     }
+}
+
+fn apply_lasm_header_placeholder_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) {
+    for value in response.headers.values_mut() {
+        if !contains_lasm_request_placeholder_tokens(value.as_str()) {
+            continue;
+        }
+        let with_path_params =
+            replace_lasm_response_placeholder_tokens(value, "{{req.pathParam:", |key| {
+                path_params.get(key.trim()).cloned()
+            });
+        let with_headers =
+            replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
+                find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
+            });
+        let materialized =
+            replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
+                request.query_params.get(key.trim()).cloned()
+            });
+        if materialized != *value {
+            *value = materialized;
+        }
+    }
+}
+
+fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
+    value.contains("{{req.pathParam:")
+        || value.contains("{{req.header:")
+        || value.contains("{{req.query:")
 }
 
 fn replace_lasm_response_placeholder_tokens(
