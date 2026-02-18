@@ -7737,6 +7737,7 @@ fn process_lasm_connection_with_runtime(
                 omit_body,
                 close_connection,
             )?;
+            responses_written = responses_written.saturating_add(1);
             if close_connection {
                 return Ok(());
             }
