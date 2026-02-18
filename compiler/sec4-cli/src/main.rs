@@ -7108,8 +7108,21 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    let policy_overflow_probe_timeout_ms =
+        match u64::try_from(policy.http.overflow_probe_timeout_ms) {
+            Ok(value) => value,
+            Err(_) => {
+                eprintln!("run failed: policy http.overflow_probe_timeout_ms must be >= 0");
+                return Err(2);
+            }
+        };
+    if policy_overflow_probe_timeout_ms == 0 {
+        eprintln!("run failed: policy http.overflow_probe_timeout_ms must be >= 1");
+        return Err(2);
+    }
     let overflow_probe_timeout_ms = match resolve_lasm_overflow_probe_timeout_ms(
         overflow_probe_timeout_ms,
+        policy_overflow_probe_timeout_ms,
         effective_timeout_ms,
     ) {
         Ok(value) => value,
@@ -7778,9 +7791,10 @@ fn resolve_lasm_runtime_step_budget(
 
 fn resolve_lasm_overflow_probe_timeout_ms(
     explicit_override: Option<u64>,
+    policy_default: u64,
     effective_timeout_ms: u64,
 ) -> Result<u64, String> {
-    let fallback = effective_timeout_ms.min(50).max(1);
+    let fallback = policy_default.min(effective_timeout_ms).max(1);
     if let Some(value) = explicit_override {
         if value == 0 {
             return Err("invalid --overflow-probe-timeout-ms: expected u64 >= 1".to_string());

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Repeated Cargo parallelization by launching two `sec4-core` policy tests together, causing avoidable lock waits during fast LASM iteration. | Keep every Cargo run strictly sequential, even for tiny policy tests; parallelize only read/search commands. |
 | 2026-02-18 | self | Launched two Cargo tests in parallel while validating the max-pending policy slice, causing avoidable package/build lock waits. | Keep Cargo commands strictly sequential in this repo; parallelize only read/search or non-Cargo operations. |
 | 2026-02-18 | self | Changed LASM `max_pending` default source from concurrency-derived to policy-derived and missed that one overload test relied on implicit `max_pending=1`, causing timeout-path failure instead of deterministic `503`. | When changing runtime defaults, immediately audit overload tests and pin scenario-shaping flags (`--max-pending`) explicitly where saturation shape matters. |
 | 2026-02-18 | self | Tried applying a multi-hunk `main.rs` patch using stale resolver context, so `apply_patch` failed on the first attempt. | On frequently edited runtime files, capture the exact live snippet (`sed -n`) immediately before patching and split big changes into smaller hunks. |
