@@ -9332,6 +9332,14 @@ fn read_lasm_http_chunked_body(
                 message: "incomplete request while reading chunk size".to_string(),
             });
         }
+        if read > max_header_bytes {
+            return Err(LasmRequestReadError {
+                status: 431,
+                message: format!(
+                    "request headers exceed configured limit ({max_header_bytes} bytes)"
+                ),
+            });
+        }
         let raw_size = chunk_size_line.trim_end_matches(['\r', '\n']);
         let mut size_and_extensions = raw_size.split(';');
         let size_token = size_and_extensions.next().unwrap_or("").trim();
@@ -9365,6 +9373,14 @@ fn read_lasm_http_chunked_body(
                     return Err(LasmRequestReadError {
                         status: 400,
                         message: "incomplete request while reading chunk trailer".to_string(),
+                    });
+                }
+                if trailer_read > max_header_bytes {
+                    return Err(LasmRequestReadError {
+                        status: 431,
+                        message: format!(
+                            "request headers exceed configured limit ({max_header_bytes} bytes)"
+                        ),
                     });
                 }
                 trailer_bytes = trailer_bytes.saturating_add(trailer_read);
