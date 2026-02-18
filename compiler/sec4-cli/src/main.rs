@@ -93,6 +93,8 @@ enum Commands {
         #[arg(long)]
         request_path: Option<String>,
         #[arg(long)]
+        request_body: Option<String>,
+        #[arg(long)]
         max_in_flight: Option<usize>,
         #[arg(long)]
         max_pending: Option<usize>,
@@ -424,6 +426,7 @@ fn main() {
             method,
             route,
             request_path,
+            request_body,
             max_in_flight,
             max_pending,
             max_request_ms,
@@ -437,6 +440,7 @@ fn main() {
             &method,
             &route,
             request_path.as_deref(),
+            request_body.as_deref(),
             max_in_flight,
             max_pending,
             max_request_ms,
@@ -509,6 +513,7 @@ fn cmd_lasm_smoke(
     method: &str,
     route: &str,
     request_path: Option<&str>,
+    request_body: Option<&str>,
     max_in_flight: Option<usize>,
     max_pending: Option<usize>,
     max_request_ms: Option<u64>,
@@ -566,6 +571,7 @@ fn cmd_lasm_smoke(
         eprintln!("lasm-smoke failed: --request-path must not be empty when provided");
         return Err(2);
     }
+    let request_body = request_body.unwrap_or_default();
 
     let runtime_actions = if let Some(script) = runtime_script {
         match parse_lasm_runtime_script(script) {
@@ -663,8 +669,20 @@ fn cmd_lasm_smoke(
         return Err(1);
     }
 
+    let (smoke_request_path, smoke_query_params) = split_lasm_path_and_query(request_path);
+    let smoke_request = LasmRunRequest {
+        method: method.to_string(),
+        http_version: "HTTP/1.1".to_string(),
+        path: smoke_request_path,
+        query_params: smoke_query_params,
+        headers: BTreeMap::new(),
+        body: request_body.as_bytes().to_vec(),
+    };
+
     for _ in 0..requests {
-        runtime.submit(sec4_core::HttpRequest::new(method, request_path));
+        let mut request = sec4_core::HttpRequest::new(method, request_path);
+        request.body = request_body.as_bytes().to_vec();
+        runtime.submit(request);
     }
     let report = runtime.run_until_idle(max_steps);
     if !report.idle {
@@ -690,7 +708,17 @@ fn cmd_lasm_smoke(
     let mut first_path_params = None;
     let mut first_headers = None;
     let mut first_body = None;
-    while let Some(exchange) = runtime.pop_response() {
+    while let Some(mut exchange) = runtime.pop_response() {
+        apply_lasm_text_placeholder_materialization(
+            &mut exchange.response,
+            &smoke_request,
+            &exchange.path_params,
+        );
+        apply_lasm_header_placeholder_materialization(
+            &mut exchange.response,
+            &smoke_request,
+            &exchange.path_params,
+        );
         let duration_ms = exchange.duration_ms();
         response_count += 1;
         *status_counts.entry(exchange.response.status).or_insert(0) += 1;
@@ -814,6 +842,7 @@ fn cmd_lasm_smoke(
                 "maxPending": effective_max_pending,
                 "maxRequestMs": effective_max_request_ms,
                 "requestPath": request_path,
+                "requestBodyBytes": request_body.len(),
                 "okCount": ok_count,
                 "errorCount": error_count,
                 "statusCounts": status_counts
