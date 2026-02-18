@@ -7931,6 +7931,151 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_merges_header_names_case_insensitively() {
+    let project_dir = temp_dir("sec4-run-command-lasm-header-case-merge");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmheadercasemergecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.setHeader(headers.name("content-type"), headers.value("application/x-sec4-demo"));
+  res.setHeader(headers.name("x-trace-id"), headers.value("client-supplied-trace"));
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM header-case merge test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM header-case merge process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM header-case merge process should exit successfully"
+    );
+    let response_lower = response.to_ascii_lowercase();
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response_lower.matches("\r\ncontent-type:").count() == 1,
+        "response should include exactly one content-type header after case-insensitive merge:\n{response}"
+    );
+    assert!(
+        response_lower.contains("\r\ncontent-type: application/x-sec4-demo"),
+        "response should preserve user-provided content-type value without injecting fallback default:\n{response}"
+    );
+    assert!(
+        !response_lower.contains("text/plain; charset=utf-8"),
+        "response should not include fallback content-type when case-insensitive match exists:\n{response}"
+    );
+    assert!(
+        response_lower.matches("\r\nx-trace-id:").count() == 1,
+        "response should include exactly one x-trace-id header after trace injection:\n{response}"
+    );
+    assert!(
+        response_lower.contains("\r\nx-trace-id: rt-1"),
+        "runtime trace injection should overwrite user-provided x-trace-id value deterministically:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_returns_400_for_invalid_json_payload() {
     let project_dir = temp_dir("sec4-run-command-lasm-invalid-json");
     let port = find_available_tcp_port();

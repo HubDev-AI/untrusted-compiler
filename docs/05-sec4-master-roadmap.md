@@ -322,6 +322,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM now emits multiple `Set-Cookie` header lines when handlers call `res.addCookie(...)` multiple times in one response, preserving deterministic cookie ordering while keeping dynamic placeholder materialization intact (`docs/book/951-m39-lasm-multi-set-cookie-emission.md`).
 - [x] LASM `cookie.build(name, value)` extraction now materializes request-derived placeholders for both cookie names and values, enabling deterministic dynamic cookie-name flows (for example `cookie.build(validate.nonEmpty(req.query("cookie_name")), validate.nonEmpty(req.query("session")))`) in LASM run mode (`docs/book/952-m39-lasm-dynamic-cookie-name-placeholder-materialization.md`).
 - [x] LASM response-header placeholder materialization now covers dynamic header keys as well as values (for example `res.setHeader(headers.name(validate.nonEmpty(req.query("header_name"))), headers.value(...))`), preserving deterministic dynamic-header behavior under typed sink wrappers (`docs/book/953-m39-lasm-dynamic-response-header-name-materialization.md`).
+- [x] LASM response writer now normalizes/merges headers case-insensitively before default injection and trace/header upserts, preventing duplicate semantic headers like `Content-Type`/`content-type` and preserving deterministic override behavior (`docs/book/954-m39-lasm-case-insensitive-response-header-merge.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

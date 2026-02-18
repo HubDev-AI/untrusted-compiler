@@ -919,5 +919,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `951-m39-lasm-multi-set-cookie-emission.md`
 - `952-m39-lasm-dynamic-cookie-name-placeholder-materialization.md`
 - `953-m39-lasm-dynamic-response-header-name-materialization.md`
+- `954-m39-lasm-case-insensitive-response-header-merge.md`
 
 As milestones progress, chapters will be added and linked from this index.
