@@ -9546,6 +9546,12 @@ fn read_lasm_http_request_head(
     if bytes == 0 {
         return Err(make_error(400, "empty request".to_string()));
     }
+    if !request_line.ends_with('\n') {
+        return Err(make_error(
+            400,
+            "incomplete request while reading request line".to_string(),
+        ));
+    }
     let mut consumed = bytes;
     if consumed > max_header_bytes {
         return Err(make_error(
@@ -9644,6 +9650,12 @@ fn read_lasm_http_request_head(
             .read_line(&mut header_line)
             .map_err(|err| map_read_error("reading header line", err))?;
         if read == 0 {
+            return Err(make_error(
+                400,
+                "incomplete request while reading header line".to_string(),
+            ));
+        }
+        if !header_line.ends_with('\n') {
             return Err(make_error(
                 400,
                 "incomplete request while reading header line".to_string(),

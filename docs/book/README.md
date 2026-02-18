@@ -957,5 +957,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `989-m39-lasm-chunk-size-line-header-limit-enforcement.md`
 - `990-m39-lasm-incomplete-header-section-rejection.md`
 - `991-m39-lasm-incomplete-chunk-line-rejection.md`
+- `992-m39-lasm-incomplete-request-and-header-line-terminator-rejection.md`
 
 As milestones progress, chapters will be added and linked from this index.
