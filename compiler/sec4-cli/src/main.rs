@@ -6587,6 +6587,10 @@ fn cmd_run(
         eprintln!("run failed: --max-runtime-steps is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && max_pending.is_some() {
+        eprintln!("run failed: --max-pending is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && max_keep_alive_requests.is_some() {
         eprintln!("run failed: --max-keep-alive-requests is only supported with --backend lasm");
         return Err(2);

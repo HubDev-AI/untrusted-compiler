@@ -19736,6 +19736,34 @@ fn run_command_rejects_max_keep_alive_requests_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_max_pending_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-max-pending-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-pending", "2"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --max-pending is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-pending is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only max-pending flag guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_overflow_probe_timeout_ms_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-overflow-probe-timeout-c-backend");
     let project_path = project_dir

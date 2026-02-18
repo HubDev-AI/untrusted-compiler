@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Ran `rg` with a hyphen-prefixed pattern (`--max-pending|max_pending`) without `-e/--`, so ripgrep treated it as an invalid flag. | For patterns that begin with `-`, always pass `-e <pattern>` (or insert `--` before the pattern). |
 | 2026-02-18 | self | Read LASM code state from a stale divergent local branch and attempted to patch a bug that was already fixed on `origin/dev`, causing avoidable patch failure churn. | After each merge cycle, switch to a fresh `codex/*` branch from `origin/dev` and re-read the exact target section before patching. |
 | 2026-02-18 | self | Triggered `web.run` while in a local-only compiler/runtime pass. | Keep LASM/compiler implementation turns strictly on local shell/apply_patch tooling and avoid web calls unless external research is explicitly required. |
 | 2026-02-18 | self | While adding a new CLI flag test, I patched against an outdated context block and `apply_patch` failed once. | Before inserting new tests, locate the current anchor with `rg -n` + `sed` and patch against live surrounding lines. |
