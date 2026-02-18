@@ -6318,6 +6318,15 @@ fn read_lasm_http_request(
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
     let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
+    let map_read_error = |stage: &str, err: std::io::Error| {
+        if matches!(
+            err.kind(),
+            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+        ) {
+            return make_error(408, format!("request read timeout while {stage}"));
+        }
+        make_error(400, format!("could not {stage}: {err}"))
+    };
     let mut reader = BufReader::new(
         stream
             .try_clone()
@@ -6326,7 +6335,7 @@ fn read_lasm_http_request(
     let mut request_line = String::new();
     let bytes = reader
         .read_line(&mut request_line)
-        .map_err(|err| make_error(400, format!("could not read request line: {err}")))?;
+        .map_err(|err| map_read_error("reading request line", err))?;
     if bytes == 0 {
         return Err(make_error(400, "empty request".to_string()));
     }
@@ -6347,7 +6356,7 @@ fn read_lasm_http_request(
         header_line.clear();
         let read = reader
             .read_line(&mut header_line)
-            .map_err(|err| make_error(400, format!("could not read header line: {err}")))?;
+            .map_err(|err| map_read_error("reading header line", err))?;
         if read == 0 {
             break;
         }
@@ -6398,7 +6407,7 @@ fn read_lasm_http_request(
     if content_length > 0 {
         reader
             .read_exact(&mut body)
-            .map_err(|err| make_error(400, format!("could not read request body: {err}")))?;
+            .map_err(|err| map_read_error("reading request body", err))?;
     }
 
     let path = request_target
@@ -6493,6 +6502,7 @@ fn http_status_text(status: u16) -> &'static str {
         401 => "Unauthorized",
         403 => "Forbidden",
         400 => "Bad Request",
+        408 => "Request Timeout",
         405 => "Method Not Allowed",
         413 => "Payload Too Large",
         404 => "Not Found",
