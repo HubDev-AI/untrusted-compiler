@@ -7434,6 +7434,36 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut compose_invalid_name_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /compose/user-8?trace=q%2B8+ok&header_name=X_Trace_Echo HTTP/1.1\r\nHost: localhost\r\nX-Request-Id: req-100\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/compose invalid-name request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/compose invalid-name response should be readable");
+                compose_invalid_name_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let compose_invalid_name_response = match compose_invalid_name_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM req placeholder test could not connect /compose invalid-name request"
+            );
+        }
+    };
+
     let mut query_invalid_escape_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -7503,6 +7533,22 @@ fn main() effects { net } -> Int {
     assert!(
         compose_response.contains("\r\n\r\nid=user-7;trace=q+7 ok;requestId=req-99"),
         "/compose response should materialize mixed literal and request-derived placeholders in body:\n{compose_response}"
+    );
+    assert!(
+        compose_invalid_name_response.contains("HTTP/1.1 200 OK"),
+        "/compose invalid-name response should contain 200 status line:\n{compose_invalid_name_response}"
+    );
+    assert!(
+        !compose_invalid_name_response.contains("X_Trace_Echo:"),
+        "/compose invalid-name response should drop dynamic headers whose materialized names fail header-name grammar:\n{compose_invalid_name_response}"
+    );
+    assert!(
+        compose_invalid_name_response.contains("X-Request-Id-Echo: req-100"),
+        "/compose invalid-name response should keep valid static response headers:\n{compose_invalid_name_response}"
+    );
+    assert!(
+        compose_invalid_name_response.contains("\r\n\r\nid=user-8;trace=q+8 ok;requestId=req-100"),
+        "/compose invalid-name response should keep dynamic body materialization intact:\n{compose_invalid_name_response}"
     );
     assert!(
         query_invalid_escape_response.contains("HTTP/1.1 200 OK"),
