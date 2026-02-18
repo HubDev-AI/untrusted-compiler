@@ -9589,16 +9589,10 @@ fn read_lasm_http_request_head(
             "invalid request line: tab separators are not allowed".to_string(),
         ));
     }
-    let mut parts = request_line.split_whitespace();
+    let mut parts = request_line.split(' ');
     let method = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
-    if !is_lasm_http_token(method) {
-        return Err(make_error(
-            400,
-            "invalid request line: invalid method token".to_string(),
-        ));
-    }
     let request_target = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
@@ -9608,10 +9602,20 @@ fn read_lasm_http_request_head(
             "invalid request line: missing http version".to_string(),
         )
     })?;
-    if parts.next().is_some() {
+    if method.is_empty()
+        || request_target.is_empty()
+        || http_version.is_empty()
+        || parts.next().is_some()
+    {
         return Err(make_error(
             400,
-            "invalid request line: unexpected trailing tokens".to_string(),
+            "invalid request line: expected single-space separators".to_string(),
+        ));
+    }
+    if !is_lasm_http_token(method) {
+        return Err(make_error(
+            400,
+            "invalid request line: invalid method token".to_string(),
         ));
     }
     if http_version != "HTTP/1.1" && http_version != "HTTP/1.0" {
