@@ -6826,6 +6826,24 @@ fn read_lasm_http_request(
     let request_target = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
+    let http_version = parts.next().ok_or_else(|| {
+        make_error(
+            400,
+            "invalid request line: missing http version".to_string(),
+        )
+    })?;
+    if parts.next().is_some() {
+        return Err(make_error(
+            400,
+            "invalid request line: unexpected trailing tokens".to_string(),
+        ));
+    }
+    if http_version != "HTTP/1.1" && http_version != "HTTP/1.0" {
+        return Err(make_error(
+            505,
+            format!("unsupported http version: {http_version}"),
+        ));
+    }
 
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
@@ -6997,6 +7015,7 @@ fn http_status_text(status: u16) -> &'static str {
         500 => "Internal Server Error",
         503 => "Service Unavailable",
         504 => "Gateway Timeout",
+        505 => "HTTP Version Not Supported",
         _ => "Status",
     }
 }

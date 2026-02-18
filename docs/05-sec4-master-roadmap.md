@@ -298,6 +298,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM decode/create materialization now rejects non-JSON content-type payloads deterministically (`400 HTTP.BAD_REQUEST`, `content-type must be application/json`) while preserving empty-body fallback compatibility (`docs/book/927-m39-lasm-json-content-type-enforcement.md`).
 - [x] LASM non-oneshot overload path now returns deterministic JSON error envelopes (`HTTP.SERVICE_UNAVAILABLE`) with trace metadata instead of plain-text overload bodies (`docs/book/928-m39-lasm-overload-json-error-envelope.md`).
 - [x] LASM response writer now enforces HTTP HEAD body omission across runtime and overload paths while preserving deterministic overload JSON headers (`docs/book/929-m39-lasm-head-body-omission-parity.md`).
+- [x] LASM request-line parsing now enforces explicit HTTP version tokens and deterministic unsupported-version rejection (`505 HTTP Version Not Supported`) for non-HTTP/1.0/1.1 requests (`docs/book/930-m39-lasm-request-line-version-hardening.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
