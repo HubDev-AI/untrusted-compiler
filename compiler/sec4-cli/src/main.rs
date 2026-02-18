@@ -5756,12 +5756,24 @@ fn cmd_run_lasm_backend(
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
-                let _ = drain_lasm_request_head(&mut stream, effective_max_header_bytes);
+                let request_head = read_lasm_request_head(&mut stream, effective_max_header_bytes).ok();
+                let request_headers = request_head.as_ref().map(|head| &head.headers);
+                let include_cors_defaults =
+                    should_include_lasm_cors_defaults(request_headers, header_defaults.as_ref());
                 let mut response =
                     sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
-                apply_lasm_request_origin_header(&mut response, None, header_defaults.as_ref());
+                apply_lasm_request_origin_header(
+                    &mut response,
+                    request_headers,
+                    header_defaults.as_ref(),
+                );
                 stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
-                let _ = write_lasm_http_response(&mut stream, &response, header_defaults.as_ref(), true);
+                let _ = write_lasm_http_response(
+                    &mut stream,
+                    &response,
+                    header_defaults.as_ref(),
+                    include_cors_defaults,
+                );
             }
             Err(TrySendError::Disconnected(_stream)) => {
                 eprintln!("run failed: LASM worker pool disconnected unexpectedly");
@@ -5965,7 +5977,7 @@ fn process_lasm_connection_with_runtime(
         LasmCorsPreflightDecision::Accept => {
             let mut response = sec4_core::HttpResponse::text(204, "");
             response.body.clear();
-            apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
+            apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
             stamp_lasm_trace_id(&mut response, trace_counter);
             write_lasm_http_response(stream, &response, header_defaults, true)?;
             return Ok(());
@@ -5977,7 +5989,7 @@ fn process_lasm_connection_with_runtime(
             return Ok(());
         }
     }
-    let include_cors_defaults = should_include_lasm_cors_defaults(Some(&request), header_defaults);
+    let include_cors_defaults = should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
 
     let request_method = request.method.clone();
     let mut runtime_request = sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
@@ -5990,7 +6002,7 @@ fn process_lasm_connection_with_runtime(
             500,
             "run failed: LASM runtime remained active after step budget",
         );
-        apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
+        apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
         stamp_lasm_trace_id(&mut response, trace_counter);
         write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)?;
         return Ok(());
@@ -6008,7 +6020,7 @@ fn process_lasm_connection_with_runtime(
     if request_method.eq_ignore_ascii_case("HEAD") {
         response.body.clear();
     }
-    apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
+    apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
     stamp_lasm_trace_id(&mut response, trace_counter);
     write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
 }
@@ -6137,16 +6149,16 @@ fn are_lasm_cors_requested_headers_allowed(
 }
 
 fn should_include_lasm_cors_defaults(
-    request: Option<&LasmRunRequest>,
+    request_headers: Option<&BTreeMap<String, String>>,
     header_defaults: &LasmResponseHeaderDefaults,
 ) -> bool {
     if !header_defaults.cors_enabled {
         return false;
     }
-    let Some(request) = request else {
+    let Some(request_headers) = request_headers else {
         return true;
     };
-    let Some(origin) = find_lasm_header_value(&request.headers, "Origin").map(str::trim) else {
+    let Some(origin) = find_lasm_header_value(request_headers, "Origin").map(str::trim) else {
         return true;
     };
     if origin.is_empty() {
@@ -6162,7 +6174,7 @@ fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str)
 }
 
 fn resolve_lasm_allow_origin(
-    request: Option<&LasmRunRequest>,
+    request_headers: Option<&BTreeMap<String, String>>,
     header_defaults: &LasmResponseHeaderDefaults,
 ) -> Option<String> {
     if !header_defaults.cors_enabled {
@@ -6171,8 +6183,8 @@ fn resolve_lasm_allow_origin(
     if header_defaults.cors_allow_any_origin {
         return Some("*".to_string());
     }
-    if let Some(request) = request {
-        if let Some(origin) = find_lasm_header_value(&request.headers, "Origin") {
+    if let Some(request_headers) = request_headers {
+        if let Some(origin) = find_lasm_header_value(request_headers, "Origin") {
             if header_defaults.cors_allowed_origins.is_empty() {
                 return Some(origin.to_string());
             }
@@ -6191,29 +6203,34 @@ fn resolve_lasm_allow_origin(
 
 fn apply_lasm_request_origin_header(
     response: &mut sec4_core::HttpResponse,
-    request: Option<&LasmRunRequest>,
+    request_headers: Option<&BTreeMap<String, String>>,
     header_defaults: &LasmResponseHeaderDefaults,
 ) {
-    if let Some(allow_origin) = resolve_lasm_allow_origin(request, header_defaults) {
+    if let Some(allow_origin) = resolve_lasm_allow_origin(request_headers, header_defaults) {
         response
             .headers
             .insert("Access-Control-Allow-Origin".to_string(), allow_origin);
     }
 }
 
-fn drain_lasm_request_head(stream: &mut TcpStream, max_header_bytes: usize) -> Result<(), String> {
+fn read_lasm_request_head(
+    stream: &mut TcpStream,
+    max_header_bytes: usize,
+) -> Result<LasmRequestHead, String> {
     let mut reader = BufReader::new(
         stream
             .try_clone()
-            .map_err(|err| format!("could not clone stream while draining request: {err}"))?,
+            .map_err(|err| format!("could not clone stream while reading request head: {err}"))?,
     );
     let mut consumed = 0usize;
     let mut line = String::new();
+    let mut is_first_line = true;
+    let mut headers = BTreeMap::new();
     loop {
         line.clear();
         let read = reader
             .read_line(&mut line)
-            .map_err(|err| format!("could not read request while draining overload path: {err}"))?;
+            .map_err(|err| format!("could not read request while reading overload head: {err}"))?;
         if read == 0 {
             break;
         }
@@ -6224,8 +6241,15 @@ fn drain_lasm_request_head(stream: &mut TcpStream, max_header_bytes: usize) -> R
         if line == "\r\n" || line == "\n" {
             break;
         }
+        if is_first_line {
+            is_first_line = false;
+            continue;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            headers.insert(name.trim().to_string(), value.trim().to_string());
+        }
     }
-    Ok(())
+    Ok(LasmRequestHead { headers })
 }
 
 #[derive(Debug, Clone)]
@@ -6234,6 +6258,11 @@ struct LasmRunRequest {
     path: String,
     headers: BTreeMap<String, String>,
     body: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRequestHead {
+    headers: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
