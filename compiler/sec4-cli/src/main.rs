@@ -15,6 +15,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -860,6 +861,13 @@ struct LasmRunRoutePlan {
     headers: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+struct LasmResponsePlan {
+    status: u16,
+    body: String,
+    default_content_type: Option<String>,
+}
+
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -890,17 +898,19 @@ fn collect_lasm_route_plans(
         if !seen_routes.insert(route_key) {
             continue;
         }
-        let Some((status, body)) =
-            extract_response_plan(&functions, registration.handler_name.as_str())
+        let Some(response_plan) = extract_response_plan(&functions, registration.handler_name.as_str())
         else {
             continue;
         };
-        let headers = extract_response_headers(&functions, registration.handler_name.as_str());
+        let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
+        if let Some(content_type) = response_plan.default_content_type {
+            headers.entry("Content-Type".to_string()).or_insert(content_type);
+        }
         plans.push(LasmRunRoutePlan {
             method: registration.method,
             path: registration.path,
-            status,
-            body,
+            status: response_plan.status,
+            body: response_plan.body,
             headers,
         });
     }
@@ -925,13 +935,16 @@ fn resolve_lasm_smoke_route_plan(
         })
         .collect::<HashMap<_, _>>();
     let handler_name = find_route_handler_name(&functions, entry_name, method, route)?;
-    let (status, body) = extract_response_plan(&functions, handler_name.as_str())?;
-    let headers = extract_response_headers(&functions, handler_name.as_str());
+    let response_plan = extract_response_plan(&functions, handler_name.as_str())?;
+    let mut headers = extract_response_headers(&functions, handler_name.as_str());
+    if let Some(content_type) = response_plan.default_content_type {
+        headers.entry("Content-Type".to_string()).or_insert(content_type);
+    }
 
     Some(LasmSmokeRoutePlan {
         handler_name,
-        status,
-        body,
+        status: response_plan.status,
+        body: response_plan.body,
         headers,
     })
 }
@@ -1424,7 +1437,7 @@ fn resolve_route_registration_expr(
 fn extract_response_plan(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     let mut visited = HashSet::new();
     extract_response_plan_in_function(functions, function_name, &mut visited)
 }
@@ -1433,7 +1446,7 @@ fn extract_response_plan_in_function(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     visited: &mut HashSet<String>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if !visited.insert(function_name.to_string()) {
         return None;
     }
@@ -1447,7 +1460,7 @@ fn extract_response_plan_in_block(
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     for statement in &block.statements {
         if let Some(response) =
             extract_response_plan_in_stmt(functions, statement, visited, bindings)
@@ -1466,7 +1479,7 @@ fn extract_response_plan_in_stmt(
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     match &statement.kind {
         sec4_core::ast::StmtKind::Let { name, value, .. } => {
             if let Some(response) =
@@ -1491,7 +1504,7 @@ fn extract_response_plan_in_expr(
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
     bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
             if let Some(response) = match_response_helper_call(callee, args, bindings) {
@@ -1574,7 +1587,7 @@ fn match_response_helper_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
     };
@@ -1598,59 +1611,79 @@ fn match_response_helper_call(
 fn match_res_text_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if args.len() < 2 {
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
     let body = parse_string_literal(&args[1], bindings)?;
-    Some((status, body))
+    Some(LasmResponsePlan {
+        status,
+        body,
+        default_content_type: Some("text/plain; charset=utf-8".to_string()),
+    })
 }
 
 fn match_res_html_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if args.len() != 1 {
         return None;
     }
     let body =
         parse_string_literal(&args[0], bindings).unwrap_or_else(|| "<html></html>".to_string());
-    Some((200, body))
+    Some(LasmResponsePlan {
+        status: 200,
+        body,
+        default_content_type: Some("text/html; charset=utf-8".to_string()),
+    })
 }
 
 fn match_res_json_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     let status = match args.len() {
         2 => 200,
         length if length >= 3 => parse_status_literal(&args[0], bindings)?,
         _ => return None,
     };
-    Some((status, "json response".to_string()))
+    Some(LasmResponsePlan {
+        status,
+        body: "json response".to_string(),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
 fn match_res_ok_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if args.len() < 3 {
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
-    Some((status, "ok response".to_string()))
+    Some(LasmResponsePlan {
+        status,
+        body: "ok response".to_string(),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
 fn match_res_ok_meta_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
-) -> Option<(u16, String)> {
+) -> Option<LasmResponsePlan> {
     if args.len() < 4 {
         return None;
     }
     let status = parse_status_literal(&args[0], bindings)?;
-    Some((status, "ok response".to_string()))
+    Some(LasmResponsePlan {
+        status,
+        body: "ok response".to_string(),
+        default_content_type: Some("application/json; charset=utf-8".to_string()),
+    })
 }
 
 fn parse_status_literal(
@@ -5604,6 +5637,7 @@ fn cmd_run_lasm_backend(
     };
 
     let mut worker_handles = Vec::new();
+    let trace_counter = Arc::new(AtomicU64::new(0));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
@@ -5622,6 +5656,7 @@ fn cmd_run_lasm_backend(
         for _ in 0..effective_max_in_flight {
             let worker_receiver = Arc::clone(&shared_receiver);
             let routes_for_worker = routes.clone();
+            let trace_counter_for_worker = Arc::clone(&trace_counter);
             worker_handles.push(std::thread::spawn(move || {
                 let mut runtime =
                     match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
@@ -5648,6 +5683,7 @@ fn cmd_run_lasm_backend(
                         &mut runtime,
                         effective_max_header_bytes,
                         effective_max_body_bytes,
+                        trace_counter_for_worker.as_ref(),
                     ) {
                         eprintln!("warning: LASM backend worker failed: {message}");
                     }
@@ -5680,6 +5716,7 @@ fn cmd_run_lasm_backend(
                     .expect("oneshot runtime should be initialized"),
                 effective_max_header_bytes,
                 effective_max_body_bytes,
+                trace_counter.as_ref(),
             ) {
                 eprintln!("warning: LASM backend worker failed: {message}");
             };
@@ -5693,10 +5730,10 @@ fn cmd_run_lasm_backend(
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
                 let _ = drain_lasm_request_head(&mut stream, effective_max_header_bytes);
-                let _ = write_lasm_http_response(
-                    &mut stream,
-                    &sec4_core::HttpResponse::text(503, "server busy: max concurrency reached"),
-                );
+                let mut response =
+                    sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
+                stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
+                let _ = write_lasm_http_response(&mut stream, &response);
             }
             Err(TrySendError::Disconnected(_stream)) => {
                 eprintln!("run failed: LASM worker pool disconnected unexpectedly");
@@ -5751,14 +5788,14 @@ fn process_lasm_connection_with_runtime(
     runtime: &mut sec4_core::LasmHttpRuntime,
     max_header_bytes: usize,
     max_body_bytes: usize,
+    trace_counter: &AtomicU64,
 ) -> Result<(), String> {
     let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
         Ok(request) => request,
         Err(err) => {
-            write_lasm_http_response(
-                stream,
-                &sec4_core::HttpResponse::text(err.status, err.message),
-            )?;
+            let mut response = sec4_core::HttpResponse::text(err.status, err.message);
+            stamp_lasm_trace_id(&mut response, trace_counter);
+            write_lasm_http_response(stream, &response)?;
             return Ok(());
         }
     };
@@ -5770,13 +5807,12 @@ fn process_lasm_connection_with_runtime(
     let request_id = runtime.submit(runtime_request);
     let report = runtime.run_until_idle(65_536);
     if !report.idle {
-        write_lasm_http_response(
-            stream,
-            &sec4_core::HttpResponse::text(
-                500,
-                "run failed: LASM runtime remained active after step budget",
-            ),
-        )?;
+        let mut response = sec4_core::HttpResponse::text(
+            500,
+            "run failed: LASM runtime remained active after step budget",
+        );
+        stamp_lasm_trace_id(&mut response, trace_counter);
+        write_lasm_http_response(stream, &response)?;
         return Ok(());
     }
 
@@ -5792,6 +5828,7 @@ fn process_lasm_connection_with_runtime(
     if request_method.eq_ignore_ascii_case("HEAD") {
         response.body.clear();
     }
+    stamp_lasm_trace_id(&mut response, trace_counter);
     write_lasm_http_response(stream, &response)
 }
 
@@ -5944,6 +5981,24 @@ fn write_lasm_http_response(
 ) -> Result<(), String> {
     let mut headers = response.headers.clone();
     headers
+        .entry("Access-Control-Allow-Origin".to_string())
+        .or_insert_with(|| "*".to_string());
+    headers
+        .entry("Access-Control-Expose-Headers".to_string())
+        .or_insert_with(|| "x-trace-id,x-showcase".to_string());
+    headers
+        .entry("X-Content-Type-Options".to_string())
+        .or_insert_with(|| "nosniff".to_string());
+    headers
+        .entry("X-Frame-Options".to_string())
+        .or_insert_with(|| "SAMEORIGIN".to_string());
+    headers
+        .entry("Referrer-Policy".to_string())
+        .or_insert_with(|| "no-referrer".to_string());
+    headers
+        .entry("Content-Security-Policy".to_string())
+        .or_insert_with(|| "default-src 'self'; frame-ancestors 'none'; base-uri 'self'".to_string());
+    headers
         .entry("Content-Length".to_string())
         .or_insert_with(|| response.body.len().to_string());
     headers
@@ -5972,6 +6027,17 @@ fn write_lasm_http_response(
         .flush()
         .map_err(|err| format!("could not flush response stream: {err}"))?;
     Ok(())
+}
+
+fn next_lasm_trace_id(trace_counter: &AtomicU64) -> String {
+    let next = trace_counter.fetch_add(1, Ordering::Relaxed) + 1;
+    format!("rt-{next}")
+}
+
+fn stamp_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_counter: &AtomicU64) {
+    response
+        .headers
+        .insert("X-Trace-Id".to_string(), next_lasm_trace_id(trace_counter));
 }
 
 fn http_status_text(status: u16) -> &'static str {

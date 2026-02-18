@@ -1378,6 +1378,14 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
         Some("active"),
         "lasm-smoke json should include extracted response headers"
     );
+    assert_eq!(
+        parsed
+            .get("headers")
+            .and_then(|headers| headers.get("Content-Type"))
+            .and_then(serde_json::Value::as_str),
+        Some("application/json; charset=utf-8"),
+        "lasm-smoke json should include default JSON content-type for res.ok handlers"
+    );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
 }
@@ -3617,6 +3625,14 @@ fn main() effects { net } -> Int {
         "response should include deterministic trace header:\n{response}"
     );
     assert!(
+        response.contains("Access-Control-Allow-Origin: *"),
+        "response should include CORS allow-origin header:\n{response}"
+    );
+    assert!(
+        response.contains("Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"),
+        "response should include security policy header:\n{response}"
+    );
+    assert!(
         response.contains("\r\n\r\npong"),
         "response should include expected body:\n{response}"
     );
@@ -3741,6 +3757,10 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("HTTP/1.1 200 OK"),
         "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
     );
     assert!(
         response.contains("\r\n\r\npong"),
@@ -3871,6 +3891,10 @@ fn main() effects { net } -> Int {
         "response should contain 200 status line:\n{response}"
     );
     assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
         response.contains("\r\n\r\npong"),
         "response should include bound response body:\n{response}"
     );
@@ -3999,8 +4023,16 @@ fn main() effects { net } -> Int {
         "response should contain 200 status line:\n{response}"
     );
     assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
         response.contains("Set-Cookie: session=demo-token"),
         "response should include deterministic set-cookie header:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Expose-Headers: x-trace-id,x-showcase"),
+        "response should include deterministic exposed-header list:\n{response}"
     );
     assert!(
         response.contains("\r\n\r\npong"),
@@ -4131,8 +4163,146 @@ fn main() effects { net } -> Int {
         "response should contain 200 status line:\n{response}"
     );
     assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
         response.contains("\r\n\r\npong"),
         "response should include expected body:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_lasm_backend_sets_json_content_type_for_res_ok() {
+    let project_dir = temp_dir("sec4-run-command-lasm-json-content-type");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmjsoncontenttypecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn createUser() effects { net } -> Int {
+  res.ok(201, "CreateUserResponse", 1);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/users", createUser);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM json content-type test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM json content-type process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM json content-type process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 201 Created"),
+        "response should contain extracted success status line:\n{response}"
+    );
+    assert!(
+        response.contains("Content-Type: application/json; charset=utf-8"),
+        "response should include deterministic JSON content-type:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nok response"),
+        "response should include deterministic res.ok body marker:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
@@ -4255,6 +4425,10 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("HTTP/1.1 200 OK"),
         "HEAD response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "HEAD response should include deterministic trace header:\n{response}"
     );
     assert!(
         response.contains("Content-Length: 0"),
@@ -4387,6 +4561,10 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("HTTP/1.1 413 Payload Too Large"),
         "response should contain deterministic body-limit status line:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
     );
     assert!(
         response.contains("request body exceeds configured limit (4 bytes)"),
@@ -4531,6 +4709,10 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("HTTP/1.1 503 Service Unavailable"),
         "response should contain deterministic service unavailable status:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-"),
+        "response should include deterministic trace header prefix:\n{response}"
     );
     assert!(
         response.contains("server busy: max concurrency reached"),
