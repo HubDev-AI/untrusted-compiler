@@ -320,6 +320,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM placeholder materialization now also applies to response headers, including typed sink forms like `headers.value(validate.nonEmpty(req.query("trace")))`, keeping dynamic body/header response behavior aligned for request-derived route/query/header values (`docs/book/949-m39-lasm-response-header-placeholder-materialization.md`).
 - [x] LASM `res.addCookie(cookie.build(...))` now materializes request-derived placeholders in cookie values (for example `cookie.build("session", validate.nonEmpty(req.query("session")))`), so dynamic Set-Cookie behavior matches LASM dynamic header/body materialization semantics (`docs/book/950-m39-lasm-dynamic-set-cookie-placeholder-materialization.md`).
 - [x] LASM now emits multiple `Set-Cookie` header lines when handlers call `res.addCookie(...)` multiple times in one response, preserving deterministic cookie ordering while keeping dynamic placeholder materialization intact (`docs/book/951-m39-lasm-multi-set-cookie-emission.md`).
+- [x] LASM `cookie.build(name, value)` extraction now materializes request-derived placeholders for both cookie names and values, enabling deterministic dynamic cookie-name flows (for example `cookie.build(validate.nonEmpty(req.query("cookie_name")), validate.nonEmpty(req.query("session")))`) in LASM run mode (`docs/book/952-m39-lasm-dynamic-cookie-name-placeholder-materialization.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

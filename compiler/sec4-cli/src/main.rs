@@ -2103,7 +2103,8 @@ fn extract_cookie_literal(
             if namespace != "cookie" || field != "build" || args.len() < 2 {
                 return None;
             }
-            let name = extract_string_literal_or_binding(&args[0], bindings)?;
+            let name = extract_string_literal_or_binding(&args[0], bindings)
+                .or_else(|| extract_lasm_request_header_placeholder(&args[0], bindings, 0))?;
             let value = extract_string_literal_or_binding(&args[1], bindings)
                 .or_else(|| extract_lasm_request_header_placeholder(&args[1], bindings, 0))?;
             Some(format!("{name}={value}"))
