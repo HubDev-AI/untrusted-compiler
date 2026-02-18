@@ -6455,6 +6455,157 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_allows_cors_preflight_with_wildcard_methods_and_headers() {
+    if !clang_available() {
+        eprintln!("skipping run-command cors wildcard preflight test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-cors-preflight-wildcards");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runcorspreflightwildcardscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[cors]
+enabled = true
+allowed_origins = ["https://frontend.example"]
+allowed_methods = ["*"]
+allowed_headers = ["*"]
+max_age_seconds = 60
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn createUser() effects { net } -> Int {
+  res.text(201, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let router = cors.withCors(router, cors.fromPolicy());
+  http.post(router, "/users", createUser);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"OPTIONS /users HTTP/1.1\r\nHost: localhost\r\nOrigin: https://frontend.example\r\nAccess-Control-Request-Method: DELETE\r\nAccess-Control-Request-Headers: x-custom-token\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command cors wildcard preflight test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command cors wildcard preflight process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command cors wildcard preflight process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 204 No Content"),
+        "response should contain 204 status line for cors preflight:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Origin: https://frontend.example"),
+        "response should include policy-driven allow-origin header:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Methods: *"),
+        "response should preserve wildcard allowed-methods header:\n{response}"
+    );
+    assert!(
+        response.contains("Access-Control-Allow-Headers: *"),
+        "response should preserve wildcard allowed-headers header:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_rejects_invalid_cors_preflight_without_origin() {
     if !clang_available() {
         eprintln!("skipping run-command invalid cors preflight test: clang not available");

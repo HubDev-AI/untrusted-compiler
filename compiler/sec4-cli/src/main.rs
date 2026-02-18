@@ -5828,7 +5828,9 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
     let cors_enabled = policy.cors.enabled;
     let mut cors_allow_any_origin = false;
     let mut cors_allowed_origins = Vec::new();
+    let mut cors_allow_any_method = false;
     let mut cors_allowed_methods = Vec::new();
+    let mut cors_allow_any_header = false;
     let mut cors_allowed_headers = Vec::new();
     let mut cors_default_origin = None;
     let cors_allow_private_network = policy.cors.allow_private_network;
@@ -5843,7 +5845,14 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
             .iter()
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
-            .map(|value| value.to_ascii_uppercase())
+            .map(|value| {
+                let normalized = value.to_ascii_uppercase();
+                if normalized == "*" {
+                    cors_allow_any_method = true;
+                }
+                normalized
+            })
+            .filter(|value| value != "*")
             .collect();
         cors_allowed_headers = policy
             .cors
@@ -5851,7 +5860,14 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
             .iter()
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
-            .map(|value| value.to_ascii_lowercase())
+            .map(|value| {
+                let normalized = value.to_ascii_lowercase();
+                if normalized == "*" {
+                    cors_allow_any_header = true;
+                }
+                normalized
+            })
+            .filter(|value| value != "*")
             .collect();
         cors_default_origin = Some(if cors_allow_any_origin {
             "*".to_string()
@@ -5946,7 +5962,9 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
         cors_enabled,
         cors_allow_any_origin,
         cors_allowed_origins,
+        cors_allow_any_method,
         cors_allowed_methods,
+        cors_allow_any_header,
         cors_allowed_headers,
         cors_allow_private_network,
         cors_default_origin,
@@ -6114,6 +6132,9 @@ fn is_lasm_cors_requested_method_allowed(
     requested_method: &str,
     header_defaults: &LasmResponseHeaderDefaults,
 ) -> bool {
+    if header_defaults.cors_allow_any_method {
+        return true;
+    }
     if header_defaults.cors_allowed_methods.is_empty() {
         return true;
     }
@@ -6128,6 +6149,9 @@ fn are_lasm_cors_requested_headers_allowed(
     requested_headers: &str,
     header_defaults: &LasmResponseHeaderDefaults,
 ) -> bool {
+    if header_defaults.cors_allow_any_header {
+        return true;
+    }
     if requested_headers.is_empty() || header_defaults.cors_allowed_headers.is_empty() {
         return true;
     }
@@ -6272,7 +6296,9 @@ struct LasmResponseHeaderDefaults {
     cors_enabled: bool,
     cors_allow_any_origin: bool,
     cors_allowed_origins: Vec<String>,
+    cors_allow_any_method: bool,
     cors_allowed_methods: Vec<String>,
+    cors_allow_any_header: bool,
     cors_allowed_headers: Vec<String>,
     cors_allow_private_network: bool,
     cors_default_origin: Option<String>,
