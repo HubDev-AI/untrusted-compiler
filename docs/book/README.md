@@ -924,5 +924,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `956-m39-lasm-dynamic-response-header-validation-hardening.md`
 - `957-m39-lasm-validate-header-value-placeholder-extraction.md`
 - `958-m39-lasm-dynamic-header-name-grammar-parity.md`
+- `959-m39-lasm-dynamic-response-header-non-empty-value-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.

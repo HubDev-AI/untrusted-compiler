@@ -6654,12 +6654,12 @@ fn apply_lasm_header_placeholder_materialization(
         } else {
             value
         };
-        if !is_lasm_http_header_value(materialized_value.as_str()) {
+        if !is_lasm_response_header_value_valid(materialized_value.as_str()) {
             continue;
         }
         if materialized_name.eq_ignore_ascii_case("Set-Cookie") {
             for cookie in materialized_value.split('\n') {
-                if cookie.is_empty() || !is_lasm_http_header_value(cookie) {
+                if !is_lasm_response_header_value_valid(cookie) {
                     continue;
                 }
                 append_lasm_set_cookie_header(&mut materialized_headers, cookie);
@@ -7605,6 +7605,10 @@ fn is_lasm_http_token(value: &str) -> bool {
 
 fn is_lasm_http_header_value(value: &str) -> bool {
     value.chars().all(|ch| ch == '\t' || !ch.is_control())
+}
+
+fn is_lasm_response_header_value_valid(value: &str) -> bool {
+    !value.is_empty() && is_lasm_http_header_value(value)
 }
 
 fn parse_lasm_authority_port(value: &str) -> Option<u16> {
