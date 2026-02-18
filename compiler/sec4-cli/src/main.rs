@@ -7054,14 +7054,34 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let max_requests_per_connection =
-        match resolve_lasm_max_requests_per_connection(max_keep_alive_requests) {
-            Ok(value) => value,
-            Err(message) => {
-                eprintln!("run failed: {message}");
-                return Err(2);
-            }
-        };
+    let policy_max_keep_alive_requests = match u64::try_from(policy.http.max_keep_alive_requests) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_keep_alive_requests must be >= 0");
+            return Err(2);
+        }
+    };
+    let policy_max_keep_alive_requests = match usize::try_from(policy_max_keep_alive_requests) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: policy http.max_keep_alive_requests must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: policy http.max_keep_alive_requests exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let max_requests_per_connection = match resolve_lasm_max_requests_per_connection(
+        max_keep_alive_requests,
+        policy_max_keep_alive_requests,
+    ) {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    };
     let overflow_probe_timeout_ms = match resolve_lasm_overflow_probe_timeout_ms(
         overflow_probe_timeout_ms,
         effective_timeout_ms,
@@ -7759,8 +7779,8 @@ fn resolve_lasm_overflow_probe_timeout_ms(
 
 fn resolve_lasm_max_requests_per_connection(
     explicit_override: Option<u64>,
+    policy_default: usize,
 ) -> Result<usize, String> {
-    const DEFAULT_MAX_REQUESTS: usize = 256;
     if let Some(value) = explicit_override {
         let parsed = usize::try_from(value).map_err(|_| {
             "invalid --max-keep-alive-requests: exceeds platform limits".to_string()
@@ -7771,11 +7791,11 @@ fn resolve_lasm_max_requests_per_connection(
         return Ok(parsed);
     }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS") else {
-        return Ok(DEFAULT_MAX_REQUESTS);
+        return Ok(policy_default);
     };
     let value = raw.trim();
     if value.is_empty() {
-        return Ok(DEFAULT_MAX_REQUESTS);
+        return Ok(policy_default);
     }
     let parsed = value.parse::<usize>().map_err(|_| {
         "invalid SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS: expected usize >= 1".to_string()

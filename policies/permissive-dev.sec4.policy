@@ -22,6 +22,7 @@ forbid_secret_fields_in_schema = true
 [http]
 max_body_bytes = 1048576
 max_concurrency = 1024
+max_keep_alive_requests = 256
 default_timeout_ms = 15000
 
 [budget]

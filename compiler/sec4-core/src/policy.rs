@@ -104,6 +104,7 @@ pub struct JsonPolicyConfig {
 pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
     pub max_concurrency: i64,
+    pub max_keep_alive_requests: i64,
     pub max_header_bytes: i64,
     pub max_multipart_bytes: i64,
     pub default_timeout_ms: i64,
@@ -212,8 +213,8 @@ impl Default for Policy {
                 hsts_preload: false,
                 csp_enabled: true,
                 csp_report_only: false,
-                csp_policy:
-                    "default-src 'self'; frame-ancestors 'none'; base-uri 'self'".to_string(),
+                csp_policy: "default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+                    .to_string(),
                 x_frame_options: "DENY".to_string(),
                 x_content_type_options: true,
                 referrer_policy: "strict-origin-when-cross-origin".to_string(),
@@ -267,6 +268,7 @@ impl Default for Policy {
             http: HttpPolicyConfig {
                 max_body_bytes: 4_096,
                 max_concurrency: 256,
+                max_keep_alive_requests: 256,
                 max_header_bytes: 8_191,
                 max_multipart_bytes: 4_096,
                 default_timeout_ms: 200,
@@ -445,6 +447,8 @@ struct HttpSection {
     max_body_bytes: Option<i64>,
     #[serde(default)]
     max_concurrency: Option<i64>,
+    #[serde(default)]
+    max_keep_alive_requests: Option<i64>,
     #[serde(default)]
     default_timeout_ms: Option<i64>,
     #[serde(default)]
@@ -870,6 +874,21 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_concurrency = max_concurrency;
+            }
+        }
+
+        if let Some(max_keep_alive_requests) = section.max_keep_alive_requests {
+            if max_keep_alive_requests < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_keep_alive_requests",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_keep_alive_requests must be >= 1"),
+                );
+            } else {
+                policy.http.max_keep_alive_requests = max_keep_alive_requests;
             }
         }
 

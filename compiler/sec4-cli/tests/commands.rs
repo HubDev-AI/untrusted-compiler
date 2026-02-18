@@ -14864,6 +14864,121 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_enforces_max_keep_alive_requests_from_policy() {
+    let project_dir = temp_dir("sec4-run-command-lasm-keep-alive-policy");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmkeepalivepolicycommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("sec4.policy"),
+        r#"[http]
+max_keep_alive_requests = 1
+"#,
+    )
+    .expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut stream = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before keep-alive connect with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(next) => {
+                stream = Some(next);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let mut stream = match stream {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM keep-alive policy test could not connect to server");
+        }
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("keep-alive stream read timeout should be configurable");
+
+    stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("first keep-alive request should be written");
+    let mut reader = BufReader::new(&mut stream);
+    let response = read_http_response(&mut reader);
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should be successful:\n{response}"
+    );
+    assert!(
+        response.contains("Connection: close"),
+        "response should force close after policy max_keep_alive_requests is reached:\n{response}"
+    );
+    assert!(
+        response.ends_with("\r\n\r\npong"),
+        "response should include expected body:\n{response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_cli_keep_alive_override_takes_precedence_over_env() {
     let project_dir = temp_dir("sec4-run-command-lasm-keep-alive-cli-override");
     let port = find_available_tcp_port();
