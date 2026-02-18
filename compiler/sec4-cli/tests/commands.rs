@@ -5046,6 +5046,139 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_lasm_backend_does_not_apply_unbound_middleware_to_route() {
+    let project_dir = temp_dir("sec4-run-command-lasm-unbound-middleware");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmunboundmiddlewarecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn public() effects { net } -> Int {
+  res.text(200, "public");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  let authOnly = auth.withAuth(http.router(), auth.fromPolicy());
+  let csrfOnly = csrf.withCsrf(http.router(), csrf.fromPolicy());
+  http.get(router, "/public", public);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /public HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM unbound middleware test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM unbound middleware process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM unbound middleware process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line for unbound middleware route:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\npublic"),
+        "response should include expected public body:\n{response}"
+    );
+    assert!(
+        !response.contains("\"code\":\"AUTH.UNAUTHORIZED\"")
+            && !response.contains("\"code\":\"AUTH.CSRF_TOKEN_INVALID\""),
+        "response should not include auth/csrf middleware failures for unrelated route:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_returns_400_for_missing_http_version() {
     let project_dir = temp_dir("sec4-run-command-lasm-missing-http-version");
     let port = find_available_tcp_port();
