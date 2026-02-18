@@ -7535,7 +7535,7 @@ entry = "src/main.ut"
     fs::write(
         project_dir.join("src/main.ut"),
         r#"fn health() effects { net } -> Int {
-  let cookie_value = cookie.build("session", "demo-token");
+  let cookie_value = cookie.build("session", validate.nonEmpty(req.query("session")));
   res.addCookie(cookie_value);
   res.text(200, "pong");
   0
@@ -7586,7 +7586,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                        b"GET /health?session=demo%2Btoken HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();
@@ -7641,7 +7641,7 @@ fn main() effects { net } -> Int {
         "response should include deterministic trace header:\n{response}"
     );
     assert!(
-        response.contains("Set-Cookie: session=demo-token"),
+        response.contains("Set-Cookie: session=demo+token"),
         "response should include deterministic set-cookie header:\n{response}"
     );
     assert!(

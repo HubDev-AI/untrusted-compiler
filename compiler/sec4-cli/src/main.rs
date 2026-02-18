@@ -2089,7 +2089,8 @@ fn extract_cookie_literal(
                 return None;
             }
             let name = extract_string_literal_or_binding(&args[0], bindings)?;
-            let value = extract_string_literal_or_binding(&args[1], bindings)?;
+            let value = extract_string_literal_or_binding(&args[1], bindings)
+                .or_else(|| extract_lasm_request_header_placeholder(&args[1], bindings, 0))?;
             Some(format!("{name}={value}"))
         }
         _ => None,
