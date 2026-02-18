@@ -5772,6 +5772,15 @@ fn main() effects { net } -> Int {
         "response should include deterministic invalid-method message:\n{response}"
     );
     assert!(
+        response.contains("Content-Type: application/json; charset=utf-8"),
+        "parser failures should emit JSON envelope content-type:\n{response}"
+    );
+    assert!(
+        response.contains("\"code\":\"HTTP.BAD_REQUEST\"")
+            && response.contains("\"kind\":\"validation\""),
+        "parser failure response should contain deterministic envelope code/kind:\n{response}"
+    );
+    assert!(
         response.contains("X-Trace-Id: rt-1"),
         "response should include deterministic trace header:\n{response}"
     );
