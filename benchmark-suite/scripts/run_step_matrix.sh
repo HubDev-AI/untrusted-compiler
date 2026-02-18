@@ -11,7 +11,7 @@ USAGE
 }
 
 dry_run="false"
-impls_csv="sec4,node,go,rust"
+impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 
 while [ "$#" -gt 0 ]; do

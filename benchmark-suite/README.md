@@ -37,7 +37,7 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite bench-profile IMPL=sec4 ENDPOINT=users-get`
    - step-load (knee detection): `make -C benchmark-suite bench-step-profile IMPL=sec4 ENDPOINT=decode`
    - analyze step output: `make -C benchmark-suite analyze-step-profile IMPL=sec4 ENDPOINT=decode`
-   - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=sec4,node,go,rust ENDPOINTS=decode`
+   - compare step analyses: `make -C benchmark-suite compare-step-matrix IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=decode`
 5. Convert raw wrk2 output to summary JSON:
    - `make -C benchmark-suite summarize IMPL=sec4`
 6. Bundle summaries + env into one report:
@@ -53,7 +53,7 @@ Measure end-to-end service behavior across identical implementations:
 11. Run full cross-impl orchestrator:
    - `make -C benchmark-suite bench-matrix-dry`
    - `make -C benchmark-suite bench-matrix`
-   - default run includes `sec4,node,go,rust`; override with `IMPLS=sec4,node,go,rust,c`
+   - default run includes `sec4,sec4-lasm,node,go,rust`; override with `IMPLS=sec4,sec4-lasm,node,go,rust,c`
    - override endpoint set with `ENDPOINTS=ping,decode` for focused runs
 12. Run step-load cross-impl orchestrator:
    - `make -C benchmark-suite bench-step-matrix-dry`
@@ -68,7 +68,7 @@ Measure end-to-end service behavior across identical implementations:
 15. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
 16. Verify benchmark bundle completeness:
-   - `make -C benchmark-suite verify-bundle IMPLS=sec4,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
+   - `make -C benchmark-suite verify-bundle IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
 17. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`

@@ -5,7 +5,7 @@ usage() {
   echo "usage: $0 [--impls sec4,sec4-lasm,node,go,rust,c] [--dry-run-only]" >&2
 }
 
-impls_csv="sec4,node,go,rust,c"
+impls_csv="sec4,sec4-lasm,node,go,rust,c"
 dry_run_only="false"
 
 while [ "$#" -gt 0 ]; do

@@ -890,5 +890,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `922-m39-lasm-run-benchmark-contract-response-materialization.md`
 - `923-m39-lasm-run-benchmark-response-validation-hardening.md`
 - `924-m39-lasm-benchmark-payload-validation-parity.md`
+- `925-m39-benchmark-default-impl-set-includes-sec4-lasm.md`
 
 As milestones progress, chapters will be added and linked from this index.
