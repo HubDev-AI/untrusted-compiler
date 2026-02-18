@@ -11,6 +11,8 @@ use sec4_core::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -59,6 +61,8 @@ enum Commands {
         max_concurrency: Option<u64>,
         #[arg(long)]
         serve_timeout_ms: Option<u64>,
+        #[arg(long, value_enum, default_value_t = RunBackend::C)]
+        backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
     },
@@ -193,6 +197,12 @@ enum BuildTlsBackend {
     Auto,
     None,
     Openssl,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum RunBackend {
+    C,
+    Lasm,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -383,6 +393,7 @@ fn main() {
             max_body_bytes,
             max_concurrency,
             serve_timeout_ms,
+            backend,
             tls_backend,
         } => cmd_run(
             &path,
@@ -391,6 +402,7 @@ fn main() {
             max_body_bytes,
             max_concurrency,
             serve_timeout_ms,
+            backend,
             tls_backend,
         ),
         Commands::Promote {
@@ -605,12 +617,7 @@ fn cmd_lasm_smoke(
         };
     let mut response = sec4_core::HttpResponse::text(response_status, response_body);
     response.headers = response_headers;
-    if let Err(message) = runtime.register_route(
-        method,
-        route,
-        runtime_actions,
-        response,
-    ) {
+    if let Err(message) = runtime.register_route(method, route, runtime_actions, response) {
         eprintln!("lasm-smoke failed: {message}");
         return Err(1);
     }
@@ -835,6 +842,70 @@ struct LasmSmokeRoutePlan {
     headers: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+struct LasmRouteRegistration {
+    method: String,
+    path: String,
+    handler_name: String,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRunRoutePlan {
+    method: String,
+    path: String,
+    status: u16,
+    body: String,
+    headers: BTreeMap<String, String>,
+}
+
+fn collect_lasm_route_plans(
+    program: &sec4_core::ast::Program,
+    entry_name: &str,
+) -> Vec<LasmRunRoutePlan> {
+    let functions = program
+        .items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            sec4_core::ast::ItemKind::Function(function) => {
+                Some((function.name.as_str(), function))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let mut visited_functions = HashSet::new();
+    let mut registrations = Vec::new();
+    collect_route_registrations_in_function(
+        &functions,
+        entry_name,
+        &mut visited_functions,
+        &mut registrations,
+    );
+
+    let mut plans = Vec::new();
+    let mut seen_routes = HashSet::new();
+    for registration in registrations {
+        let route_key = format!("{} {}", registration.method, registration.path);
+        if !seen_routes.insert(route_key) {
+            continue;
+        }
+        let Some((status, body)) =
+            extract_response_plan(&functions, registration.handler_name.as_str())
+        else {
+            continue;
+        };
+        let headers = extract_response_headers(&functions, registration.handler_name.as_str());
+        plans.push(LasmRunRoutePlan {
+            method: registration.method,
+            path: registration.path,
+            status,
+            body,
+            headers,
+        });
+    }
+
+    plans
+}
+
 fn resolve_lasm_smoke_route_plan(
     program: &sec4_core::ast::Program,
     entry_name: &str,
@@ -861,6 +932,117 @@ fn resolve_lasm_smoke_route_plan(
         body,
         headers,
     })
+}
+
+fn collect_route_registrations_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+) {
+    if !visited.insert(function_name.to_string()) {
+        return;
+    }
+    let Some(function) = functions.get(function_name) else {
+        return;
+    };
+    collect_route_registrations_in_block(functions, &function.body, visited, registrations);
+}
+
+fn collect_route_registrations_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+) {
+    for statement in &block.statements {
+        collect_route_registrations_in_stmt(functions, statement, visited, registrations);
+    }
+    if let Some(tail) = &block.tail {
+        collect_route_registrations_in_expr(functions, tail, visited, registrations);
+    }
+}
+
+fn collect_route_registrations_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+) {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { value, .. } => {
+            collect_route_registrations_in_expr(functions, value, visited, registrations)
+        }
+        sec4_core::ast::StmtKind::Return { value } => {
+            if let Some(value) = value {
+                collect_route_registrations_in_expr(functions, value, visited, registrations);
+            }
+        }
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            collect_route_registrations_in_expr(functions, expr, visited, registrations)
+        }
+    }
+}
+
+fn collect_route_registrations_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    registrations: &mut Vec<LasmRouteRegistration>,
+) {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            if let Some(registration) = match_route_registration_details(callee, args) {
+                registrations.push(registration);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                collect_route_registrations_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    registrations,
+                );
+            }
+            collect_route_registrations_in_expr(functions, callee, visited, registrations);
+            for argument in args {
+                collect_route_registrations_in_expr(functions, argument, visited, registrations);
+            }
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            collect_route_registrations_in_expr(functions, expr, visited, registrations)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            collect_route_registrations_in_expr(functions, left, visited, registrations);
+            collect_route_registrations_in_expr(functions, right, visited, registrations);
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            collect_route_registrations_in_expr(functions, object, visited, registrations)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_route_registrations_in_expr(functions, condition, visited, registrations);
+            collect_route_registrations_in_block(functions, then_branch, visited, registrations);
+            if let Some(else_branch) = else_branch {
+                collect_route_registrations_in_expr(functions, else_branch, visited, registrations);
+            }
+        }
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            collect_route_registrations_in_expr(functions, scrutinee, visited, registrations);
+            for arm in arms {
+                collect_route_registrations_in_expr(functions, &arm.value, visited, registrations);
+            }
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            collect_route_registrations_in_block(functions, block, visited, registrations)
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => {}
+    }
 }
 
 fn find_route_handler_name(
@@ -1026,6 +1208,17 @@ fn match_route_registration_call(
     method: &str,
     route: &str,
 ) -> Option<String> {
+    let registration = match_route_registration_details(callee, args)?;
+    if registration.method != method || registration.path != route {
+        return None;
+    }
+    Some(registration.handler_name)
+}
+
+fn match_route_registration_details(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+) -> Option<LasmRouteRegistration> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
     };
@@ -1045,10 +1238,6 @@ fn match_route_registration_call(
         "head" => "HEAD",
         _ => return None,
     };
-    if route_method != method {
-        return None;
-    }
-
     let (route_arg_index, handler_arg_index) = if args.len() >= 3 {
         (1usize, 2usize)
     } else if args.len() >= 2 {
@@ -1060,14 +1249,14 @@ fn match_route_registration_call(
     let sec4_core::ast::ExprKind::String(route_path) = &args[route_arg_index].kind else {
         return None;
     };
-    if route_path != route {
-        return None;
-    }
-
     let sec4_core::ast::ExprKind::Identifier(handler_name) = &args[handler_arg_index].kind else {
         return None;
     };
-    Some(handler_name.clone())
+    Some(LasmRouteRegistration {
+        method: route_method.to_string(),
+        path: route_path.clone(),
+        handler_name: handler_name.clone(),
+    })
 }
 
 fn extract_response_plan(
@@ -4678,6 +4867,7 @@ fn cmd_run(
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
     if max_body_bytes == Some(0) {
@@ -4707,6 +4897,18 @@ fn cmd_run(
             return Err(1);
         }
     };
+
+    if backend == RunBackend::Lasm {
+        return cmd_run_lasm_backend(
+            path,
+            &manifest,
+            &policy,
+            port,
+            oneshot,
+            max_concurrency,
+            serve_timeout_ms,
+        );
+    }
 
     cmd_build(path, Some(BuildEmitTarget::CBin), false, false, tls_backend)?;
 
@@ -5008,6 +5210,259 @@ fn cmd_run(
             );
             Err(1)
         }
+    }
+}
+
+fn cmd_run_lasm_backend(
+    path: &Path,
+    manifest: &sec4_core::Manifest,
+    policy: &Policy,
+    port: Option<u16>,
+    oneshot: bool,
+    max_concurrency: Option<u64>,
+    serve_timeout_ms: Option<u64>,
+) -> Result<(), i32> {
+    let program = match analyze_entry(path, manifest) {
+        Ok(program) => program,
+        Err(diagnostics) => {
+            print_diagnostics(&diagnostics);
+            return Err(1);
+        }
+    };
+    let mir = sec4_core::lower_program_to_mir(&program);
+    let lasm_program = sec4_core::lower_mir_to_lasm(&mir);
+    let Some(entry) = lasm_program.entry.as_ref() else {
+        eprintln!("run failed: compiled program does not expose an entrypoint");
+        return Err(1);
+    };
+
+    let mut runtime = sec4_core::LasmHttpRuntime::default();
+    let policy_max_in_flight = match u64::try_from(policy.http.max_concurrency) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_concurrency must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_in_flight = max_concurrency.unwrap_or(policy_max_in_flight);
+    if let Err(message) = runtime.set_max_in_flight(effective_max_in_flight as usize) {
+        eprintln!("run failed: {message}");
+        return Err(2);
+    }
+    let policy_timeout_ms = match u64::try_from(policy.http.default_timeout_ms) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.default_timeout_ms must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_timeout_ms = serve_timeout_ms.unwrap_or(policy_timeout_ms);
+    if let Err(message) = runtime.set_max_request_duration_ms(effective_timeout_ms) {
+        eprintln!("run failed: {message}");
+        return Err(2);
+    }
+
+    let routes = collect_lasm_route_plans(&program, entry.name.as_str());
+    if routes.is_empty() {
+        eprintln!(
+            "run failed: no HTTP routes discovered from entry `{}` for LASM backend",
+            entry.name
+        );
+        return Err(1);
+    }
+    for route in routes {
+        let mut response = sec4_core::HttpResponse::text(route.status, route.body);
+        response.headers = route.headers;
+        if let Err(message) = runtime.register_route(
+            route.method.as_str(),
+            route.path.as_str(),
+            vec![
+                sec4_core::RuntimeAction::Yield,
+                sec4_core::RuntimeAction::Complete(0),
+            ],
+            response,
+        ) {
+            eprintln!("run failed: {message}");
+            return Err(1);
+        }
+    }
+
+    let listen_port = port.unwrap_or(8080);
+    let listener = match TcpListener::bind(("127.0.0.1", listen_port)) {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!(
+                "run failed: could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}"
+            );
+            return Err(2);
+        }
+    };
+
+    let mut handled_requests = 0usize;
+    for incoming in listener.incoming() {
+        let mut stream = match incoming {
+            Ok(stream) => stream,
+            Err(err) => {
+                eprintln!("run failed: LASM backend accept error: {err}");
+                return Err(2);
+            }
+        };
+        if let Err(err) =
+            stream.set_read_timeout(Some(std::time::Duration::from_millis(effective_timeout_ms)))
+        {
+            eprintln!("run failed: LASM backend could not set read timeout: {err}");
+            return Err(2);
+        }
+
+        let request =
+            match read_lasm_http_request(&mut stream, policy.http.max_header_bytes as usize) {
+                Ok(request) => request,
+                Err(message) => {
+                    let _ = write_lasm_http_response(
+                        &mut stream,
+                        &sec4_core::HttpResponse::text(400, message.clone()),
+                    );
+                    continue;
+                }
+            };
+
+        let request_id = runtime.submit(sec4_core::HttpRequest::new(
+            request.method.as_str(),
+            request.path.as_str(),
+        ));
+        let report = runtime.run_until_idle(65_536);
+        if !report.idle {
+            eprintln!("run failed: LASM runtime remained active after step budget");
+            return Err(1);
+        }
+
+        let mut matched = None;
+        while let Some(exchange) = runtime.pop_response() {
+            if exchange.request_id == request_id {
+                matched = Some(exchange.response);
+                break;
+            }
+        }
+        let response = matched.unwrap_or_else(|| {
+            sec4_core::HttpResponse::text(500, "missing LASM response for request")
+        });
+        if let Err(message) = write_lasm_http_response(&mut stream, &response) {
+            eprintln!("run failed: LASM backend write response error: {message}");
+            return Err(2);
+        }
+
+        handled_requests += 1;
+        if oneshot && handled_requests >= 1 {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct LasmRunRequest {
+    method: String,
+    path: String,
+}
+
+fn read_lasm_http_request(
+    stream: &mut TcpStream,
+    max_header_bytes: usize,
+) -> Result<LasmRunRequest, String> {
+    let mut reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("could not clone stream: {err}"))?,
+    );
+    let mut request_line = String::new();
+    let bytes = reader
+        .read_line(&mut request_line)
+        .map_err(|err| format!("could not read request line: {err}"))?;
+    if bytes == 0 {
+        return Err("empty request".to_string());
+    }
+    let mut consumed = bytes;
+    let mut parts = request_line.trim_end().split_whitespace();
+    let method = parts
+        .next()
+        .ok_or_else(|| "invalid request line: missing method".to_string())?;
+    let path = parts
+        .next()
+        .ok_or_else(|| "invalid request line: missing path".to_string())?;
+
+    let mut header_line = String::new();
+    loop {
+        header_line.clear();
+        let read = reader
+            .read_line(&mut header_line)
+            .map_err(|err| format!("could not read header line: {err}"))?;
+        if read == 0 {
+            break;
+        }
+        consumed = consumed.saturating_add(read);
+        if consumed > max_header_bytes {
+            return Err(format!(
+                "request headers exceed configured limit ({max_header_bytes} bytes)"
+            ));
+        }
+        if header_line == "\r\n" || header_line == "\n" {
+            break;
+        }
+    }
+
+    Ok(LasmRunRequest {
+        method: method.to_string(),
+        path: path.to_string(),
+    })
+}
+
+fn write_lasm_http_response(
+    stream: &mut TcpStream,
+    response: &sec4_core::HttpResponse,
+) -> Result<(), String> {
+    let mut headers = response.headers.clone();
+    headers
+        .entry("Content-Length".to_string())
+        .or_insert_with(|| response.body.len().to_string());
+    headers
+        .entry("Connection".to_string())
+        .or_insert_with(|| "close".to_string());
+    headers
+        .entry("Content-Type".to_string())
+        .or_insert_with(|| "text/plain; charset=utf-8".to_string());
+
+    let status_text = http_status_text(response.status);
+    let mut response_head = format!("HTTP/1.1 {} {}\r\n", response.status, status_text);
+    for (name, value) in headers {
+        response_head.push_str(name.as_str());
+        response_head.push_str(": ");
+        response_head.push_str(value.as_str());
+        response_head.push_str("\r\n");
+    }
+    response_head.push_str("\r\n");
+    stream
+        .write_all(response_head.as_bytes())
+        .map_err(|err| format!("could not write response headers: {err}"))?;
+    stream
+        .write_all(&response.body)
+        .map_err(|err| format!("could not write response body: {err}"))?;
+    stream
+        .flush()
+        .map_err(|err| format!("could not flush response stream: {err}"))?;
+    Ok(())
+}
+
+fn http_status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        201 => "Created",
+        400 => "Bad Request",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
+        _ => "Status",
     }
 }
 
@@ -5313,7 +5768,11 @@ fn cmd_promote(
             "{}",
             serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
         );
-        return if blocking_preconditions { Err(1) } else { Ok(()) };
+        return if blocking_preconditions {
+            Err(1)
+        } else {
+            Ok(())
+        };
     }
 
     let apply_report = apply_promote_plan(path, &generated_files, &localdb_references, &plan)?;
