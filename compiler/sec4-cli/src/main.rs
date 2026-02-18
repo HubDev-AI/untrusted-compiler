@@ -634,18 +634,18 @@ fn cmd_lasm_smoke(
                         (405, headers, String::new(), "method-mismatch".to_string())
                     } else {
                         (
-                            200,
+                            404,
                             BTreeMap::new(),
-                            format!("lasm entry {} ok", entry.name),
-                            "entry".to_string(),
+                            String::new(),
+                            "route-miss".to_string(),
                         )
                     }
                 } else {
                     (
-                        200,
+                        404,
                         BTreeMap::new(),
-                        format!("lasm entry {} ok", entry.name),
-                        "entry".to_string(),
+                        String::new(),
+                        "route-miss".to_string(),
                     )
                 }
             }
