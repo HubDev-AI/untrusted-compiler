@@ -576,14 +576,15 @@ fn cmd_lasm_smoke(
         eprintln!("lasm-smoke failed: --request-path must not be empty when provided");
         return Err(2);
     }
-    let request_headers = match parse_lasm_smoke_request_headers(request_headers) {
-        Ok(headers) => headers,
-        Err(message) => {
-            eprintln!("lasm-smoke failed: {message}");
-            return Err(2);
-        }
-    };
     let request_body = request_body.unwrap_or_default();
+    let request_headers =
+        match parse_lasm_smoke_request_headers(request_headers, request_body.len()) {
+            Ok(headers) => headers,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
+                return Err(2);
+            }
+        };
 
     let runtime_actions = if let Some(script) = runtime_script {
         match parse_lasm_runtime_script(script) {
@@ -926,6 +927,7 @@ fn parse_lasm_runtime_script(script: &str) -> Result<Vec<sec4_core::RuntimeActio
 
 fn parse_lasm_smoke_request_headers(
     request_headers: &[String],
+    request_body_len: usize,
 ) -> Result<BTreeMap<String, String>, String> {
     let mut parsed = BTreeMap::new();
     for raw_header in request_headers {
@@ -959,6 +961,44 @@ fn parse_lasm_smoke_request_headers(
             return Err(format!(
                 "invalid --request-header value `{header}`: invalid header value character"
             ));
+        }
+        if name.eq_ignore_ascii_case("host") {
+            let host = parse_lasm_authority(value).ok_or_else(|| {
+                format!("invalid --request-header value `{header}`: invalid host header")
+            })?;
+            if let Some(existing) = find_lasm_header_value(&parsed, name) {
+                let existing_host = parse_lasm_authority(existing).ok_or_else(|| {
+                    "invalid --request-header value: existing host header is invalid".to_string()
+                })?;
+                if existing_host != host {
+                    return Err(
+                        "invalid --request-header value: conflicting host headers".to_string()
+                    );
+                }
+            }
+        }
+        if name.eq_ignore_ascii_case("content-length") {
+            let content_length = value.parse::<usize>().map_err(|_| {
+                format!(
+                    "invalid --request-header value `{header}`: content-length must be a positive integer or zero"
+                )
+            })?;
+            if content_length != request_body_len {
+                return Err(format!(
+                    "invalid --request-header value `{header}`: content-length does not match request body bytes ({request_body_len})"
+                ));
+            }
+            if let Some(existing) = find_lasm_header_value(&parsed, name) {
+                let existing_length = existing.parse::<usize>().map_err(|_| {
+                    "invalid --request-header value: existing content-length is invalid".to_string()
+                })?;
+                if existing_length != content_length {
+                    return Err(
+                        "invalid --request-header value: conflicting content-length headers"
+                            .to_string(),
+                    );
+                }
+            }
         }
         if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
             return Err(
