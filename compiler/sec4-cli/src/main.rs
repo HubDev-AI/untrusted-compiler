@@ -2351,6 +2351,7 @@ fn parse_lasm_request_text_placeholder(
         "method" if args.is_empty() => Some("{{req.method}}".to_string()),
         "path" if args.is_empty() => Some("{{req.path}}".to_string()),
         "httpVersion" if args.is_empty() => Some("{{req.httpVersion}}".to_string()),
+        "body" => Some("{{req.body}}".to_string()),
         "pathParam" | "header" | "query" | "cookie" => {
             if args.is_empty() {
                 return None;
@@ -3162,6 +3163,7 @@ fn parse_lasm_request_header_placeholder_call(
         "method" if args.is_empty() => Some("{{req.method}}".to_string()),
         "path" if args.is_empty() => Some("{{req.path}}".to_string()),
         "httpVersion" if args.is_empty() => Some("{{req.httpVersion}}".to_string()),
+        "body" => Some("{{req.body}}".to_string()),
         "pathParam" | "header" | "query" | "cookie" => {
             if args.is_empty() {
                 return None;
@@ -8046,6 +8048,7 @@ fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
         || value.contains("{{req.method}}")
         || value.contains("{{req.path}}")
         || value.contains("{{req.httpVersion}}")
+        || value.contains("{{req.body}}")
 }
 
 fn materialize_lasm_request_placeholders(
@@ -8056,8 +8059,10 @@ fn materialize_lasm_request_placeholders(
     let with_method = value.replace("{{req.method}}", request.method.as_str());
     let with_path = with_method.replace("{{req.path}}", request.path.as_str());
     let with_http_version = with_path.replace("{{req.httpVersion}}", request.http_version.as_str());
+    let request_body = String::from_utf8_lossy(&request.body);
+    let with_body = with_http_version.replace("{{req.body}}", request_body.as_ref());
     let with_path_params =
-        replace_lasm_response_placeholder_tokens(&with_http_version, "{{req.pathParam:", |key| {
+        replace_lasm_response_placeholder_tokens(&with_body, "{{req.pathParam:", |key| {
             path_params.get(key.trim()).cloned()
         });
     let with_headers =
