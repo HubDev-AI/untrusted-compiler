@@ -6993,7 +6993,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_pending = max_pending.unwrap_or(effective_max_in_flight as u64);
+    let policy_max_pending = match u64::try_from(policy.http.max_pending) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_pending must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_pending = max_pending.unwrap_or(policy_max_pending);
     let effective_max_pending = match usize::try_from(effective_max_pending) {
         Ok(value) if value >= 1 => value,
         Ok(_) => {

@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Launched two Cargo tests in parallel while validating the max-pending policy slice, causing avoidable package/build lock waits. | Keep Cargo commands strictly sequential in this repo; parallelize only read/search or non-Cargo operations. |
+| 2026-02-18 | self | Changed LASM `max_pending` default source from concurrency-derived to policy-derived and missed that one overload test relied on implicit `max_pending=1`, causing timeout-path failure instead of deterministic `503`. | When changing runtime defaults, immediately audit overload tests and pin scenario-shaping flags (`--max-pending`) explicitly where saturation shape matters. |
 | 2026-02-18 | self | Tried applying a multi-hunk `main.rs` patch using stale resolver context, so `apply_patch` failed on the first attempt. | On frequently edited runtime files, capture the exact live snippet (`sed -n`) immediately before patching and split big changes into smaller hunks. |
 | 2026-02-18 | self | Ran `rg` with a hyphen-prefixed pattern (`--max-pending|max_pending`) without `-e/--`, so ripgrep treated it as an invalid flag. | For patterns that begin with `-`, always pass `-e <pattern>` (or insert `--` before the pattern). |
 | 2026-02-18 | self | Read LASM code state from a stale divergent local branch and attempted to patch a bug that was already fixed on `origin/dev`, causing avoidable patch failure churn. | After each merge cycle, switch to a fresh `codex/*` branch from `origin/dev` and re-read the exact target section before patching. |

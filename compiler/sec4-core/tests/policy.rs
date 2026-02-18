@@ -31,6 +31,7 @@ fn policy_defaults_when_empty() {
     assert!(policy.json.require_schema_for_encode);
     assert_eq!(policy.http.max_body_bytes, 4_096);
     assert_eq!(policy.http.max_concurrency, 256);
+    assert_eq!(policy.http.max_pending, 256);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
     assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 8_191);
@@ -532,6 +533,7 @@ fn policy_parses_http_body_and_timeout_limits() {
 [http]
 max_body_bytes = 262144
 max_concurrency = 96
+max_pending = 48
 max_keep_alive_requests = 64
 max_runtime_steps = 32768
 max_header_bytes = 16384
@@ -543,6 +545,7 @@ default_timeout_ms = 7500
         parse_policy_str(Path::new("sec4.policy"), source).expect("http limits should parse");
     assert_eq!(policy.http.max_body_bytes, 262144);
     assert_eq!(policy.http.max_concurrency, 96);
+    assert_eq!(policy.http.max_pending, 48);
     assert_eq!(policy.http.max_keep_alive_requests, 64);
     assert_eq!(policy.http.max_runtime_steps, 32768);
     assert_eq!(policy.http.max_header_bytes, 16384);
@@ -583,6 +586,18 @@ max_concurrency = 0
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("http.max_concurrency must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_invalid_http_max_pending() {
+    let source = r#"
+[http]
+max_pending = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("http.max_pending must be >= 1");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
@@ -668,6 +683,7 @@ fn policy_profile_default_secure_prod_parses() {
     assert_eq!(policy.json.max_depth, 32);
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
     assert_eq!(policy.http.max_concurrency, 256);
+    assert_eq!(policy.http.max_pending, 256);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
     assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 32768);
@@ -717,6 +733,7 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.json.max_depth, 64);
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
     assert_eq!(policy.http.max_concurrency, 1024);
+    assert_eq!(policy.http.max_pending, 1024);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
     assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 8_191);
