@@ -7134,6 +7134,12 @@ fn read_lasm_http_request_head(
                 "invalid header line: invalid header name token".to_string(),
             ));
         }
+        if !is_lasm_http_header_value(value) {
+            return Err(make_error(
+                400,
+                "invalid header line: invalid header value character".to_string(),
+            ));
+        }
         if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
             return Err(make_error(
                 501,
@@ -7281,6 +7287,10 @@ fn is_lasm_http_token(value: &str) -> bool {
                         | b'~'
                 )
         })
+}
+
+fn is_lasm_http_header_value(value: &str) -> bool {
+    value.chars().all(|ch| ch == '\t' || !ch.is_control())
 }
 
 fn parse_lasm_authority_port(value: &str) -> Option<u16> {
