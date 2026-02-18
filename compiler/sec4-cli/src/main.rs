@@ -1094,12 +1094,14 @@ fn collect_route_registrations_in_expr(
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
             maybe_apply_router_middleware_call_binding(functions, expr, bindings, registrations);
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
             if let Some(registration) =
-                match_route_registration_details(functions, callee, args, bindings)
+                match_route_registration_details(functions, &resolved_callee, args, bindings)
             {
                 registrations.push(registration);
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let callee_bindings = collect_route_registration_call_bindings(
                     functions,
                     function_name,
@@ -1300,13 +1302,25 @@ fn find_route_handler_name_in_expr(
 ) -> Option<String> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(handler_name) =
-                match_route_registration_call(functions, callee, args, method, route, bindings)
-            {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(handler_name) = match_route_registration_call(
+                functions,
+                &resolved_callee,
+                args,
+                method,
+                route,
+                bindings,
+            ) {
                 return Some(handler_name);
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
-                let mut callee_bindings = HashMap::new();
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+                let mut callee_bindings = collect_route_registration_call_bindings(
+                    functions,
+                    function_name,
+                    args,
+                    bindings,
+                );
                 if let Some(handler_name) = find_route_handler_name_in_function(
                     functions,
                     function_name,
