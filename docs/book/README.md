@@ -959,5 +959,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `991-m39-lasm-incomplete-chunk-line-rejection.md`
 - `992-m39-lasm-incomplete-request-and-header-line-terminator-rejection.md`
 - `993-m39-lasm-keep-alive-accounting-on-runtime-step-failure.md`
+- `994-m39-lasm-absolute-form-scheme-case-insensitive-parsing.md`
 
 As milestones progress, chapters will be added and linked from this index.

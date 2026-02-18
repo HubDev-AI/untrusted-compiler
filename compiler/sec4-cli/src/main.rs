@@ -9603,13 +9603,21 @@ fn read_lasm_http_request_head(
         request_target
     } else if request_target.starts_with('/') {
         request_target
-    } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
-        let (scheme, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
-            make_error(
-                400,
-                "invalid request target: malformed absolute-form".to_string(),
-            )
-        })?;
+    } else if request_target.contains("://") {
+        let (scheme_raw, authority_and_path) =
+            request_target.split_once("://").ok_or_else(|| {
+                make_error(
+                    400,
+                    "invalid request target: malformed absolute-form".to_string(),
+                )
+            })?;
+        let scheme = if scheme_raw.eq_ignore_ascii_case("http") {
+            "http"
+        } else if scheme_raw.eq_ignore_ascii_case("https") {
+            "https"
+        } else {
+            return Err(make_error(400, "invalid request target".to_string()));
+        };
         let authority_end = authority_and_path
             .find(['/', '?'])
             .unwrap_or(authority_and_path.len());
