@@ -7547,6 +7547,36 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut query_duplicate_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /query?trace=first&trace=second HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/query duplicate-key request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/query duplicate-key response should be readable");
+                query_duplicate_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let query_duplicate_response = match query_duplicate_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM req placeholder test could not connect /query duplicate-key request"
+            );
+        }
+    };
+
     let mut cookie_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -7686,6 +7716,14 @@ fn main() effects { net } -> Int {
     assert!(
         query_response.contains("\r\n\r\nq+7 ok"),
         "/query response should materialize request query value in body:\n{query_response}"
+    );
+    assert!(
+        query_duplicate_response.contains("HTTP/1.1 200 OK"),
+        "/query duplicate-key response should contain 200 status line:\n{query_duplicate_response}"
+    );
+    assert!(
+        query_duplicate_response.contains("\r\n\r\nfirst"),
+        "/query duplicate-key response should keep first query value for duplicate keys:\n{query_duplicate_response}"
     );
     assert!(
         cookie_response.contains("HTTP/1.1 200 OK"),
