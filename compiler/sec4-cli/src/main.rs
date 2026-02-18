@@ -6144,21 +6144,16 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
-            let id = match extract_lasm_payload_id(&payload) {
-                Some(id) if is_lasm_uuid_v4(&id) => id,
-                _ => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "VALIDATION.UUID_INVALID",
-                            "validation",
-                            "id must be UUID v4",
-                            400,
-                        ),
-                    );
-                    return;
-                }
+            if let Some((code, message)) = validate_lasm_benchmark_user_payload(&payload) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(code, "validation", message, 400),
+                );
+                return;
+            }
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
             };
             set_lasm_json_response(
                 response,
@@ -6189,21 +6184,16 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
-            let id = match extract_lasm_payload_id(&payload) {
-                Some(id) if is_lasm_uuid_v4(&id) => id,
-                _ => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "VALIDATION.UUID_INVALID",
-                            "validation",
-                            "id must be UUID v4",
-                            400,
-                        ),
-                    );
-                    return;
-                }
+            if let Some((code, message)) = validate_lasm_benchmark_user_payload(&payload) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(code, "validation", message, 400),
+                );
+                return;
+            }
+            let Some(id) = extract_lasm_payload_id(&payload) else {
+                return;
             };
             if let Ok(mut state) = dynamic_state.lock() {
                 state.users_by_id.insert(id.clone(), payload);
@@ -6278,6 +6268,98 @@ fn extract_lasm_payload_id(payload: &serde_json::Value) -> Option<String> {
         .and_then(serde_json::Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn validate_lasm_benchmark_user_payload(
+    payload: &serde_json::Value,
+) -> Option<(&'static str, &'static str)> {
+    let Some(id) = payload.get("id").and_then(serde_json::Value::as_str) else {
+        return Some(("VALIDATION.UUID_INVALID", "id must be UUID v4"));
+    };
+    if !is_lasm_uuid_v4(id) {
+        return Some(("VALIDATION.UUID_INVALID", "id must be UUID v4"));
+    }
+
+    let Some(email) = payload.get("email").and_then(serde_json::Value::as_str) else {
+        return Some(("VALIDATION.INVALID", "email must be a valid email string"));
+    };
+    if !is_lasm_email(email) {
+        return Some(("VALIDATION.INVALID", "email must be a valid email string"));
+    }
+
+    let Some(age) = payload.get("age").and_then(serde_json::Value::as_i64) else {
+        return Some((
+            "VALIDATION.INVALID",
+            "age must be an integer between 0 and 150",
+        ));
+    };
+    if !(0..=150).contains(&age) {
+        return Some((
+            "VALIDATION.INVALID",
+            "age must be an integer between 0 and 150",
+        ));
+    }
+
+    let Some(tags) = payload.get("tags").and_then(serde_json::Value::as_array) else {
+        return Some(("VALIDATION.INVALID", "tags must be an array of length <= 16"));
+    };
+    if tags.len() > 16 {
+        return Some(("VALIDATION.INVALID", "tags must be an array of length <= 16"));
+    }
+    if tags.iter().any(|tag| {
+        let Some(value) = tag.as_str() else {
+            return true;
+        };
+        value.is_empty() || value.len() > 32
+    }) {
+        return Some((
+            "VALIDATION.INVALID",
+            "tags must contain strings of length 1..32",
+        ));
+    }
+
+    let Some(zip) = payload
+        .get("address")
+        .and_then(|address| address.get("zip"))
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Some((
+            "VALIDATION.INVALID",
+            "address.zip must be a digit string of length 4..10",
+        ));
+    };
+    if !is_lasm_zip(zip) {
+        return Some((
+            "VALIDATION.INVALID",
+            "address.zip must be a digit string of length 4..10",
+        ));
+    }
+
+    let Some(flags) = payload
+        .get("meta")
+        .and_then(|meta| meta.get("flags"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Some(("VALIDATION.INVALID", "meta.flags must be an object"));
+    };
+    for key in ["a", "b", "c"] {
+        if !flags.get(key).is_some_and(serde_json::Value::is_boolean) {
+            return Some(("VALIDATION.INVALID", "meta.flags must be an object"));
+        }
+    }
+
+    None
+}
+
+fn is_lasm_email(value: &str) -> bool {
+    let mut segments = value.split('@');
+    let local = segments.next().unwrap_or_default();
+    let domain = segments.next().unwrap_or_default();
+    segments.next().is_none() && !local.is_empty() && domain.contains('.')
+}
+
+fn is_lasm_zip(value: &str) -> bool {
+    (4..=10).contains(&value.len()) && value.chars().all(|ch| ch.is_ascii_digit())
 }
 
 fn resolve_lasm_user_lookup_id(

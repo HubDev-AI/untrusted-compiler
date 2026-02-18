@@ -292,6 +292,7 @@ Post-alpha track acceptance anchors:
 - [x] CLI `lasm-smoke` now extracts static response headers from handler call graphs (`res.setHeader`) including typed header gate wrappers and local let-bindings (`docs/book/909-m39-lasm-smoke-response-header-extraction.md`).
 - [x] LASM run backend now materializes benchmark contract JSON bodies from request payloads/path params (`DecodeResponse`, `CreateUserResponse`, `UserResponse`) with shared in-process user state for deterministic read-after-write behavior in the LASM benchmark lane (`docs/book/922-m39-lasm-run-benchmark-contract-response-materialization.md`).
 - [x] LASM benchmark response materialization now enforces deterministic JSON/UUID validation (`400` `JSON.INVALID_SYNTAX` / `VALIDATION.UUID_INVALID`) for JSON-expected decode/create paths while preserving compatibility fallback for legacy empty-body fixture requests (`docs/book/923-m39-lasm-run-benchmark-response-validation-hardening.md`).
+- [x] LASM decode/create materialization now enforces full benchmark user payload validation parity (`email`, `age`, `tags`, `address.zip`, `meta.flags`) with deterministic `VALIDATION.INVALID` responses for malformed request bodies (`docs/book/924-m39-lasm-benchmark-payload-validation-parity.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
