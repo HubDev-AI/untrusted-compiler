@@ -7273,7 +7273,8 @@ fn queryRoute() effects { net } -> Int {
 }
 
 fn composeRoute() effects { net } -> Int {
-  res.setHeader(headers.name("X-Trace-Echo"), headers.value(validate.nonEmpty(req.query("trace"))));
+  let echo_name = headers.name(validate.nonEmpty(req.query("header_name")));
+  res.setHeader(echo_name, headers.value(validate.nonEmpty(req.query("trace"))));
   res.setHeader(headers.name("X-Request-Id-Echo"), headers.value(validate.nonEmpty(req.header("X-Request-Id"))));
   res.text(200, "id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
   0
@@ -7410,7 +7411,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"GET /compose/user-7?trace=q%2B7+ok HTTP/1.1\r\nHost: localhost\r\nX-Request-Id: req-99\r\nConnection: close\r\n\r\n",
+                        b"GET /compose/user-7?trace=q%2B7+ok&header_name=X-Trace-Echo HTTP/1.1\r\nHost: localhost\r\nX-Request-Id: req-99\r\nConnection: close\r\n\r\n",
                     )
                     .expect("/compose request should be written");
                 let mut body = String::new();

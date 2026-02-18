@@ -918,5 +918,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `950-m39-lasm-dynamic-set-cookie-placeholder-materialization.md`
 - `951-m39-lasm-multi-set-cookie-emission.md`
 - `952-m39-lasm-dynamic-cookie-name-placeholder-materialization.md`
+- `953-m39-lasm-dynamic-response-header-name-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.
