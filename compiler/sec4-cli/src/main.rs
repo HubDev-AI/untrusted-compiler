@@ -6959,6 +6959,10 @@ fn cmd_run_lasm_backend(
         }
     };
     let effective_timeout_ms = serve_timeout_ms.unwrap_or(policy_timeout_ms);
+    if effective_timeout_ms == 0 {
+        eprintln!("run failed: effective serve timeout must be >= 1ms");
+        return Err(2);
+    }
     let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
         Ok(value) => value,
         Err(_) => {
@@ -6995,6 +6999,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    let overflow_probe_timeout_ms =
+        match resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
 
     let routes = collect_lasm_route_plans(&program, entry.name.as_str());
     if routes.is_empty() {
@@ -7139,11 +7151,12 @@ fn cmd_run_lasm_backend(
             Err(TrySendError::Full(mut stream)) => {
                 // Keep overflow probing bounded so saturated accept loops do not block
                 // for the full request timeout waiting on slow clients.
-                let probe_timeout_ms = effective_timeout_ms.min(50).max(1);
-                let _ = stream
-                    .set_read_timeout(Some(std::time::Duration::from_millis(probe_timeout_ms)));
-                let _ = stream
-                    .set_write_timeout(Some(std::time::Duration::from_millis(probe_timeout_ms)));
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(
+                    overflow_probe_timeout_ms,
+                )));
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(
+                    overflow_probe_timeout_ms,
+                )));
                 let trace_id = next_lasm_trace_id(trace_counter.as_ref());
                 match read_lasm_request_head(&mut stream, effective_max_header_bytes) {
                     Ok(request_head) => {
@@ -7639,6 +7652,26 @@ fn resolve_lasm_runtime_step_budget(explicit_override: Option<u64>) -> Result<us
         return Err("invalid SEC4_RT_LASM_MAX_STEPS: expected usize >= 1".to_string());
     }
     Ok(parsed)
+}
+
+fn resolve_lasm_overflow_probe_timeout_ms(effective_timeout_ms: u64) -> Result<u64, String> {
+    let fallback = effective_timeout_ms.min(50).max(1);
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS") else {
+        return Ok(fallback);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(fallback);
+    }
+    let parsed = value.parse::<u64>().map_err(|_| {
+        "invalid SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS: expected u64 >= 1".to_string()
+    })?;
+    if parsed == 0 {
+        return Err(
+            "invalid SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS: expected u64 >= 1".to_string(),
+        );
+    }
+    Ok(parsed.min(effective_timeout_ms).max(1))
 }
 
 fn apply_lasm_dynamic_response_materialization(
