@@ -2141,13 +2141,17 @@ fn extract_auth_requirement_in_expr(
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(call_requirement) = match_auth_requirement_call(callee, args, bindings) {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(call_requirement) =
+                match_auth_requirement_call(&resolved_callee, args, bindings)
+            {
                 requirement.require_auth |= call_requirement.require_auth;
                 if let Some(required_role) = call_requirement.required_role {
                     requirement.required_role = Some(required_role);
                 }
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let call_bindings = collect_auth_requirement_call_bindings(
                     functions,
                     function_name,
