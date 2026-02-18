@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Triggered a web search tool call during a local-only LASM implementation loop while gathering code context. | Keep LASM/compiler slices strictly on local shell/apply_patch tooling; use web tooling only when external research is explicitly required. |
 | 2026-02-18 | self | After moving LASM run to a bounded worker pool, I kept the old saturation test assumption (`2nd` connection should get `503`); with queue capacity present, overload shifted to the `3rd` connection. | When concurrency architecture changes (direct reject -> queued workers), update overload tests to reflect worker+queue capacity, not old immediate-reject behavior. |
 | 2026-02-18 | self | Repeated Cargo CLI misuse by passing multiple bare test filters in one `cargo test` invocation during LASM validation. | Keep one test filter per `cargo test` command (or run the whole target) and script sequential invocations explicitly. |
 | 2026-02-18 | self | Initial LASM concurrency-limit test sent a full second request while the server was in immediate-overload reject mode; because the server closes without draining request bytes, client-side read could hit `Connection reset by peer` and obscure the actual `503` behavior. | For overload-path socket tests, avoid writing extra request bytes that the server intentionally skips; assert on deterministic response status/body from a plain accepted connection. |

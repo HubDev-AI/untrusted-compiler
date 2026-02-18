@@ -1278,21 +1278,25 @@ fn extract_response_plan_in_function(
         return None;
     }
     let function = functions.get(function_name)?;
-    extract_response_plan_in_block(functions, &function.body, visited)
+    let mut bindings = HashMap::new();
+    extract_response_plan_in_block(functions, &function.body, visited, &mut bindings)
 }
 
 fn extract_response_plan_in_block(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<(u16, String)> {
     for statement in &block.statements {
-        if let Some(response) = extract_response_plan_in_stmt(functions, statement, visited) {
+        if let Some(response) =
+            extract_response_plan_in_stmt(functions, statement, visited, bindings)
+        {
             return Some(response);
         }
     }
     if let Some(tail) = &block.tail {
-        return extract_response_plan_in_expr(functions, tail, visited);
+        return extract_response_plan_in_expr(functions, tail, visited, bindings);
     }
     None
 }
@@ -1301,16 +1305,23 @@ fn extract_response_plan_in_stmt(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<(u16, String)> {
     match &statement.kind {
-        sec4_core::ast::StmtKind::Let { value, .. } => {
-            extract_response_plan_in_expr(functions, value, visited)
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, value, visited, bindings)
+            {
+                return Some(response);
+            }
+            bindings.insert(name.clone(), value.clone());
+            None
         }
         sec4_core::ast::StmtKind::Return { value } => value
             .as_ref()
-            .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited)),
+            .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited, bindings)),
         sec4_core::ast::StmtKind::Expr { expr } => {
-            extract_response_plan_in_expr(functions, expr, visited)
+            extract_response_plan_in_expr(functions, expr, visited, bindings)
         }
     }
 }
@@ -1319,10 +1330,11 @@ fn extract_response_plan_in_expr(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<(u16, String)> {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(response) = match_response_helper_call(callee, args) {
+            if let Some(response) = match_response_helper_call(callee, args, bindings) {
                 return Some(response);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
@@ -1332,11 +1344,14 @@ fn extract_response_plan_in_expr(
                     return Some(response);
                 }
             }
-            if let Some(response) = extract_response_plan_in_expr(functions, callee, visited) {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, callee, visited, bindings)
+            {
                 return Some(response);
             }
             for argument in args {
-                if let Some(response) = extract_response_plan_in_expr(functions, argument, visited)
+                if let Some(response) =
+                    extract_response_plan_in_expr(functions, argument, visited, bindings)
                 {
                     return Some(response);
                 }
@@ -1344,33 +1359,40 @@ fn extract_response_plan_in_expr(
             None
         }
         sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            extract_response_plan_in_expr(functions, expr, visited)
+            extract_response_plan_in_expr(functions, expr, visited, bindings)
         }
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            extract_response_plan_in_expr(functions, left, visited)
-                .or_else(|| extract_response_plan_in_expr(functions, right, visited))
+            extract_response_plan_in_expr(functions, left, visited, bindings)
+                .or_else(|| extract_response_plan_in_expr(functions, right, visited, bindings))
         }
         sec4_core::ast::ExprKind::Member { object, .. } => {
-            extract_response_plan_in_expr(functions, object, visited)
+            extract_response_plan_in_expr(functions, object, visited, bindings)
         }
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
-        } => extract_response_plan_in_expr(functions, condition, visited)
-            .or_else(|| extract_response_plan_in_block(functions, then_branch, visited))
+        } => extract_response_plan_in_expr(functions, condition, visited, bindings)
             .or_else(|| {
-                else_branch
-                    .as_ref()
-                    .and_then(|entry| extract_response_plan_in_expr(functions, entry, visited))
+                let mut then_bindings = bindings.clone();
+                extract_response_plan_in_block(functions, then_branch, visited, &mut then_bindings)
+            })
+            .or_else(|| {
+                let mut else_bindings = bindings.clone();
+                else_branch.as_ref().and_then(|entry| {
+                    extract_response_plan_in_expr(functions, entry, visited, &mut else_bindings)
+                })
             }),
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            if let Some(response) = extract_response_plan_in_expr(functions, scrutinee, visited) {
+            if let Some(response) =
+                extract_response_plan_in_expr(functions, scrutinee, visited, bindings)
+            {
                 return Some(response);
             }
             for arm in arms {
+                let mut arm_bindings = bindings.clone();
                 if let Some(response) =
-                    extract_response_plan_in_expr(functions, &arm.value, visited)
+                    extract_response_plan_in_expr(functions, &arm.value, visited, &mut arm_bindings)
                 {
                     return Some(response);
                 }
@@ -1378,7 +1400,8 @@ fn extract_response_plan_in_expr(
             None
         }
         sec4_core::ast::ExprKind::Block(block) => {
-            extract_response_plan_in_block(functions, block, visited)
+            let mut block_bindings = bindings.clone();
+            extract_response_plan_in_block(functions, block, visited, &mut block_bindings)
         }
         sec4_core::ast::ExprKind::Identifier(_)
         | sec4_core::ast::ExprKind::Number(_)
@@ -1390,6 +1413,7 @@ fn extract_response_plan_in_expr(
 fn match_response_helper_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<(u16, String)> {
     let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
         return None;
@@ -1402,67 +1426,110 @@ fn match_response_helper_call(
     }
 
     match field.as_str() {
-        "text" => match_res_text_call(args),
-        "html" => match_res_html_call(args),
-        "json" => match_res_json_call(args),
-        "ok" => match_res_ok_call(args),
-        "okMeta" => match_res_ok_meta_call(args),
+        "text" => match_res_text_call(args, bindings),
+        "html" => match_res_html_call(args, bindings),
+        "json" => match_res_json_call(args, bindings),
+        "ok" => match_res_ok_call(args, bindings),
+        "okMeta" => match_res_ok_meta_call(args, bindings),
         _ => None,
     }
 }
 
-fn match_res_text_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_text_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<(u16, String)> {
     if args.len() < 2 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
-    let sec4_core::ast::ExprKind::String(body) = &args[1].kind else {
-        return None;
-    };
-    Some((status, body.clone()))
+    let status = parse_status_literal(&args[0], bindings)?;
+    let body = parse_string_literal(&args[1], bindings)?;
+    Some((status, body))
 }
 
-fn match_res_html_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_html_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<(u16, String)> {
     if args.len() != 1 {
         return None;
     }
-    let body = match &args[0].kind {
-        sec4_core::ast::ExprKind::String(entry) => entry.clone(),
-        _ => "<html></html>".to_string(),
-    };
+    let body =
+        parse_string_literal(&args[0], bindings).unwrap_or_else(|| "<html></html>".to_string());
     Some((200, body))
 }
 
-fn match_res_json_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_json_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<(u16, String)> {
     let status = match args.len() {
         2 => 200,
-        length if length >= 3 => parse_status_literal(&args[0])?,
+        length if length >= 3 => parse_status_literal(&args[0], bindings)?,
         _ => return None,
     };
     Some((status, "json response".to_string()))
 }
 
-fn match_res_ok_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_ok_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<(u16, String)> {
     if args.len() < 3 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
+    let status = parse_status_literal(&args[0], bindings)?;
     Some((status, "ok response".to_string()))
 }
 
-fn match_res_ok_meta_call(args: &[sec4_core::ast::Expr]) -> Option<(u16, String)> {
+fn match_res_ok_meta_call(
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<(u16, String)> {
     if args.len() < 4 {
         return None;
     }
-    let status = parse_status_literal(&args[0])?;
+    let status = parse_status_literal(&args[0], bindings)?;
     Some((status, "ok response".to_string()))
 }
 
-fn parse_status_literal(expr: &sec4_core::ast::Expr) -> Option<u16> {
-    let sec4_core::ast::ExprKind::Number(status_literal) = &expr.kind else {
+fn parse_status_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<u16> {
+    let resolved = resolve_response_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::Number(status_literal) = &resolved.kind else {
         return None;
     };
     status_literal.parse::<u16>().ok()
+}
+
+fn parse_string_literal(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    let resolved = resolve_response_expr(expr, bindings, 0)?;
+    let sec4_core::ast::ExprKind::String(value) = &resolved.kind else {
+        return None;
+    };
+    Some(value.clone())
+}
+
+fn resolve_response_expr(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<sec4_core::ast::Expr> {
+    if depth > 32 {
+        return None;
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            let bound = bindings.get(name)?;
+            resolve_response_expr(bound, bindings, depth + 1)
+        }
+        _ => Some(expr.clone()),
+    }
 }
 
 fn extract_response_headers(
