@@ -14695,6 +14695,8 @@ fn run_command_lasm_backend_persists_user_store_when_db_base_flag_is_set() {
     let create_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     let read_port = find_available_tcp_port();
+    let read_by_email_port = find_available_tcp_port();
+    let read_old_email_port = find_available_tcp_port();
     let update_port = find_available_tcp_port();
     let delete_port = find_available_tcp_port();
     let read_after_delete_port = find_available_tcp_port();
@@ -14722,6 +14724,11 @@ fn getUser() effects { net } -> Int {
   0
 }
 
+fn getUserByEmail() effects { net } -> Int {
+  res.json(200, "UserByEmailResponse", 0);
+  0
+}
+
 fn listUsers() effects { net } -> Int {
   res.json(200, "ListUsersResponse", 0);
   0
@@ -14742,6 +14749,7 @@ fn main() effects { net } -> Int {
   http.post(router, "/users", createUser);
   http.get(router, "/users", listUsers);
   http.get(router, "/users/:id", getUser);
+  http.get(router, "/users/by-email", getUserByEmail);
   http.post(router, "/users/:id/update", updateUser);
   http.post(router, "/users/:id/delete", deleteUser);
   http.serve(8080, router);
@@ -14933,6 +14941,32 @@ fn main() effects { net } -> Int {
     assert!(
         read_response.contains("\"email\":\"updated@example.com\""),
         "read response should include updated persisted user payload:\n{read_response}"
+    );
+
+    let read_by_email_response = run_lasm_oneshot_request(
+        read_by_email_port,
+        "GET /users/by-email?email=updated%40example.com HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        read_by_email_response.contains("HTTP/1.1 200 OK"),
+        "read-by-email response should contain deterministic 200 status:\n{read_by_email_response}"
+    );
+    assert!(
+        read_by_email_response.contains("\"email\":\"updated@example.com\""),
+        "read-by-email response should include updated persisted user payload:\n{read_by_email_response}"
+    );
+
+    let read_old_email_response = run_lasm_oneshot_request(
+        read_old_email_port,
+        "GET /users/by-email?email=user%40example.com HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        read_old_email_response.contains("HTTP/1.1 404 Not Found"),
+        "read-old-email response should contain deterministic 404 status:\n{read_old_email_response}"
+    );
+    assert!(
+        read_old_email_response.contains("\"code\":\"HTTP.NOT_FOUND\""),
+        "read-old-email response should include deterministic not-found error code:\n{read_old_email_response}"
     );
 
     let delete_response = run_lasm_oneshot_request(

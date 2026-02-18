@@ -8438,6 +8438,66 @@ fn apply_lasm_dynamic_response_materialization(
                 ),
             }
         }
+        "UserByEmailResponse" => {
+            let Some(email) = resolve_lasm_user_lookup_email(request) else {
+                return;
+            };
+            if !is_lasm_email(&email) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.INVALID",
+                        "validation",
+                        "email must be a valid email string",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let user = match dynamic_state.lock() {
+                Ok(state) => state
+                    .users_by_id
+                    .iter()
+                    .filter_map(|(id, user)| {
+                        user.get("email")
+                            .and_then(serde_json::Value::as_str)
+                            .filter(|candidate| candidate.eq_ignore_ascii_case(email.as_str()))
+                            .map(|_| (id.as_str(), user))
+                    })
+                    .min_by_key(|(id, _)| *id)
+                    .map(|(_, user)| user.clone()),
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            match user {
+                Some(user) => set_lasm_json_response(response, 200, &user),
+                None => set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope(
+                        "HTTP.NOT_FOUND",
+                        "not_found",
+                        "user not found",
+                        404,
+                        trace_id,
+                    ),
+                ),
+            }
+        }
         "DeleteUserResponse" => {
             let Some(id) = resolve_lasm_user_lookup_id(request, path_params) else {
                 return;
@@ -9183,6 +9243,15 @@ fn resolve_lasm_user_lookup_id(
     request
         .path
         .strip_prefix("/users/")
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn resolve_lasm_user_lookup_email(request: &LasmRunRequest) -> Option<String> {
+    request
+        .query_params
+        .get("email")
+        .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
 }
