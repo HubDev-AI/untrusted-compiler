@@ -963,5 +963,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `995-m39-lasm-runtime-reset-after-step-budget-exhaustion.md`
 - `996-m39-lasm-absolute-form-query-only-normalization.md`
 - `997-m39-lasm-step-budget-json-error-envelope.md`
+- `998-m39-lasm-request-line-leading-whitespace-rejection.md`
 
 As milestones progress, chapters will be added and linked from this index.
