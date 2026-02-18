@@ -905,5 +905,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `937-m39-lasm-expect-header-rejection.md`
 - `938-m39-lasm-absolute-form-host-parity-enforcement.md`
 - `939-m39-lasm-authority-normalization-and-host-validation.md`
+- `940-m39-lasm-http-token-and-fragment-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
