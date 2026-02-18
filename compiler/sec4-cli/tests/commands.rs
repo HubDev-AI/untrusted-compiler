@@ -3922,6 +3922,27 @@ fn main() effects { net } -> Int {
 
     thread::sleep(Duration::from_millis(120));
 
+    let mut queued = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => {
+                queued = Some(stream);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let _queued_stream = match queued {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("could not establish queued connection for LASM concurrency-limit test");
+        }
+    };
+
+    thread::sleep(Duration::from_millis(120));
+
     let mut response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -3942,7 +3963,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM concurrency-limit test could not connect second client");
+            panic!("run command LASM concurrency-limit test could not connect overflow client");
         }
     };
 

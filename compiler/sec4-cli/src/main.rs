@@ -15,8 +15,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::mpsc::{sync_channel, TrySendError};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -5316,9 +5316,41 @@ fn cmd_run_lasm_backend(
         }
     };
 
-    let mut handled_requests = 0usize;
-    let active_workers = Arc::new(AtomicUsize::new(0));
     let mut worker_handles = Vec::new();
+    let worker_sender = if oneshot {
+        None
+    } else {
+        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_in_flight);
+        let shared_receiver = Arc::new(Mutex::new(receiver));
+        for _ in 0..effective_max_in_flight {
+            let worker_receiver = Arc::clone(&shared_receiver);
+            let routes_for_worker = routes.clone();
+            worker_handles.push(std::thread::spawn(move || loop {
+                let next_stream = {
+                    let receiver = match worker_receiver.lock() {
+                        Ok(receiver) => receiver,
+                        Err(_) => return,
+                    };
+                    receiver.recv()
+                };
+                let mut stream = match next_stream {
+                    Ok(stream) => stream,
+                    Err(_) => break,
+                };
+                if let Err(message) = process_lasm_connection(
+                    &mut stream,
+                    &routes_for_worker,
+                    effective_timeout_ms,
+                    effective_max_header_bytes,
+                    effective_max_body_bytes,
+                ) {
+                    eprintln!("warning: LASM backend worker failed: {message}");
+                }
+            }));
+        }
+        Some(sender)
+    };
+
     for incoming in listener.incoming() {
         let mut stream = match incoming {
             Ok(stream) => stream,
@@ -5334,71 +5366,43 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
 
-        if active_workers.load(Ordering::SeqCst) >= effective_max_in_flight {
-            let _ = write_lasm_http_response(
-                &mut stream,
-                &sec4_core::HttpResponse::text(503, "server busy: max concurrency reached"),
-            );
-            handled_requests += 1;
-            if oneshot && handled_requests >= 1 {
-                break;
-            }
-            reap_finished_lasm_worker_threads(&mut worker_handles);
-            continue;
-        }
-
-        active_workers.fetch_add(1, Ordering::SeqCst);
-        let active_workers_guard = Arc::clone(&active_workers);
-        let routes_for_worker = routes.clone();
-        worker_handles.push(std::thread::spawn(move || {
-            let _guard = ActiveLasmWorker {
-                active_workers: active_workers_guard,
-            };
+        if oneshot {
             if let Err(message) = process_lasm_connection(
                 &mut stream,
-                &routes_for_worker,
+                &routes,
                 effective_timeout_ms,
                 effective_max_header_bytes,
                 effective_max_body_bytes,
             ) {
                 eprintln!("warning: LASM backend worker failed: {message}");
-            }
-        }));
-
-        handled_requests += 1;
-        if oneshot && handled_requests >= 1 {
+            };
             break;
         }
-        reap_finished_lasm_worker_threads(&mut worker_handles);
+
+        let sender = worker_sender
+            .as_ref()
+            .expect("worker sender should exist for non-oneshot LASM backend");
+        match sender.try_send(stream) {
+            Ok(()) => {}
+            Err(TrySendError::Full(mut stream)) => {
+                let _ = write_lasm_http_response(
+                    &mut stream,
+                    &sec4_core::HttpResponse::text(503, "server busy: max concurrency reached"),
+                );
+            }
+            Err(TrySendError::Disconnected(_stream)) => {
+                eprintln!("run failed: LASM worker pool disconnected unexpectedly");
+                return Err(2);
+            }
+        }
     }
 
+    drop(worker_sender);
     for handle in worker_handles {
         let _ = handle.join();
     }
 
     Ok(())
-}
-
-struct ActiveLasmWorker {
-    active_workers: Arc<AtomicUsize>,
-}
-
-impl Drop for ActiveLasmWorker {
-    fn drop(&mut self) {
-        self.active_workers.fetch_sub(1, Ordering::SeqCst);
-    }
-}
-
-fn reap_finished_lasm_worker_threads(handles: &mut Vec<std::thread::JoinHandle<()>>) {
-    let mut index = 0usize;
-    while index < handles.len() {
-        if handles[index].is_finished() {
-            let handle = handles.swap_remove(index);
-            let _ = handle.join();
-        } else {
-            index += 1;
-        }
-    }
 }
 
 fn process_lasm_connection(
