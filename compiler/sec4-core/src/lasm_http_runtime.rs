@@ -222,6 +222,12 @@ impl LasmHttpRuntime {
             let allowed_methods = self.resolve_allowed_methods_for_path(request.path.as_str());
             let mut response = if allowed_methods.is_empty() {
                 HttpResponse::text(404, "route not found")
+            } else if request.method.trim().eq_ignore_ascii_case("OPTIONS") {
+                let mut response = HttpResponse::text(204, "");
+                response
+                    .headers
+                    .insert("Allow".to_string(), allowed_methods.join(", "));
+                response
             } else {
                 let mut response = HttpResponse::text(405, "method not allowed");
                 response
@@ -746,6 +752,46 @@ mod tests {
         assert_eq!(
             allow, "GET, HEAD",
             "method mismatch response should include deterministic allow header with HEAD fallback for GET routes"
+        );
+    }
+
+    #[test]
+    fn options_request_for_registered_path_returns_204_with_allow_header() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .register_route(
+                "GET",
+                "/health",
+                vec![RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let request_id = runtime.submit(HttpRequest::new("OPTIONS", "/health"));
+        let report = runtime.run_until_idle(16);
+        assert!(
+            report.idle,
+            "runtime should stay idle for OPTIONS allow-probe route response"
+        );
+
+        let exchange = runtime
+            .pop_response()
+            .expect("OPTIONS probe should emit immediate response");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 204);
+        assert!(
+            exchange.response.body.is_empty(),
+            "OPTIONS allow-probe response should omit body bytes"
+        );
+        let allow = exchange
+            .response
+            .headers
+            .get("Allow")
+            .map(String::as_str)
+            .unwrap_or("");
+        assert_eq!(
+            allow, "GET, HEAD",
+            "OPTIONS allow-probe response should include deterministic allow header with HEAD fallback for GET routes"
         );
     }
 
