@@ -918,6 +918,7 @@ fn collect_lasm_route_plans(
         entry_name,
         &mut visited_functions,
         &mut registrations,
+        None,
     );
     let mut plans = Vec::new();
     let mut seen_routes = HashSet::new();
@@ -1013,14 +1014,17 @@ fn collect_route_registrations_in_function(
     function_name: &str,
     visited: &mut HashSet<String>,
     registrations: &mut Vec<LasmRouteRegistration>,
+    seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
 ) {
-    if !visited.insert(function_name.to_string()) {
+    if visited.contains(function_name) {
         return;
     }
+    visited.insert(function_name.to_string());
     let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
         return;
     };
-    let mut local_bindings = HashMap::new();
+    let mut local_bindings = seed_bindings.unwrap_or_default();
     collect_route_registrations_in_block(
         functions,
         &function.body,
@@ -1028,6 +1032,7 @@ fn collect_route_registrations_in_function(
         registrations,
         &mut local_bindings,
     );
+    visited.remove(function_name);
 }
 
 fn collect_route_registrations_in_block(
@@ -1090,11 +1095,18 @@ fn collect_route_registrations_in_expr(
                 registrations.push(registration);
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                let callee_bindings = collect_route_registration_call_bindings(
+                    functions,
+                    function_name,
+                    args,
+                    bindings,
+                );
                 collect_route_registrations_in_function(
                     functions,
                     function_name,
                     visited,
                     registrations,
+                    Some(callee_bindings),
                 );
             }
             collect_route_registrations_in_expr(
@@ -1498,6 +1510,7 @@ fn extract_router_middleware_requirements(
                         functions,
                         function_name,
                         args,
+                        bindings,
                         depth + 1,
                     );
                 requirements.require_auth |= wrapper_requirements.require_auth;
@@ -1519,10 +1532,29 @@ fn extract_router_middleware_requirements(
     }
 }
 
+fn collect_route_registration_call_bindings(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> HashMap<String, sec4_core::ast::Expr> {
+    let mut call_bindings = HashMap::new();
+    let Some(function) = functions.get(function_name) else {
+        return call_bindings;
+    };
+    for (param, arg) in function.params.iter().zip(args.iter()) {
+        let resolved =
+            resolve_route_registration_expr(arg, bindings, 0).unwrap_or_else(|| arg.clone());
+        call_bindings.insert(param.name.clone(), resolved);
+    }
+    call_bindings
+}
+
 fn extract_router_middleware_requirements_from_function_call(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     call_args: &[sec4_core::ast::Expr],
+    caller_bindings: &HashMap<String, sec4_core::ast::Expr>,
     depth: usize,
 ) -> LasmRouteMiddlewareRequirements {
     if depth > 32 {
@@ -1533,7 +1565,9 @@ fn extract_router_middleware_requirements_from_function_call(
     };
     let mut bindings = HashMap::new();
     for (param, arg) in function.params.iter().zip(call_args.iter()) {
-        bindings.insert(param.name.clone(), arg.clone());
+        let resolved =
+            resolve_route_registration_expr(arg, caller_bindings, 0).unwrap_or_else(|| arg.clone());
+        bindings.insert(param.name.clone(), resolved);
     }
     extract_router_middleware_requirements_from_block(
         functions,
@@ -1579,6 +1613,7 @@ fn extract_router_middleware_requirements_from_block(
                                 functions,
                                 function_name.as_str(),
                                 args,
+                                bindings,
                                 depth + 1,
                             )
                         } else {
@@ -1627,6 +1662,7 @@ fn maybe_apply_router_middleware_call_binding(
             functions,
             function_name.as_str(),
             args,
+            bindings,
             1,
         );
         helper_requirements.require_auth || helper_requirements.require_csrf
