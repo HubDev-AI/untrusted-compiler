@@ -16723,6 +16723,136 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_counts_runtime_step_failures_toward_keep_alive_limit() {
+    let project_dir = temp_dir("sec4-run-command-lasm-keep-alive-runtime-step-failure-counting");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmkeepaliveruntimesteplimitcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+            "--max-keep-alive-requests",
+            "2",
+            "--max-runtime-steps",
+            "1",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut stream = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before keep-alive connect with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(next) => {
+                stream = Some(next);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let mut stream = match stream {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM runtime-step keep-alive test could not connect to server");
+        }
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("keep-alive stream read timeout should be configurable");
+
+    stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("first keep-alive request should be written");
+    let mut reader = BufReader::new(&mut stream);
+    let first_response = read_http_response(&mut reader);
+    assert!(
+        first_response.contains("HTTP/1.1 500 Internal Server Error"),
+        "first runtime-step response should be deterministic 500:\n{first_response}"
+    );
+    assert!(
+        first_response.contains("Connection: keep-alive"),
+        "first runtime-step response should keep connection open:\n{first_response}"
+    );
+    assert!(
+        first_response.contains("LASM runtime remained active after step budget (1)"),
+        "first runtime-step response should include deterministic message:\n{first_response}"
+    );
+
+    reader
+        .get_mut()
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n")
+        .expect("second keep-alive request should be written");
+    let second_response = read_http_response(&mut reader);
+    assert!(
+        second_response.contains("HTTP/1.1 500 Internal Server Error"),
+        "second runtime-step response should be deterministic 500:\n{second_response}"
+    );
+    assert!(
+        second_response.contains("Connection: close"),
+        "second runtime-step response should close after keep-alive request limit:\n{second_response}"
+    );
+    assert!(
+        second_response.contains("LASM runtime remained active after step budget (1)"),
+        "second runtime-step response should include deterministic message:\n{second_response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_supports_pipelined_requests_on_single_socket() {
     let project_dir = temp_dir("sec4-run-command-lasm-pipelined-requests");
     let port = find_available_tcp_port();
