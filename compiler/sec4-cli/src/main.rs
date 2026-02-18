@@ -7032,11 +7032,14 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_timeout_ms = serve_timeout_ms.unwrap_or(policy_timeout_ms);
-    if effective_timeout_ms == 0 {
-        eprintln!("run failed: effective serve timeout must be >= 1ms");
-        return Err(2);
-    }
+    let effective_timeout_ms =
+        match resolve_lasm_serve_timeout_ms(serve_timeout_ms, policy_timeout_ms) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
         Ok(value) => value,
         Err(_) => {
@@ -7830,6 +7833,32 @@ fn resolve_lasm_max_pending(
         .map_err(|_| "invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string())?;
     if parsed == 0 {
         return Err("invalid SEC4_RT_LASM_MAX_PENDING: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
+}
+
+fn resolve_lasm_serve_timeout_ms(
+    explicit_override: Option<u64>,
+    policy_default: u64,
+) -> Result<u64, String> {
+    if let Some(value) = explicit_override {
+        if value == 0 {
+            return Err("invalid --serve-timeout-ms: expected u64 >= 1".to_string());
+        }
+        return Ok(value);
+    }
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_TIMEOUT_MS") else {
+        return Ok(policy_default.max(1));
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(policy_default.max(1));
+    }
+    let parsed = value
+        .parse::<u64>()
+        .map_err(|_| "invalid SEC4_RT_LASM_TIMEOUT_MS: expected u64 >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_TIMEOUT_MS: expected u64 >= 1".to_string());
     }
     Ok(parsed)
 }
