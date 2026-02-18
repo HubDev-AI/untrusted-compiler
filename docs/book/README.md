@@ -966,5 +966,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `998-m39-lasm-request-line-leading-whitespace-rejection.md`
 - `999-m39-lasm-request-line-trailing-whitespace-rejection.md`
 - `1000-m39-lasm-request-line-tab-separator-rejection.md`
+- `1001-m39-lasm-request-line-single-space-separator-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
