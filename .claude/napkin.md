@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Repeated a bad validation habit by launching multiple Cargo test commands in parallel during LASM checks, which again caused build-lock waiting noise. | Keep Cargo execution strictly sequential in this repo and use parallel tool calls only for read/search commands. |
 | 2026-02-18 | self | While converting LASM `Transfer-Encoding: chunked` coverage from reject-path to success-path, I left the fixture on `POST /health` even though only `GET /health` is registered, causing a misleading `405` failure unrelated to chunked parsing. | When parser behavior changes let requests reach routing, align method/path fixture registration first (`GET` vs `POST`) before asserting parser/runtime outcomes. |
 | 2026-02-18 | self | Repeated Cargo parallelization by launching two `sec4-core` policy tests together, causing avoidable lock waits during fast LASM iteration. | Keep every Cargo run strictly sequential, even for tiny policy tests; parallelize only read/search commands. |
 | 2026-02-18 | self | Launched two Cargo tests in parallel while validating the max-pending policy slice, causing avoidable package/build lock waits. | Keep Cargo commands strictly sequential in this repo; parallelize only read/search or non-Cargo operations. |
