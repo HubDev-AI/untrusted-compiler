@@ -333,6 +333,7 @@ Post-alpha track acceptance anchors:
 - [x] Added first-class `req.method()` / `req.path()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.method}}`, `{{req.path}}`) for deterministic method/path-driven handler and response behavior (`docs/book/962-m39-req-method-path-intrinsics-and-lasm-placeholders.md`).
 - [x] Added first-class `req.httpVersion()` intrinsic support across semantic typing, C backend/runtime ABI, and LASM placeholder extraction/materialization (`{{req.httpVersion}}`) for deterministic request-version-aware handler and response behavior (`docs/book/963-m39-req-http-version-intrinsic-and-lasm-placeholder-parity.md`).
 - [x] LASM query parsing now keeps first-seen values for duplicate keys (matching C runtime map behavior) so `req.query("...")` remains backend-parity deterministic under duplicate-key requests (`docs/book/964-m39-lasm-query-duplicate-first-value-parity.md`).
+- [x] LASM `req.cookie(...)` lookup now matches cookie names case-insensitively (trimmed) so cookie-driven handlers/placeholders stay parity-aligned with C runtime behavior under mixed-case cookie keys (`docs/book/965-m39-lasm-req-cookie-case-insensitive-lookup-parity.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

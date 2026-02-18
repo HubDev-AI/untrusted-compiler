@@ -930,5 +930,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `962-m39-req-method-path-intrinsics-and-lasm-placeholders.md`
 - `963-m39-req-http-version-intrinsic-and-lasm-placeholder-parity.md`
 - `964-m39-lasm-query-duplicate-first-value-parity.md`
+- `965-m39-lasm-req-cookie-case-insensitive-lookup-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.

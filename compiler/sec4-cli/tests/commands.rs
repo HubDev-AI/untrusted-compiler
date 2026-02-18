@@ -7605,6 +7605,34 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut cookie_case_variant_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /cookie HTTP/1.1\r\nHost: localhost\r\nCookie: Session=sess-43; mode=active\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/cookie case-variant request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/cookie case-variant response should be readable");
+                cookie_case_variant_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let cookie_case_variant_response = match cookie_case_variant_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /cookie case-variant request");
+        }
+    };
+
     let mut compose_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -7736,6 +7764,18 @@ fn main() effects { net } -> Int {
     assert!(
         cookie_response.contains("\r\n\r\ncookie=sess-42"),
         "/cookie response should materialize request cookie in response body:\n{cookie_response}"
+    );
+    assert!(
+        cookie_case_variant_response.contains("HTTP/1.1 200 OK"),
+        "/cookie case-variant response should contain 200 status line:\n{cookie_case_variant_response}"
+    );
+    assert!(
+        cookie_case_variant_response.contains("X-Session-Echo: sess-43"),
+        "/cookie case-variant response should match req.cookie lookups case-insensitively:\n{cookie_case_variant_response}"
+    );
+    assert!(
+        cookie_case_variant_response.contains("\r\n\r\ncookie=sess-43"),
+        "/cookie case-variant response should materialize request cookie case-insensitively in body:\n{cookie_case_variant_response}"
     );
     assert!(
         compose_response.contains("HTTP/1.1 200 OK"),

@@ -7150,13 +7150,17 @@ fn find_lasm_cookie_value(headers: &BTreeMap<String, String>, cookie_name: &str)
 }
 
 fn parse_lasm_cookie_header_value<'a>(cookie_header: &'a str, cookie_name: &str) -> Option<&'a str> {
+    let cookie_name = cookie_name.trim();
+    if cookie_name.is_empty() {
+        return None;
+    }
     for segment in cookie_header.split(';') {
         let segment = segment.trim();
         if segment.is_empty() {
             continue;
         }
         let (name, value) = segment.split_once('=')?;
-        if name.trim() != cookie_name {
+        if !name.trim().eq_ignore_ascii_case(cookie_name) {
             continue;
         }
         let value = value.trim();
