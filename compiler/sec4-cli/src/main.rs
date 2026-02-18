@@ -1111,6 +1111,7 @@ const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Requi
 const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
+const LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
 
 fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDynamicResponseState {
     let users_store_path = resolve_lasm_dynamic_users_store_path(explicit_db_base);
@@ -7870,6 +7871,7 @@ fn process_lasm_connection_with_runtime(
                 dynamic_state,
                 trace_id.as_str(),
             );
+            materialize_lasm_internal_runtime_error_envelope(&mut response, trace_id.as_str());
             response
         } else {
             let mut response = sec4_core::HttpResponse::text(500, "");
@@ -8286,7 +8288,9 @@ fn apply_lasm_dynamic_response_materialization(
                     }
                     state.users_by_id.insert(id.clone(), payload);
                     if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
-                        eprintln!("warning: LASM dynamic users store persistence failed: {message}");
+                        eprintln!(
+                            "warning: LASM dynamic users store persistence failed: {message}"
+                        );
                     }
                 }
                 Err(_) => {
@@ -9093,6 +9097,49 @@ fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) 
         .headers
         .remove(LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER);
     response.headers.remove(LASM_INTERNAL_CSRF_REQUIRE_HEADER);
+    response
+        .headers
+        .remove(LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER);
+}
+
+fn materialize_lasm_internal_runtime_error_envelope(
+    response: &mut sec4_core::HttpResponse,
+    trace_id: &str,
+) {
+    let Some(header_key) = find_lasm_header_key_case_insensitive(
+        &response.headers,
+        LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER,
+    ) else {
+        return;
+    };
+    let code = response.headers.remove(&header_key).unwrap_or_default();
+    if code.trim().is_empty() {
+        return;
+    }
+    let message = String::from_utf8_lossy(&response.body).to_string();
+    let kind = lasm_internal_error_kind_for_code(code.as_str(), response.status);
+    set_lasm_json_response(
+        response,
+        response.status,
+        &lasm_error_envelope(
+            code.as_str(),
+            kind,
+            message.as_str(),
+            response.status,
+            trace_id,
+        ),
+    );
+}
+
+fn lasm_internal_error_kind_for_code(code: &str, status: u16) -> &'static str {
+    match code {
+        "HTTP.NOT_FOUND" => "not_found",
+        "HTTP.GATEWAY_TIMEOUT" => "timeout",
+        "HTTP.SERVICE_UNAVAILABLE" => "resource_limit",
+        "HTTP.METHOD_NOT_ALLOWED" => "validation",
+        _ if status >= 500 => "internal",
+        _ => "validation",
+    }
 }
 
 fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {

@@ -16255,8 +16255,13 @@ fn main() effects { net } -> Int {
         "response should include deterministic allow header:\n{response}"
     );
     assert!(
+        response.contains("\"code\":\"HTTP.METHOD_NOT_ALLOWED\"")
+            && response.contains("\"kind\":\"validation\""),
+        "response should include deterministic method-mismatch envelope code/kind:\n{response}"
+    );
+    assert!(
         response.contains("method not allowed"),
-        "response should include deterministic method-mismatch response body:\n{response}"
+        "response should include deterministic method-mismatch message:\n{response}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
