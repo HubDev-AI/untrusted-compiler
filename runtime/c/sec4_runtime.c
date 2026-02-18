@@ -9310,6 +9310,25 @@ int64_t sec4_rt_req_header(const char *name) {
   return sec4_rt_track_string_value(value, UINT64_C(0x30303));
 }
 
+int64_t sec4_rt_req_cookie(const char *name) {
+  char cookie_header[512];
+  char extracted[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
+  const char *value = name;
+  if (g_sec4_rt_request.has_request
+      && g_sec4_rt_request.raw_headers_len > 0
+      && sec4_rt_parse_header_value(
+          g_sec4_rt_request.raw_headers,
+          g_sec4_rt_request.raw_headers_len,
+          "Cookie",
+          cookie_header,
+          sizeof(cookie_header)
+      )
+      && sec4_rt_parse_cookie_value(cookie_header, name, extracted, sizeof(extracted))) {
+    value = extracted;
+  }
+  return sec4_rt_track_string_value(value, UINT64_C(0x34343));
+}
+
 int64_t sec4_rt_res_json(int64_t schema, int64_t value) {
   if (g_sec4_rt_request.json_checked && !g_sec4_rt_request.json_valid) {
     return 1;

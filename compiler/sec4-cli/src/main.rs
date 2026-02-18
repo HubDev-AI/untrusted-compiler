@@ -1699,6 +1699,7 @@ fn parse_lasm_request_text_placeholder(
         "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
         "header" => Some(format!("{{{{req.header:{key}}}}}")),
         "query" => Some(format!("{{{{req.query:{key}}}}}")),
+        "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
         _ => None,
     }
 }
@@ -2237,6 +2238,7 @@ fn parse_lasm_request_header_placeholder_call(
         "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
         "header" => Some(format!("{{{{req.header:{key}}}}}")),
         "query" => Some(format!("{{{{req.query:{key}}}}}")),
+        "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
         _ => None,
     }
 }
@@ -6675,6 +6677,7 @@ fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
     value.contains("{{req.pathParam:")
         || value.contains("{{req.header:")
         || value.contains("{{req.query:")
+        || value.contains("{{req.cookie:")
 }
 
 fn materialize_lasm_request_placeholders(
@@ -6689,7 +6692,11 @@ fn materialize_lasm_request_placeholders(
         replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
             find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)
         });
-    replace_lasm_response_placeholder_tokens(&with_headers, "{{req.query:", |key| {
+    let with_cookies =
+        replace_lasm_response_placeholder_tokens(&with_headers, "{{req.cookie:", |key| {
+            find_lasm_cookie_value(&request.headers, key.trim())
+        });
+    replace_lasm_response_placeholder_tokens(&with_cookies, "{{req.query:", |key| {
         request.query_params.get(key.trim()).cloned()
     })
 }
@@ -7099,6 +7106,37 @@ fn find_lasm_header_value<'a>(
     headers
         .iter()
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
+}
+
+fn find_lasm_cookie_value(headers: &BTreeMap<String, String>, cookie_name: &str) -> Option<String> {
+    if cookie_name.trim().is_empty() {
+        return None;
+    }
+    headers.iter().find_map(|(header_name, header_value)| {
+        if !header_name.eq_ignore_ascii_case("Cookie") {
+            return None;
+        }
+        parse_lasm_cookie_header_value(header_value.as_str(), cookie_name).map(ToOwned::to_owned)
+    })
+}
+
+fn parse_lasm_cookie_header_value<'a>(cookie_header: &'a str, cookie_name: &str) -> Option<&'a str> {
+    for segment in cookie_header.split(';') {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        let (name, value) = segment.split_once('=')?;
+        if name.trim() != cookie_name {
+            continue;
+        }
+        let value = value.trim();
+        if value.is_empty() {
+            return None;
+        }
+        return Some(value);
+    }
+    None
 }
 
 fn lasm_header_has_token(value: &str, token: &str) -> bool {

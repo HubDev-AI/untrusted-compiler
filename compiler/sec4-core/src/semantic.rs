@@ -3238,7 +3238,8 @@ impl<'a> Analyzer<'a> {
 
         if !(is_req_query_call(callee_name)
             || is_req_path_param_call(callee_name)
-            || is_req_header_call(callee_name))
+            || is_req_header_call(callee_name)
+            || is_req_cookie_call(callee_name))
         {
             return;
         }
@@ -3247,6 +3248,8 @@ impl<'a> Analyzer<'a> {
             "req.query"
         } else if is_req_path_param_call(callee_name) {
             "req.pathParam"
+        } else if is_req_cookie_call(callee_name) {
+            "req.cookie"
         } else {
             "req.header"
         };
@@ -5803,7 +5806,7 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             return_ty: IntrinsicReturnTy::UntrustedBytes,
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
-        | "req.header" => Some(IntrinsicSpec {
+        | "req.header" | "req_cookie" | "req.cookie" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
@@ -6380,6 +6383,10 @@ fn is_req_path_param_call(name: &str) -> bool {
 
 fn is_req_header_call(name: &str) -> bool {
     matches!(name, "req_header" | "req.header")
+}
+
+fn is_req_cookie_call(name: &str) -> bool {
+    matches!(name, "req_cookie" | "req.cookie")
 }
 
 fn is_sql_q_call(name: &str) -> bool {
