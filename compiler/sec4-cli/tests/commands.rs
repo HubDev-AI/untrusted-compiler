@@ -19378,6 +19378,34 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_rejects_zero_max_header_bytes_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-max-header-bytes");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-header-bytes", "0"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --max-header-bytes override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-header-bytes must be >= 1"),
+        "stderr should include deterministic max-header-bytes validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_zero_max_body_bytes_override() {
     let project_dir = temp_dir("sec4-run-command-zero-max-body-bytes");
     let project_path = project_dir
@@ -19400,6 +19428,34 @@ fn run_command_rejects_zero_max_body_bytes_override() {
     assert!(
         stderr.contains("run failed: --max-body-bytes must be >= 1"),
         "stderr should include deterministic max-body-bytes validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_max_runtime_steps_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-max-runtime-steps-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&["run", "--path", &project_path, "--max-runtime-steps", "32"]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --max-runtime-steps is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --max-runtime-steps is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only flag guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

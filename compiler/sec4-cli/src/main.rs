@@ -59,6 +59,8 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         oneshot: bool,
         #[arg(long)]
+        max_header_bytes: Option<u64>,
+        #[arg(long)]
         max_body_bytes: Option<u64>,
         #[arg(long)]
         max_concurrency: Option<u64>,
@@ -401,6 +403,7 @@ fn main() {
             path,
             port,
             oneshot,
+            max_header_bytes,
             max_body_bytes,
             max_concurrency,
             max_pending,
@@ -412,6 +415,7 @@ fn main() {
             &path,
             port,
             oneshot,
+            max_header_bytes,
             max_body_bytes,
             max_concurrency,
             max_pending,
@@ -6528,6 +6532,7 @@ fn cmd_run(
     path: &Path,
     port: Option<u16>,
     oneshot: bool,
+    max_header_bytes: Option<u64>,
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
@@ -6536,6 +6541,10 @@ fn cmd_run(
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
+    if max_header_bytes == Some(0) {
+        eprintln!("run failed: --max-header-bytes must be >= 1");
+        return Err(2);
+    }
     if max_body_bytes == Some(0) {
         eprintln!("run failed: --max-body-bytes must be >= 1");
         return Err(2);
@@ -6583,6 +6592,7 @@ fn cmd_run(
             &policy,
             port,
             oneshot,
+            max_header_bytes,
             max_body_bytes,
             max_concurrency,
             max_pending,
@@ -6590,6 +6600,15 @@ fn cmd_run(
             max_runtime_steps,
         );
     }
+
+    let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_header_bytes must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_header_bytes = max_header_bytes.unwrap_or(policy_max_header_bytes);
 
     cmd_build(path, Some(BuildEmitTarget::CBin), false, false, tls_backend)?;
 
@@ -6705,7 +6724,7 @@ fn cmd_run(
     );
     cmd.env(
         "SEC4_RT_HTTP_MAX_HEADER_BYTES",
-        policy.http.max_header_bytes.to_string(),
+        effective_max_header_bytes.to_string(),
     );
     cmd.env(
         "SEC4_RT_HTTP_MAX_MULTIPART_BYTES",
@@ -6900,6 +6919,7 @@ fn cmd_run_lasm_backend(
     policy: &Policy,
     port: Option<u16>,
     oneshot: bool,
+    max_header_bytes: Option<u64>,
     max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
@@ -6970,10 +6990,11 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let effective_max_header_bytes = match usize::try_from(policy_max_header_bytes) {
+    let effective_max_header_bytes = max_header_bytes.unwrap_or(policy_max_header_bytes);
+    let effective_max_header_bytes = match usize::try_from(effective_max_header_bytes) {
         Ok(value) => value,
         Err(_) => {
-            eprintln!("run failed: policy http.max_header_bytes exceeds platform limits");
+            eprintln!("run failed: effective max header bytes exceeds platform limits");
             return Err(2);
         }
     };
