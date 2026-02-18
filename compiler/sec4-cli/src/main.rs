@@ -73,10 +73,18 @@ enum Commands {
         request_path: Option<String>,
         #[arg(long)]
         max_in_flight: Option<usize>,
+        #[arg(long)]
+        max_pending: Option<usize>,
+        #[arg(long)]
+        max_request_ms: Option<u64>,
+        #[arg(long)]
+        runtime_script: Option<String>,
         #[arg(long, default_value_t = 1)]
         requests: usize,
         #[arg(long, default_value_t = 128)]
         max_steps: usize,
+        #[arg(long, default_value_t = false)]
+        fail_on_errors: bool,
         #[arg(long, value_enum, default_value_t = LasmSmokeOutputFormat::Text)]
         format: LasmSmokeOutputFormat,
     },
@@ -358,8 +366,12 @@ fn main() {
             route,
             request_path,
             max_in_flight,
+            max_pending,
+            max_request_ms,
+            runtime_script,
             requests,
             max_steps,
+            fail_on_errors,
             format,
         } => cmd_lasm_smoke(
             &path,
@@ -367,8 +379,12 @@ fn main() {
             &route,
             request_path.as_deref(),
             max_in_flight,
+            max_pending,
+            max_request_ms,
+            runtime_script.as_deref(),
             requests,
             max_steps,
+            fail_on_errors,
             format,
         ),
         Commands::Test { path } => cmd_test(&path),
@@ -435,8 +451,12 @@ fn cmd_lasm_smoke(
     route: &str,
     request_path: Option<&str>,
     max_in_flight: Option<usize>,
+    max_pending: Option<usize>,
+    max_request_ms: Option<u64>,
+    runtime_script: Option<&str>,
     requests: usize,
     max_steps: usize,
+    fail_on_errors: bool,
     format: LasmSmokeOutputFormat,
 ) -> Result<(), i32> {
     if requests == 0 {
@@ -488,14 +508,45 @@ fn cmd_lasm_smoke(
         return Err(2);
     }
 
+    let runtime_actions = if let Some(script) = runtime_script {
+        match parse_lasm_runtime_script(script) {
+            Ok(actions) => actions,
+            Err(message) => {
+                eprintln!("lasm-smoke failed: {message}");
+                return Err(2);
+            }
+        }
+    } else {
+        vec![
+            sec4_core::RuntimeAction::Yield,
+            sec4_core::RuntimeAction::Complete(0),
+        ]
+    };
+
     let mut runtime = sec4_core::LasmHttpRuntime::default();
     let mut effective_max_in_flight = None;
+    let mut effective_max_pending = None;
+    let mut effective_max_request_ms = None;
     if let Some(limit) = max_in_flight {
         if let Err(message) = runtime.set_max_in_flight(limit) {
             eprintln!("lasm-smoke failed: {message}");
             return Err(2);
         }
         effective_max_in_flight = Some(limit);
+    }
+    if let Some(limit) = max_pending {
+        if let Err(message) = runtime.set_max_pending(limit) {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+        effective_max_pending = Some(limit);
+    }
+    if let Some(limit) = max_request_ms {
+        if let Err(message) = runtime.set_max_request_duration_ms(limit) {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(2);
+        }
+        effective_max_request_ms = Some(limit);
     }
     let (response_status, response_headers, response_body, response_origin) =
         match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
@@ -517,10 +568,7 @@ fn cmd_lasm_smoke(
     if let Err(message) = runtime.register_route(
         method,
         route,
-        vec![
-            sec4_core::RuntimeAction::Yield,
-            sec4_core::RuntimeAction::Complete(0),
-        ],
+        runtime_actions,
         response,
     ) {
         eprintln!("lasm-smoke failed: {message}");
@@ -543,6 +591,7 @@ fn cmd_lasm_smoke(
     let mut response_count = 0usize;
     let mut ok_count = 0usize;
     let mut error_count = 0usize;
+    let mut status_counts: BTreeMap<u16, usize> = BTreeMap::new();
     let mut first_request_id = None;
     let mut first_response_id = None;
     let mut first_status = None;
@@ -551,6 +600,7 @@ fn cmd_lasm_smoke(
     let mut first_body = None;
     while let Some(exchange) = runtime.pop_response() {
         response_count += 1;
+        *status_counts.entry(exchange.response.status).or_insert(0) += 1;
         if exchange.response.status < 400 {
             ok_count += 1;
         } else {
@@ -571,6 +621,19 @@ fn cmd_lasm_smoke(
         return Err(1);
     }
 
+    if fail_on_errors && error_count > 0 {
+        let status_counts_text = status_counts
+            .iter()
+            .map(|(status, count)| format!("{status}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        eprintln!(
+            "lasm-smoke failed: error responses observed with --fail-on-errors (errors={} statusCounts={})",
+            error_count, status_counts_text
+        );
+        return Err(1);
+    }
+
     let first_path_params = first_path_params.unwrap_or_default();
     let first_path_params_text = if first_path_params.is_empty() {
         "-".to_string()
@@ -588,16 +651,30 @@ fn cmd_lasm_smoke(
             let max_in_flight_text = effective_max_in_flight
                 .map(|value| value.to_string())
                 .unwrap_or_else(|| "unbounded".to_string());
+            let max_pending_text = effective_max_pending
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            let max_request_ms_text = effective_max_request_ms
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            let status_counts_text = status_counts
+                .iter()
+                .map(|(status, count)| format!("{status}:{count}"))
+                .collect::<Vec<_>>()
+                .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} ok={} errors={} steps={} nowMs={} status={} pathParams={} headerCount={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} requests={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} steps={} nowMs={} status={} pathParams={} headerCount={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
                 response_origin,
                 requests,
                 max_in_flight_text,
+                max_pending_text,
+                max_request_ms_text,
                 ok_count,
                 error_count,
+                status_counts_text,
                 report.steps,
                 report.now_ms,
                 first_status.unwrap_or(0),
@@ -615,9 +692,15 @@ fn cmd_lasm_smoke(
                 "origin": response_origin,
                 "requests": requests,
                 "maxInFlight": effective_max_in_flight,
+                "maxPending": effective_max_pending,
+                "maxRequestMs": effective_max_request_ms,
                 "requestPath": request_path,
                 "okCount": ok_count,
                 "errorCount": error_count,
+                "statusCounts": status_counts
+                    .iter()
+                    .map(|(status, count)| (status.to_string(), *count))
+                    .collect::<BTreeMap<String, usize>>(),
                 "steps": report.steps,
                 "nowMs": report.now_ms,
                 "status": first_status.unwrap_or(0),
@@ -633,6 +716,42 @@ fn cmd_lasm_smoke(
         }
     }
     Ok(())
+}
+
+fn parse_lasm_runtime_script(script: &str) -> Result<Vec<sec4_core::RuntimeAction>, String> {
+    let mut actions = Vec::new();
+    for raw_segment in script.split(',') {
+        let segment = raw_segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        if segment.eq_ignore_ascii_case("yield") {
+            actions.push(sec4_core::RuntimeAction::Yield);
+            continue;
+        }
+        if let Some(raw_ms) = segment.strip_prefix("sleep:") {
+            let duration_ms = raw_ms.trim().parse::<u64>().map_err(|_| {
+                format!("invalid --runtime-script segment `{segment}`: sleep duration must be u64")
+            })?;
+            actions.push(sec4_core::RuntimeAction::SleepMs(duration_ms));
+            continue;
+        }
+        if let Some(raw_code) = segment.strip_prefix("complete:") {
+            let code = raw_code.trim().parse::<i64>().map_err(|_| {
+                format!("invalid --runtime-script segment `{segment}`: complete code must be i64")
+            })?;
+            actions.push(sec4_core::RuntimeAction::Complete(code));
+            continue;
+        }
+        return Err(format!(
+            "invalid --runtime-script segment `{segment}`: expected `yield`, `sleep:<ms>`, or `complete:<code>`"
+        ));
+    }
+
+    if actions.is_empty() {
+        return Err("invalid --runtime-script: expected at least one action segment".to_string());
+    }
+    Ok(actions)
 }
 
 #[derive(Debug, Clone)]
