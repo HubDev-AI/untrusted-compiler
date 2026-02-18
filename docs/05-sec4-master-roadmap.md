@@ -344,6 +344,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM run backend now enforces handler auth-helper contracts (`auth.require`, `auth.requireRole`) with policy-aware token/cookie subject checks and deterministic `401/403` envelopes, including dynamic required-role materialization via request placeholders (`docs/book/973-m39-lasm-auth-helper-enforcement-with-ctx-current.md`).
 - [x] LASM run backend now enforces router middleware auth/csrf contracts (`auth.withAuth`, `csrf.withCsrf`) by extracting middleware usage from the route composition call graph and applying policy-aware deterministic `401 AUTH.UNAUTHORIZED` / `403 AUTH.CSRF_TOKEN_INVALID` response envelopes at request time (`docs/book/974-m39-lasm-auth-csrf-middleware-enforcement.md`).
 - [x] LASM auth middleware enforcement now respects `SEC4_RT_AUTH_MODE` env override (`off` disables middleware auth checks) while preserving handler-level auth-helper enforcement semantics, matching C-runtime policy/env precedence more closely (`docs/book/975-m39-lasm-auth-middleware-env-off-parity.md`).
+- [x] LASM csrf middleware enforcement now respects `SEC4_RT_CSRF_*` env overrides (including `SEC4_RT_CSRF_MODE=off`) for enabled-mode, cookie/header names, and protected-method sets, preserving deterministic `403 AUTH.CSRF_TOKEN_INVALID` only when effective csrf protection remains active (`docs/book/976-m39-lasm-csrf-middleware-env-off-parity.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
