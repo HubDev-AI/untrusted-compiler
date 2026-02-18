@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Tried landing a large multi-hunk `apply_patch` over heavily edited LASM runtime code; context drift caused patch failure and slowed the slice. | For active runtime files, apply refactors in small ordered hunks (state fields -> submit flow -> queue flow -> tests) to keep patch context stable. |
 | 2026-02-18 | self | After hardening LASM to suppress CORS defaults for disallowed origins, I initially kept a test assertion expecting `Vary: Origin`, which contradicted the new suppression policy. | When tightening header-suppression behavior, align assertions with the selected policy boundary (full CORS suppression vs partial suppression) before rerunning broad suites. |
 | 2026-02-18 | self | Added a LASM regression test but initially forgot `--backend lasm`, which exercised the default backend path and produced a misleading failure during LASM validation. | For backend-specific command tests, always set `--backend` explicitly and align the test name/fixture intent with that backend. |
 | 2026-02-18 | self | Added LASM preflight `403` rejection assertions before checking LASM status-text mapping; runtime emitted fallback reason phrase (`Status`) because `http_status_text` lacked `403`. | When introducing new deterministic HTTP status paths, extend shared status-text mapping in the same change so response-line assertions remain stable. |

@@ -5991,7 +5991,6 @@ fn process_lasm_connection_with_runtime(
     }
     let include_cors_defaults = should_include_lasm_cors_defaults(Some(&request.headers), header_defaults);
 
-    let request_method = request.method.clone();
     let mut runtime_request = sec4_core::HttpRequest::new(request.method.clone(), request.path.clone());
     runtime_request.headers = request.headers.clone();
     runtime_request.body = request.body.clone();
@@ -6017,9 +6016,6 @@ fn process_lasm_connection_with_runtime(
     }
     let mut response = matched
         .unwrap_or_else(|| sec4_core::HttpResponse::text(500, "missing LASM response for request"));
-    if request_method.eq_ignore_ascii_case("HEAD") {
-        response.body.clear();
-    }
     apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
     stamp_lasm_trace_id(&mut response, trace_counter);
     write_lasm_http_response(stream, &response, header_defaults, include_cors_defaults)
