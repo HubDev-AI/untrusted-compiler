@@ -6928,6 +6928,7 @@ fn read_lasm_http_request(
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
     let mut parsed_content_length: Option<usize> = None;
+    let mut parsed_host_header: Option<String> = None;
 
     let mut header_line = String::new();
     loop {
@@ -6987,13 +6988,23 @@ fn read_lasm_http_request(
             parsed_content_length = Some(parsed);
             content_length = parsed;
         }
+        if name.eq_ignore_ascii_case("host") {
+            if let Some(existing) = parsed_host_header.as_deref() {
+                if !existing.eq_ignore_ascii_case(value) {
+                    return Err(make_error(400, "conflicting host headers".to_string()));
+                }
+            } else {
+                parsed_host_header = Some(value.to_string());
+            }
+        }
         headers.insert(name.to_string(), value.to_string());
     }
 
     if http_version.eq_ignore_ascii_case("HTTP/1.1") {
-        let has_host = headers
-            .iter()
-            .any(|(name, value)| name.eq_ignore_ascii_case("host") && !value.trim().is_empty());
+        let has_host = parsed_host_header
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|host| !host.is_empty());
         if !has_host {
             return Err(make_error(400, "missing host header".to_string()));
         }
@@ -7013,10 +7024,36 @@ fn read_lasm_http_request(
             .map_err(|err| map_read_error("reading request body", err))?;
     }
 
-    let path = request_target
+    let normalized_target = if request_target == "*" {
+        request_target
+    } else if request_target.starts_with('/') {
+        request_target
+    } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
+        let (_, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
+            make_error(
+                400,
+                "invalid request target: malformed absolute-form".to_string(),
+            )
+        })?;
+        if authority_and_path.is_empty() || authority_and_path.starts_with('/') {
+            return Err(make_error(
+                400,
+                "invalid request target: missing authority".to_string(),
+            ));
+        }
+        if let Some(path_index) = authority_and_path.find('/') {
+            &authority_and_path[path_index..]
+        } else {
+            "/"
+        }
+    } else {
+        return Err(make_error(400, "invalid request target".to_string()));
+    };
+
+    let path = normalized_target
         .split_once('?')
         .map(|(path, _)| path)
-        .unwrap_or(request_target);
+        .unwrap_or(normalized_target);
 
     Ok(LasmRunRequest {
         method: method.to_ascii_uppercase(),
