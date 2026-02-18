@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Triggered `web.run` while implementing local-only `lasm-smoke` queue defaulting logic. | Keep local code slices strictly on repository tooling and treat web tools as disabled unless external verification is explicitly requested. |
 | 2026-02-18 | self | Triggered `web.run` during a local-only LASM run-backend queue-cap hardening slice. | Keep local implementation turns strictly on repository tooling (`exec_command`/`apply_patch`) and avoid web tooling unless external sources are explicitly required. |
 | 2026-02-18 | self | While adding lasm-smoke 404/405 fallback branches, I returned a tuple inside a nested `if` without making it the arm expression, causing a compile-time type mismatch (`expected ()`). | For match-arm tuple branches, structure nested `if/else` so every branch yields the tuple expression directly (or return early), then compile once before test runs. |
 | 2026-02-18 | self | Triggered `web.run` again while implementing local-only LASM smoke parity (405/Allow method-mismatch path). | Keep local compiler/runtime implementation turns strictly on local tools; only invoke web tooling when external docs/news verification is explicitly needed. |
