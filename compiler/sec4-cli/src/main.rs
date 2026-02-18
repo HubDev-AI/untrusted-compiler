@@ -7760,7 +7760,9 @@ fn split_lasm_path_and_query(target: &str) -> (String, BTreeMap<String, String>)
         if key.trim().is_empty() {
             continue;
         }
-        query_params.insert(key, value);
+        if !query_params.contains_key(key.as_str()) {
+            query_params.insert(key, value);
+        }
     }
 
     (path.to_string(), query_params)
