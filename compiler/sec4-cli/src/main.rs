@@ -8308,6 +8308,114 @@ fn apply_lasm_dynamic_response_materialization(
                 ),
             }
         }
+        "DeleteUserResponse" => {
+            let Some(id) = resolve_lasm_user_lookup_id(request, path_params) else {
+                return;
+            };
+            if !is_lasm_uuid_v4(&id) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "VALIDATION.UUID_INVALID",
+                        "validation",
+                        "id must be UUID v4",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
+            let deleted = match dynamic_state.lock() {
+                Ok(mut state) => {
+                    let deleted = state.users_by_id.remove(&id).is_some();
+                    if deleted {
+                        if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
+                            eprintln!(
+                                "warning: LASM dynamic users store persistence failed: {message}"
+                            );
+                        }
+                    }
+                    deleted
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            if deleted {
+                set_lasm_json_response(
+                    response,
+                    200,
+                    &serde_json::json!({
+                        "ok": true,
+                        "userId": id,
+                        "deleted": true,
+                    }),
+                );
+            } else {
+                set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope(
+                        "HTTP.NOT_FOUND",
+                        "not_found",
+                        "user not found",
+                        404,
+                        trace_id,
+                    ),
+                );
+            }
+        }
+        "ListUsersResponse" => {
+            let users = match dynamic_state.lock() {
+                Ok(state) => {
+                    let mut ordered = state
+                        .users_by_id
+                        .iter()
+                        .map(|(id, user)| (id.clone(), user.clone()))
+                        .collect::<Vec<_>>();
+                    ordered.sort_by(|left, right| left.0.cmp(&right.0));
+                    ordered
+                        .into_iter()
+                        .map(|(_, user)| user)
+                        .collect::<Vec<_>>()
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
+            };
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "count": users.len(),
+                    "users": users,
+                }),
+            );
+        }
         _ => {}
     }
 }
