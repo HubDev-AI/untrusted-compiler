@@ -6623,7 +6623,10 @@ fn apply_lasm_header_placeholder_materialization(
         } else {
             name
         };
-        if materialized_name.trim().is_empty() {
+        if materialized_name.trim().is_empty()
+            || materialized_name != materialized_name.trim()
+            || !is_lasm_http_token(materialized_name.as_str())
+        {
             continue;
         }
         let materialized_value = if contains_lasm_request_placeholder_tokens(value.as_str()) {
@@ -6631,9 +6634,12 @@ fn apply_lasm_header_placeholder_materialization(
         } else {
             value
         };
+        if !is_lasm_http_header_value(materialized_value.as_str()) {
+            continue;
+        }
         if materialized_name.eq_ignore_ascii_case("Set-Cookie") {
             for cookie in materialized_value.split('\n') {
-                if cookie.is_empty() {
+                if cookie.is_empty() || !is_lasm_http_header_value(cookie) {
                     continue;
                 }
                 append_lasm_set_cookie_header(&mut materialized_headers, cookie);
