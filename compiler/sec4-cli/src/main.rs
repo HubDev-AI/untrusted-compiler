@@ -854,6 +854,8 @@ struct LasmRouteRegistration {
     method: String,
     path: String,
     handler_name: String,
+    require_auth_middleware: bool,
+    require_csrf_middleware: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -917,8 +919,6 @@ fn collect_lasm_route_plans(
         &mut visited_functions,
         &mut registrations,
     );
-    let middleware_requirements = extract_route_middleware_requirements(&functions, entry_name);
-
     let mut plans = Vec::new();
     let mut seen_routes = HashSet::new();
     for registration in registrations {
@@ -940,7 +940,7 @@ fn collect_lasm_route_plans(
                 "1".to_string(),
             );
         }
-        if middleware_requirements.require_auth {
+        if registration.require_auth_middleware {
             headers.insert(
                 LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER.to_string(),
                 "1".to_string(),
@@ -952,7 +952,7 @@ fn collect_lasm_route_plans(
                 required_role,
             );
         }
-        if middleware_requirements.require_csrf {
+        if registration.require_csrf_middleware {
             headers.insert(
                 LASM_INTERNAL_CSRF_REQUIRE_HEADER.to_string(),
                 "1".to_string(),
@@ -1441,6 +1441,11 @@ fn match_route_registration_details(
     } else {
         return None;
     };
+    let middleware_requirements = if args.len() >= 3 {
+        extract_router_middleware_requirements(&args[0], bindings, 0)
+    } else {
+        LasmRouteMiddlewareRequirements::default()
+    };
 
     let route_path = extract_route_path_literal(&args[route_arg_index], bindings)?;
     let handler_name = extract_handler_identifier(&args[handler_arg_index], bindings)?;
@@ -1448,7 +1453,44 @@ fn match_route_registration_details(
         method: route_method.to_string(),
         path: route_path,
         handler_name,
+        require_auth_middleware: middleware_requirements.require_auth,
+        require_csrf_middleware: middleware_requirements.require_csrf,
     })
+}
+
+fn extract_router_middleware_requirements(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> LasmRouteMiddlewareRequirements {
+    if depth > 32 {
+        return LasmRouteMiddlewareRequirements::default();
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(bound) = bindings.get(name) {
+                return extract_router_middleware_requirements(bound, bindings, depth + 1);
+            }
+            LasmRouteMiddlewareRequirements::default()
+        }
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let mut requirements = LasmRouteMiddlewareRequirements::default();
+            if match_auth_middleware_call(callee, bindings) {
+                requirements.require_auth = true;
+            }
+            if match_csrf_middleware_call(callee, bindings) {
+                requirements.require_csrf = true;
+            }
+            if let Some(base_router_expr) = args.first() {
+                let base_requirements =
+                    extract_router_middleware_requirements(base_router_expr, bindings, depth + 1);
+                requirements.require_auth |= base_requirements.require_auth;
+                requirements.require_csrf |= base_requirements.require_csrf;
+            }
+            requirements
+        }
+        _ => LasmRouteMiddlewareRequirements::default(),
+    }
 }
 
 fn extract_route_path_literal(
@@ -1650,252 +1692,6 @@ fn extract_auth_requirement(
     let mut visited = HashSet::new();
     extract_auth_requirement_in_function(functions, function_name, &mut visited, &mut requirement);
     requirement
-}
-
-fn extract_route_middleware_requirements(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    entry_name: &str,
-) -> LasmRouteMiddlewareRequirements {
-    let mut requirements = LasmRouteMiddlewareRequirements::default();
-    let mut visited = HashSet::new();
-    extract_route_middleware_requirements_in_function(
-        functions,
-        entry_name,
-        &mut visited,
-        &mut requirements,
-    );
-    requirements
-}
-
-fn extract_route_middleware_requirements_in_function(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    function_name: &str,
-    visited: &mut HashSet<String>,
-    requirements: &mut LasmRouteMiddlewareRequirements,
-) {
-    if !visited.insert(function_name.to_string()) {
-        return;
-    }
-    let Some(function) = functions.get(function_name) else {
-        return;
-    };
-    let mut bindings = HashMap::new();
-    extract_route_middleware_requirements_in_block(
-        functions,
-        &function.body,
-        visited,
-        requirements,
-        &mut bindings,
-    );
-}
-
-fn extract_route_middleware_requirements_in_block(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    block: &sec4_core::ast::Block,
-    visited: &mut HashSet<String>,
-    requirements: &mut LasmRouteMiddlewareRequirements,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) {
-    for statement in &block.statements {
-        extract_route_middleware_requirements_in_stmt(
-            functions,
-            statement,
-            visited,
-            requirements,
-            bindings,
-        );
-    }
-    if let Some(tail) = &block.tail {
-        extract_route_middleware_requirements_in_expr(
-            functions,
-            tail,
-            visited,
-            requirements,
-            bindings,
-        );
-    }
-}
-
-fn extract_route_middleware_requirements_in_stmt(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    statement: &sec4_core::ast::Stmt,
-    visited: &mut HashSet<String>,
-    requirements: &mut LasmRouteMiddlewareRequirements,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) {
-    match &statement.kind {
-        sec4_core::ast::StmtKind::Let { name, value, .. } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                value,
-                visited,
-                requirements,
-                bindings,
-            );
-            bindings.insert(name.clone(), value.clone());
-        }
-        sec4_core::ast::StmtKind::Return { value } => {
-            if let Some(value) = value {
-                extract_route_middleware_requirements_in_expr(
-                    functions,
-                    value,
-                    visited,
-                    requirements,
-                    bindings,
-                );
-            }
-        }
-        sec4_core::ast::StmtKind::Expr { expr } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                expr,
-                visited,
-                requirements,
-                bindings,
-            );
-        }
-    }
-}
-
-fn extract_route_middleware_requirements_in_expr(
-    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
-    expr: &sec4_core::ast::Expr,
-    visited: &mut HashSet<String>,
-    requirements: &mut LasmRouteMiddlewareRequirements,
-    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
-) {
-    match &expr.kind {
-        sec4_core::ast::ExprKind::Call { callee, args } => {
-            if match_auth_middleware_call(callee, bindings) {
-                requirements.require_auth = true;
-            }
-            if match_csrf_middleware_call(callee, bindings) {
-                requirements.require_csrf = true;
-            }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
-                extract_route_middleware_requirements_in_function(
-                    functions,
-                    function_name,
-                    visited,
-                    requirements,
-                );
-            }
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                callee,
-                visited,
-                requirements,
-                bindings,
-            );
-            for argument in args {
-                extract_route_middleware_requirements_in_expr(
-                    functions,
-                    argument,
-                    visited,
-                    requirements,
-                    bindings,
-                );
-            }
-        }
-        sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                expr,
-                visited,
-                requirements,
-                bindings,
-            )
-        }
-        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                left,
-                visited,
-                requirements,
-                bindings,
-            );
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                right,
-                visited,
-                requirements,
-                bindings,
-            );
-        }
-        sec4_core::ast::ExprKind::Member { object, .. } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                object,
-                visited,
-                requirements,
-                bindings,
-            )
-        }
-        sec4_core::ast::ExprKind::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                condition,
-                visited,
-                requirements,
-                bindings,
-            );
-            let mut then_bindings = bindings.clone();
-            extract_route_middleware_requirements_in_block(
-                functions,
-                then_branch,
-                visited,
-                requirements,
-                &mut then_bindings,
-            );
-            if let Some(else_branch) = else_branch {
-                let mut else_bindings = bindings.clone();
-                extract_route_middleware_requirements_in_expr(
-                    functions,
-                    else_branch,
-                    visited,
-                    requirements,
-                    &mut else_bindings,
-                );
-            }
-        }
-        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            extract_route_middleware_requirements_in_expr(
-                functions,
-                scrutinee,
-                visited,
-                requirements,
-                bindings,
-            );
-            for arm in arms {
-                let mut arm_bindings = bindings.clone();
-                extract_route_middleware_requirements_in_expr(
-                    functions,
-                    &arm.value,
-                    visited,
-                    requirements,
-                    &mut arm_bindings,
-                );
-            }
-        }
-        sec4_core::ast::ExprKind::Block(block) => {
-            let mut block_bindings = bindings.clone();
-            extract_route_middleware_requirements_in_block(
-                functions,
-                block,
-                visited,
-                requirements,
-                &mut block_bindings,
-            );
-        }
-        sec4_core::ast::ExprKind::Identifier(_)
-        | sec4_core::ast::ExprKind::Number(_)
-        | sec4_core::ast::ExprKind::String(_)
-        | sec4_core::ast::ExprKind::Bool(_) => {}
-    }
 }
 
 fn match_auth_middleware_call(
