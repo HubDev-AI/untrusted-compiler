@@ -7489,7 +7489,7 @@ fn read_lasm_http_request_head(
                 parsed_host_header = Some(parsed_host);
             }
         }
-        headers.insert(name.to_string(), value.to_string());
+        insert_lasm_request_header_case_insensitive(&mut headers, name, value);
     }
 
     if http_version.eq_ignore_ascii_case("HTTP/1.1") && parsed_host_header.is_none() {
@@ -7569,6 +7569,43 @@ fn parse_lasm_authority(value: &str) -> Option<LasmAuthority> {
     }
 
     Some(LasmAuthority { host, port })
+}
+
+fn insert_lasm_request_header_case_insensitive(
+    headers: &mut BTreeMap<String, String>,
+    name: &str,
+    value: &str,
+) {
+    if let Some(existing_key) = find_lasm_header_key_case_insensitive(headers, name) {
+        let existing_key = existing_key.to_string();
+        let existing_value = headers
+            .remove(existing_key.as_str())
+            .unwrap_or_else(|| "".to_string());
+        headers.insert(
+            existing_key.clone(),
+            merge_lasm_request_header_values(existing_key.as_str(), existing_value.as_str(), value),
+        );
+        return;
+    }
+    headers.insert(name.to_string(), value.to_string());
+}
+
+fn merge_lasm_request_header_values(header_name: &str, existing: &str, next: &str) -> String {
+    if header_name.eq_ignore_ascii_case("host")
+        || header_name.eq_ignore_ascii_case("content-length")
+    {
+        return existing.to_string();
+    }
+    if existing.is_empty() {
+        return next.to_string();
+    }
+    if next.is_empty() {
+        return existing.to_string();
+    }
+    if header_name.eq_ignore_ascii_case("cookie") {
+        return format!("{existing}; {next}");
+    }
+    format!("{existing}, {next}")
 }
 
 fn is_lasm_response_header_name_valid(value: &str) -> bool {
