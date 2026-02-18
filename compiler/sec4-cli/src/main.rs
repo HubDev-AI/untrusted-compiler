@@ -9288,6 +9288,7 @@ fn read_lasm_http_request(
             reader,
             &mut request_head.headers,
             max_body_bytes,
+            max_header_bytes,
             &map_read_error,
         )?
     } else {
@@ -9314,10 +9315,12 @@ fn read_lasm_http_chunked_body(
     reader: &mut BufReader<TcpStream>,
     headers: &mut BTreeMap<String, String>,
     max_body_bytes: usize,
+    max_header_bytes: usize,
     map_read_error: &dyn Fn(&str, std::io::Error) -> LasmRequestReadError,
 ) -> Result<Vec<u8>, LasmRequestReadError> {
     let mut body = Vec::new();
     let mut chunk_size_line = String::new();
+    let mut trailer_bytes = 0usize;
     loop {
         chunk_size_line.clear();
         let read = reader
@@ -9362,6 +9365,15 @@ fn read_lasm_http_chunked_body(
                     return Err(LasmRequestReadError {
                         status: 400,
                         message: "incomplete request while reading chunk trailer".to_string(),
+                    });
+                }
+                trailer_bytes = trailer_bytes.saturating_add(trailer_read);
+                if trailer_bytes > max_header_bytes {
+                    return Err(LasmRequestReadError {
+                        status: 431,
+                        message: format!(
+                            "request headers exceed configured limit ({max_header_bytes} bytes)"
+                        ),
                     });
                 }
                 if trailer_line == "\r\n" || trailer_line == "\n" {
