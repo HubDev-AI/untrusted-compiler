@@ -6870,6 +6870,12 @@ enum LasmCorsPreflightDecision {
     Reject { status: u16, message: &'static str },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LasmAuthority {
+    host: String,
+    port: Option<u16>,
+}
+
 fn read_lasm_http_request(
     reader: &mut BufReader<TcpStream>,
     max_header_bytes: usize,
@@ -6925,13 +6931,13 @@ fn read_lasm_http_request(
         ));
     }
 
-    let mut absolute_authority: Option<&str> = None;
+    let mut absolute_authority: Option<(&str, LasmAuthority)> = None;
     let normalized_target = if request_target == "*" {
         request_target
     } else if request_target.starts_with('/') {
         request_target
     } else if request_target.starts_with("http://") || request_target.starts_with("https://") {
-        let (_, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
+        let (scheme, authority_and_path) = request_target.split_once("://").ok_or_else(|| {
             make_error(
                 400,
                 "invalid request target: malformed absolute-form".to_string(),
@@ -6947,7 +6953,13 @@ fn read_lasm_http_request(
                 "invalid request target: missing authority".to_string(),
             ));
         }
-        absolute_authority = Some(authority);
+        let parsed_authority = parse_lasm_authority(authority).ok_or_else(|| {
+            make_error(
+                400,
+                "invalid request target: malformed absolute-form".to_string(),
+            )
+        })?;
+        absolute_authority = Some((scheme, parsed_authority));
         if authority_end < authority_and_path.len()
             && authority_and_path.as_bytes()[authority_end] == b'/'
         {
@@ -6962,7 +6974,7 @@ fn read_lasm_http_request(
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
     let mut parsed_content_length: Option<usize> = None;
-    let mut parsed_host_header: Option<String> = None;
+    let mut parsed_host_header: Option<LasmAuthority> = None;
 
     let mut header_line = String::new();
     loop {
@@ -7029,34 +7041,28 @@ fn read_lasm_http_request(
             content_length = parsed;
         }
         if name.eq_ignore_ascii_case("host") {
-            if let Some(existing) = parsed_host_header.as_deref() {
-                if !existing.eq_ignore_ascii_case(value) {
+            let parsed_host = parse_lasm_authority(value)
+                .ok_or_else(|| make_error(400, "invalid host header".to_string()))?;
+            if let Some(existing) = parsed_host_header.as_ref() {
+                if existing != &parsed_host {
                     return Err(make_error(400, "conflicting host headers".to_string()));
                 }
             } else {
-                parsed_host_header = Some(value.to_string());
+                parsed_host_header = Some(parsed_host);
             }
         }
         headers.insert(name.to_string(), value.to_string());
     }
 
     if http_version.eq_ignore_ascii_case("HTTP/1.1") {
-        let has_host = parsed_host_header
-            .as_deref()
-            .map(str::trim)
-            .is_some_and(|host| !host.is_empty());
-        if !has_host {
+        if parsed_host_header.is_none() {
             return Err(make_error(400, "missing host header".to_string()));
         }
     }
-    if let (Some(authority), Some(host)) = (
-        absolute_authority,
-        parsed_host_header
-            .as_deref()
-            .map(str::trim)
-            .filter(|host| !host.is_empty()),
-    ) {
-        if !host.eq_ignore_ascii_case(authority) {
+    if let (Some((scheme, authority)), Some(host)) =
+        (absolute_authority.as_ref(), parsed_host_header.as_ref())
+    {
+        if !lasm_authority_matches_absolute_form(host, authority, scheme) {
             return Err(make_error(
                 400,
                 "host header does not match request target authority".to_string(),
@@ -7090,6 +7096,86 @@ fn read_lasm_http_request(
         headers,
         body,
     })
+}
+
+fn parse_lasm_authority(value: &str) -> Option<LasmAuthority> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.contains(',')
+        || trimmed.contains('@')
+        || trimmed.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+
+    let (host, port) = if let Some(rest) = trimmed.strip_prefix('[') {
+        let end = rest.find(']')?;
+        let literal = &rest[..end];
+        if literal.is_empty() {
+            return None;
+        }
+        let remainder = &rest[end + 1..];
+        let port = if remainder.is_empty() {
+            None
+        } else {
+            let value = remainder.strip_prefix(':')?;
+            Some(parse_lasm_authority_port(value)?)
+        };
+        (format!("[{}]", literal.to_ascii_lowercase()), port)
+    } else {
+        if trimmed.contains('/') || trimmed.contains('?') || trimmed.contains('#') {
+            return None;
+        }
+        let colon_count = trimmed.as_bytes().iter().filter(|&&ch| ch == b':').count();
+        let (host, port) = match colon_count {
+            0 => (trimmed.to_ascii_lowercase(), None),
+            1 => {
+                let (host, port) = trimmed.rsplit_once(':')?;
+                if host.is_empty() {
+                    return None;
+                }
+                (
+                    host.to_ascii_lowercase(),
+                    Some(parse_lasm_authority_port(port)?),
+                )
+            }
+            _ => return None,
+        };
+        (host, port)
+    };
+
+    if host.is_empty() {
+        return None;
+    }
+
+    Some(LasmAuthority { host, port })
+}
+
+fn parse_lasm_authority_port(value: &str) -> Option<u16> {
+    if value.is_empty() || !value.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let parsed = value.parse::<u16>().ok()?;
+    if parsed == 0 {
+        return None;
+    }
+    Some(parsed)
+}
+
+fn lasm_authority_matches_absolute_form(
+    host: &LasmAuthority,
+    request_target: &LasmAuthority,
+    scheme: &str,
+) -> bool {
+    if host.host != request_target.host {
+        return false;
+    }
+    let default_port = match scheme {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    };
+    host.port.or(default_port) == request_target.port.or(default_port)
 }
 
 fn write_lasm_http_response(

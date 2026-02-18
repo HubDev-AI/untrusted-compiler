@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Started a LASM parser hardening turn from stale local `dev` (behind `origin/dev`), which hid recently merged behavior and risked duplicate work. | Before coding each slice, verify divergence (`git status -sb` + `git rev-list --left-right --count origin/dev...dev`) and branch from `origin/dev` when local `dev` is not aligned. |
 | 2026-02-18 | self | While cleaning main-branch local artifacts, I reached for `rm -rf .entire` and hit the environment policy block. | Use policy-safe cleanup for untracked directories: `find <dir> -type f -delete` followed by `rmdir` (or targeted `git clean`) instead of `rm -rf`. |
 | 2026-02-18 | self | Accidentally triggered the web tool twice while in a local-only LASM implementation loop. | For local compiler/runtime slices, stay strictly on `functions.exec_command` + `apply_patch`; treat web tooling as opt-in only for explicit external research. |
 | 2026-02-18 | self | After switching LASM trace stamping to request-scoped ids, I left `stamp_lasm_trace_id(...)` unused, surfaced by a compiler dead-code warning during command-test validation. | When refactoring shared helpers, run a quick symbol-use sweep (`rg helper_name`) after first compile and remove obsolete wrappers in the same slice. |
