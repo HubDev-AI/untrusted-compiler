@@ -301,6 +301,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM request-line parsing now enforces explicit HTTP version tokens, enforces `max_header_bytes` on the request line before parsing headers, and emits deterministic unsupported-version rejection (`505 HTTP Version Not Supported`) for non-HTTP/1.0/1.1 requests (`docs/book/930-m39-lasm-request-line-version-hardening.md`).
 - [x] LASM worker runtime now supports HTTP keep-alive request reuse on persistent sockets (with HTTP/1.0 + `Connection: close` deterministic close behavior) while preserving existing queue/backpressure controls (`docs/book/931-m39-lasm-worker-keep-alive-support.md`).
 - [x] LASM worker runtime now reuses a persistent buffered request reader per connection (supporting pipelined request parsing), interprets comma-delimited `Connection` tokens deterministically, and rejects unsupported `Transfer-Encoding` with deterministic `501 Not Implemented` responses (`docs/book/932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`).
+- [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

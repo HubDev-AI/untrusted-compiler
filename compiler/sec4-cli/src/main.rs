@@ -6927,6 +6927,7 @@ fn read_lasm_http_request(
 
     let mut headers = BTreeMap::new();
     let mut content_length = 0usize;
+    let mut parsed_content_length: Option<usize> = None;
 
     let mut header_line = String::new();
     loop {
@@ -6969,12 +6970,22 @@ fn read_lasm_http_request(
             ));
         }
         if name.eq_ignore_ascii_case("content-length") {
-            content_length = value.parse::<usize>().map_err(|_| {
+            let parsed = value.parse::<usize>().map_err(|_| {
                 make_error(
                     400,
                     "invalid content-length header: expected usize".to_string(),
                 )
             })?;
+            if let Some(existing) = parsed_content_length {
+                if existing != parsed {
+                    return Err(make_error(
+                        400,
+                        "conflicting content-length headers".to_string(),
+                    ));
+                }
+            }
+            parsed_content_length = Some(parsed);
+            content_length = parsed;
         }
         headers.insert(name.to_string(), value.to_string());
     }
