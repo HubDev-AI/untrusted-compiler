@@ -908,5 +908,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `940-m39-lasm-http-token-and-fragment-hardening.md`
 - `941-m39-lasm-deterministic-read-error-mapping.md`
 - `942-m39-lasm-parser-error-envelope-parity.md`
+- `943-m39-lasm-parser-error-cors-suppression.md`
 
 As milestones progress, chapters will be added and linked from this index.

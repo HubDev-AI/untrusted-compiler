@@ -311,6 +311,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM parser now rejects invalid HTTP method/header-name tokens, forbids whitespace around header names, and rejects request-target URI fragments with deterministic `400` diagnostics before route execution (`docs/book/940-m39-lasm-http-token-and-fragment-hardening.md`).
 - [x] LASM parser now maps request-read failures into deterministic error classes (timeout, invalid encoding, incomplete request, generic read failure) to avoid host-dependent OS error text variance (`docs/book/941-m39-lasm-deterministic-read-error-mapping.md`).
 - [x] LASM parser failures now emit deterministic JSON error envelopes (status-mapped code/kind + trace metadata) for contract parity with other runtime failure paths (`docs/book/942-m39-lasm-parser-error-envelope-parity.md`).
+- [x] LASM parser failure responses now suppress default CORS headers, keeping malformed-request failure paths deterministic and non-permissive while preserving trace + structured error envelope metadata (`docs/book/943-m39-lasm-parser-error-cors-suppression.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

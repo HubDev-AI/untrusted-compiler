@@ -6091,7 +6091,7 @@ fn process_lasm_connection_with_runtime(
                         stream,
                         &response,
                         header_defaults,
-                        true,
+                        false,
                         false,
                         true,
                     )?;
