@@ -921,5 +921,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `953-m39-lasm-dynamic-response-header-name-materialization.md`
 - `954-m39-lasm-case-insensitive-response-header-merge.md`
 - `955-m39-lasm-content-length-upsert-correctness.md`
+- `956-m39-lasm-dynamic-response-header-validation-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.
