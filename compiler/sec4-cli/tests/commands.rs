@@ -4144,9 +4144,7 @@ fn main() effects { net } -> Int {
             .try_wait()
             .expect("run command wait should succeed while connecting")
         {
-            panic!(
-                "run command exited before request-line-limit request with status: {status}"
-            );
+            panic!("run command exited before request-line-limit request with status: {status}");
         }
 
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -4170,9 +4168,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!(
-                "run command LASM request-line-limit test could not connect to server"
-            );
+            panic!("run command LASM request-line-limit test could not connect to server");
         }
     };
 
@@ -4191,9 +4187,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!(
-                "run command LASM request-line-limit process did not exit in expected window"
-            );
+            panic!("run command LASM request-line-limit process did not exit in expected window");
         }
     };
 
@@ -4208,6 +4202,136 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("request headers exceed configured limit (40 bytes)"),
         "response should include deterministic request-line limit message:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_oneshot_lasm_backend_returns_501_for_transfer_encoding() {
+    let project_dir = temp_dir("sec4-run-command-lasm-transfer-encoding");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmtransferencodingcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before transfer-encoding request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"POST /health HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n4\r\npong\r\n0\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM transfer-encoding test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM transfer-encoding process did not exit in expected window");
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command LASM transfer-encoding process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 501 Not Implemented"),
+        "response should contain deterministic transfer-encoding status:\n{response}"
+    );
+    assert!(
+        response.contains("transfer-encoding is not supported"),
+        "response should include deterministic transfer-encoding message:\n{response}"
     );
     assert!(
         response.contains("X-Trace-Id: rt-1"),
@@ -6759,6 +6883,130 @@ fn main() effects { net } -> Int {
     assert!(
         second_response.ends_with("\r\n\r\npong"),
         "second response should include expected body:\n{second_response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_lasm_backend_supports_pipelined_requests_on_single_socket() {
+    let project_dir = temp_dir("sec4-run-command-lasm-pipelined-requests");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmpipelinedrequestscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--port",
+            port_value.as_str(),
+            "--max-concurrency",
+            "1",
+            "--serve-timeout-ms",
+            "5000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut stream = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before pipelined connect with status: {status}");
+        }
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(next) => {
+                stream = Some(next);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let mut stream = match stream {
+        Some(stream) => stream,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM pipelined test could not connect to server");
+        }
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("pipelined stream read timeout should be configurable");
+
+    stream
+        .write_all(
+            b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, upgrade\r\n\r\nGET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
+        .expect("pipelined requests should be written");
+    let mut reader = BufReader::new(&mut stream);
+    let first_response = read_http_response(&mut reader);
+    let second_response = read_http_response(&mut reader);
+
+    assert!(
+        first_response.contains("HTTP/1.1 200 OK"),
+        "first pipelined response should be successful:\n{first_response}"
+    );
+    assert!(
+        first_response.contains("Connection: keep-alive"),
+        "first pipelined response should keep connection open:\n{first_response}"
+    );
+    assert!(
+        first_response.ends_with("\r\n\r\npong"),
+        "first pipelined response should include expected body:\n{first_response}"
+    );
+
+    assert!(
+        second_response.contains("HTTP/1.1 200 OK"),
+        "second pipelined response should be successful:\n{second_response}"
+    );
+    assert!(
+        second_response.contains("Connection: close"),
+        "second pipelined response should close connection:\n{second_response}"
+    );
+    assert!(
+        second_response.ends_with("\r\n\r\npong"),
+        "second pipelined response should include expected body:\n{second_response}"
     );
 
     let _ = child.kill();

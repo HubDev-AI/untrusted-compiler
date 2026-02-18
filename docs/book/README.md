@@ -897,5 +897,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `929-m39-lasm-head-body-omission-parity.md`
 - `930-m39-lasm-request-line-version-hardening.md`
 - `931-m39-lasm-worker-keep-alive-support.md`
+- `932-m39-lasm-persistent-reader-and-transfer-encoding-rejection.md`
 
 As milestones progress, chapters will be added and linked from this index.

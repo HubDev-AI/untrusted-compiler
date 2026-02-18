@@ -6058,21 +6058,34 @@ fn process_lasm_connection_with_runtime(
     header_defaults: &LasmResponseHeaderDefaults,
     dynamic_state: &Mutex<LasmDynamicResponseState>,
 ) -> Result<(), String> {
+    let mut request_reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("could not clone stream for LASM request reader: {err}"))?,
+    );
     loop {
         let trace_id = next_lasm_trace_id(trace_counter);
-        let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
-            Ok(request) => request,
-            Err(err) => {
-                if err.status == 400 && err.message == "empty request" {
+        let request =
+            match read_lasm_http_request(&mut request_reader, max_header_bytes, max_body_bytes) {
+                Ok(request) => request,
+                Err(err) => {
+                    if err.status == 400 && err.message == "empty request" {
+                        return Ok(());
+                    }
+                    let mut response = sec4_core::HttpResponse::text(err.status, err.message);
+                    apply_lasm_request_origin_header(&mut response, None, header_defaults);
+                    set_lasm_trace_id(&mut response, trace_id.as_str());
+                    write_lasm_http_response(
+                        stream,
+                        &response,
+                        header_defaults,
+                        true,
+                        false,
+                        true,
+                    )?;
                     return Ok(());
                 }
-                let mut response = sec4_core::HttpResponse::text(err.status, err.message);
-                apply_lasm_request_origin_header(&mut response, None, header_defaults);
-                set_lasm_trace_id(&mut response, trace_id.as_str());
-                write_lasm_http_response(stream, &response, header_defaults, true, false, true)?;
-                return Ok(());
-            }
-        };
+            };
 
         let close_connection = !allow_keep_alive || lasm_should_close_connection(&request);
         let omit_body = request.method.eq_ignore_ascii_case("HEAD");
@@ -6711,12 +6724,18 @@ fn find_lasm_header_value<'a>(
         .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
 }
 
+fn lasm_header_has_token(value: &str, token: &str) -> bool {
+    value
+        .split(',')
+        .any(|part| part.trim().eq_ignore_ascii_case(token))
+}
+
 fn lasm_should_close_connection(request: &LasmRunRequest) -> bool {
     if let Some(connection) = find_lasm_header_value(&request.headers, "Connection") {
-        if connection.eq_ignore_ascii_case("close") {
+        if lasm_header_has_token(connection, "close") {
             return true;
         }
-        if connection.eq_ignore_ascii_case("keep-alive") {
+        if lasm_header_has_token(connection, "keep-alive") {
             return false;
         }
     }
@@ -6852,7 +6871,7 @@ enum LasmCorsPreflightDecision {
 }
 
 fn read_lasm_http_request(
-    stream: &mut TcpStream,
+    reader: &mut BufReader<TcpStream>,
     max_header_bytes: usize,
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
@@ -6866,11 +6885,6 @@ fn read_lasm_http_request(
         }
         make_error(400, format!("could not {stage}: {err}"))
     };
-    let mut reader = BufReader::new(
-        stream
-            .try_clone()
-            .map_err(|err| make_error(400, format!("could not clone stream: {err}")))?,
-    );
     let mut request_line = String::new();
     let bytes = reader
         .read_line(&mut request_line)
@@ -6946,6 +6960,12 @@ fn read_lasm_http_request(
             return Err(make_error(
                 400,
                 "invalid header line: empty header name".to_string(),
+            ));
+        }
+        if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
+            return Err(make_error(
+                501,
+                "transfer-encoding is not supported".to_string(),
             ));
         }
         if name.eq_ignore_ascii_case("content-length") {
@@ -7086,6 +7106,7 @@ fn http_status_text(status: u16) -> &'static str {
         413 => "Payload Too Large",
         404 => "Not Found",
         500 => "Internal Server Error",
+        501 => "Not Implemented",
         503 => "Service Unavailable",
         504 => "Gateway Timeout",
         505 => "HTTP Version Not Supported",
