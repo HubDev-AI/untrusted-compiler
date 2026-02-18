@@ -1523,13 +1523,15 @@ fn extract_router_middleware_requirements(
         }
         sec4_core::ast::ExprKind::Call { callee, args } => {
             let mut requirements = LasmRouteMiddlewareRequirements::default();
-            if match_auth_middleware_call(callee, bindings) {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if match_auth_middleware_call(&resolved_callee, bindings) {
                 requirements.require_auth = true;
             }
-            if match_csrf_middleware_call(callee, bindings) {
+            if match_csrf_middleware_call(&resolved_callee, bindings) {
                 requirements.require_csrf = true;
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let wrapper_requirements =
                     extract_router_middleware_requirements_from_function_call(
                         functions,
@@ -1678,16 +1680,18 @@ fn maybe_apply_router_middleware_call_binding(
     let sec4_core::ast::ExprKind::Call { callee, args } = &expr.kind else {
         return;
     };
+    let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+        .unwrap_or_else(|| callee.as_ref().clone());
     let mut requirements = LasmRouteMiddlewareRequirements::default();
-    if match_auth_middleware_call(callee, bindings) {
+    if match_auth_middleware_call(&resolved_callee, bindings) {
         requirements.require_auth = true;
     }
-    if match_csrf_middleware_call(callee, bindings) {
+    if match_csrf_middleware_call(&resolved_callee, bindings) {
         requirements.require_csrf = true;
     }
     if requirements.require_auth || requirements.require_csrf {
         // no-op; direct middleware calls already captured above
-    } else if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+    } else if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
         let helper_requirements = extract_router_middleware_requirements_from_function_call(
             functions,
             function_name.as_str(),
@@ -1702,7 +1706,9 @@ fn maybe_apply_router_middleware_call_binding(
         return;
     }
 
-    if let Some(name) = extract_router_binding_target_from_call(functions, callee, args, bindings) {
+    if let Some(name) =
+        extract_router_binding_target_from_call(functions, &resolved_callee, args, bindings)
+    {
         for registration in registrations.iter_mut() {
             if registration.router_binding.as_deref() == Some(name.as_str()) {
                 registration.require_auth_middleware |= requirements.require_auth;
@@ -1728,7 +1734,9 @@ fn extract_router_binding_target_from_call(
             .first()
             .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
     }
-    if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+    let resolved_callee =
+        resolve_route_registration_expr(callee, bindings, 0).unwrap_or_else(|| callee.clone());
+    if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
         if let Some(function) = functions.get(function_name.as_str()) {
             if let Some(index) = function.params.iter().position(|param| {
                 matches!(
