@@ -74,6 +74,8 @@ enum Commands {
         max_runtime_steps: Option<u64>,
         #[arg(long)]
         max_keep_alive_requests: Option<u64>,
+        #[arg(long)]
+        db_base: Option<PathBuf>,
         #[arg(long, value_enum, default_value_t = RunBackend::C)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -415,6 +417,7 @@ fn main() {
             overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
+            db_base,
             backend,
             tls_backend,
         } => cmd_run(
@@ -429,6 +432,7 @@ fn main() {
             overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
+            db_base.as_deref(),
             backend,
             tls_backend,
         ),
@@ -1108,8 +1112,8 @@ const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 
-fn build_lasm_dynamic_response_state() -> LasmDynamicResponseState {
-    let users_store_path = resolve_lasm_dynamic_users_store_path();
+fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDynamicResponseState {
+    let users_store_path = resolve_lasm_dynamic_users_store_path(explicit_db_base);
     let users_by_id = users_store_path
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
@@ -1120,7 +1124,10 @@ fn build_lasm_dynamic_response_state() -> LasmDynamicResponseState {
     }
 }
 
-fn resolve_lasm_dynamic_users_store_path() -> Option<PathBuf> {
+fn resolve_lasm_dynamic_users_store_path(explicit_db_base: Option<&Path>) -> Option<PathBuf> {
+    if let Some(base) = explicit_db_base {
+        return Some(base.join("users.json"));
+    }
     let raw = std::env::var("SEC4_RT_LASM_DB_BASE").ok()?;
     let value = raw.trim();
     if value.is_empty() {
@@ -6633,6 +6640,7 @@ fn cmd_run(
     overflow_probe_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
+    db_base: Option<&Path>,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
@@ -6684,6 +6692,10 @@ fn cmd_run(
         eprintln!("run failed: --overflow-probe-timeout-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_base.is_some() {
+        eprintln!("run failed: --db-base is only supported with --backend lasm");
+        return Err(2);
+    }
 
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
@@ -6715,6 +6727,7 @@ fn cmd_run(
             overflow_probe_timeout_ms,
             max_runtime_steps,
             max_keep_alive_requests,
+            db_base,
         );
     }
 
@@ -7044,6 +7057,7 @@ fn cmd_run_lasm_backend(
     overflow_probe_timeout_ms: Option<u64>,
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
+    db_base: Option<&Path>,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -7255,7 +7269,7 @@ fn cmd_run_lasm_backend(
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
-    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state()));
+    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state(db_base)));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
