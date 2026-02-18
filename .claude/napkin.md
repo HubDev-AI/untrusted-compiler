@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Used markdown backticks in a `gh pr create --body "..."` shell string; shell attempted command substitution and emitted `command not found`. | When composing PR bodies from shell, avoid backticks in inline quoted strings (or use `--body-file` with a heredoc) to prevent command substitution side effects. |
 | 2026-02-18 | self | Used `if ... && let ...` in Rust and hit compiler error (`E0658`) for unstable let-chain syntax in this toolchain. | Keep conditionals portable: use nested `if let`/`match` blocks instead of `&& let` expressions. |
 | 2026-02-18 | self | Assumed `auth.mode = "off"` was valid policy input for a LASM middleware test; parser rejected it (`P6003`) so `sec4 run` exited before request handling. | Validate policy enum support before writing tests; for off-mode parity paths use runtime env override (`SEC4_RT_AUTH_MODE=off`) instead of invalid policy fixtures. |
 | 2026-02-18 | self | Re-ran two post-format cargo command tests in parallel and hit build-directory lock contention again. | Keep all cargo validations strictly sequential in this repo, including quick post-format rechecks. |
