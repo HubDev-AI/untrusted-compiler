@@ -13,7 +13,7 @@ Files:
 
 ## Behavior
 
-1. `promote` currently supports only dry-run mode; apply mode is rejected deterministically with usage-style guidance.
+1. S3 baseline introduces deterministic dry-run planning mode (`--dry-run`) for promotion prechecks.
 2. Supported route is explicitly constrained to `browser -> server`; unsupported direction pairs fail deterministically.
 3. Dry-run emits deterministic JSON plan artifact containing:
    - `changedBindings`
@@ -27,7 +27,7 @@ Files:
 
 ## Why
 
-This establishes the S3 promotion planning contract without changing source trees yet, enabling deterministic preview and gating workflows before S4 apply/rewrite work.
+This establishes the S3 promotion planning contract and deterministic preview/gating workflow. S4 apply/rewrite behavior is documented separately in chapter `921`.
 
 ## Validation
 
