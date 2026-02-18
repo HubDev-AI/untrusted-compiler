@@ -1585,6 +1585,63 @@ fn lasm_smoke_command_captures_path_params_with_request_path_override() {
 }
 
 #[test]
+fn lasm_smoke_command_matches_parameterized_registration_with_concrete_route_selection() {
+    let root = temp_dir("sec4-lasm-smoke-param-registration-concrete-route");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-param-registration-concrete-route\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn get_user() effects { net } -> Int {\n  res.text(202, \"param handler selected\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/users/:id\", get_user);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/users/42",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(
+        stdout.contains("origin=handler:get_user"),
+        "lasm-smoke output should resolve concrete route through parameterized registration:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("status=202"),
+        "lasm-smoke output should include handler-extracted status for concrete route selection:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("body=param handler selected"),
+        "lasm-smoke output should include handler body from parameterized registration:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("pathParams=id=42"),
+        "lasm-smoke output should preserve path parameter capture when concrete route selects parameterized registration:\n{stdout}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_zero_step_budget() {
     let root = temp_dir("sec4-lasm-smoke-zero-budget");
     let project_dir = root.join("project");

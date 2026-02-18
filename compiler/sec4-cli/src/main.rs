@@ -607,14 +607,18 @@ fn cmd_lasm_smoke(
         }
         effective_max_request_ms = Some(limit);
     }
+    let mut runtime_route_path = route.to_string();
     let (response_status, response_headers, response_body, response_origin) =
         match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
-            Some(route_plan) => (
-                route_plan.status,
-                route_plan.headers,
-                route_plan.body,
-                format!("handler:{}", route_plan.handler_name),
-            ),
+            Some(route_plan) => {
+                runtime_route_path = route_plan.route_path.clone();
+                (
+                    route_plan.status,
+                    route_plan.headers,
+                    route_plan.body,
+                    format!("handler:{}", route_plan.handler_name),
+                )
+            }
             None => (
                 200,
                 BTreeMap::new(),
@@ -624,7 +628,12 @@ fn cmd_lasm_smoke(
         };
     let mut response = sec4_core::HttpResponse::text(response_status, response_body);
     response.headers = response_headers;
-    if let Err(message) = runtime.register_route(method, route, runtime_actions, response) {
+    if let Err(message) = runtime.register_route(
+        method,
+        runtime_route_path.as_str(),
+        runtime_actions,
+        response,
+    ) {
         eprintln!("lasm-smoke failed: {message}");
         return Err(1);
     }
@@ -844,6 +853,7 @@ fn parse_lasm_runtime_script(script: &str) -> Result<Vec<sec4_core::RuntimeActio
 #[derive(Debug, Clone)]
 struct LasmSmokeRoutePlan {
     handler_name: String,
+    route_path: String,
     status: u16,
     body: String,
     headers: BTreeMap<String, String>,
@@ -997,9 +1007,9 @@ fn resolve_lasm_smoke_route_plan(
             _ => None,
         })
         .collect::<HashMap<_, _>>();
-    let handler_name = find_latest_route_handler_name(&functions, entry_name, method, route)?;
-    let response_plan = extract_response_plan(&functions, handler_name.as_str())?;
-    let mut headers = extract_response_headers(&functions, handler_name.as_str());
+    let registration = find_latest_route_registration(&functions, entry_name, method, route)?;
+    let response_plan = extract_response_plan(&functions, registration.handler_name.as_str())?;
+    let mut headers = extract_response_headers(&functions, registration.handler_name.as_str());
     if let Some(content_type) = response_plan.default_content_type {
         headers
             .entry("Content-Type".to_string())
@@ -1007,7 +1017,8 @@ fn resolve_lasm_smoke_route_plan(
     }
 
     Some(LasmSmokeRoutePlan {
-        handler_name,
+        handler_name: registration.handler_name,
+        route_path: registration.path,
         status: response_plan.status,
         body: response_plan.body,
         headers,
@@ -1210,12 +1221,12 @@ fn collect_route_registrations_in_expr(
     }
 }
 
-fn find_latest_route_handler_name(
+fn find_latest_route_registration(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     entry_name: &str,
     method: &str,
     route: &str,
-) -> Option<String> {
+) -> Option<LasmRouteRegistration> {
     let normalized_method = method.trim().to_ascii_uppercase();
     let mut visited_functions = HashSet::new();
     let mut registrations = Vec::new();
@@ -1229,10 +1240,70 @@ fn find_latest_route_handler_name(
     registrations
         .into_iter()
         .filter(|registration| {
-            registration.method == normalized_method && registration.path == route
+            registration.method == normalized_method
+                && route_registration_matches_selected_route(registration.path.as_str(), route)
         })
-        .map(|registration| registration.handler_name)
         .next_back()
+}
+
+fn route_registration_matches_selected_route(
+    registration_path: &str,
+    selected_route: &str,
+) -> bool {
+    let registration_match_path = normalized_lasm_route_match_path(registration_path);
+    let selected_match_path = normalized_lasm_route_match_path(selected_route);
+    if registration_match_path == selected_match_path {
+        return true;
+    }
+
+    let registration_segments = split_lasm_route_match_segments(registration_match_path);
+    let selected_segments = split_lasm_route_match_segments(selected_match_path);
+    if registration_segments.len() != selected_segments.len() {
+        return false;
+    }
+
+    for (pattern_segment, selected_segment) in
+        registration_segments.iter().zip(selected_segments.iter())
+    {
+        if let Some(param_name) = pattern_segment.strip_prefix(':') {
+            if is_valid_lasm_route_param_name(param_name) {
+                continue;
+            }
+        }
+        if pattern_segment != selected_segment {
+            return false;
+        }
+    }
+    true
+}
+
+fn normalized_lasm_route_match_path(path: &str) -> &str {
+    let mut end = path.len();
+    if let Some(index) = path.find('?') {
+        end = end.min(index);
+    }
+    if let Some(index) = path.find('#') {
+        end = end.min(index);
+    }
+    &path[..end]
+}
+
+fn split_lasm_route_match_segments(path: &str) -> Vec<&str> {
+    path.trim_matches('/')
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect()
+}
+
+fn is_valid_lasm_route_param_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn match_route_registration_details(

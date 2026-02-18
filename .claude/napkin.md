@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Repeated PR-body shell quoting mistake by using backticks in `gh pr create --body`, which triggered command substitution and noisy `zsh` errors. | For PR descriptions, always use `--body-file` (quoted heredoc) instead of inline `--body` text when content includes code-like tokens. |
+| 2026-02-18 | self | Added a new `lasm-smoke` command test with legacy summary keys (`responseOrigin`/`responseStatus`/`responseBody`), causing a false negative despite correct runtime behavior. | For `lasm-smoke` text assertions, first capture the current summary line format from test output and assert against live keys (`origin`/`status`/`body`). |
 | 2026-02-18 | self | Triggered a `web.run` tool call while doing a local-only LASM implementation pass. | Keep LASM/compiler iterations strictly on local shell/apply_patch tooling unless the task explicitly requires external web research. |
 | 2026-02-18 | self | While adding alias-callee resolution in LASM response extraction, I treated `callee` fallback as `Box<Expr>` (`callee.clone()`), causing a compile-time type mismatch where plain `Expr` was required. | When fallback-cloning callees in AST extraction paths, use `callee.as_ref().clone()` so the resolver consistently returns `Expr` values. |
 | 2026-02-18 | self | Used markdown backticks in a `gh pr create --body "..."` shell string; shell attempted command substitution and emitted `command not found`. | When composing PR bodies from shell, avoid backticks in inline quoted strings (or use `--body-file` with a heredoc) to prevent command substitution side effects. |
