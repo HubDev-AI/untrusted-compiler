@@ -6832,24 +6832,7 @@ fn cmd_run_lasm_backend(
                 return Err(2);
             }
         };
-    let policy_max_pending = match u64::try_from(policy.http.max_pending) {
-        Ok(value) => value,
-        Err(_) => {
-            eprintln!("run failed: policy http.max_pending must be >= 0");
-            return Err(2);
-        }
-    };
-    let policy_max_pending = match usize::try_from(policy_max_pending) {
-        Ok(value) if value >= 1 => value,
-        Ok(_) => {
-            eprintln!("run failed: policy http.max_pending must be >= 1");
-            return Err(2);
-        }
-        Err(_) => {
-            eprintln!("run failed: policy http.max_pending exceeds platform limits");
-            return Err(2);
-        }
-    };
+    let policy_max_pending = policy_max_in_flight;
     let effective_max_pending = match resolve_lasm_max_pending(max_pending, policy_max_pending) {
         Ok(value) => value,
         Err(message) => {
@@ -7579,90 +7562,6 @@ fn resolve_lasm_serve_timeout_ms(
     Ok(parsed)
 }
 
-fn resolve_lasm_runtime_step_budget(
-    explicit_override: Option<u64>,
-    policy_default: usize,
-) -> Result<usize, String> {
-    if let Some(value) = explicit_override {
-        return usize::try_from(value)
-            .map_err(|_| "invalid --max-runtime-steps: exceeds platform limits".to_string());
-    }
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_STEPS") else {
-        return Ok(policy_default);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(policy_default);
-    }
-    let parsed = value
-        .parse::<usize>()
-        .map_err(|_| "invalid SEC4_RT_LASM_MAX_STEPS: expected usize >= 1".to_string())?;
-    if parsed == 0 {
-        return Err("invalid SEC4_RT_LASM_MAX_STEPS: expected usize >= 1".to_string());
-    }
-    Ok(parsed)
-}
-
-fn resolve_lasm_overflow_probe_timeout_ms(
-    explicit_override: Option<u64>,
-    policy_default: u64,
-    effective_timeout_ms: u64,
-) -> Result<u64, String> {
-    let fallback = policy_default.min(effective_timeout_ms).max(1);
-    if let Some(value) = explicit_override {
-        if value == 0 {
-            return Err("invalid --overflow-probe-timeout-ms: expected u64 >= 1".to_string());
-        }
-        return Ok(value.min(effective_timeout_ms).max(1));
-    }
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS") else {
-        return Ok(fallback);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(fallback);
-    }
-    let parsed = value.parse::<u64>().map_err(|_| {
-        "invalid SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS: expected u64 >= 1".to_string()
-    })?;
-    if parsed == 0 {
-        return Err(
-            "invalid SEC4_RT_LASM_OVERFLOW_PROBE_TIMEOUT_MS: expected u64 >= 1".to_string(),
-        );
-    }
-    Ok(parsed.min(effective_timeout_ms).max(1))
-}
-
-fn resolve_lasm_max_requests_per_connection(
-    explicit_override: Option<u64>,
-    policy_default: usize,
-) -> Result<usize, String> {
-    if let Some(value) = explicit_override {
-        let parsed = usize::try_from(value).map_err(|_| {
-            "invalid --max-keep-alive-requests: exceeds platform limits".to_string()
-        })?;
-        if parsed == 0 {
-            return Err("invalid --max-keep-alive-requests: expected usize >= 1".to_string());
-        }
-        return Ok(parsed);
-    }
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS") else {
-        return Ok(policy_default);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(policy_default);
-    }
-    let parsed = value.parse::<usize>().map_err(|_| {
-        "invalid SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS: expected usize >= 1".to_string()
-    })?;
-    if parsed == 0 {
-        return Err(
-            "invalid SEC4_RT_LASM_MAX_KEEP_ALIVE_REQUESTS: expected usize >= 1".to_string(),
-        );
-    }
-    Ok(parsed)
-}
 fn apply_lasm_dynamic_response_materialization(
     response: &mut sec4_core::HttpResponse,
     request: &LasmRunRequest,
