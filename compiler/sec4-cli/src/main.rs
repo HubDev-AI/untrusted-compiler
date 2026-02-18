@@ -7047,13 +7047,32 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let runtime_step_budget = match resolve_lasm_runtime_step_budget(max_runtime_steps) {
+    let policy_max_runtime_steps = match u64::try_from(policy.http.max_runtime_steps) {
         Ok(value) => value,
-        Err(message) => {
-            eprintln!("run failed: {message}");
+        Err(_) => {
+            eprintln!("run failed: policy http.max_runtime_steps must be >= 0");
             return Err(2);
         }
     };
+    let policy_max_runtime_steps = match usize::try_from(policy_max_runtime_steps) {
+        Ok(value) if value >= 1 => value,
+        Ok(_) => {
+            eprintln!("run failed: policy http.max_runtime_steps must be >= 1");
+            return Err(2);
+        }
+        Err(_) => {
+            eprintln!("run failed: policy http.max_runtime_steps exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let runtime_step_budget =
+        match resolve_lasm_runtime_step_budget(max_runtime_steps, policy_max_runtime_steps) {
+            Ok(value) => value,
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        };
     let policy_max_keep_alive_requests = match u64::try_from(policy.http.max_keep_alive_requests) {
         Ok(value) => value,
         Err(_) => {
@@ -7726,18 +7745,20 @@ fn process_lasm_connection_with_runtime(
     }
 }
 
-fn resolve_lasm_runtime_step_budget(explicit_override: Option<u64>) -> Result<usize, String> {
-    const DEFAULT_MAX_STEPS: usize = 65_536;
+fn resolve_lasm_runtime_step_budget(
+    explicit_override: Option<u64>,
+    policy_default: usize,
+) -> Result<usize, String> {
     if let Some(value) = explicit_override {
         return usize::try_from(value)
             .map_err(|_| "invalid --max-runtime-steps: exceeds platform limits".to_string());
     }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_STEPS") else {
-        return Ok(DEFAULT_MAX_STEPS);
+        return Ok(policy_default);
     };
     let value = raw.trim();
     if value.is_empty() {
-        return Ok(DEFAULT_MAX_STEPS);
+        return Ok(policy_default);
     }
     let parsed = value
         .parse::<usize>()
