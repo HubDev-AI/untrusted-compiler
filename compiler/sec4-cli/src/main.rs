@@ -6645,7 +6645,7 @@ fn apply_lasm_header_placeholder_materialization(
         };
         if materialized_name.trim().is_empty()
             || materialized_name != materialized_name.trim()
-            || !is_lasm_http_token(materialized_name.as_str())
+            || !is_lasm_response_header_name_valid(materialized_name.as_str())
         {
             continue;
         }
@@ -7569,6 +7569,14 @@ fn parse_lasm_authority(value: &str) -> Option<LasmAuthority> {
     }
 
     Some(LasmAuthority { host, port })
+}
+
+fn is_lasm_response_header_name_valid(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
 }
 
 fn is_lasm_http_token(value: &str) -> bool {
