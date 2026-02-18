@@ -6471,6 +6471,7 @@ fn http_status_text(status: u16) -> &'static str {
         401 => "Unauthorized",
         403 => "Forbidden",
         400 => "Bad Request",
+        405 => "Method Not Allowed",
         413 => "Payload Too Large",
         404 => "Not Found",
         500 => "Internal Server Error",

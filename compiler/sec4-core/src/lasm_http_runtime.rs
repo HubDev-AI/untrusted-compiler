@@ -1,5 +1,5 @@
 use crate::lasm_runtime::{LasmAsyncRuntime, RunReport, RuntimeAction, TaskId};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
@@ -207,12 +207,22 @@ impl LasmHttpRuntime {
         {
             self.enqueue_or_start_request(request_id, request_started_at_ms, route);
         } else {
+            let allowed_methods = self.resolve_allowed_methods_for_path(request.path.as_str());
+            let response = if allowed_methods.is_empty() {
+                HttpResponse::text(404, "route not found")
+            } else {
+                let mut response = HttpResponse::text(405, "method not allowed");
+                response
+                    .headers
+                    .insert("Allow".to_string(), allowed_methods.join(", "));
+                response
+            };
             self.ready_responses.push_back(HttpExchange {
                 request_id,
                 request_started_at_ms,
                 response_ready_at_ms: request_started_at_ms,
                 path_params: BTreeMap::new(),
-                response: HttpResponse::text(404, "route not found"),
+                response,
             });
         }
 
@@ -494,6 +504,42 @@ impl LasmHttpRuntime {
         }
         None
     }
+
+    fn resolve_allowed_methods_for_path(&self, path: &str) -> Vec<String> {
+        let request_match_path = normalized_request_match_path(path);
+        let request_segments = split_request_segments(request_match_path);
+        let mut methods = BTreeSet::new();
+
+        for ((method, route_path), _route) in &self.exact_routes {
+            if route_path == request_match_path {
+                methods.insert(method.clone());
+            }
+        }
+
+        for route in &self.pattern_routes {
+            if route.pattern_segments.len() != request_segments.len() {
+                continue;
+            }
+            let mut matches = true;
+            for (pattern, request) in route.pattern_segments.iter().zip(request_segments.iter()) {
+                if let RouteSegment::Literal(literal) = pattern {
+                    if literal != request {
+                        matches = false;
+                        break;
+                    }
+                }
+            }
+            if matches {
+                methods.insert(route.method.clone());
+            }
+        }
+
+        if methods.contains("GET") {
+            methods.insert("HEAD".to_string());
+        }
+
+        methods.into_iter().collect()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -583,6 +629,42 @@ mod tests {
             "missing route should not emit path params"
         );
         assert_eq!(exchange.response.status, 404);
+    }
+
+    #[test]
+    fn method_mismatch_returns_405_with_allow_header_without_scheduler_work() {
+        let mut runtime = LasmHttpRuntime::default();
+        runtime
+            .register_route(
+                "GET",
+                "/health",
+                vec![RuntimeAction::Complete(0)],
+                HttpResponse::text(200, "ok"),
+            )
+            .expect("route registration should succeed");
+
+        let request_id = runtime.submit(HttpRequest::new("POST", "/health"));
+        let report = runtime.run_until_idle(16);
+        assert!(
+            report.idle,
+            "runtime should stay idle for method mismatch route response"
+        );
+
+        let exchange = runtime
+            .pop_response()
+            .expect("method mismatch should emit immediate response");
+        assert_eq!(exchange.request_id, request_id);
+        assert_eq!(exchange.response.status, 405);
+        let allow = exchange
+            .response
+            .headers
+            .get("Allow")
+            .map(String::as_str)
+            .unwrap_or("");
+        assert_eq!(
+            allow, "GET, HEAD",
+            "method mismatch response should include deterministic allow header with HEAD fallback for GET routes"
+        );
     }
 
     #[test]
