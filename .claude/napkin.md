@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | In LASM `run --oneshot`, parse-limit failures (`413`/`400`) returned a response but did not increment oneshot request count, so the process stayed alive and tests timed out. | In oneshot serve loops, count handled requests for both success and deterministic error responses before the `continue` path. |
 | 2026-02-18 | self | While wiring `run --backend lasm`, I defaulted `Option<u64>` CLI limits with policy fields typed as `i64`, which caused compile-time type mismatches in `unwrap_or(...)`. | When threading policy defaults into CLI `Option<u64>` flags, convert policy values with checked `u64::try_from(...)` and emit deterministic user-facing errors on negative values. |
 | 2026-02-18 | self | Assumed semantic diagnostics would always use `E`-prefixed codes in promote-plan tests; actual unknown-function diagnostic code was `T3104`. | For diagnostic-code assertions, match on category semantics (for example `DIAG.` + message/severity) instead of hard-coding one prefix family. |
 | 2026-02-18 | self | After evolving `promote` tests from “missing dry-run” to apply/route-guard coverage, chapter `920` still referenced the removed test name. | When command behavior changes invalidate prior test names, update chapter validation lists in the same commit as test renames. |

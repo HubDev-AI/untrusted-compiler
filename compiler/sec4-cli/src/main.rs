@@ -11,7 +11,7 @@ use sec4_core::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -4905,6 +4905,7 @@ fn cmd_run(
             &policy,
             port,
             oneshot,
+            max_body_bytes,
             max_concurrency,
             serve_timeout_ms,
         );
@@ -5219,6 +5220,7 @@ fn cmd_run_lasm_backend(
     policy: &Policy,
     port: Option<u16>,
     oneshot: bool,
+    max_body_bytes: Option<u64>,
     max_concurrency: Option<u64>,
     serve_timeout_ms: Option<u64>,
 ) -> Result<(), i32> {
@@ -5261,6 +5263,35 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: {message}");
         return Err(2);
     }
+    let policy_max_header_bytes = match u64::try_from(policy.http.max_header_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_header_bytes must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_header_bytes = match usize::try_from(policy_max_header_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_header_bytes exceeds platform limits");
+            return Err(2);
+        }
+    };
+    let policy_max_body_bytes = match u64::try_from(policy.http.max_body_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: policy http.max_body_bytes must be >= 0");
+            return Err(2);
+        }
+    };
+    let effective_max_body_bytes = max_body_bytes.unwrap_or(policy_max_body_bytes);
+    let effective_max_body_bytes = match usize::try_from(effective_max_body_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("run failed: effective max body bytes exceeds platform limits");
+            return Err(2);
+        }
+    };
 
     let routes = collect_lasm_route_plans(&program, entry.name.as_str());
     if routes.is_empty() {
@@ -5314,22 +5345,30 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
 
-        let request =
-            match read_lasm_http_request(&mut stream, policy.http.max_header_bytes as usize) {
-                Ok(request) => request,
-                Err(message) => {
-                    let _ = write_lasm_http_response(
-                        &mut stream,
-                        &sec4_core::HttpResponse::text(400, message.clone()),
-                    );
-                    continue;
+        let request = match read_lasm_http_request(
+            &mut stream,
+            effective_max_header_bytes,
+            effective_max_body_bytes,
+        ) {
+            Ok(request) => request,
+            Err(err) => {
+                let _ = write_lasm_http_response(
+                    &mut stream,
+                    &sec4_core::HttpResponse::text(err.status, err.message),
+                );
+                handled_requests += 1;
+                if oneshot && handled_requests >= 1 {
+                    break;
                 }
-            };
+                continue;
+            }
+        };
 
-        let request_id = runtime.submit(sec4_core::HttpRequest::new(
-            request.method.as_str(),
-            request.path.as_str(),
-        ));
+        let mut runtime_request =
+            sec4_core::HttpRequest::new(request.method.as_str(), request.path.as_str());
+        runtime_request.headers = request.headers;
+        runtime_request.body = request.body;
+        let request_id = runtime.submit(runtime_request);
         let report = runtime.run_until_idle(65_536);
         if !report.idle {
             eprintln!("run failed: LASM runtime remained active after step budget");
@@ -5364,56 +5403,115 @@ fn cmd_run_lasm_backend(
 struct LasmRunRequest {
     method: String,
     path: String,
+    headers: BTreeMap<String, String>,
+    body: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmRequestReadError {
+    status: u16,
+    message: String,
 }
 
 fn read_lasm_http_request(
     stream: &mut TcpStream,
     max_header_bytes: usize,
-) -> Result<LasmRunRequest, String> {
+    max_body_bytes: usize,
+) -> Result<LasmRunRequest, LasmRequestReadError> {
+    let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
     let mut reader = BufReader::new(
         stream
             .try_clone()
-            .map_err(|err| format!("could not clone stream: {err}"))?,
+            .map_err(|err| make_error(400, format!("could not clone stream: {err}")))?,
     );
     let mut request_line = String::new();
     let bytes = reader
         .read_line(&mut request_line)
-        .map_err(|err| format!("could not read request line: {err}"))?;
+        .map_err(|err| make_error(400, format!("could not read request line: {err}")))?;
     if bytes == 0 {
-        return Err("empty request".to_string());
+        return Err(make_error(400, "empty request".to_string()));
     }
     let mut consumed = bytes;
     let mut parts = request_line.trim_end().split_whitespace();
     let method = parts
         .next()
-        .ok_or_else(|| "invalid request line: missing method".to_string())?;
-    let path = parts
+        .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
+    let request_target = parts
         .next()
-        .ok_or_else(|| "invalid request line: missing path".to_string())?;
+        .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
+
+    let mut headers = BTreeMap::new();
+    let mut content_length = 0usize;
 
     let mut header_line = String::new();
     loop {
         header_line.clear();
         let read = reader
             .read_line(&mut header_line)
-            .map_err(|err| format!("could not read header line: {err}"))?;
+            .map_err(|err| make_error(400, format!("could not read header line: {err}")))?;
         if read == 0 {
             break;
         }
         consumed = consumed.saturating_add(read);
         if consumed > max_header_bytes {
-            return Err(format!(
-                "request headers exceed configured limit ({max_header_bytes} bytes)"
+            return Err(make_error(
+                400,
+                "request headers exceed configured limit ({max_header_bytes} bytes)".to_string(),
             ));
         }
         if header_line == "\r\n" || header_line == "\n" {
             break;
         }
+        let header = header_line.trim_end_matches(['\r', '\n']);
+        let Some((name_raw, value_raw)) = header.split_once(':') else {
+            return Err(make_error(
+                400,
+                "invalid header line: missing ':' separator".to_string(),
+            ));
+        };
+        let name = name_raw.trim();
+        let value = value_raw.trim();
+        if name.is_empty() {
+            return Err(make_error(
+                400,
+                "invalid header line: empty header name".to_string(),
+            ));
+        }
+        if name.eq_ignore_ascii_case("content-length") {
+            content_length = value.parse::<usize>().map_err(|_| {
+                make_error(
+                    400,
+                    "invalid content-length header: expected usize".to_string(),
+                )
+            })?;
+        }
+        headers.insert(name.to_string(), value.to_string());
     }
 
+    if content_length > max_body_bytes {
+        return Err(make_error(
+            413,
+            format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
+        ));
+    }
+
+    let mut body = vec![0u8; content_length];
+    if content_length > 0 {
+        reader
+            .read_exact(&mut body)
+            .map_err(|err| make_error(400, format!("could not read request body: {err}")))?;
+    }
+
+    let path = request_target
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(request_target);
+
     Ok(LasmRunRequest {
-        method: method.to_string(),
+        method: method.to_ascii_uppercase(),
         path: path.to_string(),
+        headers,
+        body,
     })
 }
 
@@ -5458,6 +5556,7 @@ fn http_status_text(status: u16) -> &'static str {
         200 => "OK",
         201 => "Created",
         400 => "Bad Request",
+        413 => "Payload Too Large",
         404 => "Not Found",
         500 => "Internal Server Error",
         503 => "Service Unavailable",
