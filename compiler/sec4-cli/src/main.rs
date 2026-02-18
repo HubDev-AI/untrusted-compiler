@@ -9570,7 +9570,14 @@ fn read_lasm_http_request_head(
             format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
         ));
     }
-    let mut parts = request_line.trim_end().split_whitespace();
+    let request_line = request_line.trim_end_matches(['\r', '\n']);
+    if request_line.starts_with(char::is_whitespace) {
+        return Err(make_error(
+            400,
+            "invalid request line: leading whitespace is not allowed".to_string(),
+        ));
+    }
+    let mut parts = request_line.split_whitespace();
     let method = parts
         .next()
         .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
