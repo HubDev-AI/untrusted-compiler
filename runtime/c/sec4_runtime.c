@@ -10106,8 +10106,9 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
   return SEC4_RT_DB_RESULT_OK;
 }
 
-int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
-  if (query_template == NULL || query_template[0] == '\0') {
+int64_t sec4_rt_sql_q(int64_t query_template, int64_t params) {
+  const char *query_template_value = sec4_rt_resolve_tracked_or_literal_string(query_template);
+  if (query_template_value == NULL || query_template_value[0] == '\0') {
     sec4_rt_store_std_error_response(
         400,
         "DB.SQL_TEMPLATE_INVALID",
@@ -10117,7 +10118,7 @@ int64_t sec4_rt_sql_q(const char *query_template, int64_t params) {
     return 0;
   }
 
-  int64_t template_handle = sec4_rt_track_string_value(query_template, UINT64_C(0x18181));
+  int64_t template_handle = sec4_rt_track_string_value(query_template_value, UINT64_C(0x18181));
   if (template_handle == 0) {
     sec4_rt_store_std_error_response(
         500,
@@ -12188,9 +12189,12 @@ int64_t sec4_rt_sec_csp(void) {
   return sec4_rt_nonzero_constant_handle(UINT64_C(0xB2002));
 }
 
-int64_t sec4_rt_sec_csp_add(int64_t csp, const char *directive, const char *value) {
-  int64_t directive_handle = sec4_rt_nonzero_handle_from_string(directive, UINT64_C(0xB2003));
-  int64_t value_handle = sec4_rt_nonzero_handle_from_string(value, UINT64_C(0xB2004));
+int64_t sec4_rt_sec_csp_add(int64_t csp, int64_t directive, int64_t value) {
+  const char *directive_value = sec4_rt_resolve_tracked_or_literal_string(directive);
+  const char *csp_value = sec4_rt_resolve_tracked_or_literal_string(value);
+  int64_t directive_handle =
+      sec4_rt_nonzero_handle_from_string(directive_value, UINT64_C(0xB2003));
+  int64_t value_handle = sec4_rt_nonzero_handle_from_string(csp_value, UINT64_C(0xB2004));
   int64_t addition = sec4_rt_handle_from_two(directive_handle, value_handle, UINT64_C(0xB2005));
   return sec4_rt_handle_from_two(csp, addition, UINT64_C(0xB2006));
 }
@@ -12270,8 +12274,12 @@ int64_t sec4_rt_auth_require(int64_t ctx) {
   return sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2014));
 }
 
-int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
+int64_t sec4_rt_auth_require_role(int64_t ctx, int64_t required_role) {
   (void) ctx;
+  const char *required_role_value = sec4_rt_resolve_tracked_or_literal_string(required_role);
+  if (required_role_value == NULL || required_role_value[0] == '\0') {
+    required_role_value = "role";
+  }
   const char *auth_mode = sec4_rt_effective_auth_mode(NULL);
   char auth_subject[256];
   bool used_bearer = false;
@@ -12293,8 +12301,8 @@ int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
   }
 
   bool has_required_role = used_bearer
-      ? sec4_rt_bearer_token_has_role(auth_subject, required_role)
-      : sec4_rt_auth_cookie_has_role(required_role);
+      ? sec4_rt_bearer_token_has_role(auth_subject, required_role_value)
+      : sec4_rt_auth_cookie_has_role(required_role_value);
   if (!has_required_role) {
     const char *forbidden_message = used_bearer
         ? "Authorization token missing required role"
@@ -12307,12 +12315,14 @@ int64_t sec4_rt_auth_require_role(int64_t ctx, const char *required_role) {
           forbidden_message
       );
     }
-    int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2016));
+    int64_t role_handle =
+        sec4_rt_nonzero_handle_from_string(required_role_value, UINT64_C(0xB2016));
     return sec4_rt_handle_from_two(role_handle, 403, UINT64_C(0xB2017));
   }
 
   int64_t auth_handle = sec4_rt_nonzero_handle_from_string(auth_subject, UINT64_C(0xB2018));
-  int64_t role_handle = sec4_rt_nonzero_handle_from_string(required_role, UINT64_C(0xB2019));
+  int64_t role_handle =
+      sec4_rt_nonzero_handle_from_string(required_role_value, UINT64_C(0xB2019));
   return sec4_rt_handle_from_two(auth_handle, role_handle, UINT64_C(0xB2020));
 }
 

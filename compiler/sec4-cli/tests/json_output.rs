@@ -11208,11 +11208,11 @@ int main(void) {
   const char *internal_url_b_raw = getenv("SEC4_RT_TEST_INTERNAL_URL_B");
   if (internal_url_a_raw == NULL || internal_url_b_raw == NULL) { return 10; }
 
-  int64_t query_a = sec4_rt_sql_q("SELECT 1", 11);
-  int64_t query_b = sec4_rt_sql_q("SELECT 2", 11);
+  int64_t query_a = sec4_rt_sql_q((int64_t)(uintptr_t) "SELECT 1", 11);
+  int64_t query_b = sec4_rt_sql_q((int64_t)(uintptr_t) "SELECT 2", 11);
   if (query_a == 0 || query_b == 0) { return 11; }
   if (query_a == query_b) { return 12; }
-  if (sec4_rt_sql_q("", 11) != 0) { return 13; }
+  if (sec4_rt_sql_q((int64_t)(uintptr_t) "", 11) != 0) { return 13; }
 
   int64_t tx = sec4_rt_db_tx(101);
   if (tx == 0) { return 14; }
@@ -11347,7 +11347,7 @@ fn c_bin_runtime_db_exec_query_one_roundtrip_returns_tracked_body_when_clang_ava
         r#"#include "sec4_runtime.h"
 
 int main(void) {
-  int64_t query = sec4_rt_sql_q("SELECT roundtrip", 41);
+  int64_t query = sec4_rt_sql_q((int64_t)(uintptr_t) "SELECT roundtrip", 41);
   if (query == 0) { return 10; }
 
   int64_t exec_handle = sec4_rt_db_exec(9001, query);
@@ -11427,7 +11427,7 @@ fn c_bin_runtime_db_query_one_missing_record_returns_error_when_clang_available(
         r#"#include "sec4_runtime.h"
 
 int main(void) {
-  int64_t query = sec4_rt_sql_q("SELECT missing", 77);
+  int64_t query = sec4_rt_sql_q((int64_t)(uintptr_t) "SELECT missing", 77);
   if (query == 0) { return 10; }
 
   if (sec4_rt_db_query_one(404, query, 7001) != 0) { return 11; }
@@ -23170,7 +23170,8 @@ fn c_bin_http_runtime_auth_require_role_rejects_cookie_without_required_role_whe
             r#"#include "sec4_runtime.h"
 
 static int64_t secure(void) {{
-  (void) sec4_rt_auth_require_role(1, "admin");
+  int64_t role = sec4_rt_req_query("role");
+  (void) sec4_rt_auth_require_role(1, role);
   return 0;
 }}
 
@@ -23226,7 +23227,7 @@ int main(void) {{
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"GET /secure HTTP/1.1\r\nHost: localhost\r\nCookie: session=session123\r\nConnection: close\r\n\r\n",
+                        b"GET /secure?role=admin HTTP/1.1\r\nHost: localhost\r\nCookie: session=session123\r\nConnection: close\r\n\r\n",
                     )
                     .expect("request should be written");
                 let mut body = String::new();

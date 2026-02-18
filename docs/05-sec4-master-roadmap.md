@@ -339,6 +339,7 @@ Post-alpha track acceptance anchors:
 - [x] C runtime `err.*` top-level helpers now accept tracked string handles (with literal fallback) for error `code`/`message` arguments, enabling deterministic dynamic error-message flows in native oneshot/runtime paths (`docs/book/968-m39-c-runtime-string-handle-literal-abi-bridge-for-err-helpers.md`).
 - [x] C runtime `log.*` string-accepting helpers now accept tracked handles (with literal fallback) across event/key/value/method/path logging surfaces, closing string ABI gaps for structured logging flows in native execution (`docs/book/969-m39-c-runtime-string-handle-literal-abi-bridge-for-log-helpers.md`).
 - [x] C runtime `err.with*` enrichment helpers now accept tracked string handles (with literal fallback + deterministic default field names), enabling dynamic error-path/detail/limit/dependency enrichment in native runtime paths (`docs/book/970-m39-c-runtime-string-handle-literal-abi-bridge-for-err-with-helpers.md`).
+- [x] C runtime `sql.q`, `sec.cspAdd`, and `auth.requireRole` now accept tracked string handles (with literal fallback), closing remaining high-use string ABI mismatch points across DB/security/auth helper surfaces (`docs/book/971-m39-c-runtime-string-handle-literal-abi-bridge-for-auth-csp-sql-helpers.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
