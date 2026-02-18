@@ -6973,6 +6973,13 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    let runtime_step_budget = match resolve_lasm_runtime_step_budget() {
+        Ok(value) => value,
+        Err(message) => {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    };
 
     let routes = collect_lasm_route_plans(&program, entry.name.as_str());
     if routes.is_empty() {
@@ -7049,6 +7056,7 @@ fn cmd_run_lasm_backend(
                         &mut runtime,
                         effective_max_header_bytes,
                         effective_max_body_bytes,
+                        runtime_step_budget,
                         true,
                         trace_counter_for_worker.as_ref(),
                         header_defaults_for_worker.as_ref(),
@@ -7095,6 +7103,7 @@ fn cmd_run_lasm_backend(
                     .expect("oneshot runtime should be initialized"),
                 effective_max_header_bytes,
                 effective_max_body_bytes,
+                runtime_step_budget,
                 false,
                 trace_counter.as_ref(),
                 header_defaults.as_ref(),
@@ -7429,6 +7438,7 @@ fn process_lasm_connection_with_runtime(
     runtime: &mut sec4_core::LasmHttpRuntime,
     max_header_bytes: usize,
     max_body_bytes: usize,
+    runtime_step_budget: usize,
     allow_keep_alive: bool,
     trace_counter: &AtomicU64,
     header_defaults: &LasmResponseHeaderDefaults,
@@ -7527,11 +7537,13 @@ fn process_lasm_connection_with_runtime(
         runtime_request.headers = request.headers.clone();
         runtime_request.body = request.body.clone();
         let request_id = runtime.submit(runtime_request);
-        let report = runtime.run_until_idle(65_536);
+        let report = runtime.run_until_idle(runtime_step_budget);
         if !report.idle {
             let mut response = sec4_core::HttpResponse::text(
                 500,
-                "run failed: LASM runtime remained active after step budget",
+                format!(
+                    "run failed: LASM runtime remained active after step budget ({runtime_step_budget})"
+                ),
             );
             apply_lasm_request_origin_header(
                 &mut response,
@@ -7588,6 +7600,24 @@ fn process_lasm_connection_with_runtime(
             return Ok(());
         }
     }
+}
+
+fn resolve_lasm_runtime_step_budget() -> Result<usize, String> {
+    const DEFAULT_MAX_STEPS: usize = 65_536;
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_STEPS") else {
+        return Ok(DEFAULT_MAX_STEPS);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(DEFAULT_MAX_STEPS);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_MAX_STEPS: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_MAX_STEPS: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
 }
 
 fn apply_lasm_dynamic_response_materialization(
