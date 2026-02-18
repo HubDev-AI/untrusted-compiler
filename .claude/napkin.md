@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Tried applying a multi-hunk `main.rs` patch using stale resolver context, so `apply_patch` failed on the first attempt. | On frequently edited runtime files, capture the exact live snippet (`sed -n`) immediately before patching and split big changes into smaller hunks. |
 | 2026-02-18 | self | Ran `rg` with a hyphen-prefixed pattern (`--max-pending|max_pending`) without `-e/--`, so ripgrep treated it as an invalid flag. | For patterns that begin with `-`, always pass `-e <pattern>` (or insert `--` before the pattern). |
 | 2026-02-18 | self | Read LASM code state from a stale divergent local branch and attempted to patch a bug that was already fixed on `origin/dev`, causing avoidable patch failure churn. | After each merge cycle, switch to a fresh `codex/*` branch from `origin/dev` and re-read the exact target section before patching. |
 | 2026-02-18 | self | Triggered `web.run` while in a local-only compiler/runtime pass. | Keep LASM/compiler implementation turns strictly on local shell/apply_patch tooling and avoid web calls unless external research is explicitly required. |
