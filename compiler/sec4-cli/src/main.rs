@@ -62,6 +62,16 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,
     },
+    Promote {
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        #[arg(long, value_enum)]
+        from: PromoteTarget,
+        #[arg(long, value_enum)]
+        to: PromoteTarget,
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+    },
     LasmSmoke {
         #[arg(long, default_value = ".")]
         path: PathBuf,
@@ -187,6 +197,12 @@ enum BuildTlsBackend {
 enum EmitTarget {
     Ast,
     DiagnosticsJson,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum PromoteTarget {
+    Browser,
+    Server,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -330,6 +346,21 @@ struct ReplayMockExecutionTraces {
     fs: Vec<ReplayMockFsDependencyTrace>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PromoteBindingReference {
+    file: String,
+    line: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PromotePrecondition {
+    code: String,
+    severity: String,
+    message: String,
+    file: Option<String>,
+    line: Option<usize>,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -360,6 +391,12 @@ fn main() {
             serve_timeout_ms,
             tls_backend,
         ),
+        Commands::Promote {
+            path,
+            from,
+            to,
+            dry_run,
+        } => cmd_promote(&path, from, to, dry_run),
         Commands::LasmSmoke {
             path,
             method,
@@ -5102,6 +5139,215 @@ fn cmd_lint(path: &Path) -> Result<(), i32> {
         None,
         Some("risk>=HIGH"),
     )
+}
+
+fn cmd_promote(path: &Path, from: PromoteTarget, to: PromoteTarget, dry_run: bool) -> Result<(), i32> {
+    if !dry_run {
+        eprintln!("promote failed: apply mode is not implemented yet; rerun with --dry-run");
+        return Err(2);
+    }
+
+    if from != PromoteTarget::Browser || to != PromoteTarget::Server {
+        eprintln!(
+            "promote failed: unsupported promotion route `{} -> {}` (only `browser -> server` is available)",
+            promote_target_label(from),
+            promote_target_label(to)
+        );
+        return Err(2);
+    }
+
+    let source_root = path.join("src");
+    let source_files = collect_ut_files(&source_root)?;
+    let scanned_sources = source_files
+        .iter()
+        .map(|file| project_relative_path(path, file))
+        .collect::<Vec<_>>();
+
+    let localdb_references = collect_promote_binding_references(path, &source_files, "localdb.")?;
+    let mut preconditions = Vec::new();
+
+    if source_files.is_empty() {
+        preconditions.push(PromotePrecondition {
+            code: "PROMOTE.P9301".to_string(),
+            severity: "error".to_string(),
+            message: "no .ut source files found under src/".to_string(),
+            file: None,
+            line: None,
+        });
+    }
+
+    if !source_root.join("main.ut").exists() {
+        preconditions.push(PromotePrecondition {
+            code: "PROMOTE.P9302".to_string(),
+            severity: "error".to_string(),
+            message: "expected composition entry `src/main.ut` for promotion planning".to_string(),
+            file: Some("src/main.ut".to_string()),
+            line: Some(1),
+        });
+    }
+
+    let manifest = match sec4_core::validate_project(path) {
+        Ok(manifest) => Some(manifest),
+        Err(diagnostics) => {
+            for diagnostic in diagnostics {
+                preconditions.push(precondition_from_diagnostic(path, &diagnostic));
+            }
+            None
+        }
+    };
+
+    if let Some(manifest) = manifest.as_ref() {
+        if let Err(diagnostics) = analyze_entry(path, manifest) {
+            for diagnostic in diagnostics {
+                preconditions.push(precondition_from_diagnostic(path, &diagnostic));
+            }
+        }
+    }
+
+    if localdb_references.is_empty() {
+        preconditions.push(PromotePrecondition {
+            code: "PROMOTE.P9303".to_string(),
+            severity: "warning".to_string(),
+            message: "no localdb usage found; storage adapter rewrite may be a no-op".to_string(),
+            file: None,
+            line: None,
+        });
+    }
+
+    preconditions.sort_by(|left, right| {
+        (
+            left.severity.as_str(),
+            left.code.as_str(),
+            left.file.as_deref().unwrap_or(""),
+            left.line.unwrap_or(0),
+            left.message.as_str(),
+        )
+            .cmp(&(
+                right.severity.as_str(),
+                right.code.as_str(),
+                right.file.as_deref().unwrap_or(""),
+                right.line.unwrap_or(0),
+                right.message.as_str(),
+            ))
+    });
+
+    let blocking_preconditions = preconditions.iter().any(|item| item.severity == "error");
+    let localdb_references_json = localdb_references
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "file": entry.file,
+                "line": entry.line
+            })
+        })
+        .collect::<Vec<_>>();
+    let generated_files = vec![
+        "server/db/schema.sql",
+        "server/deploy/sec4.server.toml",
+        "server/reports/promote-plan.json",
+        "server/src/main.ut",
+        "server/src/repo/db_repo.ut",
+    ];
+
+    let plan = serde_json::json!({
+        "version": "0.1",
+        "mode": "dry-run",
+        "from": promote_target_label(from),
+        "to": promote_target_label(to),
+        "scannedSources": scanned_sources,
+        "changedBindings": [
+            {
+                "name": "runtime.transport",
+                "from": "browser-wasm",
+                "to": "server-http",
+                "reason": "server promotion switches browser-local dispatch to server request handling"
+            },
+            {
+                "name": "storage.adapter",
+                "from": "localdb.*",
+                "to": "db.*",
+                "reason": "server promotion replaces browser-local persistence with shared database adapters",
+                "references": localdb_references_json
+            }
+        ],
+        "generatedFiles": generated_files,
+        "preconditions": preconditions
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "code": item.code,
+                    "severity": item.severity,
+                    "message": item.message,
+                    "file": item.file,
+                    "line": item.line
+                })
+            })
+            .collect::<Vec<_>>(),
+        "ready": !blocking_preconditions
+    });
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&plan).expect("promotion plan should serialize as JSON")
+    );
+
+    if blocking_preconditions {
+        Err(1)
+    } else {
+        Ok(())
+    }
+}
+
+fn promote_target_label(target: PromoteTarget) -> &'static str {
+    match target {
+        PromoteTarget::Browser => "browser",
+        PromoteTarget::Server => "server",
+    }
+}
+
+fn precondition_from_diagnostic(project_root: &Path, diagnostic: &Diagnostic) -> PromotePrecondition {
+    PromotePrecondition {
+        code: format!("DIAG.{}", diagnostic.code),
+        severity: diagnostic.severity.to_string(),
+        message: diagnostic.message.clone(),
+        file: Some(project_relative_path(project_root, &diagnostic.span.file)),
+        line: Some(diagnostic.span.start_line),
+    }
+}
+
+fn project_relative_path(project_root: &Path, file: &Path) -> String {
+    let relative = file.strip_prefix(project_root).unwrap_or(file);
+    relative.to_string_lossy().replace('\\', "/")
+}
+
+fn collect_promote_binding_references(
+    project_root: &Path,
+    source_files: &[PathBuf],
+    needle: &str,
+) -> Result<Vec<PromoteBindingReference>, i32> {
+    let mut references = Vec::new();
+    for source_file in source_files {
+        let source = match fs::read_to_string(source_file) {
+            Ok(source) => source,
+            Err(err) => {
+                eprintln!(
+                    "promote failed: could not read source file `{}`: {err}",
+                    source_file.display()
+                );
+                return Err(2);
+            }
+        };
+
+        for (index, line) in source.lines().enumerate() {
+            if line.contains(needle) {
+                references.push(PromoteBindingReference {
+                    file: project_relative_path(project_root, source_file),
+                    line: index + 1,
+                });
+            }
+        }
+    }
+    Ok(references)
 }
 
 fn collect_ut_files(path: &Path) -> Result<Vec<PathBuf>, i32> {
