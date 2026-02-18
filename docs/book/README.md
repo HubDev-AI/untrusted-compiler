@@ -909,5 +909,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `941-m39-lasm-deterministic-read-error-mapping.md`
 - `942-m39-lasm-parser-error-envelope-parity.md`
 - `943-m39-lasm-parser-error-cors-suppression.md`
+- `944-m39-lasm-overflow-parser-hardening.md`
 
 As milestones progress, chapters will be added and linked from this index.

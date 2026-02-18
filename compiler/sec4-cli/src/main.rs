@@ -5816,12 +5816,11 @@ fn cmd_run_lasm_backend(
                 let trace_id = next_lasm_trace_id(trace_counter.as_ref());
                 match read_lasm_request_head(&mut stream, effective_max_header_bytes) {
                     Ok(request_head) => {
-                        let request_headers = Some(&request_head.headers);
-                        let omit_body = request_head.method.eq_ignore_ascii_case("HEAD");
                         let include_cors_defaults = should_include_lasm_cors_defaults(
-                            request_headers,
+                            Some(&request_head.headers),
                             header_defaults.as_ref(),
                         );
+                        let omit_body = request_head.method.eq_ignore_ascii_case("HEAD");
                         let mut response = sec4_core::HttpResponse::text(503, "");
                         set_lasm_json_response(
                             &mut response,
@@ -5836,7 +5835,7 @@ fn cmd_run_lasm_backend(
                         );
                         apply_lasm_request_origin_header(
                             &mut response,
-                            request_headers,
+                            Some(&request_head.headers),
                             header_defaults.as_ref(),
                         );
                         set_lasm_trace_id(&mut response, trace_id.as_str());
@@ -5850,12 +5849,8 @@ fn cmd_run_lasm_backend(
                         );
                     }
                     Err(err) => {
-                        if err.status == 408
-                            || (err.status == 400
-                                && (err.message == "empty request"
-                                    || err.message.starts_with("incomplete request")))
-                        {
-                            let mut response = sec4_core::HttpResponse::text(503, "");
+                        let mut response = sec4_core::HttpResponse::text(503, "");
+                        if lasm_overload_head_should_fallback_to_busy(&err) {
                             set_lasm_json_response(
                                 &mut response,
                                 503,
@@ -5867,30 +5862,20 @@ fn cmd_run_lasm_backend(
                                     trace_id.as_str(),
                                 ),
                             );
-                            set_lasm_trace_id(&mut response, trace_id.as_str());
-                            let _ = write_lasm_http_response(
-                                &mut stream,
-                                &response,
-                                header_defaults.as_ref(),
-                                false,
-                                false,
-                                true,
-                            );
-                            continue;
-                        }
-                        let mut response = sec4_core::HttpResponse::text(err.status, "");
-                        let (code, kind) = lasm_request_read_error_code_kind(err.status);
-                        set_lasm_json_response(
-                            &mut response,
-                            err.status,
-                            &lasm_error_envelope(
-                                code,
-                                kind,
-                                err.message.as_str(),
+                        } else {
+                            let (code, kind) = lasm_request_read_error_code_kind(err.status);
+                            set_lasm_json_response(
+                                &mut response,
                                 err.status,
-                                trace_id.as_str(),
-                            ),
-                        );
+                                &lasm_error_envelope(
+                                    code,
+                                    kind,
+                                    err.message.as_str(),
+                                    err.status,
+                                    trace_id.as_str(),
+                                ),
+                            );
+                        }
                         set_lasm_trace_id(&mut response, trace_id.as_str());
                         let _ = write_lasm_http_response(
                             &mut stream,
@@ -6619,6 +6604,14 @@ fn lasm_request_read_error_code_kind(status: u16) -> (&'static str, &'static str
     }
 }
 
+fn lasm_overload_head_should_fallback_to_busy(err: &LasmRequestReadError) -> bool {
+    err.status == 408
+        || err.message == "empty request"
+        || err
+            .message
+            .starts_with("incomplete request while reading request line")
+}
+
 fn is_lasm_uuid_v4(value: &str) -> bool {
     if value.len() != 36 {
         return false;
@@ -6865,217 +6858,14 @@ fn read_lasm_request_head(
     stream: &mut TcpStream,
     max_header_bytes: usize,
 ) -> Result<LasmRequestHead, LasmRequestReadError> {
-    let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
-    let map_read_error = |stage: &str, err: std::io::Error| match err.kind() {
-        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
-            make_error(408, format!("request read timeout while {stage}"))
-        }
-        std::io::ErrorKind::InvalidData => {
-            make_error(400, format!("invalid request encoding while {stage}"))
-        }
-        std::io::ErrorKind::UnexpectedEof => {
-            make_error(400, format!("incomplete request while {stage}"))
-        }
-        _ => make_error(400, format!("could not {stage}")),
-    };
-    let mut reader = BufReader::new(stream.try_clone().map_err(|err| {
-        make_error(
-            400,
-            format!("could not clone stream while reading request head: {err}"),
-        )
+    let mut reader = BufReader::new(stream.try_clone().map_err(|err| LasmRequestReadError {
+        status: 400,
+        message: format!("could not clone stream while reading request head: {err}"),
     })?);
-    let mut request_line = String::new();
-    let bytes = reader
-        .read_line(&mut request_line)
-        .map_err(|err| map_read_error("reading request line", err))?;
-    if bytes == 0 {
-        return Err(make_error(400, "empty request".to_string()));
-    }
-    let mut consumed = bytes;
-    if consumed > max_header_bytes {
-        return Err(make_error(
-            431,
-            format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
-        ));
-    }
-
-    let mut parts = request_line.trim_end().split_whitespace();
-    let method = parts
-        .next()
-        .ok_or_else(|| make_error(400, "invalid request line: missing method".to_string()))?;
-    if !is_lasm_http_token(method) {
-        return Err(make_error(
-            400,
-            "invalid request line: invalid method token".to_string(),
-        ));
-    }
-    let request_target = parts
-        .next()
-        .ok_or_else(|| make_error(400, "invalid request line: missing path".to_string()))?;
-    let http_version = parts.next().ok_or_else(|| {
-        make_error(
-            400,
-            "invalid request line: missing http version".to_string(),
-        )
-    })?;
-    if parts.next().is_some() {
-        return Err(make_error(
-            400,
-            "invalid request line: unexpected trailing tokens".to_string(),
-        ));
-    }
-    if http_version != "HTTP/1.1" && http_version != "HTTP/1.0" {
-        return Err(make_error(
-            505,
-            format!("unsupported http version: {http_version}"),
-        ));
-    }
-    if request_target != "*" && request_target.contains('#') {
-        return Err(make_error(
-            400,
-            "invalid request target: fragment is not allowed".to_string(),
-        ));
-    }
-
-    let mut absolute_authority: Option<(&str, LasmAuthority)> = None;
-    if !(request_target == "*" || request_target.starts_with('/')) {
-        if request_target.starts_with("http://") || request_target.starts_with("https://") {
-            let (scheme, authority_and_path) =
-                request_target.split_once("://").ok_or_else(|| {
-                    make_error(
-                        400,
-                        "invalid request target: malformed absolute-form".to_string(),
-                    )
-                })?;
-            let authority_end = authority_and_path
-                .find(['/', '?'])
-                .unwrap_or(authority_and_path.len());
-            let authority = &authority_and_path[..authority_end];
-            if authority.is_empty() {
-                return Err(make_error(
-                    400,
-                    "invalid request target: missing authority".to_string(),
-                ));
-            }
-            let parsed_authority = parse_lasm_authority(authority).ok_or_else(|| {
-                make_error(
-                    400,
-                    "invalid request target: malformed absolute-form".to_string(),
-                )
-            })?;
-            absolute_authority = Some((scheme, parsed_authority));
-        } else {
-            return Err(make_error(400, "invalid request target".to_string()));
-        }
-    }
-
-    let mut headers = BTreeMap::new();
-    let mut parsed_content_length: Option<usize> = None;
-    let mut parsed_host_header: Option<LasmAuthority> = None;
-    let mut header_line = String::new();
-    loop {
-        header_line.clear();
-        let read = reader
-            .read_line(&mut header_line)
-            .map_err(|err| map_read_error("reading header line", err))?;
-        if read == 0 {
-            break;
-        }
-        consumed = consumed.saturating_add(read);
-        if consumed > max_header_bytes {
-            return Err(make_error(
-                431,
-                format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
-            ));
-        }
-        if header_line == "\r\n" || header_line == "\n" {
-            break;
-        }
-        let header = header_line.trim_end_matches(['\r', '\n']);
-        let Some((name_raw, value_raw)) = header.split_once(':') else {
-            return Err(make_error(
-                400,
-                "invalid header line: missing ':' separator".to_string(),
-            ));
-        };
-        if name_raw != name_raw.trim() {
-            return Err(make_error(
-                400,
-                "invalid header line: whitespace around header name".to_string(),
-            ));
-        }
-        let name = name_raw;
-        let value = value_raw.trim();
-        if name.is_empty() {
-            return Err(make_error(
-                400,
-                "invalid header line: empty header name".to_string(),
-            ));
-        }
-        if !is_lasm_http_token(name) {
-            return Err(make_error(
-                400,
-                "invalid header line: invalid header name token".to_string(),
-            ));
-        }
-        if name.eq_ignore_ascii_case("transfer-encoding") && !value.is_empty() {
-            return Err(make_error(
-                501,
-                "transfer-encoding is not supported".to_string(),
-            ));
-        }
-        if name.eq_ignore_ascii_case("expect") && !value.is_empty() {
-            return Err(make_error(
-                417,
-                "expect header is not supported".to_string(),
-            ));
-        }
-        if name.eq_ignore_ascii_case("content-length") {
-            let parsed = value.parse::<usize>().map_err(|_| {
-                make_error(
-                    400,
-                    "invalid content-length header: expected usize".to_string(),
-                )
-            })?;
-            if let Some(existing) = parsed_content_length {
-                if existing != parsed {
-                    return Err(make_error(
-                        400,
-                        "conflicting content-length headers".to_string(),
-                    ));
-                }
-            }
-            parsed_content_length = Some(parsed);
-        }
-        if name.eq_ignore_ascii_case("host") {
-            let parsed_host = parse_lasm_authority(value)
-                .ok_or_else(|| make_error(400, "invalid host header".to_string()))?;
-            if let Some(existing) = parsed_host_header.as_ref() {
-                if existing != &parsed_host {
-                    return Err(make_error(400, "conflicting host headers".to_string()));
-                }
-            } else {
-                parsed_host_header = Some(parsed_host);
-            }
-        }
-        headers.insert(name.to_string(), value.to_string());
-    }
-    if http_version.eq_ignore_ascii_case("HTTP/1.1") && parsed_host_header.is_none() {
-        return Err(make_error(400, "missing host header".to_string()));
-    }
-    if let (Some((scheme, authority)), Some(host)) =
-        (absolute_authority.as_ref(), parsed_host_header.as_ref())
-    {
-        if !lasm_authority_matches_absolute_form(host, authority, scheme) {
-            return Err(make_error(
-                400,
-                "host header does not match request target authority".to_string(),
-            ));
-        }
-    }
+    let parsed = read_lasm_http_request_head(&mut reader, max_header_bytes)?;
     Ok(LasmRequestHead {
-        method: method.to_ascii_uppercase(),
-        headers,
+        method: parsed.method,
+        headers: parsed.headers,
     })
 }
 
@@ -7086,6 +6876,15 @@ struct LasmRunRequest {
     path: String,
     headers: BTreeMap<String, String>,
     body: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct LasmParsedRequestHead {
+    method: String,
+    http_version: String,
+    path: String,
+    headers: BTreeMap<String, String>,
+    content_length: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -7132,6 +6931,53 @@ fn read_lasm_http_request(
     max_header_bytes: usize,
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
+    let request_head = read_lasm_http_request_head(reader, max_header_bytes)?;
+    if request_head.content_length > max_body_bytes {
+        return Err(LasmRequestReadError {
+            status: 413,
+            message: format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
+        });
+    }
+
+    let map_read_error = |stage: &str, err: std::io::Error| match err.kind() {
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => LasmRequestReadError {
+            status: 408,
+            message: format!("request read timeout while {stage}"),
+        },
+        std::io::ErrorKind::InvalidData => LasmRequestReadError {
+            status: 400,
+            message: format!("invalid request encoding while {stage}"),
+        },
+        std::io::ErrorKind::UnexpectedEof => LasmRequestReadError {
+            status: 400,
+            message: format!("incomplete request while {stage}"),
+        },
+        _ => LasmRequestReadError {
+            status: 400,
+            message: format!("could not {stage}"),
+        },
+    };
+
+    let mut body = vec![0u8; request_head.content_length];
+    if request_head.content_length > 0 {
+        reader
+            .read_exact(&mut body)
+            .map_err(|err| map_read_error("reading request body", err))?;
+    }
+
+    Ok(LasmRunRequest {
+        method: request_head.method,
+        http_version: request_head.http_version,
+        path: request_head.path,
+        headers: request_head.headers,
+        body,
+    })
+}
+
+fn read_lasm_http_request_head(
+    reader: &mut BufReader<TcpStream>,
+    max_header_bytes: usize,
+) -> Result<LasmParsedRequestHead, LasmRequestReadError> {
     let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
     let map_read_error = |stage: &str, err: std::io::Error| match err.kind() {
         std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
@@ -7346,31 +7192,17 @@ fn read_lasm_http_request(
         }
     }
 
-    if content_length > max_body_bytes {
-        return Err(make_error(
-            413,
-            format!("request body exceeds configured limit ({max_body_bytes} bytes)"),
-        ));
-    }
-
-    let mut body = vec![0u8; content_length];
-    if content_length > 0 {
-        reader
-            .read_exact(&mut body)
-            .map_err(|err| map_read_error("reading request body", err))?;
-    }
-
     let path = normalized_target
         .split_once('?')
         .map(|(path, _)| path)
         .unwrap_or(normalized_target);
 
-    Ok(LasmRunRequest {
+    Ok(LasmParsedRequestHead {
         method: method.to_ascii_uppercase(),
         http_version: http_version.to_string(),
         path: path.to_string(),
         headers,
-        body,
+        content_length,
     })
 }
 
