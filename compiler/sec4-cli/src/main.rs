@@ -5760,7 +5760,7 @@ fn cmd_run_lasm_backend(
                 let mut response =
                     sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
                 stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
-                let _ = write_lasm_http_response(&mut stream, &response, header_defaults.as_ref());
+                let _ = write_lasm_http_response(&mut stream, &response, header_defaults.as_ref(), true);
             }
             Err(TrySendError::Disconnected(_stream)) => {
                 eprintln!("run failed: LASM worker pool disconnected unexpectedly");
@@ -5935,17 +5935,26 @@ fn process_lasm_connection_with_runtime(
             let mut response = sec4_core::HttpResponse::text(err.status, err.message);
             apply_lasm_request_origin_header(&mut response, None, header_defaults);
             stamp_lasm_trace_id(&mut response, trace_counter);
-            write_lasm_http_response(stream, &response, header_defaults)?;
+            write_lasm_http_response(stream, &response, header_defaults, true)?;
             return Ok(());
         }
     };
-    if is_lasm_cors_preflight_request(&request, header_defaults) {
-        let mut response = sec4_core::HttpResponse::text(204, "");
-        response.body.clear();
-        apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
-        stamp_lasm_trace_id(&mut response, trace_counter);
-        write_lasm_http_response(stream, &response, header_defaults)?;
-        return Ok(());
+    match evaluate_lasm_cors_preflight_request(&request, header_defaults) {
+        LasmCorsPreflightDecision::NotPreflight => {}
+        LasmCorsPreflightDecision::Accept => {
+            let mut response = sec4_core::HttpResponse::text(204, "");
+            response.body.clear();
+            apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
+            stamp_lasm_trace_id(&mut response, trace_counter);
+            write_lasm_http_response(stream, &response, header_defaults, true)?;
+            return Ok(());
+        }
+        LasmCorsPreflightDecision::Reject { status, message } => {
+            let mut response = sec4_core::HttpResponse::text(status, message);
+            stamp_lasm_trace_id(&mut response, trace_counter);
+            write_lasm_http_response(stream, &response, header_defaults, false)?;
+            return Ok(());
+        }
     }
 
     let request_method = request.method.clone();
@@ -5961,7 +5970,7 @@ fn process_lasm_connection_with_runtime(
         );
         apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
         stamp_lasm_trace_id(&mut response, trace_counter);
-        write_lasm_http_response(stream, &response, header_defaults)?;
+        write_lasm_http_response(stream, &response, header_defaults, true)?;
         return Ok(());
     }
 
@@ -5979,19 +5988,54 @@ fn process_lasm_connection_with_runtime(
     }
     apply_lasm_request_origin_header(&mut response, Some(&request), header_defaults);
     stamp_lasm_trace_id(&mut response, trace_counter);
-    write_lasm_http_response(stream, &response, header_defaults)
+    write_lasm_http_response(stream, &response, header_defaults, true)
 }
 
-fn is_lasm_cors_preflight_request(
+fn evaluate_lasm_cors_preflight_request(
     request: &LasmRunRequest,
     header_defaults: &LasmResponseHeaderDefaults,
-) -> bool {
+) -> LasmCorsPreflightDecision {
     if !header_defaults.cors_enabled || !request.method.eq_ignore_ascii_case("OPTIONS") {
+        return LasmCorsPreflightDecision::NotPreflight;
+    }
+    let requested_method = find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
+        .map(str::trim)
+        .unwrap_or("");
+    let origin = find_lasm_header_value(&request.headers, "Origin")
+        .map(str::trim)
+        .unwrap_or("");
+    if requested_method.is_empty() && origin.is_empty() {
+        return LasmCorsPreflightDecision::NotPreflight;
+    }
+    if origin.is_empty() {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight missing origin",
+        };
+    }
+    if !is_lasm_cors_origin_value_valid(origin) {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight origin invalid",
+        };
+    }
+    if requested_method.is_empty() {
+        return LasmCorsPreflightDecision::Reject {
+            status: 400,
+            message: "cors preflight missing requested method",
+        };
+    }
+    LasmCorsPreflightDecision::Accept
+}
+
+fn is_lasm_cors_origin_value_valid(origin: &str) -> bool {
+    if origin.is_empty() || origin == "*" {
         return false;
     }
-    find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
+    if origin.chars().any(char::is_whitespace) {
+        return false;
+    }
+    origin.starts_with("http://") || origin.starts_with("https://")
 }
 
 fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
@@ -6084,6 +6128,13 @@ struct LasmResponseHeaderDefaults {
     cors_allowed_origins: Vec<String>,
     cors_default_origin: Option<String>,
     headers: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LasmCorsPreflightDecision {
+    NotPreflight,
+    Accept,
+    Reject { status: u16, message: &'static str },
 }
 
 fn read_lasm_http_request(
@@ -6192,9 +6243,16 @@ fn write_lasm_http_response(
     stream: &mut TcpStream,
     response: &sec4_core::HttpResponse,
     header_defaults: &LasmResponseHeaderDefaults,
+    include_cors_defaults: bool,
 ) -> Result<(), String> {
     let mut headers = response.headers.clone();
+    if !include_cors_defaults {
+        headers.retain(|name, _| !is_lasm_cors_default_header_name(name.as_str()));
+    }
     for (name, value) in &header_defaults.headers {
+        if !include_cors_defaults && is_lasm_cors_default_header_name(name.as_str()) {
+            continue;
+        }
         headers
             .entry(name.clone())
             .or_insert_with(|| value.clone());
@@ -6228,6 +6286,17 @@ fn write_lasm_http_response(
         .flush()
         .map_err(|err| format!("could not flush response stream: {err}"))?;
     Ok(())
+}
+
+fn is_lasm_cors_default_header_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("Vary")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Origin")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Credentials")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Methods")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Headers")
+        || name.eq_ignore_ascii_case("Access-Control-Max-Age")
+        || name.eq_ignore_ascii_case("Access-Control-Allow-Private-Network")
+        || name.eq_ignore_ascii_case("Access-Control-Expose-Headers")
 }
 
 fn next_lasm_trace_id(trace_counter: &AtomicU64) -> String {
