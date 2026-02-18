@@ -943,5 +943,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `975-m39-lasm-auth-middleware-env-off-parity.md`
 - `976-m39-lasm-csrf-middleware-env-off-parity.md`
 - `977-m39-lasm-route-scoped-middleware-extraction.md`
+- `978-m39-lasm-helper-wrapper-router-binding-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.
