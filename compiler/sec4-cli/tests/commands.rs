@@ -14695,6 +14695,7 @@ fn run_command_lasm_backend_persists_user_store_when_db_base_flag_is_set() {
     let create_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     let read_port = find_available_tcp_port();
+    let update_port = find_available_tcp_port();
     let delete_port = find_available_tcp_port();
     let read_after_delete_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
@@ -14731,11 +14732,17 @@ fn deleteUser() effects { net } -> Int {
   0
 }
 
+fn updateUser() effects { net } -> Int {
+  res.json(200, "UpdateUserResponse", 0);
+  0
+}
+
 fn main() effects { net } -> Int {
   let router = http.router();
   http.post(router, "/users", createUser);
   http.get(router, "/users", listUsers);
   http.get(router, "/users/:id", getUser);
+  http.post(router, "/users/:id/update", updateUser);
   http.post(router, "/users/:id/delete", deleteUser);
   http.serve(8080, router);
   0
@@ -14747,6 +14754,9 @@ fn main() effects { net } -> Int {
     let user_id = "123e4567-e89b-42d3-a456-426614174000";
     let create_payload = format!(
         "{{\"id\":\"{user_id}\",\"email\":\"user@example.com\",\"age\":30,\"tags\":[\"core\"],\"address\":{{\"zip\":\"12345\"}},\"meta\":{{\"flags\":{{\"a\":true,\"b\":false,\"c\":true}}}}}}"
+    );
+    let update_payload = format!(
+        "{{\"id\":\"{user_id}\",\"email\":\"updated@example.com\",\"age\":31,\"tags\":[\"core\",\"updated\"],\"address\":{{\"zip\":\"67890\"}},\"meta\":{{\"flags\":{{\"a\":false,\"b\":true,\"c\":false}}}}}}"
     );
 
     let path = project_dir
@@ -14884,6 +14894,30 @@ fn main() effects { net } -> Int {
         "list response should include created user id:\n{list_response}"
     );
 
+    let update_response = run_lasm_oneshot_request(
+        update_port,
+        format!(
+            "POST /users/{user_id}/update HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            update_payload.len(),
+            update_payload
+        ),
+    );
+    assert!(
+        update_response.contains("HTTP/1.1 200 OK"),
+        "update response should contain deterministic 200 status:\n{update_response}"
+    );
+    assert!(
+        update_response.contains("\"updated\":true"),
+        "update response should include deterministic updated marker:\n{update_response}"
+    );
+
+    let persisted_store_after_update = fs::read_to_string(&users_store_path)
+        .expect("LASM db persistence should keep users store after update");
+    assert!(
+        persisted_store_after_update.contains("\"email\": \"updated@example.com\""),
+        "persisted users store should include updated user payload:\n{persisted_store_after_update}"
+    );
+
     let read_response = run_lasm_oneshot_request(
         read_port,
         format!("GET /users/{user_id} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"),
@@ -14897,8 +14931,8 @@ fn main() effects { net } -> Int {
         "read response should include persisted user id:\n{read_response}"
     );
     assert!(
-        read_response.contains("\"email\":\"user@example.com\""),
-        "read response should include persisted user payload:\n{read_response}"
+        read_response.contains("\"email\":\"updated@example.com\""),
+        "read response should include updated persisted user payload:\n{read_response}"
     );
 
     let delete_response = run_lasm_oneshot_request(
