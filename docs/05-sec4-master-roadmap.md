@@ -336,6 +336,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM `req.cookie(...)` lookup now matches cookie names case-insensitively (trimmed) so cookie-driven handlers/placeholders stay parity-aligned with C runtime behavior under mixed-case cookie keys (`docs/book/965-m39-lasm-req-cookie-case-insensitive-lookup-parity.md`).
 - [x] C runtime `req.header(...)` / `req.cookie(...)` now merge duplicate request headers case-insensitively in arrival order (`Cookie` via `; `, generic headers via `, `, with first-value preservation for `Host`/`Content-Length`) to align request-header duplicate handling with LASM behavior (`docs/book/966-m39-c-runtime-req-header-cookie-duplicate-merge-parity.md`).
 - [x] C runtime string-bridge ABI now accepts tracked handles for `res.text`, `headers.name/value`, and `cookie.build` (with literal fallback), fixing dynamic request-derived string flows in native oneshot/runtime paths (`docs/book/967-m39-c-runtime-string-handle-literal-abi-bridge-for-res-headers-cookies.md`).
+- [x] C runtime `err.*` top-level helpers now accept tracked string handles (with literal fallback) for error `code`/`message` arguments, enabling deterministic dynamic error-message flows in native oneshot/runtime paths (`docs/book/968-m39-c-runtime-string-handle-literal-abi-bridge-for-err-helpers.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 

@@ -8740,7 +8740,7 @@ int main(void) {
   int64_t redacted = sec4_rt_log_attr_redacted("token");
   int64_t with_attr = sec4_rt_log_with_attr(with_count, "token", redacted);
   int64_t with_http = sec4_rt_log_with_http(with_attr, "POST", "/users", 201, 12);
-  int64_t err = sec4_rt_err_internal("boom");
+  int64_t err = sec4_rt_err_internal((int64_t)(uintptr_t) "boom");
   err = sec4_rt_err_with_path(err, "$.email");
   err = sec4_rt_err_with_detail(err, "validator", sec4_rt_log_str("validate.email"));
   int64_t with_error = sec4_rt_log_with_error(with_http, err);
@@ -15476,13 +15476,13 @@ fn c_bin_runtime_internal_https_self_signed_fails_tls_verify_without_insecure_ov
 static int64_t probe(void) {{
   const char *internal_url_raw = getenv("SEC4_RT_TEST_INTERNAL_URL");
   if (internal_url_raw == NULL) {{
-    (void) sec4_rt_err_internal("missing internal tls url");
+    (void) sec4_rt_err_internal((int64_t)(uintptr_t) "missing internal tls url");
     return 0;
   }}
 
   int64_t internal_url = sec4_rt_req_query(internal_url_raw);
   if (internal_url == 0) {{
-    (void) sec4_rt_err_internal("invalid internal tls url");
+    (void) sec4_rt_err_internal((int64_t)(uintptr_t) "invalid internal tls url");
     return 0;
   }}
 
@@ -18374,7 +18374,7 @@ fn c_bin_http_runtime_err_internal_sets_error_response_when_clang_available() {
             r#"#include "sec4_runtime.h"
 
 static int64_t boom(void) {{
-  (void) sec4_rt_err_internal("boom");
+  (void) sec4_rt_err_internal((int64_t)(uintptr_t) "boom");
   return 0;
 }}
 
@@ -18523,7 +18523,11 @@ fn c_bin_http_runtime_err_rate_limit_sets_limit_field_when_clang_available() {
             r#"#include "sec4_runtime.h"
 
 static int64_t limited(void) {{
-  (void) sec4_rt_err_rate_limit("LIMIT.RATE", "rate limited", 7);
+  (void) sec4_rt_err_rate_limit(
+      (int64_t)(uintptr_t) "LIMIT.RATE",
+      (int64_t)(uintptr_t) "rate limited",
+      7
+  );
   return 0;
 }}
 
@@ -18662,7 +18666,10 @@ fn c_bin_http_runtime_err_with_helpers_enrich_error_response_when_clang_availabl
             r#"#include "sec4_runtime.h"
 
 static int64_t validate(void) {{
-  int64_t base = sec4_rt_err_validation("VALIDATE.EMAIL_INVALID", "Invalid email.");
+  int64_t base = sec4_rt_err_validation(
+      (int64_t)(uintptr_t) "VALIDATE.EMAIL_INVALID",
+      (int64_t)(uintptr_t) "Invalid email."
+  );
   int64_t with_path = sec4_rt_err_with_path(base, "$.email");
   int64_t validator = sec4_rt_log_str("validate.email");
   int64_t with_detail = sec4_rt_err_with_detail(with_path, "validator", validator);
