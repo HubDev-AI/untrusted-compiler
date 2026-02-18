@@ -7084,6 +7084,9 @@ fn cmd_run_lasm_backend(
     for incoming in listener.incoming() {
         let mut stream = match incoming {
             Ok(stream) => stream,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {
+                continue;
+            }
             Err(err) => {
                 eprintln!("run failed: LASM backend accept error: {err}");
                 return Err(2);
