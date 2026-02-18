@@ -6072,7 +6072,19 @@ fn process_lasm_connection_with_runtime(
                     if err.status == 400 && err.message == "empty request" {
                         return Ok(());
                     }
-                    let mut response = sec4_core::HttpResponse::text(err.status, err.message);
+                    let mut response = sec4_core::HttpResponse::text(err.status, "");
+                    let (code, kind) = lasm_request_read_error_code_kind(err.status);
+                    set_lasm_json_response(
+                        &mut response,
+                        err.status,
+                        &lasm_error_envelope(
+                            code,
+                            kind,
+                            err.message.as_str(),
+                            err.status,
+                            trace_id.as_str(),
+                        ),
+                    );
                     apply_lasm_request_origin_header(&mut response, None, header_defaults);
                     set_lasm_trace_id(&mut response, trace_id.as_str());
                     write_lasm_http_response(
@@ -6538,6 +6550,20 @@ fn lasm_error_envelope(
             "timeMs": lasm_now_ms(),
         }
     })
+}
+
+fn lasm_request_read_error_code_kind(status: u16) -> (&'static str, &'static str) {
+    match status {
+        408 => ("HTTP.REQUEST_TIMEOUT", "timeout"),
+        413 => ("HTTP.PAYLOAD_TOO_LARGE", "resource_limit"),
+        417 => ("HTTP.EXPECTATION_FAILED", "validation"),
+        431 => ("HTTP.REQUEST_HEADER_FIELDS_TOO_LARGE", "resource_limit"),
+        501 => ("HTTP.NOT_IMPLEMENTED", "internal"),
+        505 => ("HTTP.VERSION_NOT_SUPPORTED", "validation"),
+        400 => ("HTTP.BAD_REQUEST", "validation"),
+        _ if status >= 500 => ("HTTP.INTERNAL", "internal"),
+        _ => ("HTTP.BAD_REQUEST", "validation"),
+    }
 }
 
 fn is_lasm_uuid_v4(value: &str) -> bool {
