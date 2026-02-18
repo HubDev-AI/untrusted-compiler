@@ -9332,6 +9332,12 @@ fn read_lasm_http_chunked_body(
                 message: "incomplete request while reading chunk size".to_string(),
             });
         }
+        if !chunk_size_line.ends_with('\n') {
+            return Err(LasmRequestReadError {
+                status: 400,
+                message: "incomplete request while reading chunk size".to_string(),
+            });
+        }
         if read > max_header_bytes {
             return Err(LasmRequestReadError {
                 status: 431,
@@ -9370,6 +9376,12 @@ fn read_lasm_http_chunked_body(
                     .read_line(&mut trailer_line)
                     .map_err(|err| map_read_error("reading chunk trailer", err))?;
                 if trailer_read == 0 {
+                    return Err(LasmRequestReadError {
+                        status: 400,
+                        message: "incomplete request while reading chunk trailer".to_string(),
+                    });
+                }
+                if !trailer_line.ends_with('\n') {
                     return Err(LasmRequestReadError {
                         status: 400,
                         message: "incomplete request while reading chunk trailer".to_string(),
