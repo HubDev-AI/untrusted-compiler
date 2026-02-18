@@ -650,17 +650,21 @@ fn cmd_lasm_smoke(
     }
     let mut runtime_route_method = method.trim().to_ascii_uppercase();
     let mut runtime_route_path = route.to_string();
-    let (response_status, response_headers, response_body, response_origin) =
+    let mut route_registrations = Vec::<(String, String, sec4_core::HttpResponse)>::new();
+    let response_origin =
         match resolve_lasm_smoke_route_plan(&program, entry.name.as_str(), method, route) {
             Some(route_plan) => {
                 runtime_route_method = route_plan.route_method.clone();
                 runtime_route_path = route_plan.route_path.clone();
-                (
-                    route_plan.status,
-                    route_plan.headers,
-                    route_plan.body,
-                    format!("handler:{}", route_plan.handler_name),
-                )
+                let mut response =
+                    sec4_core::HttpResponse::text(route_plan.status, route_plan.body);
+                response.headers = route_plan.headers;
+                route_registrations.push((
+                    runtime_route_method.clone(),
+                    runtime_route_path.clone(),
+                    response,
+                ));
+                format!("handler:{}", route_plan.handler_name)
             }
             None => {
                 let allowed_methods =
@@ -670,37 +674,32 @@ fn cmd_lasm_smoke(
                         .iter()
                         .any(|candidate| candidate == &runtime_route_method);
                     if !selected_has_match {
-                        let mut headers = BTreeMap::new();
-                        headers.insert("Allow".to_string(), allowed_methods.join(", "));
-                        (405, headers, String::new(), "method-mismatch".to_string())
+                        for allowed_method in allowed_methods {
+                            route_registrations.push((
+                                allowed_method,
+                                route.to_string(),
+                                sec4_core::HttpResponse::text(200, ""),
+                            ));
+                        }
+                        "method-mismatch".to_string()
                     } else {
-                        (
-                            404,
-                            BTreeMap::new(),
-                            String::new(),
-                            "route-miss".to_string(),
-                        )
+                        "route-miss".to_string()
                     }
                 } else {
-                    (
-                        404,
-                        BTreeMap::new(),
-                        String::new(),
-                        "route-miss".to_string(),
-                    )
+                    "route-miss".to_string()
                 }
             }
         };
-    let mut response = sec4_core::HttpResponse::text(response_status, response_body);
-    response.headers = response_headers;
-    if let Err(message) = runtime.register_route(
-        runtime_route_method.as_str(),
-        runtime_route_path.as_str(),
-        runtime_actions,
-        response,
-    ) {
-        eprintln!("lasm-smoke failed: {message}");
-        return Err(1);
+    for (registration_method, registration_path, registration_response) in route_registrations {
+        if let Err(message) = runtime.register_route(
+            registration_method.as_str(),
+            registration_path.as_str(),
+            runtime_actions.clone(),
+            registration_response,
+        ) {
+            eprintln!("lasm-smoke failed: {message}");
+            return Err(1);
+        }
     }
 
     let (smoke_request_path, smoke_query_params) = split_lasm_path_and_query(request_path);
@@ -743,6 +742,8 @@ fn cmd_lasm_smoke(
     let mut first_path_params = None;
     let mut first_headers = None;
     let mut first_body = None;
+    let mut first_error_code = None;
+    let mut first_error_kind = None;
     while let Some(mut exchange) = runtime.pop_response() {
         apply_lasm_text_placeholder_materialization(
             &mut exchange.response,
@@ -754,6 +755,15 @@ fn cmd_lasm_smoke(
             &smoke_request,
             &exchange.path_params,
         );
+        let runtime_error_code = find_lasm_header_key_case_insensitive(
+            &exchange.response.headers,
+            LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER,
+        )
+        .and_then(|key| exchange.response.headers.get(&key).cloned())
+        .filter(|code| !code.trim().is_empty());
+        let runtime_error_kind = runtime_error_code.as_deref().map(|code| {
+            lasm_internal_error_kind_for_code(code, exchange.response.status).to_string()
+        });
         let duration_ms = exchange.duration_ms();
         response_count += 1;
         *status_counts.entry(exchange.response.status).or_insert(0) += 1;
@@ -779,6 +789,8 @@ fn cmd_lasm_smoke(
             first_path_params = Some(exchange.path_params.clone());
             first_headers = Some(exchange.response.headers.clone());
             first_body = Some(String::from_utf8_lossy(&exchange.response.body).to_string());
+            first_error_code = runtime_error_code;
+            first_error_kind = runtime_error_kind;
         }
     }
 
@@ -820,6 +832,8 @@ fn cmd_lasm_smoke(
     };
     let first_headers = first_headers.unwrap_or_default();
     let first_body = first_body.unwrap_or_default();
+    let first_error_code_text = first_error_code.as_deref().unwrap_or("-");
+    let first_error_kind_text = first_error_kind.as_deref().unwrap_or("-");
     match format {
         LasmSmokeOutputFormat::Text => {
             let max_in_flight_text = effective_max_in_flight
@@ -837,7 +851,7 @@ fn cmd_lasm_smoke(
                 .collect::<Vec<_>>()
                 .join(",");
             println!(
-                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} firstDurationMs={} pathParams={} headerCount={} body={}",
+                "lasm smoke succeeded: requestId={} responseRequestId={} entry={} origin={} resolvedRouteMethod={} resolvedRoutePath={} requests={} requestHeaderCount={} maxInFlight={} maxPending={} maxRequestMs={} ok={} errors={} statusCounts={} durationMinMs={} durationMaxMs={} durationAvgMs={} steps={} nowMs={} status={} errorCode={} errorKind={} firstDurationMs={} pathParams={} headerCount={} body={}",
                 first_request_id.unwrap_or(0),
                 first_response_id.unwrap_or(0),
                 entry.name,
@@ -858,6 +872,8 @@ fn cmd_lasm_smoke(
                 report.steps,
                 report.now_ms,
                 first_status.unwrap_or(0),
+                first_error_code_text,
+                first_error_kind_text,
                 first_duration_ms.unwrap_or(0),
                 first_path_params_text,
                 first_headers.len(),
@@ -895,6 +911,8 @@ fn cmd_lasm_smoke(
                 "steps": report.steps,
                 "nowMs": report.now_ms,
                 "status": first_status.unwrap_or(0),
+                "errorCode": first_error_code,
+                "errorKind": first_error_kind,
                 "firstDurationMs": first_duration_ms.unwrap_or(0),
                 "pathParams": first_path_params,
                 "headers": first_headers,

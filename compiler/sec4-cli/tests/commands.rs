@@ -1784,12 +1784,27 @@ fn lasm_smoke_command_reports_method_mismatch_with_allow_header() {
         "lasm-smoke json should count method mismatch as an error response"
     );
     assert_eq!(
+        parsed.get("errorCode").and_then(serde_json::Value::as_str),
+        Some("HTTP.METHOD_NOT_ALLOWED"),
+        "lasm-smoke json should include deterministic runtime error code for method mismatch"
+    );
+    assert_eq!(
+        parsed.get("errorKind").and_then(serde_json::Value::as_str),
+        Some("validation"),
+        "lasm-smoke json should include deterministic runtime error kind for method mismatch"
+    );
+    assert_eq!(
         parsed
             .get("headers")
             .and_then(|headers| headers.get("Allow"))
             .and_then(serde_json::Value::as_str),
         Some("GET, HEAD"),
         "lasm-smoke json should include deterministic Allow header for method mismatch"
+    );
+    assert_eq!(
+        parsed.get("body").and_then(serde_json::Value::as_str),
+        Some("method not allowed"),
+        "lasm-smoke json should include deterministic method mismatch body from runtime"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
@@ -1855,11 +1870,26 @@ fn lasm_smoke_command_reports_route_miss_as_404() {
         "lasm-smoke json should count route miss as an error response"
     );
     assert_eq!(
+        parsed.get("errorCode").and_then(serde_json::Value::as_str),
+        Some("HTTP.NOT_FOUND"),
+        "lasm-smoke json should include deterministic runtime error code for route miss"
+    );
+    assert_eq!(
+        parsed.get("errorKind").and_then(serde_json::Value::as_str),
+        Some("not_found"),
+        "lasm-smoke json should include deterministic runtime error kind for route miss"
+    );
+    assert_eq!(
         parsed
             .get("headers")
             .and_then(|headers| headers.get("Allow")),
         None,
         "lasm-smoke json route miss should not emit an Allow header"
+    );
+    assert_eq!(
+        parsed.get("body").and_then(serde_json::Value::as_str),
+        Some("route not found"),
+        "lasm-smoke json should include deterministic route miss body from runtime"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");

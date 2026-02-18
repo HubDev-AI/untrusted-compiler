@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | Tried a large multi-hunk patch against `cmd_lasm_smoke` and hit context drift, which forced a retry and slowed the slice. | Split active-function edits into smaller ordered hunks (route registration, exchange capture, output payload) and patch each against fresh `sed` context. |
 | 2026-02-19 | user | I paused between slices instead of continuously taking the next implementation task in sequence, despite explicit instruction to keep moving without stops. | Immediately chain next scoped implementation task after each completion (or blocker note) and continue task-to-task without conversational idle pauses. |
 | 2026-02-18 | self | I paused to explain a failed patch instead of immediately continuing with the next concrete implementation step, despite explicit user direction to keep chaining tasks. | When a patch fails, log it in one short line, immediately re-read the exact live context, and continue with the next implementation action without conversational pauses. |
 | 2026-02-18 | self | After `gh pr merge`, I kept coding immediately and missed that context had snapped back to stale local `dev`, so the next LASM slice started on the wrong base branch. | After every merge, run `git branch --show-current` and `git rev-parse HEAD origin/dev` before any edits; if not on a fresh `codex/*` from `origin/dev`, re-anchor first. |
