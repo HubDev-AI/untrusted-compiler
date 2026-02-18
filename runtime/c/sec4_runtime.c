@@ -784,6 +784,20 @@ static int64_t sec4_rt_handle_from_three(int64_t a, int64_t b, int64_t c, uint64
   return sec4_rt_handle_from_two(left, c, salt);
 }
 
+static const char *sec4_rt_resolve_tracked_or_literal_string(int64_t input) {
+  const char *tracked = sec4_rt_lookup_tracked_value(input);
+  if (tracked != NULL) {
+    return tracked;
+  }
+  if (input == 0) {
+    return NULL;
+  }
+  if ((uint64_t) input < UINT64_C(4096)) {
+    return NULL;
+  }
+  return (const char *) (uintptr_t) input;
+}
+
 static bool sec4_rt_extract_request_header(
     const char *name,
     char *value,
@@ -9541,8 +9555,12 @@ int64_t sec4_rt_res_html(int64_t html) {
   return 0;
 }
 
-int64_t sec4_rt_res_text(int64_t status, const char *body) {
-  sec4_rt_store_response(status, "text/plain; charset=utf-8", body);
+int64_t sec4_rt_res_text(int64_t status, int64_t body) {
+  const char *body_value = sec4_rt_resolve_tracked_or_literal_string(body);
+  if (body_value == NULL) {
+    body_value = "";
+  }
+  sec4_rt_store_response(status, "text/plain; charset=utf-8", body_value);
   return 0;
 }
 
@@ -9555,13 +9573,18 @@ int64_t sec4_rt_set_header(int64_t name, int64_t value) {
   return sec4_rt_append_response_header(header_name, header_value);
 }
 
-int64_t sec4_rt_cookie_build(const char *name, const char *value) {
-  if (!sec4_rt_is_header_name_valid(name) || !sec4_rt_is_header_value_valid(value)) {
+int64_t sec4_rt_cookie_build(int64_t name, int64_t value) {
+  const char *name_value = sec4_rt_resolve_tracked_or_literal_string(name);
+  const char *cookie_value = sec4_rt_resolve_tracked_or_literal_string(value);
+  if (name_value == NULL || cookie_value == NULL) {
+    return 0;
+  }
+  if (!sec4_rt_is_header_name_valid(name_value) || !sec4_rt_is_header_value_valid(cookie_value)) {
     return 0;
   }
 
   char cookie[SEC4_RT_MAX_TRACKED_VALUE_BYTES];
-  int written = snprintf(cookie, sizeof(cookie), "%s=%s", name, value);
+  int written = snprintf(cookie, sizeof(cookie), "%s=%s", name_value, cookie_value);
   if (written <= 0 || (size_t) written >= sizeof(cookie)) {
     return 0;
   }
@@ -11401,18 +11424,20 @@ int64_t sec4_rt_path_base_handle(int64_t input) {
   return sec4_rt_path_base_literal(raw);
 }
 
-int64_t sec4_rt_headers_name(const char *input) {
-  if (!sec4_rt_is_header_name_valid(input)) {
+int64_t sec4_rt_headers_name(int64_t input) {
+  const char *input_value = sec4_rt_resolve_tracked_or_literal_string(input);
+  if (!sec4_rt_is_header_name_valid(input_value)) {
     return 0;
   }
-  return sec4_rt_track_string_value(input, UINT64_C(0xE0E0E));
+  return sec4_rt_track_string_value(input_value, UINT64_C(0xE0E0E));
 }
 
-int64_t sec4_rt_headers_value(const char *input) {
-  if (!sec4_rt_is_header_value_valid(input)) {
+int64_t sec4_rt_headers_value(int64_t input) {
+  const char *input_value = sec4_rt_resolve_tracked_or_literal_string(input);
+  if (!sec4_rt_is_header_value_valid(input_value)) {
     return 0;
   }
-  return sec4_rt_track_string_value(input, UINT64_C(0xF0F0F));
+  return sec4_rt_track_string_value(input_value, UINT64_C(0xF0F0F));
 }
 
 int64_t sec4_rt_http_router(void) {
