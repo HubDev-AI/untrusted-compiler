@@ -5661,6 +5661,7 @@ fn cmd_run_lasm_backend(
 
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
+    let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
@@ -5680,6 +5681,7 @@ fn cmd_run_lasm_backend(
             let worker_receiver = Arc::clone(&shared_receiver);
             let routes_for_worker = routes.clone();
             let trace_counter_for_worker = Arc::clone(&trace_counter);
+            let header_defaults_for_worker = Arc::clone(&header_defaults);
             worker_handles.push(std::thread::spawn(move || {
                 let mut runtime =
                     match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
@@ -5707,6 +5709,7 @@ fn cmd_run_lasm_backend(
                         effective_max_header_bytes,
                         effective_max_body_bytes,
                         trace_counter_for_worker.as_ref(),
+                        header_defaults_for_worker.as_ref(),
                     ) {
                         eprintln!("warning: LASM backend worker failed: {message}");
                     }
@@ -5740,6 +5743,7 @@ fn cmd_run_lasm_backend(
                 effective_max_header_bytes,
                 effective_max_body_bytes,
                 trace_counter.as_ref(),
+                header_defaults.as_ref(),
             ) {
                 eprintln!("warning: LASM backend worker failed: {message}");
             };
@@ -5756,7 +5760,7 @@ fn cmd_run_lasm_backend(
                 let mut response =
                     sec4_core::HttpResponse::text(503, "server busy: max concurrency reached");
                 stamp_lasm_trace_id(&mut response, trace_counter.as_ref());
-                let _ = write_lasm_http_response(&mut stream, &response);
+                let _ = write_lasm_http_response(&mut stream, &response, header_defaults.as_ref());
             }
             Err(TrySendError::Disconnected(_stream)) => {
                 eprintln!("run failed: LASM worker pool disconnected unexpectedly");
@@ -5806,19 +5810,73 @@ fn build_lasm_http_runtime(
     Ok(runtime)
 }
 
+fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDefaults {
+    let mut headers = BTreeMap::new();
+    if policy.cors.enabled {
+        let allow_origin = if policy.cors.has_wildcard_origin() {
+            "*".to_string()
+        } else {
+            policy
+                .cors
+                .allowed_origins
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "*".to_string())
+        };
+        headers.insert("Access-Control-Allow-Origin".to_string(), allow_origin);
+        let exposed_headers = if policy.cors.exposed_headers.is_empty() {
+            "x-trace-id,x-showcase".to_string()
+        } else {
+            policy.cors.exposed_headers.join(",")
+        };
+        headers.insert("Access-Control-Expose-Headers".to_string(), exposed_headers);
+    }
+    if policy.security_headers.enabled {
+        if policy.security_headers.x_content_type_options {
+            headers.insert("X-Content-Type-Options".to_string(), "nosniff".to_string());
+        }
+        if !policy.security_headers.x_frame_options.trim().is_empty() {
+            headers.insert(
+                "X-Frame-Options".to_string(),
+                policy.security_headers.x_frame_options.clone(),
+            );
+        }
+        if !policy.security_headers.referrer_policy.trim().is_empty() {
+            headers.insert(
+                "Referrer-Policy".to_string(),
+                policy.security_headers.referrer_policy.clone(),
+            );
+        }
+        if policy.security_headers.csp_enabled && !policy.security_headers.csp_policy.trim().is_empty()
+        {
+            let header_name = if policy.security_headers.csp_report_only {
+                "Content-Security-Policy-Report-Only"
+            } else {
+                "Content-Security-Policy"
+            };
+            headers.insert(
+                header_name.to_string(),
+                policy.security_headers.csp_policy.clone(),
+            );
+        }
+    }
+    LasmResponseHeaderDefaults { headers }
+}
+
 fn process_lasm_connection_with_runtime(
     stream: &mut TcpStream,
     runtime: &mut sec4_core::LasmHttpRuntime,
     max_header_bytes: usize,
     max_body_bytes: usize,
     trace_counter: &AtomicU64,
+    header_defaults: &LasmResponseHeaderDefaults,
 ) -> Result<(), String> {
     let request = match read_lasm_http_request(stream, max_header_bytes, max_body_bytes) {
         Ok(request) => request,
         Err(err) => {
             let mut response = sec4_core::HttpResponse::text(err.status, err.message);
             stamp_lasm_trace_id(&mut response, trace_counter);
-            write_lasm_http_response(stream, &response)?;
+            write_lasm_http_response(stream, &response, header_defaults)?;
             return Ok(());
         }
     };
@@ -5835,7 +5893,7 @@ fn process_lasm_connection_with_runtime(
             "run failed: LASM runtime remained active after step budget",
         );
         stamp_lasm_trace_id(&mut response, trace_counter);
-        write_lasm_http_response(stream, &response)?;
+        write_lasm_http_response(stream, &response, header_defaults)?;
         return Ok(());
     }
 
@@ -5852,7 +5910,7 @@ fn process_lasm_connection_with_runtime(
         response.body.clear();
     }
     stamp_lasm_trace_id(&mut response, trace_counter);
-    write_lasm_http_response(stream, &response)
+    write_lasm_http_response(stream, &response, header_defaults)
 }
 
 fn drain_lasm_request_head(stream: &mut TcpStream, max_header_bytes: usize) -> Result<(), String> {
@@ -5894,6 +5952,11 @@ struct LasmRunRequest {
 struct LasmRequestReadError {
     status: u16,
     message: String,
+}
+
+#[derive(Debug, Clone)]
+struct LasmResponseHeaderDefaults {
+    headers: BTreeMap<String, String>,
 }
 
 fn read_lasm_http_request(
@@ -6001,26 +6064,14 @@ fn read_lasm_http_request(
 fn write_lasm_http_response(
     stream: &mut TcpStream,
     response: &sec4_core::HttpResponse,
+    header_defaults: &LasmResponseHeaderDefaults,
 ) -> Result<(), String> {
     let mut headers = response.headers.clone();
-    headers
-        .entry("Access-Control-Allow-Origin".to_string())
-        .or_insert_with(|| "*".to_string());
-    headers
-        .entry("Access-Control-Expose-Headers".to_string())
-        .or_insert_with(|| "x-trace-id,x-showcase".to_string());
-    headers
-        .entry("X-Content-Type-Options".to_string())
-        .or_insert_with(|| "nosniff".to_string());
-    headers
-        .entry("X-Frame-Options".to_string())
-        .or_insert_with(|| "SAMEORIGIN".to_string());
-    headers
-        .entry("Referrer-Policy".to_string())
-        .or_insert_with(|| "no-referrer".to_string());
-    headers
-        .entry("Content-Security-Policy".to_string())
-        .or_insert_with(|| "default-src 'self'; frame-ancestors 'none'; base-uri 'self'".to_string());
+    for (name, value) in &header_defaults.headers {
+        headers
+            .entry(name.clone())
+            .or_insert_with(|| value.clone());
+    }
     headers
         .entry("Content-Length".to_string())
         .or_insert_with(|| response.body.len().to_string());
