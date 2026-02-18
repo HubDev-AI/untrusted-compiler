@@ -585,6 +585,7 @@ fn cmd_lasm_smoke(
                 return Err(2);
             }
         };
+    let request_headers = finalize_lasm_smoke_request_headers(request_headers, request_body.len());
 
     let runtime_actions = if let Some(script) = runtime_script {
         match parse_lasm_runtime_script(script) {
@@ -1011,6 +1012,24 @@ fn parse_lasm_smoke_request_headers(
         insert_lasm_request_header_case_insensitive(&mut parsed, name, value);
     }
     Ok(parsed)
+}
+
+fn finalize_lasm_smoke_request_headers(
+    mut request_headers: BTreeMap<String, String>,
+    request_body_len: usize,
+) -> BTreeMap<String, String> {
+    if find_lasm_header_key_case_insensitive(&request_headers, "Host").is_none() {
+        request_headers.insert("Host".to_string(), "127.0.0.1".to_string());
+    }
+    if find_lasm_header_key_case_insensitive(&request_headers, "Content-Length").is_none() {
+        let content_length = request_body_len.to_string();
+        insert_lasm_request_header_case_insensitive(
+            &mut request_headers,
+            "Content-Length",
+            content_length.as_str(),
+        );
+    }
+    request_headers
 }
 
 #[derive(Debug, Clone)]

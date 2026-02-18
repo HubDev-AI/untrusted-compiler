@@ -1984,8 +1984,8 @@ fn lasm_smoke_command_materializes_request_header_when_request_header_flag_is_se
         parsed
             .get("requestHeaderCount")
             .and_then(serde_json::Value::as_u64),
-        Some(1),
-        "lasm-smoke json should report request-header count"
+        Some(3),
+        "lasm-smoke json should include explicit + default host/content-length request headers"
     );
     assert_eq!(
         parsed
@@ -1994,6 +1994,22 @@ fn lasm_smoke_command_materializes_request_header_when_request_header_flag_is_se
             .and_then(serde_json::Value::as_str),
         Some("smoke-req-42"),
         "lasm-smoke json should report provided request-header value"
+    );
+    assert_eq!(
+        parsed
+            .get("requestHeaders")
+            .and_then(|headers| headers.get("Host"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1"),
+        "lasm-smoke json should include deterministic default Host header"
+    );
+    assert_eq!(
+        parsed
+            .get("requestHeaders")
+            .and_then(|headers| headers.get("Content-Length"))
+            .and_then(serde_json::Value::as_str),
+        Some("0"),
+        "lasm-smoke json should include deterministic default Content-Length header for empty request body"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
