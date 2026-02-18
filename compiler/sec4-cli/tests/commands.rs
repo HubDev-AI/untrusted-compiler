@@ -1866,6 +1866,70 @@ fn lasm_smoke_command_reports_route_miss_as_404() {
 }
 
 #[test]
+fn lasm_smoke_command_materializes_request_body_when_request_body_flag_is_set() {
+    let root = temp_dir("sec4-lasm-smoke-request-body-materialization");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-request-body-materialization\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn body_route() effects { net } -> Int {\n  res.text(200, \"body={{req.body}}\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.post(router, \"/body\", body_route);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "POST",
+        "--route",
+        "/body",
+        "--request-body",
+        "smoke+payload",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed.get("status").and_then(serde_json::Value::as_u64),
+        Some(200),
+        "lasm-smoke json should return 200 for request-body placeholder route"
+    );
+    assert_eq!(
+        parsed.get("body").and_then(serde_json::Value::as_str),
+        Some("body=smoke+payload"),
+        "lasm-smoke json should materialize request body placeholder in response body"
+    );
+    assert_eq!(
+        parsed
+            .get("requestBodyBytes")
+            .and_then(serde_json::Value::as_u64),
+        Some(13),
+        "lasm-smoke json should report request-body byte size"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_rejects_zero_step_budget() {
     let root = temp_dir("sec4-lasm-smoke-zero-budget");
     let project_dir = root.join("project");
