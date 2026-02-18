@@ -1099,6 +1099,7 @@ struct LasmRouteMiddlewareRequirements {
 #[derive(Debug, Default)]
 struct LasmDynamicResponseState {
     users_by_id: HashMap<String, serde_json::Value>,
+    users_store_path: Option<PathBuf>,
 }
 
 const LASM_INTERNAL_AUTH_REQUIRE_HEADER: &str = "X-Sec4-Internal-Auth-Require";
@@ -1106,6 +1107,90 @@ const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Requi
 const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
+
+fn build_lasm_dynamic_response_state() -> LasmDynamicResponseState {
+    let users_store_path = resolve_lasm_dynamic_users_store_path();
+    let users_by_id = users_store_path
+        .as_ref()
+        .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
+        .unwrap_or_default();
+    LasmDynamicResponseState {
+        users_by_id,
+        users_store_path,
+    }
+}
+
+fn resolve_lasm_dynamic_users_store_path() -> Option<PathBuf> {
+    let raw = std::env::var("SEC4_RT_LASM_DB_BASE").ok()?;
+    let value = raw.trim();
+    if value.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(value).join("users.json"))
+}
+
+fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {
+    let raw = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return HashMap::new(),
+        Err(err) => {
+            eprintln!(
+                "warning: LASM dynamic users store load failed at `{}`: {err}",
+                path.display()
+            );
+            return HashMap::new();
+        }
+    };
+    let parsed: serde_json::Value = match serde_json::from_slice(&raw) {
+        Ok(value) => value,
+        Err(err) => {
+            eprintln!(
+                "warning: LASM dynamic users store parse failed at `{}`: {err}",
+                path.display()
+            );
+            return HashMap::new();
+        }
+    };
+    let Some(object) = parsed.as_object() else {
+        eprintln!(
+            "warning: LASM dynamic users store root must be a JSON object at `{}`",
+            path.display()
+        );
+        return HashMap::new();
+    };
+    object
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
+}
+
+fn persist_lasm_dynamic_users_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
+    let Some(path) = state.users_store_path.as_ref() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic users store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let ordered = state
+        .users_by_id
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let bytes = serde_json::to_vec_pretty(&ordered)
+        .map_err(|err| format!("could not serialize LASM dynamic users store: {err}"))?;
+    fs::write(path, bytes).map_err(|err| {
+        format!(
+            "could not write LASM dynamic users store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
 
 fn collect_lasm_route_plans(
     program: &sec4_core::ast::Program,
@@ -7170,7 +7255,7 @@ fn cmd_run_lasm_backend(
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
-    let dynamic_state = Arc::new(Mutex::new(LasmDynamicResponseState::default()));
+    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state()));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
@@ -8159,6 +8244,9 @@ fn apply_lasm_dynamic_response_materialization(
             };
             if let Ok(mut state) = dynamic_state.lock() {
                 state.users_by_id.insert(id.clone(), payload);
+                if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
+                    eprintln!("warning: LASM dynamic users store persistence failed: {message}");
+                }
             }
             set_lasm_json_response(
                 response,
