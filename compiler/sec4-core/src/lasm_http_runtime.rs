@@ -40,8 +40,17 @@ impl HttpResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpExchange {
     pub request_id: u64,
+    pub request_started_at_ms: u64,
+    pub response_ready_at_ms: u64,
     pub path_params: BTreeMap<String, String>,
     pub response: HttpResponse,
+}
+
+impl HttpExchange {
+    pub fn duration_ms(&self) -> u64 {
+        self.response_ready_at_ms
+            .saturating_sub(self.request_started_at_ms)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -192,13 +201,16 @@ impl LasmHttpRuntime {
     pub fn submit(&mut self, request: HttpRequest) -> u64 {
         let request_id = self.next_request_id;
         self.next_request_id += 1;
+        let request_started_at_ms = self.scheduler.now_ms();
 
         if let Some(route) = self.resolve_route_plan(request.method.as_str(), request.path.as_str())
         {
-            self.enqueue_or_start_request(request_id, route);
+            self.enqueue_or_start_request(request_id, request_started_at_ms, route);
         } else {
             self.ready_responses.push_back(HttpExchange {
                 request_id,
+                request_started_at_ms,
+                response_ready_at_ms: request_started_at_ms,
                 path_params: BTreeMap::new(),
                 response: HttpResponse::text(404, "route not found"),
             });
@@ -248,6 +260,8 @@ impl LasmHttpRuntime {
 
                 self.ready_responses.push_back(HttpExchange {
                     request_id,
+                    request_started_at_ms: started_at_ms,
+                    response_ready_at_ms: self.scheduler.now_ms(),
                     path_params,
                     response,
                 });
@@ -284,8 +298,12 @@ impl LasmHttpRuntime {
             .unwrap_or(true)
     }
 
-    fn enqueue_or_start_request(&mut self, request_id: u64, route: ResolvedRoutePlan) {
-        let request_started_at_ms = self.scheduler.now_ms();
+    fn enqueue_or_start_request(
+        &mut self,
+        request_id: u64,
+        request_started_at_ms: u64,
+        route: ResolvedRoutePlan,
+    ) {
         if self.can_start_request_now() {
             self.start_request_task(
                 request_id,
@@ -300,6 +318,8 @@ impl LasmHttpRuntime {
         if self.max_pending_reached() {
             self.ready_responses.push_back(HttpExchange {
                 request_id,
+                request_started_at_ms,
+                response_ready_at_ms: self.scheduler.now_ms(),
                 path_params: route.path_params,
                 response: HttpResponse::text(503, "runtime queue full"),
             });
@@ -339,6 +359,8 @@ impl LasmHttpRuntime {
             if self.is_request_timed_out(pending.request_started_at_ms) {
                 self.ready_responses.push_back(HttpExchange {
                     request_id: pending.request_id,
+                    request_started_at_ms: pending.request_started_at_ms,
+                    response_ready_at_ms: self.scheduler.now_ms(),
                     path_params: pending.path_params,
                     response: self.timeout_response(),
                 });
@@ -391,12 +413,16 @@ impl LasmHttpRuntime {
             let Some(request_id) = self.task_to_request.remove(&task_id) else {
                 continue;
             };
-            self.task_started_at_ms.remove(&task_id);
+            let Some(started_at_ms) = self.task_started_at_ms.remove(&task_id) else {
+                continue;
+            };
             let path_params = self.task_to_path_params.remove(&task_id).unwrap_or_default();
             self.task_to_response.remove(&task_id);
             if cancelled {
                 self.ready_responses.push_back(HttpExchange {
                     request_id,
+                    request_started_at_ms: started_at_ms,
+                    response_ready_at_ms: self.scheduler.now_ms(),
                     path_params,
                     response: self.timeout_response(),
                 });

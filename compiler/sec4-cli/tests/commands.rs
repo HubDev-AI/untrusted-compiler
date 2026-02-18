@@ -1481,6 +1481,154 @@ fn lasm_smoke_command_reports_timeout_status_with_max_request_ms() {
 }
 
 #[test]
+fn lasm_smoke_command_times_out_pending_requests_from_submit_age() {
+    let root = temp_dir("sec4-lasm-smoke-timeout-from-submit-age");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-timeout-from-submit-age\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--runtime-script",
+        "sleep:20,complete:0",
+        "--max-request-ms",
+        "10",
+        "--max-in-flight",
+        "1",
+        "--requests",
+        "2",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        output.status.success(),
+        "lasm-smoke should report deterministic timeout results for in-flight + pending requests"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed.get("errorCount").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "both requests should exceed timeout budget in deterministic timeout scenario"
+    );
+    assert_eq!(
+        parsed
+            .get("statusCounts")
+            .and_then(|counts| counts.get("504"))
+            .and_then(serde_json::Value::as_u64),
+        Some(2),
+        "both responses should emit timeout status"
+    );
+    assert_eq!(
+        parsed.get("nowMs").and_then(serde_json::Value::as_u64),
+        Some(20),
+        "submit-age timeout should avoid running an extra second task window after first timeout"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn lasm_smoke_command_reports_duration_stats_in_json_summary() {
+    let root = temp_dir("sec4-lasm-smoke-duration-stats");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-duration-stats\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--runtime-script",
+        "sleep:7,complete:0",
+        "--requests",
+        "1",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "lasm-smoke command should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed
+            .get("durationMs")
+            .and_then(|duration| duration.get("min"))
+            .and_then(serde_json::Value::as_u64),
+        Some(7),
+        "duration min should be deterministic for scripted sleep"
+    );
+    assert_eq!(
+        parsed
+            .get("durationMs")
+            .and_then(|duration| duration.get("max"))
+            .and_then(serde_json::Value::as_u64),
+        Some(7),
+        "duration max should be deterministic for scripted sleep"
+    );
+    assert_eq!(
+        parsed
+            .get("durationMs")
+            .and_then(|duration| duration.get("avg"))
+            .and_then(serde_json::Value::as_u64),
+        Some(7),
+        "duration avg should be deterministic for scripted sleep"
+    );
+    assert_eq!(
+        parsed.get("firstDurationMs").and_then(serde_json::Value::as_u64),
+        Some(7),
+        "firstDurationMs should align with deterministic scripted duration"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_fail_on_errors_turns_overflow_into_failure() {
     let root = temp_dir("sec4-lasm-smoke-fail-on-errors");
     let project_dir = root.join("project");
