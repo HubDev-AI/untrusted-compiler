@@ -32,6 +32,7 @@ fn policy_defaults_when_empty() {
     assert_eq!(policy.http.max_body_bytes, 4_096);
     assert_eq!(policy.http.max_concurrency, 256);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
+    assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 8_191);
     assert_eq!(policy.http.max_multipart_bytes, 4_096);
     assert_eq!(policy.http.default_timeout_ms, 200);
@@ -532,6 +533,7 @@ fn policy_parses_http_body_and_timeout_limits() {
 max_body_bytes = 262144
 max_concurrency = 96
 max_keep_alive_requests = 64
+max_runtime_steps = 32768
 max_header_bytes = 16384
 max_multipart_bytes = 131072
 default_timeout_ms = 7500
@@ -542,6 +544,7 @@ default_timeout_ms = 7500
     assert_eq!(policy.http.max_body_bytes, 262144);
     assert_eq!(policy.http.max_concurrency, 96);
     assert_eq!(policy.http.max_keep_alive_requests, 64);
+    assert_eq!(policy.http.max_runtime_steps, 32768);
     assert_eq!(policy.http.max_header_bytes, 16384);
     assert_eq!(policy.http.max_multipart_bytes, 131072);
     assert_eq!(policy.http.default_timeout_ms, 7500);
@@ -592,6 +595,18 @@ max_keep_alive_requests = 0
 
     let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
         .expect_err("http.max_keep_alive_requests must be >= 1");
+    assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
+}
+
+#[test]
+fn policy_rejects_invalid_http_max_runtime_steps() {
+    let source = r#"
+[http]
+max_runtime_steps = 0
+"#;
+
+    let diagnostics = parse_policy_str(Path::new("sec4.policy"), source)
+        .expect_err("http.max_runtime_steps must be >= 1");
     assert!(diagnostics.iter().any(|diag| diag.code == "P6003"));
 }
 
@@ -654,6 +669,7 @@ fn policy_profile_default_secure_prod_parses() {
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
     assert_eq!(policy.http.max_concurrency, 256);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
+    assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 32768);
     assert_eq!(policy.http.max_multipart_bytes, 4_096);
     assert_eq!(policy.http.default_timeout_ms, 5000);
@@ -702,6 +718,7 @@ fn policy_profile_permissive_dev_parses() {
     assert_eq!(policy.http.max_body_bytes, 1_048_576);
     assert_eq!(policy.http.max_concurrency, 1024);
     assert_eq!(policy.http.max_keep_alive_requests, 256);
+    assert_eq!(policy.http.max_runtime_steps, 65_536);
     assert_eq!(policy.http.max_header_bytes, 8_191);
     assert_eq!(policy.http.max_multipart_bytes, 4_096);
     assert_eq!(policy.http.default_timeout_ms, 15000);

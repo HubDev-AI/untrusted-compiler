@@ -105,6 +105,7 @@ pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
     pub max_concurrency: i64,
     pub max_keep_alive_requests: i64,
+    pub max_runtime_steps: i64,
     pub max_header_bytes: i64,
     pub max_multipart_bytes: i64,
     pub default_timeout_ms: i64,
@@ -269,6 +270,7 @@ impl Default for Policy {
                 max_body_bytes: 4_096,
                 max_concurrency: 256,
                 max_keep_alive_requests: 256,
+                max_runtime_steps: 65_536,
                 max_header_bytes: 8_191,
                 max_multipart_bytes: 4_096,
                 default_timeout_ms: 200,
@@ -449,6 +451,8 @@ struct HttpSection {
     max_concurrency: Option<i64>,
     #[serde(default)]
     max_keep_alive_requests: Option<i64>,
+    #[serde(default)]
+    max_runtime_steps: Option<i64>,
     #[serde(default)]
     default_timeout_ms: Option<i64>,
     #[serde(default)]
@@ -889,6 +893,21 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_keep_alive_requests = max_keep_alive_requests;
+            }
+        }
+
+        if let Some(max_runtime_steps) = section.max_runtime_steps {
+            if max_runtime_steps < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_runtime_steps",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_runtime_steps must be >= 1"),
+                );
+            } else {
+                policy.http.max_runtime_steps = max_runtime_steps;
             }
         }
 
