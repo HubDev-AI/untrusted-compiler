@@ -66,6 +66,8 @@ enum Commands {
         max_pending: Option<u64>,
         #[arg(long)]
         serve_timeout_ms: Option<u64>,
+        #[arg(long)]
+        max_runtime_steps: Option<u64>,
         #[arg(long, value_enum, default_value_t = RunBackend::C)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -403,6 +405,7 @@ fn main() {
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            max_runtime_steps,
             backend,
             tls_backend,
         } => cmd_run(
@@ -413,6 +416,7 @@ fn main() {
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            max_runtime_steps,
             backend,
             tls_backend,
         ),
@@ -6528,6 +6532,7 @@ fn cmd_run(
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    max_runtime_steps: Option<u64>,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
@@ -6545,6 +6550,10 @@ fn cmd_run(
     }
     if serve_timeout_ms == Some(0) {
         eprintln!("run failed: --serve-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if max_runtime_steps == Some(0) {
+        eprintln!("run failed: --max-runtime-steps must be >= 1");
         return Err(2);
     }
 
@@ -6574,6 +6583,7 @@ fn cmd_run(
             max_concurrency,
             max_pending,
             serve_timeout_ms,
+            max_runtime_steps,
         );
     }
 
@@ -6890,6 +6900,7 @@ fn cmd_run_lasm_backend(
     max_concurrency: Option<u64>,
     max_pending: Option<u64>,
     serve_timeout_ms: Option<u64>,
+    max_runtime_steps: Option<u64>,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -6973,7 +6984,7 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let runtime_step_budget = match resolve_lasm_runtime_step_budget() {
+    let runtime_step_budget = match resolve_lasm_runtime_step_budget(max_runtime_steps) {
         Ok(value) => value,
         Err(message) => {
             eprintln!("run failed: {message}");
@@ -7602,8 +7613,12 @@ fn process_lasm_connection_with_runtime(
     }
 }
 
-fn resolve_lasm_runtime_step_budget() -> Result<usize, String> {
+fn resolve_lasm_runtime_step_budget(explicit_override: Option<u64>) -> Result<usize, String> {
     const DEFAULT_MAX_STEPS: usize = 65_536;
+    if let Some(value) = explicit_override {
+        return usize::try_from(value)
+            .map_err(|_| "invalid --max-runtime-steps: exceeds platform limits".to_string());
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_MAX_STEPS") else {
         return Ok(DEFAULT_MAX_STEPS);
     };
