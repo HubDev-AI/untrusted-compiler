@@ -6556,6 +6556,10 @@ fn cmd_run(
         eprintln!("run failed: --max-runtime-steps must be >= 1");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && max_runtime_steps.is_some() {
+        eprintln!("run failed: --max-runtime-steps is only supported with --backend lasm");
+        return Err(2);
+    }
 
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
