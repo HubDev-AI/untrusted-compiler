@@ -2226,7 +2226,9 @@ fn match_auth_requirement_call(
 ) -> Option<LasmAuthRequirement> {
     let mut is_require = false;
     let mut is_require_role = false;
-    match &callee.kind {
+    let resolved_callee =
+        resolve_route_registration_expr(callee, bindings, 0).unwrap_or_else(|| callee.clone());
+    match &resolved_callee.kind {
         sec4_core::ast::ExprKind::Identifier(name) => {
             is_require = name == "auth_require";
             is_require_role = name == "auth_require_role";
