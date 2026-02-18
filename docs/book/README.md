@@ -945,5 +945,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `977-m39-lasm-route-scoped-middleware-extraction.md`
 - `978-m39-lasm-helper-wrapper-router-binding-resolution.md`
 - `979-m39-lasm-serve-wrapper-middleware-propagation.md`
+- `980-m39-lasm-helper-side-effect-router-argument-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.

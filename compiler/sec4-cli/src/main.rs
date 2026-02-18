@@ -1631,10 +1631,9 @@ fn extract_router_middleware_requirements_from_block(
                     if applies_auth || applies_csrf {
                         accumulated.require_auth |= applies_auth;
                         accumulated.require_csrf |= applies_csrf;
-                        let first_name = args
-                            .first()
-                            .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
-                        if let Some(name) = first_name {
+                        if let Some(name) = extract_router_binding_target_from_call(
+                            functions, callee, args, bindings,
+                        ) {
                             bindings.insert(name, expr.clone());
                         }
                     }
@@ -1685,10 +1684,7 @@ fn maybe_apply_router_middleware_call_binding(
         return;
     }
 
-    let first_name = args
-        .first()
-        .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
-    if let Some(name) = first_name {
+    if let Some(name) = extract_router_binding_target_from_call(functions, callee, args, bindings) {
         for registration in registrations.iter_mut() {
             if registration.router_binding.as_deref() == Some(name.as_str()) {
                 registration.require_auth_middleware |= requirements.require_auth;
@@ -1697,6 +1693,42 @@ fn maybe_apply_router_middleware_call_binding(
         }
         bindings.insert(name, expr.clone());
     }
+}
+
+fn extract_router_binding_target_from_call(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<String> {
+    if args.is_empty() {
+        return None;
+    }
+    if match_auth_middleware_call(callee, bindings) || match_csrf_middleware_call(callee, bindings)
+    {
+        return args
+            .first()
+            .and_then(|entry| extract_router_binding_target(entry, bindings, 0));
+    }
+    if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+        if let Some(function) = functions.get(function_name.as_str()) {
+            if let Some(index) = function.params.iter().position(|param| {
+                matches!(
+                    &param.ty.kind,
+                    sec4_core::ast::TypeExprKind::Named { name, args }
+                    if name == "Router" && args.is_empty()
+                )
+            }) {
+                if let Some(argument) = args.get(index) {
+                    if let Some(target) = extract_router_binding_target(argument, bindings, 0) {
+                        return Some(target);
+                    }
+                }
+            }
+        }
+    }
+    args.first()
+        .and_then(|entry| extract_router_binding_target(entry, bindings, 0))
 }
 
 fn extract_route_path_literal(
