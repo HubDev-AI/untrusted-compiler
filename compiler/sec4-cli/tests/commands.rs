@@ -14972,7 +14972,7 @@ fn main() effects { net } -> Int {
         "response should contain deterministic header-limit status:\n{response}"
     );
     assert!(
-        response.contains("request headers exceed configured limit"),
+        response.contains("request headers exceed configured limit (80 bytes)"),
         "response should include deterministic header-limit message:\n{response}"
     );
     assert!(
