@@ -172,6 +172,7 @@ impl LasmHttpRuntime {
             return Err("invalid max pending limit: must be >= 1".to_string());
         }
         self.max_pending = Some(limit);
+        self.enforce_pending_limit();
         Ok(())
     }
 
@@ -209,7 +210,12 @@ impl LasmHttpRuntime {
 
         if let Some(route) = self.resolve_route_plan(request.method.as_str(), request.path.as_str())
         {
-            self.enqueue_or_start_request(request_id, request_started_at_ms, is_head_request, route);
+            self.enqueue_or_start_request(
+                request_id,
+                request_started_at_ms,
+                is_head_request,
+                route,
+            );
         } else {
             let allowed_methods = self.resolve_allowed_methods_for_path(request.path.as_str());
             let mut response = if allowed_methods.is_empty() {
@@ -420,6 +426,28 @@ impl LasmHttpRuntime {
             .unwrap_or(false)
     }
 
+    fn enforce_pending_limit(&mut self) {
+        let Some(limit) = self.max_pending else {
+            return;
+        };
+        while self.pending_requests.len() > limit {
+            let Some(pending) = self.pending_requests.pop_back() else {
+                break;
+            };
+            let mut response = HttpResponse::text(503, "runtime queue full");
+            if pending.is_head_request {
+                response.body.clear();
+            }
+            self.ready_responses.push_back(HttpExchange {
+                request_id: pending.request_id,
+                request_started_at_ms: pending.request_started_at_ms,
+                response_ready_at_ms: self.scheduler.now_ms(),
+                path_params: pending.path_params,
+                response,
+            });
+        }
+    }
+
     fn is_request_timed_out(&self, started_at_ms: u64) -> bool {
         self.max_request_duration_ms
             .map(|limit| self.scheduler.now_ms().saturating_sub(started_at_ms) >= limit)
@@ -454,7 +482,10 @@ impl LasmHttpRuntime {
             let Some(started_at_ms) = self.task_started_at_ms.remove(&task_id) else {
                 continue;
             };
-            let path_params = self.task_to_path_params.remove(&task_id).unwrap_or_default();
+            let path_params = self
+                .task_to_path_params
+                .remove(&task_id)
+                .unwrap_or_default();
             let is_head_request = self.task_is_head_request.remove(&task_id).unwrap_or(false);
             self.task_to_response.remove(&task_id);
             if cancelled {
@@ -589,7 +620,11 @@ fn canonical_route_key(method: String, path: String) -> (String, String) {
 fn split_route_pattern_segments(path: &str) -> Result<Vec<RouteSegment>, String> {
     let mut seen_params = HashSet::new();
     let mut segments = Vec::new();
-    for segment in path.trim_matches('/').split('/').filter(|entry| !entry.is_empty()) {
+    for segment in path
+        .trim_matches('/')
+        .split('/')
+        .filter(|entry| !entry.is_empty())
+    {
         if let Some(param_name) = segment.strip_prefix(':') {
             if !is_valid_route_param_name(param_name) {
                 return Err(format!(
@@ -891,7 +926,10 @@ mod tests {
         let mut runtime = LasmHttpRuntime::default();
         let request_id = runtime.submit(HttpRequest::new("HEAD", "/missing"));
         let report = runtime.run_until_idle(16);
-        assert!(report.idle, "runtime should stay idle for missing HEAD route");
+        assert!(
+            report.idle,
+            "runtime should stay idle for missing HEAD route"
+        );
 
         let exchange = runtime.pop_response().expect("response should be ready");
         assert_eq!(exchange.request_id, request_id);
@@ -1032,7 +1070,10 @@ mod tests {
         );
 
         let second_report = runtime.run_until_idle(2);
-        assert!(second_report.idle, "runtime should become idle after queued completion");
+        assert!(
+            second_report.idle,
+            "runtime should become idle after queued completion"
+        );
         assert_eq!(
             runtime.pending_request_count(),
             0,
@@ -1099,8 +1140,7 @@ mod tests {
             "overflow should emit deterministic queue-full 503"
         );
         assert_eq!(
-            overflow_exchange.response.body,
-            b"runtime queue full",
+            overflow_exchange.response.body, b"runtime queue full",
             "overflow response should include deterministic queue-full body"
         );
         assert_eq!(
@@ -1156,7 +1196,10 @@ mod tests {
 
         let request_id = runtime.submit(HttpRequest::new("GET", "/slow"));
         let report = runtime.run_until_idle(8);
-        assert!(report.idle, "runtime should become idle after timeout mapping");
+        assert!(
+            report.idle,
+            "runtime should become idle after timeout mapping"
+        );
 
         let exchange = runtime
             .pop_response()
@@ -1200,7 +1243,10 @@ mod tests {
         assert_eq!(exchange.response.body, b"handler timed out after 10ms");
 
         let follow_up = runtime.run_until_idle(4);
-        assert!(follow_up.idle, "runtime should remain idle after cancellation");
+        assert!(
+            follow_up.idle,
+            "runtime should remain idle after cancellation"
+        );
         assert!(
             runtime.pop_response().is_none(),
             "cancelled task should not later emit an additional completion response"
@@ -1250,7 +1296,13 @@ mod tests {
         assert_eq!(second_exchange.request_id, second_request);
         assert_eq!(first_exchange.response.status, 504);
         assert_eq!(second_exchange.response.status, 504);
-        assert_eq!(first_exchange.response.body, b"handler timed out after 10ms");
-        assert_eq!(second_exchange.response.body, b"handler timed out after 10ms");
+        assert_eq!(
+            first_exchange.response.body,
+            b"handler timed out after 10ms"
+        );
+        assert_eq!(
+            second_exchange.response.body,
+            b"handler timed out after 10ms"
+        );
     }
 }
