@@ -7670,9 +7670,9 @@ fn write_lasm_http_response(
         }
         insert_lasm_header_if_missing_case_insensitive(&mut headers, name, value.clone());
     }
-    insert_lasm_header_if_missing_case_insensitive(
+    upsert_lasm_header_case_insensitive(
         &mut headers,
-        "Content-Length",
+        "Content-Length".to_string(),
         response.body.len().to_string(),
     );
     upsert_lasm_header_case_insensitive(
