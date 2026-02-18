@@ -209,6 +209,205 @@ fn init_then_check_succeeds() {
 }
 
 #[test]
+fn promote_dry_run_emits_deterministic_plan_for_valid_project() {
+    let root = temp_dir("sec4-promote-dry-run-deterministic");
+    let project_dir = root.join("project");
+    write_minimal_project(&project_dir, "");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let first = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        first.status.success(),
+        "promote dry-run should succeed for valid project with non-blocking warnings"
+    );
+
+    let second = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        second.status.success(),
+        "repeated promote dry-run should succeed for unchanged project"
+    );
+
+    let first_stdout = String::from_utf8(first.stdout).expect("stdout should be utf-8");
+    let second_stdout = String::from_utf8(second.stdout).expect("stdout should be utf-8");
+    assert_eq!(
+        first_stdout, second_stdout,
+        "promote dry-run output should be byte-identical for unchanged tree"
+    );
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&first_stdout).expect("promote dry-run should emit valid json");
+    assert_eq!(
+        parsed.get("from").and_then(serde_json::Value::as_str),
+        Some("browser"),
+        "promotion plan should include from target"
+    );
+    assert_eq!(
+        parsed.get("to").and_then(serde_json::Value::as_str),
+        Some("server"),
+        "promotion plan should include to target"
+    );
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "plan should be ready when only warning-level preconditions exist"
+    );
+    assert_eq!(
+        parsed
+            .get("changedBindings")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(2),
+        "promotion plan should include deterministic changed-binding entries"
+    );
+    assert!(
+        parsed
+            .get("generatedFiles")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|files| files.iter().any(|entry| {
+                entry.as_str() == Some("server/src/repo/db_repo.ut")
+            })),
+        "promotion plan should include deterministic generated scaffold files"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("code").and_then(serde_json::Value::as_str) == Some("PROMOTE.P9303")
+                    && item.get("severity").and_then(serde_json::Value::as_str) == Some("warning")
+            })),
+        "promotion plan should include deterministic warning when localdb usage is absent"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_fails_without_dry_run() {
+    let root = temp_dir("sec4-promote-missing-dry-run");
+    let project_dir = root.join("project");
+    write_minimal_project(&project_dir, "");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote without --dry-run should fail deterministically"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "missing --dry-run should produce deterministic usage-style exit code"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("apply mode is not implemented yet"),
+        "promote failure should include deterministic guidance for missing --dry-run:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn promote_dry_run_reports_blocking_preconditions_for_invalid_project() {
+    let root = temp_dir("sec4-promote-invalid-project");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"promote-invalid\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn main( -> Int {\n  0\n}\n",
+    )
+    .expect("invalid source should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "promote",
+        "--path",
+        &project_path,
+        "--from",
+        "browser",
+        "--to",
+        "server",
+        "--dry-run",
+    ]);
+    assert!(
+        !output.status.success(),
+        "promote dry-run should fail when blocking preconditions exist"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "blocking preconditions should produce deterministic failure exit code"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("promote dry-run should emit json even on failure");
+    assert_eq!(
+        parsed.get("ready").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "plan readiness should be false when blocking preconditions exist"
+    );
+    assert!(
+        parsed
+            .get("preconditions")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|items| items.iter().any(|item| {
+                item.get("severity").and_then(serde_json::Value::as_str) == Some("error")
+                    && item
+                        .get("code")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|code| code.starts_with("DIAG."))
+            })),
+        "blocking promote plan should include diagnostic-derived error preconditions"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn check_succeeds_for_multi_file_module_project() {
     let root = temp_dir("sec4-check-multi-file-pass");
     let project_dir = root.join("project");
