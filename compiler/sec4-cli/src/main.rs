@@ -6882,14 +6882,17 @@ fn read_lasm_http_request(
     max_body_bytes: usize,
 ) -> Result<LasmRunRequest, LasmRequestReadError> {
     let make_error = |status: u16, message: String| LasmRequestReadError { status, message };
-    let map_read_error = |stage: &str, err: std::io::Error| {
-        if matches!(
-            err.kind(),
-            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
-        ) {
-            return make_error(408, format!("request read timeout while {stage}"));
+    let map_read_error = |stage: &str, err: std::io::Error| match err.kind() {
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
+            make_error(408, format!("request read timeout while {stage}"))
         }
-        make_error(400, format!("could not {stage}: {err}"))
+        std::io::ErrorKind::InvalidData => {
+            make_error(400, format!("invalid request encoding while {stage}"))
+        }
+        std::io::ErrorKind::UnexpectedEof => {
+            make_error(400, format!("incomplete request while {stage}"))
+        }
+        _ => make_error(400, format!("could not {stage}")),
     };
     let mut request_line = String::new();
     let bytes = reader
