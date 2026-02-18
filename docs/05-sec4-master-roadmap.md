@@ -318,6 +318,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM `res.text(...)` dynamic materialization now includes `req.query("...")` placeholders (including `validate.nonEmpty(...)` wrappers) using parsed request query maps for deterministic query-driven response bodies (`docs/book/947-m39-lasm-req-query-placeholder-materialization.md`).
 - [x] LASM query parsing now decodes `%XX` escapes and `+` (with deterministic raw fallback for invalid percent escapes), aligning `req.query(...)` placeholder materialization with existing runtime query-decoding behavior (`docs/book/948-m39-lasm-query-percent-decoding-parity.md`).
 - [x] LASM placeholder materialization now also applies to response headers, including typed sink forms like `headers.value(validate.nonEmpty(req.query("trace")))`, keeping dynamic body/header response behavior aligned for request-derived route/query/header values (`docs/book/949-m39-lasm-response-header-placeholder-materialization.md`).
+- [x] LASM `res.addCookie(cookie.build(...))` now materializes request-derived placeholders in cookie values (for example `cookie.build("session", validate.nonEmpty(req.query("session")))`), so dynamic Set-Cookie behavior matches LASM dynamic header/body materialization semantics (`docs/book/950-m39-lasm-dynamic-set-cookie-placeholder-materialization.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
