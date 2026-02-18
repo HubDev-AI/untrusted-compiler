@@ -3242,7 +3242,8 @@ impl<'a> Analyzer<'a> {
             || is_req_cookie_call(callee_name)
             || is_req_method_call(callee_name)
             || is_req_path_call(callee_name)
-            || is_req_http_version_call(callee_name))
+            || is_req_http_version_call(callee_name)
+            || is_ctx_current_call(callee_name))
         {
             return;
         }
@@ -3253,6 +3254,8 @@ impl<'a> Analyzer<'a> {
             "req.pathParam"
         } else if is_req_cookie_call(callee_name) {
             "req.cookie"
+        } else if is_ctx_current_call(callee_name) {
+            "ctx.current"
         } else if is_req_method_call(callee_name) {
             "req.method"
         } else if is_req_path_call(callee_name) {
@@ -3266,17 +3269,14 @@ impl<'a> Analyzer<'a> {
         if is_req_method_call(callee_name)
             || is_req_path_call(callee_name)
             || is_req_http_version_call(callee_name)
+            || is_ctx_current_call(callee_name)
         {
             if !args.is_empty() {
                 self.diagnostics.push(
-                    Diagnostic::error(
-                        "E4001",
-                        format!("{call_name} expects no arguments"),
-                        span,
-                    )
-                    .with_tag("security")
-                    .with_tag("schema")
-                    .with_note(format!("use `{call_name}()`")),
+                    Diagnostic::error("E4001", format!("{call_name} expects no arguments"), span)
+                        .with_tag("security")
+                        .with_tag("schema")
+                        .with_note(format!("use `{call_name}()`")),
                 );
             }
             return;
@@ -3828,6 +3828,11 @@ impl<'a> Analyzer<'a> {
                 "inbound network listener is disabled in browser profile",
                 "browser profile forbids `http.serve`; use exported handler entrypoints in browser builds",
             )
+        } else if is_ctx_current_call(callee_name) {
+            (
+                "request context intrinsics are disabled in browser profile",
+                "browser profile forbids `ctx.current`; browser builds do not expose server request context",
+            )
         } else if is_net_internal_call(callee_name) || is_url_internal_gate(callee_name) {
             (
                 "internal network intrinsics are disabled in browser profile",
@@ -3845,7 +3850,9 @@ impl<'a> Analyzer<'a> {
                     "`{callee_name}` is not available when `[build].profile = \"browser\"`"
                 ))
                 .with_note(note)
-                .with_note("switch to `[build].profile = \"server\"` for server-side capability access"),
+                .with_note(
+                    "switch to `[build].profile = \"server\"` for server-side capability access",
+                ),
         );
         true
     }
@@ -5773,6 +5780,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Unknown,
         }),
+        "ctx_current" | "ctx.current" => Some(IntrinsicSpec {
+            effect: Some("net"),
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::Named("Ctx"),
+        }),
         "err_validation" | "err.validation" => Some(IntrinsicSpec {
             effect: None,
             required_capability: None,
@@ -5834,8 +5846,8 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             return_ty: IntrinsicReturnTy::UntrustedBytes,
         }),
         "req_query" | "req.query" | "req_path_param" | "req.pathParam" | "req_header"
-        | "req.header" | "req_cookie" | "req.cookie" | "req_method" | "req.method"
-        | "req_path" | "req.path" | "req_http_version" | "req.httpVersion" => Some(IntrinsicSpec {
+        | "req.header" | "req_cookie" | "req.cookie" | "req_method" | "req.method" | "req_path"
+        | "req.path" | "req_http_version" | "req.httpVersion" => Some(IntrinsicSpec {
             effect: Some("net"),
             required_capability: None,
             return_ty: IntrinsicReturnTy::UntrustedString,
@@ -6182,6 +6194,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
             | "headers"
             | "cookie"
             | "req"
+            | "ctx"
             | "res"
             | "sanitize"
             | "sec"
@@ -6428,6 +6441,10 @@ fn is_req_path_call(name: &str) -> bool {
 
 fn is_req_http_version_call(name: &str) -> bool {
     matches!(name, "req_http_version" | "req.httpVersion")
+}
+
+fn is_ctx_current_call(name: &str) -> bool {
+    matches!(name, "ctx_current" | "ctx.current")
 }
 
 fn is_sql_q_call(name: &str) -> bool {

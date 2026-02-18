@@ -937,5 +937,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `969-m39-c-runtime-string-handle-literal-abi-bridge-for-log-helpers.md`
 - `970-m39-c-runtime-string-handle-literal-abi-bridge-for-err-with-helpers.md`
 - `971-m39-c-runtime-string-handle-literal-abi-bridge-for-auth-csp-sql-helpers.md`
+- `972-m39-ctx-current-intrinsic-runtime-bridge.md`
 
 As milestones progress, chapters will be added and linked from this index.

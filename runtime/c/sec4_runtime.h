@@ -7,6 +7,7 @@
 int64_t sec4_rt_identity_i64(int64_t value);
 bool sec4_rt_identity_bool(bool value);
 int64_t sec4_rt_ctx(void);
+int64_t sec4_rt_ctx_current(void);
 int64_t sec4_rt_db_cap(void);
 int64_t sec4_rt_fs_cap(void);
 int64_t sec4_rt_net_cap(void);

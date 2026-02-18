@@ -4099,6 +4099,146 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_oneshot_supports_ctx_current_with_auth_require_role() {
+    if !clang_available() {
+        eprintln!("skipping run-command ctx.current auth.requireRole test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-ctx-current-auth-require-role");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runctxcurrentauthrequirerolecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn secure() effects { net } -> Int {
+  let ctx = ctx.current();
+  let role = validate.nonEmpty(req.query("role"));
+  auth.requireRole(ctx, role);
+  res.text(200, "authorized");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/secure", secure);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--tls-backend",
+            "auto",
+            "--oneshot",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut response = None;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while connecting")
+        {
+            panic!("run command exited before request with status: {status}");
+        }
+
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /secure?role=admin HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer admin\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("response should be readable");
+                response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+
+    let response = match response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command ctx.current auth.requireRole test could not connect to server");
+        }
+    };
+
+    let mut status = None;
+    for _ in 0..240 {
+        match child.try_wait().expect("run command wait should succeed") {
+            Some(next) => {
+                status = Some(next);
+                break;
+            }
+            None => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let status = match status {
+        Some(status) => status,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command ctx.current auth.requireRole process did not exit in expected window"
+            );
+        }
+    };
+
+    assert!(
+        status.success(),
+        "run command ctx.current auth.requireRole process should exit successfully"
+    );
+    assert!(
+        response.contains("HTTP/1.1 200 OK"),
+        "response should contain 200 status line:\n{response}"
+    );
+    assert!(
+        response.contains("\r\n\r\nauthorized"),
+        "response should include expected body:\n{response}"
+    );
+    assert!(
+        response.contains("X-Trace-Id: rt-1"),
+        "response should include deterministic trace header:\n{response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_serves_request_and_exits() {
     let project_dir = temp_dir("sec4-run-command-lasm-oneshot");
     let port = find_available_tcp_port();
@@ -5388,7 +5528,9 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("run command LASM duplicate-header merge process did not exit in expected window");
+            panic!(
+                "run command LASM duplicate-header merge process did not exit in expected window"
+            );
         }
     };
 
@@ -9184,9 +9326,7 @@ fn main() effects { net } -> Int {
         None => {
             let _ = child.kill();
             let _ = child.wait();
-            panic!(
-                "run command LASM empty dynamic header values test could not connect to server"
-            );
+            panic!("run command LASM empty dynamic header values test could not connect to server");
         }
     };
 
