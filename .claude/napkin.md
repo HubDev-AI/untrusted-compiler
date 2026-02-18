@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | While adding lasm-smoke 404/405 fallback branches, I returned a tuple inside a nested `if` without making it the arm expression, causing a compile-time type mismatch (`expected ()`). | For match-arm tuple branches, structure nested `if/else` so every branch yields the tuple expression directly (or return early), then compile once before test runs. |
 | 2026-02-18 | self | Triggered `web.run` again while implementing local-only LASM smoke parity (405/Allow method-mismatch path). | Keep local compiler/runtime implementation turns strictly on local tools; only invoke web tooling when external docs/news verification is explicitly needed. |
 | 2026-02-18 | self | Triggered a `web.run` call while doing local-only LASM implementation work on `lasm-smoke` parity updates. | Keep LASM/compiler code turns strictly on local shell/apply_patch commands; treat web tooling as off-limits unless external research is explicitly required. |
 | 2026-02-18 | self | Repeated PR-body shell quoting mistake by using backticks in `gh pr create --body`, which triggered command substitution and noisy `zsh` errors. | For PR descriptions, always use `--body-file` (quoted heredoc) instead of inline `--body` text when content includes code-like tokens. |
