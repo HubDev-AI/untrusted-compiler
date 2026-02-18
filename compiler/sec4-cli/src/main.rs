@@ -1879,6 +1879,8 @@ fn extract_response_plan_in_expr(
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
             let mut response = None;
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
             if let Some(next) = extract_response_plan_in_expr(functions, callee, visited, bindings)
             {
                 response = Some(next);
@@ -1890,10 +1892,10 @@ fn extract_response_plan_in_expr(
                     response = Some(next);
                 }
             }
-            if let Some(response) = match_response_helper_call(callee, args, bindings) {
+            if let Some(response) = match_response_helper_call(&resolved_callee, args, bindings) {
                 return Some(response);
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let call_bindings =
                     collect_response_plan_call_bindings(functions, function_name, args, bindings);
                 if let Some(response) = extract_response_plan_in_function(
@@ -2568,6 +2570,7 @@ fn extract_response_headers(
         &mut visited,
         &mut headers,
         None,
+        None,
     );
     headers
 }
@@ -2577,7 +2580,8 @@ fn extract_response_headers_in_function(
     function_name: &str,
     visited: &mut HashSet<String>,
     headers: &mut BTreeMap<String, String>,
-    seed_bindings: Option<HashMap<String, String>>,
+    seed_value_bindings: Option<HashMap<String, String>>,
+    seed_expr_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
 ) {
     if visited.contains(function_name) {
         return;
@@ -2587,13 +2591,15 @@ fn extract_response_headers_in_function(
         visited.remove(function_name);
         return;
     };
-    let mut local_bindings = seed_bindings.unwrap_or_default();
+    let mut value_bindings = seed_value_bindings.unwrap_or_default();
+    let mut expr_bindings = seed_expr_bindings.unwrap_or_default();
     extract_response_headers_in_block(
         functions,
         &function.body,
         visited,
         headers,
-        &mut local_bindings,
+        &mut value_bindings,
+        &mut expr_bindings,
     );
     visited.remove(function_name);
 }
@@ -2603,13 +2609,28 @@ fn extract_response_headers_in_block(
     block: &sec4_core::ast::Block,
     visited: &mut HashSet<String>,
     headers: &mut BTreeMap<String, String>,
-    bindings: &mut HashMap<String, String>,
+    value_bindings: &mut HashMap<String, String>,
+    expr_bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     for statement in &block.statements {
-        extract_response_headers_in_stmt(functions, statement, visited, headers, bindings);
+        extract_response_headers_in_stmt(
+            functions,
+            statement,
+            visited,
+            headers,
+            value_bindings,
+            expr_bindings,
+        );
     }
     if let Some(tail) = &block.tail {
-        extract_response_headers_in_expr(functions, tail, visited, headers, bindings);
+        extract_response_headers_in_expr(
+            functions,
+            tail,
+            visited,
+            headers,
+            value_bindings,
+            expr_bindings,
+        );
     }
 }
 
@@ -2618,23 +2639,46 @@ fn extract_response_headers_in_stmt(
     statement: &sec4_core::ast::Stmt,
     visited: &mut HashSet<String>,
     headers: &mut BTreeMap<String, String>,
-    bindings: &mut HashMap<String, String>,
+    value_bindings: &mut HashMap<String, String>,
+    expr_bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     match &statement.kind {
         sec4_core::ast::StmtKind::Let { name, value, .. } => {
-            if let Some(binding_value) = extract_header_binding_literal(value, bindings) {
-                bindings.insert(name.clone(), binding_value);
+            expr_bindings.insert(name.clone(), value.clone());
+            if let Some(binding_value) =
+                extract_header_binding_literal(value, value_bindings, expr_bindings, 0)
+            {
+                value_bindings.insert(name.clone(), binding_value);
             }
-            extract_response_headers_in_expr(functions, value, visited, headers, bindings)
+            extract_response_headers_in_expr(
+                functions,
+                value,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            )
         }
         sec4_core::ast::StmtKind::Return { value } => {
             if let Some(value) = value {
-                extract_response_headers_in_expr(functions, value, visited, headers, bindings);
+                extract_response_headers_in_expr(
+                    functions,
+                    value,
+                    visited,
+                    headers,
+                    value_bindings,
+                    expr_bindings,
+                );
             }
         }
-        sec4_core::ast::StmtKind::Expr { expr } => {
-            extract_response_headers_in_expr(functions, expr, visited, headers, bindings)
-        }
+        sec4_core::ast::StmtKind::Expr { expr } => extract_response_headers_in_expr(
+            functions,
+            expr,
+            visited,
+            headers,
+            value_bindings,
+            expr_bindings,
+        ),
     }
 }
 
@@ -2643,88 +2687,162 @@ fn extract_response_headers_in_expr(
     expr: &sec4_core::ast::Expr,
     visited: &mut HashSet<String>,
     headers: &mut BTreeMap<String, String>,
-    bindings: &mut HashMap<String, String>,
+    value_bindings: &mut HashMap<String, String>,
+    expr_bindings: &mut HashMap<String, sec4_core::ast::Expr>,
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some((name, value)) = match_res_set_header_call(callee, args, bindings) {
+            let resolved_callee = resolve_route_registration_expr(callee, expr_bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some((name, value)) =
+                match_res_set_header_call(&resolved_callee, args, value_bindings, expr_bindings)
+            {
                 headers.insert(name, value);
             }
-            if let Some(cookie) = match_res_add_cookie_call(callee, args, bindings) {
+            if let Some(cookie) =
+                match_res_add_cookie_call(&resolved_callee, args, value_bindings, expr_bindings)
+            {
                 append_lasm_set_cookie_header(headers, cookie.as_str());
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
-                let call_bindings =
-                    collect_response_header_call_bindings(functions, function_name, args, bindings);
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+                let (call_value_bindings, call_expr_bindings) =
+                    collect_response_header_call_bindings(
+                        functions,
+                        function_name,
+                        args,
+                        value_bindings,
+                        expr_bindings,
+                    );
                 extract_response_headers_in_function(
                     functions,
                     function_name,
                     visited,
                     headers,
-                    Some(call_bindings),
+                    Some(call_value_bindings),
+                    Some(call_expr_bindings),
                 );
             }
-            extract_response_headers_in_expr(functions, callee, visited, headers, bindings);
+            extract_response_headers_in_expr(
+                functions,
+                callee,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            );
             for argument in args {
-                extract_response_headers_in_expr(functions, argument, visited, headers, bindings);
+                extract_response_headers_in_expr(
+                    functions,
+                    argument,
+                    visited,
+                    headers,
+                    value_bindings,
+                    expr_bindings,
+                );
             }
         }
-        sec4_core::ast::ExprKind::Unary { expr, .. } => {
-            extract_response_headers_in_expr(functions, expr, visited, headers, bindings)
-        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => extract_response_headers_in_expr(
+            functions,
+            expr,
+            visited,
+            headers,
+            value_bindings,
+            expr_bindings,
+        ),
         sec4_core::ast::ExprKind::Binary { left, right, .. } => {
-            extract_response_headers_in_expr(functions, left, visited, headers, bindings);
-            extract_response_headers_in_expr(functions, right, visited, headers, bindings);
+            extract_response_headers_in_expr(
+                functions,
+                left,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            );
+            extract_response_headers_in_expr(
+                functions,
+                right,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            );
         }
-        sec4_core::ast::ExprKind::Member { object, .. } => {
-            extract_response_headers_in_expr(functions, object, visited, headers, bindings)
-        }
+        sec4_core::ast::ExprKind::Member { object, .. } => extract_response_headers_in_expr(
+            functions,
+            object,
+            visited,
+            headers,
+            value_bindings,
+            expr_bindings,
+        ),
         sec4_core::ast::ExprKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            extract_response_headers_in_expr(functions, condition, visited, headers, bindings);
-            let mut then_bindings = bindings.clone();
+            extract_response_headers_in_expr(
+                functions,
+                condition,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            );
+            let mut then_value_bindings = value_bindings.clone();
+            let mut then_expr_bindings = expr_bindings.clone();
             extract_response_headers_in_block(
                 functions,
                 then_branch,
                 visited,
                 headers,
-                &mut then_bindings,
+                &mut then_value_bindings,
+                &mut then_expr_bindings,
             );
             if let Some(else_branch) = else_branch {
-                let mut else_bindings = bindings.clone();
+                let mut else_value_bindings = value_bindings.clone();
+                let mut else_expr_bindings = expr_bindings.clone();
                 extract_response_headers_in_expr(
                     functions,
                     else_branch,
                     visited,
                     headers,
-                    &mut else_bindings,
+                    &mut else_value_bindings,
+                    &mut else_expr_bindings,
                 );
             }
         }
         sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
-            extract_response_headers_in_expr(functions, scrutinee, visited, headers, bindings);
+            extract_response_headers_in_expr(
+                functions,
+                scrutinee,
+                visited,
+                headers,
+                value_bindings,
+                expr_bindings,
+            );
             for arm in arms {
-                let mut arm_bindings = bindings.clone();
+                let mut arm_value_bindings = value_bindings.clone();
+                let mut arm_expr_bindings = expr_bindings.clone();
                 extract_response_headers_in_expr(
                     functions,
                     &arm.value,
                     visited,
                     headers,
-                    &mut arm_bindings,
+                    &mut arm_value_bindings,
+                    &mut arm_expr_bindings,
                 );
             }
         }
         sec4_core::ast::ExprKind::Block(block) => {
-            let mut block_bindings = bindings.clone();
+            let mut block_value_bindings = value_bindings.clone();
+            let mut block_expr_bindings = expr_bindings.clone();
             extract_response_headers_in_block(
                 functions,
                 block,
                 visited,
                 headers,
-                &mut block_bindings,
+                &mut block_value_bindings,
+                &mut block_expr_bindings,
             )
         }
         sec4_core::ast::ExprKind::Identifier(_)
@@ -2738,18 +2856,28 @@ fn collect_response_header_call_bindings(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
     args: &[sec4_core::ast::Expr],
-    bindings: &HashMap<String, String>,
-) -> HashMap<String, String> {
-    let mut call_bindings = HashMap::new();
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> (
+    HashMap<String, String>,
+    HashMap<String, sec4_core::ast::Expr>,
+) {
+    let mut call_value_bindings = HashMap::new();
+    let mut call_expr_bindings = HashMap::new();
     let Some(function) = functions.get(function_name) else {
-        return call_bindings;
+        return (call_value_bindings, call_expr_bindings);
     };
     for (param, arg) in function.params.iter().zip(args.iter()) {
-        if let Some(value) = extract_header_binding_literal(arg, bindings) {
-            call_bindings.insert(param.name.clone(), value);
+        let resolved =
+            resolve_route_registration_expr(arg, expr_bindings, 0).unwrap_or_else(|| arg.clone());
+        if let Some(value) =
+            extract_header_binding_literal(&resolved, value_bindings, expr_bindings, 0)
+        {
+            call_value_bindings.insert(param.name.clone(), value);
         }
+        call_expr_bindings.insert(param.name.clone(), resolved);
     }
-    call_bindings
+    (call_value_bindings, call_expr_bindings)
 }
 
 fn append_lasm_set_cookie_header(headers: &mut BTreeMap<String, String>, cookie: &str) {
@@ -2770,7 +2898,8 @@ fn append_lasm_set_cookie_header(headers: &mut BTreeMap<String, String>, cookie:
 fn match_res_set_header_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
-    bindings: &HashMap<String, String>,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<(String, String)> {
     if args.len() < 2 {
         return None;
@@ -2784,15 +2913,16 @@ fn match_res_set_header_call(
     if namespace != "res" || field != "setHeader" {
         return None;
     }
-    let name = extract_header_gate_literal(&args[0], "name", bindings)?;
-    let value = extract_header_gate_literal(&args[1], "value", bindings)?;
+    let name = extract_header_gate_literal(&args[0], "name", value_bindings, expr_bindings, 0)?;
+    let value = extract_header_gate_literal(&args[1], "value", value_bindings, expr_bindings, 0)?;
     Some((name, value))
 }
 
 fn match_res_add_cookie_call(
     callee: &sec4_core::ast::Expr,
     args: &[sec4_core::ast::Expr],
-    bindings: &HashMap<String, String>,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
 ) -> Option<String> {
     if args.is_empty() {
         return None;
@@ -2806,28 +2936,48 @@ fn match_res_add_cookie_call(
     if namespace != "res" || field != "addCookie" {
         return None;
     }
-    extract_cookie_literal(&args[0], bindings)
+    extract_cookie_literal(&args[0], value_bindings, expr_bindings, 0)
 }
 
 fn extract_header_binding_literal(
     expr: &sec4_core::ast::Expr,
-    bindings: &HashMap<String, String>,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
 ) -> Option<String> {
-    extract_header_gate_literal(expr, "name", bindings)
-        .or_else(|| extract_header_gate_literal(expr, "value", bindings))
-        .or_else(|| extract_lasm_request_header_placeholder(expr, bindings, 0))
-        .or_else(|| extract_cookie_literal(expr, bindings))
+    if depth > 32 {
+        return None;
+    }
+    extract_header_gate_literal(expr, "name", value_bindings, expr_bindings, depth)
+        .or_else(|| {
+            extract_header_gate_literal(expr, "value", value_bindings, expr_bindings, depth)
+        })
+        .or_else(|| extract_lasm_request_header_placeholder(expr, value_bindings, 0))
+        .or_else(|| extract_cookie_literal(expr, value_bindings, expr_bindings, depth))
 }
 
 fn extract_cookie_literal(
     expr: &sec4_core::ast::Expr,
-    bindings: &HashMap<String, String>,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
 ) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
     match &expr.kind {
         sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
-        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(value) = value_bindings.get(name) {
+                return Some(value.clone());
+            }
+            let bound = expr_bindings.get(name)?;
+            extract_cookie_literal(bound, value_bindings, expr_bindings, depth + 1)
+        }
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+            let resolved_callee = resolve_route_registration_expr(callee, expr_bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            let sec4_core::ast::ExprKind::Member { object, field } = &resolved_callee.kind else {
                 return None;
             };
             let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
@@ -2836,11 +2986,48 @@ fn extract_cookie_literal(
             if namespace != "cookie" || field != "build" || args.len() < 2 {
                 return None;
             }
-            let name = extract_string_literal_or_binding(&args[0], bindings)
-                .or_else(|| extract_lasm_request_header_placeholder(&args[0], bindings, 0))?;
-            let value = extract_string_literal_or_binding(&args[1], bindings)
-                .or_else(|| extract_lasm_request_header_placeholder(&args[1], bindings, 0))?;
+            let name = extract_string_literal_or_binding_with_expr(
+                &args[0],
+                value_bindings,
+                expr_bindings,
+                depth + 1,
+            )
+            .or_else(|| extract_lasm_request_header_placeholder(&args[0], value_bindings, 0))?;
+            let value = extract_string_literal_or_binding_with_expr(
+                &args[1],
+                value_bindings,
+                expr_bindings,
+                depth + 1,
+            )
+            .or_else(|| extract_lasm_request_header_placeholder(&args[1], value_bindings, 0))?;
             Some(format!("{name}={value}"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_string_literal_or_binding_with_expr(
+    expr: &sec4_core::ast::Expr,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    match &expr.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(value) = value_bindings.get(name) {
+                return Some(value.clone());
+            }
+            let bound = expr_bindings.get(name)?;
+            extract_string_literal_or_binding_with_expr(
+                bound,
+                value_bindings,
+                expr_bindings,
+                depth + 1,
+            )
         }
         _ => None,
     }
@@ -2860,29 +3047,62 @@ fn extract_string_literal_or_binding(
 fn extract_header_gate_literal(
     expr: &sec4_core::ast::Expr,
     expected_gate: &str,
-    bindings: &HashMap<String, String>,
+    value_bindings: &HashMap<String, String>,
+    expr_bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
 ) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
     match &expr.kind {
         sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
-        sec4_core::ast::ExprKind::Identifier(name) => bindings.get(name).cloned(),
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            if let Some(value) = value_bindings.get(name) {
+                return Some(value.clone());
+            }
+            let bound = expr_bindings.get(name)?;
+            extract_header_gate_literal(
+                bound,
+                expected_gate,
+                value_bindings,
+                expr_bindings,
+                depth + 1,
+            )
+        }
         sec4_core::ast::ExprKind::Call { callee, args } => {
+            let resolved_callee = resolve_route_registration_expr(callee, expr_bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
             if expected_gate == "value" || expected_gate == "name" {
-                if let Some(value) =
-                    parse_lasm_request_header_placeholder_call(callee, args, bindings)
-                {
+                if let Some(value) = parse_lasm_request_header_placeholder_call(
+                    &resolved_callee,
+                    args,
+                    value_bindings,
+                ) {
                     return Some(value);
                 }
-                if is_lasm_validate_non_empty_call(callee) && !args.is_empty() {
-                    return extract_header_gate_literal(&args[0], expected_gate, bindings);
+                if is_lasm_validate_non_empty_call(&resolved_callee) && !args.is_empty() {
+                    return extract_header_gate_literal(
+                        &args[0],
+                        expected_gate,
+                        value_bindings,
+                        expr_bindings,
+                        depth + 1,
+                    );
                 }
                 if expected_gate == "value"
-                    && is_lasm_validate_header_value_call(callee)
+                    && is_lasm_validate_header_value_call(&resolved_callee)
                     && !args.is_empty()
                 {
-                    return extract_header_gate_literal(&args[0], expected_gate, bindings);
+                    return extract_header_gate_literal(
+                        &args[0],
+                        expected_gate,
+                        value_bindings,
+                        expr_bindings,
+                        depth + 1,
+                    );
                 }
             }
-            let sec4_core::ast::ExprKind::Member { object, field } = &callee.kind else {
+            let sec4_core::ast::ExprKind::Member { object, field } = &resolved_callee.kind else {
                 return None;
             };
             let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
@@ -2892,8 +3112,14 @@ fn extract_header_gate_literal(
                 return None;
             }
             if expected_gate == "value" || expected_gate == "name" {
-                return extract_header_gate_literal(&args[0], expected_gate, bindings)
-                    .or_else(|| extract_lasm_request_header_placeholder(&args[0], bindings, 0));
+                return extract_header_gate_literal(
+                    &args[0],
+                    expected_gate,
+                    value_bindings,
+                    expr_bindings,
+                    depth + 1,
+                )
+                .or_else(|| extract_lasm_request_header_placeholder(&args[0], value_bindings, 0));
             }
             let sec4_core::ast::ExprKind::String(value) = &args[0].kind else {
                 return None;
