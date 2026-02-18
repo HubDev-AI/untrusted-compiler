@@ -5385,6 +5385,7 @@ fn cmd_run_lasm_backend(
         match sender.try_send(stream) {
             Ok(()) => {}
             Err(TrySendError::Full(mut stream)) => {
+                let _ = drain_lasm_request_head(&mut stream, effective_max_header_bytes);
                 let _ = write_lasm_http_response(
                     &mut stream,
                     &sec4_core::HttpResponse::text(503, "server busy: max concurrency reached"),
@@ -5475,6 +5476,33 @@ fn process_lasm_connection(
     let response = matched
         .unwrap_or_else(|| sec4_core::HttpResponse::text(500, "missing LASM response for request"));
     write_lasm_http_response(stream, &response)
+}
+
+fn drain_lasm_request_head(stream: &mut TcpStream, max_header_bytes: usize) -> Result<(), String> {
+    let mut reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("could not clone stream while draining request: {err}"))?,
+    );
+    let mut consumed = 0usize;
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = reader
+            .read_line(&mut line)
+            .map_err(|err| format!("could not read request while draining overload path: {err}"))?;
+        if read == 0 {
+            break;
+        }
+        consumed = consumed.saturating_add(read);
+        if consumed > max_header_bytes {
+            break;
+        }
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
