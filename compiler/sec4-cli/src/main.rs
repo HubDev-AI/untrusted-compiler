@@ -2525,7 +2525,13 @@ fn extract_response_headers(
 ) -> BTreeMap<String, String> {
     let mut headers = BTreeMap::new();
     let mut visited = HashSet::new();
-    extract_response_headers_in_function(functions, function_name, &mut visited, &mut headers);
+    extract_response_headers_in_function(
+        functions,
+        function_name,
+        &mut visited,
+        &mut headers,
+        None,
+    );
     headers
 }
 
@@ -2534,14 +2540,17 @@ fn extract_response_headers_in_function(
     function_name: &str,
     visited: &mut HashSet<String>,
     headers: &mut BTreeMap<String, String>,
+    seed_bindings: Option<HashMap<String, String>>,
 ) {
-    if !visited.insert(function_name.to_string()) {
+    if visited.contains(function_name) {
         return;
     }
+    visited.insert(function_name.to_string());
     let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
         return;
     };
-    let mut local_bindings = HashMap::new();
+    let mut local_bindings = seed_bindings.unwrap_or_default();
     extract_response_headers_in_block(
         functions,
         &function.body,
@@ -2549,6 +2558,7 @@ fn extract_response_headers_in_function(
         headers,
         &mut local_bindings,
     );
+    visited.remove(function_name);
 }
 
 fn extract_response_headers_in_block(
@@ -2607,7 +2617,15 @@ fn extract_response_headers_in_expr(
                 append_lasm_set_cookie_header(headers, cookie.as_str());
             }
             if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
-                extract_response_headers_in_function(functions, function_name, visited, headers);
+                let call_bindings =
+                    collect_response_header_call_bindings(functions, function_name, args, bindings);
+                extract_response_headers_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    headers,
+                    Some(call_bindings),
+                );
             }
             extract_response_headers_in_expr(functions, callee, visited, headers, bindings);
             for argument in args {
@@ -2677,6 +2695,24 @@ fn extract_response_headers_in_expr(
         | sec4_core::ast::ExprKind::String(_)
         | sec4_core::ast::ExprKind::Bool(_) => {}
     }
+}
+
+fn collect_response_header_call_bindings(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut call_bindings = HashMap::new();
+    let Some(function) = functions.get(function_name) else {
+        return call_bindings;
+    };
+    for (param, arg) in function.params.iter().zip(args.iter()) {
+        if let Some(value) = extract_header_binding_literal(arg, bindings) {
+            call_bindings.insert(param.name.clone(), value);
+        }
+    }
+    call_bindings
 }
 
 fn append_lasm_set_cookie_header(headers: &mut BTreeMap<String, String>, cookie: &str) {
