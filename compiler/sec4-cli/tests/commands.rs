@@ -1488,6 +1488,20 @@ fn lasm_smoke_command_emits_json_summary_when_requested() {
         "lasm-smoke json should include resolved handler origin"
     );
     assert_eq!(
+        parsed
+            .get("resolvedRouteMethod")
+            .and_then(serde_json::Value::as_str),
+        Some("POST"),
+        "lasm-smoke json should include resolved route method"
+    );
+    assert_eq!(
+        parsed
+            .get("resolvedRoutePath")
+            .and_then(serde_json::Value::as_str),
+        Some("/users"),
+        "lasm-smoke json should include resolved route path"
+    );
+    assert_eq!(
         parsed.get("status").and_then(serde_json::Value::as_u64),
         Some(201),
         "lasm-smoke json should include extracted status code"
@@ -1637,6 +1651,14 @@ fn lasm_smoke_command_matches_parameterized_registration_with_concrete_route_sel
         stdout.contains("pathParams=id=42"),
         "lasm-smoke output should preserve path parameter capture when concrete route selects parameterized registration:\n{stdout}"
     );
+    assert!(
+        stdout.contains("resolvedRoutePath=/users/:id"),
+        "lasm-smoke output should report resolved parameterized route path:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("resolvedRouteMethod=GET"),
+        "lasm-smoke output should report resolved route method:\n{stdout}"
+    );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
 }
@@ -1689,6 +1711,14 @@ fn lasm_smoke_command_head_method_falls_back_to_get_registration() {
     assert!(
         stdout.contains("statusCounts=204:1"),
         "lasm-smoke output should count fallback response status deterministically:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("resolvedRouteMethod=GET"),
+        "lasm-smoke output should report resolved GET method for HEAD fallback:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("resolvedRoutePath=/health"),
+        "lasm-smoke output should report resolved route path for HEAD fallback:\n{stdout}"
     );
 
     fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
