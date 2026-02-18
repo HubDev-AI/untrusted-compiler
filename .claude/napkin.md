@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | Appended a new book index entry (`970`) before implementation/docs were complete, creating a temporary index/document mismatch in the working tree. | Add README chapter index lines only after the corresponding chapter file and roadmap note are prepared in the same slice. |
 | 2026-02-18 | self | Changed runtime `err.*` ABI signatures to handle-based arguments but initially forgot that several hand-written C harness snippets in `json_output.rs` still passed raw literals, causing compile failures. | When changing runtime function signatures, immediately run `rg` across harness/tests for direct C call sites and patch them in the same slice before first validation run. |
 | 2026-02-18 | self | Tried validating C duplicate-header merge via `sec4 run --oneshot` using dynamic `req.header` response wiring; the binary terminated by signal because C backend still has known string-handle boundary gaps in that path. | For C runtime parity slices on request extractors, prefer direct clang-gated runtime harness tests in `json_output.rs` unless the command path is already proven handle-safe. |
 | 2026-02-18 | self | Triggered an empty `web.run` call mid-slice while working in a local-only LASM/runtime loop. | Keep local implementation turns strictly on shell/apply_patch tooling and avoid invoking `web` namespace unless external research is explicitly required. |

@@ -12403,15 +12403,16 @@ int64_t sec4_rt_err_internal(int64_t message) {
   );
 }
 
-int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
+int64_t sec4_rt_err_with_path(int64_t error, int64_t path) {
+  const char *path_value = sec4_rt_resolve_tracked_or_literal_string(path);
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
-  if (path != NULL && path[0] != '\0') {
-    strncpy(state.path, path, sizeof(state.path) - 1);
+  if (path_value != NULL && path_value[0] != '\0') {
+    strncpy(state.path, path_value, sizeof(state.path) - 1);
     state.path[sizeof(state.path) - 1] = '\0';
   }
-  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path, UINT64_C(0xC3008));
+  int64_t path_handle = sec4_rt_nonzero_handle_from_string(path_value, UINT64_C(0xC3008));
   int64_t next = sec4_rt_handle_from_two(error, path_handle, UINT64_C(0xC3009));
   state.handle = next;
   sec4_rt_error_store_state(&state);
@@ -12421,12 +12422,16 @@ int64_t sec4_rt_err_with_path(int64_t error, const char *path) {
   return next;
 }
 
-int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
+int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value) {
+  const char *key_value = sec4_rt_resolve_tracked_or_literal_string(key);
+  if (key_value == NULL || key_value[0] == '\0') {
+    key_value = "detail";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
-  sec4_rt_error_append_detail_entry(&state, key, value);
-  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key, UINT64_C(0xC3010));
+  sec4_rt_error_append_detail_entry(&state, key_value, value);
+  int64_t key_handle = sec4_rt_nonzero_handle_from_string(key_value, UINT64_C(0xC3010));
   int64_t detail_handle = sec4_rt_handle_from_two(key_handle, value, UINT64_C(0xC3011));
   int64_t next = sec4_rt_handle_from_two(error, detail_handle, UINT64_C(0xC3012));
   state.handle = next;
@@ -12437,20 +12442,20 @@ int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value) {
   return next;
 }
 
-int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max) {
+int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max) {
+  const char *name_value = sec4_rt_resolve_tracked_or_literal_string(name);
+  if (name_value == NULL || name_value[0] == '\0') {
+    name_value = "limit";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
   state.has_limit = true;
-  strncpy(
-      state.limit_name,
-      name != NULL && name[0] != '\0' ? name : "limit",
-      sizeof(state.limit_name) - 1
-  );
+  strncpy(state.limit_name, name_value, sizeof(state.limit_name) - 1);
   state.limit_name[sizeof(state.limit_name) - 1] = '\0';
   state.limit_value = value;
   state.limit_max = max;
-  int64_t limit_name = sec4_rt_nonzero_handle_from_string(name, UINT64_C(0xC3013));
+  int64_t limit_name = sec4_rt_nonzero_handle_from_string(name_value, UINT64_C(0xC3013));
   int64_t observed = sec4_rt_handle_from_two(value, max, UINT64_C(0xC3014));
   int64_t limit_handle = sec4_rt_handle_from_two(limit_name, observed, UINT64_C(0xC3015));
   int64_t next = sec4_rt_handle_from_two(error, limit_handle, UINT64_C(0xC3016));
@@ -12464,29 +12469,34 @@ int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, i
 
 int64_t sec4_rt_err_with_dependency(
     int64_t error,
-    const char *service,
-    const char *operation,
+    int64_t service,
+    int64_t operation,
     int64_t retryable
 ) {
+  const char *service_value = sec4_rt_resolve_tracked_or_literal_string(service);
+  const char *operation_value = sec4_rt_resolve_tracked_or_literal_string(operation);
+  if (service_value == NULL || service_value[0] == '\0') {
+    service_value = "dependency";
+  }
+  if (operation_value == NULL || operation_value[0] == '\0') {
+    operation_value = "op";
+  }
   sec4_rt_ensure_error_response_in_request();
   sec4_rt_error_state state;
   sec4_rt_error_load_state(error, &state);
   state.has_dependency = true;
-  strncpy(
-      state.dependency_service,
-      service != NULL && service[0] != '\0' ? service : "dependency",
-      sizeof(state.dependency_service) - 1
-  );
+  strncpy(state.dependency_service, service_value, sizeof(state.dependency_service) - 1);
   state.dependency_service[sizeof(state.dependency_service) - 1] = '\0';
   strncpy(
       state.dependency_operation,
-      operation != NULL && operation[0] != '\0' ? operation : "op",
+      operation_value,
       sizeof(state.dependency_operation) - 1
   );
   state.dependency_operation[sizeof(state.dependency_operation) - 1] = '\0';
   state.dependency_retryable = retryable != 0;
-  int64_t service_handle = sec4_rt_nonzero_handle_from_string(service, UINT64_C(0xC3017));
-  int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation, UINT64_C(0xC3018));
+  int64_t service_handle =
+      sec4_rt_nonzero_handle_from_string(service_value, UINT64_C(0xC3017));
+  int64_t op_handle = sec4_rt_nonzero_handle_from_string(operation_value, UINT64_C(0xC3018));
   int64_t dep_handle = sec4_rt_handle_from_three(
       service_handle,
       op_handle,
