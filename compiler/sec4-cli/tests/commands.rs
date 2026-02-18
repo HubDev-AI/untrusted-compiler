@@ -7272,11 +7272,19 @@ fn queryRoute() effects { net } -> Int {
   0
 }
 
+fn composeRoute() effects { net } -> Int {
+  res.setHeader(headers.name("X-Trace-Echo"), headers.value(validate.nonEmpty(req.query("trace"))));
+  res.setHeader(headers.name("X-Request-Id-Echo"), headers.value(validate.nonEmpty(req.header("X-Request-Id"))));
+  res.text(200, "id={{req.pathParam:id}};trace={{req.query:trace}};requestId={{req.header:X-Request-Id}}");
+  0
+}
+
 fn main() effects { net } -> Int {
   let router = http.router();
   http.get(router, "/users/:id", userRoute);
   http.get(router, "/request-id", headerRoute);
   http.get(router, "/query", queryRoute);
+  http.get(router, "/compose/:id", composeRoute);
   http.serve(8080, router);
   0
 }
@@ -7396,6 +7404,34 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut compose_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /compose/user-7?trace=q%2B7+ok HTTP/1.1\r\nHost: localhost\r\nX-Request-Id: req-99\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/compose request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/compose response should be readable");
+                compose_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let compose_response = match compose_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /compose request");
+        }
+    };
+
     let mut query_invalid_escape_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -7449,6 +7485,22 @@ fn main() effects { net } -> Int {
     assert!(
         query_response.contains("\r\n\r\nq+7 ok"),
         "/query response should materialize request query value in body:\n{query_response}"
+    );
+    assert!(
+        compose_response.contains("HTTP/1.1 200 OK"),
+        "/compose response should contain 200 status line:\n{compose_response}"
+    );
+    assert!(
+        compose_response.contains("X-Trace-Echo: q+7 ok"),
+        "/compose response should materialize query-driven placeholder for response header:\n{compose_response}"
+    );
+    assert!(
+        compose_response.contains("X-Request-Id-Echo: req-99"),
+        "/compose response should materialize request-header placeholder for response header:\n{compose_response}"
+    );
+    assert!(
+        compose_response.contains("\r\n\r\nid=user-7;trace=q+7 ok;requestId=req-99"),
+        "/compose response should materialize mixed literal and request-derived placeholders in body:\n{compose_response}"
     );
     assert!(
         query_invalid_escape_response.contains("HTTP/1.1 200 OK"),
