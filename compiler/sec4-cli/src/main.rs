@@ -6131,6 +6131,20 @@ fn apply_lasm_dynamic_response_materialization(
             if request.body.is_empty() && !lasm_request_expects_json(request) {
                 return;
             }
+            if !request.body.is_empty() && !lasm_request_expects_json(request) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "HTTP.BAD_REQUEST",
+                        "validation",
+                        "content-type must be application/json",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return;
+            }
             let payload = match parse_lasm_json_payload(&request.body) {
                 Some(payload) => payload,
                 None => {
@@ -6170,6 +6184,20 @@ fn apply_lasm_dynamic_response_materialization(
         }
         "CreateUserResponse" => {
             if request.body.is_empty() && !lasm_request_expects_json(request) {
+                return;
+            }
+            if !request.body.is_empty() && !lasm_request_expects_json(request) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "HTTP.BAD_REQUEST",
+                        "validation",
+                        "content-type must be application/json",
+                        400,
+                        trace_id,
+                    ),
+                );
                 return;
             }
             let payload = match parse_lasm_json_payload(&request.body) {
