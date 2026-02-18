@@ -913,5 +913,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `945-m39-lasm-header-value-character-validation.md`
 - `946-m39-lasm-overload-probe-timeout-and-req-placeholder-materialization.md`
 - `947-m39-lasm-req-query-placeholder-materialization.md`
+- `948-m39-lasm-query-percent-decoding-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.

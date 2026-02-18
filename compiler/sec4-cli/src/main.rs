@@ -7458,14 +7458,46 @@ fn split_lasm_path_and_query(target: &str) -> (String, BTreeMap<String, String>)
         if segment.is_empty() {
             continue;
         }
-        let (key, value) = segment.split_once('=').unwrap_or((segment, ""));
+        let (key_raw, value_raw) = segment.split_once('=').unwrap_or((segment, ""));
+        let decoded = decode_lasm_query_component(key_raw)
+            .zip(decode_lasm_query_component(value_raw))
+            .unwrap_or_else(|| (key_raw.to_string(), value_raw.to_string()));
+        let (key, value) = decoded;
         if key.trim().is_empty() {
             continue;
         }
-        query_params.insert(key.to_string(), value.to_string());
+        query_params.insert(key, value);
     }
 
     (path.to_string(), query_params)
+}
+
+fn decode_lasm_query_component(component: &str) -> Option<String> {
+    let mut decoded = Vec::with_capacity(component.len());
+    let bytes = component.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            b'%' => {
+                if index + 2 >= bytes.len() {
+                    return None;
+                }
+                let hi = (bytes[index + 1] as char).to_digit(16)?;
+                let lo = (bytes[index + 2] as char).to_digit(16)?;
+                decoded.push(((hi << 4) | lo) as u8);
+                index += 3;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8(decoded).ok()
 }
 
 fn write_lasm_http_response(

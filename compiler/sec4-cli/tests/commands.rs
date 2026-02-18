@@ -7374,7 +7374,7 @@ fn main() effects { net } -> Int {
             Ok(mut stream) => {
                 stream
                     .write_all(
-                        b"GET /query?trace=q-7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                        b"GET /query?tra%63e=q%2B7+ok HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
                     )
                     .expect("/query request should be written");
                 let mut body = String::new();
@@ -7393,6 +7393,36 @@ fn main() effects { net } -> Int {
             let _ = child.kill();
             let _ = child.wait();
             panic!("run command LASM req placeholder test could not connect /query request");
+        }
+    };
+
+    let mut query_invalid_escape_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /query?trace=bad%zz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/query invalid-escape request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/query invalid-escape response should be readable");
+                query_invalid_escape_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let query_invalid_escape_response = match query_invalid_escape_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "run command LASM req placeholder test could not connect /query invalid-escape request"
+            );
         }
     };
 
@@ -7417,8 +7447,16 @@ fn main() effects { net } -> Int {
         "/query response should contain 200 status line:\n{query_response}"
     );
     assert!(
-        query_response.contains("\r\n\r\nq-7"),
+        query_response.contains("\r\n\r\nq+7 ok"),
         "/query response should materialize request query value in body:\n{query_response}"
+    );
+    assert!(
+        query_invalid_escape_response.contains("HTTP/1.1 200 OK"),
+        "/query invalid-escape response should contain 200 status line:\n{query_invalid_escape_response}"
+    );
+    assert!(
+        query_invalid_escape_response.contains("\r\n\r\nbad%zz"),
+        "/query invalid-escape response should keep raw query value on invalid percent sequence:\n{query_invalid_escape_response}"
     );
 
     let _ = child.kill();

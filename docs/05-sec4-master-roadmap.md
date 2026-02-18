@@ -316,6 +316,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM shared request-head parsing now rejects control characters in header values with deterministic `400` diagnostics (`invalid header line: invalid header value character`), keeping normal and overload parser behavior aligned (`docs/book/945-m39-lasm-header-value-character-validation.md`).
 - [x] LASM overload probing now uses bounded short read timeouts to avoid long accept-loop stalls under queue saturation, and `res.text(...)` runtime materialization now supports request-derived placeholders from `req.pathParam`/`req.header` (including `validate.nonEmpty(...)` wrappers) for deterministic dynamic response bodies (`docs/book/946-m39-lasm-overload-probe-timeout-and-req-placeholder-materialization.md`).
 - [x] LASM `res.text(...)` dynamic materialization now includes `req.query("...")` placeholders (including `validate.nonEmpty(...)` wrappers) using parsed request query maps for deterministic query-driven response bodies (`docs/book/947-m39-lasm-req-query-placeholder-materialization.md`).
+- [x] LASM query parsing now decodes `%XX` escapes and `+` (with deterministic raw fallback for invalid percent escapes), aligning `req.query(...)` placeholder materialization with existing runtime query-decoding behavior (`docs/book/948-m39-lasm-query-percent-decoding-parity.md`).
 
 ### M39-S3 `sec4 promote` dry-run planner acceptance criteria
 
