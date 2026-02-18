@@ -173,11 +173,13 @@ impl LasmHttpRuntime {
         }
         self.max_pending = Some(limit);
         self.enforce_pending_limit();
+        self.drain_pending_requests();
         Ok(())
     }
 
     pub fn clear_max_pending(&mut self) {
         self.max_pending = None;
+        self.drain_pending_requests();
     }
 
     pub fn set_max_request_duration_ms(&mut self, limit_ms: u64) -> Result<(), String> {
