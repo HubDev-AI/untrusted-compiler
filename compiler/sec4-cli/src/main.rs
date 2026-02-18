@@ -5812,7 +5812,8 @@ fn build_lasm_http_runtime(
 
 fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDefaults {
     let mut headers = BTreeMap::new();
-    if policy.cors.enabled {
+    let cors_enabled = policy.cors.enabled;
+    if cors_enabled {
         let allow_origin = if policy.cors.has_wildcard_origin() {
             "*".to_string()
         } else {
@@ -5824,6 +5825,39 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
                 .unwrap_or_else(|| "*".to_string())
         };
         headers.insert("Access-Control-Allow-Origin".to_string(), allow_origin);
+        if policy.cors.allow_credentials {
+            headers.insert(
+                "Access-Control-Allow-Credentials".to_string(),
+                "true".to_string(),
+            );
+        }
+        if !policy.cors.allowed_methods.is_empty() {
+            headers.insert(
+                "Access-Control-Allow-Methods".to_string(),
+                policy.cors.allowed_methods.join(","),
+            );
+        }
+        if !policy.cors.allowed_headers.is_empty() {
+            headers.insert(
+                "Access-Control-Allow-Headers".to_string(),
+                policy.cors.allowed_headers.join(","),
+            );
+        }
+        if policy.cors.max_age_seconds >= 0 {
+            headers.insert(
+                "Access-Control-Max-Age".to_string(),
+                policy.cors.max_age_seconds.to_string(),
+            );
+        }
+        if policy.cors.allow_private_network {
+            headers.insert(
+                "Access-Control-Allow-Private-Network".to_string(),
+                "true".to_string(),
+            );
+        }
+        if policy.cors.require_vary_origin {
+            headers.insert("Vary".to_string(), "Origin".to_string());
+        }
         let exposed_headers = if policy.cors.exposed_headers.is_empty() {
             "x-trace-id,x-showcase".to_string()
         } else {
@@ -5832,6 +5866,16 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
         headers.insert("Access-Control-Expose-Headers".to_string(), exposed_headers);
     }
     if policy.security_headers.enabled {
+        if policy.security_headers.hsts_enabled {
+            let mut hsts = format!("max-age={}", policy.security_headers.hsts_max_age_seconds);
+            if policy.security_headers.hsts_include_subdomains {
+                hsts.push_str("; includeSubDomains");
+            }
+            if policy.security_headers.hsts_preload {
+                hsts.push_str("; preload");
+            }
+            headers.insert("Strict-Transport-Security".to_string(), hsts);
+        }
         if policy.security_headers.x_content_type_options {
             headers.insert("X-Content-Type-Options".to_string(), "nosniff".to_string());
         }
@@ -5860,7 +5904,10 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
             );
         }
     }
-    LasmResponseHeaderDefaults { headers }
+    LasmResponseHeaderDefaults {
+        cors_enabled,
+        headers,
+    }
 }
 
 fn process_lasm_connection_with_runtime(
@@ -5880,6 +5927,13 @@ fn process_lasm_connection_with_runtime(
             return Ok(());
         }
     };
+    if is_lasm_cors_preflight_request(&request, header_defaults) {
+        let mut response = sec4_core::HttpResponse::text(204, "");
+        response.body.clear();
+        stamp_lasm_trace_id(&mut response, trace_counter);
+        write_lasm_http_response(stream, &response, header_defaults)?;
+        return Ok(());
+    }
 
     let request_method = request.method.clone();
     let mut runtime_request = sec4_core::HttpRequest::new(request.method, request.path);
@@ -5911,6 +5965,24 @@ fn process_lasm_connection_with_runtime(
     }
     stamp_lasm_trace_id(&mut response, trace_counter);
     write_lasm_http_response(stream, &response, header_defaults)
+}
+
+fn is_lasm_cors_preflight_request(
+    request: &LasmRunRequest,
+    header_defaults: &LasmResponseHeaderDefaults,
+) -> bool {
+    if !header_defaults.cors_enabled || !request.method.eq_ignore_ascii_case("OPTIONS") {
+        return false;
+    }
+    find_lasm_header_value(&request.headers, "Access-Control-Request-Method")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn find_lasm_header_value<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
+    headers
+        .iter()
+        .find_map(|(key, value)| key.eq_ignore_ascii_case(name).then_some(value.as_str()))
 }
 
 fn drain_lasm_request_head(stream: &mut TcpStream, max_header_bytes: usize) -> Result<(), String> {
@@ -5956,6 +6028,7 @@ struct LasmRequestReadError {
 
 #[derive(Debug, Clone)]
 struct LasmResponseHeaderDefaults {
+    cors_enabled: bool,
     headers: BTreeMap<String, String>,
 }
 
@@ -6118,6 +6191,7 @@ fn http_status_text(status: u16) -> &'static str {
     match status {
         200 => "OK",
         201 => "Created",
+        204 => "No Content",
         400 => "Bad Request",
         413 => "Payload Too Large",
         404 => "Not Found",
