@@ -104,6 +104,7 @@ pub struct JsonPolicyConfig {
 pub struct HttpPolicyConfig {
     pub max_body_bytes: i64,
     pub max_concurrency: i64,
+    pub max_pending: i64,
     pub max_keep_alive_requests: i64,
     pub max_runtime_steps: i64,
     pub max_header_bytes: i64,
@@ -269,6 +270,7 @@ impl Default for Policy {
             http: HttpPolicyConfig {
                 max_body_bytes: 4_096,
                 max_concurrency: 256,
+                max_pending: 256,
                 max_keep_alive_requests: 256,
                 max_runtime_steps: 65_536,
                 max_header_bytes: 8_191,
@@ -449,6 +451,8 @@ struct HttpSection {
     max_body_bytes: Option<i64>,
     #[serde(default)]
     max_concurrency: Option<i64>,
+    #[serde(default)]
+    max_pending: Option<i64>,
     #[serde(default)]
     max_keep_alive_requests: Option<i64>,
     #[serde(default)]
@@ -878,6 +882,21 @@ fn build_policy(policy_path: &Path, raw: PolicyFile) -> Result<Policy, Vec<Diagn
                 );
             } else {
                 policy.http.max_concurrency = max_concurrency;
+            }
+        }
+
+        if let Some(max_pending) = section.max_pending {
+            if max_pending < 1 {
+                diagnostics.push(
+                    Diagnostic::error(
+                        "P6003",
+                        "invalid http.max_pending",
+                        Span::point(policy_path.to_path_buf(), 1, 1),
+                    )
+                    .with_note("http.max_pending must be >= 1"),
+                );
+            } else {
+                policy.http.max_pending = max_pending;
             }
         }
 
