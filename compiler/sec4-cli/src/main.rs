@@ -7717,10 +7717,19 @@ fn process_lasm_connection_with_runtime(
         let request_id = runtime.submit(runtime_request);
         let report = runtime.run_until_idle(runtime_step_budget);
         if !report.idle {
-            let mut response = sec4_core::HttpResponse::text(
+            let message = format!(
+                "run failed: LASM runtime remained active after step budget ({runtime_step_budget})"
+            );
+            let mut response = sec4_core::HttpResponse::text(500, "");
+            set_lasm_json_response(
+                &mut response,
                 500,
-                format!(
-                    "run failed: LASM runtime remained active after step budget ({runtime_step_budget})"
+                &lasm_error_envelope(
+                    "LASM.STEP_BUDGET_EXCEEDED",
+                    "internal",
+                    message.as_str(),
+                    500,
+                    trace_id.as_str(),
                 ),
             );
             apply_lasm_request_origin_header(
