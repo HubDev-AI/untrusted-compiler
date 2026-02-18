@@ -2334,6 +2334,86 @@ fn lasm_smoke_command_reports_queue_overflow_with_max_pending_limit() {
 }
 
 #[test]
+fn lasm_smoke_command_defaults_max_pending_to_max_in_flight_when_unspecified() {
+    let root = temp_dir("sec4-lasm-smoke-max-pending-derived-from-in-flight");
+    let project_dir = root.join("project");
+    fs::create_dir_all(project_dir.join("src")).expect("src should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        "[package]\nname = \"lasm-smoke-max-pending-derived-from-in-flight\"\nversion = \"0.1.0\"\n",
+    )
+    .expect("manifest should be written");
+    fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        "fn health() effects { net } -> Int {\n  res.text(200, \"smoke body\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/probe\", health);\n  0\n}\n",
+    )
+    .expect("entry should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8")
+        .to_string();
+    let output = run_cli(&[
+        "lasm-smoke",
+        "--path",
+        &project_path,
+        "--method",
+        "GET",
+        "--route",
+        "/probe",
+        "--max-in-flight",
+        "1",
+        "--requests",
+        "3",
+        "--max-steps",
+        "64",
+        "--format",
+        "json",
+    ]);
+    assert!(
+        output.status.success(),
+        "lasm-smoke command should succeed and report overflow when max-pending defaults from max-in-flight"
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("lasm-smoke json output should be valid json");
+    assert_eq!(
+        parsed
+            .get("maxInFlight")
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "json summary should include effective max in-flight limit"
+    );
+    assert_eq!(
+        parsed.get("maxPending").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "json summary should derive max pending from max in-flight when pending override is absent"
+    );
+    assert_eq!(
+        parsed.get("okCount").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "derived pending overflow scenario should keep two accepted responses successful"
+    );
+    assert_eq!(
+        parsed.get("errorCount").and_then(serde_json::Value::as_u64),
+        Some(1),
+        "derived pending overflow scenario should include one deterministic error response"
+    );
+    assert_eq!(
+        parsed
+            .get("statusCounts")
+            .and_then(|counts| counts.get("503"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "statusCounts should include overflow response count when pending is derived"
+    );
+
+    fs::remove_dir_all(&root).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn lasm_smoke_command_reports_timeout_status_with_max_request_ms() {
     let root = temp_dir("sec4-lasm-smoke-max-request-timeout");
     let project_dir = root.join("project");

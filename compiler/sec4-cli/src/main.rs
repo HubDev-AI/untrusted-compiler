@@ -593,7 +593,8 @@ fn cmd_lasm_smoke(
         }
         effective_max_in_flight = Some(limit);
     }
-    if let Some(limit) = max_pending {
+    let derived_max_pending = max_pending.or(max_in_flight);
+    if let Some(limit) = derived_max_pending {
         if let Err(message) = runtime.set_max_pending(limit) {
             eprintln!("lasm-smoke failed: {message}");
             return Err(2);
