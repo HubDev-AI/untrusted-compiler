@@ -6717,23 +6717,11 @@ fn build_lasm_response_header_defaults(policy: &Policy) -> LasmResponseHeaderDef
     } else {
         "session".to_string()
     };
-    let csrf_enabled = policy.csrf.enabled && !policy.csrf.mode.trim().eq_ignore_ascii_case("off");
-    let csrf_cookie_name = if !policy.csrf.cookie_name.trim().is_empty()
-        && is_lasm_response_header_name_valid(policy.csrf.cookie_name.trim())
-    {
-        policy.csrf.cookie_name.trim().to_string()
-    } else {
-        "csrf".to_string()
-    };
-    let csrf_header_name = if !policy.csrf.header_name.trim().is_empty()
-        && is_lasm_response_header_name_valid(policy.csrf.header_name.trim())
-    {
-        policy.csrf.header_name.trim().to_string()
-    } else {
-        "X-CSRF-Token".to_string()
-    };
+    let csrf_enabled = lasm_effective_csrf_enabled(policy.csrf.enabled, policy.csrf.mode.as_str());
+    let csrf_cookie_name = lasm_effective_csrf_cookie_name(policy.csrf.cookie_name.as_str());
+    let csrf_header_name = lasm_effective_csrf_header_name(policy.csrf.header_name.as_str());
     let csrf_protected_methods =
-        normalize_lasm_csrf_protected_methods(policy.csrf.protected_methods.as_slice());
+        lasm_effective_csrf_protected_methods(policy.csrf.protected_methods.as_slice());
     let mut cors_allow_any_origin = false;
     let mut cors_allowed_origins = Vec::new();
     let mut cors_allow_any_method = false;
@@ -7397,6 +7385,78 @@ fn lasm_effective_auth_mode(policy_mode: &str) -> String {
         }
     }
     normalize_lasm_auth_mode(policy_mode).to_string()
+}
+
+fn parse_lasm_env_bool(name: &str) -> Option<bool> {
+    let value = std::env::var(name).ok()?;
+    let normalized = value.trim();
+    if normalized.eq_ignore_ascii_case("1")
+        || normalized.eq_ignore_ascii_case("true")
+        || normalized.eq_ignore_ascii_case("yes")
+        || normalized.eq_ignore_ascii_case("on")
+    {
+        return Some(true);
+    }
+    if normalized.eq_ignore_ascii_case("0")
+        || normalized.eq_ignore_ascii_case("false")
+        || normalized.eq_ignore_ascii_case("no")
+        || normalized.eq_ignore_ascii_case("off")
+    {
+        return Some(false);
+    }
+    None
+}
+
+fn lasm_effective_csrf_enabled(policy_enabled: bool, policy_mode: &str) -> bool {
+    let mut enabled = policy_enabled && !policy_mode.trim().eq_ignore_ascii_case("off");
+    if let Some(env_enabled) = parse_lasm_env_bool("SEC4_RT_CSRF_ENABLED") {
+        enabled = env_enabled;
+    }
+    if let Ok(mode) = std::env::var("SEC4_RT_CSRF_MODE") {
+        if mode.trim().eq_ignore_ascii_case("off") {
+            enabled = false;
+        }
+    }
+    enabled
+}
+
+fn lasm_effective_csrf_cookie_name(policy_cookie_name: &str) -> String {
+    if let Ok(value) = std::env::var("SEC4_RT_CSRF_COOKIE_NAME") {
+        if !value.trim().is_empty() && is_lasm_response_header_name_valid(value.trim()) {
+            return value.trim().to_string();
+        }
+    }
+    if !policy_cookie_name.trim().is_empty()
+        && is_lasm_response_header_name_valid(policy_cookie_name.trim())
+    {
+        return policy_cookie_name.trim().to_string();
+    }
+    "csrf".to_string()
+}
+
+fn lasm_effective_csrf_header_name(policy_header_name: &str) -> String {
+    if let Ok(value) = std::env::var("SEC4_RT_CSRF_HEADER_NAME") {
+        if !value.trim().is_empty() && is_lasm_response_header_name_valid(value.trim()) {
+            return value.trim().to_string();
+        }
+    }
+    if !policy_header_name.trim().is_empty()
+        && is_lasm_response_header_name_valid(policy_header_name.trim())
+    {
+        return policy_header_name.trim().to_string();
+    }
+    "X-CSRF-Token".to_string()
+}
+
+fn lasm_effective_csrf_protected_methods(policy_methods: &[String]) -> Vec<String> {
+    if let Ok(raw) = std::env::var("SEC4_RT_CSRF_PROTECTED_METHODS") {
+        let env_methods = raw
+            .split(',')
+            .map(|value| value.trim().to_string())
+            .collect::<Vec<_>>();
+        return normalize_lasm_csrf_protected_methods(env_methods.as_slice());
+    }
+    normalize_lasm_csrf_protected_methods(policy_methods)
 }
 
 fn lasm_auth_mode_allows_token(mode: &str) -> bool {

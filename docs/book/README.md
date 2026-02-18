@@ -941,5 +941,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `973-m39-lasm-auth-helper-enforcement-with-ctx-current.md`
 - `974-m39-lasm-auth-csrf-middleware-enforcement.md`
 - `975-m39-lasm-auth-middleware-env-off-parity.md`
+- `976-m39-lasm-csrf-middleware-env-off-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
