@@ -1627,6 +1627,10 @@ fn extract_router_middleware_requirements_from_block(
     for statement in &block.statements {
         match &statement.kind {
             sec4_core::ast::StmtKind::Let { name, value, .. } => {
+                let value_requirements =
+                    extract_router_middleware_requirements(functions, value, bindings, depth + 1);
+                accumulated.require_auth |= value_requirements.require_auth;
+                accumulated.require_csrf |= value_requirements.require_csrf;
                 bindings.insert(name.clone(), value.clone());
             }
             sec4_core::ast::StmtKind::Return { value } => {
@@ -1645,10 +1649,14 @@ fn extract_router_middleware_requirements_from_block(
             }
             sec4_core::ast::StmtKind::Expr { expr } => {
                 if let sec4_core::ast::ExprKind::Call { callee, args } = &expr.kind {
-                    let direct_auth = match_auth_middleware_call(callee, bindings);
-                    let direct_csrf = match_csrf_middleware_call(callee, bindings);
+                    let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                        .unwrap_or_else(|| callee.as_ref().clone());
+                    let direct_auth = match_auth_middleware_call(&resolved_callee, bindings);
+                    let direct_csrf = match_csrf_middleware_call(&resolved_callee, bindings);
                     let helper_requirements =
-                        if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+                        if let sec4_core::ast::ExprKind::Identifier(function_name) =
+                            &resolved_callee.kind
+                        {
                             extract_router_middleware_requirements_from_function_call(
                                 functions,
                                 function_name.as_str(),
@@ -1665,7 +1673,10 @@ fn extract_router_middleware_requirements_from_block(
                         accumulated.require_auth |= applies_auth;
                         accumulated.require_csrf |= applies_csrf;
                         if let Some(name) = extract_router_binding_target_from_call(
-                            functions, callee, args, bindings,
+                            functions,
+                            &resolved_callee,
+                            args,
+                            bindings,
                         ) {
                             bindings.insert(name, expr.clone());
                         }
@@ -2141,13 +2152,17 @@ fn extract_auth_requirement_in_expr(
 ) {
     match &expr.kind {
         sec4_core::ast::ExprKind::Call { callee, args } => {
-            if let Some(call_requirement) = match_auth_requirement_call(callee, args, bindings) {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(call_requirement) =
+                match_auth_requirement_call(&resolved_callee, args, bindings)
+            {
                 requirement.require_auth |= call_requirement.require_auth;
                 if let Some(required_role) = call_requirement.required_role {
                     requirement.required_role = Some(required_role);
                 }
             }
-            if let sec4_core::ast::ExprKind::Identifier(function_name) = &callee.kind {
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
                 let call_bindings = collect_auth_requirement_call_bindings(
                     functions,
                     function_name,
