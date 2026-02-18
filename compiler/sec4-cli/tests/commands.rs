@@ -7266,10 +7266,17 @@ fn headerRoute() effects { net } -> Int {
   0
 }
 
+fn queryRoute() effects { net } -> Int {
+  let trace = validate.nonEmpty(req.query("trace"));
+  res.text(200, trace);
+  0
+}
+
 fn main() effects { net } -> Int {
   let router = http.router();
   http.get(router, "/users/:id", userRoute);
   http.get(router, "/request-id", headerRoute);
+  http.get(router, "/query", queryRoute);
   http.serve(8080, router);
   0
 }
@@ -7361,6 +7368,34 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut query_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /query?trace=q-7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/query request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/query response should be readable");
+                query_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let query_response = match query_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /query request");
+        }
+    };
+
     assert!(
         user_response.contains("HTTP/1.1 200 OK"),
         "/users response should contain 200 status line:\n{user_response}"
@@ -7376,6 +7411,14 @@ fn main() effects { net } -> Int {
     assert!(
         header_response.contains("\r\n\r\nreq-42"),
         "/request-id response should materialize request header in body:\n{header_response}"
+    );
+    assert!(
+        query_response.contains("HTTP/1.1 200 OK"),
+        "/query response should contain 200 status line:\n{query_response}"
+    );
+    assert!(
+        query_response.contains("\r\n\r\nq-7"),
+        "/query response should materialize request query value in body:\n{query_response}"
     );
 
     let _ = child.kill();
