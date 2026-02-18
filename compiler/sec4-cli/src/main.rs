@@ -7660,7 +7660,7 @@ fn write_lasm_http_response(
     omit_body: bool,
     close_connection: bool,
 ) -> Result<(), String> {
-    let mut headers = response.headers.clone();
+    let mut headers = normalize_lasm_response_headers_case_insensitive(response.headers.clone());
     if !include_cors_defaults {
         headers.retain(|name, _| !is_lasm_cors_default_header_name(name.as_str()));
     }
@@ -7668,12 +7668,15 @@ fn write_lasm_http_response(
         if !include_cors_defaults && is_lasm_cors_default_header_name(name.as_str()) {
             continue;
         }
-        headers.entry(name.clone()).or_insert_with(|| value.clone());
+        insert_lasm_header_if_missing_case_insensitive(&mut headers, name, value.clone());
     }
-    headers
-        .entry("Content-Length".to_string())
-        .or_insert_with(|| response.body.len().to_string());
-    headers.insert(
+    insert_lasm_header_if_missing_case_insensitive(
+        &mut headers,
+        "Content-Length",
+        response.body.len().to_string(),
+    );
+    upsert_lasm_header_case_insensitive(
+        &mut headers,
         "Connection".to_string(),
         if close_connection {
             "close".to_string()
@@ -7681,9 +7684,11 @@ fn write_lasm_http_response(
             "keep-alive".to_string()
         },
     );
-    headers
-        .entry("Content-Type".to_string())
-        .or_insert_with(|| "text/plain; charset=utf-8".to_string());
+    insert_lasm_header_if_missing_case_insensitive(
+        &mut headers,
+        "Content-Type",
+        "text/plain; charset=utf-8".to_string(),
+    );
 
     let status_text = http_status_text(response.status);
     let mut response_head = format!("HTTP/1.1 {} {}\r\n", response.status, status_text);
@@ -7720,6 +7725,53 @@ fn write_lasm_http_response(
     Ok(())
 }
 
+fn insert_lasm_header_if_missing_case_insensitive(
+    headers: &mut BTreeMap<String, String>,
+    canonical_name: &str,
+    value: String,
+) {
+    if find_lasm_header_key_case_insensitive(headers, canonical_name).is_some() {
+        return;
+    }
+    headers.insert(canonical_name.to_string(), value);
+}
+
+fn normalize_lasm_response_headers_case_insensitive(
+    headers: BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let mut normalized = BTreeMap::new();
+    for (name, value) in headers {
+        if let Some(existing_key) = find_lasm_header_key_case_insensitive(&normalized, name.as_str()) {
+            normalized.insert(existing_key, value);
+        } else {
+            normalized.insert(name, value);
+        }
+    }
+    normalized
+}
+
+fn upsert_lasm_header_case_insensitive(
+    headers: &mut BTreeMap<String, String>,
+    canonical_name: String,
+    value: String,
+) {
+    if let Some(existing_key) = find_lasm_header_key_case_insensitive(headers, canonical_name.as_str()) {
+        headers.insert(existing_key, value);
+        return;
+    }
+    headers.insert(canonical_name, value);
+}
+
+fn find_lasm_header_key_case_insensitive(
+    headers: &BTreeMap<String, String>,
+    target: &str,
+) -> Option<String> {
+    headers
+        .keys()
+        .find(|name| name.eq_ignore_ascii_case(target))
+        .cloned()
+}
+
 fn is_lasm_cors_default_header_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("Vary")
         || name.eq_ignore_ascii_case("Access-Control-Allow-Origin")
@@ -7737,6 +7789,12 @@ fn next_lasm_trace_id(trace_counter: &AtomicU64) -> String {
 }
 
 fn set_lasm_trace_id(response: &mut sec4_core::HttpResponse, trace_id: &str) {
+    if let Some(existing_key) =
+        find_lasm_header_key_case_insensitive(&response.headers, "X-Trace-Id")
+    {
+        response.headers.insert(existing_key, trace_id.to_string());
+        return;
+    }
     response
         .headers
         .insert("X-Trace-Id".to_string(), trace_id.to_string());
