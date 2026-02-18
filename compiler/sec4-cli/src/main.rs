@@ -1688,18 +1688,28 @@ fn parse_lasm_request_text_placeholder(
     let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
         return None;
     };
-    if namespace != "req" || args.is_empty() {
-        return None;
-    }
-    let key = parse_string_literal(&args[0], bindings)?;
-    if key.trim().is_empty() {
+    if namespace != "req" {
         return None;
     }
     match field.as_str() {
-        "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
-        "header" => Some(format!("{{{{req.header:{key}}}}}")),
-        "query" => Some(format!("{{{{req.query:{key}}}}}")),
-        "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
+        "method" if args.is_empty() => Some("{{req.method}}".to_string()),
+        "path" if args.is_empty() => Some("{{req.path}}".to_string()),
+        "pathParam" | "header" | "query" | "cookie" => {
+            if args.is_empty() {
+                return None;
+            }
+            let key = parse_string_literal(&args[0], bindings)?;
+            if key.trim().is_empty() {
+                return None;
+            }
+            match field.as_str() {
+                "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
+                "header" => Some(format!("{{{{req.header:{key}}}}}")),
+                "query" => Some(format!("{{{{req.query:{key}}}}}")),
+                "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -2227,18 +2237,28 @@ fn parse_lasm_request_header_placeholder_call(
     let sec4_core::ast::ExprKind::Identifier(namespace) = &object.kind else {
         return None;
     };
-    if namespace != "req" || args.is_empty() {
-        return None;
-    }
-    let key = extract_string_literal_or_binding(&args[0], bindings)?;
-    if key.trim().is_empty() {
+    if namespace != "req" {
         return None;
     }
     match field.as_str() {
-        "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
-        "header" => Some(format!("{{{{req.header:{key}}}}}")),
-        "query" => Some(format!("{{{{req.query:{key}}}}}")),
-        "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
+        "method" if args.is_empty() => Some("{{req.method}}".to_string()),
+        "path" if args.is_empty() => Some("{{req.path}}".to_string()),
+        "pathParam" | "header" | "query" | "cookie" => {
+            if args.is_empty() {
+                return None;
+            }
+            let key = extract_string_literal_or_binding(&args[0], bindings)?;
+            if key.trim().is_empty() {
+                return None;
+            }
+            match field.as_str() {
+                "pathParam" => Some(format!("{{{{req.pathParam:{key}}}}}")),
+                "header" => Some(format!("{{{{req.header:{key}}}}}")),
+                "query" => Some(format!("{{{{req.query:{key}}}}}")),
+                "cookie" => Some(format!("{{{{req.cookie:{key}}}}}")),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -6678,6 +6698,8 @@ fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
         || value.contains("{{req.header:")
         || value.contains("{{req.query:")
         || value.contains("{{req.cookie:")
+        || value.contains("{{req.method}}")
+        || value.contains("{{req.path}}")
 }
 
 fn materialize_lasm_request_placeholders(
@@ -6685,9 +6707,12 @@ fn materialize_lasm_request_placeholders(
     request: &LasmRunRequest,
     path_params: &BTreeMap<String, String>,
 ) -> String {
-    let with_path_params = replace_lasm_response_placeholder_tokens(value, "{{req.pathParam:", |key| {
-        path_params.get(key.trim()).cloned()
-    });
+    let with_method = value.replace("{{req.method}}", request.method.as_str());
+    let with_path = with_method.replace("{{req.path}}", request.path.as_str());
+    let with_path_params =
+        replace_lasm_response_placeholder_tokens(&with_path, "{{req.pathParam:", |key| {
+            path_params.get(key.trim()).cloned()
+        });
     let with_headers =
         replace_lasm_response_placeholder_tokens(&with_path_params, "{{req.header:", |key| {
             find_lasm_header_value(&request.headers, key.trim()).map(ToOwned::to_owned)

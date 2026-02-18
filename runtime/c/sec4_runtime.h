@@ -42,6 +42,8 @@ int64_t sec4_rt_req_query(const char *name);
 int64_t sec4_rt_req_path_param(const char *name);
 int64_t sec4_rt_req_header(const char *name);
 int64_t sec4_rt_req_cookie(const char *name);
+int64_t sec4_rt_req_method(void);
+int64_t sec4_rt_req_path(void);
 int64_t sec4_rt_res_json(int64_t schema, int64_t value);
 int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value);
 int64_t sec4_rt_res_ok_meta(int64_t status, int64_t schema, int64_t value, int64_t meta);

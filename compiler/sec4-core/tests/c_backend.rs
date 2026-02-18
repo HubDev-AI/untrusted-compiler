@@ -96,6 +96,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_req_path_param(const char *name);"));
     assert!(header.contains("int64_t sec4_rt_req_header(const char *name);"));
     assert!(header.contains("int64_t sec4_rt_req_cookie(const char *name);"));
+    assert!(header.contains("int64_t sec4_rt_req_method(void);"));
+    assert!(header.contains("int64_t sec4_rt_req_path(void);"));
     assert!(header.contains("int64_t sec4_rt_res_json(int64_t schema, int64_t value);"));
     assert!(
         header.contains("int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value);")
@@ -195,6 +197,8 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_req_path_param(const char *name)"));
     assert!(source.contains("int64_t sec4_rt_req_header(const char *name)"));
     assert!(source.contains("int64_t sec4_rt_req_cookie(const char *name)"));
+    assert!(source.contains("int64_t sec4_rt_req_method(void)"));
+    assert!(source.contains("int64_t sec4_rt_req_path(void)"));
     assert!(source.contains("int64_t sec4_rt_res_json(int64_t schema, int64_t value)"));
     assert!(
         source.contains("int64_t sec4_rt_res_ok(int64_t status, int64_t schema, int64_t value)")
@@ -363,6 +367,8 @@ fn main() effects { net } -> Int {
   req.pathParam(1, 2);
   req.header(1, 2);
   req.cookie(1, 2);
+  req.method();
+  req.path();
   req.json(schema);
   res.json(schema, 1);
   res.ok(201, schema, 1);
@@ -382,6 +388,8 @@ fn main() effects { net } -> Int {
     assert!(c.contains("(void)(sec4_rt_req_path_param(1, 2));"));
     assert!(c.contains("(void)(sec4_rt_req_header(1, 2));"));
     assert!(c.contains("(void)(sec4_rt_req_cookie(1, 2));"));
+    assert!(c.contains("(void)(sec4_rt_req_method());"));
+    assert!(c.contains("(void)(sec4_rt_req_path());"));
     assert!(c.contains("(void)(sec4_rt_req_json(schema));"));
     assert!(c.contains("(void)(sec4_rt_res_json(schema, 1));"));
     assert!(c.contains("(void)(sec4_rt_res_ok(201, schema, 1));"));

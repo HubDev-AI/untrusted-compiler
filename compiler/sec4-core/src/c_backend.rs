@@ -234,6 +234,10 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("req_header(", "__SEC4_INTRINSIC_REQ_HEADER__(");
     lowered = lowered.replace("req.cookie(", "__SEC4_INTRINSIC_REQ_COOKIE__(");
     lowered = lowered.replace("req_cookie(", "__SEC4_INTRINSIC_REQ_COOKIE__(");
+    lowered = lowered.replace("req.method(", "__SEC4_INTRINSIC_REQ_METHOD__(");
+    lowered = lowered.replace("req_method(", "__SEC4_INTRINSIC_REQ_METHOD__(");
+    lowered = lowered.replace("req.path(", "__SEC4_INTRINSIC_REQ_PATH__(");
+    lowered = lowered.replace("req_path(", "__SEC4_INTRINSIC_REQ_PATH__(");
     lowered = lowered.replace("res.json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res_json(", "__SEC4_INTRINSIC_RES_JSON__(");
     lowered = lowered.replace("res.okMeta(", "__SEC4_INTRINSIC_RES_OK_META__(");
@@ -457,6 +461,8 @@ fn lower_c_expr(expr: &str) -> String {
     );
     lowered = lowered.replace("__SEC4_INTRINSIC_REQ_HEADER__(", "sec4_rt_req_header(");
     lowered = lowered.replace("__SEC4_INTRINSIC_REQ_COOKIE__(", "sec4_rt_req_cookie(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_REQ_METHOD__(", "sec4_rt_req_method(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_REQ_PATH__(", "sec4_rt_req_path(");
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_JSON__(", "sec4_rt_res_json(");
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_OK__(", "sec4_rt_res_ok(");
     lowered = lowered.replace("__SEC4_INTRINSIC_RES_OK_META__(", "sec4_rt_res_ok_meta(");
