@@ -6843,10 +6843,12 @@ fn cmd_run_lasm_backend(
     let dynamic_state = Arc::new(Mutex::new(LasmDynamicResponseState::default()));
     let mut oneshot_runtime = if oneshot {
         Some(
-            build_lasm_http_runtime(&routes, effective_timeout_ms).map_err(|message| {
-                eprintln!("run failed: {message}");
-                2
-            })?,
+            build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
+                |message| {
+                    eprintln!("run failed: {message}");
+                    2
+                },
+            )?,
         )
     } else {
         None
@@ -6863,14 +6865,17 @@ fn cmd_run_lasm_backend(
             let header_defaults_for_worker = Arc::clone(&header_defaults);
             let dynamic_state_for_worker = Arc::clone(&dynamic_state);
             worker_handles.push(std::thread::spawn(move || {
-                let mut runtime =
-                    match build_lasm_http_runtime(&routes_for_worker, effective_timeout_ms) {
-                        Ok(runtime) => runtime,
-                        Err(message) => {
-                            eprintln!("warning: LASM worker bootstrap failed: {message}");
-                            return;
-                        }
-                    };
+                let mut runtime = match build_lasm_http_runtime(
+                    &routes_for_worker,
+                    effective_timeout_ms,
+                    effective_max_pending,
+                ) {
+                    Ok(runtime) => runtime,
+                    Err(message) => {
+                        eprintln!("warning: LASM worker bootstrap failed: {message}");
+                        return;
+                    }
+                };
                 loop {
                     let next_stream = {
                         let receiver = match worker_receiver.lock() {
@@ -7038,11 +7043,15 @@ fn cmd_run_lasm_backend(
 fn build_lasm_http_runtime(
     routes: &[LasmRunRoutePlan],
     timeout_ms: u64,
+    max_pending: usize,
 ) -> Result<sec4_core::LasmHttpRuntime, String> {
     let mut runtime = sec4_core::LasmHttpRuntime::default();
     runtime
         .set_max_in_flight(1)
         .map_err(|message| format!("could not configure LASM runtime max in-flight: {message}"))?;
+    runtime
+        .set_max_pending(max_pending)
+        .map_err(|message| format!("could not configure LASM runtime max pending: {message}"))?;
     runtime
         .set_max_request_duration_ms(timeout_ms)
         .map_err(|message| {
