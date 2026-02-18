@@ -940,5 +940,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `972-m39-ctx-current-intrinsic-runtime-bridge.md`
 - `973-m39-lasm-auth-helper-enforcement-with-ctx-current.md`
 - `974-m39-lasm-auth-csrf-middleware-enforcement.md`
+- `975-m39-lasm-auth-middleware-env-off-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
