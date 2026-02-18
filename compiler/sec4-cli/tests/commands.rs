@@ -14693,6 +14693,7 @@ fn run_command_lasm_backend_persists_user_store_when_db_base_flag_is_set() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-persistence");
     let db_base = project_dir.join("lasm-db");
     let create_port = find_available_tcp_port();
+    let create_duplicate_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     let read_port = find_available_tcp_port();
     let read_by_email_port = find_available_tcp_port();
@@ -14871,6 +14872,23 @@ fn main() effects { net } -> Int {
     assert!(
         create_response.contains("\"userId\":\"123e4567-e89b-42d3-a456-426614174000\""),
         "create response should include deterministic user id:\n{create_response}"
+    );
+
+    let duplicate_create_response = run_lasm_oneshot_request(
+        create_duplicate_port,
+        format!(
+            "POST /users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            create_payload.len(),
+            create_payload
+        ),
+    );
+    assert!(
+        duplicate_create_response.contains("HTTP/1.1 409 "),
+        "duplicate create response should contain deterministic 409 status:\n{duplicate_create_response}"
+    );
+    assert!(
+        duplicate_create_response.contains("\"code\":\"HTTP.CONFLICT\""),
+        "duplicate create response should include deterministic conflict code:\n{duplicate_create_response}"
     );
 
     let users_store_path = db_base.join("users.json");

@@ -8256,10 +8256,40 @@ fn apply_lasm_dynamic_response_materialization(
             let Some(id) = extract_lasm_payload_id(&payload) else {
                 return;
             };
-            if let Ok(mut state) = dynamic_state.lock() {
-                state.users_by_id.insert(id.clone(), payload);
-                if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
-                    eprintln!("warning: LASM dynamic users store persistence failed: {message}");
+            match dynamic_state.lock() {
+                Ok(mut state) => {
+                    if state.users_by_id.contains_key(&id) {
+                        set_lasm_json_response(
+                            response,
+                            409,
+                            &lasm_error_envelope(
+                                "HTTP.CONFLICT",
+                                "conflict",
+                                "user already exists",
+                                409,
+                                trace_id,
+                            ),
+                        );
+                        return;
+                    }
+                    state.users_by_id.insert(id.clone(), payload);
+                    if let Err(message) = persist_lasm_dynamic_users_to_disk(&state) {
+                        eprintln!("warning: LASM dynamic users store persistence failed: {message}");
+                    }
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
                 }
             }
             set_lasm_json_response(
