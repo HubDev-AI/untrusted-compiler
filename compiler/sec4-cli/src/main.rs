@@ -7872,7 +7872,19 @@ fn process_lasm_connection_with_runtime(
             );
             response
         } else {
-            sec4_core::HttpResponse::text(500, "missing LASM response for request")
+            let mut response = sec4_core::HttpResponse::text(500, "");
+            set_lasm_json_response(
+                &mut response,
+                500,
+                &lasm_error_envelope(
+                    "LASM.MISSING_RESPONSE",
+                    "internal",
+                    "missing LASM response for request",
+                    500,
+                    trace_id.as_str(),
+                ),
+            );
+            response
         };
         apply_lasm_request_origin_header(&mut response, Some(&request.headers), header_defaults);
         set_lasm_trace_id(&mut response, trace_id.as_str());
@@ -8451,7 +8463,20 @@ fn apply_lasm_dynamic_response_materialization(
             }
             let user = match dynamic_state.lock() {
                 Ok(state) => state.users_by_id.get(&id).cloned(),
-                Err(_) => None,
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return;
+                }
             };
             match user {
                 Some(user) => set_lasm_json_response(response, 200, &user),
@@ -10663,6 +10688,7 @@ fn http_status_text(status: u16) -> &'static str {
         417 => "Expectation Failed",
         408 => "Request Timeout",
         405 => "Method Not Allowed",
+        409 => "Conflict",
         431 => "Request Header Fields Too Large",
         413 => "Payload Too Large",
         404 => "Not Found",

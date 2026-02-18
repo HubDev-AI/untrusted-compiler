@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-18 | self | I paused to explain a failed patch instead of immediately continuing with the next concrete implementation step, despite explicit user direction to keep chaining tasks. | When a patch fails, log it in one short line, immediately re-read the exact live context, and continue with the next implementation action without conversational pauses. |
 | 2026-02-18 | self | After `gh pr merge`, I kept coding immediately and missed that context had snapped back to stale local `dev`, so the next LASM slice started on the wrong base branch. | After every merge, run `git branch --show-current` and `git rev-parse HEAD origin/dev` before any edits; if not on a fresh `codex/*` from `origin/dev`, re-anchor first. |
 | 2026-02-18 | self | Accidentally triggered the web tool while in a local-only LASM implementation loop. | Keep LASM/compiler slices strictly on local repository tools (`exec_command`/`apply_patch`) unless external research is explicitly required. |
 | 2026-02-18 | self | Used parallel Cargo validation again for targeted LASM tests and reintroduced package/build lock wait noise. | Run Cargo commands strictly sequential in this repo; parallelize only read/search commands. |
