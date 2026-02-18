@@ -7076,6 +7076,16 @@ fn cmd_run_lasm_backend(
             eprintln!("run failed: LASM backend could not set read timeout: {err}");
             return Err(2);
         }
+        if let Err(err) =
+            stream.set_write_timeout(Some(std::time::Duration::from_millis(effective_timeout_ms)))
+        {
+            eprintln!("run failed: LASM backend could not set write timeout: {err}");
+            return Err(2);
+        }
+        if let Err(err) = stream.set_nodelay(true) {
+            eprintln!("run failed: LASM backend could not enable TCP_NODELAY: {err}");
+            return Err(2);
+        }
 
         if oneshot {
             if let Err(message) = process_lasm_connection_with_runtime(
@@ -7106,6 +7116,8 @@ fn cmd_run_lasm_backend(
                 let probe_timeout_ms = effective_timeout_ms.min(50).max(1);
                 let _ = stream
                     .set_read_timeout(Some(std::time::Duration::from_millis(probe_timeout_ms)));
+                let _ = stream
+                    .set_write_timeout(Some(std::time::Duration::from_millis(probe_timeout_ms)));
                 let trace_id = next_lasm_trace_id(trace_counter.as_ref());
                 match read_lasm_request_head(&mut stream, effective_max_header_bytes) {
                     Ok(request_head) => {
