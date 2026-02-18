@@ -6787,7 +6787,9 @@ fn read_lasm_request_head(
         }
         consumed = consumed.saturating_add(read);
         if consumed > max_header_bytes {
-            break;
+            return Err(format!(
+                "request headers exceed configured limit ({max_header_bytes} bytes)"
+            ));
         }
         if line == "\r\n" || line == "\n" {
             break;
@@ -6877,6 +6879,12 @@ fn read_lasm_http_request(
         return Err(make_error(400, "empty request".to_string()));
     }
     let mut consumed = bytes;
+    if consumed > max_header_bytes {
+        return Err(make_error(
+            431,
+            format!("request headers exceed configured limit ({max_header_bytes} bytes)"),
+        ));
+    }
     let mut parts = request_line.trim_end().split_whitespace();
     let method = parts
         .next()
