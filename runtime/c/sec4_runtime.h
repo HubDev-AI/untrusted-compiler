@@ -118,13 +118,13 @@ int64_t sec4_rt_err_not_found(int64_t code, int64_t message);
 int64_t sec4_rt_err_conflict(int64_t code, int64_t message);
 int64_t sec4_rt_err_rate_limit(int64_t code, int64_t message, int64_t limit);
 int64_t sec4_rt_err_internal(int64_t message);
-int64_t sec4_rt_err_with_path(int64_t error, const char *path);
-int64_t sec4_rt_err_with_detail(int64_t error, const char *key, int64_t value);
-int64_t sec4_rt_err_with_limit(int64_t error, const char *name, int64_t value, int64_t max);
+int64_t sec4_rt_err_with_path(int64_t error, int64_t path);
+int64_t sec4_rt_err_with_detail(int64_t error, int64_t key, int64_t value);
+int64_t sec4_rt_err_with_limit(int64_t error, int64_t name, int64_t value, int64_t max);
 int64_t sec4_rt_err_with_dependency(
     int64_t error,
-    const char *service,
-    const char *operation,
+    int64_t service,
+    int64_t operation,
     int64_t retryable
 );
 int64_t sec4_rt_err_with_cause(int64_t error, int64_t cause);

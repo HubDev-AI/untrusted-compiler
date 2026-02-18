@@ -8747,10 +8747,10 @@ int main(void) {
       12
   );
   int64_t err = sec4_rt_err_internal((int64_t)(uintptr_t) "boom");
-  err = sec4_rt_err_with_path(err, "$.email");
+  err = sec4_rt_err_with_path(err, (int64_t)(uintptr_t) "$.email");
   err = sec4_rt_err_with_detail(
       err,
-      "validator",
+      (int64_t)(uintptr_t) "validator",
       sec4_rt_log_str((int64_t)(uintptr_t) "validate.email")
   );
   int64_t with_error = sec4_rt_log_with_error(with_http, err);
@@ -18680,13 +18680,21 @@ static int64_t validate(void) {{
       (int64_t)(uintptr_t) "VALIDATE.EMAIL_INVALID",
       (int64_t)(uintptr_t) "Invalid email."
   );
-  int64_t with_path = sec4_rt_err_with_path(base, "$.email");
+  int64_t with_path = sec4_rt_err_with_path(base, (int64_t)(uintptr_t) "$.email");
   int64_t validator = sec4_rt_log_str((int64_t)(uintptr_t) "validate.email");
-  int64_t with_detail = sec4_rt_err_with_detail(with_path, "validator", validator);
+  int64_t with_detail =
+      sec4_rt_err_with_detail(with_path, (int64_t)(uintptr_t) "validator", validator);
   int64_t expected = sec4_rt_log_str((int64_t)(uintptr_t) "Email");
-  int64_t with_detail2 = sec4_rt_err_with_detail(with_detail, "expected", expected);
-  int64_t with_limit = sec4_rt_err_with_limit(with_detail2, "maxJsonDepth", 33, 32);
-  int64_t with_dependency = sec4_rt_err_with_dependency(with_limit, "postgres", "query", 1);
+  int64_t with_detail2 =
+      sec4_rt_err_with_detail(with_detail, (int64_t)(uintptr_t) "expected", expected);
+  int64_t with_limit =
+      sec4_rt_err_with_limit(with_detail2, (int64_t)(uintptr_t) "maxJsonDepth", 33, 32);
+  int64_t with_dependency = sec4_rt_err_with_dependency(
+      with_limit,
+      (int64_t)(uintptr_t) "postgres",
+      (int64_t)(uintptr_t) "query",
+      1
+  );
   (void) sec4_rt_err_with_cause(with_dependency, 123);
   return 0;
 }}
