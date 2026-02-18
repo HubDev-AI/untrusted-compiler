@@ -8769,6 +8769,10 @@ fn main() effects { net } -> Int {
         response.contains("X-Trace-Id: rt-"),
         "overflow parser response should include deterministic trace header:\n{response}"
     );
+    assert!(
+        !response.contains("Access-Control-Allow-Origin: "),
+        "overflow parser response should suppress CORS defaults:\n{response}"
+    );
 
     let _ = child.kill();
     let _ = child.wait();
