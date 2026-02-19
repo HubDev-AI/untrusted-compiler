@@ -1118,12 +1118,43 @@ struct LasmRouteMiddlewareRequirements {
     require_csrf: bool,
 }
 
+#[derive(Debug, Clone)]
+struct LasmSqlQueryPlan {
+    template: String,
+    params: String,
+}
+
+#[derive(Debug, Clone)]
+enum LasmDbTxPlan {
+    FromDb { db: String },
+    Handle { tx: String },
+}
+
+#[derive(Debug, Clone)]
+enum LasmDbOperationPlan {
+    Exec {
+        db: String,
+        query: LasmSqlQueryPlan,
+    },
+    ExecTx {
+        tx: LasmDbTxPlan,
+        query: LasmSqlQueryPlan,
+    },
+    QueryOne {
+        db: String,
+        row_schema: String,
+        query: LasmSqlQueryPlan,
+    },
+}
+
 #[derive(Debug, Default)]
 struct LasmDynamicResponseState {
     users_by_id: HashMap<String, serde_json::Value>,
     users_store_path: Option<PathBuf>,
     db_records: Vec<LasmDbRecord>,
     db_records_store_path: Option<PathBuf>,
+    db_tx_handles: HashMap<i64, i64>,
+    next_db_tx_handle: i64,
     next_db_record_id: u64,
 }
 
@@ -1144,6 +1175,13 @@ const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 const LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
+const LASM_INTERNAL_DB_OP_HEADER: &str = "X-Sec4-Internal-Db-Op";
+const LASM_INTERNAL_DB_HANDLE_HEADER: &str = "X-Sec4-Internal-Db";
+const LASM_INTERNAL_DB_TEMPLATE_HEADER: &str = "X-Sec4-Internal-Db-Template";
+const LASM_INTERNAL_DB_PARAMS_HEADER: &str = "X-Sec4-Internal-Db-Params";
+const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
+const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
+const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 
 fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDynamicResponseState {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
@@ -1163,11 +1201,26 @@ fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDyn
         .max()
         .unwrap_or(0)
         .saturating_add(1);
+    let mut db_tx_handles = HashMap::new();
+    for record in &db_records {
+        if record.tx > 0 {
+            db_tx_handles.insert(record.tx, record.db);
+        }
+    }
+    let next_db_tx_handle = db_tx_handles
+        .keys()
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+        .max(1);
     LasmDynamicResponseState {
         users_by_id,
         users_store_path,
         db_records,
         db_records_store_path,
+        db_tx_handles,
+        next_db_tx_handle,
         next_db_record_id,
     }
 }
@@ -1410,6 +1463,11 @@ fn collect_lasm_route_plans(
                 "1".to_string(),
             );
         }
+        if let Some(db_operation) =
+            extract_lasm_db_operation(&functions, registration.handler_name.as_str())
+        {
+            apply_lasm_db_operation_plan_headers(&mut headers, &db_operation);
+        }
         if let Some(content_type) = response_plan.default_content_type {
             headers
                 .entry("Content-Type".to_string())
@@ -1425,6 +1483,77 @@ fn collect_lasm_route_plans(
     }
 
     plans
+}
+
+fn apply_lasm_db_operation_plan_headers(
+    headers: &mut BTreeMap<String, String>,
+    operation: &LasmDbOperationPlan,
+) {
+    match operation {
+        LasmDbOperationPlan::Exec { db, query } => {
+            headers.insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "exec".to_string());
+            headers.insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), db.clone());
+            headers.insert(
+                LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+                query.template.clone(),
+            );
+            headers.insert(
+                LASM_INTERNAL_DB_PARAMS_HEADER.to_string(),
+                query.params.clone(),
+            );
+            headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+            headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+            headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+        }
+        LasmDbOperationPlan::ExecTx { tx, query } => {
+            headers.insert(LASM_INTERNAL_DB_OP_HEADER.to_string(), "execTx".to_string());
+            headers.insert(
+                LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+                query.template.clone(),
+            );
+            headers.insert(
+                LASM_INTERNAL_DB_PARAMS_HEADER.to_string(),
+                query.params.clone(),
+            );
+            match tx {
+                LasmDbTxPlan::FromDb { db } => {
+                    headers.insert(LASM_INTERNAL_DB_TX_DB_HEADER.to_string(), db.clone());
+                    headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+                }
+                LasmDbTxPlan::Handle { tx } => {
+                    headers.insert(LASM_INTERNAL_DB_TX_HEADER.to_string(), tx.clone());
+                    headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+                }
+            }
+            headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
+            headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+        }
+        LasmDbOperationPlan::QueryOne {
+            db,
+            row_schema,
+            query,
+        } => {
+            headers.insert(
+                LASM_INTERNAL_DB_OP_HEADER.to_string(),
+                "queryOne".to_string(),
+            );
+            headers.insert(LASM_INTERNAL_DB_HANDLE_HEADER.to_string(), db.clone());
+            headers.insert(
+                LASM_INTERNAL_DB_TEMPLATE_HEADER.to_string(),
+                query.template.clone(),
+            );
+            headers.insert(
+                LASM_INTERNAL_DB_PARAMS_HEADER.to_string(),
+                query.params.clone(),
+            );
+            headers.insert(
+                LASM_INTERNAL_DB_ROW_SCHEMA_HEADER.to_string(),
+                row_schema.clone(),
+            );
+            headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+            headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+        }
+    }
 }
 
 fn resolve_lasm_smoke_route_plan(
@@ -2362,6 +2491,458 @@ fn collect_response_plan_call_bindings(
     call_bindings
 }
 
+fn extract_lasm_db_operation(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+) -> Option<LasmDbOperationPlan> {
+    let mut visited = HashSet::new();
+    extract_lasm_db_operation_in_function(functions, function_name, &mut visited, None)
+}
+
+fn extract_lasm_db_operation_in_function(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    visited: &mut HashSet<String>,
+    seed_bindings: Option<HashMap<String, sec4_core::ast::Expr>>,
+) -> Option<LasmDbOperationPlan> {
+    if visited.contains(function_name) {
+        return None;
+    }
+    visited.insert(function_name.to_string());
+    let Some(function) = functions.get(function_name) else {
+        visited.remove(function_name);
+        return None;
+    };
+    let mut bindings = seed_bindings.unwrap_or_default();
+    let operation =
+        extract_lasm_db_operation_in_block(functions, &function.body, visited, &mut bindings);
+    visited.remove(function_name);
+    operation
+}
+
+fn extract_lasm_db_operation_in_block(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    block: &sec4_core::ast::Block,
+    visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmDbOperationPlan> {
+    let mut operation = None;
+    for statement in &block.statements {
+        if let Some(next) =
+            extract_lasm_db_operation_in_stmt(functions, statement, visited, bindings)
+        {
+            operation = Some(next);
+        }
+    }
+    if let Some(tail) = &block.tail {
+        if let Some(next) = extract_lasm_db_operation_in_expr(functions, tail, visited, bindings) {
+            operation = Some(next);
+        }
+    }
+    operation
+}
+
+fn extract_lasm_db_operation_in_stmt(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    statement: &sec4_core::ast::Stmt,
+    visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmDbOperationPlan> {
+    match &statement.kind {
+        sec4_core::ast::StmtKind::Let { name, value, .. } => {
+            let operation = extract_lasm_db_operation_in_expr(functions, value, visited, bindings);
+            bindings.insert(name.clone(), value.clone());
+            operation
+        }
+        sec4_core::ast::StmtKind::Return { value } => value.as_ref().and_then(|entry| {
+            extract_lasm_db_operation_in_expr(functions, entry, visited, bindings)
+        }),
+        sec4_core::ast::StmtKind::Expr { expr } => {
+            extract_lasm_db_operation_in_expr(functions, expr, visited, bindings)
+        }
+    }
+}
+
+fn extract_lasm_db_operation_in_expr(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    expr: &sec4_core::ast::Expr,
+    visited: &mut HashSet<String>,
+    bindings: &mut HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmDbOperationPlan> {
+    match &expr.kind {
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let mut operation = None;
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(next) =
+                extract_lasm_db_operation_in_expr(functions, callee, visited, bindings)
+            {
+                operation = Some(next);
+            }
+            for argument in args {
+                if let Some(next) =
+                    extract_lasm_db_operation_in_expr(functions, argument, visited, bindings)
+                {
+                    operation = Some(next);
+                }
+            }
+            if let Some(next) = match_lasm_db_operation_call(&resolved_callee, args, bindings) {
+                operation = Some(next);
+            }
+            if let sec4_core::ast::ExprKind::Identifier(function_name) = &resolved_callee.kind {
+                let call_bindings = collect_lasm_db_operation_call_bindings(
+                    functions,
+                    function_name,
+                    args,
+                    bindings,
+                );
+                if let Some(next) = extract_lasm_db_operation_in_function(
+                    functions,
+                    function_name,
+                    visited,
+                    Some(call_bindings),
+                ) {
+                    operation = Some(next);
+                }
+            }
+            operation
+        }
+        sec4_core::ast::ExprKind::Unary { expr, .. } => {
+            extract_lasm_db_operation_in_expr(functions, expr, visited, bindings)
+        }
+        sec4_core::ast::ExprKind::Binary { left, right, .. } => {
+            let mut operation =
+                extract_lasm_db_operation_in_expr(functions, left, visited, bindings);
+            if let Some(next) =
+                extract_lasm_db_operation_in_expr(functions, right, visited, bindings)
+            {
+                operation = Some(next);
+            }
+            operation
+        }
+        sec4_core::ast::ExprKind::Member { object, .. } => {
+            extract_lasm_db_operation_in_expr(functions, object, visited, bindings)
+        }
+        sec4_core::ast::ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => extract_lasm_db_operation_in_expr(functions, condition, visited, bindings)
+            .or_else(|| {
+                let mut then_bindings = bindings.clone();
+                extract_lasm_db_operation_in_block(
+                    functions,
+                    then_branch,
+                    visited,
+                    &mut then_bindings,
+                )
+            })
+            .or_else(|| {
+                let mut else_bindings = bindings.clone();
+                else_branch.as_ref().and_then(|entry| {
+                    extract_lasm_db_operation_in_expr(functions, entry, visited, &mut else_bindings)
+                })
+            }),
+        sec4_core::ast::ExprKind::Match { scrutinee, arms } => {
+            if let Some(operation) =
+                extract_lasm_db_operation_in_expr(functions, scrutinee, visited, bindings)
+            {
+                return Some(operation);
+            }
+            for arm in arms {
+                let mut arm_bindings = bindings.clone();
+                if let Some(operation) = extract_lasm_db_operation_in_expr(
+                    functions,
+                    &arm.value,
+                    visited,
+                    &mut arm_bindings,
+                ) {
+                    return Some(operation);
+                }
+            }
+            None
+        }
+        sec4_core::ast::ExprKind::Block(block) => {
+            let mut block_bindings = bindings.clone();
+            extract_lasm_db_operation_in_block(functions, block, visited, &mut block_bindings)
+        }
+        sec4_core::ast::ExprKind::Identifier(_)
+        | sec4_core::ast::ExprKind::Number(_)
+        | sec4_core::ast::ExprKind::String(_)
+        | sec4_core::ast::ExprKind::Bool(_) => None,
+    }
+}
+
+fn collect_lasm_db_operation_call_bindings(
+    functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
+    function_name: &str,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> HashMap<String, sec4_core::ast::Expr> {
+    let mut call_bindings = HashMap::new();
+    let Some(function) = functions.get(function_name) else {
+        return call_bindings;
+    };
+    for (param, arg) in function.params.iter().zip(args.iter()) {
+        let resolved =
+            resolve_route_registration_expr(arg, bindings, 0).unwrap_or_else(|| arg.clone());
+        call_bindings.insert(param.name.clone(), resolved);
+    }
+    call_bindings
+}
+
+fn match_lasm_db_operation_call(
+    callee: &sec4_core::ast::Expr,
+    args: &[sec4_core::ast::Expr],
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+) -> Option<LasmDbOperationPlan> {
+    if is_lasm_db_exec_call(callee) {
+        let (db_index, query_index) = match args.len() {
+            2 => (0, 1),
+            3 => (1, 2),
+            _ => return None,
+        };
+        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+            .unwrap_or_else(|| "1".to_string());
+        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        return Some(LasmDbOperationPlan::Exec { db, query });
+    }
+    if is_lasm_db_exec_tx_call(callee) {
+        let (tx_index, query_index) = match args.len() {
+            2 => (0, 1),
+            3 => (1, 2),
+            _ => return None,
+        };
+        let tx = extract_lasm_db_tx_plan(&args[tx_index], bindings, 0)?;
+        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        return Some(LasmDbOperationPlan::ExecTx { tx, query });
+    }
+    if is_lasm_db_query_one_call(callee) {
+        let (db_index, query_index, row_schema_index) = match args.len() {
+            3 => (0, 1, 2),
+            4 => (1, 2, 3),
+            _ => return None,
+        };
+        let db = extract_lasm_db_value_template(&args[db_index], bindings, 0)
+            .unwrap_or_else(|| "1".to_string());
+        let row_schema = extract_lasm_db_value_template(&args[row_schema_index], bindings, 0)
+            .unwrap_or_else(|| "1".to_string());
+        let query = extract_lasm_sql_query_plan(&args[query_index], bindings, 0)?;
+        return Some(LasmDbOperationPlan::QueryOne {
+            db,
+            row_schema,
+            query,
+        });
+    }
+    None
+}
+
+fn extract_lasm_db_tx_plan(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<LasmDbTxPlan> {
+    if depth > 32 {
+        return None;
+    }
+    let resolved = resolve_response_expr(expr, bindings, depth)?;
+    if let sec4_core::ast::ExprKind::Call { callee, args } = &resolved.kind {
+        let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+            .unwrap_or_else(|| callee.as_ref().clone());
+        if is_lasm_db_tx_call(&resolved_callee) {
+            let db_index = match args.len() {
+                1 => 0,
+                2 => 1,
+                _ => return None,
+            };
+            let db = extract_lasm_db_value_template(&args[db_index], bindings, depth + 1)
+                .unwrap_or_else(|| "1".to_string());
+            return Some(LasmDbTxPlan::FromDb { db });
+        }
+    }
+    let tx = extract_lasm_db_value_template(&resolved, bindings, depth + 1)?;
+    Some(LasmDbTxPlan::Handle { tx })
+}
+
+fn extract_lasm_sql_query_plan(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<LasmSqlQueryPlan> {
+    if depth > 32 {
+        return None;
+    }
+    let resolved = resolve_response_expr(expr, bindings, depth)?;
+    let sec4_core::ast::ExprKind::Call { callee, args } = &resolved.kind else {
+        return None;
+    };
+    let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+        .unwrap_or_else(|| callee.as_ref().clone());
+    if !is_lasm_sql_q_call(&resolved_callee) || args.len() < 2 {
+        return None;
+    }
+    let template = extract_lasm_db_value_template(&args[0], bindings, depth + 1)?;
+    if template.trim().is_empty() {
+        return None;
+    }
+    let params = extract_lasm_db_value_template(&args[1], bindings, depth + 1)
+        .unwrap_or_else(|| "0".to_string());
+    Some(LasmSqlQueryPlan { template, params })
+}
+
+fn extract_lasm_db_value_template(
+    expr: &sec4_core::ast::Expr,
+    bindings: &HashMap<String, sec4_core::ast::Expr>,
+    depth: usize,
+) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    let resolved = resolve_response_expr(expr, bindings, depth)?;
+    match &resolved.kind {
+        sec4_core::ast::ExprKind::String(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Number(value) => Some(value.clone()),
+        sec4_core::ast::ExprKind::Bool(value) => Some(if *value {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        }),
+        sec4_core::ast::ExprKind::Call { callee, args } => {
+            let resolved_callee = resolve_route_registration_expr(callee, bindings, 0)
+                .unwrap_or_else(|| callee.as_ref().clone());
+            if let Some(placeholder) =
+                parse_lasm_request_text_placeholder(&resolved_callee, args, bindings)
+            {
+                return Some(placeholder);
+            }
+            if is_lasm_validate_non_empty_call(&resolved_callee)
+                || is_lasm_validate_header_value_call(&resolved_callee)
+                || is_lasm_validate_int64_call(&resolved_callee)
+            {
+                return args
+                    .first()
+                    .and_then(|value| extract_lasm_db_value_template(value, bindings, depth + 1));
+            }
+            if is_lasm_headers_name_call(&resolved_callee)
+                || is_lasm_headers_value_call(&resolved_callee)
+            {
+                return args
+                    .first()
+                    .and_then(|value| extract_lasm_db_value_template(value, bindings, depth + 1));
+            }
+            if is_lasm_db_cap_constructor_call(&resolved_callee) {
+                return Some("1".to_string());
+            }
+            parse_lasm_res_text_template(&resolved, bindings, depth + 1)
+        }
+        sec4_core::ast::ExprKind::Binary { op, left, right }
+            if *op == sec4_core::ast::BinaryOp::Add =>
+        {
+            let lhs = extract_lasm_db_value_template(left, bindings, depth + 1)?;
+            let rhs = extract_lasm_db_value_template(right, bindings, depth + 1)?;
+            Some(format!("{lhs}{rhs}"))
+        }
+        _ => parse_lasm_res_text_template(&resolved, bindings, depth + 1),
+    }
+}
+
+fn is_lasm_sql_q_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => matches!(name.as_str(), "sql_q"),
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            matches!(
+                (&object.kind, field.as_str()),
+                (sec4_core::ast::ExprKind::Identifier(name), "q") if name == "sql"
+            )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_db_exec_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            matches!(name.as_str(), "db_exec" | "db_write")
+        }
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            matches!(
+                (&object.kind, field.as_str()),
+                (sec4_core::ast::ExprKind::Identifier(name), "exec") if name == "db"
+            )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_db_tx_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => matches!(name.as_str(), "db_tx"),
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            matches!(
+                (&object.kind, field.as_str()),
+                (sec4_core::ast::ExprKind::Identifier(name), "tx") if name == "db"
+            )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_db_exec_tx_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => {
+            matches!(name.as_str(), "db_exec_tx")
+        }
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            matches!(
+                (&object.kind, field.as_str()),
+                (sec4_core::ast::ExprKind::Identifier(name), "execTx") if name == "db"
+            )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_db_query_one_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => matches!(name.as_str(), "db_read"),
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            matches!(
+                (&object.kind, field.as_str()),
+                (sec4_core::ast::ExprKind::Identifier(name), "queryOne") if name == "db"
+            )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_db_cap_constructor_call(callee: &sec4_core::ast::Expr) -> bool {
+    matches!(callee.kind, sec4_core::ast::ExprKind::Identifier(ref name) if name == "DbCap")
+}
+
+fn is_lasm_headers_name_call(callee: &sec4_core::ast::Expr) -> bool {
+    matches!(
+        &callee.kind,
+        sec4_core::ast::ExprKind::Member { object, field }
+            if field == "name"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref namespace) if namespace == "headers"
+                )
+    )
+}
+
+fn is_lasm_headers_value_call(callee: &sec4_core::ast::Expr) -> bool {
+    matches!(
+        &callee.kind,
+        sec4_core::ast::ExprKind::Member { object, field }
+            if field == "value"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref namespace) if namespace == "headers"
+                )
+    )
+}
+
 fn extract_auth_requirement(
     functions: &HashMap<&str, &sec4_core::ast::FunctionDecl>,
     function_name: &str,
@@ -2801,6 +3382,20 @@ fn is_lasm_validate_header_value_call(callee: &sec4_core::ast::Expr) -> bool {
         sec4_core::ast::ExprKind::Identifier(name) => name == "validate_header_value",
         sec4_core::ast::ExprKind::Member { object, field } => {
             field == "headerValue"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref name) if name == "validate"
+                )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_validate_int64_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => name == "validate_int64",
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "int64"
                 && matches!(
                     object.kind,
                     sec4_core::ast::ExprKind::Identifier(ref name) if name == "validate"
@@ -8374,6 +8969,16 @@ fn apply_lasm_dynamic_response_materialization(
 
     apply_lasm_text_placeholder_materialization(response, request, path_params);
     apply_lasm_header_placeholder_materialization(response, request, path_params);
+    if apply_lasm_internal_db_operation_materialization(
+        response,
+        request,
+        path_params,
+        dynamic_state,
+        trace_id,
+    ) {
+        clear_lasm_internal_response_markers(response);
+        return;
+    }
 
     let Some(schema_hint) = extract_lasm_response_schema_hint(response) else {
         return;
@@ -9624,6 +10229,13 @@ fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) 
     response
         .headers
         .remove(LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
+    response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
 }
 
 fn materialize_lasm_internal_runtime_error_envelope(
@@ -9993,6 +10605,445 @@ fn resolve_lasm_db_row_schema(request: &LasmRunRequest) -> Result<i64, ()> {
         return raw.trim().parse::<i64>().map_err(|_| ());
     }
     Ok(1)
+}
+
+fn apply_lasm_internal_db_operation_materialization(
+    response: &mut sec4_core::HttpResponse,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+    dynamic_state: &Mutex<LasmDynamicResponseState>,
+    trace_id: &str,
+) -> bool {
+    let Some(raw_operation) = take_lasm_internal_header_value(response, LASM_INTERNAL_DB_OP_HEADER)
+    else {
+        return false;
+    };
+    let operation = materialize_lasm_internal_header_value(raw_operation, request, path_params);
+    let operation = operation.trim();
+    match operation {
+        "exec" => {
+            let template = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
+                    .unwrap_or_default(),
+                request,
+                path_params,
+            );
+            if template.trim().is_empty() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.SQL_TEMPLATE_INVALID",
+                        "validation",
+                        "sql.q query template is required",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
+            let params = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
+                    .unwrap_or_else(|| "0".to_string()),
+                request,
+                path_params,
+            );
+            let db_raw = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
+                    .unwrap_or_else(|| "1".to_string()),
+                request,
+                path_params,
+            );
+            let db = match parse_lasm_positive_i64(db_raw.trim()) {
+                Some(value) => value,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.EXEC_INVALID",
+                            "validation",
+                            "db.exec requires db capability and query handle",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            let record = match dynamic_state.lock() {
+                Ok(mut state) => {
+                    let record = LasmDbRecord {
+                        id: state.next_db_record_id,
+                        op: "exec".to_string(),
+                        db,
+                        template: template.trim().to_string(),
+                        params: normalize_lasm_db_params(params.as_str()),
+                        tx: 0,
+                        created_at_ms: lasm_now_ms(),
+                    };
+                    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                    state.db_records.push(record.clone());
+                    if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&state) {
+                        eprintln!(
+                            "warning: LASM dynamic records store persistence failed: {message}"
+                        );
+                    }
+                    record
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "recordId": record.id,
+                    "db": record.db,
+                    "op": record.op,
+                    "template": record.template,
+                    "params": record.params,
+                    "tx": record.tx,
+                }),
+            );
+            true
+        }
+        "execTx" => {
+            let template = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
+                    .unwrap_or_default(),
+                request,
+                path_params,
+            );
+            if template.trim().is_empty() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.SQL_TEMPLATE_INVALID",
+                        "validation",
+                        "sql.q query template is required",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
+            let params = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
+                    .unwrap_or_else(|| "0".to_string()),
+                request,
+                path_params,
+            );
+            let tx_db_source =
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_DB_HEADER).map(
+                    |value| materialize_lasm_internal_header_value(value, request, path_params),
+                );
+            let tx_handle_raw =
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
+                    |value| materialize_lasm_internal_header_value(value, request, path_params),
+                );
+            let record = match dynamic_state.lock() {
+                Ok(mut state) => {
+                    let (db, tx) = if let Some(db_raw) = tx_db_source {
+                        let Some(db_value) = parse_lasm_positive_i64(db_raw.trim()) else {
+                            set_lasm_json_response(
+                                response,
+                                400,
+                                &lasm_error_envelope(
+                                    "DB.EXEC_TX_INVALID",
+                                    "validation",
+                                    "db.execTx requires transaction and query handles",
+                                    400,
+                                    trace_id,
+                                ),
+                            );
+                            return true;
+                        };
+                        let tx_value = allocate_lasm_db_tx_handle(&mut state, db_value);
+                        (db_value, tx_value)
+                    } else {
+                        let Some(tx_raw) = tx_handle_raw.as_ref() else {
+                            set_lasm_json_response(
+                                response,
+                                400,
+                                &lasm_error_envelope(
+                                    "DB.EXEC_TX_INVALID",
+                                    "validation",
+                                    "db.execTx requires transaction and query handles",
+                                    400,
+                                    trace_id,
+                                ),
+                            );
+                            return true;
+                        };
+                        let Some(tx_value) = parse_lasm_positive_i64(tx_raw.trim()) else {
+                            set_lasm_json_response(
+                                response,
+                                400,
+                                &lasm_error_envelope(
+                                    "DB.EXEC_TX_INVALID",
+                                    "validation",
+                                    "db.execTx requires transaction and query handles",
+                                    400,
+                                    trace_id,
+                                ),
+                            );
+                            return true;
+                        };
+                        let Some(db_value) = state.db_tx_handles.get(&tx_value).copied() else {
+                            set_lasm_json_response(
+                                response,
+                                400,
+                                &lasm_error_envelope(
+                                    "DB.EXEC_TX_HANDLE_INVALID",
+                                    "validation",
+                                    "db.execTx transaction handle must come from db.tx",
+                                    400,
+                                    trace_id,
+                                ),
+                            );
+                            return true;
+                        };
+                        (db_value, tx_value)
+                    };
+                    let record = LasmDbRecord {
+                        id: state.next_db_record_id,
+                        op: "execTx".to_string(),
+                        db,
+                        template: template.trim().to_string(),
+                        params: normalize_lasm_db_params(params.as_str()),
+                        tx,
+                        created_at_ms: lasm_now_ms(),
+                    };
+                    state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                    state.db_records.push(record.clone());
+                    if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&state) {
+                        eprintln!(
+                            "warning: LASM dynamic records store persistence failed: {message}"
+                        );
+                    }
+                    record
+                }
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "recordId": record.id,
+                    "db": record.db,
+                    "op": record.op,
+                    "template": record.template,
+                    "params": record.params,
+                    "tx": record.tx,
+                }),
+            );
+            true
+        }
+        "queryOne" => {
+            let template = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TEMPLATE_HEADER)
+                    .unwrap_or_default(),
+                request,
+                path_params,
+            );
+            if template.trim().is_empty() {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.SQL_TEMPLATE_INVALID",
+                        "validation",
+                        "sql.q query template is required",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
+            let params = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_PARAMS_HEADER)
+                    .unwrap_or_else(|| "0".to_string()),
+                request,
+                path_params,
+            );
+            let db_raw = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_HANDLE_HEADER)
+                    .unwrap_or_else(|| "1".to_string()),
+                request,
+                path_params,
+            );
+            let db = match parse_lasm_positive_i64(db_raw.trim()) {
+                Some(value) => value,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.QUERY_ONE_INVALID",
+                            "validation",
+                            "db.queryOne requires db capability, query, and row schema handles",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            let row_schema_raw = materialize_lasm_internal_header_value(
+                take_lasm_internal_header_value(response, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER)
+                    .unwrap_or_else(|| "1".to_string()),
+                request,
+                path_params,
+            );
+            let row_schema = match parse_lasm_positive_i64(row_schema_raw.trim()) {
+                Some(value) => value,
+                None => {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.QUERY_ONE_INVALID",
+                            "validation",
+                            "db.queryOne requires db capability, query, and row schema handles",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            let template = template.trim().to_string();
+            let params = normalize_lasm_db_params(params.as_str());
+            let record = match dynamic_state.lock() {
+                Ok(state) => state
+                    .db_records
+                    .iter()
+                    .rev()
+                    .find(|record| {
+                        record.db == db && record.template == template && record.params == params
+                    })
+                    .cloned(),
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            let Some(record) = record else {
+                set_lasm_json_response(
+                    response,
+                    404,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_NOT_FOUND",
+                        "missing_dependency",
+                        "db.queryOne record not found",
+                        404,
+                        trace_id,
+                    ),
+                );
+                return true;
+            };
+            let row = format!(
+                "op={};db={};template={};params={};tx={};rowSchema={}",
+                record.op, record.db, record.template, record.params, record.tx, row_schema
+            );
+            set_lasm_json_response(
+                response,
+                200,
+                &serde_json::json!({
+                    "ok": true,
+                    "recordId": record.id,
+                    "rowSchema": row_schema,
+                    "row": row,
+                    "record": lasm_db_record_to_json(&record),
+                }),
+            );
+            true
+        }
+        _ => false,
+    }
+}
+
+fn take_lasm_internal_header_value(
+    response: &mut sec4_core::HttpResponse,
+    header_name: &str,
+) -> Option<String> {
+    let key = find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
+    response.headers.remove(&key)
+}
+
+fn materialize_lasm_internal_header_value(
+    value: String,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) -> String {
+    if contains_lasm_request_placeholder_tokens(value.as_str()) {
+        materialize_lasm_request_placeholders(value.as_str(), request, path_params)
+    } else {
+        value
+    }
+}
+
+fn parse_lasm_positive_i64(value: &str) -> Option<i64> {
+    value
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .filter(|candidate| *candidate > 0)
+}
+
+fn normalize_lasm_db_params(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn allocate_lasm_db_tx_handle(state: &mut LasmDynamicResponseState, db: i64) -> i64 {
+    let tx = state.next_db_tx_handle.max(1);
+    state.next_db_tx_handle = tx.saturating_add(1).max(1);
+    state.db_tx_handles.insert(tx, db);
+    tx
 }
 
 fn set_lasm_json_response(
