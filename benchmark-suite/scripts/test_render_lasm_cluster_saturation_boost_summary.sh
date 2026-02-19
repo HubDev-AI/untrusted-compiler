@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "$0")/.." && pwd)"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+matrix="$tmp/matrix.json"
+cat >"${matrix}" <<'JSON'
+{
+  "impl": "sec4-lasm-cluster",
+  "run": {
+    "projectPath": "examples/lasm-alpha-full",
+    "requestPath": "/health",
+    "duration": "40s",
+    "threads": 8,
+    "connections": 256,
+    "targetRequests": 1000000
+  },
+  "boostSteps": [2, 4, 6],
+  "runs": [
+    {
+      "saturationBoostStep": 2,
+      "pass": true,
+      "requests": 1200000,
+      "requestsPerSec": 60000,
+      "peakRssKb": 12000
+    },
+    {
+      "saturationBoostStep": 4,
+      "pass": true,
+      "requests": 1260000,
+      "requestsPerSec": 63000,
+      "peakRssKb": 12500
+    },
+    {
+      "saturationBoostStep": 6,
+      "pass": false,
+      "requests": 1400000,
+      "requestsPerSec": 70000,
+      "peakRssKb": 11000
+    }
+  ]
+}
+JSON
+
+analysis="$tmp/analysis.json"
+cat >"${analysis}" <<'JSON'
+{
+  "summary": {
+    "runCount": 3,
+    "passCount": 2,
+    "selectionMode": "pass-first",
+    "recommendedBoostStep": 4
+  },
+  "rankedRuns": [
+    {
+      "saturationBoostStep": 4,
+      "pass": true,
+      "requests": 1260000,
+      "requestsPerSec": 63000,
+      "peakRssKb": 12500
+    },
+    {
+      "saturationBoostStep": 2,
+      "pass": true,
+      "requests": 1200000,
+      "requestsPerSec": 60000,
+      "peakRssKb": 12000
+    },
+    {
+      "saturationBoostStep": 6,
+      "pass": false,
+      "requests": 1400000,
+      "requestsPerSec": 70000,
+      "peakRssKb": 11000
+    }
+  ]
+}
+JSON
+
+verify="$tmp/verify.json"
+cat >"${verify}" <<'JSON'
+{
+  "pass": true,
+  "requestsTargetMet": true,
+  "run": {
+    "autoscaleSaturationBoostStep": 4
+  },
+  "observed": {
+    "requests": 1280000,
+    "requestsPerSec": 64000,
+    "peakRssKb": 12400,
+    "p99": "3.90ms"
+  }
+}
+JSON
+
+out="$tmp/summary.md"
+"${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh" "${matrix}" "${analysis}" "${out}" "${verify}" >/dev/null
+
+if ! grep -q '^# LASM Saturation Boost Summary (v0.1)$' "${out}"; then
+  echo "summary missing title" >&2
+  exit 1
+fi
+if ! grep -q '^- Recommended boost step: 4$' "${out}"; then
+  echo "summary missing recommended boost step line" >&2
+  exit 1
+fi
+if ! grep -q '^## Ranked Runs$' "${out}"; then
+  echo "summary missing ranked runs section" >&2
+  exit 1
+fi
+if ! grep -q '| 1 | 4 | true | 63000 | 1260000 | 12500 |' "${out}"; then
+  echo "summary missing ranked run row for recommended step" >&2
+  exit 1
+fi
+if ! grep -q '^## Recommended Step Verification$' "${out}"; then
+  echo "summary missing verification section" >&2
+  exit 1
+fi
+if ! grep -q '^- Requests/sec: 64000$' "${out}"; then
+  echo "summary missing verification throughput line" >&2
+  exit 1
+fi
+
+verify_bad="$tmp/verify-bad.json"
+cat >"${verify_bad}" <<'JSON'
+{
+  "run": {
+    "autoscaleSaturationBoostStep": 2
+  }
+}
+JSON
+if "${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh" "${matrix}" "${analysis}" "${tmp}/bad.md" "${verify_bad}" >/tmp/lasm-sat-boost-summary-mismatch.log 2>&1; then
+  echo "summary renderer accepted mismatched verification boost step" >&2
+  exit 1
+fi
+if ! grep -q 'recommended verification boost step mismatch: expected 4, got 2' /tmp/lasm-sat-boost-summary-mismatch.log; then
+  echo "summary renderer missing mismatch diagnostic" >&2
+  exit 1
+fi
+
+echo "render_lasm_cluster_saturation_boost_summary test passed"

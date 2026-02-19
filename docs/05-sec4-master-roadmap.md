@@ -499,6 +499,11 @@ Post-alpha track acceptance anchors:
      - `--verify-out` controls follow-up artifact location, and the runner now rejects invalid `--verify-recommended --skip-analysis` combinations deterministically,
      - run mode prints `recommendedVerificationOut=<path>` after follow-up execution.
      - documented in `docs/book/1039-m39-lasm-saturation-boost-recommended-followup-verification.md`.
+   - [x] Added saturation boost markdown summary renderer for operator handoff:
+     - new script `benchmark-suite/scripts/render_lasm_cluster_saturation_boost_summary.sh` renders deterministic markdown from matrix + analysis artifacts (and optional verify artifact),
+     - renderer validates recommended-step consistency between analysis and optional verification artifact,
+     - Makefile target added: `lasm-cluster-saturation-boost-summary`.
+     - documented in `docs/book/1040-m39-lasm-saturation-boost-summary-renderer.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
