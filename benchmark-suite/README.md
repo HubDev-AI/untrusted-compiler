@@ -65,16 +65,20 @@ Measure end-to-end service behavior across identical implementations:
    - `make -C benchmark-suite sec4-capacity-probe`
    - override endpoint and target requests:
      - `make -C benchmark-suite sec4-capacity-probe CAPACITY_ENDPOINT=ping CAPACITY_TARGET_REQUESTS=1000000`
-15. Build deterministic artifact manifest:
+15. Run sec4 LASM cluster capacity probe (1M-request threshold + peak RSS):
+   - `make -C benchmark-suite lasm-cluster-capacity-probe`
+   - override project and target requests:
+     - `make -C benchmark-suite lasm-cluster-capacity-probe LASM_CAPACITY_PROJECT_PATH=examples/lasm-alpha-full LASM_CAPACITY_TARGET_REQUESTS=1000000`
+16. Build deterministic artifact manifest:
    - `make -C benchmark-suite artifact-manifest`
-16. Verify benchmark bundle completeness:
+17. Verify benchmark bundle completeness:
    - `make -C benchmark-suite verify-bundle IMPLS=sec4,sec4-lasm,node,go,rust ENDPOINTS=ping,decode,users-post,users-get`
    - hash checking is on by default; use `verify_benchmark_bundle.sh --skip-hash-check ...` only when intentionally bypassing manifest integrity checks
-17. Validate benchmark helper scripts:
+18. Validate benchmark helper scripts:
    - `make -C benchmark-suite test-scripts`
-18. Validate cross-impl service contract parity:
+19. Validate cross-impl service contract parity:
    - `make -C benchmark-suite test-services`
-19. Stop DB:
+20. Stop DB:
    - `make -C benchmark-suite db-down`
 
 ## Notes
@@ -110,4 +114,5 @@ Measure end-to-end service behavior across identical implementations:
 - Full-suite runner also emits `results/artifact-manifest.json` (sha256 + size per artifact, excluding logs).
 - `verify_benchmark_bundle.sh` checks required artifacts/JSON validity and verifies sha256 hashes against `artifact-manifest.json` for selected IMPLS/ENDPOINTS.
 - `run_sec4_capacity_probe.sh` builds/starts sec4 benchmark service, runs one load profile, samples peak RSS, and writes `results/summaries/sec4-capacity-probe.json` with pass/fail against request threshold.
+- `run_lasm_cluster_capacity_probe.sh` runs `sec4 run --backend lasm` in cluster mode with tunable scaling flags, drives `wrk`, samples peak RSS, and writes `results/summaries/sec4-lasm-cluster-capacity-probe.json`.
 - `check_regression_thresholds.sh` also supports memory guard inputs (`--max-rss-kb`, baseline `baselineRssKb` + `maxRssRegressionPct`) in addition to p99/coverage thresholds.

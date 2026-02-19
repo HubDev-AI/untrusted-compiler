@@ -88,6 +88,10 @@ enum Commands {
         autoscale_target_connections: Option<usize>,
         #[arg(long, default_value_t = 1000)]
         autoscale_check_ms: u64,
+        #[arg(long, default_value_t = 250)]
+        autoscale_scale_up_cooldown_ms: u64,
+        #[arg(long, default_value_t = 2000)]
+        autoscale_scale_down_cooldown_ms: u64,
         #[arg(long)]
         cluster_relay_workers: Option<usize>,
         #[arg(long)]
@@ -448,6 +452,8 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            autoscale_scale_up_cooldown_ms,
+            autoscale_scale_down_cooldown_ms,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -471,6 +477,8 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            autoscale_scale_up_cooldown_ms,
+            autoscale_scale_down_cooldown_ms,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -7761,6 +7769,8 @@ fn cmd_run(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    autoscale_scale_up_cooldown_ms: u64,
+    autoscale_scale_down_cooldown_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     reuse_port: bool,
@@ -7781,6 +7791,14 @@ fn cmd_run(
     }
     if autoscale_check_ms == 0 {
         eprintln!("run failed: --autoscale-check-ms must be >= 1");
+        return Err(2);
+    }
+    if autoscale_scale_up_cooldown_ms == 0 {
+        eprintln!("run failed: --autoscale-scale-up-cooldown-ms must be >= 1");
+        return Err(2);
+    }
+    if autoscale_scale_down_cooldown_ms == 0 {
+        eprintln!("run failed: --autoscale-scale-down-cooldown-ms must be >= 1");
         return Err(2);
     }
     if cluster_relay_workers == Some(0) {
@@ -7865,6 +7883,18 @@ fn cmd_run(
         eprintln!("run failed: --autoscale-check-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && autoscale_scale_up_cooldown_ms != 250 {
+        eprintln!(
+            "run failed: --autoscale-scale-up-cooldown-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && autoscale_scale_down_cooldown_ms != 2000 {
+        eprintln!(
+            "run failed: --autoscale-scale-down-cooldown-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_relay_workers.is_some() {
         eprintln!("run failed: --cluster-relay-workers is only supported with --backend lasm");
         return Err(2);
@@ -7932,6 +7962,8 @@ fn cmd_run(
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            autoscale_scale_up_cooldown_ms,
+            autoscale_scale_down_cooldown_ms,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -8268,6 +8300,8 @@ struct LasmClusterConfig {
     max_instances: usize,
     target_connections_per_instance: usize,
     autoscale_check_ms: u64,
+    autoscale_scale_up_cooldown_ms: u64,
+    autoscale_scale_down_cooldown_ms: u64,
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
@@ -8780,6 +8814,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_active_connections = Arc::clone(&active_connections);
         let autoscale_stop_flag = Arc::clone(&stop_flag);
         Some(std::thread::spawn(move || {
+            let mut last_scale_up_at: Option<Instant> = None;
+            let mut last_scale_down_at: Option<Instant> = None;
             while !autoscale_stop_flag.load(Ordering::Relaxed) {
                 std::thread::sleep(Duration::from_millis(autoscale_config.autoscale_check_ms));
                 if autoscale_stop_flag.load(Ordering::Relaxed) {
@@ -8797,22 +8833,47 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     Err(_) => break,
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
-                while state.workers.len() < desired {
-                    let worker_port = state.next_port;
-                    state.next_port = state.next_port.saturating_add(1);
-                    match spawn_and_wait_lasm_cluster_worker(&autoscale_config, worker_port) {
-                        Ok(worker) => state.workers.push(worker),
-                        Err(message) => {
-                            eprintln!("warning: LASM cluster autoscale-up failed: {message}");
-                            break;
+                let now = Instant::now();
+                if desired > state.workers.len()
+                    && last_scale_up_at
+                        .map(|at| {
+                            now.duration_since(at)
+                                >= Duration::from_millis(
+                                    autoscale_config.autoscale_scale_up_cooldown_ms,
+                                )
+                        })
+                        .unwrap_or(true)
+                {
+                    while state.workers.len() < desired {
+                        let worker_port = state.next_port;
+                        state.next_port = state.next_port.saturating_add(1);
+                        match spawn_and_wait_lasm_cluster_worker(&autoscale_config, worker_port) {
+                            Ok(worker) => state.workers.push(worker),
+                            Err(message) => {
+                                eprintln!("warning: LASM cluster autoscale-up failed: {message}");
+                                break;
+                            }
                         }
                     }
+                    last_scale_up_at = Some(now);
                 }
-                while state.workers.len() > desired {
-                    if let Some(mut worker) = state.workers.pop() {
-                        let _ = worker.child.kill();
-                        let _ = worker.child.wait();
+                if desired < state.workers.len()
+                    && last_scale_down_at
+                        .map(|at| {
+                            now.duration_since(at)
+                                >= Duration::from_millis(
+                                    autoscale_config.autoscale_scale_down_cooldown_ms,
+                                )
+                        })
+                        .unwrap_or(true)
+                {
+                    while state.workers.len() > desired {
+                        if let Some(mut worker) = state.workers.pop() {
+                            let _ = worker.child.kill();
+                            let _ = worker.child.wait();
+                        }
                     }
+                    last_scale_down_at = Some(now);
                 }
                 if state.round_robin_index >= state.workers.len() {
                     state.round_robin_index = 0;
@@ -8890,6 +8951,8 @@ fn cmd_run_lasm_backend(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    autoscale_scale_up_cooldown_ms: u64,
+    autoscale_scale_down_cooldown_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     reuse_port: bool,
@@ -9123,6 +9186,8 @@ fn cmd_run_lasm_backend(
                 .unwrap_or(effective_max_in_flight)
                 .max(1),
             autoscale_check_ms,
+            autoscale_scale_up_cooldown_ms,
+            autoscale_scale_down_cooldown_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
@@ -9150,6 +9215,8 @@ fn cmd_run_lasm_backend(
             max_instances,
             target_connections_per_instance,
             autoscale_check_ms,
+            autoscale_scale_up_cooldown_ms,
+            autoscale_scale_down_cooldown_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
