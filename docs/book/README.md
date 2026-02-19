@@ -998,5 +998,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1030-m39-closure-gate-runtime-smoke-db-adapter-lane-enforcement.md`
 - `1031-m39-lasm-autoscale-step-window-controls.md`
 - `1032-m39-lasm-autoscale-saturation-boost.md`
+- `1033-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`
 
 As milestones progress, chapters will be added and linked from this index.

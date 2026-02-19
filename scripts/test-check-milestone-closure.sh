@@ -280,6 +280,8 @@ jobs:
         run: scripts/test-runtime-smoke-workflow-contract-guard.sh
       - name: Validate runtime-smoke artifacts checker
         run: scripts/test-check-runtime-smoke-artifacts.sh
+      - name: Validate runtime-smoke db-adapter artifacts checker
+        run: scripts/test-check-runtime-smoke-db-adapter-artifacts.sh
       - name: Validate runtime-smoke branch index builder
         run: scripts/test-build-runtime-smoke-branch-index.sh
       - name: Validate runtime-smoke bundle checker
