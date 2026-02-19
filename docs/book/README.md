@@ -1022,5 +1022,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1050-m39-full-suite-saturation-combined-preset-targets.md`
 - `1051-m39-lasm-cluster-hot-path-lock-contention-reduction.md`
 - `1052-m39-lasm-cluster-read-write-lock-state-optimization.md`
+- `1053-m39-lasm-cluster-lock-free-worker-port-snapshots.md`
 
 As milestones progress, chapters will be added and linked from this index.
