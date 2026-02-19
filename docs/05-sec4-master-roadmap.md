@@ -460,6 +460,11 @@ Post-alpha track acceptance anchors:
      - autoscaler now enforces separate up/down cooldown windows to reduce worker-count thrash on bursty traffic,
      - flags stay LASM-only with deterministic validation and guard diagnostics.
      - documented in `docs/book/1028-m39-lasm-autoscale-cooldown-hysteresis-controls.md`.
+   - [x] Added dedicated LASM cluster capacity probe tooling:
+     - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
+     - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
+     - dry-run contract coverage added in benchmark suite script tests.
+     - documented in `docs/book/1029-m39-lasm-cluster-capacity-probe-tooling.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
