@@ -119,7 +119,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
 
   leader_json="$(jq -c --arg endpoint "$endpoint" '.endpoints[] | select(.endpoint == $endpoint) | .leader' "$matrix_path" | head -n 1)"
   if [ -z "$leader_json" ] || [ "$leader_json" = "null" ]; then
-    row_lines+=("| ${endpoint} | missing | - | - | missing | missing |")
+    row_lines+=("| ${endpoint} | missing | - | - | - | missing | missing |")
     continue
   fi
 
@@ -145,6 +145,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   coverage_pct="$(awk -v target="${target_rps}" -v actual="${actual_rps}" 'BEGIN { if (target + 0 > 0) printf "%.2f", (actual / target) * 100; else printf "0.00" }')"
   coverage_display="${coverage_pct}"
   p99_fmt="$(awk -v n="${p99_ms}" 'BEGIN { printf "%.2f", n + 0 }')"
+  rss_display="$(jq -r '(.rssKb // null) | if . == null then "n/a" else tostring end' <<<"$leader_json")"
 
   threshold_pair="$(default_thresholds "$endpoint")"
   abs_status="n/a"
@@ -190,7 +191,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
     base_na=$((base_na + 1))
   fi
 
-  row_lines+=("| ${endpoint} | ${leader_impl} | ${p99_fmt} | ${coverage_display} | ${abs_status} | ${baseline_status} |")
+  row_lines+=("| ${endpoint} | ${leader_impl} | ${p99_fmt} | ${coverage_display} | ${rss_display} | ${abs_status} | ${baseline_status} |")
 done
 
 run_mode="mixed"
@@ -228,8 +229,8 @@ fi
   echo "- Run mode: ${run_mode}"
   echo "- Generators: ${generators}"
   echo
-  echo "| Endpoint | Leader | p99 (ms) | Coverage (%) | Absolute Guard | Baseline Guard |"
-  echo "| --- | --- | ---: | ---: | --- | --- |"
+  echo "| Endpoint | Leader | p99 (ms) | Coverage (%) | RSS (KB) | Absolute Guard | Baseline Guard |"
+  echo "| --- | --- | ---: | ---: | ---: | --- | --- |"
   for row in "${row_lines[@]}"; do
     echo "${row}"
   done
