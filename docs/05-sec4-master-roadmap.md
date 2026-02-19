@@ -456,10 +456,11 @@ Post-alpha track acceptance anchors:
      - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
      - documented in `docs/book/1027-m39-lasm-worker-dispatch-crossbeam-channel.md`.
    - [x] Added autoscale hysteresis controls for cluster worker scaling:
-     - new LASM flags: `--autoscale-scale-up-cooldown-ms` and `--autoscale-scale-down-cooldown-ms`,
-     - autoscaler now enforces separate up/down cooldown windows to reduce worker-count thrash on bursty traffic,
+     - new LASM flags: `--autoscale-scale-up-cooldown-ms`, `--autoscale-scale-down-cooldown-ms`, `--autoscale-scale-up-step`, and `--autoscale-scale-down-step`,
+     - autoscaler now enforces separate up/down cooldown windows and bounded per-check scale steps to reduce worker-count thrash on bursty traffic,
      - flags stay LASM-only with deterministic validation and guard diagnostics.
-     - documented in `docs/book/1028-m39-lasm-autoscale-cooldown-hysteresis-controls.md`.
+     - LASM cluster capacity probe script now supports these step controls for benchmark runs.
+     - documented in `docs/book/1030-m39-lasm-autoscale-step-window-controls.md`.
    - [x] Added dedicated LASM cluster capacity probe tooling:
      - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
      - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
