@@ -12,13 +12,13 @@ use sec4_core::{
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{sync_channel, TrySendError};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -76,6 +76,14 @@ enum Commands {
         max_keep_alive_requests: Option<u64>,
         #[arg(long)]
         db_base: Option<PathBuf>,
+        #[arg(long, default_value_t = 1)]
+        instances: usize,
+        #[arg(long)]
+        autoscale_max_instances: Option<usize>,
+        #[arg(long)]
+        autoscale_target_connections: Option<usize>,
+        #[arg(long, default_value_t = 1000)]
+        autoscale_check_ms: u64,
         #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -418,6 +426,10 @@ fn main() {
             max_runtime_steps,
             max_keep_alive_requests,
             db_base,
+            instances,
+            autoscale_max_instances,
+            autoscale_target_connections,
+            autoscale_check_ms,
             backend,
             tls_backend,
         } => cmd_run(
@@ -433,6 +445,10 @@ fn main() {
             max_runtime_steps,
             max_keep_alive_requests,
             db_base.as_deref(),
+            instances,
+            autoscale_max_instances,
+            autoscale_target_connections,
+            autoscale_check_ms,
             backend,
             tls_backend,
         ),
@@ -7463,9 +7479,29 @@ fn cmd_run(
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
+    instances: usize,
+    autoscale_max_instances: Option<usize>,
+    autoscale_target_connections: Option<usize>,
+    autoscale_check_ms: u64,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
+    if instances == 0 {
+        eprintln!("run failed: --instances must be >= 1");
+        return Err(2);
+    }
+    if autoscale_max_instances == Some(0) {
+        eprintln!("run failed: --autoscale-max-instances must be >= 1");
+        return Err(2);
+    }
+    if autoscale_target_connections == Some(0) {
+        eprintln!("run failed: --autoscale-target-connections must be >= 1");
+        return Err(2);
+    }
+    if autoscale_check_ms == 0 {
+        eprintln!("run failed: --autoscale-check-ms must be >= 1");
+        return Err(2);
+    }
     if max_header_bytes == Some(0) {
         eprintln!("run failed: --max-header-bytes must be >= 1");
         return Err(2);
@@ -7518,6 +7554,33 @@ fn cmd_run(
         eprintln!("run failed: --db-base is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && instances != 1 {
+        eprintln!("run failed: --instances is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && autoscale_max_instances.is_some() {
+        eprintln!("run failed: --autoscale-max-instances is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && autoscale_target_connections.is_some() {
+        eprintln!(
+            "run failed: --autoscale-target-connections is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && autoscale_check_ms != 1000 {
+        eprintln!("run failed: --autoscale-check-ms is only supported with --backend lasm");
+        return Err(2);
+    }
+    let max_instances = autoscale_max_instances.unwrap_or(instances);
+    if max_instances < instances {
+        eprintln!("run failed: --autoscale-max-instances must be >= --instances");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && oneshot && max_instances > 1 {
+        eprintln!("run failed: cluster mode does not support --oneshot");
+        return Err(2);
+    }
 
     let manifest = match sec4_core::validate_project(path) {
         Ok(manifest) => manifest,
@@ -7550,6 +7613,10 @@ fn cmd_run(
             max_runtime_steps,
             max_keep_alive_requests,
             db_base,
+            instances,
+            autoscale_max_instances,
+            autoscale_target_connections,
+            autoscale_check_ms,
         );
     }
 
@@ -7865,6 +7932,445 @@ fn cmd_run(
     }
 }
 
+#[derive(Clone, Debug)]
+struct LasmClusterConfig {
+    path: PathBuf,
+    listen_port: u16,
+    max_header_bytes: Option<u64>,
+    max_body_bytes: Option<u64>,
+    max_concurrency: Option<u64>,
+    max_pending: Option<u64>,
+    serve_timeout_ms: Option<u64>,
+    overflow_probe_timeout_ms: Option<u64>,
+    max_runtime_steps: Option<u64>,
+    max_keep_alive_requests: Option<u64>,
+    db_base: Option<PathBuf>,
+    min_instances: usize,
+    max_instances: usize,
+    target_connections_per_instance: usize,
+    autoscale_check_ms: u64,
+    worker_ready_timeout_ms: u64,
+}
+
+#[derive(Debug)]
+struct LasmClusterWorker {
+    port: u16,
+    child: Child,
+}
+
+#[derive(Debug)]
+struct LasmClusterState {
+    workers: Vec<LasmClusterWorker>,
+    round_robin_index: usize,
+    next_port: u16,
+}
+
+fn compute_lasm_cluster_base_port(listen_port: u16, max_instances: usize) -> Result<u16, String> {
+    let base_port = u32::from(listen_port) + 100;
+    let needed_span = u32::try_from(max_instances.saturating_sub(1))
+        .map_err(|_| "cluster instance count exceeds supported port span".to_string())?;
+    let last_port = base_port + needed_span;
+    if last_port > u32::from(u16::MAX) {
+        return Err(
+            "cannot allocate worker ports: choose a lower --port for cluster mode".to_string(),
+        );
+    }
+    Ok(u16::try_from(base_port).expect("base port range prevalidated"))
+}
+
+fn push_optional_u64_run_arg(cmd: &mut Command, flag: &str, value: Option<u64>) {
+    if let Some(value) = value {
+        cmd.arg(flag).arg(value.to_string());
+    }
+}
+
+fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path>) {
+    if let Some(value) = value {
+        cmd.arg(flag).arg(value);
+    }
+}
+
+fn spawn_lasm_cluster_worker(
+    config: &LasmClusterConfig,
+    worker_port: u16,
+) -> Result<Child, String> {
+    let current_exe = std::env::current_exe().map_err(|err| {
+        format!("could not resolve current sec4 executable for cluster mode: {err}")
+    })?;
+    let mut cmd = Command::new(current_exe);
+    cmd.arg("run")
+        .arg("--path")
+        .arg(&config.path)
+        .arg("--backend")
+        .arg("lasm")
+        .arg("--port")
+        .arg(worker_port.to_string())
+        .arg("--instances")
+        .arg("1");
+
+    push_optional_u64_run_arg(&mut cmd, "--max-header-bytes", config.max_header_bytes);
+    push_optional_u64_run_arg(&mut cmd, "--max-body-bytes", config.max_body_bytes);
+    push_optional_u64_run_arg(&mut cmd, "--max-concurrency", config.max_concurrency);
+    push_optional_u64_run_arg(&mut cmd, "--max-pending", config.max_pending);
+    push_optional_u64_run_arg(&mut cmd, "--serve-timeout-ms", config.serve_timeout_ms);
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--overflow-probe-timeout-ms",
+        config.overflow_probe_timeout_ms,
+    );
+    push_optional_u64_run_arg(&mut cmd, "--max-runtime-steps", config.max_runtime_steps);
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--max-keep-alive-requests",
+        config.max_keep_alive_requests,
+    );
+    push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
+
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
+    cmd.spawn()
+        .map_err(|err| format!("could not spawn LASM cluster worker on port {worker_port}: {err}"))
+}
+
+fn wait_for_lasm_cluster_worker_ready(
+    child: &mut Child,
+    worker_port: u16,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let start = Instant::now();
+    let timeout = Duration::from_millis(timeout_ms.max(200));
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "LASM cluster worker on port {worker_port} exited early with status {status}"
+                ));
+            }
+            Ok(None) => {}
+            Err(err) => {
+                return Err(format!(
+                    "could not check LASM cluster worker status on port {worker_port}: {err}"
+                ));
+            }
+        }
+
+        match TcpStream::connect(("127.0.0.1", worker_port)) {
+            Ok(stream) => {
+                let _ = stream.shutdown(Shutdown::Both);
+                return Ok(());
+            }
+            Err(_) => {
+                if start.elapsed() >= timeout {
+                    return Err(format!(
+                        "LASM cluster worker on port {worker_port} did not become ready within {} ms",
+                        timeout.as_millis()
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(40));
+            }
+        }
+    }
+}
+
+fn spawn_and_wait_lasm_cluster_worker(
+    config: &LasmClusterConfig,
+    worker_port: u16,
+) -> Result<LasmClusterWorker, String> {
+    let mut child = spawn_lasm_cluster_worker(config, worker_port)?;
+    if let Err(err) =
+        wait_for_lasm_cluster_worker_ready(&mut child, worker_port, config.worker_ready_timeout_ms)
+    {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(err);
+    }
+    Ok(LasmClusterWorker {
+        port: worker_port,
+        child,
+    })
+}
+
+fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
+    let mut kept = Vec::with_capacity(state.workers.len());
+    for mut worker in state.workers.drain(..) {
+        match worker.child.try_wait() {
+            Ok(Some(status)) => {
+                eprintln!(
+                    "warning: LASM cluster worker on port {} exited: {}",
+                    worker.port, status
+                );
+            }
+            Ok(None) => kept.push(worker),
+            Err(err) => {
+                eprintln!(
+                    "warning: could not inspect LASM cluster worker on port {}: {}",
+                    worker.port, err
+                );
+            }
+        }
+    }
+    state.workers = kept;
+    if state.round_robin_index >= state.workers.len() {
+        state.round_robin_index = 0;
+    }
+}
+
+fn desired_lasm_cluster_instances(
+    active_connections: usize,
+    min_instances: usize,
+    max_instances: usize,
+    target_connections_per_instance: usize,
+) -> usize {
+    let needed = if active_connections == 0 {
+        min_instances
+    } else {
+        active_connections.saturating_add(target_connections_per_instance.saturating_sub(1))
+            / target_connections_per_instance
+    };
+    needed.clamp(min_instances, max_instances)
+}
+
+fn write_lasm_cluster_unavailable_response(
+    client: &mut TcpStream,
+    message: &str,
+) -> Result<(), String> {
+    let body = format!(
+        "{{\"ok\":false,\"status\":503,\"error\":\"{}\"}}",
+        message.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    let response = format!(
+        "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    client
+        .write_all(response.as_bytes())
+        .map_err(|err| format!("could not write LASM cluster overload response: {err}"))?;
+    client
+        .flush()
+        .map_err(|err| format!("could not flush LASM cluster overload response: {err}"))?;
+    Ok(())
+}
+
+fn relay_lasm_cluster_connection(
+    client: &mut TcpStream,
+    upstream: &mut TcpStream,
+) -> Result<(), String> {
+    let mut client_read = client
+        .try_clone()
+        .map_err(|err| format!("could not clone client stream for proxy read: {err}"))?;
+    let mut client_write = client
+        .try_clone()
+        .map_err(|err| format!("could not clone client stream for proxy write: {err}"))?;
+    let mut upstream_read = upstream
+        .try_clone()
+        .map_err(|err| format!("could not clone upstream stream for proxy read: {err}"))?;
+    let mut upstream_write = upstream
+        .try_clone()
+        .map_err(|err| format!("could not clone upstream stream for proxy write: {err}"))?;
+
+    let client_to_upstream = std::thread::spawn(move || {
+        let _ = std::io::copy(&mut client_read, &mut upstream_write);
+        let _ = upstream_write.shutdown(Shutdown::Write);
+    });
+
+    let upstream_to_client = std::io::copy(&mut upstream_read, &mut client_write)
+        .map_err(|err| format!("could not relay upstream response to client: {err}"));
+    let _ = client_write.shutdown(Shutdown::Write);
+    let _ = client_to_upstream.join();
+    upstream_to_client.map(|_| ())
+}
+
+fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
+    for worker in &mut state.workers {
+        let _ = worker.child.kill();
+        let _ = worker.child.wait();
+    }
+    state.workers.clear();
+    state.round_robin_index = 0;
+}
+
+fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
+    let listener = match TcpListener::bind(("127.0.0.1", config.listen_port)) {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!(
+                "run failed: could not bind LASM cluster proxy on 127.0.0.1:{}: {err}",
+                config.listen_port
+            );
+            return Err(2);
+        }
+    };
+
+    let base_port = match compute_lasm_cluster_base_port(config.listen_port, config.max_instances) {
+        Ok(port) => port,
+        Err(message) => {
+            eprintln!("run failed: {message}");
+            return Err(2);
+        }
+    };
+
+    let mut state = LasmClusterState {
+        workers: Vec::new(),
+        round_robin_index: 0,
+        next_port: base_port,
+    };
+    for _ in 0..config.min_instances {
+        let worker_port = state.next_port;
+        state.next_port = state.next_port.saturating_add(1);
+        match spawn_and_wait_lasm_cluster_worker(&config, worker_port) {
+            Ok(worker) => state.workers.push(worker),
+            Err(message) => {
+                stop_lasm_cluster_workers(&mut state);
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        }
+    }
+    if state.workers.is_empty() {
+        eprintln!("run failed: could not bootstrap LASM cluster workers");
+        return Err(2);
+    }
+
+    let shared_state = Arc::new(Mutex::new(state));
+    let shared_config = Arc::new(config);
+    let active_connections = Arc::new(AtomicUsize::new(0));
+    let stop_flag = Arc::new(AtomicBool::new(false));
+
+    let autoscale_handle = if shared_config.max_instances > shared_config.min_instances {
+        let autoscale_state = Arc::clone(&shared_state);
+        let autoscale_config = Arc::clone(&shared_config);
+        let autoscale_active_connections = Arc::clone(&active_connections);
+        let autoscale_stop_flag = Arc::clone(&stop_flag);
+        Some(std::thread::spawn(move || {
+            while !autoscale_stop_flag.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(autoscale_config.autoscale_check_ms));
+                if autoscale_stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                let active = autoscale_active_connections.load(Ordering::Relaxed);
+                let desired = desired_lasm_cluster_instances(
+                    active,
+                    autoscale_config.min_instances,
+                    autoscale_config.max_instances,
+                    autoscale_config.target_connections_per_instance,
+                );
+                let mut state = match autoscale_state.lock() {
+                    Ok(state) => state,
+                    Err(_) => break,
+                };
+                prune_dead_lasm_cluster_workers(&mut state);
+                while state.workers.len() < desired {
+                    let worker_port = state.next_port;
+                    state.next_port = state.next_port.saturating_add(1);
+                    match spawn_and_wait_lasm_cluster_worker(&autoscale_config, worker_port) {
+                        Ok(worker) => state.workers.push(worker),
+                        Err(message) => {
+                            eprintln!("warning: LASM cluster autoscale-up failed: {message}");
+                            break;
+                        }
+                    }
+                }
+                while state.workers.len() > desired {
+                    if let Some(mut worker) = state.workers.pop() {
+                        let _ = worker.child.kill();
+                        let _ = worker.child.wait();
+                    }
+                }
+                if state.round_robin_index >= state.workers.len() {
+                    state.round_robin_index = 0;
+                }
+            }
+        }))
+    } else {
+        None
+    };
+
+    for incoming in listener.incoming() {
+        let client_stream = match incoming {
+            Ok(stream) => stream,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) => {
+                eprintln!("run failed: LASM cluster proxy accept error: {err}");
+                break;
+            }
+        };
+
+        let state = Arc::clone(&shared_state);
+        let config = Arc::clone(&shared_config);
+        let active = Arc::clone(&active_connections);
+        std::thread::spawn(move || {
+            active.fetch_add(1, Ordering::Relaxed);
+            let mut client = client_stream;
+
+            let backend_port = {
+                let mut state = match state.lock() {
+                    Ok(state) => state,
+                    Err(_) => {
+                        let _ = write_lasm_cluster_unavailable_response(
+                            &mut client,
+                            "cluster state unavailable",
+                        );
+                        active.fetch_sub(1, Ordering::Relaxed);
+                        return;
+                    }
+                };
+                prune_dead_lasm_cluster_workers(&mut state);
+                while state.workers.len() < config.min_instances {
+                    let worker_port = state.next_port;
+                    state.next_port = state.next_port.saturating_add(1);
+                    match spawn_and_wait_lasm_cluster_worker(&config, worker_port) {
+                        Ok(worker) => state.workers.push(worker),
+                        Err(message) => {
+                            eprintln!("warning: LASM cluster worker recovery failed: {message}");
+                            break;
+                        }
+                    }
+                }
+                if state.workers.is_empty() {
+                    None
+                } else {
+                    let index = state.round_robin_index % state.workers.len();
+                    state.round_robin_index = state.round_robin_index.saturating_add(1);
+                    Some(state.workers[index].port)
+                }
+            };
+
+            let Some(backend_port) = backend_port else {
+                let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
+                active.fetch_sub(1, Ordering::Relaxed);
+                return;
+            };
+
+            match TcpStream::connect(("127.0.0.1", backend_port)) {
+                Ok(mut upstream) => {
+                    let _ = client.set_nodelay(true);
+                    let _ = upstream.set_nodelay(true);
+                    let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
+                }
+                Err(err) => {
+                    eprintln!(
+                        "warning: LASM cluster worker {} connect failed: {}",
+                        backend_port, err
+                    );
+                    let _ =
+                        write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                }
+            }
+            active.fetch_sub(1, Ordering::Relaxed);
+        });
+    }
+
+    stop_flag.store(true, Ordering::Relaxed);
+    if let Some(handle) = autoscale_handle {
+        let _ = handle.join();
+    }
+    if let Ok(mut state) = shared_state.lock() {
+        stop_lasm_cluster_workers(&mut state);
+    }
+    Ok(())
+}
+
 fn cmd_run_lasm_backend(
     path: &Path,
     manifest: &sec4_core::Manifest,
@@ -7880,6 +8386,10 @@ fn cmd_run_lasm_backend(
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
+    instances: usize,
+    autoscale_max_instances: Option<usize>,
+    autoscale_target_connections: Option<usize>,
+    autoscale_check_ms: u64,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -8068,6 +8578,40 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+
+    let max_instances = autoscale_max_instances.unwrap_or(instances);
+    if max_instances < instances {
+        eprintln!("run failed: --autoscale-max-instances must be >= --instances");
+        return Err(2);
+    }
+    let cluster_mode = instances > 1 || max_instances > 1;
+    if cluster_mode && oneshot {
+        eprintln!("run failed: cluster mode does not support --oneshot");
+        return Err(2);
+    }
+    if cluster_mode {
+        let target_connections_per_instance = autoscale_target_connections
+            .unwrap_or(effective_max_in_flight)
+            .max(1);
+        return cmd_run_lasm_cluster(LasmClusterConfig {
+            path: path.to_path_buf(),
+            listen_port: port.unwrap_or(8080),
+            max_header_bytes,
+            max_body_bytes,
+            max_concurrency,
+            max_pending,
+            serve_timeout_ms,
+            overflow_probe_timeout_ms: Some(overflow_probe_timeout_ms),
+            max_runtime_steps,
+            max_keep_alive_requests,
+            db_base: db_base.map(Path::to_path_buf),
+            min_instances: instances,
+            max_instances,
+            target_connections_per_instance,
+            autoscale_check_ms,
+            worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+        });
+    }
 
     let routes = collect_lasm_route_plans(&program, entry.name.as_str());
     if routes.is_empty() {

@@ -423,6 +423,12 @@ Post-alpha track acceptance anchors:
 1. [x] Completed LASM DB parity for active DB intrinsics (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) and removed schema-switch fallback branches for write/query-one paths while keeping deterministic envelopes on `records.log` adapter v1.
 2. [x] Made LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), with clean-machine `init -> check -> build -> run` validated on LASM-first flow.
 3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
+   - [x] Added built-in LASM horizontal front-layer orchestration in `sec4 run`:
+     - `--instances <N>` launches multi-instance LASM worker pool behind a built-in TCP front proxy.
+     - `--autoscale-max-instances`, `--autoscale-target-connections`, `--autoscale-check-ms` add adaptive worker scaling controls.
+     - documented in `docs/book/1014-m39-lasm-run-cluster-front-proxy-and-autoscale.md`.
+   - [x] Added command coverage for cluster guardrails and cluster serving path.
+   - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,
