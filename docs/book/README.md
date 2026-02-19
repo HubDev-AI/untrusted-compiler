@@ -985,5 +985,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1017-m39-benchmark-trend-workflow-endpoint-contract-coherence.md`
 - `1018-m39-lasm-run-cluster-front-proxy-and-autoscale.md`
 - `1019-m39-run-db-adapter-flag.md`
+- `1020-m39-run-db-adapter-runtime-flag-contract-lock.md`
 
 As milestones progress, chapters will be added and linked from this index.
