@@ -1,6 +1,8 @@
-# Untrusted<T> Zed Extension (Scaffold)
+# Untrusted<T> Zed Extension
 
-This directory contains an initial scaffold for Zed integration:
+This directory contains the official Zed integration for Untrusted<T>.
+
+## What it provides
 
 - `extension.toml`:
   - registers `Untrusted<T>` grammar metadata,
@@ -10,10 +12,25 @@ This directory contains an initial scaffold for Zed integration:
 - `src/lib.rs`:
   - launches `sec4audit-language-server --stdio` for Zed LSP requests.
 
+## Feature surface (from LSP)
+
+- diagnostics (`publishDiagnostics`)
+- go to definition / hover
+- references / rename
+- quickfix code actions
+- document formatting (`textDocument/formatting`)
+
+## Local smoke project
+
+Use:
+
+- `/Users/vladimirtrifonov/src/ai/AILang/examples/zed-plugin-smoke`
+
+It includes multi-file `.ut` modules plus playground files for diagnostics and formatter checks.
+
 ## Notes
 
 - `grammars.untrusted.rev` is pinned to a commit SHA and should be updated whenever grammar changes are intentionally rolled forward.
-- This scaffold is intentionally minimal and focused on LSP wiring.
 
 ## Validation
 

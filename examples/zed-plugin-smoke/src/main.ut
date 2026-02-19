@@ -1,0 +1,9 @@
+use http.handlers;
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", healthHandler);
+  http.get(router, "/users/:id", userHandler);
+  http.serve(8080, router);
+  0
+}

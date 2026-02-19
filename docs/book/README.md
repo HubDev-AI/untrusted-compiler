@@ -1001,5 +1001,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1033-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`
 - `1034-m39-lasm-autoscale-saturation-boost-step-control.md`
 - `1035-m39-lasm-saturation-boost-matrix-tooling.md`
+- `1036-m39-zed-plugin-formatting-and-smoke-project.md`
 
 As milestones progress, chapters will be added and linked from this index.
