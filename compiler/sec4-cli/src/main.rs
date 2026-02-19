@@ -8639,10 +8639,18 @@ fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
     let host_parallelism = std::thread::available_parallelism()
         .map(|value| value.get())
         .unwrap_or(4);
+    let target_connection_floor = config
+        .target_connections_per_instance
+        .max(config.min_instances)
+        .max(1);
+    let adaptive_cap = config
+        .max_instances
+        .saturating_mul(config.target_connections_per_instance.max(1))
+        .clamp(128, 512);
     host_parallelism
         .max(config.min_instances)
-        .min(config.max_instances.saturating_mul(4).max(4))
-        .min(128)
+        .max(target_connection_floor)
+        .min(adaptive_cap)
 }
 
 fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: usize) -> usize {

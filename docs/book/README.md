@@ -1026,5 +1026,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1054-m39-lasm-cluster-relay-connect-timeout-and-saturation-signal.md`
 - `1055-m39-lasm-cluster-snapshot-publish-change-detection.md`
 - `1056-m39-lasm-cluster-relay-no-spawn-pump-loop.md`
+- `1057-m39-lasm-cluster-relay-auto-worker-pressure-sizing.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I benchmarked the new relay auto-sizing change with `--cluster-relay-workers 32` still pinned, so the first run didn’t measure the new default behavior. | For default-tuning slices, rerun probe without explicit override flags and verify `.run.clusterRelayWorkers == \"auto\"` in the output artifact before comparing metrics. |
 | 2026-02-19 | self | I queried LASM capacity probe output with outdated JSON paths (`.requests.total`, `.throughput.requestsPerSec`) and got `null`, which hid real results; I also briefly ran two Cargo tests in parallel again and reintroduced lock-wait noise. | Confirm artifact schema first with `jq keys`/`jq .` before metric extraction, and keep all Cargo commands strictly sequential in this repo. |
 | 2026-02-19 | self | I ran `cargo fmt` for a single-file change and it also reformatted `compiler/sec4-cli/tests/commands.rs`, creating unrelated churn. | For focused runtime slices, format only targeted files and immediately `git status` after format commands; revert incidental test/doc formatting before commit. |
 | 2026-02-19 | self | I kicked off a broad `find ~/Library` scan to detect Zed paths and it was slow/noisy for a small operator-doc task. | Prefer focused candidate-path probes first (`~/Library/Application Support/Zed`, `~/.local/share/zed`) and only run broad scans if targeted checks fail. |
