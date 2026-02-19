@@ -514,6 +514,11 @@ Post-alpha track acceptance anchors:
      - supports `--dry-run` plan output and `--skip-verify` mode for matrix/analysis/summary-only execution,
      - Makefile target added: `lasm-cluster-saturation-boost-bundle`.
      - documented in `docs/book/1042-m39-lasm-saturation-boost-bundle-orchestration.md`.
+   - [x] Full benchmark suite orchestration now supports optional LASM saturation lane:
+     - `run_full_benchmark_suite.sh --include-lasm-saturation` now executes the saturation bundle as an explicit phase and forwards generated summary into final report publishing,
+     - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
+     - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
+     - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

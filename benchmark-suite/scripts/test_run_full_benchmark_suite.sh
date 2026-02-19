@@ -29,8 +29,30 @@ if ! grep -q 'build_artifact_manifest.sh .*results .*artifact-manifest.json' <<<
   exit 1
 fi
 
+out_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-skip-verify)"
+if ! grep -q '^phase: lasm saturation tuning bundle$' <<<"$out_sat"; then
+  echo "missing lasm saturation phase" >&2
+  exit 1
+fi
+if ! grep -q '^sec4 LASM saturation boost bundle plan:$' <<<"$out_sat"; then
+  echo "missing delegated saturation bundle plan output" >&2
+  exit 1
+fi
+if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*analysis.json .*step-matrix.json .*sec4-lasm-cluster-saturation-boost-summary.md' <<<"$out_sat"; then
+  echo "missing publish command with saturation summary input" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls unknown --endpoints ping >/dev/null 2>&1; then
   echo "expected invalid impl to fail via delegated validation" >&2
+  exit 1
+fi
+if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls node --endpoints ping --include-lasm-saturation >/tmp/run-full-sat-invalid.log 2>&1; then
+  echo "expected include-lasm-saturation without sec4-lasm to fail" >&2
+  exit 1
+fi
+if ! grep -q -- '--include-lasm-saturation requires sec4-lasm in --impls' /tmp/run-full-sat-invalid.log; then
+  echo "missing include-lasm-saturation guard diagnostic" >&2
   exit 1
 fi
 
