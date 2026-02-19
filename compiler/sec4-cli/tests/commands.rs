@@ -15090,7 +15090,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_lasm_backend_persists_records_log_and_query_one_when_db_schema_hints_are_used() {
+fn run_command_lasm_backend_persists_records_log_and_query_one_when_db_intrinsics_are_used() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-records-log");
     let db_base = project_dir.join("lasm-db");
     let exec_port = find_available_tcp_port();
@@ -15111,13 +15111,24 @@ entry = "src/main.ut"
     .expect("manifest should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        r#"fn dbExec() effects { net } -> Int {
-  res.json(200, "DbExecResponse", 0);
+        r#"fn dbExec() effects { net, db.write } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.exec(db, query);
+  res.json(200, "DbExecRuntimeResponse", 0);
   0
 }
 
-fn dbExecTx() effects { net } -> Int {
-  res.json(200, "DbExecTxResponse", 0);
+fn dbExecTx() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
   0
 }
 
@@ -15248,7 +15259,7 @@ fn main() effects { net } -> Int {
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
-        "POST /db/exec-tx?template=SELECT%201&params=alpha&tx=9 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_tx_response.contains("HTTP/1.1 200 OK"),
@@ -15257,7 +15268,7 @@ fn main() effects { net } -> Int {
     assert!(
         exec_tx_response.contains("\"recordId\":2")
             && exec_tx_response.contains("\"op\":\"execTx\"")
-            && exec_tx_response.contains("\"tx\":9"),
+            && exec_tx_response.contains("\"tx\":"),
         "db execTx response should include deterministic second record payload:\n{exec_tx_response}"
     );
 

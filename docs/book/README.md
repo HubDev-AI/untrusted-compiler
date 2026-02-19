@@ -969,5 +969,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1001-m39-lasm-request-line-single-space-separator-enforcement.md`
 - `1002-m39-lasm-dynamic-user-store-persistence.md`
 - `1003-m37-alpha2-release-closure-refresh.md`
+- `1004-m39-lasm-db-intrinsic-execution-baseline.md`
 
 As milestones progress, chapters will be added and linked from this index.
