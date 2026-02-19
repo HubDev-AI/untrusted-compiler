@@ -19,6 +19,7 @@ LASM_SATURATION_ANALYSIS ?= results/summaries/sec4-lasm-cluster-saturation-boost
 LASM_SATURATION_VERIFY_OUT ?= results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json
 LASM_SATURATION_SUMMARY ?= results/summaries/sec4-lasm-cluster-saturation-boost-summary.md
 LASM_SATURATION_VERIFY_INPUT ?=
+SATURATION_SUMMARY ?=
 
 help:
 	@echo "Targets:"
@@ -55,7 +56,7 @@ help:
 	@echo "  compare      Build endpoint comparison from report files"
 	@echo "  compare-matrix Build comparison matrix across all endpoints"
 	@echo "  analyze-matrix Analyze tail-latency/target-coverage signals from matrix"
-	@echo "  publish-report Build markdown benchmark report from matrix + sec4 audit"
+	@echo "  publish-report Build markdown benchmark report from matrix + sec4 audit (+ optional saturation summary)"
 	@echo "  test-scripts Run benchmark helper script tests"
 	@echo "  test-services Run cross-impl service contract smoke checks"
 
@@ -163,7 +164,11 @@ analyze-matrix:
 	scripts/analyze_matrix.sh results/summaries/compare-matrix.json results/summaries/analysis.json
 
 publish-report:
-	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json
+	@if [ -n "$(SATURATION_SUMMARY)" ]; then \
+		scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json "" "$(SATURATION_SUMMARY)"; \
+	else \
+		scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json; \
+	fi
 
 test-scripts:
 	scripts/test_run_sec4_capacity_probe.sh

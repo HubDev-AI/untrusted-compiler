@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 5 ]; then
-  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 6 ]; then
+  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json] [saturation_summary.md]" >&2
   exit 2
 fi
 
@@ -11,6 +11,7 @@ out_path="$2"
 sec_audit_path="${3:-}"
 analysis_path="${4:-}"
 step_matrix_path="${5:-}"
+saturation_summary_path="${6:-}"
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -36,6 +37,27 @@ if [ -n "$step_matrix_path" ] && [ ! -f "$step_matrix_path" ]; then
   echo "step matrix file not found: ${step_matrix_path}" >&2
   exit 2
 fi
+if [ -n "$saturation_summary_path" ] && [ ! -f "$saturation_summary_path" ]; then
+  echo "saturation summary file not found: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Recommended boost step:' "$saturation_summary_path"; then
+  echo "saturation summary missing recommended boost step line: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Selection mode:' "$saturation_summary_path"; then
+  echo "saturation summary missing selection mode line: ${saturation_summary_path}" >&2
+  exit 2
+fi
+
+extract_summary_value() {
+  local prefix="$1"
+  local path="$2"
+  local line
+  line="$(grep -F -- "$prefix" "$path" | head -n 1 || true)"
+  line="${line#"$prefix"}"
+  printf '%s' "$line"
+}
 
 mkdir -p "$(dirname "$out_path")"
 now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -83,6 +105,9 @@ fi
   fi
   if [ -n "$step_matrix_path" ]; then
     echo "- Step matrix source: ${step_matrix_path}"
+  fi
+  if [ -n "$saturation_summary_path" ]; then
+    echo "- Saturation summary source: ${saturation_summary_path}"
   fi
   echo
 
@@ -235,6 +260,26 @@ fi
     fi
   else
     echo "- No sec4 audit artifact provided."
+  fi
+  echo
+
+  echo "## LASM Saturation Boost Tuning"
+  echo
+  if [ -n "$saturation_summary_path" ]; then
+    sat_recommended="$(extract_summary_value '- Recommended boost step: ' "$saturation_summary_path")"
+    sat_selection_mode="$(extract_summary_value '- Selection mode: ' "$saturation_summary_path")"
+    sat_pass_runs="$(extract_summary_value '- Pass runs: ' "$saturation_summary_path")"
+    sat_verify_reqps="$(extract_summary_value '- Requests/sec: ' "$saturation_summary_path")"
+
+    echo "- Summary source: ${saturation_summary_path}"
+    echo "- Recommended boost step: ${sat_recommended}"
+    echo "- Selection mode: ${sat_selection_mode}"
+    echo "- Pass runs: ${sat_pass_runs}"
+    if [ -n "$sat_verify_reqps" ]; then
+      echo "- Verification requests/sec: ${sat_verify_reqps}"
+    fi
+  else
+    echo "- No saturation-summary artifact provided."
   fi
 } > "$out_path"
 

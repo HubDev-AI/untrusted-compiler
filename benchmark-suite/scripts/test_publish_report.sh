@@ -17,7 +17,7 @@ analysis="$tmp/analysis.json"
 "$root_dir/scripts/analyze_matrix.sh" "$matrix" "$analysis" >/dev/null
 
 out="$tmp/report.md"
-"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" "$root_dir/scripts/testdata/sample-step-matrix.json" >/dev/null
+"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" "$root_dir/scripts/testdata/sample-step-matrix.json" "$root_dir/scripts/testdata/sample-saturation-boost-summary.md" >/dev/null
 
 if ! grep -q '^# Benchmark Comparative Report (v0.1)$' "$out"; then
   echo "missing report title" >&2
@@ -99,6 +99,18 @@ fi
 
 if ! grep -q 'Policy: default-secure-prod' "$out"; then
   echo "missing security policy summary" >&2
+  exit 1
+fi
+if ! grep -q '^## LASM Saturation Boost Tuning$' "$out"; then
+  echo "missing saturation boost section" >&2
+  exit 1
+fi
+if ! grep -q 'Recommended boost step: 4' "$out"; then
+  echo "missing saturation boost recommendation summary" >&2
+  exit 1
+fi
+if ! grep -q 'Selection mode: pass-first' "$out"; then
+  echo "missing saturation boost selection mode summary" >&2
   exit 1
 fi
 
