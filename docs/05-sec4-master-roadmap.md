@@ -333,6 +333,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM DB intrinsic persistence now supports adapter selection via `SEC4_RT_LASM_DB_ADAPTER` (`records.log` default, `sqlite` optional), with SQLite-backed load/persist parity for `db.exec`/`db.execTx`/`db.queryOne` while preserving default file-adapter behavior (`docs/book/1015-m39-lasm-db-sqlite-adapter-baseline.md`).
 - [x] LASM `DbListRecordsResponse` now exposes the active DB adapter label (`records.log` or `sqlite`) so operator introspection confirms which persistence backend is active during runtime validation flows (`docs/book/1016-m39-lasm-db-list-response-adapter-visibility.md`).
 - [x] Benchmark-trend workflow contract checks now enforce endpoint-set coherence across benchmark run scope, threshold checks, and trend-note rendering, and require one `--max-rss-kb` guard per threshold endpoint invocation to prevent silent CI drift (`docs/book/1017-m39-benchmark-trend-workflow-endpoint-contract-coherence.md`).
+- [x] `sec4 run` now supports explicit `--db-adapter <records-log|sqlite>` selection for LASM mode (single-instance and cluster-worker paths), with deterministic C-backend guard diagnostics for lasm-only usage; SQLite command coverage now exercises adapter selection through CLI flag surface while preserving `SEC4_RT_LASM_DB_ADAPTER` fallback compatibility (`docs/book/1019-m39-run-db-adapter-flag.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -435,7 +436,7 @@ Post-alpha track acceptance anchors:
    - [x] Added fast fixed-cluster shared-port mode (`SO_REUSEPORT`) for LASM:
      - when `--instances == --autoscale-max-instances`, workers bind one shared port without front-proxy relay.
      - benchmark probes show improved throughput vs proxy-cluster path (for example ~96k req/s on `/ping` in local wrk profile).
-     - documented in `docs/book/1019-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
+     - documented in `docs/book/1020-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

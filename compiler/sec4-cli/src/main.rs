@@ -78,6 +78,8 @@ enum Commands {
         max_keep_alive_requests: Option<u64>,
         #[arg(long)]
         db_base: Option<PathBuf>,
+        #[arg(long, value_enum)]
+        db_adapter: Option<RunDbAdapter>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -234,6 +236,13 @@ enum BuildTlsBackend {
 enum RunBackend {
     C,
     Lasm,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum RunDbAdapter {
+    #[value(alias = "records", alias = "records.log")]
+    RecordsLog,
+    Sqlite,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -430,6 +439,7 @@ fn main() {
             max_runtime_steps,
             max_keep_alive_requests,
             db_base,
+            db_adapter,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -450,6 +460,7 @@ fn main() {
             max_runtime_steps,
             max_keep_alive_requests,
             db_base.as_deref(),
+            db_adapter,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -1214,10 +1225,13 @@ const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
 const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 
-fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDynamicResponseState {
+fn build_lasm_dynamic_response_state(
+    explicit_db_base: Option<&Path>,
+    explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
+) -> LasmDynamicResponseState {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
-    let db_records_adapter = resolve_lasm_dynamic_db_records_adapter();
+    let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
     let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
     let users_by_id = users_store_path
@@ -1278,7 +1292,12 @@ fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<Pa
     Some(PathBuf::from(value))
 }
 
-fn resolve_lasm_dynamic_db_records_adapter() -> LasmDbRecordsAdapter {
+fn resolve_lasm_dynamic_db_records_adapter(
+    explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
+) -> LasmDbRecordsAdapter {
+    if let Some(adapter) = explicit_db_records_adapter {
+        return adapter;
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_DB_ADAPTER") else {
         return LasmDbRecordsAdapter::RecordsLog;
     };
@@ -7729,6 +7748,7 @@ fn cmd_run(
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
+    db_adapter: Option<RunDbAdapter>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -7805,6 +7825,10 @@ fn cmd_run(
         eprintln!("run failed: --db-base is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_adapter.is_some() {
+        eprintln!("run failed: --db-adapter is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && instances != 1 {
         eprintln!("run failed: --instances is only supported with --backend lasm");
         return Err(2);
@@ -7868,6 +7892,7 @@ fn cmd_run(
             max_runtime_steps,
             max_keep_alive_requests,
             db_base,
+            db_adapter,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -8201,6 +8226,7 @@ struct LasmClusterConfig {
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     db_base: Option<PathBuf>,
+    db_adapter: Option<RunDbAdapter>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -8247,6 +8273,26 @@ fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path
     }
 }
 
+fn run_db_adapter_arg_value(adapter: RunDbAdapter) -> &'static str {
+    match adapter {
+        RunDbAdapter::RecordsLog => "records-log",
+        RunDbAdapter::Sqlite => "sqlite",
+    }
+}
+
+fn run_db_adapter_to_lasm_db_records_adapter(adapter: RunDbAdapter) -> LasmDbRecordsAdapter {
+    match adapter {
+        RunDbAdapter::RecordsLog => LasmDbRecordsAdapter::RecordsLog,
+        RunDbAdapter::Sqlite => LasmDbRecordsAdapter::Sqlite,
+    }
+}
+
+fn push_optional_db_adapter_run_arg(cmd: &mut Command, value: Option<RunDbAdapter>) {
+    if let Some(value) = value {
+        cmd.arg("--db-adapter").arg(run_db_adapter_arg_value(value));
+    }
+}
+
 fn spawn_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
@@ -8285,6 +8331,7 @@ fn spawn_lasm_cluster_worker(
         config.max_keep_alive_requests,
     );
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
+    push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
 
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
@@ -8736,6 +8783,7 @@ fn cmd_run_lasm_backend(
     max_runtime_steps: Option<u64>,
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
+    db_adapter: Option<RunDbAdapter>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -8980,6 +9028,7 @@ fn cmd_run_lasm_backend(
             max_runtime_steps,
             max_keep_alive_requests,
             db_base: db_base.map(Path::to_path_buf),
+            db_adapter,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
@@ -9009,7 +9058,10 @@ fn cmd_run_lasm_backend(
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
-    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state(db_base)));
+    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state(
+        db_base,
+        db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
+    )));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
