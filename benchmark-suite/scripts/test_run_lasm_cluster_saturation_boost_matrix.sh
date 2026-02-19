@@ -17,6 +17,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --autoscale-scale-up-step 2 \
   --autoscale-scale-down-step 1 \
   --out results/summaries/custom-saturation-boost-matrix.json \
+  --analysis-out results/summaries/custom-saturation-boost-analysis.json \
   2>&1)"
 
 if ! grep -q 'sec4 LASM saturation boost matrix plan:' <<<"$out"; then
@@ -45,6 +46,28 @@ if ! grep -q 'autoscaleSaturationBoostStep=7' <<<"$out"; then
 fi
 if ! grep -q "out=${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-7.json" <<<"$out"; then
   echo "saturation boost matrix dry-run missing resolved per-step output path" >&2
+  exit 1
+fi
+if ! grep -q "analysisOut=${root_dir}/results/summaries/custom-saturation-boost-analysis.json" <<<"$out"; then
+  echo "saturation boost matrix dry-run missing analysis output path" >&2
+  exit 1
+fi
+if ! grep -q "analysisCmd=${root_dir}/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh ${root_dir}/results/summaries/custom-saturation-boost-matrix.json ${root_dir}/results/summaries/custom-saturation-boost-analysis.json" <<<"$out"; then
+  echo "saturation boost matrix dry-run missing analysis command plan" >&2
+  exit 1
+fi
+
+out_skip_analysis="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --skip-analysis \
+  --boost-steps 2,4 \
+  2>&1)"
+if ! grep -q 'skipAnalysis=true' <<<"$out_skip_analysis"; then
+  echo "saturation boost matrix dry-run missing skip-analysis plan marker" >&2
+  exit 1
+fi
+if grep -q 'analysisCmd=' <<<"$out_skip_analysis"; then
+  echo "saturation boost matrix dry-run should not print analysis command when skip-analysis is set" >&2
   exit 1
 fi
 

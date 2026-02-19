@@ -489,6 +489,11 @@ Post-alpha track acceptance anchors:
      - ranking is deterministic (`pass` first, then throughput, then request count, then lower RSS, then lower step),
      - Makefile target added: `lasm-cluster-saturation-boost-analyze`.
      - documented in `docs/book/1037-m39-lasm-saturation-boost-analysis-tooling.md`.
+   - [x] Matrix runner now supports integrated recommendation emission:
+     - `run_lasm_cluster_saturation_boost_matrix.sh` now accepts `--analysis-out` and runs analysis automatically by default after matrix generation,
+     - run mode now prints `recommendedSaturationBoostStep=<n>` from the generated analysis artifact,
+     - `--skip-analysis` keeps matrix-only behavior for explicit operator control.
+     - documented in `docs/book/1038-m39-lasm-saturation-boost-matrix-integrated-analysis.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

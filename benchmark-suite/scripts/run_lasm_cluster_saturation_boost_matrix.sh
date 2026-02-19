@@ -29,6 +29,8 @@ Options:
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
   --out <path>                                     Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
+  --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
+  --skip-analysis                                  Skip post-run matrix analysis/recommendation output
   --skip-build                                     Skip sec4 binary rebuild for all probes
   --dry-run                                        Print matrix probe plan only
   -h, --help                                       Show this help
@@ -55,6 +57,8 @@ cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
+analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
+skip_analysis="false"
 skip_build="false"
 dry_run="false"
 
@@ -144,6 +148,14 @@ while [ "$#" -gt 0 ]; do
       out_rel="${2:-}"
       shift 2
       ;;
+    --analysis-out)
+      analysis_out_rel="${2:-}"
+      shift 2
+      ;;
+    --skip-analysis)
+      skip_analysis="true"
+      shift
+      ;;
     --skip-build)
       skip_build="true"
       shift
@@ -195,9 +207,14 @@ fi
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
 probe_script="${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh"
+analyze_script="${root_dir}/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh"
 
 if [ ! -x "${probe_script}" ]; then
   echo "missing executable probe script: ${probe_script}" >&2
+  exit 1
+fi
+if [ "${skip_analysis}" != "true" ] && [ ! -x "${analyze_script}" ]; then
+  echo "missing executable analysis script: ${analyze_script}" >&2
   exit 1
 fi
 
@@ -211,6 +228,16 @@ fi
 out_dir="$(dirname "${out_path}")"
 mkdir -p "${out_dir}"
 
+if [[ "${analysis_out_rel}" = /* ]]; then
+  analysis_out_path="${analysis_out_rel}"
+elif [[ "${analysis_out_rel}" == benchmark-suite/* ]]; then
+  analysis_out_path="${repo_root}/${analysis_out_rel}"
+else
+  analysis_out_path="${root_dir}/${analysis_out_rel}"
+fi
+analysis_out_dir="$(dirname "${analysis_out_path}")"
+mkdir -p "${analysis_out_dir}"
+
 boost_steps_joined="$(IFS=,; echo "${boost_steps[*]}")"
 
 cat <<PLAN
@@ -223,6 +250,8 @@ sec4 LASM saturation boost matrix plan:
   connections=${connections}
   targetRequests=${target_requests}
   out=${out_path}
+  analysisOut=${analysis_out_path}
+  skipAnalysis=${skip_analysis}
 PLAN
 
 runs_json='[]'
@@ -292,6 +321,9 @@ for step in "${boost_steps[@]}"; do
 done
 
 if [ "${dry_run}" = "true" ]; then
+  if [ "${skip_analysis}" != "true" ]; then
+    echo "analysisCmd=${analyze_script} ${out_path} ${analysis_out_path}"
+  fi
   exit 0
 fi
 
@@ -322,3 +354,9 @@ jq -n \
   }' > "${out_path}"
 
 echo "wrote ${out_path}"
+
+if [ "${skip_analysis}" != "true" ]; then
+  "${analyze_script}" "${out_path}" "${analysis_out_path}"
+  recommended_step="$(jq -r '.summary.recommendedBoostStep' "${analysis_out_path}")"
+  echo "recommendedSaturationBoostStep=${recommended_step}"
+fi

@@ -121,7 +121,7 @@ lasm-cluster-capacity-probe:
 	scripts/run_lasm_cluster_capacity_probe.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)"
 
 lasm-cluster-saturation-boost-matrix:
-	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)"
+	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --out "$(LASM_SATURATION_MATRIX)" --analysis-out "$(LASM_SATURATION_ANALYSIS)"
 
 lasm-cluster-saturation-boost-analyze:
 	scripts/analyze_lasm_cluster_saturation_boost_matrix.sh "$(LASM_SATURATION_MATRIX)" "$(LASM_SATURATION_ANALYSIS)"

@@ -1003,5 +1003,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1035-m39-lasm-saturation-boost-matrix-tooling.md`
 - `1036-m39-zed-plugin-formatting-and-smoke-project.md`
 - `1037-m39-lasm-saturation-boost-analysis-tooling.md`
+- `1038-m39-lasm-saturation-boost-matrix-integrated-analysis.md`
 
 As milestones progress, chapters will be added and linked from this index.
