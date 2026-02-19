@@ -12,7 +12,7 @@
           "loadGenerator": "wrk2",
           "constantRate": true,
           "p99": "4.30ms",
-          "rssKb": null
+          "rssKb": 42000
         },
         {
           "impl": "go",
@@ -22,7 +22,7 @@
           "loadGenerator": "wrk2",
           "constantRate": true,
           "p99": "4.80ms",
-          "rssKb": null
+          "rssKb": 39000
         }
       ],
       "leader": {
@@ -33,7 +33,7 @@
         "loadGenerator": "wrk2",
         "constantRate": true,
         "p99": "4.30ms",
-        "rssKb": null
+        "rssKb": 42000
       }
     }
   ]

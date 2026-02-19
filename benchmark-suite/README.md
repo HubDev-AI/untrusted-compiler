@@ -110,3 +110,4 @@ Measure end-to-end service behavior across identical implementations:
 - Full-suite runner also emits `results/artifact-manifest.json` (sha256 + size per artifact, excluding logs).
 - `verify_benchmark_bundle.sh` checks required artifacts/JSON validity and verifies sha256 hashes against `artifact-manifest.json` for selected IMPLS/ENDPOINTS.
 - `run_sec4_capacity_probe.sh` builds/starts sec4 benchmark service, runs one load profile, samples peak RSS, and writes `results/summaries/sec4-capacity-probe.json` with pass/fail against request threshold.
+- `check_regression_thresholds.sh` also supports memory guard inputs (`--max-rss-kb`, baseline `baselineRssKb` + `maxRssRegressionPct`) in addition to p99/coverage thresholds.
