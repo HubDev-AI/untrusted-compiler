@@ -1,4 +1,4 @@
-# 1030 M39 Slice: LASM Autoscale Step-Window Controls
+# 1031 M39 Slice: LASM Autoscale Step-Window Controls
 
 This slice extends LASM autoscale hysteresis with bounded worker-count changes per autoscale tick.
 

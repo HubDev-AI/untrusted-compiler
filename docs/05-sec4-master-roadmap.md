@@ -338,6 +338,7 @@ Post-alpha track acceptance anchors:
 - [x] Added canonical LASM DB adapter operator smoke script (`scripts/smoke-sec4-run-lasm-db-adapter.sh`) that executes intrinsic-backed `/db/*` flows under explicit `--db-adapter` selection and validates adapter-specific persistence outputs (`records.log` vs `records.sqlite3`), plus script token-contract + guard coverage (`docs/book/1021-m39-lasm-db-adapter-operator-smoke-script.md`).
 - [x] Naming-lock contract suite now executes LASM DB adapter smoke script contract + guard checks so adapter smoke script drift fails CI through the standard script-contract path (`docs/book/1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`).
 - [x] Runtime-smoke CI workflow now executes LASM DB adapter smoke lanes (`records-log` and `sqlite`) in addition to hello-api lanes, with runtime-smoke workflow contract + guard coverage updated to lock both adapter-step tokens and preserve bundle-check enforcement (`docs/book/1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`).
+- [x] Milestone closure gate `M16-C` now enforces runtime-smoke DB adapter lane tokens (records-log + sqlite) alongside hello-api lanes, and closure fixture coverage was updated to keep strict gate evaluation deterministic (`docs/book/1030-m39-closure-gate-runtime-smoke-db-adapter-lane-enforcement.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -460,7 +461,7 @@ Post-alpha track acceptance anchors:
      - autoscaler now enforces separate up/down cooldown windows and bounded per-check scale steps to reduce worker-count thrash on bursty traffic,
      - flags stay LASM-only with deterministic validation and guard diagnostics.
      - LASM cluster capacity probe script now supports these step controls for benchmark runs.
-     - documented in `docs/book/1030-m39-lasm-autoscale-step-window-controls.md`.
+     - documented in `docs/book/1031-m39-lasm-autoscale-step-window-controls.md`.
    - [x] Added dedicated LASM cluster capacity probe tooling:
      - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
      - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
