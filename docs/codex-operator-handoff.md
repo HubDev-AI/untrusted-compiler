@@ -131,7 +131,7 @@ To reduce merge conflicts, split by file ownership where possible.
 Copy this to the other editor/operator:
 
 ---
-You are working in `/Users/vladimirtrifonov/src/ai/AILang` on branch `dev`.
+You are working in `<repo-root>` on branch `dev`.
 
 Read first:
 1. `docs/codex-operator-handoff.md`
@@ -161,7 +161,7 @@ After coding each slice:
 ## 8) Quick Start Commands
 
 ```bash
-cd /Users/vladimirtrifonov/src/ai/AILang
+cd <repo-root>
 git checkout dev
 git pull --ff-only
 
@@ -189,4 +189,3 @@ A slice is complete only when all are true:
 2. Continue queue/backpressure behavior hardening under keep-alive workloads.
 3. Benchmark comparability refinements for `sec4-lasm` lane.
 4. Keep docs/readiness estimate synchronized with actual merged behavior.
-

@@ -1869,6 +1869,9 @@ fn spawn_one_shot_http_server(body: &str) -> (u16, thread::JoinHandle<()>) {
                 Err(err) => panic!("oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -1929,6 +1932,9 @@ fn spawn_one_shot_http_chunked_server(body: &str) -> (u16, thread::JoinHandle<()
                 Err(err) => panic!("chunked oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2001,6 +2007,9 @@ fn spawn_one_shot_http_malformed_chunked_server() -> (u16, thread::JoinHandle<()
                 Err(err) => panic!("malformed chunked oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2058,6 +2067,9 @@ fn spawn_one_shot_http_chunked_with_trailers_server(body: &str) -> (u16, thread:
                 Err(err) => panic!("chunked trailers oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2141,6 +2153,9 @@ fn spawn_one_shot_http_chunked_missing_trailer_terminator_server() -> (u16, thre
                 }
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2197,6 +2212,9 @@ fn spawn_one_shot_http_large_headers_server() -> (u16, thread::JoinHandle<()>) {
                 Err(err) => panic!("large-headers oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2251,6 +2269,9 @@ fn spawn_one_shot_http_conflicting_framing_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("conflicting framing oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("conflicting framing oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2303,6 +2324,9 @@ fn spawn_one_shot_http_invalid_status_line_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("invalid status-line oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2359,6 +2383,9 @@ fn spawn_one_shot_http_invalid_transfer_encoding_server() -> (u16, thread::JoinH
                 }
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2415,6 +2442,9 @@ fn spawn_one_shot_http_unsupported_transfer_encoding_server() -> (u16, thread::J
                 }
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2467,6 +2497,9 @@ fn spawn_one_shot_http_obs_fold_header_server() -> (u16, thread::JoinHandle<()>)
                 Err(err) => panic!("obs-fold header oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2519,6 +2552,9 @@ fn spawn_one_shot_http_header_whitespace_before_colon_server() -> (u16, thread::
                 Err(err) => panic!("header whitespace oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2573,6 +2609,9 @@ fn spawn_one_shot_http_invalid_header_section_server() -> (u16, thread::JoinHand
                 Err(err) => panic!("invalid header-section oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2624,6 +2663,9 @@ fn spawn_one_shot_http_header_control_char_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("header control-char oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2678,6 +2720,9 @@ fn spawn_one_shot_http_invalid_content_type_server() -> (u16, thread::JoinHandle
                 Err(err) => panic!("invalid content-type oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2730,6 +2775,9 @@ fn spawn_one_shot_http_unsupported_version_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("unsupported version oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2782,6 +2830,9 @@ fn spawn_one_shot_http_invalid_header_line_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("invalid header-line oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2835,6 +2886,9 @@ fn spawn_one_shot_http_invalid_retry_after_server() -> (u16, thread::JoinHandle<
                 Err(err) => panic!("invalid retry-after oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2887,6 +2941,9 @@ fn spawn_one_shot_http_conflicting_location_headers_server() -> (u16, thread::Jo
                 Err(err) => panic!("conflicting location oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2943,6 +3000,9 @@ fn spawn_one_shot_http_duplicate_content_length_equal_server() -> (u16, thread::
                 }
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -2999,6 +3059,9 @@ fn spawn_one_shot_http_duplicate_content_length_conflict_server() -> (u16, threa
                 }
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3054,6 +3117,9 @@ fn spawn_one_shot_http_server_with_response_delay(
                 Err(err) => panic!("oneshot delayed server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3113,6 +3179,9 @@ fn spawn_one_shot_http_redirect_chain_server(
                     Err(err) => panic!("redirect oneshot server accept failed: {err}"),
                 }
             };
+            stream
+                .set_nonblocking(false)
+                .expect("oneshot server stream blocking setup should work");
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
@@ -3200,6 +3269,9 @@ fn spawn_one_shot_http_monotonic_redirect_server(
                     Err(err) => panic!("monotonic redirect oneshot server accept failed: {err}"),
                 }
             };
+            stream
+                .set_nonblocking(false)
+                .expect("oneshot server stream blocking setup should work");
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
@@ -3260,6 +3332,9 @@ fn spawn_one_shot_http_relative_redirect_server() -> (u16, thread::JoinHandle<()
                     Err(err) => panic!("relative redirect oneshot server accept failed: {err}"),
                 }
             };
+            stream
+                .set_nonblocking(false)
+                .expect("oneshot server stream blocking setup should work");
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
@@ -3342,6 +3417,9 @@ fn spawn_one_shot_http_invalid_relative_redirect_server() -> (u16, thread::JoinH
                 Err(err) => panic!("invalid relative redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3394,6 +3472,9 @@ fn spawn_one_shot_http_fragment_redirect_server() -> (u16, thread::JoinHandle<()
                 Err(err) => panic!("fragment redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3446,6 +3527,9 @@ fn spawn_one_shot_http_invalid_target_char_redirect_server() -> (u16, thread::Jo
                 Err(err) => panic!("target-char redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3500,6 +3584,9 @@ fn spawn_one_shot_http_invalid_query_percent_redirect_server() -> (u16, thread::
                 Err(err) => panic!("query-percent redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3554,6 +3641,9 @@ fn spawn_one_shot_http_invalid_query_separator_redirect_server() -> (u16, thread
                 Err(err) => panic!("query-separator redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3608,6 +3698,9 @@ fn spawn_one_shot_http_scope_invalid_redirect_server() -> (u16, thread::JoinHand
                 Err(err) => panic!("scope-invalid redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3662,6 +3755,9 @@ fn spawn_one_shot_http_missing_location_redirect_server() -> (u16, thread::JoinH
                 Err(err) => panic!("missing-location redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3716,6 +3812,9 @@ fn spawn_one_shot_http_invalid_scheme_redirect_server() -> (u16, thread::JoinHan
                 Err(err) => panic!("invalid-scheme redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3770,6 +3869,9 @@ fn spawn_one_shot_http_redirect_cycle_server() -> (u16, thread::JoinHandle<()>) 
                     Err(err) => panic!("redirect-cycle oneshot server accept failed: {err}"),
                 }
             };
+            stream
+                .set_nonblocking(false)
+                .expect("oneshot server stream blocking setup should work");
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
@@ -3844,6 +3946,9 @@ fn spawn_one_shot_http_absolute_redirect_upper_host_server() -> (u16, thread::Jo
                     }
                 }
             };
+            stream
+                .set_nonblocking(false)
+                .expect("oneshot server stream blocking setup should work");
 
             let mut buffer = [0_u8; 1024];
             let mut request = Vec::new();
@@ -3930,6 +4035,9 @@ fn spawn_one_shot_http_invalid_redirect_host_server() -> (u16, thread::JoinHandl
                 Err(err) => panic!("invalid redirect-host oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -3989,6 +4097,9 @@ fn spawn_one_shot_http_ipv6_malformed_redirect_server(
                 Err(err) => panic!("malformed ipv6 redirect oneshot server accept failed: {err}"),
             }
         };
+        stream
+            .set_nonblocking(false)
+            .expect("oneshot server stream blocking setup should work");
 
         let mut buffer = [0_u8; 1024];
         let mut request = Vec::new();
@@ -9481,10 +9592,10 @@ fn c_bin_runtime_path_and_header_guards_when_clang_available() {
         r#"#include "sec4_runtime.h"
 
 int main(void) {
-  if (sec4_rt_headers_name("X-Test") == 0) { return 11; }
-  if (sec4_rt_headers_name("") != 0) { return 12; }
-  if (sec4_rt_headers_value("ok") == 0) { return 13; }
-  if (sec4_rt_headers_value("") != 0) { return 14; }
+  if (sec4_rt_headers_name((int64_t)(uintptr_t)"X-Test") == 0) { return 11; }
+  if (sec4_rt_headers_name((int64_t)(uintptr_t)"") != 0) { return 12; }
+  if (sec4_rt_headers_value((int64_t)(uintptr_t)"ok") == 0) { return 13; }
+  if (sec4_rt_headers_value((int64_t)(uintptr_t)"") != 0) { return 14; }
   if (sec4_rt_path_base("/tmp/base") == 0) { return 15; }
   if (sec4_rt_path_base("tmp/base") != 0) { return 16; }
   if (sec4_rt_path_base("/tmp/../base") != 0) { return 17; }
@@ -19152,7 +19263,7 @@ static int64_t now_route(void) {{
   if (sec4_rt_time_now() == 0) {{
     return 0;
   }}
-  sec4_rt_res_text(200, "ok");
+  sec4_rt_res_text(200, (int64_t)(uintptr_t)"ok");
   return 0;
 }}
 
@@ -32739,13 +32850,13 @@ static int64_t compare_handler(void) {{
   int64_t left_redacted = sec4_rt_secret_redact(left);
   int64_t right_redacted = sec4_rt_secret_redact(right);
   if (left_redacted == 0 || right_redacted == 0) {{
-    sec4_rt_res_text(500, "redact-failed");
+    sec4_rt_res_text(500, (int64_t)(uintptr_t)"redact-failed");
     return 0;
   }}
   if (sec4_rt_crypto_ct_eq(left_redacted, right_redacted)) {{
-    sec4_rt_res_text(200, "equal");
+    sec4_rt_res_text(200, (int64_t)(uintptr_t)"equal");
   }} else {{
-    sec4_rt_res_text(401, "not-equal");
+    sec4_rt_res_text(401, (int64_t)(uintptr_t)"not-equal");
   }}
   return 0;
 }}
@@ -32886,15 +32997,15 @@ fn c_bin_http_runtime_secret_reveal_denied_by_default_when_clang_available() {
 static int64_t reveal_handler(void) {{
   int64_t secret = sec4_rt_secret_get(1, "SEC4_RT_TEST_SECRET_VALUE");
   if (secret == 0) {{
-    sec4_rt_res_text(500, "missing-secret");
+    sec4_rt_res_text(500, (int64_t)(uintptr_t)"missing-secret");
     return 0;
   }}
   int64_t revealed = sec4_rt_secret_reveal(1, secret);
   if (revealed == 0) {{
-    sec4_rt_res_text(403, "reveal-denied");
+    sec4_rt_res_text(403, (int64_t)(uintptr_t)"reveal-denied");
     return 0;
   }}
-  sec4_rt_res_text(200, "reveal-allowed");
+  sec4_rt_res_text(200, (int64_t)(uintptr_t)"reveal-allowed");
   return 0;
 }}
 
@@ -33037,15 +33148,15 @@ fn c_bin_http_runtime_secret_reveal_allowed_with_env_override_when_clang_availab
 static int64_t reveal_handler(void) {{
   int64_t secret = sec4_rt_secret_get(1, "SEC4_RT_TEST_SECRET_VALUE");
   if (secret == 0) {{
-    sec4_rt_res_text(500, "missing-secret");
+    sec4_rt_res_text(500, (int64_t)(uintptr_t)"missing-secret");
     return 0;
   }}
   int64_t revealed = sec4_rt_secret_reveal(1, secret);
   if (revealed == 0) {{
-    sec4_rt_res_text(403, "reveal-denied");
+    sec4_rt_res_text(403, (int64_t)(uintptr_t)"reveal-denied");
     return 0;
   }}
-  sec4_rt_res_text(200, "reveal-allowed");
+  sec4_rt_res_text(200, (int64_t)(uintptr_t)"reveal-allowed");
   return 0;
 }}
 

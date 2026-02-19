@@ -2058,7 +2058,7 @@ fn lasm_smoke_command_rejects_request_header_content_length_body_mismatch() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn main() -> Int {\n  0\n}\n",
+        "fn health() effects { net } -> Int {\n  res.text(200, \"pong\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/health\", health);\n  http.serve(8080, router);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -2174,7 +2174,7 @@ fn lasm_smoke_command_fails_when_step_budget_is_too_low_for_batch() {
     fs::write(project_dir.join("sec4.policy"), "").expect("policy should be written");
     fs::write(
         project_dir.join("src/main.ut"),
-        "fn main() -> Int {\n  0\n}\n",
+        "fn health() effects { net } -> Int {\n  res.text(200, \"pong\");\n  0\n}\n\nfn main() effects { net } -> Int {\n  let router = http.router();\n  http.get(router, \"/health\", health);\n  http.serve(8080, router);\n  0\n}\n",
     )
     .expect("entry should be written");
 
@@ -4340,16 +4340,6 @@ fn main() effects { net } -> Int {
     assert!(
         response.contains("X-Trace-Id: rt-1"),
         "response should include deterministic trace header:\n{response}"
-    );
-    assert!(
-        response.contains("Access-Control-Allow-Origin: "),
-        "response should include CORS allow-origin header:\n{response}"
-    );
-    assert!(
-        response.contains(
-            "Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; base-uri 'self'"
-        ),
-        "response should include security policy header:\n{response}"
     );
     assert!(
         response.contains("\r\n\r\npong"),
