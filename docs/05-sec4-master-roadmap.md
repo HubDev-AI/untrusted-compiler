@@ -150,13 +150,13 @@ WASM/browser execution is now an explicit roadmap priority, but it is hard-gated
 3. benchmark evidence is current and published for the release candidate baseline (cross-impl matrix + trend artifacts).
 4. alpha artifacts are published and externally consumable (release notes + publish manifest chain).
 
-### `WASM_START_GATE` status (2026-02-17)
+### `WASM_START_GATE` status (2026-02-19)
 
 - `OPEN` based on verified closure evidence:
   - alpha decision record `GO`:
     - `build/m37-alpha-tag-decision-record.json`
   - alpha tag created and pushed:
-    - `v0.1.0-alpha.1`
+    - `v0.1.0-alpha.2`
   - post-tag publish-manifest chain verified:
     - `scripts/verify-release-promotion-inputs.sh`
     - `scripts/generate-release-publish-manifest.sh`
@@ -594,12 +594,22 @@ Post-alpha track acceptance anchors:
 ### M37-S11 tracking (live status)
 
 - [x] Created and pushed alpha tag `v0.1.0-alpha.1` from `dev` `HEAD`.
+- [x] Refreshed release-gate stability for closure execution:
+  - one-shot C harness readers force accepted sockets back to blocking mode to remove `WouldBlock` flakes.
+  - `scripts/release-alpha-gate.sh` now runs `cargo test` in deterministic serialized mode by default (`CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, overrideable via env).
+- [x] Created and pushed alpha tag `v0.1.0-alpha.2` from `dev` `HEAD` after closure refresh.
+- [x] Re-executed post-tag verifier chain for `v0.1.0-alpha.2`:
+  - `scripts/release-alpha-gate.sh --skip-tests`
+  - `scripts/verify-release-promotion-inputs.sh`
+  - `scripts/generate-release-publish-manifest.sh`
+  - `scripts/verify-release-publish-manifest.sh`
 - [x] Executed post-tag verifier chain:
   - `scripts/release-alpha-gate.sh --skip-tests`
   - `scripts/verify-release-promotion-inputs.sh`
   - `scripts/generate-release-publish-manifest.sh`
   - `scripts/verify-release-publish-manifest.sh`
 - [x] Added book chapter documenting M37-S11 tag/post-tag closure (`docs/book/885-m37-alpha-tag-execution-and-post-tag-verification-closure.md`).
+- [x] Added book chapter documenting alpha.2 closure refresh (`docs/book/1003-m37-alpha2-release-closure-refresh.md`).
 
 ### M38-S1 outbound HTTP chunked-body decoding hardening acceptance criteria
 
