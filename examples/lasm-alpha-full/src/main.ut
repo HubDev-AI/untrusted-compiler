@@ -1,0 +1,192 @@
+// lasm-alpha-full:
+// End-to-end alpha showcase for LASM backend coverage.
+//
+// This example intentionally exercises:
+// - middleware chain (security headers, CORS, CSRF, auth)
+// - request-source placeholders in text/header/cookie output
+// - auth helper enforcement (require + requireRole)
+// - schema-tagged dynamic user-store flows (users.json)
+// - schema-tagged dynamic DB record flows (records.log)
+//
+// Run with:
+// sec4 run --path examples/lasm-alpha-full --backend lasm --db-base <dir> --port 8080
+
+fn health() effects { net } -> Int {
+  // Basic liveness endpoint.
+  res.text(200, "ok");
+  0
+}
+
+fn metadata() effects { net } -> Int {
+  // Static typed header + cookie sinks.
+  res.setHeader(headers.name("X-Showcase"), headers.value("lasm-alpha-full"));
+  res.addCookie(cookie.build("session", "demo"));
+  res.text(200, "metadata ready");
+  0
+}
+
+fn previewHtml() effects { net } -> Int {
+  // Untrusted query value must be sanitized before HTML response.
+  let raw = req.query("raw");
+  res.html(sanitize.html(raw));
+  0
+}
+
+fn echoRequest() effects { net } -> Int {
+  // Request-source values and typed gates.
+  let trace = validate.nonEmpty(req.header("x-request-id"));
+  let dynamicHeaderName = headers.name(validate.nonEmpty(req.query("header_name")));
+  let dynamicHeaderValue = headers.value(validate.nonEmpty(req.query("header_value")));
+  let dynamicCookieName = validate.nonEmpty(req.query("cookie_name"));
+  let dynamicCookieValue = validate.nonEmpty(req.query("cookie_value"));
+
+  res.setHeader(headers.name("X-Echo-Trace"), headers.value(trace));
+  res.setHeader(dynamicHeaderName, dynamicHeaderValue);
+  res.addCookie(cookie.build(dynamicCookieName, dynamicCookieValue));
+  res.text(
+    200,
+    "method={{req.method}} path={{req.path}} version={{req.httpVersion}} id={{req.pathParam:id}} q={{req.query:q}} trace={{req.header:x-request-id}} session={{req.cookie:session}}"
+  );
+  0
+}
+
+fn gateChecks() effects { net } -> Int {
+  // Core trust/path/url/value gates.
+  let publicRaw = req.query("public_url");
+  let internalRaw = req.query("internal_url");
+  let fileRaw = req.query("file");
+  let countRaw = req.query("count");
+  let uuidRaw = req.query("uuid");
+  let headerRaw = req.query("header");
+
+  let base = path.base("/tmp/sec4-lasm-full");
+  path.under(base, fileRaw);
+  url.public(publicRaw);
+  url.internal(internalRaw);
+  validate.int64(countRaw);
+  validate.uuid(uuidRaw);
+  validate.headerValue(headerRaw);
+  validate.nonEmpty(req.query("name"));
+
+  res.text(200, "gate checks completed");
+  0
+}
+
+fn authRequired() effects { net } -> Int {
+  // LASM auth helper enforcement.
+  auth.require(ctx.current());
+  res.text(200, "auth ok");
+  0
+}
+
+fn adminRequired() effects { net } -> Int {
+  // Role check from bearer token/cookie/header role source.
+  auth.requireRole(ctx.current(), "admin");
+  res.text(200, "admin ok");
+  0
+}
+
+fn decodePayload() effects { net } -> Int {
+  // Dynamic JSON decode validation + deterministic envelope.
+  res.json(200, "DecodeResponse", 0);
+  0
+}
+
+fn createUser() effects { net } -> Int {
+  // Dynamic users.json create path.
+  res.ok(201, "CreateUserResponse", 0);
+  0
+}
+
+fn updateUser() effects { net } -> Int {
+  // Dynamic users.json update path.
+  res.json(200, "UpdateUserResponse", 0);
+  0
+}
+
+fn getUser() effects { net } -> Int {
+  // Dynamic users.json read-by-id path.
+  res.json(200, "UserResponse", 0);
+  0
+}
+
+fn getUserByEmail() effects { net } -> Int {
+  // Dynamic users.json read-by-email path.
+  res.json(200, "UserByEmailResponse", 0);
+  0
+}
+
+fn deleteUser() effects { net } -> Int {
+  // Dynamic users.json delete path.
+  res.json(200, "DeleteUserResponse", 0);
+  0
+}
+
+fn listUsers() effects { net } -> Int {
+  // Dynamic users.json list path.
+  res.json(200, "ListUsersResponse", 0);
+  0
+}
+
+fn dbExec() effects { net } -> Int {
+  // Dynamic records.log write path.
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn dbExecTx() effects { net } -> Int {
+  // Dynamic records.log tx write path.
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbQueryOne() effects { net } -> Int {
+  // Dynamic records.log latest matching record query path.
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  // Dynamic records.log full list path.
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let securityHeaders = sec.defaultHeaders();
+  let corsCfg = cors.fromPolicy();
+  let csrfCfg = csrf.fromPolicy();
+  let authCfg = auth.fromPolicy();
+
+  let base = http.router();
+  let withHeaders = sec.withSecurityHeaders(base, securityHeaders);
+  let withCors = cors.withCors(withHeaders, corsCfg);
+  let withCsrf = csrf.withCsrf(withCors, csrfCfg);
+  let router = auth.withAuth(withCsrf, authCfg);
+
+  http.get(router, "/health", health);
+  http.get(router, "/metadata", metadata);
+  http.get(router, "/preview", previewHtml);
+  http.get(router, "/echo/:id", echoRequest);
+  http.get(router, "/gates", gateChecks);
+
+  http.get(router, "/auth/required", authRequired);
+  http.get(router, "/auth/admin", adminRequired);
+
+  http.post(router, "/decode", decodePayload);
+
+  http.post(router, "/users", createUser);
+  http.post(router, "/users/:id/update", updateUser);
+  http.post(router, "/users/:id/delete", deleteUser);
+  http.get(router, "/users/:id", getUser);
+  http.get(router, "/users/by-email", getUserByEmail);
+  http.get(router, "/users", listUsers);
+
+  http.post(router, "/db/exec", dbExec);
+  http.post(router, "/db/exec-tx", dbExecTx);
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.get(router, "/db/records", dbListRecords);
+
+  http.serve(8080, router);
+  0
+}

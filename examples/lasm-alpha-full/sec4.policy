@@ -1,0 +1,74 @@
+[policy]
+name = "lasm-alpha-full"
+version = "0.1"
+mode = "enforce"
+env = "dev"
+
+[json]
+max_bytes = 4096
+max_depth = 16
+
+[http]
+max_body_bytes = 262144
+max_header_bytes = 32768
+default_timeout_ms = 5000
+max_runtime_steps = 65536
+max_concurrency = 256
+
+[net.public]
+allowed_schemes = ["http", "https"]
+allowed_domains = []
+blocked_domains = []
+allowed_ports = [80, 443]
+allow_redirects = false
+max_redirects = 0
+
+[net.internal]
+enabled = true
+allowed_cidrs = []
+allowed_domains = []
+
+[fs]
+enabled = true
+
+[cors]
+enabled = true
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST", "OPTIONS"]
+allowed_headers = ["authorization", "content-type", "x-csrf-token", "x-request-id", "x-role"]
+exposed_headers = ["x-trace-id", "x-showcase", "x-echo-trace", "x-flow"]
+allow_credentials = false
+max_age_seconds = 600
+forbid_any_origin = false
+forbid_reflect_origin = false
+require_vary_origin = false
+
+[security_headers]
+enabled = true
+x_content_type_options = true
+x_frame_options = "SAMEORIGIN"
+referrer_policy = "no-referrer"
+
+[security_headers.hsts]
+enabled = false
+max_age_seconds = 0
+include_subdomains = false
+preload = false
+
+[security_headers.csp]
+enabled = true
+report_only = false
+
+[csrf]
+enabled = false
+mode = "off"
+cookie_name = "csrf"
+header_name = "x-csrf-token"
+same_site = "Lax"
+secure_cookie = false
+http_only_cookie = false
+protected_methods = ["POST", "PUT", "PATCH", "DELETE"]
+
+[auth]
+mode = "token"
+cross_site_frontend = false
