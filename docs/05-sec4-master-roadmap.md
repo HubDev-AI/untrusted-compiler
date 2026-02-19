@@ -410,8 +410,25 @@ Post-alpha track acceptance anchors:
 
 ### Remaining implementation slices (priority order)
 
-1. Execute alpha tag creation + post-tag verification from the latest `M37-S8` `GO` decision record.
-2. Publish alpha-closure summary and open `WASM_START_GATE` to begin `M39` browser-to-server promotion work.
+1. Complete LASM DB parity by replacing schema-name/materialization DB branches with real LASM intrinsic execution (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) while keeping deterministic envelopes and `records.log` adapter v1.
+2. Make LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), then validate clean-machine `init -> check -> build -> run` on LASM-first flow.
+3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
+4. Progress DB adapters behind the same intrinsic surface:
+   - keep file adapter (`records.log`) for alpha path,
+   - add SQLite adapter as first real embedded DB target,
+   - keep external DB adapters post-alpha.
+5. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
+6. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
+
+### Post-DB execution lock (authoritative order)
+
+When LASM DB intrinsic parity is complete, execution order is fixed:
+
+1. LASM default backend.
+2. LASM stability/load hardening.
+3. DB adapter progression (SQLite first).
+4. Alpha usability/reproducibility closure.
+5. WASM/browser track.
 
 ## M37 - No-Stub Alpha Sprint (Execution-Complete; Tag Pending)
 
