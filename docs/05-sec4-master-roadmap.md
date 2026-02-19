@@ -479,6 +479,11 @@ Post-alpha track acceptance anchors:
      - when relay saturation events are observed, autoscale now boosts desired workers and per-check scale-up budget using this dedicated step (independent from normal `--autoscale-scale-up-step`),
      - benchmark cluster capacity probe tooling now accepts/forwards the same flag for deterministic tuning workflows.
      - documented in `docs/book/1034-m39-lasm-autoscale-saturation-boost-step-control.md`.
+   - [x] Added saturation boost matrix runner tooling for deterministic tuning sweeps:
+     - new benchmark script runs multiple cluster capacity probes across `--boost-steps <csv>` and records per-step summaries,
+     - dry-run output prints the full per-step execution plan; run mode writes a matrix summary artifact with pass/requests/throughput/RSS per boost step,
+     - Makefile target added: `lasm-cluster-saturation-boost-matrix`.
+     - documented in `docs/book/1035-m39-lasm-saturation-boost-matrix-tooling.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

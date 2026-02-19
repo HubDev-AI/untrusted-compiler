@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe lasm-cluster-capacity-probe artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -13,6 +13,7 @@ CAPACITY_ENDPOINT ?= ping
 CAPACITY_TARGET_REQUESTS ?= 1000000
 LASM_CAPACITY_PROJECT_PATH ?= examples/lasm-alpha-full
 LASM_CAPACITY_TARGET_REQUESTS ?= 1000000
+LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
 
 help:
 	@echo "Targets:"
@@ -38,6 +39,7 @@ help:
 	@echo "  bench-full-dry Print full-suite command plan"
 	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
+	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
 	@echo "  artifact-manifest Build deterministic artifact manifest from results/"
 	@echo "  verify-bundle Verify expected benchmark bundle artifacts for IMPLS/ENDPOINTS"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -115,6 +117,9 @@ sec4-capacity-probe:
 lasm-cluster-capacity-probe:
 	scripts/run_lasm_cluster_capacity_probe.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)"
 
+lasm-cluster-saturation-boost-matrix:
+	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)"
+
 artifact-manifest:
 	scripts/build_artifact_manifest.sh results "$(ARTIFACT_MANIFEST)"
 
@@ -142,6 +147,7 @@ publish-report:
 test-scripts:
 	scripts/test_run_sec4_capacity_probe.sh
 	scripts/test_run_lasm_cluster_capacity_probe.sh
+	scripts/test_run_lasm_cluster_saturation_boost_matrix.sh
 	scripts/test_wrk2_summary.sh
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh
