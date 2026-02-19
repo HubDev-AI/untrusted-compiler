@@ -519,7 +519,11 @@ Post-alpha track acceptance anchors:
      - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
      - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
      - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
-   - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
+   - [x] Cluster proxy hot-path lock contention reduced:
+     - relay worker request path no longer performs worker pruning/recovery/spawn under state lock for each incoming connection,
+     - background scaler/maintenance loop now owns dead-worker pruning + min-instance recovery in one place,
+     - relay backend-port selection now uses an atomic selection counter over current worker set to keep per-connection critical section minimal.
+     - documented in `docs/book/1047-m39-lasm-cluster-hot-path-lock-contention-reduction.md`.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,

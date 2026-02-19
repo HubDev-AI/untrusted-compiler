@@ -8364,7 +8364,6 @@ struct LasmClusterWorker {
 #[derive(Debug)]
 struct LasmClusterState {
     workers: Vec<LasmClusterWorker>,
-    round_robin_index: usize,
     next_port: u16,
 }
 
@@ -8569,9 +8568,28 @@ fn prune_dead_lasm_cluster_workers(state: &mut LasmClusterState) {
         }
     }
     state.workers = kept;
-    if state.round_robin_index >= state.workers.len() {
-        state.round_robin_index = 0;
+}
+
+fn recover_lasm_cluster_min_workers(
+    state: &mut LasmClusterState,
+    config: &LasmClusterConfig,
+    warning_label: &str,
+) {
+    while state.workers.len() < config.min_instances {
+        let worker_port = state.next_port;
+        state.next_port = state.next_port.saturating_add(1);
+        match spawn_and_wait_lasm_cluster_worker(config, worker_port) {
+            Ok(worker) => state.workers.push(worker),
+            Err(message) => {
+                eprintln!("warning: LASM cluster {warning_label} failed: {message}");
+                break;
+            }
+        }
     }
+}
+
+fn lasm_cluster_maintenance_interval_ms(config: &LasmClusterConfig) -> u64 {
+    config.autoscale_check_ms.clamp(100, 500)
 }
 
 fn desired_lasm_cluster_instances(
@@ -8665,7 +8683,6 @@ fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
         let _ = worker.child.wait();
     }
     state.workers.clear();
-    state.round_robin_index = 0;
 }
 
 fn bind_lasm_listener(listen_port: u16, reuse_port: bool) -> Result<TcpListener, String> {
@@ -8699,7 +8716,6 @@ fn bind_lasm_listener(listen_port: u16, reuse_port: bool) -> Result<TcpListener,
 fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let mut state = LasmClusterState {
         workers: Vec::new(),
-        round_robin_index: 0,
         next_port: config.listen_port,
     };
     for _ in 0..config.min_instances {
@@ -8754,7 +8770,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
     let mut state = LasmClusterState {
         workers: Vec::new(),
-        round_robin_index: 0,
         next_port: base_port,
     };
     for _ in 0..config.min_instances {
@@ -8783,93 +8798,102 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let (relay_sender, relay_receiver) = bounded::<TcpStream>(relay_queue_capacity);
+    let relay_selection_counter = Arc::new(AtomicUsize::new(0));
     let mut relay_handles = Vec::with_capacity(relay_worker_count);
 
     for _ in 0..relay_worker_count {
         let relay_receiver = relay_receiver.clone();
         let relay_state = Arc::clone(&shared_state);
-        let relay_config = Arc::clone(&shared_config);
         let relay_active = Arc::clone(&active_connections);
-        relay_handles.push(std::thread::spawn(move || {
-            loop {
-                let mut client = match relay_receiver.recv() {
-                    Ok(stream) => stream,
-                    Err(_) => break,
-                };
+        let relay_selection_counter = Arc::clone(&relay_selection_counter);
+        relay_handles.push(std::thread::spawn(move || loop {
+            let mut client = match relay_receiver.recv() {
+                Ok(stream) => stream,
+                Err(_) => break,
+            };
 
-                let backend_port = {
-                    let mut state = match relay_state.lock() {
-                        Ok(state) => state,
-                        Err(_) => {
-                            let _ = write_lasm_cluster_unavailable_response(
-                                &mut client,
-                                "cluster state unavailable",
-                            );
-                            relay_active.fetch_sub(1, Ordering::Relaxed);
-                            continue;
-                        }
-                    };
-                    prune_dead_lasm_cluster_workers(&mut state);
-                    while state.workers.len() < relay_config.min_instances {
-                        let worker_port = state.next_port;
-                        state.next_port = state.next_port.saturating_add(1);
-                        match spawn_and_wait_lasm_cluster_worker(&relay_config, worker_port) {
-                            Ok(worker) => state.workers.push(worker),
-                            Err(message) => {
-                                eprintln!("warning: LASM cluster worker recovery failed: {message}");
-                                break;
-                            }
-                        }
-                    }
-                    if state.workers.is_empty() {
-                        None
-                    } else {
-                        let index = state.round_robin_index % state.workers.len();
-                        state.round_robin_index = state.round_robin_index.saturating_add(1);
-                        Some(state.workers[index].port)
-                    }
-                };
-
-                let Some(backend_port) = backend_port else {
-                    let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
-                    relay_active.fetch_sub(1, Ordering::Relaxed);
-                    continue;
-                };
-
-                match TcpStream::connect(("127.0.0.1", backend_port)) {
-                    Ok(mut upstream) => {
-                        let _ = client.set_nodelay(true);
-                        let _ = upstream.set_nodelay(true);
-                        let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
-                    }
-                    Err(err) => {
-                        eprintln!(
-                            "warning: LASM cluster worker {} connect failed: {}",
-                            backend_port, err
+            let backend_port = {
+                let state = match relay_state.lock() {
+                    Ok(state) => state,
+                    Err(_) => {
+                        let _ = write_lasm_cluster_unavailable_response(
+                            &mut client,
+                            "cluster state unavailable",
                         );
-                        let _ =
-                            write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                        relay_active.fetch_sub(1, Ordering::Relaxed);
+                        continue;
                     }
+                };
+                if state.workers.is_empty() {
+                    None
+                } else {
+                    let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                        % state.workers.len();
+                    Some(state.workers[index].port)
                 }
+            };
+
+            let Some(backend_port) = backend_port else {
+                let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
                 relay_active.fetch_sub(1, Ordering::Relaxed);
+                continue;
+            };
+
+            match TcpStream::connect(("127.0.0.1", backend_port)) {
+                Ok(mut upstream) => {
+                    let _ = client.set_nodelay(true);
+                    let _ = upstream.set_nodelay(true);
+                    let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
+                }
+                Err(err) => {
+                    eprintln!(
+                        "warning: LASM cluster worker {} connect failed: {}",
+                        backend_port, err
+                    );
+                    let _ =
+                        write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                }
             }
+            relay_active.fetch_sub(1, Ordering::Relaxed);
         }));
     }
 
-    let autoscale_handle = if shared_config.max_instances > shared_config.min_instances {
+    let autoscale_enabled = shared_config.max_instances > shared_config.min_instances;
+    let maintenance_interval_ms = lasm_cluster_maintenance_interval_ms(shared_config.as_ref());
+    let autoscale_handle = {
         let autoscale_state = Arc::clone(&shared_state);
         let autoscale_config = Arc::clone(&shared_config);
         let autoscale_active_connections = Arc::clone(&active_connections);
         let autoscale_saturation_events = Arc::clone(&relay_saturation_events);
         let autoscale_stop_flag = Arc::clone(&stop_flag);
-        Some(std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
+            let mut last_scale_eval_at = Instant::now()
+                .checked_sub(Duration::from_millis(autoscale_config.autoscale_check_ms))
+                .unwrap_or_else(Instant::now);
             while !autoscale_stop_flag.load(Ordering::Relaxed) {
-                std::thread::sleep(Duration::from_millis(autoscale_config.autoscale_check_ms));
+                std::thread::sleep(Duration::from_millis(maintenance_interval_ms));
                 if autoscale_stop_flag.load(Ordering::Relaxed) {
                     break;
                 }
+                let now = Instant::now();
+                let mut state = match autoscale_state.lock() {
+                    Ok(state) => state,
+                    Err(_) => break,
+                };
+                prune_dead_lasm_cluster_workers(&mut state);
+                recover_lasm_cluster_min_workers(&mut state, &autoscale_config, "worker recovery");
+                if !autoscale_enabled {
+                    continue;
+                }
+                if now.duration_since(last_scale_eval_at)
+                    < Duration::from_millis(autoscale_config.autoscale_check_ms)
+                {
+                    continue;
+                }
+                last_scale_eval_at = now;
+
                 let active = autoscale_active_connections.load(Ordering::Relaxed);
                 let mut desired = desired_lasm_cluster_instances(
                     active,
@@ -8877,11 +8901,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     autoscale_config.max_instances,
                     autoscale_config.target_connections_per_instance,
                 );
-                let mut state = match autoscale_state.lock() {
-                    Ok(state) => state,
-                    Err(_) => break,
-                };
-                prune_dead_lasm_cluster_workers(&mut state);
                 let saturation_events = autoscale_saturation_events.swap(0, Ordering::Relaxed);
                 let mut scale_up_step_budget = autoscale_config.autoscale_scale_up_step;
                 if saturation_events > 0 {
@@ -8891,10 +8910,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         .saturating_add(autoscale_config.autoscale_saturation_boost_step)
                         .min(autoscale_config.max_instances);
                     desired = desired.max(boosted_target);
-                    scale_up_step_budget = scale_up_step_budget
-                        .max(autoscale_config.autoscale_saturation_boost_step);
+                    scale_up_step_budget =
+                        scale_up_step_budget.max(autoscale_config.autoscale_saturation_boost_step);
                 }
-                let now = Instant::now();
                 let current_workers = state.workers.len();
                 let up_target = if desired > current_workers {
                     desired.min(current_workers.saturating_add(scale_up_step_budget))
@@ -8927,8 +8945,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 let current_workers = state.workers.len();
                 let down_target = if desired < current_workers {
                     desired.max(
-                        current_workers
-                            .saturating_sub(autoscale_config.autoscale_scale_down_step),
+                        current_workers.saturating_sub(autoscale_config.autoscale_scale_down_step),
                     )
                 } else {
                     current_workers
@@ -8951,13 +8968,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                     last_scale_down_at = Some(now);
                 }
-                if state.round_robin_index >= state.workers.len() {
-                    state.round_robin_index = 0;
-                }
             }
-        }))
-    } else {
-        None
+        })
     };
 
     for incoming in listener.incoming() {
@@ -8999,9 +9011,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     for handle in relay_handles {
         let _ = handle.join();
     }
-    if let Some(handle) = autoscale_handle {
-        let _ = handle.join();
-    }
+    let _ = autoscale_handle.join();
     if let Ok(mut state) = shared_state.lock() {
         stop_lasm_cluster_workers(&mut state);
     }
