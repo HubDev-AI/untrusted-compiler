@@ -76,7 +76,7 @@ enum Commands {
         max_keep_alive_requests: Option<u64>,
         #[arg(long)]
         db_base: Option<PathBuf>,
-        #[arg(long, value_enum, default_value_t = RunBackend::C)]
+        #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
         tls_backend: BuildTlsBackend,

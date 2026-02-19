@@ -547,7 +547,13 @@ fn promote_e2e_apply_generates_server_project_that_checks_and_runs() {
         "generated server scaffold should pass sec4 check"
     );
 
-    let run_output = run_cli(&["run", "--path", &server_project_path_string]);
+    let run_output = run_cli(&[
+        "run",
+        "--path",
+        &server_project_path_string,
+        "--backend",
+        "c",
+    ]);
     assert!(
         run_output.status.success(),
         "generated server scaffold should run successfully"
@@ -23460,6 +23466,18 @@ fn run_command_rejects_zero_max_body_bytes_override() {
 }
 
 #[test]
+fn run_command_help_reports_lasm_as_default_backend() {
+    let output = run_cli(&["run", "--help"]);
+    assert!(output.status.success(), "run --help should succeed");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be utf-8");
+    assert!(
+        stdout.contains("--backend <BACKEND>") && stdout.contains("[default: lasm]"),
+        "run --help should show deterministic lasm backend default:\n{stdout}"
+    );
+}
+
+#[test]
 fn run_command_rejects_max_runtime_steps_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-max-runtime-steps-c-backend");
     let project_path = project_dir
@@ -23467,7 +23485,15 @@ fn run_command_rejects_max_runtime_steps_with_c_backend() {
         .expect("temp project path should be valid utf-8")
         .to_string();
 
-    let output = run_cli(&["run", "--path", &project_path, "--max-runtime-steps", "32"]);
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--max-runtime-steps",
+        "32",
+    ]);
     assert!(
         !output.status.success(),
         "run command should fail when --max-runtime-steps is used on c backend"
@@ -23499,6 +23525,8 @@ fn run_command_rejects_max_keep_alive_requests_with_c_backend() {
         "run",
         "--path",
         &project_path,
+        "--backend",
+        "c",
         "--max-keep-alive-requests",
         "2",
     ]);
@@ -23531,7 +23559,15 @@ fn run_command_rejects_max_pending_with_c_backend() {
         .expect("temp project path should be valid utf-8")
         .to_string();
 
-    let output = run_cli(&["run", "--path", &project_path, "--max-pending", "2"]);
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--max-pending",
+        "2",
+    ]);
     assert!(
         !output.status.success(),
         "run command should fail when --max-pending is used on c backend"
@@ -23564,7 +23600,15 @@ fn run_command_rejects_db_base_with_c_backend() {
         .expect("db base path should be valid utf-8")
         .to_string();
 
-    let output = run_cli(&["run", "--path", &project_path, "--db-base", &db_base_value]);
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-base",
+        &db_base_value,
+    ]);
     assert!(
         !output.status.success(),
         "run command should fail when --db-base is used on c backend"
@@ -23596,6 +23640,8 @@ fn run_command_rejects_overflow_probe_timeout_ms_with_c_backend() {
         "run",
         "--path",
         &project_path,
+        "--backend",
+        "c",
         "--overflow-probe-timeout-ms",
         "20",
     ]);

@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | Switching `sec4 run` default backend to LASM broke a promotion scaffold test that implicitly relied on old C default behavior. | In tests that validate C-specific scaffold/runtime behavior, always pass `--backend c` explicitly instead of relying on command defaults. |
+| 2026-02-19 | self | I launched three Cargo test commands in parallel while validating the LASM-default slice and repeated the known lock-contention risk pattern. | Keep Cargo execution strictly sequential in this repo; use parallel tool calls only for read/search/non-Cargo commands. |
 | 2026-02-19 | self | I attempted one large multi-hunk patch against `semantic.rs` and hit context mismatch on shifted sections. | For heavily edited files, patch in small anchored hunks after fresh `sed` context snapshots to avoid patch-drift retries. |
 | 2026-02-19 | self | I parallelized two Cargo verifications (`commands` test + `sec4 check`) in one turn and reintroduced `Blocking waiting for file lock on package cache` noise. | Keep Cargo verifications strictly sequential even when using `multi_tool_use.parallel`; parallelize only read/search operations. |
 | 2026-02-19 | self | I tried wiring `db.queryOne(..., 7)` in a LASM route fixture and forgot semantic rules require a typed `Schema<_>` row descriptor, so `sec4 run` exited with `E4001` before serving. | Keep route-facing LASM DB intrinsic tests on paths that compile under zero-arg handler constraints (`db.exec` / `db.execTx`) and use legacy query-one schema-hint bridge until typed row-schema wiring is available in runnable handlers. |
