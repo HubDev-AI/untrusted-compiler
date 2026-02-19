@@ -27,12 +27,12 @@ if ! grep -q '^- Generators: wrk2$' "$out"; then
   exit 1
 fi
 
-if ! grep -q '| ping | node | 18.20 | 90.00 | pass | pass |' "$out"; then
+if ! grep -q '| ping | node | 18.20 | 90.00 | n/a | pass | pass |' "$out"; then
   echo "missing ping pass row" >&2
   exit 1
 fi
 
-if ! grep -q '| decode | node | 92.00 | 55.00 | fail | fail |' "$out"; then
+if ! grep -q '| decode | node | 92.00 | 55.00 | n/a | fail | fail |' "$out"; then
   echo "missing decode fail row" >&2
   exit 1
 fi
@@ -54,7 +54,7 @@ fallback_out="${tmp}/trend-note-wrk.md"
   --baseline-dir "${root_dir}/../baselines" \
   --out "$fallback_out" >/dev/null
 
-if ! grep -q '| ping | go | 1.75 | n/a | n/a | n/a |' "$fallback_out"; then
+if ! grep -q '| ping | go | 1.75 | n/a | n/a | n/a | n/a |' "$fallback_out"; then
   echo "missing non-constant-rate n/a row" >&2
   exit 1
 fi
