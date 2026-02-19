@@ -128,14 +128,25 @@ fn listUsers() effects { net } -> Int {
   0
 }
 
-fn dbExec() effects { net } -> Int {
-  // Dynamic records.log write path.
+fn dbExec() effects { net, db.write } -> Int {
+  // Dynamic records.log write path via intrinsic DB execution.
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.exec(db, query);
   res.json(200, "DbExecResponse", 0);
   0
 }
 
-fn dbExecTx() effects { net } -> Int {
-  // Dynamic records.log tx write path.
+fn dbExecTx() effects { net, db.write, db.tx } -> Int {
+  // Dynamic records.log tx write path via intrinsic DB execution.
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
   res.json(200, "DbExecTxResponse", 0);
   0
 }
