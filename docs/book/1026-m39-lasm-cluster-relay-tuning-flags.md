@@ -1,4 +1,4 @@
-# 1023 M39 Slice: LASM Cluster Relay Tuning Flags
+# 1026 M39 Slice: LASM Cluster Relay Tuning Flags
 
 This slice adds runtime controls for the LASM front-proxy relay layer so scaling behavior can be tuned without code changes.
 

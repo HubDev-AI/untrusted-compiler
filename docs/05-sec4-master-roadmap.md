@@ -335,6 +335,9 @@ Post-alpha track acceptance anchors:
 - [x] Benchmark-trend workflow contract checks now enforce endpoint-set coherence across benchmark run scope, threshold checks, and trend-note rendering, and require one `--max-rss-kb` guard per threshold endpoint invocation to prevent silent CI drift (`docs/book/1017-m39-benchmark-trend-workflow-endpoint-contract-coherence.md`).
 - [x] `sec4 run` now supports explicit `--db-adapter <records-log|sqlite>` selection for LASM mode (single-instance and cluster-worker paths), with deterministic C-backend guard diagnostics for lasm-only usage; SQLite command coverage now exercises adapter selection through CLI flag surface while preserving `SEC4_RT_LASM_DB_ADAPTER` fallback compatibility (`docs/book/1019-m39-run-db-adapter-flag.md`).
 - [x] `sec4 run` runtime-flag script contracts now lock `--db-adapter` wiring invariants (run field presence, LASM-only guard diagnostic, LASM dynamic-state adapter bridge, and cluster worker forwarding bridge) with deterministic guard-fixture drift coverage in naming-lock script tests (`docs/book/1020-m39-run-db-adapter-runtime-flag-contract-lock.md`).
+- [x] Added canonical LASM DB adapter operator smoke script (`scripts/smoke-sec4-run-lasm-db-adapter.sh`) that executes intrinsic-backed `/db/*` flows under explicit `--db-adapter` selection and validates adapter-specific persistence outputs (`records.log` vs `records.sqlite3`), plus script token-contract + guard coverage (`docs/book/1021-m39-lasm-db-adapter-operator-smoke-script.md`).
+- [x] Naming-lock contract suite now executes LASM DB adapter smoke script contract + guard checks so adapter smoke script drift fails CI through the standard script-contract path (`docs/book/1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`).
+- [x] Runtime-smoke CI workflow now executes LASM DB adapter smoke lanes (`records-log` and `sqlite`) in addition to hello-api lanes, with runtime-smoke workflow contract + guard coverage updated to lock both adapter-step tokens and preserve bundle-check enforcement (`docs/book/1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -437,21 +440,21 @@ Post-alpha track acceptance anchors:
    - [x] Added fast fixed-cluster shared-port mode (`SO_REUSEPORT`) for LASM:
      - when `--instances == --autoscale-max-instances`, workers bind one shared port without front-proxy relay.
      - benchmark probes show improved throughput vs proxy-cluster path (for example ~96k req/s on `/ping` in local wrk profile).
-     - documented in `docs/book/1021-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
+     - documented in `docs/book/1024-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
    - [x] Replaced front-proxy thread-per-connection relay with bounded relay worker pool:
      - proxy now uses a fixed worker-count + bounded queue instead of spawning one relay thread per accepted connection,
      - queue saturation now returns deterministic `503` (`cluster relay saturated`) instead of unbounded relay thread growth,
      - local load probes after this change reached about `~60k req/s` in autoscale proxy mode and `~121k req/s` in fixed reuse-port mode (`/health`, auth header, local wrk profile).
-     - documented in `docs/book/1022-m39-lasm-cluster-relay-worker-pool.md`.
+     - documented in `docs/book/1025-m39-lasm-cluster-relay-worker-pool.md`.
    - [x] Added explicit cluster-proxy relay tuning flags:
      - `--cluster-relay-workers` and `--cluster-relay-queue` now tune front-proxy relay concurrency/queue depth without code edits,
      - both flags are LASM-only and require cluster proxy mode (`--instances > 1` with autoscale range); fixed reuse-port mode rejects them as not applicable.
-     - documented in `docs/book/1023-m39-lasm-cluster-relay-tuning-flags.md`.
+     - documented in `docs/book/1026-m39-lasm-cluster-relay-tuning-flags.md`.
    - [x] Removed receiver-lock contention from LASM worker dispatch:
      - replaced `Arc<Mutex<Receiver<TcpStream>>>` fan-out with bounded multi-consumer channels (`crossbeam-channel`) for both proxy relay workers and LASM backend workers,
      - keeps bounded backpressure semantics while avoiding serialized `recv()` lock sections under load,
      - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
-     - documented in `docs/book/1024-m39-lasm-worker-dispatch-crossbeam-channel.md`.
+     - documented in `docs/book/1027-m39-lasm-worker-dispatch-crossbeam-channel.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

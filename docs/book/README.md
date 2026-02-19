@@ -986,9 +986,12 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1018-m39-lasm-run-cluster-front-proxy-and-autoscale.md`
 - `1019-m39-run-db-adapter-flag.md`
 - `1020-m39-run-db-adapter-runtime-flag-contract-lock.md`
-- `1021-m39-lasm-fixed-cluster-reuseport-fast-path.md`
-- `1022-m39-lasm-cluster-relay-worker-pool.md`
-- `1023-m39-lasm-cluster-relay-tuning-flags.md`
-- `1024-m39-lasm-worker-dispatch-crossbeam-channel.md`
+- `1021-m39-lasm-db-adapter-operator-smoke-script.md`
+- `1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`
+- `1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`
+- `1024-m39-lasm-fixed-cluster-reuseport-fast-path.md`
+- `1025-m39-lasm-cluster-relay-worker-pool.md`
+- `1026-m39-lasm-cluster-relay-tuning-flags.md`
+- `1027-m39-lasm-worker-dispatch-crossbeam-channel.md`
 
 As milestones progress, chapters will be added and linked from this index.

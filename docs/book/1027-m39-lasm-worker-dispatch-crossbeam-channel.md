@@ -1,4 +1,4 @@
-# 1024 M39 Slice: LASM Worker Dispatch via Crossbeam Bounded Channels
+# 1027 M39 Slice: LASM Worker Dispatch via Crossbeam Bounded Channels
 
 This slice removes receiver-lock bottlenecks from LASM request dispatch paths.
 

@@ -1,4 +1,4 @@
-# 1022 M39 Slice: LASM Cluster Relay Worker Pool (Bounded Proxy Path)
+# 1025 M39 Slice: LASM Cluster Relay Worker Pool (Bounded Proxy Path)
 
 This slice hardens LASM cluster front-proxy execution by removing unbounded relay thread spawning.
 
