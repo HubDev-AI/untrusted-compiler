@@ -122,3 +122,9 @@ scripts/stage-zed-extension-bundle.sh --clean
 ```
 
 This writes staged bundle content plus `build/zed-extension-bundle/bundle-manifest.json`.
+
+For one-command operator readiness (release checks + operator smoke + bundle stage), run:
+
+```bash
+scripts/check-zed-extension-operator-readiness.sh
+```

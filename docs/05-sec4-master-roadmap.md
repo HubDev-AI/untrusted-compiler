@@ -10164,8 +10164,19 @@ M13-S1 go/no-go note:
 - [x] Added `bundle-manifest.json` emission with per-file `path/size/sha256`.
 - [x] Updated `zed-extension/README.md` with bundle staging usage.
 
+### M39-S2J Zed extension local operator checklist consolidation acceptance criteria
+- Repository includes a single entrypoint command for local operator readiness.
+- Entry command wraps release checklist (without duplicate smoke), operator smoke, and bundle stage.
+- Command emits deterministic pass/fail outcome and validates staged manifest presence.
+
+### M39-S2J tracking (live status)
+- [x] Added `scripts/check-zed-extension-operator-readiness.sh`.
+- [x] Wrapped `check-zed-extension-release.sh --skip-smoke`, `run-zed-extension-operator-smoke.sh`, and `stage-zed-extension-bundle.sh --clean`.
+- [x] Added staged manifest existence assertion in readiness flow.
+- [x] Updated `zed-extension/README.md` with one-command readiness entrypoint.
+
 ### Next planned slice
-- M39-S2J Zed extension local operator checklist consolidation (single entrypoint command wrapping release + operator smoke + bundle stage).
+- M39-S2K Wire Zed operator readiness command into release-operator handoff docs and lane prompts.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
