@@ -25,6 +25,11 @@ if ! grep -q 'command: wrk2 --latency' <<<"$out"; then
   echo "run_profile dry-run missing wrk2 command" >&2
   exit 1
 fi
+pid_out="$(PATH="${tmp}:$PATH" BENCH_SERVER_PID=123 "${root_dir}/scripts/run_profile.sh" --dry-run sec4 ping 2>&1)"
+if ! grep -q 'service pid: 123' <<<"$pid_out"; then
+  echo "run_profile dry-run missing service pid echo" >&2
+  exit 1
+fi
 
 override_out="$(PATH="${tmp}:$PATH" BENCH_THREADS=2 BENCH_CONNECTIONS=16 BENCH_DURATION=7s BENCH_TARGET=1234 "${root_dir}/scripts/run_profile.sh" --dry-run sec4 decode 2>&1)"
 if ! grep -q 'targetRps=1234' <<<"$override_out"; then

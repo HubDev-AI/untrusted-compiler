@@ -13,6 +13,10 @@
         "p95": "3.50ms",
         "p99": "6.10ms",
         "max": "15.20ms"
+      },
+      "memory": {
+        "rssKb": 54000,
+        "sampleSource": "ps"
       }
     },
     {
@@ -25,6 +29,10 @@
         "p95": "9.50ms",
         "p99": "16.80ms",
         "max": "34.50ms"
+      },
+      "memory": {
+        "rssKb": 54000,
+        "sampleSource": "ps"
       }
     },
     {
@@ -37,6 +45,10 @@
         "p95": "14.80ms",
         "p99": "23.50ms",
         "max": "44.20ms"
+      },
+      "memory": {
+        "rssKb": 54000,
+        "sampleSource": "ps"
       }
     }
   ],

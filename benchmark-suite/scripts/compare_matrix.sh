@@ -44,7 +44,8 @@ rows_json="$(jq -s '
         requestsPerSec: (.requestsPerSec // 0),
         loadGenerator: (if has("loadGenerator") then .loadGenerator else "wrk2" end),
         constantRate: (if has("constantRate") then .constantRate else true end),
-        p99: (.latency.p99 // "")
+        p99: (.latency.p99 // ""),
+        rssKb: (.memory.rssKb // null)
       }
   ]
 ' "${report_files[@]}")"

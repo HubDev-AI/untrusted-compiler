@@ -47,6 +47,8 @@ leader_count="$(jq '.endpoints | length' "$matrix_path")"
 constant_rate_true_count="$(jq '[.endpoints[].leader | (if has("constantRate") then .constantRate else true end) | select(. == true)] | length' "$matrix_path")"
 non_constant_count="$((leader_count - constant_rate_true_count))"
 invalid_p99_count="$(jq '[.endpoints[].leader | ((.p99 // "") | tostring | test("[0-9]+(\\.[0-9]+)?") | not)] | map(select(. == true)) | length' "$matrix_path")"
+memory_sampled_count="$(jq '[.endpoints[].leader | select((.rssKb // null) != null)] | length' "$matrix_path")"
+memory_missing_count="$((leader_count - memory_sampled_count))"
 generators="$(jq -r '[.endpoints[].leader | (if has("loadGenerator") then .loadGenerator else "wrk2" end)] | unique | join(", ")' "$matrix_path")"
 
 run_mode="mixed"
@@ -58,6 +60,9 @@ fi
 
 quality_status="PASS"
 if [ "$non_constant_count" -gt 0 ] || [ "$invalid_p99_count" -gt 0 ]; then
+  quality_status="WARN"
+fi
+if [ "$memory_missing_count" -gt 0 ]; then
   quality_status="WARN"
 fi
 
@@ -85,16 +90,20 @@ fi
   echo
   echo "- Run mode: ${run_mode}"
   echo "- Generators: ${generators}"
+  echo "- Memory samples: ${memory_sampled_count}/${leader_count}"
   echo "- Quality status: ${quality_status}"
   if [ "$non_constant_count" -gt 0 ]; then
-    echo "- Warning: ${non_constant_count}/${leader_count} endpoint leaders are non-constant-rate (`constantRate=false`)."
+    echo "- Warning: ${non_constant_count}/${leader_count} endpoint leaders are non-constant-rate (constantRate=false)."
   fi
   if [ "$invalid_p99_count" -gt 0 ]; then
-    echo "- Warning: ${invalid_p99_count}/${leader_count} endpoint leaders have missing or non-numeric `p99`."
+    echo "- Warning: ${invalid_p99_count}/${leader_count} endpoint leaders have missing or non-numeric p99."
+  fi
+  if [ "$memory_missing_count" -gt 0 ]; then
+    echo "- Warning: ${memory_missing_count}/${leader_count} endpoint leaders are missing rssKb memory samples."
   fi
   echo
-  echo "| Endpoint | Constant Rate | Generator | p99 | Status |"
-  echo "|---|---|---|---:|---|"
+  echo "| Endpoint | Constant Rate | Generator | p99 | RSS (KB) | Status |"
+  echo "|---|---|---|---:|---:|---|"
   jq -r '
     .endpoints[]
     | .endpoint as $ep
@@ -104,27 +113,29 @@ fi
         (if ($l | has("constantRate")) then $l.constantRate else true end | tostring),
         (if ($l | has("loadGenerator")) then $l.loadGenerator else "wrk2" end),
         (($l.p99 // "") | tostring),
+        (if (($l.rssKb // null) == null) then "n/a" else (($l.rssKb | tostring)) end),
         (
           ((if ($l | has("constantRate")) then $l.constantRate else true end) == true)
           and ((($l.p99 // "") | tostring | test("[0-9]+(\\.[0-9]+)?")))
+          and (($l.rssKb // null) != null)
           | if . then "PASS" else "WARN" end
         )
       ]
     | @tsv
   ' "$matrix_path" \
-    | while IFS=$'\t' read -r endpoint constant_rate generator p99 status; do
+    | while IFS=$'\t' read -r endpoint constant_rate generator p99 rss_kb status; do
         [ -z "$p99" ] && p99="n/a"
-        printf "| %s | %s | %s | %s | %s |\n" "$endpoint" "$constant_rate" "$generator" "$p99" "$status"
+        printf "| %s | %s | %s | %s | %s | %s |\n" "$endpoint" "$constant_rate" "$generator" "$p99" "$rss_kb" "$status"
       done
   echo
 
   echo "## Endpoint Leaders"
   echo
-  echo "| Endpoint | Leader | Requests/sec | p99 |"
-  echo "|---|---|---:|---:|"
-  jq -r '.endpoints[] | [.endpoint, (.leader.impl // "n/a"), ((.leader.requestsPerSec // 0)|tostring), (.leader.p99 // "")] | @tsv' "$matrix_path" \
-    | while IFS=$'\t' read -r endpoint leader reqps p99; do
-        printf "| %s | %s | %s | %s |\n" "$endpoint" "$leader" "$reqps" "$p99"
+  echo "| Endpoint | Leader | Requests/sec | p99 | RSS (KB) |"
+  echo "|---|---|---:|---:|---:|"
+  jq -r '.endpoints[] | [.endpoint, (.leader.impl // "n/a"), ((.leader.requestsPerSec // 0)|tostring), (.leader.p99 // ""), (if (.leader.rssKb // null) == null then "n/a" else (.leader.rssKb | tostring) end)] | @tsv' "$matrix_path" \
+    | while IFS=$'\t' read -r endpoint leader reqps p99 rss_kb; do
+        printf "| %s | %s | %s | %s | %s |\n" "$endpoint" "$leader" "$reqps" "$p99" "$rss_kb"
       done
   echo
 

@@ -11,7 +11,8 @@
           "requestsPerSec": 152431.97,
           "constantRate": false,
           "loadGenerator": "wrk",
-          "p99": "1.75ms"
+          "p99": "1.75ms",
+          "rssKb": null
         }
       ],
       "leader": {
@@ -21,7 +22,8 @@
         "requestsPerSec": 152431.97,
         "constantRate": false,
         "loadGenerator": "wrk",
-        "p99": "1.75ms"
+        "p99": "1.75ms",
+        "rssKb": null
       }
     }
   ]

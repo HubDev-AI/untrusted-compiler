@@ -33,6 +33,11 @@ for report in "${report_files[@]}"; do
   target_rps="$(jq -r '.targetRps // 0' <<<"$summary")"
   load_generator="$(jq -r '.loadGenerator // "wrk2"' <<<"$summary")"
   constant_rate="$(jq -r 'if has("constantRate") then .constantRate else true end' <<<"$summary")"
+  rss_kb="$(jq -r '.memory.rssKb // empty' <<<"$summary")"
+  rss_kb_json="null"
+  if [ -n "$rss_kb" ]; then
+    rss_kb_json="$rss_kb"
+  fi
 
   row="$(jq -n \
     --arg impl "$impl" \
@@ -42,7 +47,8 @@ for report in "${report_files[@]}"; do
     --argjson constant_rate "$constant_rate" \
     --argjson reqps "$reqps" \
     --argjson target "$target_rps" \
-    '{impl:$impl,endpoint:$endpoint,targetRps:$target,requestsPerSec:$reqps,p99:$p99,loadGenerator:$load_generator,constantRate:$constant_rate}')"
+    --argjson rss_kb "$rss_kb_json" \
+    '{impl:$impl,endpoint:$endpoint,targetRps:$target,requestsPerSec:$reqps,p99:$p99,loadGenerator:$load_generator,constantRate:$constant_rate,rssKb:$rss_kb}')"
   rows="$(jq -c --argjson row "$row" '. + [$row]' <<<"$rows")"
 done
 

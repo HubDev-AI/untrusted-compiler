@@ -11,7 +11,8 @@
           "requestsPerSec": 9800.0,
           "loadGenerator": "wrk2",
           "constantRate": true,
-          "p99": "4.20ms"
+          "p99": "4.20ms",
+          "rssKb": null
         },
         {
           "impl": "go",
@@ -20,7 +21,8 @@
           "requestsPerSec": 9700.0,
           "loadGenerator": "wrk2",
           "constantRate": true,
-          "p99": "4.80ms"
+          "p99": "4.80ms",
+          "rssKb": null
         },
         {
           "impl": "node",
@@ -29,7 +31,8 @@
           "requestsPerSec": 9000.0,
           "loadGenerator": "wrk2",
           "constantRate": true,
-          "p99": "7.50ms"
+          "p99": "7.50ms",
+          "rssKb": null
         },
         {
           "impl": "rust",
@@ -38,7 +41,8 @@
           "requestsPerSec": 9750.0,
           "loadGenerator": "wrk2",
           "constantRate": true,
-          "p99": "4.60ms"
+          "p99": "4.60ms",
+          "rssKb": null
         }
       ],
       "leader": {
@@ -48,7 +52,8 @@
         "requestsPerSec": 9800.0,
         "loadGenerator": "wrk2",
         "constantRate": true,
-        "p99": "4.20ms"
+        "p99": "4.20ms",
+        "rssKb": null
       }
     }
   ]

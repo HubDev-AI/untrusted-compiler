@@ -97,4 +97,22 @@ if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp5/samples" --schem
   exit 1
 fi
 
+tmp6="$(mktemp -d)"
+cleanup6() {
+  rm -rf "$tmp6"
+}
+trap 'cleanup; cleanup2; cleanup3; cleanup4; cleanup5; cleanup6' EXIT
+
+mkdir -p "$tmp6/samples" "$tmp6/schemas"
+cp "$root_dir"/testdata/sample-*.json "$tmp6/samples/"
+cp "$root_dir"/../spec/schemas/*.schema.json "$tmp6/schemas/"
+
+jq 'del(.memory.rssKb)' "$tmp6/samples/sample-summary-ping.json" > "$tmp6/samples/sample-summary-ping.json.tmp"
+mv "$tmp6/samples/sample-summary-ping.json.tmp" "$tmp6/samples/sample-summary-ping.json"
+
+if "$root_dir/validate_contract_schema.sh" --samples-dir "$tmp6/samples" --schema-dir "$tmp6/schemas" >/dev/null 2>&1; then
+  echo "expected schema validator to fail when summary memory rssKb is missing" >&2
+  exit 1
+fi
+
 echo "validate_contract_schema test passed"
