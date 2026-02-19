@@ -103,6 +103,8 @@ enum Commands {
         cluster_relay_workers: Option<usize>,
         #[arg(long)]
         cluster_relay_queue: Option<usize>,
+        #[arg(long)]
+        cluster_status_json: Option<PathBuf>,
         #[arg(long, hide = true, default_value_t = false)]
         reuse_port: bool,
         #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
@@ -466,6 +468,7 @@ fn main() {
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_status_json,
             reuse_port,
             backend,
             tls_backend,
@@ -494,6 +497,7 @@ fn main() {
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_status_json.as_deref(),
             reuse_port,
             backend,
             tls_backend,
@@ -7789,6 +7793,7 @@ fn cmd_run(
     autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_status_json: Option<&Path>,
     reuse_port: bool,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
@@ -7945,6 +7950,10 @@ fn cmd_run(
         eprintln!("run failed: --cluster-relay-queue is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_status_json.is_some() {
+        eprintln!("run failed: --cluster-status-json is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && reuse_port {
         eprintln!("run failed: --reuse-port is only supported with --backend lasm");
         return Err(2);
@@ -7957,6 +7966,10 @@ fn cmd_run(
     }
     if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_queue.is_some() {
         eprintln!("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_status_json.is_some() {
+        eprintln!("run failed: --cluster-status-json requires cluster mode (--instances > 1)");
         return Err(2);
     }
     if max_instances < instances {
@@ -8011,6 +8024,7 @@ fn cmd_run(
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_status_json,
             reuse_port,
         );
     }
@@ -8353,6 +8367,7 @@ struct LasmClusterConfig {
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_status_json: Option<PathBuf>,
     reuse_port_workers: bool,
 }
 
@@ -8691,6 +8706,63 @@ fn write_lasm_cluster_unavailable_response(
     Ok(())
 }
 
+fn write_lasm_cluster_status_json(
+    path: &Path,
+    listen_port: u16,
+    min_instances: usize,
+    max_instances: usize,
+    worker_count: usize,
+    worker_ports: &[u16],
+    active_connections: usize,
+    relay_saturation_events_pending: usize,
+    relay_saturation_events_total: u64,
+) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!(
+                    "could not create cluster status json parent directory {}: {err}",
+                    parent.display()
+                )
+            })?;
+        }
+    }
+
+    let payload = serde_json::json!({
+        "mode": "lasm-cluster",
+        "updatedAtMs": lasm_now_ms(),
+        "listenPort": listen_port,
+        "minInstances": min_instances,
+        "maxInstances": max_instances,
+        "workerCount": worker_count,
+        "workerPorts": worker_ports,
+        "activeConnections": active_connections,
+        "relaySaturationEventsPending": relay_saturation_events_pending,
+        "relaySaturationEventsTotal": relay_saturation_events_total,
+    });
+    let encoded = serde_json::to_vec_pretty(&payload)
+        .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
+
+    let tmp_path = path.with_extension(format!(
+        "{}.tmp",
+        path.extension().and_then(|value| value.to_str()).unwrap_or("json")
+    ));
+    fs::write(&tmp_path, encoded).map_err(|err| {
+        format!(
+            "could not write cluster status json temporary file {}: {err}",
+            tmp_path.display()
+        )
+    })?;
+    fs::rename(&tmp_path, path).map_err(|err| {
+        format!(
+            "could not move cluster status json temporary file {} to {}: {err}",
+            tmp_path.display(),
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
 const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
 const LASM_CLUSTER_RELAY_RECEIVE_WAIT_MS: u64 = 2;
 
@@ -8978,6 +9050,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let active_connections = Arc::new(AtomicUsize::new(0));
     let stop_flag = Arc::new(AtomicBool::new(false));
     let relay_saturation_events = Arc::new(AtomicUsize::new(0));
+    let relay_saturation_events_total = Arc::new(AtomicU64::new(0));
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
@@ -8991,6 +9064,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_selection_counter = Arc::clone(&relay_selection_counter);
         let relay_worker_ports = Arc::clone(&worker_ports_snapshot);
         let relay_saturation_events = Arc::clone(&relay_saturation_events);
+        let relay_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
@@ -9066,6 +9140,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
                     let Some(backend_port) = backend_port else {
                         relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                        relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
                         let _ = write_lasm_cluster_unavailable_response(
                             &mut client,
                             "no healthy workers",
@@ -9093,6 +9168,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         Err(err) => {
                             relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                            relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
                             unhealthy_ports_until.insert(
                                 backend_port,
                                 Instant::now() + lasm_cluster_backend_connect_cooldown(),
@@ -9154,6 +9230,47 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             }
         }));
     }
+
+    let status_writer_handle = if let Some(status_path) = shared_config.cluster_status_json.clone()
+    {
+        let status_stop_flag = Arc::clone(&stop_flag);
+        let status_state = Arc::clone(&shared_state);
+        let status_config = Arc::clone(&shared_config);
+        let status_active_connections = Arc::clone(&active_connections);
+        let status_saturation_events = Arc::clone(&relay_saturation_events);
+        let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
+        let status_worker_ports = Arc::clone(&worker_ports_snapshot);
+        let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
+        Some(std::thread::spawn(move || {
+            loop {
+                let worker_ports = status_worker_ports.load();
+                let worker_count = match status_state.read() {
+                    Ok(state) => state.workers.len(),
+                    Err(_) => worker_ports.len(),
+                };
+                if let Err(err) = write_lasm_cluster_status_json(
+                    status_path.as_path(),
+                    status_config.listen_port,
+                    status_config.min_instances,
+                    status_config.max_instances,
+                    worker_count,
+                    worker_ports.as_slice(),
+                    status_active_connections.load(Ordering::Relaxed),
+                    status_saturation_events.load(Ordering::Relaxed),
+                    status_saturation_events_total.load(Ordering::Relaxed),
+                ) {
+                    eprintln!("warning: LASM cluster status json write failed: {err}");
+                }
+
+                if status_stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(status_interval_ms));
+            }
+        }))
+    } else {
+        None
+    };
 
     let autoscale_enabled = shared_config.max_instances > shared_config.min_instances;
     let maintenance_interval_ms = lasm_cluster_maintenance_interval_ms(shared_config.as_ref());
@@ -9296,6 +9413,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             Err(TrySendError::Full(stream)) => {
                 client_stream = stream;
                 relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
                 active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
@@ -9321,6 +9439,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let _ = handle.join();
     }
     let _ = autoscale_handle.join();
+    if let Some(handle) = status_writer_handle {
+        let _ = handle.join();
+    }
     if let Ok(mut state) = shared_state.write() {
         stop_lasm_cluster_workers(&mut state);
     }
@@ -9354,6 +9475,7 @@ fn cmd_run_lasm_backend(
     autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
@@ -9565,6 +9687,10 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: --cluster-relay-queue is not used in fixed reuse-port cluster mode");
         return Err(2);
     }
+    if fixed_cluster_reuse_port_mode && cluster_status_json.is_some() {
+        eprintln!("run failed: --cluster-status-json is not used in fixed reuse-port cluster mode");
+        return Err(2);
+    }
     if fixed_cluster_reuse_port_mode {
         return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
             path: path.to_path_buf(),
@@ -9593,6 +9719,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
+            cluster_status_json: None,
             reuse_port_workers: true,
         });
     }
@@ -9625,6 +9752,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_status_json: cluster_status_json.map(Path::to_path_buf),
             reuse_port_workers: false,
         });
     }
