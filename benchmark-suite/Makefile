@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -35,6 +35,15 @@ LASM_SATURATION_THROUGHPUT_CONNECTIONS ?= 512
 LASM_SATURATION_THROUGHPUT_TARGET_REQUESTS ?= 1000000
 LASM_SATURATION_THROUGHPUT_RELAY_WORKERS ?= 32
 LASM_SATURATION_THROUGHPUT_RELAY_QUEUE ?= 4096
+LASM_SATURATION_LATENCY_IMPLS ?= sec4-lasm
+LASM_SATURATION_LATENCY_ENDPOINTS ?= ping
+LASM_SATURATION_LATENCY_BOOST_STEPS ?= 1,2,3
+LASM_SATURATION_LATENCY_DURATION ?= 30s
+LASM_SATURATION_LATENCY_THREADS ?= 4
+LASM_SATURATION_LATENCY_CONNECTIONS ?= 64
+LASM_SATURATION_LATENCY_TARGET_REQUESTS ?= 250000
+LASM_SATURATION_LATENCY_RELAY_WORKERS ?= 16
+LASM_SATURATION_LATENCY_RELAY_QUEUE ?= 2048
 
 help:
 	@echo "Targets:"
@@ -62,6 +71,8 @@ help:
 	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
 	@echo "  bench-full-saturation-throughput Run saturation-enabled full suite with tuned throughput preset knobs"
 	@echo "  bench-full-saturation-throughput-dry Print throughput preset full-suite+saturation plan"
+	@echo "  bench-full-saturation-latency Run saturation-enabled full suite with latency-oriented preset knobs"
+	@echo "  bench-full-saturation-latency-dry Print latency preset full-suite+saturation plan"
 	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
 	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
@@ -180,6 +191,32 @@ bench-full-saturation-throughput-dry:
 		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)" \
 		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"
 
+bench-full-saturation-latency:
+	@$(MAKE) bench-full-saturation \
+		IMPLS="$(LASM_SATURATION_LATENCY_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_LATENCY_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_LATENCY_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_LATENCY_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_LATENCY_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_LATENCY_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"
+
+bench-full-saturation-latency-dry:
+	@$(MAKE) bench-full-saturation-dry \
+		IMPLS="$(LASM_SATURATION_LATENCY_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_LATENCY_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_LATENCY_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_LATENCY_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_LATENCY_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_LATENCY_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"
+
 sec4-capacity-probe:
 	scripts/run_sec4_capacity_probe.sh --endpoint "$(CAPACITY_ENDPOINT)" --target-requests "$(CAPACITY_TARGET_REQUESTS)"
 
@@ -260,6 +297,7 @@ test-scripts:
 	scripts/test_preflight.sh
 	scripts/test_makefile_profile_targets.sh
 	scripts/test_bench_full_saturation_throughput_profile.sh
+	scripts/test_bench_full_saturation_latency_profile.sh
 	scripts/test_test_service_contracts.sh
 
 test-services:
