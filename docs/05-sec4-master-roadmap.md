@@ -330,6 +330,7 @@ Post-alpha track acceptance anchors:
 - [x] Scheduled benchmark-trend CI workflow now applies explicit RSS absolute guards (`--max-rss-kb`) for ping/decode threshold steps, and workflow contract tests lock presence of RSS threshold flags to prevent drift (`docs/book/1012-m39-benchmark-trend-ci-rss-threshold-enforcement.md`).
 - [x] Benchmark evidence-quality checker now treats missing/invalid leader RSS as a first-class warning signal (with `--fail-on-warning` escalation), and compare-row identity checks include `rssKb` parity to prevent hidden memory-signal drift across leader/compared rows (`docs/book/1013-m39-benchmark-evidence-quality-rss-warning-enforcement.md`).
 - [x] Trend-note baseline guard evaluation now applies optional RSS regression checks when baseline files provide `baselineRssKb`/`maxRssRegressionPct`, so trend pass/fail status can reflect memory drift alongside p99/coverage in the same baseline verdict (`docs/book/1014-m39-trend-note-baseline-rss-guard-evaluation.md`).
+- [x] LASM DB intrinsic persistence now supports adapter selection via `SEC4_RT_LASM_DB_ADAPTER` (`records.log` default, `sqlite` optional), with SQLite-backed load/persist parity for `db.exec`/`db.execTx`/`db.queryOne` while preserving default file-adapter behavior (`docs/book/1015-m39-lasm-db-sqlite-adapter-baseline.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -424,7 +425,7 @@ Post-alpha track acceptance anchors:
 1. [x] Completed LASM DB parity for active DB intrinsics (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) and removed schema-switch fallback branches for write/query-one paths while keeping deterministic envelopes on `records.log` adapter v1.
 2. [x] Made LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), with clean-machine `init -> check -> build -> run` validated on LASM-first flow.
 3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
-4. Progress DB adapters behind the same intrinsic surface:
+4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,
    - keep external DB adapters post-alpha.
