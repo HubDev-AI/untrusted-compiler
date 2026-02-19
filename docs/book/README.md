@@ -1029,5 +1029,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1057-m39-lasm-cluster-relay-auto-worker-pressure-sizing.md`
 - `1058-m39-lasm-cluster-relay-worker-multiplex-pump-loop.md`
 - `1059-m39-lasm-cluster-relay-port-connect-failure-cooldown.md`
+- `1060-m39-lasm-cluster-relay-read-drain-loop.md`
 
 As milestones progress, chapters will be added and linked from this index.

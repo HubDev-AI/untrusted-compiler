@@ -584,6 +584,11 @@ Post-alpha track acceptance anchors:
      - when no unhealthy ports are tracked, relay selection remains a direct round-robin fast path (no cooldown-map scan),
      - this reduces repeated immediate retries against transiently unavailable worker ports during churn while preserving existing deterministic `503` availability envelopes.
      - documented in `docs/book/1059-m39-lasm-cluster-relay-port-connect-failure-cooldown.md`.
+   - [x] Relay pump read path now drains available socket bytes per cycle:
+     - changed both client->upstream and upstream->client read phases from single-read-per-cycle to read-until-`WouldBlock` loops while preserving bounded buffer behavior and existing half-close semantics,
+     - this reduces relay scheduler churn under active traffic by allowing each pump cycle to consume contiguous readable socket bursts,
+     - short probe in the current post-cooldown baseline moved from `~72.49k req/s` to `~72.76k req/s` with comparable memory/tail-latency profile.
+     - documented in `docs/book/1060-m39-lasm-cluster-relay-read-drain-loop.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
