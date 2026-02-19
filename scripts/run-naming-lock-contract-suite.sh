@@ -36,7 +36,7 @@ run_step() {
   step=$((step + 1))
 }
 
-TOTAL_STEPS=178
+TOTAL_STEPS=181
 
 run_step "scripts/test-check-no-local-path-leaks.sh"
 run_step "scripts/test-check-sec4-explain-audit-coverage.sh"
@@ -54,6 +54,7 @@ run_step "scripts/test-smoke-sec4-run-lasm-db-adapter-script-contract-guard.sh"
 run_step "scripts/test-runtime-smoke-workflow-contract.sh"
 run_step "scripts/test-runtime-smoke-workflow-contract-guard.sh"
 run_step "scripts/test-check-runtime-smoke-artifacts.sh"
+run_step "scripts/test-check-runtime-smoke-db-adapter-artifacts.sh"
 run_step "scripts/test-build-runtime-smoke-branch-index.sh"
 run_step "scripts/test-check-runtime-smoke-bundle.sh"
 run_step "scripts/test-check-m17-operator-handoff-readiness.sh"
