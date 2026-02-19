@@ -443,6 +443,10 @@ Post-alpha track acceptance anchors:
      - queue saturation now returns deterministic `503` (`cluster relay saturated`) instead of unbounded relay thread growth,
      - local load probes after this change reached about `~60k req/s` in autoscale proxy mode and `~121k req/s` in fixed reuse-port mode (`/health`, auth header, local wrk profile).
      - documented in `docs/book/1022-m39-lasm-cluster-relay-worker-pool.md`.
+   - [x] Added explicit cluster-proxy relay tuning flags:
+     - `--cluster-relay-workers` and `--cluster-relay-queue` now tune front-proxy relay concurrency/queue depth without code edits,
+     - both flags are LASM-only and require cluster proxy mode (`--instances > 1` with autoscale range); fixed reuse-port mode rejects them as not applicable.
+     - documented in `docs/book/1023-m39-lasm-cluster-relay-tuning-flags.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

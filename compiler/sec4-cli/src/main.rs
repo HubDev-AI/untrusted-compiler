@@ -88,6 +88,10 @@ enum Commands {
         autoscale_target_connections: Option<usize>,
         #[arg(long, default_value_t = 1000)]
         autoscale_check_ms: u64,
+        #[arg(long)]
+        cluster_relay_workers: Option<usize>,
+        #[arg(long)]
+        cluster_relay_queue: Option<usize>,
         #[arg(long, hide = true, default_value_t = false)]
         reuse_port: bool,
         #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
@@ -444,6 +448,8 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
             reuse_port,
             backend,
             tls_backend,
@@ -465,6 +471,8 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
             reuse_port,
             backend,
             tls_backend,
@@ -7753,6 +7761,8 @@ fn cmd_run(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
     reuse_port: bool,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
@@ -7771,6 +7781,14 @@ fn cmd_run(
     }
     if autoscale_check_ms == 0 {
         eprintln!("run failed: --autoscale-check-ms must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_workers == Some(0) {
+        eprintln!("run failed: --cluster-relay-workers must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_queue == Some(0) {
+        eprintln!("run failed: --cluster-relay-queue must be >= 1");
         return Err(2);
     }
     if max_header_bytes == Some(0) {
@@ -7847,11 +7865,28 @@ fn cmd_run(
         eprintln!("run failed: --autoscale-check-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_relay_workers.is_some() {
+        eprintln!("run failed: --cluster-relay-workers is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && reuse_port {
         eprintln!("run failed: --reuse-port is only supported with --backend lasm");
         return Err(2);
     }
     let max_instances = autoscale_max_instances.unwrap_or(instances);
+    let cluster_mode = max_instances > 1 || instances > 1;
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_workers.is_some() {
+        eprintln!("run failed: --cluster-relay-workers requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -7897,6 +7932,8 @@ fn cmd_run(
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
             reuse_port,
         );
     }
@@ -8232,6 +8269,8 @@ struct LasmClusterConfig {
     target_connections_per_instance: usize,
     autoscale_check_ms: u64,
     worker_ready_timeout_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
     reuse_port_workers: bool,
 }
 
@@ -8470,6 +8509,9 @@ fn desired_lasm_cluster_instances(
 }
 
 fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
+    if let Some(value) = config.cluster_relay_workers {
+        return value;
+    }
     let host_parallelism = std::thread::available_parallelism()
         .map(|value| value.get())
         .unwrap_or(4);
@@ -8480,6 +8522,9 @@ fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
 }
 
 fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: usize) -> usize {
+    if let Some(value) = config.cluster_relay_queue {
+        return value;
+    }
     config
         .target_connections_per_instance
         .max(1)
@@ -8853,6 +8898,8 @@ fn cmd_run_lasm_backend(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
     reuse_port: bool,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
@@ -9054,6 +9101,16 @@ fn cmd_run_lasm_backend(
         return Err(2);
     }
     let fixed_cluster_reuse_port_mode = cluster_mode && max_instances == instances;
+    if fixed_cluster_reuse_port_mode && cluster_relay_workers.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-workers is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue is not used in fixed reuse-port cluster mode");
+        return Err(2);
+    }
     if fixed_cluster_reuse_port_mode {
         return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
             path: path.to_path_buf(),
@@ -9075,6 +9132,8 @@ fn cmd_run_lasm_backend(
                 .max(1),
             autoscale_check_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            cluster_relay_workers: None,
+            cluster_relay_queue: None,
             reuse_port_workers: true,
         });
     }
@@ -9100,6 +9159,8 @@ fn cmd_run_lasm_backend(
             target_connections_per_instance,
             autoscale_check_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            cluster_relay_workers,
+            cluster_relay_queue,
             reuse_port_workers: false,
         });
     }
