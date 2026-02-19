@@ -10271,8 +10271,7 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
             &record_query,
             &record_body_hex
         )) {
-      io_failed = true;
-      break;
+      continue;
     }
 
     if (record_db != db_handle || record_query != query_handle) {
@@ -10281,8 +10280,7 @@ static sec4_rt_db_result sec4_rt_db_read_latest_record_body(
 
     size_t decoded_len = 0;
     if (!sec4_rt_hex_decode_bytes(record_body_hex, body_out, body_out_size, &decoded_len)) {
-      io_failed = true;
-      break;
+      continue;
     }
     found = true;
   }
