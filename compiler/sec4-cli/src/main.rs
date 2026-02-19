@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, TrySendError};
@@ -8592,6 +8593,14 @@ fn lasm_cluster_maintenance_interval_ms(config: &LasmClusterConfig) -> u64 {
     config.autoscale_check_ms.clamp(100, 500)
 }
 
+fn refresh_lasm_cluster_worker_ports_snapshot(
+    state: &LasmClusterState,
+    snapshot: &Arc<ArcSwap<Vec<u16>>>,
+) {
+    let ports = state.workers.iter().map(|worker| worker.port).collect::<Vec<_>>();
+    snapshot.store(Arc::new(ports));
+}
+
 fn desired_lasm_cluster_instances(
     active_connections: usize,
     min_instances: usize,
@@ -8789,6 +8798,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         return Err(2);
     }
 
+    let worker_ports_snapshot = Arc::new(ArcSwap::from_pointee(
+        state
+            .workers
+            .iter()
+            .map(|worker| worker.port)
+            .collect::<Vec<_>>(),
+    ));
     let shared_state = Arc::new(RwLock::new(state));
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
@@ -8803,9 +8819,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
     for _ in 0..relay_worker_count {
         let relay_receiver = relay_receiver.clone();
-        let relay_state = Arc::clone(&shared_state);
         let relay_active = Arc::clone(&active_connections);
         let relay_selection_counter = Arc::clone(&relay_selection_counter);
+        let relay_worker_ports = Arc::clone(&worker_ports_snapshot);
         relay_handles.push(std::thread::spawn(move || loop {
             let mut client = match relay_receiver.recv() {
                 Ok(stream) => stream,
@@ -8813,23 +8829,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             };
 
             let backend_port = {
-                let state = match relay_state.read() {
-                    Ok(state) => state,
-                    Err(_) => {
-                        let _ = write_lasm_cluster_unavailable_response(
-                            &mut client,
-                            "cluster state unavailable",
-                        );
-                        relay_active.fetch_sub(1, Ordering::Relaxed);
-                        continue;
-                    }
-                };
-                if state.workers.is_empty() {
+                let worker_ports = relay_worker_ports.load();
+                if worker_ports.is_empty() {
                     None
                 } else {
-                    let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
-                        % state.workers.len();
-                    Some(state.workers[index].port)
+                    let index =
+                        relay_selection_counter.fetch_add(1, Ordering::Relaxed) % worker_ports.len();
+                    Some(worker_ports[index])
                 }
             };
 
@@ -8866,6 +8872,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_active_connections = Arc::clone(&active_connections);
         let autoscale_saturation_events = Arc::clone(&relay_saturation_events);
         let autoscale_stop_flag = Arc::clone(&stop_flag);
+        let autoscale_worker_ports = Arc::clone(&worker_ports_snapshot);
         std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
@@ -8884,6 +8891,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
                 recover_lasm_cluster_min_workers(&mut state, &autoscale_config, "worker recovery");
+                refresh_lasm_cluster_worker_ports_snapshot(&state, &autoscale_worker_ports);
                 if !autoscale_enabled {
                     continue;
                 }
@@ -8968,6 +8976,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                     last_scale_down_at = Some(now);
                 }
+                refresh_lasm_cluster_worker_ports_snapshot(&state, &autoscale_worker_ports);
             }
         })
     };

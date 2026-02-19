@@ -549,6 +549,11 @@ Post-alpha track acceptance anchors:
      - background maintenance/autoscale loop remains the only writer for prune/recovery/scale mutations,
      - this removes unnecessary writer lock serialization between parallel relay workers during steady-state dispatch.
      - documented in `docs/book/1052-m39-lasm-cluster-read-write-lock-state-optimization.md`.
+   - [x] Relay backend-port selection now uses lock-free worker-port snapshots:
+     - autoscale/maintenance loop publishes current worker-port vectors through atomic snapshot updates,
+     - relay workers read the latest snapshot and select backend ports via atomic round-robin counter without touching cluster state locks,
+     - state locks remain on maintenance/autoscale mutation paths only.
+     - documented in `docs/book/1053-m39-lasm-cluster-lock-free-worker-port-snapshots.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
