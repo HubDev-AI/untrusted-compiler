@@ -11404,6 +11404,83 @@ int main(void) {
 }
 
 #[test]
+fn c_bin_runtime_db_query_one_uses_latest_cache_when_records_file_is_removed_when_clang_available()
+{
+    if !clang_available() {
+        eprintln!("skipping c-bin runtime db latest-cache test: clang not available");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-runtime-c-db-latest-cache");
+    let harness_path = project_dir.join("harness.c");
+    let binary_path = project_dir.join("runtime-db-latest-cache");
+    let db_base = project_dir.join("db-base");
+    fs::create_dir_all(&db_base).expect("db base should be created");
+
+    let runtime_c_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("runtime")
+        .join("c");
+    let runtime_source = runtime_c_dir.join("sec4_runtime.c");
+    let runtime_include = runtime_c_dir;
+
+    fs::write(
+        &harness_path,
+        r#"#include "sec4_runtime.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+  const char *db_base = getenv("SEC4_RT_DB_BASE");
+  if (db_base == NULL || db_base[0] == '\0') { return 9; }
+
+  int64_t query = sec4_rt_sql_q((int64_t)(uintptr_t) "SELECT cache", 41);
+  if (query == 0) { return 10; }
+
+  if (sec4_rt_db_exec(9002, query) == 0) { return 11; }
+  if (sec4_rt_db_query_one(9002, query, 7001) == 0) { return 12; }
+
+  char records_path[4096];
+  int written = snprintf(records_path, sizeof(records_path), "%s/records.log", db_base);
+  if (written <= 0 || (size_t) written >= sizeof(records_path)) { return 13; }
+  if (remove(records_path) != 0) { return 14; }
+
+  if (sec4_rt_db_query_one(9002, query, 7001) == 0) { return 15; }
+
+  return 0;
+}
+"#,
+    )
+    .expect("harness source should be written");
+
+    let output = Command::new("clang")
+        .arg(&harness_path)
+        .arg(&runtime_source)
+        .arg("-std=c11")
+        .arg("-O2")
+        .arg("-I")
+        .arg(&runtime_include)
+        .arg("-o")
+        .arg(&binary_path)
+        .output()
+        .expect("clang should execute for runtime harness");
+    assert!(
+        output.status.success(),
+        "runtime db latest-cache harness should compile successfully"
+    );
+
+    let run = Command::new(&binary_path)
+        .env("SEC4_RT_DB_BASE", &db_base)
+        .output()
+        .expect("compiled binary should run");
+    assert!(
+        run.status.success(),
+        "runtime db latest-cache harness should exit successfully"
+    );
+}
+
+#[test]
 fn c_bin_runtime_db_query_one_missing_record_returns_error_when_clang_available() {
     if !clang_available() {
         eprintln!("skipping c-bin runtime db missing-record test: clang not available");
