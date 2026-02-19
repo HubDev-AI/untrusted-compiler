@@ -986,5 +986,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1018-m39-lasm-run-cluster-front-proxy-and-autoscale.md`
 - `1019-m39-run-db-adapter-flag.md`
 - `1020-m39-run-db-adapter-runtime-flag-contract-lock.md`
+- `1021-m39-lasm-db-adapter-operator-smoke-script.md`
 
 As milestones progress, chapters will be added and linked from this index.
