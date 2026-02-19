@@ -589,6 +589,11 @@ Post-alpha track acceptance anchors:
      - this reduces relay scheduler churn under active traffic by allowing each pump cycle to consume contiguous readable socket bursts,
      - short probe in the current post-cooldown baseline moved from `~72.49k req/s` to `~72.76k req/s` with comparable memory/tail-latency profile.
      - documented in `docs/book/1060-m39-lasm-cluster-relay-read-drain-loop.md`.
+   - [x] Added optional LASM cluster status JSON telemetry output:
+     - new flag: `sec4 run --cluster-status-json <path>` (LASM cluster mode only),
+     - cluster front process now emits periodic JSON snapshots with worker counts/ports, active connections, and relay saturation counters (`pending` + `total`) for operator tuning/debug workflows,
+     - healthy hot path remains unchanged when the flag is not set (status writer thread is not started).
+     - documented in `docs/book/1061-m39-lasm-cluster-status-json-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

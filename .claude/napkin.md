@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I launched two Cargo tests in parallel again during cluster-status feature validation and reintroduced lock-wait noise. | Keep Cargo validations strictly sequential in this repo, even when using multi-tool calls. |
 | 2026-02-19 | self | I accidentally triggered the web tool while comparing local benchmark artifacts during a local-only runtime tuning pass. | Keep LASM tuning iterations strictly on local tools (`exec_command`/`apply_patch`) and use local `jq` for artifact comparisons. |
 | 2026-02-19 | self | I ran multiple relay tuning experiments (accept batching, buffer pool, worker-floor variants) that regressed the short healthy profile before settling on a resilience-targeted change. | For proxy hot-path tuning, gate each experiment with one quick probe and immediately revert regressions before layering another idea; keep only proven wins or explicitly resilience-scoped changes. |
 | 2026-02-19 | self | While switching relay workers to multiplex mode, I accidentally wrapped the new worker body in an extra outer `loop`, which would have reset relay state repeatedly after disconnect. | For nested worker-loop refactors, re-open the exact edited block immediately and verify loop nesting/`break` targets before running tests. |
