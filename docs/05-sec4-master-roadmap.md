@@ -564,6 +564,11 @@ Post-alpha track acceptance anchors:
      - steady-state maintenance ticks no longer allocate/store redundant snapshot vectors,
      - relay lock-free selection path remains unchanged while background publication overhead is reduced.
      - documented in `docs/book/1055-m39-lasm-cluster-snapshot-publish-change-detection.md`.
+   - [x] Cluster relay path no longer spawns per-connection helper threads:
+     - replaced `relay_lasm_cluster_connection` thread-spawn copy bridge with a single-thread nonblocking bidirectional pump loop (buffered both directions with deterministic half-close behavior),
+     - removes per-connection relay thread creation/cloning overhead while preserving existing overload/autoscale/error-envelope semantics,
+     - short capacity probe under unchanged profile improved from `~64.9k req/s` to `~70.5k req/s` (`20s`, `8` threads, `256` connections, `instances=4`, `autoscale-max=8`, `relay-workers=32`, `relay-queue=4096`).
+     - documented in `docs/book/1056-m39-lasm-cluster-relay-no-spawn-pump-loop.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

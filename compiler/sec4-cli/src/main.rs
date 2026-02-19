@@ -8683,23 +8683,133 @@ fn relay_lasm_cluster_connection(
     client: &mut TcpStream,
     upstream: &mut TcpStream,
 ) -> Result<(), String> {
-    let mut client_read = client
-        .try_clone()
-        .map_err(|err| format!("could not clone client stream for proxy read: {err}"))?;
-    let mut upstream_write = upstream
-        .try_clone()
-        .map_err(|err| format!("could not clone upstream stream for proxy write: {err}"))?;
+    client
+        .set_nonblocking(true)
+        .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
+    upstream
+        .set_nonblocking(true)
+        .map_err(|err| format!("could not set upstream proxy stream nonblocking: {err}"))?;
 
-    let client_to_upstream = std::thread::spawn(move || {
-        let _ = std::io::copy(&mut client_read, &mut upstream_write);
-        let _ = upstream_write.shutdown(Shutdown::Write);
-    });
+    let mut client_to_upstream = [0_u8; 64 * 1024];
+    let mut upstream_to_client = [0_u8; 64 * 1024];
+    let mut c2u_start = 0_usize;
+    let mut c2u_end = 0_usize;
+    let mut u2c_start = 0_usize;
+    let mut u2c_end = 0_usize;
+    let mut client_read_closed = false;
+    let mut upstream_read_closed = false;
+    let mut client_write_closed = false;
+    let mut upstream_write_closed = false;
+    let mut idle_spins = 0_u32;
 
-    let upstream_to_client = std::io::copy(upstream, client)
-        .map_err(|err| format!("could not relay upstream response to client: {err}"));
-    let _ = client.shutdown(Shutdown::Write);
-    let _ = client_to_upstream.join();
-    upstream_to_client.map(|_| ())
+    loop {
+        let mut progressed = false;
+
+        if !client_read_closed && c2u_end < client_to_upstream.len() {
+            match client.read(&mut client_to_upstream[c2u_end..]) {
+                Ok(0) => {
+                    client_read_closed = true;
+                }
+                Ok(bytes_read) => {
+                    c2u_end += bytes_read;
+                    progressed = true;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(err) => {
+                    return Err(format!("could not read proxy client stream: {err}"));
+                }
+            }
+        }
+
+        while c2u_start < c2u_end {
+            match upstream.write(&client_to_upstream[c2u_start..c2u_end]) {
+                Ok(0) => {
+                    return Err("could not relay client payload to upstream: write returned 0 bytes"
+                        .to_string());
+                }
+                Ok(bytes_written) => {
+                    c2u_start += bytes_written;
+                    progressed = true;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(err) => {
+                    return Err(format!("could not relay client payload to upstream: {err}"));
+                }
+            }
+        }
+        if c2u_start == c2u_end {
+            c2u_start = 0;
+            c2u_end = 0;
+            if client_read_closed && !upstream_write_closed {
+                let _ = upstream.shutdown(Shutdown::Write);
+                upstream_write_closed = true;
+                progressed = true;
+            }
+        }
+
+        if !upstream_read_closed && u2c_end < upstream_to_client.len() {
+            match upstream.read(&mut upstream_to_client[u2c_end..]) {
+                Ok(0) => {
+                    upstream_read_closed = true;
+                }
+                Ok(bytes_read) => {
+                    u2c_end += bytes_read;
+                    progressed = true;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(err) => {
+                    return Err(format!("could not read proxy upstream stream: {err}"));
+                }
+            }
+        }
+
+        while u2c_start < u2c_end {
+            match client.write(&upstream_to_client[u2c_start..u2c_end]) {
+                Ok(0) => {
+                    return Err(
+                        "could not relay upstream response to client: write returned 0 bytes"
+                            .to_string(),
+                    );
+                }
+                Ok(bytes_written) => {
+                    u2c_start += bytes_written;
+                    progressed = true;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(err) => {
+                    return Err(format!("could not relay upstream response to client: {err}"));
+                }
+            }
+        }
+        if u2c_start == u2c_end {
+            u2c_start = 0;
+            u2c_end = 0;
+            if upstream_read_closed && !client_write_closed {
+                let _ = client.shutdown(Shutdown::Write);
+                client_write_closed = true;
+                progressed = true;
+            }
+        }
+
+        if client_write_closed && upstream_write_closed && c2u_end == 0 && u2c_end == 0 {
+            break;
+        }
+
+        if progressed {
+            idle_spins = 0;
+            continue;
+        }
+
+        idle_spins = idle_spins.saturating_add(1);
+        if idle_spins < 32 {
+            std::thread::yield_now();
+        } else {
+            std::thread::sleep(Duration::from_millis(1));
+            idle_spins = 0;
+        }
+    }
+
+    Ok(())
 }
 
 fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
