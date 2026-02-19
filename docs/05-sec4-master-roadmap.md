@@ -10062,8 +10062,19 @@ M13-S1 go/no-go note:
 - [x] Book chapter documenting M35 closure report added.
 - [x] Naming-lock CI and closure gate updated (`M35-G`).
 
+### M39-S2C editor formatting and plugin smoke fixture acceptance criteria
+- Language server advertises and serves deterministic `textDocument/formatting`.
+- Zed plugin path includes a maintained smoke project for diagnostics/navigation/rename/format verification.
+- Book chapter captures implementation + operator test flow.
+
+### M39-S2C tracking (live status)
+- [x] Added LSP `documentFormattingProvider` capability + `textDocument/formatting` handler.
+- [x] Added formatting coverage in `compiler/sec4-lsp/src/main.rs` tests.
+- [x] Added `examples/zed-plugin-smoke` project with plugin-focused operator checklist.
+- [x] Added book chapter `1036-m39-zed-plugin-formatting-and-smoke-project.md`.
+
 ### Next planned slice
-- M39-S2A multi-file module system implementation (project-local module graph + deterministic resolution diagnostics).
+- M39-S2D Zed plugin runtime-launch hardening (clear binary-missing diagnostics + local dev fallback command path).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

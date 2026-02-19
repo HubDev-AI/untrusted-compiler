@@ -1,0 +1,3 @@
+fn loadUser(userId: String) -> Int {
+  1
+}

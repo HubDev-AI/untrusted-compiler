@@ -2,7 +2,7 @@ name = "Untrusted<T>"
 grammar = "untrusted"
 path_suffixes = ["ut"]
 
-line_comments = ["// "]
+line_comments = ["//"]
 block_comments = [{ start = "/*", end = "*/" }]
 
 brackets = [
