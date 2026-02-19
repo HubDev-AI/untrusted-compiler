@@ -971,5 +971,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1003-m37-alpha2-release-closure-refresh.md`
 - `1004-m39-lasm-db-intrinsic-execution-baseline.md`
 - `1005-m39-lasm-alpha-full-db-intrinsic-routes.md`
+- `1006-m39-lasm-remove-schema-fallback-db-write-arms.md`
 
 As milestones progress, chapters will be added and linked from this index.
