@@ -10341,6 +10341,13 @@ int64_t sec4_rt_sql_q(int64_t query_template, int64_t params) {
   return query_handle;
 }
 
+int64_t sec4_rt_schema_row(int64_t row_schema) {
+  if (row_schema <= 0) {
+    return 0;
+  }
+  return row_schema;
+}
+
 int64_t sec4_rt_db_exec(int64_t db, int64_t query) {
   if (db == 0 || query == 0) {
     sec4_rt_store_std_error_response(

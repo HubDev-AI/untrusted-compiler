@@ -1946,6 +1946,7 @@ impl<'a> Analyzer<'a> {
         self.enforce_request_source_signatures(callee_name, span.clone(), args, arg_types);
         self.enforce_path_base_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_sql_q_signature(callee_name, span.clone(), args, arg_types);
+        self.enforce_schema_row_signature(callee_name, span.clone(), args, arg_types);
         self.enforce_db_query_call_shapes(callee_name, span.clone(), args, arg_types);
         self.enforce_db_tx_call_shape(callee_name, span.clone(), args, arg_types);
         self.enforce_net_sink_call_shapes(callee_name, span.clone(), args, arg_types);
@@ -3409,6 +3410,57 @@ impl<'a> Analyzer<'a> {
         }
 
         self.enforce_sql_select_limit_policy(args);
+    }
+
+    fn enforce_schema_row_signature(
+        &mut self,
+        callee_name: &str,
+        span: Span,
+        args: &[Expr],
+        arg_types: &[Type],
+    ) {
+        if !is_schema_row_call(callee_name) {
+            return;
+        }
+
+        if args.len() != 1 {
+            self.diagnostics.push(
+                Diagnostic::error("E4001", "schema.row expects exactly one argument", span)
+                    .with_tag("security")
+                    .with_tag("schema")
+                    .with_note("use `schema.row(rowSchemaHandle)`"),
+            );
+            return;
+        }
+
+        if arg_types[0].contains_secret() || arg_types[0].contains_untrusted() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "schema.row argument cannot be `Secret<_>` or `Untrusted<_>`",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("validate and convert schema handles before `schema.row(...)`"),
+            );
+            return;
+        }
+
+        if !arg_types[0].is_numeric() {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E4001",
+                    "schema.row argument must be numeric",
+                    args[0].span.clone(),
+                )
+                .with_tag("security")
+                .with_tag("schema")
+                .with_note(format!("found `{}`", arg_types[0].describe()))
+                .with_note("pass `Int`/`Int64` row schema handles into `schema.row(...)`"),
+            );
+        }
     }
 
     fn enforce_sql_select_limit_policy(&mut self, args: &[Expr]) {
@@ -5639,6 +5691,7 @@ enum IntrinsicReturnTy {
     Unknown,
     UntrustedString,
     UntrustedBytes,
+    SchemaInt,
     Named(&'static str),
 }
 
@@ -5649,6 +5702,10 @@ impl IntrinsicReturnTy {
             Self::Unknown => Type::Unknown,
             Self::UntrustedString => Type::untrusted(Type::named("String")),
             Self::UntrustedBytes => Type::untrusted(Type::named("Bytes")),
+            Self::SchemaInt => Type::Named {
+                name: "Schema".to_string(),
+                args: vec![Type::named("Int")],
+            },
             Self::Named(name) => Type::named(name),
         }
     }
@@ -5962,6 +6019,11 @@ fn intrinsic_spec_for(name: &str) -> Option<IntrinsicSpec> {
             required_capability: None,
             return_ty: IntrinsicReturnTy::Named("SqlQuery"),
         }),
+        "schema_row" | "schema.row" => Some(IntrinsicSpec {
+            effect: None,
+            required_capability: None,
+            return_ty: IntrinsicReturnTy::SchemaInt,
+        }),
         "fs_read" | "fs.read" => Some(IntrinsicSpec {
             effect: Some("fs.read"),
             required_capability: Some("FsCap"),
@@ -6186,6 +6248,7 @@ fn is_intrinsic_namespace(name: &str) -> bool {
         name,
         "db" | "fs"
             | "sql"
+            | "schema"
             | "http"
             | "httpClient"
             | "json"
@@ -6449,6 +6512,10 @@ fn is_ctx_current_call(name: &str) -> bool {
 
 fn is_sql_q_call(name: &str) -> bool {
     matches!(name, "sql_q" | "sql.q")
+}
+
+fn is_schema_row_call(name: &str) -> bool {
+    matches!(name, "schema_row" | "schema.row")
 }
 
 fn is_cookie_build_call(name: &str) -> bool {

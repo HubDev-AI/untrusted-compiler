@@ -55,6 +55,7 @@ int64_t sec4_rt_set_header(int64_t name, int64_t value);
 int64_t sec4_rt_cookie_build(int64_t name, int64_t value);
 int64_t sec4_rt_set_cookie(int64_t cookie);
 int64_t sec4_rt_sql_q(int64_t query_template, int64_t params);
+int64_t sec4_rt_schema_row(int64_t row_schema);
 int64_t sec4_rt_db_exec(int64_t db, int64_t query);
 int64_t sec4_rt_db_tx(int64_t db);
 int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query);

@@ -258,6 +258,8 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("set_cookie(", "__SEC4_INTRINSIC_SET_COOKIE__(");
     lowered = lowered.replace("sql.q(", "__SEC4_INTRINSIC_SQL_Q__(");
     lowered = lowered.replace("sql_q(", "__SEC4_INTRINSIC_SQL_Q__(");
+    lowered = lowered.replace("schema.row(", "__SEC4_INTRINSIC_SCHEMA_ROW__(");
+    lowered = lowered.replace("schema_row(", "__SEC4_INTRINSIC_SCHEMA_ROW__(");
     lowered = lowered.replace("db.execTx(", "__SEC4_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db_exec_tx(", "__SEC4_INTRINSIC_DB_EXEC_TX__(");
     lowered = lowered.replace("db.tx(", "__SEC4_INTRINSIC_DB_TX__(");
@@ -477,6 +479,7 @@ fn lower_c_expr(expr: &str) -> String {
     lowered = lowered.replace("__SEC4_INTRINSIC_COOKIE_BUILD__(", "sec4_rt_cookie_build(");
     lowered = lowered.replace("__SEC4_INTRINSIC_SET_COOKIE__(", "sec4_rt_set_cookie(");
     lowered = lowered.replace("__SEC4_INTRINSIC_SQL_Q__(", "sec4_rt_sql_q(");
+    lowered = lowered.replace("__SEC4_INTRINSIC_SCHEMA_ROW__(", "sec4_rt_schema_row(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_EXEC__(", "sec4_rt_db_exec(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_TX__(", "sec4_rt_db_tx(");
     lowered = lowered.replace("__SEC4_INTRINSIC_DB_EXEC_TX__(", "sec4_rt_db_exec_tx(");
