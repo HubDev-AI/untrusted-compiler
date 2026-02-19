@@ -11,7 +11,8 @@
           "requestsPerSec": 9000,
           "constantRate": true,
           "loadGenerator": "wrk2",
-          "p99": "18.20ms"
+          "p99": "18.20ms",
+          "rssKb": null
         }
       ],
       "leader": {
@@ -21,7 +22,8 @@
         "requestsPerSec": 9000,
         "constantRate": true,
         "loadGenerator": "wrk2",
-        "p99": "18.20ms"
+        "p99": "18.20ms",
+        "rssKb": null
       }
     },
     {
@@ -34,7 +36,8 @@
           "requestsPerSec": 1100,
           "constantRate": true,
           "loadGenerator": "wrk2",
-          "p99": "92.00ms"
+          "p99": "92.00ms",
+          "rssKb": null
         }
       ],
       "leader": {
@@ -44,7 +47,8 @@
         "requestsPerSec": 1100,
         "constantRate": true,
         "loadGenerator": "wrk2",
-        "p99": "92.00ms"
+        "p99": "92.00ms",
+        "rssKb": null
       }
     }
   ]

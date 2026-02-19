@@ -3,6 +3,9 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I initially validated `.memory.rssKb` with `(.memory.rssKb == null) or ...`, which let missing keys pass because jq resolves absent keys to `null`. | For required JSON keys in jq contracts, always add explicit `has(\"key\")` checks before value-type assertions. |
+| 2026-02-19 | self | I wrote markdown backticks inside a double-quoted `echo` in `publish_report.sh`, which triggered shell command substitution (`rssKb: command not found`). | Avoid backticks in double-quoted shell strings; use plain text or single quotes when emitting markdown-like labels from scripts. |
+| 2026-02-19 | self | I attempted a broad patch update against `test_compare_matrix_contract.sh` and hit context mismatch due local drift in jq block formatting. | Re-open the exact target file segment with `sed -n` and apply minimal anchored hunks for jq contract blocks to avoid patch context failures. |
 | 2026-02-19 | self | Switching `sec4 run` default backend to LASM broke a promotion scaffold test that implicitly relied on old C default behavior. | In tests that validate C-specific scaffold/runtime behavior, always pass `--backend c` explicitly instead of relying on command defaults. |
 | 2026-02-19 | self | I launched three Cargo test commands in parallel while validating the LASM-default slice and repeated the known lock-contention risk pattern. | Keep Cargo execution strictly sequential in this repo; use parallel tool calls only for read/search/non-Cargo commands. |
 | 2026-02-19 | self | I attempted one large multi-hunk patch against `semantic.rs` and hit context mismatch on shifted sections. | For heavily edited files, patch in small anchored hunks after fresh `sed` context snapshots to avoid patch-drift retries. |

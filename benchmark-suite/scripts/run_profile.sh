@@ -64,6 +64,29 @@ warn_wrk_fallback() {
   fi
 }
 
+sample_rss_kb() {
+  local pid="$1"
+  local ps_rss=""
+  if [ -z "$pid" ]; then
+    echo ""
+    return
+  fi
+  if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+    echo ""
+    return
+  fi
+  if ! kill -0 "$pid" >/dev/null 2>&1; then
+    echo ""
+    return
+  fi
+  ps_rss="$(ps -o rss= -p "$pid" 2>/dev/null | awk 'NF { print $1; exit }')"
+  if [[ "$ps_rss" =~ ^[0-9]+$ ]]; then
+    echo "$ps_rss"
+    return
+  fi
+  echo ""
+}
+
 build_wrk_cmd() {
   local script_path="${1:-}"
   local url="$2"
@@ -118,6 +141,10 @@ echo "command: ${cmd[*]}"
 echo "raw: $raw"
 echo "summary: $summary"
 warn_wrk_fallback
+server_pid="${BENCH_SERVER_PID:-}"
+if [ -n "$server_pid" ]; then
+  echo "service pid: ${server_pid}"
+fi
 
 if [ "$dry_run" = "true" ]; then
   if [ "$endpoint" = "users-get" ] && [ -f "$payload_path" ]; then
@@ -162,4 +189,10 @@ else
   "${cmd[@]}" | tee "$raw"
 fi
 
-"${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary"
+rss_kb="$(sample_rss_kb "$server_pid")"
+rss_source="unavailable"
+if [ -n "$rss_kb" ]; then
+  rss_source="ps"
+fi
+
+"${root_dir}/scripts/wrk2_summary.sh" "$raw" "$impl" "$endpoint" "$target" "$summary" "$rss_kb" "$rss_source"

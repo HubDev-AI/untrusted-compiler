@@ -20,7 +20,9 @@ if ! jq -e '
     and (.requestsPerSec | type == "number")
     and (.p99 | type == "string")
     and (.loadGenerator | type == "string")
-    and (.constantRate | type == "boolean");
+    and (.constantRate | type == "boolean")
+    and has("rssKb")
+    and ((.rssKb == null) or (.rssKb | type == "number"));
   def row_eq(a; b):
     a.impl == b.impl
     and a.endpoint == b.endpoint
@@ -28,7 +30,8 @@ if ! jq -e '
     and a.requestsPerSec == b.requestsPerSec
     and a.p99 == b.p99
     and a.loadGenerator == b.loadGenerator
-    and a.constantRate == b.constantRate;
+    and a.constantRate == b.constantRate
+    and a.rssKb == b.rssKb;
 
   .version == "0.1"
   and (.endpoints | type == "array" and length > 0)

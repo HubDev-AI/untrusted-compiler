@@ -95,6 +95,8 @@ Measure end-to-end service behavior across identical implementations:
   - dry-run mode uses `--dry-run-only`,
   - real runs require `wrk2` and implementation toolchains to be present.
 - `users-get` profile seeds one deterministic user before load and passes `BENCH_USER_ID` into `load/wrk2/get_user.lua`.
+- Profile summaries now include `memory.rssKb` and `memory.sampleSource`; matrix/compare outputs propagate leader `rssKb` for throughput/latency/memory baseline visibility.
+- Matrix/step orchestrators automatically pass service PID context into profile runs for RSS sampling (`ps`); standalone `run_profile.sh` can also sample RSS when `BENCH_SERVER_PID` is set.
 - Matrix runs pass selected endpoint set into report bundling, so filtered runs do not accidentally include stale endpoint summaries from previous runs.
 - Per-implementation report bundles now include `selectedEndpoints` metadata when matrix runs are endpoint-filtered.
 - Published markdown reports include explicit endpoint scope in the header (`Endpoints in matrix (...)`) for partial-run clarity.

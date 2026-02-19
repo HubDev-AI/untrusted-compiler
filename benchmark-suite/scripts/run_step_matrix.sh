@@ -220,7 +220,7 @@ for raw_impl in "${impls[@]}"; do
   for raw_endpoint in "${endpoints[@]}"; do
     endpoint="${raw_endpoint// /}"
     [ -z "$endpoint" ] && continue
-    "${root_dir}/scripts/run_step_profile.sh" "$impl" "$endpoint" "$base_url"
+    BENCH_SERVER_PID="$pid" "${root_dir}/scripts/run_step_profile.sh" "$impl" "$endpoint" "$base_url"
     "${root_dir}/scripts/analyze_step_profile.sh" \
       "${summaries_dir}/${impl}-${endpoint}-step.json" \
       "${summaries_dir}/${impl}-${endpoint}-step-analysis.json" \

@@ -64,7 +64,7 @@ for raw_rate in "${rates[@]}"; do
     continue
   fi
 
-  BENCH_DURATION="$step_duration" BENCH_TARGET="$rate" "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
+  BENCH_SERVER_PID="${BENCH_SERVER_PID:-}" BENCH_DURATION="$step_duration" BENCH_TARGET="$rate" "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
   cp "${raw_dir}/${impl}-${endpoint}.txt" "$tagged_raw"
   cp "${sum_dir}/${impl}-${endpoint}.json" "$tagged_summary"
   summary_files+=("$tagged_summary")

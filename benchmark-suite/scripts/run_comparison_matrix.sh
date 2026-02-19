@@ -263,7 +263,7 @@ for impl in "${impls[@]}"; do
   for raw_endpoint in "${endpoints[@]}"; do
     endpoint="${raw_endpoint// /}"
     [ -z "$endpoint" ] && continue
-    "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
+    BENCH_SERVER_PID="$pid" "${root_dir}/scripts/run_profile.sh" "$impl" "$endpoint" "$base_url"
   done
   if { [ "$impl" = "sec4" ] || [ "$impl" = "sec4-lasm" ]; } && [ -n "$sec_audit_path" ]; then
     "${root_dir}/scripts/build_report.sh" "$impl" "$results_dir" "${summaries_dir}/${impl}-report.json" "$sec_audit_path" "$endpoints_csv"
