@@ -1019,5 +1019,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1047-m39-full-suite-saturation-tuning-knob-forwarding.md`
 - `1048-m39-full-suite-saturation-throughput-preset-targets.md`
 - `1049-m39-full-suite-saturation-latency-preset-targets.md`
+- `1050-m39-full-suite-saturation-combined-preset-targets.md`
 
 As milestones progress, chapters will be added and linked from this index.
