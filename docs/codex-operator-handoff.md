@@ -32,6 +32,17 @@ Use it to keep speed high without losing architecture direction.
 2. Perf cleanup in hot paths found during profiling.
 3. Additional parity fixes vs C runtime only where behavior differs.
 
+### P2: Fixed order after DB integration (must follow)
+
+1. Make LASM the default server backend for `sec4 run` (C remains explicit fallback).
+2. Run LASM stability/load hardening on the default path (throughput/latency/memory regressions tracked).
+3. Implement DB adapter progression behind the same intrinsic surface:
+   - file adapter (`records.log`) remains v1 alpha,
+   - SQLite adapter is next,
+   - external DB adapters are post-alpha.
+4. Finalize one canonical LASM+DB operator flow (`init/check/build/run/load-test`) with reproducible docs.
+5. Only then move capacity to WASM/browser track.
+
 ## 4) DB Status (Explicit)
 
 Current LASM DB is **not** a full DB client yet.
@@ -143,6 +154,7 @@ Read first:
 Execution mode:
 - Implementation-first.
 - Focus now: LASM DB parity (real intrinsic path), not composition analyzer.
+- After DB parity: follow P2 order exactly (LASM default -> load hardening -> SQLite adapter -> alpha usability -> WASM).
 - Keep Cargo runs sequential.
 - Run only targeted tests for touched behavior.
 
