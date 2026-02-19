@@ -8597,12 +8597,24 @@ fn lasm_cluster_backend_connect_timeout() -> Duration {
     Duration::from_millis(250)
 }
 
-fn refresh_lasm_cluster_worker_ports_snapshot(
+fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
+    last_published_ports: &mut Vec<u16>,
 ) {
-    let ports = state.workers.iter().map(|worker| worker.port).collect::<Vec<_>>();
-    snapshot.store(Arc::new(ports));
+    if state.workers.len() == last_published_ports.len()
+        && state
+            .workers
+            .iter()
+            .zip(last_published_ports.iter())
+            .all(|(worker, port)| worker.port == *port)
+    {
+        return;
+    }
+
+    last_published_ports.clear();
+    last_published_ports.extend(state.workers.iter().map(|worker| worker.port));
+    snapshot.store(Arc::new(last_published_ports.clone()));
 }
 
 fn desired_lasm_cluster_instances(
@@ -8888,6 +8900,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
+            let mut last_published_worker_ports = autoscale_worker_ports.load().as_ref().clone();
             let mut last_scale_eval_at = Instant::now()
                 .checked_sub(Duration::from_millis(autoscale_config.autoscale_check_ms))
                 .unwrap_or_else(Instant::now);
@@ -8903,7 +8916,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
                 recover_lasm_cluster_min_workers(&mut state, &autoscale_config, "worker recovery");
-                refresh_lasm_cluster_worker_ports_snapshot(&state, &autoscale_worker_ports);
+                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                    &state,
+                    &autoscale_worker_ports,
+                    &mut last_published_worker_ports,
+                );
                 if !autoscale_enabled {
                     continue;
                 }
@@ -8988,7 +9005,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                     last_scale_down_at = Some(now);
                 }
-                refresh_lasm_cluster_worker_ports_snapshot(&state, &autoscale_worker_ports);
+                refresh_lasm_cluster_worker_ports_snapshot_if_changed(
+                    &state,
+                    &autoscale_worker_ports,
+                    &mut last_published_worker_ports,
+                );
             }
         })
     };
