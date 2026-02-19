@@ -27,6 +27,7 @@ Keeping C as explicit fallback preserves compatibility for paths still tied to n
 3. Tests:
    - C-only guard tests now pass `--backend c` explicitly,
    - added help-surface test asserting `run --help` reports `[default: lasm]`,
+   - added oneshot integration coverage showing LASM-only flags are accepted when backend is omitted (implicit LASM default),
    - promotion run test that depends on C behavior now opts into explicit `--backend c`.
 
 ## Inputs / Outputs and Constraints
@@ -39,6 +40,7 @@ Outputs:
 
 Constraints:
 - LASM-only flags remain LASM-only (unchanged diagnostics),
+- LASM-only flags are valid on default runs because omitted backend now resolves to LASM,
 - C fallback remains opt-in via explicit `--backend c`.
 
 ## Failure Modes and Diagnostics
