@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I ran initial LASM async smoke probes against `/health`, but the benchmark service exposes `/ping`, so the first output was a false 404 route miss. | For `lasm-smoke` checks, always confirm the service route table (`src/main.ut`) first and align `--route`/`--request-path` before interpreting async/backpressure behavior. |
 | 2026-02-19 | self | Wrote a multiline UT call with a trailing comma before `);` in a new LASM example route, causing parser `P2201 expected expression`. | In `.ut` fixture/example edits, keep call argument lists trailing-comma-free unless parser support is explicit; run `sec4 check` immediately after writing route-heavy files. |
 | 2026-02-19 | self | Assumed `headers.value(...)` accepted `HeaderValue` from `validate.headerValue(...)`; semantic check requires `String` and failed with `E4001`. | For header value flows in examples/routes, pass `String`-typed values into `headers.value(...)` (for example via `validate.nonEmpty(...)`) and keep `validate.headerValue(...)` demonstrations separate. |
 | 2026-02-19 | self | I launched two Cargo validations in parallel while checking LASM DB changes, which reintroduced package/build lock contention noise. | Keep Cargo execution strictly sequential in this repo; use parallel tool calls only for read/search commands. |
