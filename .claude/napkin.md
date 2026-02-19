@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I emitted an empty TSV field from `jq @tsv` for missing `rssKb`, and Bash `read` collapsed whitespace delimiters so downstream columns shifted silently. | Never emit empty middle TSV fields for `read`-parsed contracts; use explicit sentinel tokens (for example `null`) to preserve column alignment. |
 | 2026-02-19 | self | I continued a new slice on the previously merged branch and had to recover via stash/pop, which caused avoidable doc conflicts. | After each merge, immediately fetch and branch fresh from `origin/dev` before any new edits to keep slices isolated and conflict-free. |
 | 2026-02-19 | self | I initially validated `.memory.rssKb` with `(.memory.rssKb == null) or ...`, which let missing keys pass because jq resolves absent keys to `null`. | For required JSON keys in jq contracts, always add explicit `has(\"key\")` checks before value-type assertions. |
 | 2026-02-19 | self | I wrote markdown backticks inside a double-quoted `echo` in `publish_report.sh`, which triggered shell command substitution (`rssKb: command not found`). | Avoid backticks in double-quoted shell strings; use plain text or single quotes when emitting markdown-like labels from scripts. |
