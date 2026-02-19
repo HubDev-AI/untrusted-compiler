@@ -19,6 +19,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --autoscale-check-ms 250 \
   --autoscale-scale-up-cooldown-ms 123 \
   --autoscale-scale-down-cooldown-ms 456 \
+  --autoscale-scale-up-step 5 \
+  --autoscale-scale-down-step 2 \
   --cluster-relay-workers 9 \
   --cluster-relay-queue 999 \
   --out results/summaries/custom-lasm-capacity.json \
@@ -42,6 +44,14 @@ if ! grep -q 'autoscaleScaleUpCooldownMs=123' <<<"$out"; then
 fi
 if ! grep -q 'autoscaleScaleDownCooldownMs=456' <<<"$out"; then
   echo "lasm capacity probe dry-run missing scale-down cooldown output" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleScaleUpStep=5' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing scale-up step output" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleScaleDownStep=2' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing scale-down step output" >&2
   exit 1
 fi
 if ! grep -q 'clusterRelayWorkers=9' <<<"$out"; then

@@ -23,6 +23,8 @@ Options:
   --autoscale-check-ms <n>                         LASM autoscale check interval (default: 1000)
   --autoscale-scale-up-cooldown-ms <n>             LASM scale-up cooldown (default: 250)
   --autoscale-scale-down-cooldown-ms <n>           LASM scale-down cooldown (default: 2000)
+  --autoscale-scale-up-step <n>                    LASM max scale-up workers per autoscale check (default: 2)
+  --autoscale-scale-down-step <n>                  LASM max scale-down workers per autoscale check (default: 1)
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
@@ -51,6 +53,8 @@ autoscale_target_connections="${LASM_CAPACITY_AUTOSCALE_TARGET_CONNECTIONS:-256}
 autoscale_check_ms="${LASM_CAPACITY_AUTOSCALE_CHECK_MS:-1000}"
 autoscale_scale_up_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_COOLDOWN_MS:-250}"
 autoscale_scale_down_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_COOLDOWN_MS:-2000}"
+autoscale_scale_up_step="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_STEP:-2}"
+autoscale_scale_down_step="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_STEP:-1}"
 cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
@@ -115,6 +119,14 @@ while [ "$#" -gt 0 ]; do
       autoscale_scale_down_cooldown_ms="${2:-}"
       shift 2
       ;;
+    --autoscale-scale-up-step)
+      autoscale_scale_up_step="${2:-}"
+      shift 2
+      ;;
+    --autoscale-scale-down-step)
+      autoscale_scale_down_step="${2:-}"
+      shift 2
+      ;;
     --cluster-relay-workers)
       cluster_relay_workers="${2:-}"
       shift 2
@@ -147,7 +159,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-for field in threads connections target_requests port instances autoscale_max_instances autoscale_target_connections autoscale_check_ms autoscale_scale_up_cooldown_ms autoscale_scale_down_cooldown_ms; do
+for field in threads connections target_requests port instances autoscale_max_instances autoscale_target_connections autoscale_check_ms autoscale_scale_up_cooldown_ms autoscale_scale_down_cooldown_ms autoscale_scale_up_step autoscale_scale_down_step; do
   value="${!field}"
   if ! is_number "$value"; then
     echo "${field//_/-} must be numeric, got: $value" >&2
@@ -212,6 +224,8 @@ sec4 LASM cluster capacity probe plan:
   autoscaleCheckMs=$autoscale_check_ms
   autoscaleScaleUpCooldownMs=$autoscale_scale_up_cooldown_ms
   autoscaleScaleDownCooldownMs=$autoscale_scale_down_cooldown_ms
+  autoscaleScaleUpStep=$autoscale_scale_up_step
+  autoscaleScaleDownStep=$autoscale_scale_down_step
   clusterRelayWorkers=${cluster_relay_workers:-auto}
   clusterRelayQueue=${cluster_relay_queue:-auto}
   skipBuild=$skip_build
@@ -252,6 +266,8 @@ run_args=(
   --autoscale-check-ms "$autoscale_check_ms"
   --autoscale-scale-up-cooldown-ms "$autoscale_scale_up_cooldown_ms"
   --autoscale-scale-down-cooldown-ms "$autoscale_scale_down_cooldown_ms"
+  --autoscale-scale-up-step "$autoscale_scale_up_step"
+  --autoscale-scale-down-step "$autoscale_scale_down_step"
 )
 if [ -n "$cluster_relay_workers" ]; then
   run_args+=(--cluster-relay-workers "$cluster_relay_workers")
@@ -381,6 +397,8 @@ jq -n \
   --argjson autoscaleCheckMs "$autoscale_check_ms" \
   --argjson autoscaleScaleUpCooldownMs "$autoscale_scale_up_cooldown_ms" \
   --argjson autoscaleScaleDownCooldownMs "$autoscale_scale_down_cooldown_ms" \
+  --argjson autoscaleScaleUpStep "$autoscale_scale_up_step" \
+  --argjson autoscaleScaleDownStep "$autoscale_scale_down_step" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   '{
@@ -403,6 +421,8 @@ jq -n \
       autoscaleCheckMs: $autoscaleCheckMs,
       autoscaleScaleUpCooldownMs: $autoscaleScaleUpCooldownMs,
       autoscaleScaleDownCooldownMs: $autoscaleScaleDownCooldownMs,
+      autoscaleScaleUpStep: $autoscaleScaleUpStep,
+      autoscaleScaleDownStep: $autoscaleScaleDownStep,
       clusterRelayWorkers: $relayWorkers,
       clusterRelayQueue: $relayQueue
     },

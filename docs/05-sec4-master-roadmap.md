@@ -339,7 +339,7 @@ Post-alpha track acceptance anchors:
 - [x] Naming-lock contract suite now executes LASM DB adapter smoke script contract + guard checks so adapter smoke script drift fails CI through the standard script-contract path (`docs/book/1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`).
 - [x] Runtime-smoke CI workflow now executes LASM DB adapter smoke lanes (`records-log` and `sqlite`) in addition to hello-api lanes, with runtime-smoke workflow contract + guard coverage updated to lock both adapter-step tokens and preserve bundle-check enforcement (`docs/book/1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`).
 - [x] Milestone closure gate `M16-C` now enforces runtime-smoke DB adapter lane tokens (records-log + sqlite) alongside hello-api lanes, and closure fixture coverage was updated to keep strict gate evaluation deterministic (`docs/book/1030-m39-closure-gate-runtime-smoke-db-adapter-lane-enforcement.md`).
-- [x] Runtime-smoke bundle validation now enforces LASM DB adapter artifact branch contracts (`lasm-db-records-log`, `lasm-db-sqlite`) via a dedicated db-adapter checker, and closure gate `M16-D` now requires naming-lock coverage for that checker (`docs/book/1031-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`).
+- [x] Runtime-smoke bundle validation now enforces LASM DB adapter artifact branch contracts (`lasm-db-records-log`, `lasm-db-sqlite`) via a dedicated db-adapter checker, and closure gate `M16-D` now requires naming-lock coverage for that checker (`docs/book/1033-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -458,16 +458,22 @@ Post-alpha track acceptance anchors:
      - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
      - documented in `docs/book/1027-m39-lasm-worker-dispatch-crossbeam-channel.md`.
    - [x] Added autoscale hysteresis controls for cluster worker scaling:
-     - new LASM flags: `--autoscale-scale-up-cooldown-ms` and `--autoscale-scale-down-cooldown-ms`,
-     - autoscaler now enforces separate up/down cooldown windows to reduce worker-count thrash on bursty traffic,
+     - new LASM flags: `--autoscale-scale-up-cooldown-ms`, `--autoscale-scale-down-cooldown-ms`, `--autoscale-scale-up-step`, and `--autoscale-scale-down-step`,
+     - autoscaler now enforces separate up/down cooldown windows and bounded per-check scale steps to reduce worker-count thrash on bursty traffic,
      - flags stay LASM-only with deterministic validation and guard diagnostics.
-     - documented in `docs/book/1028-m39-lasm-autoscale-cooldown-hysteresis-controls.md`.
+     - LASM cluster capacity probe script now supports these step controls for benchmark runs.
+     - documented in `docs/book/1031-m39-lasm-autoscale-step-window-controls.md`.
    - [x] Added dedicated LASM cluster capacity probe tooling:
      - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
      - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
      - dry-run contract coverage added in benchmark suite script tests.
      - first 1M-threshold run evidence: `1,278,004` requests in `20s` (`~63.6k req/s`, peak RSS `~10,464 KB`) with tuned relay settings (`workers=32`, `queue=4096`).
      - documented in `docs/book/1029-m39-lasm-cluster-capacity-probe-tooling.md`.
+   - [x] Added saturation-triggered autoscale boost in cluster proxy mode:
+     - relay queue full events are counted and consumed by autoscaler each check window,
+     - saturation pressure can raise `desired` worker count immediately (bounded by autoscale step and max instance caps) instead of relying only on active-connection heuristic,
+     - cooldown and per-check step windows remain enforced.
+     - documented in `docs/book/1032-m39-lasm-autoscale-saturation-boost.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
