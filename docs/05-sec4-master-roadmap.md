@@ -432,6 +432,10 @@ Post-alpha track acceptance anchors:
      - `--autoscale-max-instances`, `--autoscale-target-connections`, `--autoscale-check-ms` add adaptive worker scaling controls.
      - documented in `docs/book/1018-m39-lasm-run-cluster-front-proxy-and-autoscale.md`.
    - [x] Added command coverage for cluster guardrails and cluster serving path.
+   - [x] Added fast fixed-cluster shared-port mode (`SO_REUSEPORT`) for LASM:
+     - when `--instances == --autoscale-max-instances`, workers bind one shared port without front-proxy relay.
+     - benchmark probes show improved throughput vs proxy-cluster path (for example ~96k req/s on `/ping` in local wrk profile).
+     - documented in `docs/book/1019-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

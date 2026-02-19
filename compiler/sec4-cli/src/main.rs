@@ -10,6 +10,7 @@ use sec4_core::{
     AuditHistoryWindowSummary, AuditReport, AuditSeverity, BackendEmitOutput, BackendKind,
     Diagnostic, Policy,
 };
+use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -85,6 +86,8 @@ enum Commands {
         autoscale_target_connections: Option<usize>,
         #[arg(long, default_value_t = 1000)]
         autoscale_check_ms: u64,
+        #[arg(long, hide = true, default_value_t = false)]
+        reuse_port: bool,
         #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -431,6 +434,7 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            reuse_port,
             backend,
             tls_backend,
         } => cmd_run(
@@ -450,6 +454,7 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            reuse_port,
             backend,
             tls_backend,
         ),
@@ -1489,9 +1494,7 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
 
 fn persist_lasm_dynamic_db_records_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
     match state.db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => {
-            persist_lasm_dynamic_db_records_to_records_log(state)
-        }
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(state),
         LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
     }
 }
@@ -1560,12 +1563,13 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
             path.display()
         )
     })?;
-    tx.execute("DELETE FROM lasm_db_records", []).map_err(|err| {
-        format!(
-            "could not clear LASM dynamic sqlite records store `{}`: {err}",
-            path.display()
-        )
-    })?;
+    tx.execute("DELETE FROM lasm_db_records", [])
+        .map_err(|err| {
+            format!(
+                "could not clear LASM dynamic sqlite records store `{}`: {err}",
+                path.display()
+            )
+        })?;
     let mut ordered = state.db_records.clone();
     ordered.sort_by_key(|record| record.id);
     let mut statement = tx
@@ -7729,6 +7733,7 @@ fn cmd_run(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    reuse_port: bool,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
@@ -7818,6 +7823,10 @@ fn cmd_run(
         eprintln!("run failed: --autoscale-check-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && reuse_port {
+        eprintln!("run failed: --reuse-port is only supported with --backend lasm");
+        return Err(2);
+    }
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
@@ -7863,6 +7872,7 @@ fn cmd_run(
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            reuse_port,
         );
     }
 
@@ -8196,6 +8206,7 @@ struct LasmClusterConfig {
     target_connections_per_instance: usize,
     autoscale_check_ms: u64,
     worker_ready_timeout_ms: u64,
+    reuse_port_workers: bool,
 }
 
 #[derive(Debug)]
@@ -8253,6 +8264,9 @@ fn spawn_lasm_cluster_worker(
         .arg(worker_port.to_string())
         .arg("--instances")
         .arg("1");
+    if config.reuse_port_workers {
+        cmd.arg("--reuse-port");
+    }
 
     push_optional_u64_run_arg(&mut cmd, "--max-header-bytes", config.max_header_bytes);
     push_optional_u64_run_arg(&mut cmd, "--max-body-bytes", config.max_body_bytes);
@@ -8318,14 +8332,46 @@ fn wait_for_lasm_cluster_worker_ready(
     }
 }
 
+fn wait_for_lasm_cluster_worker_alive(
+    child: &mut Child,
+    worker_port: u16,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let grace_ms = timeout_ms.clamp(200, 2000);
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "LASM cluster worker on port {worker_port} exited early with status {status}"
+                ));
+            }
+            Ok(None) => {
+                if start.elapsed() >= Duration::from_millis(grace_ms) {
+                    return Ok(());
+                }
+            }
+            Err(err) => {
+                return Err(format!(
+                    "could not check LASM cluster worker status on port {worker_port}: {err}"
+                ));
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn spawn_and_wait_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
 ) -> Result<LasmClusterWorker, String> {
     let mut child = spawn_lasm_cluster_worker(config, worker_port)?;
-    if let Err(err) =
+    let wait_result = if config.reuse_port_workers {
+        wait_for_lasm_cluster_worker_alive(&mut child, worker_port, config.worker_ready_timeout_ms)
+    } else {
         wait_for_lasm_cluster_worker_ready(&mut child, worker_port, config.worker_ready_timeout_ms)
-    {
+    };
+    if let Err(err) = wait_result {
         let _ = child.kill();
         let _ = child.wait();
         return Err(err);
@@ -8405,12 +8451,6 @@ fn relay_lasm_cluster_connection(
     let mut client_read = client
         .try_clone()
         .map_err(|err| format!("could not clone client stream for proxy read: {err}"))?;
-    let mut client_write = client
-        .try_clone()
-        .map_err(|err| format!("could not clone client stream for proxy write: {err}"))?;
-    let mut upstream_read = upstream
-        .try_clone()
-        .map_err(|err| format!("could not clone upstream stream for proxy read: {err}"))?;
     let mut upstream_write = upstream
         .try_clone()
         .map_err(|err| format!("could not clone upstream stream for proxy write: {err}"))?;
@@ -8420,9 +8460,9 @@ fn relay_lasm_cluster_connection(
         let _ = upstream_write.shutdown(Shutdown::Write);
     });
 
-    let upstream_to_client = std::io::copy(&mut upstream_read, &mut client_write)
+    let upstream_to_client = std::io::copy(upstream, client)
         .map_err(|err| format!("could not relay upstream response to client: {err}"));
-    let _ = client_write.shutdown(Shutdown::Write);
+    let _ = client.shutdown(Shutdown::Write);
     let _ = client_to_upstream.join();
     upstream_to_client.map(|_| ())
 }
@@ -8434,6 +8474,70 @@ fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
     }
     state.workers.clear();
     state.round_robin_index = 0;
+}
+
+fn bind_lasm_listener(listen_port: u16, reuse_port: bool) -> Result<TcpListener, String> {
+    if !reuse_port {
+        return TcpListener::bind(("127.0.0.1", listen_port)).map_err(|err| {
+            format!("could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}")
+        });
+    }
+
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))
+        .map_err(|err| format!("could not create LASM reuse-port socket: {err}"))?;
+    socket.set_reuse_address(true).map_err(|err| {
+        format!("could not set LASM reuse-port socket option SO_REUSEADDR: {err}")
+    })?;
+    #[cfg(unix)]
+    socket.set_reuse_port(true).map_err(|err| {
+        format!("could not set LASM reuse-port socket option SO_REUSEPORT: {err}")
+    })?;
+
+    let addr = std::net::SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, listen_port);
+    socket.bind(&addr.into()).map_err(|err| {
+        format!("could not bind LASM reuse-port listener on 127.0.0.1:{listen_port}: {err}")
+    })?;
+    socket.listen(1024).map_err(|err| {
+        format!("could not listen on LASM reuse-port listener 127.0.0.1:{listen_port}: {err}")
+    })?;
+
+    Ok(socket.into())
+}
+
+fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Result<(), i32> {
+    let mut state = LasmClusterState {
+        workers: Vec::new(),
+        round_robin_index: 0,
+        next_port: config.listen_port,
+    };
+    for _ in 0..config.min_instances {
+        match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {
+            Ok(worker) => state.workers.push(worker),
+            Err(message) => {
+                stop_lasm_cluster_workers(&mut state);
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        }
+    }
+    if state.workers.is_empty() {
+        eprintln!("run failed: could not bootstrap LASM reuse-port workers");
+        return Err(2);
+    }
+
+    loop {
+        std::thread::sleep(Duration::from_millis(config.autoscale_check_ms.max(200)));
+        prune_dead_lasm_cluster_workers(&mut state);
+        while state.workers.len() < config.min_instances {
+            match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {
+                Ok(worker) => state.workers.push(worker),
+                Err(message) => {
+                    eprintln!("warning: LASM reuse-port worker recovery failed: {message}");
+                    break;
+                }
+            }
+        }
+    }
 }
 
 fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
@@ -8636,6 +8740,7 @@ fn cmd_run_lasm_backend(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    reuse_port: bool,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -8835,6 +8940,30 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: cluster mode does not support --oneshot");
         return Err(2);
     }
+    let fixed_cluster_reuse_port_mode = cluster_mode && max_instances == instances;
+    if fixed_cluster_reuse_port_mode {
+        return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
+            path: path.to_path_buf(),
+            listen_port: port.unwrap_or(8080),
+            max_header_bytes,
+            max_body_bytes,
+            max_concurrency,
+            max_pending,
+            serve_timeout_ms,
+            overflow_probe_timeout_ms: Some(overflow_probe_timeout_ms),
+            max_runtime_steps,
+            max_keep_alive_requests,
+            db_base: db_base.map(Path::to_path_buf),
+            min_instances: instances,
+            max_instances,
+            target_connections_per_instance: autoscale_target_connections
+                .unwrap_or(effective_max_in_flight)
+                .max(1),
+            autoscale_check_ms,
+            worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            reuse_port_workers: true,
+        });
+    }
     if cluster_mode {
         let target_connections_per_instance = autoscale_target_connections
             .unwrap_or(effective_max_in_flight)
@@ -8856,6 +8985,7 @@ fn cmd_run_lasm_backend(
             target_connections_per_instance,
             autoscale_check_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            reuse_port_workers: false,
         });
     }
 
@@ -8868,12 +8998,10 @@ fn cmd_run_lasm_backend(
         return Err(1);
     }
     let listen_port = port.unwrap_or(8080);
-    let listener = match TcpListener::bind(("127.0.0.1", listen_port)) {
+    let listener = match bind_lasm_listener(listen_port, reuse_port) {
         Ok(listener) => listener,
-        Err(err) => {
-            eprintln!(
-                "run failed: could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}"
-            );
+        Err(message) => {
+            eprintln!("run failed: {message}");
             return Err(2);
         }
     };

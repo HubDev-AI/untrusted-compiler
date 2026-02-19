@@ -15,13 +15,14 @@ Use it to keep speed high without losing architecture direction.
 2. LASM async runtime is heavily implemented (`M39-S2B` advanced and benchmarked).
 3. LASM DB parity for active intrinsics is done on file-backed adapter v1 (`records.log`).
 4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
-5. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
+5. Fixed-cluster fast path is available through shared-port workers (reuse-port mode when `instances == autoscale-max-instances`).
+6. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
 
 ## 3) Backlog Priority (Immediate)
 
 ### P0: LASM scale hardening to higher RPS ceilings (implementation-first)
 
-1. Optimize front proxy + worker dispatch hot path (current bottleneck before 1M req/s goal).
+1. Optimize front proxy + worker dispatch hot path (current bottleneck before 1M req/s goal in dynamic/autoscale mode).
 2. Reduce per-connection overhead in cluster mode (threading/copy path) and re-benchmark.
 3. Keep deterministic overload/error behavior while tuning performance.
 4. Produce repeatable throughput+latency+RSS evidence from cluster mode runs.

@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I assumed `std::io::copy_bidirectional` was available in this toolchain and replaced proxy relay with it, which failed compile (`E0425`). | Verify std API availability against the active Rust version before swapping I/O primitives; for compatibility keep relay logic on supported `std::io::copy` flows unless gated by explicit version checks. |
+| 2026-02-19 | self | I wrote a benchmarking shell helper using `trap ... RETURN`, which is not valid in the active `zsh` invocation mode and aborted the benchmark script. | Keep benchmark scripts shell-portable in this repo: avoid `RETURN` traps and use explicit cleanup steps or EXIT-only traps. |
 | 2026-02-19 | self | I fired two targeted Cargo tests in parallel while validating the new LASM cluster flags and immediately reintroduced package/build lock wait noise. | Keep Cargo validation strictly sequential in this repo, even for tiny targeted tests; parallelize only read/search commands. |
 | 2026-02-19 | self | I emitted an empty TSV field from `jq @tsv` for missing `rssKb`, and Bash `read` collapsed whitespace delimiters so downstream columns shifted silently. | Never emit empty middle TSV fields for `read`-parsed contracts; use explicit sentinel tokens (for example `null`) to preserve column alignment. |
 | 2026-02-19 | self | I continued a new slice on the previously merged branch and had to recover via stash/pop, which caused avoidable doc conflicts. | After each merge, immediately fetch and branch fresh from `origin/dev` before any new edits to keep slices isolated and conflict-free. |
