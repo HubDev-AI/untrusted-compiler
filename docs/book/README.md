@@ -980,5 +980,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1012-m39-benchmark-trend-ci-rss-threshold-enforcement.md`
 - `1013-m39-benchmark-evidence-quality-rss-warning-enforcement.md`
 - `1014-m39-trend-note-baseline-rss-guard-evaluation.md`
+- `1015-m39-lasm-db-sqlite-adapter-baseline.md`
 
 As milestones progress, chapters will be added and linked from this index.

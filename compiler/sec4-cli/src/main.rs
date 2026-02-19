@@ -1,5 +1,6 @@
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
     build_security_map_with_allows, emit_program_with_backend, parse_source,
@@ -1147,12 +1148,21 @@ enum LasmDbOperationPlan {
     },
 }
 
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+enum LasmDbRecordsAdapter {
+    #[default]
+    RecordsLog,
+    Sqlite,
+}
+
 #[derive(Debug, Default)]
 struct LasmDynamicResponseState {
     users_by_id: HashMap<String, serde_json::Value>,
     users_store_path: Option<PathBuf>,
     db_records: Vec<LasmDbRecord>,
+    db_records_adapter: LasmDbRecordsAdapter,
     db_records_store_path: Option<PathBuf>,
+    db_records_sqlite_store_path: Option<PathBuf>,
     db_tx_handles: HashMap<i64, i64>,
     next_db_tx_handle: i64,
     next_db_record_id: u64,
@@ -1186,15 +1196,23 @@ const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema"
 fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDynamicResponseState {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
+    let db_records_adapter = resolve_lasm_dynamic_db_records_adapter();
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
+    let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
     let users_by_id = users_store_path
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
         .unwrap_or_default();
-    let db_records = db_records_store_path
-        .as_ref()
-        .map(|path| load_lasm_dynamic_db_records_from_disk(path.as_path()))
-        .unwrap_or_default();
+    let db_records = match db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => db_records_store_path
+            .as_ref()
+            .map(|path| load_lasm_dynamic_db_records_from_disk(path.as_path()))
+            .unwrap_or_default(),
+        LasmDbRecordsAdapter::Sqlite => db_records_sqlite_store_path
+            .as_ref()
+            .map(|path| load_lasm_dynamic_db_records_from_sqlite(path.as_path()))
+            .unwrap_or_default(),
+    };
     let next_db_record_id = db_records
         .iter()
         .map(|record| record.id)
@@ -1218,7 +1236,9 @@ fn build_lasm_dynamic_response_state(explicit_db_base: Option<&Path>) -> LasmDyn
         users_by_id,
         users_store_path,
         db_records,
+        db_records_adapter,
         db_records_store_path,
+        db_records_sqlite_store_path,
         db_tx_handles,
         next_db_tx_handle,
         next_db_record_id,
@@ -1235,6 +1255,28 @@ fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<Pa
         return None;
     }
     Some(PathBuf::from(value))
+}
+
+fn resolve_lasm_dynamic_db_records_adapter() -> LasmDbRecordsAdapter {
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_DB_ADAPTER") else {
+        return LasmDbRecordsAdapter::RecordsLog;
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    if normalized.is_empty()
+        || normalized == "records"
+        || normalized == "records.log"
+        || normalized == "records-log"
+    {
+        return LasmDbRecordsAdapter::RecordsLog;
+    }
+    if normalized == "sqlite" {
+        return LasmDbRecordsAdapter::Sqlite;
+    }
+    eprintln!(
+        "warning: unsupported SEC4_RT_LASM_DB_ADAPTER value `{}`; defaulting to records.log adapter",
+        raw.trim()
+    );
+    LasmDbRecordsAdapter::RecordsLog
 }
 
 fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {
@@ -1343,7 +1385,97 @@ fn load_lasm_dynamic_db_records_from_disk(path: &Path) -> Vec<LasmDbRecord> {
     records
 }
 
+fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
+    if !path.exists() {
+        return Vec::new();
+    }
+    let connection = match Connection::open(path) {
+        Ok(connection) => connection,
+        Err(err) => {
+            eprintln!(
+                "warning: LASM dynamic sqlite records store open failed at `{}`: {err}",
+                path.display()
+            );
+            return Vec::new();
+        }
+    };
+    if let Err(err) = ensure_lasm_dynamic_db_records_sqlite_schema(&connection) {
+        eprintln!(
+            "warning: LASM dynamic sqlite records schema check failed at `{}`: {err}",
+            path.display()
+        );
+        return Vec::new();
+    }
+    let mut statement = match connection.prepare(
+        "SELECT id, op, db, template, params, tx, created_at_ms \
+         FROM lasm_db_records \
+         ORDER BY id ASC",
+    ) {
+        Ok(statement) => statement,
+        Err(err) => {
+            eprintln!(
+                "warning: LASM dynamic sqlite records query prep failed at `{}`: {err}",
+                path.display()
+            );
+            return Vec::new();
+        }
+    };
+    let entries = match statement.query_map([], |row| {
+        let id = row.get::<_, i64>(0)?;
+        if id < 0 {
+            return Err(rusqlite::Error::IntegralValueOutOfRange(0, id));
+        }
+        let created_at_ms = row.get::<_, i64>(6)?;
+        if created_at_ms < 0 {
+            return Err(rusqlite::Error::IntegralValueOutOfRange(6, created_at_ms));
+        }
+        Ok(LasmDbRecord {
+            id: id as u64,
+            op: row.get(1)?,
+            db: row.get(2)?,
+            template: row.get(3)?,
+            params: row.get(4)?,
+            tx: row.get(5)?,
+            created_at_ms: created_at_ms as u64,
+        })
+    }) {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!(
+                "warning: LASM dynamic sqlite records query failed at `{}`: {err}",
+                path.display()
+            );
+            return Vec::new();
+        }
+    };
+    let mut records = Vec::new();
+    for (index, entry) in entries.enumerate() {
+        match entry {
+            Ok(record) => records.push(record),
+            Err(err) => {
+                eprintln!(
+                    "warning: LASM dynamic sqlite records parse failed at `{}` row {}: {err}",
+                    path.display(),
+                    index + 1
+                );
+            }
+        }
+    }
+    records
+}
+
 fn persist_lasm_dynamic_db_records_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
+    match state.db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => {
+            persist_lasm_dynamic_db_records_to_records_log(state)
+        }
+        LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
+    }
+}
+
+fn persist_lasm_dynamic_db_records_to_records_log(
+    state: &LasmDynamicResponseState,
+) -> Result<(), String> {
     let Some(path) = state.db_records_store_path.as_ref() else {
         return Ok(());
     };
@@ -1371,6 +1503,113 @@ fn persist_lasm_dynamic_db_records_to_disk(state: &LasmDynamicResponseState) -> 
         )
     })?;
     Ok(())
+}
+
+fn persist_lasm_dynamic_db_records_to_sqlite(
+    state: &LasmDynamicResponseState,
+) -> Result<(), String> {
+    let Some(path) = state.db_records_sqlite_store_path.as_ref() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic sqlite records store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let mut connection = Connection::open(path).map_err(|err| {
+        format!(
+            "could not open LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
+        format!(
+            "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
+            path.display()
+        )
+    })?;
+    let tx = connection.transaction().map_err(|err| {
+        format!(
+            "could not start LASM dynamic sqlite records transaction `{}`: {err}",
+            path.display()
+        )
+    })?;
+    tx.execute("DELETE FROM lasm_db_records", []).map_err(|err| {
+        format!(
+            "could not clear LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    let mut ordered = state.db_records.clone();
+    ordered.sort_by_key(|record| record.id);
+    let mut statement = tx
+        .prepare(
+            "INSERT INTO lasm_db_records \
+             (id, op, db, template, params, tx, created_at_ms) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )
+        .map_err(|err| {
+            format!(
+                "could not prepare LASM dynamic sqlite records insert `{}`: {err}",
+                path.display()
+            )
+        })?;
+    for record in &ordered {
+        let id = i64::try_from(record.id).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record id {}: out of i64 range",
+                record.id
+            )
+        })?;
+        let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record timestamp {}: out of i64 range",
+                record.created_at_ms
+            )
+        })?;
+        statement
+            .execute(params![
+                id,
+                record.op.as_str(),
+                record.db,
+                record.template.as_str(),
+                record.params.as_str(),
+                record.tx,
+                created_at_ms
+            ])
+            .map_err(|err| {
+                format!(
+                    "could not insert LASM dynamic sqlite record {} into `{}`: {err}",
+                    record.id,
+                    path.display()
+                )
+            })?;
+    }
+    drop(statement);
+    tx.commit().map_err(|err| {
+        format!(
+            "could not commit LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
+fn ensure_lasm_dynamic_db_records_sqlite_schema(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS lasm_db_records (
+            id INTEGER PRIMARY KEY NOT NULL,
+            op TEXT NOT NULL,
+            db INTEGER NOT NULL,
+            template TEXT NOT NULL,
+            params TEXT NOT NULL,
+            tx INTEGER NOT NULL,
+            created_at_ms INTEGER NOT NULL
+        );",
+    )
 }
 
 fn lasm_db_record_from_json(value: &serde_json::Value) -> Option<LasmDbRecord> {
