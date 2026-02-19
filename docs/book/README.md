@@ -989,5 +989,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1021-m39-lasm-fixed-cluster-reuseport-fast-path.md`
 - `1022-m39-lasm-cluster-relay-worker-pool.md`
 - `1023-m39-lasm-cluster-relay-tuning-flags.md`
+- `1024-m39-lasm-worker-dispatch-crossbeam-channel.md`
 
 As milestones progress, chapters will be added and linked from this index.

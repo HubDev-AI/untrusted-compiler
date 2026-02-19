@@ -1,5 +1,6 @@
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use crossbeam_channel::{bounded, TrySendError};
 use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
@@ -18,7 +19,6 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{sync_channel, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -8700,25 +8700,17 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
-    let (relay_sender, relay_receiver) = sync_channel::<TcpStream>(relay_queue_capacity);
-    let relay_receiver = Arc::new(Mutex::new(relay_receiver));
+    let (relay_sender, relay_receiver) = bounded::<TcpStream>(relay_queue_capacity);
     let mut relay_handles = Vec::with_capacity(relay_worker_count);
 
     for _ in 0..relay_worker_count {
-        let relay_receiver = Arc::clone(&relay_receiver);
+        let relay_receiver = relay_receiver.clone();
         let relay_state = Arc::clone(&shared_state);
         let relay_config = Arc::clone(&shared_config);
         let relay_active = Arc::clone(&active_connections);
         relay_handles.push(std::thread::spawn(move || {
             loop {
-                let next_stream = {
-                    let receiver = match relay_receiver.lock() {
-                        Ok(receiver) => receiver,
-                        Err(_) => return,
-                    };
-                    receiver.recv()
-                };
-                let mut client = match next_stream {
+                let mut client = match relay_receiver.recv() {
                     Ok(stream) => stream,
                     Err(_) => break,
                 };
@@ -9204,10 +9196,9 @@ fn cmd_run_lasm_backend(
     let worker_sender = if oneshot {
         None
     } else {
-        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_pending);
-        let shared_receiver = Arc::new(Mutex::new(receiver));
+        let (sender, receiver) = bounded::<TcpStream>(effective_max_pending);
         for _ in 0..effective_max_in_flight {
-            let worker_receiver = Arc::clone(&shared_receiver);
+            let worker_receiver = receiver.clone();
             let routes_for_worker = routes.clone();
             let trace_counter_for_worker = Arc::clone(&trace_counter);
             let header_defaults_for_worker = Arc::clone(&header_defaults);
@@ -9225,14 +9216,7 @@ fn cmd_run_lasm_backend(
                     }
                 };
                 loop {
-                    let next_stream = {
-                        let receiver = match worker_receiver.lock() {
-                            Ok(receiver) => receiver,
-                            Err(_) => return,
-                        };
-                        receiver.recv()
-                    };
-                    let mut stream = match next_stream {
+                    let mut stream = match worker_receiver.recv() {
                         Ok(stream) => stream,
                         Err(_) => break,
                     };

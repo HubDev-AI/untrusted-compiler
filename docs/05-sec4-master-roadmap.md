@@ -447,6 +447,11 @@ Post-alpha track acceptance anchors:
      - `--cluster-relay-workers` and `--cluster-relay-queue` now tune front-proxy relay concurrency/queue depth without code edits,
      - both flags are LASM-only and require cluster proxy mode (`--instances > 1` with autoscale range); fixed reuse-port mode rejects them as not applicable.
      - documented in `docs/book/1023-m39-lasm-cluster-relay-tuning-flags.md`.
+   - [x] Removed receiver-lock contention from LASM worker dispatch:
+     - replaced `Arc<Mutex<Receiver<TcpStream>>>` fan-out with bounded multi-consumer channels (`crossbeam-channel`) for both proxy relay workers and LASM backend workers,
+     - keeps bounded backpressure semantics while avoiding serialized `recv()` lock sections under load,
+     - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
+     - documented in `docs/book/1024-m39-lasm-worker-dispatch-crossbeam-channel.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
