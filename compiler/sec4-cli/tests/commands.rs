@@ -13836,6 +13836,13 @@ fn composeRoute() effects { net } -> Int {
   0
 }
 
+fn previewRoute() effects { net } -> Int {
+  let raw = req.query("raw");
+  let safe = sanitize.html(raw);
+  res.html(safe);
+  0
+}
+
 fn bodyRoute() effects { net } -> Int {
   res.setHeader(headers.name("X-Body-Echo"), headers.value("{{req.body}}"));
   res.text(200, "body={{req.body}}");
@@ -13849,6 +13856,7 @@ fn main() effects { net } -> Int {
   http.get(router, "/query", queryRoute);
   http.get(router, "/cookie", cookieRoute);
   http.get(router, "/compose/:id", composeRoute);
+  http.get(router, "/preview", previewRoute);
   http.post(router, "/body", bodyRoute);
   http.serve(8080, router);
   0
@@ -14083,6 +14091,34 @@ fn main() effects { net } -> Int {
         }
     };
 
+    let mut preview_response = None;
+    for _ in 0..400 {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(mut stream) => {
+                stream
+                    .write_all(
+                        b"GET /preview?raw=%3Cscript%3Ealert('x')%20%26%20%22y%22%3C/script%3E HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("/preview request should be written");
+                let mut body = String::new();
+                stream
+                    .read_to_string(&mut body)
+                    .expect("/preview response should be readable");
+                preview_response = Some(body);
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
+    let preview_response = match preview_response {
+        Some(response) => response,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("run command LASM req placeholder test could not connect /preview request");
+        }
+    };
+
     let mut body_response = None;
     for _ in 0..400 {
         match TcpStream::connect(("127.0.0.1", port)) {
@@ -14252,6 +14288,14 @@ fn main() effects { net } -> Int {
             "\r\n\r\nversion=HTTP/1.1;method=GET;path=/compose/user-7;id=user-7;trace=q+7 ok;requestId=req-99",
         ),
         "/compose response should materialize version/method/path and request-derived placeholders in body:\n{compose_response}"
+    );
+    assert!(
+        preview_response.contains("HTTP/1.1 200 OK"),
+        "/preview response should contain 200 status line:\n{preview_response}"
+    );
+    assert!(
+        preview_response.contains("\r\n\r\n&lt;script&gt;alert(&#39;x&#39;) &amp; &quot;y&quot;&lt;/script&gt;"),
+        "/preview response should materialize sanitize.html(req.query(...)) with deterministic HTML escaping:\n{preview_response}"
     );
     assert!(
         body_response.contains("HTTP/1.1 200 OK"),

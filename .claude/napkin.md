@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I assumed LASM `res.html(...)` dynamic expressions were materialized like `res.text(...)`, but parser logic accepted only string literals and silently fell back to `<html></html>`. | Keep `res.html` on the same template extraction/materialization path as `res.text` and lock behavior with an integration assertion for `sanitize.html(req.query(...))`. |
 | 2026-02-19 | self | After merging PR #201, local checkout snapped back to stale local `dev` and I almost continued there while `origin/dev` had the real head. | Immediately run `git branch --show-current` + `git rev-parse --short HEAD origin/dev` after each merge and branch fresh from `origin/dev` before any further edits. |
 | 2026-02-19 | self | Tried a large multi-hunk patch against `cmd_lasm_smoke` and hit context drift, which forced a retry and slowed the slice. | Split active-function edits into smaller ordered hunks (route registration, exchange capture, output payload) and patch each against fresh `sed` context. |
 | 2026-02-19 | user | I paused between slices instead of continuously taking the next implementation task in sequence, despite explicit instruction to keep moving without stops. | Immediately chain next scoped implementation task after each completion (or blocker note) and continue task-to-task without conversational idle pauses. |

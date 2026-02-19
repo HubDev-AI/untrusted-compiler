@@ -2597,6 +2597,10 @@ fn parse_lasm_res_text_template(
             {
                 return Some(placeholder);
             }
+            if is_lasm_sanitize_html_call(&resolved_callee) && !args.is_empty() {
+                let template = parse_lasm_res_text_template(&args[0], bindings, depth + 1)?;
+                return Some(build_lasm_sanitize_html_template(template.as_str()));
+            }
             if is_lasm_validate_non_empty_call(&resolved_callee) && !args.is_empty() {
                 return parse_lasm_res_text_template(&args[0], bindings, depth + 1);
             }
@@ -2680,6 +2684,69 @@ fn is_lasm_validate_header_value_call(callee: &sec4_core::ast::Expr) -> bool {
     }
 }
 
+fn is_lasm_sanitize_html_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => name == "sanitize_html",
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "html"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref name) if name == "sanitize"
+                )
+        }
+        _ => false,
+    }
+}
+
+fn build_lasm_sanitize_html_template(template: &str) -> String {
+    let escaped = escape_lasm_html(template);
+    let with_method = escaped.replace("{{req.method}}", "{{sanitizeHtml:req.method}}");
+    let with_path = with_method.replace("{{req.path}}", "{{sanitizeHtml:req.path}}");
+    let with_http_version =
+        with_path.replace("{{req.httpVersion}}", "{{sanitizeHtml:req.httpVersion}}");
+    let with_body = with_http_version.replace("{{req.body}}", "{{sanitizeHtml:req.body}}");
+    let with_path_params = rewrite_lasm_placeholder_prefix(
+        &with_body,
+        "{{req.pathParam:",
+        "{{sanitizeHtml:req.pathParam:",
+    );
+    let with_headers = rewrite_lasm_placeholder_prefix(
+        &with_path_params,
+        "{{req.header:",
+        "{{sanitizeHtml:req.header:",
+    );
+    let with_cookies = rewrite_lasm_placeholder_prefix(
+        &with_headers,
+        "{{req.cookie:",
+        "{{sanitizeHtml:req.cookie:",
+    );
+    rewrite_lasm_placeholder_prefix(&with_cookies, "{{req.query:", "{{sanitizeHtml:req.query:")
+}
+
+fn rewrite_lasm_placeholder_prefix(value: &str, prefix: &str, rewritten_prefix: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut rest = value;
+    loop {
+        let Some(start) = rest.find(prefix) else {
+            output.push_str(rest);
+            break;
+        };
+        output.push_str(&rest[..start]);
+        let value_start = start + prefix.len();
+        let after_value_start = &rest[value_start..];
+        let Some(value_end) = after_value_start.find("}}") else {
+            output.push_str(&rest[start..]);
+            break;
+        };
+        let token_value = &after_value_start[..value_end];
+        output.push_str(rewritten_prefix);
+        output.push_str(token_value);
+        output.push_str("}}");
+        rest = &after_value_start[value_end + 2..];
+    }
+    output
+}
+
 fn match_res_html_call(
     args: &[sec4_core::ast::Expr],
     bindings: &HashMap<String, sec4_core::ast::Expr>,
@@ -2687,8 +2754,8 @@ fn match_res_html_call(
     if args.len() != 1 {
         return None;
     }
-    let body =
-        parse_string_literal(&args[0], bindings).unwrap_or_else(|| "<html></html>".to_string());
+    let body = parse_lasm_res_text_template(&args[0], bindings, 0)
+        .unwrap_or_else(|| "<html></html>".to_string());
     Some(LasmResponsePlan {
         status: 200,
         body,
@@ -9169,6 +9236,29 @@ fn contains_lasm_request_placeholder_tokens(value: &str) -> bool {
         || value.contains("{{req.path}}")
         || value.contains("{{req.httpVersion}}")
         || value.contains("{{req.body}}")
+        || value.contains("{{sanitizeHtml:req.pathParam:")
+        || value.contains("{{sanitizeHtml:req.header:")
+        || value.contains("{{sanitizeHtml:req.query:")
+        || value.contains("{{sanitizeHtml:req.cookie:")
+        || value.contains("{{sanitizeHtml:req.method}}")
+        || value.contains("{{sanitizeHtml:req.path}}")
+        || value.contains("{{sanitizeHtml:req.httpVersion}}")
+        || value.contains("{{sanitizeHtml:req.body}}")
+}
+
+fn escape_lasm_html(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn materialize_lasm_request_placeholders(
@@ -9193,9 +9283,58 @@ fn materialize_lasm_request_placeholders(
         replace_lasm_response_placeholder_tokens(&with_headers, "{{req.cookie:", |key| {
             find_lasm_cookie_value(&request.headers, key.trim())
         });
-    replace_lasm_response_placeholder_tokens(&with_cookies, "{{req.query:", |key| {
-        request.query_params.get(key.trim()).cloned()
-    })
+    let with_queries =
+        replace_lasm_response_placeholder_tokens(&with_cookies, "{{req.query:", |key| {
+            request.query_params.get(key.trim()).cloned()
+        });
+
+    let escaped_method = escape_lasm_html(request.method.as_str());
+    let escaped_path = escape_lasm_html(request.path.as_str());
+    let escaped_http_version = escape_lasm_html(request.http_version.as_str());
+    let escaped_body = escape_lasm_html(request_body.as_ref());
+
+    let with_sanitized_method =
+        with_queries.replace("{{sanitizeHtml:req.method}}", escaped_method.as_str());
+    let with_sanitized_path =
+        with_sanitized_method.replace("{{sanitizeHtml:req.path}}", escaped_path.as_str());
+    let with_sanitized_http_version = with_sanitized_path.replace(
+        "{{sanitizeHtml:req.httpVersion}}",
+        escaped_http_version.as_str(),
+    );
+    let with_sanitized_body =
+        with_sanitized_http_version.replace("{{sanitizeHtml:req.body}}", escaped_body.as_str());
+    let with_sanitized_path_params = replace_lasm_response_placeholder_tokens(
+        &with_sanitized_body,
+        "{{sanitizeHtml:req.pathParam:",
+        |key| {
+            path_params
+                .get(key.trim())
+                .map(|value| escape_lasm_html(value.as_str()))
+        },
+    );
+    let with_sanitized_headers = replace_lasm_response_placeholder_tokens(
+        &with_sanitized_path_params,
+        "{{sanitizeHtml:req.header:",
+        |key| find_lasm_header_value(&request.headers, key.trim()).map(escape_lasm_html),
+    );
+    let with_sanitized_cookies = replace_lasm_response_placeholder_tokens(
+        &with_sanitized_headers,
+        "{{sanitizeHtml:req.cookie:",
+        |key| {
+            find_lasm_cookie_value(&request.headers, key.trim())
+                .map(|value| escape_lasm_html(value.as_str()))
+        },
+    );
+    replace_lasm_response_placeholder_tokens(
+        &with_sanitized_cookies,
+        "{{sanitizeHtml:req.query:",
+        |key| {
+            request
+                .query_params
+                .get(key.trim())
+                .map(|value| escape_lasm_html(value.as_str()))
+        },
+    )
 }
 
 fn replace_lasm_response_placeholder_tokens(
