@@ -534,6 +534,11 @@ Post-alpha track acceptance anchors:
      - preset values are overridable through `LASM_SATURATION_LATENCY_*` variables and still flow through full-suite saturation lane delegation,
      - added runtime dry-run contract test ensuring latency preset defaults reach delegated saturation plan output.
      - documented in `docs/book/1049-m39-full-suite-saturation-latency-preset-targets.md`.
+   - [x] Added combined saturation preset orchestrator targets for one-command dual-profile sweeps:
+     - new Make targets `bench-full-saturation-presets` and `bench-full-saturation-presets-dry` run throughput and latency presets sequentially via existing preset targets,
+     - this keeps one-command exploratory tuning flows deterministic while preserving existing preset override behavior,
+     - added dry-run contract test validating both preset profiles appear in combined target output.
+     - documented in `docs/book/1050-m39-full-suite-saturation-combined-preset-targets.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

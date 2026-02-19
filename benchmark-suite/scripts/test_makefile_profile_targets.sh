@@ -78,5 +78,9 @@ require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLU
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"'
 require_target_contains_token "bench-full-saturation-latency-dry" '$(MAKE) bench-full-saturation-dry'
 require_target_contains_token "bench-full-saturation-latency-dry" 'FULL_SATURATION_SKIP_VERIFY=true'
+require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-full-saturation-throughput'
+require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-full-saturation-latency'
+require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-throughput-dry'
+require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-latency-dry'
 
 echo "makefile profile target test passed"
