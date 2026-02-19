@@ -9,6 +9,7 @@ Checks benchmark compare-matrix quality posture:
 - endpoint entries must contain non-empty compared rows and a leader row aligned to endpoint
 - leader row must be present in compared rows
 - leader p99 must be present and > 0
+- leader rssKb must be present and > 0
 - leader constantRate=false is flagged as WARN (non-constant-rate evidence)
 
 USAGE
@@ -61,7 +62,7 @@ fail_count=0
 printf '%-10s %-8s %-36s %s\n' "Endpoint" "Status" "Check" "Evidence"
 printf '%-10s %-8s %-36s %s\n' "--------" "------" "------------------------------------" "--------"
 
-while IFS=$'\t' read -r endpoint p99 constant_rate target_rps actual_rps compared_count leader_in_compared leader_endpoint; do
+while IFS=$'\t' read -r endpoint p99 rss_kb constant_rate target_rps actual_rps compared_count leader_in_compared leader_endpoint; do
   [ -z "${endpoint}" ] && continue
 
   if awk -v n="${compared_count}" 'BEGIN { exit !(n+0 > 0) }'; then
@@ -97,6 +98,14 @@ while IFS=$'\t' read -r endpoint p99 constant_rate target_rps actual_rps compare
     warn_count=$((warn_count + 1))
   fi
 
+  if awk -v n="${rss_kb}" 'BEGIN { exit !(n+0 > 0) }' >/dev/null 2>&1; then
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "PASS" "leader rssKb > 0" "rssKb=${rss_kb}"
+    pass_count=$((pass_count + 1))
+  else
+    printf '%-10s %-8s %-36s %s\n' "${endpoint}" "WARN" "leader rssKb missing/invalid" "rssKb=${rss_kb:-<empty>}"
+    warn_count=$((warn_count + 1))
+  fi
+
   if [ "${constant_rate}" = "false" ]; then
     coverage="n/a"
     if awk -v t="${target_rps}" 'BEGIN { exit !(t+0 > 0) }'; then
@@ -119,6 +128,7 @@ done < <(
           targetRps: ($row.targetRps // 0),
           requestsPerSec: ($row.requestsPerSec // 0),
           p99: ($row.p99 // ""),
+          rssKb: ($row.rssKb // null),
           loadGenerator: (if ($row | has("loadGenerator")) then $row.loadGenerator else "wrk2" end),
           constantRate: (if ($row | has("constantRate")) then $row.constantRate else true end)
         };
@@ -128,6 +138,7 @@ done < <(
       and a.targetRps == b.targetRps
       and a.requestsPerSec == b.requestsPerSec
       and a.p99 == b.p99
+      and a.rssKb == b.rssKb
       and a.loadGenerator == b.loadGenerator
       and a.constantRate == b.constantRate;
     .endpoints[]
@@ -141,6 +152,7 @@ done < <(
     | [
         $ep,
         ($leader.p99 // ""),
+        (if ($leader.rssKb // null) == null then "null" else ($leader.rssKb | tostring) end),
         (if ($leader | has("constantRate")) then $leader.constantRate else true end | tostring),
         ($leader.targetRps // 0 | tostring),
         ($leader.requestsPerSec // 0 | tostring),
