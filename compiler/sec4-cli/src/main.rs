@@ -9156,9 +9156,6 @@ fn apply_lasm_header_placeholder_materialization(
         } else {
             value
         };
-        if !is_lasm_response_header_value_valid(materialized_value.as_str()) {
-            continue;
-        }
         if materialized_name.eq_ignore_ascii_case("Set-Cookie") {
             for cookie in materialized_value.split('\n') {
                 if !is_lasm_response_header_value_valid(cookie) {
@@ -9166,6 +9163,9 @@ fn apply_lasm_header_placeholder_materialization(
                 }
                 append_lasm_set_cookie_header(&mut materialized_headers, cookie);
             }
+            continue;
+        }
+        if !is_lasm_response_header_value_valid(materialized_value.as_str()) {
             continue;
         }
         materialized_headers.insert(materialized_name, materialized_value);
