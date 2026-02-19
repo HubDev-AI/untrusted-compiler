@@ -2,7 +2,7 @@
 
 Updated: 2026-02-19  
 Primary branch: `dev`  
-Current baseline commit: `d4cf6ad`
+Current baseline commit: `4de2d06`
 
 ## 1) Purpose
 
@@ -13,35 +13,33 @@ Use it to keep speed high without losing architecture direction.
 
 1. Multi-file modules are done (`M39-S2A` complete).
 2. LASM async runtime is heavily implemented (`M39-S2B` advanced and benchmarked).
-3. Main remaining technical gap for current priority is LASM DB parity.
-4. Composition Contract Analyzer (`M39-S2`) is deferred and not a current blocker.
+3. LASM DB parity for active intrinsics is done on file-backed adapter v1 (`records.log`).
+4. Built-in LASM horizontal front-layer automation is now in-progress/usable (`sec4 run --instances ...` with autoscale flags).
+5. Composition Contract Analyzer (`M39-S2`) remains deferred and not a current blocker.
 
 ## 3) Backlog Priority (Immediate)
 
-### P0: LASM DB parity (implementation-first)
+### P0: LASM scale hardening to higher RPS ceilings (implementation-first)
 
-1. Replace LASM DB schema-name materialization bridge with real LASM DB intrinsic execution path.
-2. Implement deterministic DB handle/transaction semantics in LASM runtime path.
-3. Keep persistent storage adapter (`records.log`) as v1 backend, but execute through intrinsic flow, not response-schema switches.
-4. Align deterministic error envelopes with existing runtime contracts.
-5. Extend the LASM full example to demonstrate real DB intrinsic path end-to-end.
+1. Optimize front proxy + worker dispatch hot path (current bottleneck before 1M req/s goal).
+2. Reduce per-connection overhead in cluster mode (threading/copy path) and re-benchmark.
+3. Keep deterministic overload/error behavior while tuning performance.
+4. Produce repeatable throughput+latency+RSS evidence from cluster mode runs.
+5. Continue tuning toward higher ceilings before claiming production-scale target.
 
-### P1: Hardening after P0
+### P1: DB adapter progression after P0
 
-1. Load/capacity verification on LASM DB paths.
-2. Perf cleanup in hot paths found during profiling.
-3. Additional parity fixes vs C runtime only where behavior differs.
+1. Keep file adapter (`records.log`) as alpha v1.
+2. Add SQLite adapter behind same DB intrinsic surface.
+3. Keep external DB adapters post-alpha.
 
 ### P2: Fixed order after DB integration (must follow)
 
-1. Make LASM the default server backend for `sec4 run` (C remains explicit fallback).
-2. Run LASM stability/load hardening on the default path (throughput/latency/memory regressions tracked).
-3. Implement DB adapter progression behind the same intrinsic surface:
-   - file adapter (`records.log`) remains v1 alpha,
-   - SQLite adapter is next,
-   - external DB adapters are post-alpha.
+1. Keep LASM as default server backend for `sec4 run` (already active; C remains explicit fallback).
+2. Complete LASM stability/load hardening on that default path (throughput/latency/memory regressions tracked).
+3. Move DB adapter progression behind same intrinsic surface (SQLite next).
 4. Finalize one canonical LASM+DB operator flow (`init/check/build/run/load-test`) with reproducible docs.
-5. Only then move capacity to WASM/browser track.
+5. Only then move additional capacity to WASM/browser track.
 
 ## 4) DB Status (Explicit)
 
