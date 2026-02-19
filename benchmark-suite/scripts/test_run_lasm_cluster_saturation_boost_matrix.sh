@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "$0")/.." && pwd)"
+
+out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --boost-steps 2,4,7 \
+  --project-path examples/lasm-alpha-full \
+  --request-path /health \
+  --request-header 'Authorization: Bearer token123' \
+  --duration 6s \
+  --threads 2 \
+  --connections 32 \
+  --target-requests 12345 \
+  --autoscale-target-connections 111 \
+  --autoscale-scale-up-step 2 \
+  --autoscale-scale-down-step 1 \
+  --out results/summaries/custom-saturation-boost-matrix.json \
+  2>&1)"
+
+if ! grep -q 'sec4 LASM saturation boost matrix plan:' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing plan header" >&2
+  exit 1
+fi
+if ! grep -q 'boostSteps=2,4,7' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing boost steps listing" >&2
+  exit 1
+fi
+if ! grep -q '=== saturationBoostStep=2 ===' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing step 2 section header" >&2
+  exit 1
+fi
+if ! grep -q '=== saturationBoostStep=7 ===' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing step 7 section header" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleSaturationBoostStep=2' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing probe output for step 2" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleSaturationBoostStep=7' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing probe output for step 7" >&2
+  exit 1
+fi
+if ! grep -q "out=${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-7.json" <<<"$out"; then
+  echo "saturation boost matrix dry-run missing resolved per-step output path" >&2
+  exit 1
+fi
+
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --boost-steps 2,abc >/tmp/lasm-sat-boost-matrix-invalid-shape.log 2>&1; then
+  echo "saturation boost matrix accepted invalid non-numeric boost step" >&2
+  exit 1
+fi
+if ! grep -q 'boost-steps must contain positive integers, got: abc' /tmp/lasm-sat-boost-matrix-invalid-shape.log; then
+  echo "saturation boost matrix missing invalid-shape diagnostic" >&2
+  exit 1
+fi
+
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --boost-steps 2,0 >/tmp/lasm-sat-boost-matrix-invalid-range.log 2>&1; then
+  echo "saturation boost matrix accepted zero boost step" >&2
+  exit 1
+fi
+if ! grep -q 'boost-steps must be >= 1, got: 0' /tmp/lasm-sat-boost-matrix-invalid-range.log; then
+  echo "saturation boost matrix missing invalid-range diagnostic" >&2
+  exit 1
+fi
+
+echo "run_lasm_cluster_saturation_boost_matrix test passed"
