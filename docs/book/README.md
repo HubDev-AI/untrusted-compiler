@@ -989,5 +989,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1021-m39-lasm-db-adapter-operator-smoke-script.md`
 - `1022-m39-naming-lock-lasm-db-adapter-smoke-contract-coverage.md`
 - `1023-m39-runtime-smoke-workflow-lasm-db-adapter-lanes.md`
+- `1024-m39-closure-gate-runtime-smoke-db-adapter-lane-enforcement.md`
 
 As milestones progress, chapters will be added and linked from this index.
