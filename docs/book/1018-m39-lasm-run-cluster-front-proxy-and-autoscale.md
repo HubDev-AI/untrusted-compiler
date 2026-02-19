@@ -1,4 +1,4 @@
-# 1014 M39 Slice: LASM Run Cluster Front Proxy and Autoscale Controls
+# 1018 M39 Slice: LASM Run Cluster Front Proxy and Autoscale Controls
 
 This slice adds built-in horizontal runtime automation to `sec4 run --backend lasm` so multi-instance execution is available from the CLI (not only as external ops guidance).
 
