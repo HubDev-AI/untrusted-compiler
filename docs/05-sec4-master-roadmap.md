@@ -474,6 +474,11 @@ Post-alpha track acceptance anchors:
      - saturation pressure can raise `desired` worker count immediately (bounded by autoscale step and max instance caps) instead of relying only on active-connection heuristic,
      - cooldown and per-check step windows remain enforced.
      - documented in `docs/book/1032-m39-lasm-autoscale-saturation-boost.md`.
+   - [x] Added dedicated saturation boost-step control for cluster autoscaling:
+     - new LASM flag: `--autoscale-saturation-boost-step` (default `4`),
+     - when relay saturation events are observed, autoscale now boosts desired workers and per-check scale-up budget using this dedicated step (independent from normal `--autoscale-scale-up-step`),
+     - benchmark cluster capacity probe tooling now accepts/forwards the same flag for deterministic tuning workflows.
+     - documented in `docs/book/1034-m39-lasm-autoscale-saturation-boost-step-control.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

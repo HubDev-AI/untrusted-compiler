@@ -30,6 +30,7 @@ enum Commands {
         max_body_bytes: Option<u64>,
         serve_timeout_ms: Option<u64>,
         db_adapter: Option<RunDbAdapter>,
+        autoscale_saturation_boost_step: usize,
     },
 }
 
@@ -58,6 +59,7 @@ fn dispatch(
     max_body_bytes: Option<u64>,
     serve_timeout_ms: Option<u64>,
     db_adapter: Option<RunDbAdapter>,
+    autoscale_saturation_boost_step: usize,
 ) {
     let _ = match Commands::Run {
         path,
@@ -66,6 +68,7 @@ fn dispatch(
         max_body_bytes,
         serve_timeout_ms,
         db_adapter,
+        autoscale_saturation_boost_step,
     } {
         Commands::Run {
             path,
@@ -74,6 +77,7 @@ fn dispatch(
             max_body_bytes,
             serve_timeout_ms,
             db_adapter,
+            autoscale_saturation_boost_step,
         } => cmd_run(
             &path,
             port,
@@ -81,6 +85,7 @@ fn dispatch(
             max_body_bytes,
             serve_timeout_ms,
             db_adapter,
+            autoscale_saturation_boost_step,
             RunBackend::Lasm,
         ),
     };
@@ -119,11 +124,15 @@ fn cmd_run(
     max_body_bytes: Option<u64>,
     serve_timeout_ms: Option<u64>,
     db_adapter: Option<RunDbAdapter>,
+    autoscale_saturation_boost_step: usize,
     backend: RunBackend,
 ) -> i32 {
     let mut cmd = Command::new(path);
     if backend != RunBackend::Lasm && db_adapter.is_some() {
         eprintln!("run failed: --db-adapter is only supported with --backend lasm");
+    }
+    if backend != RunBackend::Lasm && autoscale_saturation_boost_step != 4 {
+        eprintln!("run failed: --autoscale-saturation-boost-step is only supported with --backend lasm");
     }
     if let Some(port) = port {
         cmd.env("SEC4_RT_HTTP_PORT", port.to_string());
@@ -156,6 +165,21 @@ fi
 
 if ! rg -Fq "missing run-flag contract pattern (${missing_guard_label})" "${tmp_dir}/guard-message.log"; then
   echo "expected missing-pattern diagnostic for ${missing_guard_label}" >&2
+  exit 1
+fi
+
+saturation_guard_cli="${tmp_dir}/main-saturation-guard.rs"
+cp "${pass_cli}" "${saturation_guard_cli}"
+missing_saturation_guard_label='run autoscale saturation-boost-step lasm-only guard'
+perl -0pi -e 's/run failed: --autoscale-saturation-boost-step is only supported with --backend lasm/run failed: --autoscale-scale-up-step is only supported with --backend lasm/' "${saturation_guard_cli}"
+
+if "${contract_script}" --cli "${saturation_guard_cli}" >"${tmp_dir}/saturation-guard.log" 2>&1; then
+  echo "expected run runtime-flag contract failure when autoscale saturation-boost-step lasm-only guard drifts" >&2
+  exit 1
+fi
+
+if ! rg -Fq "missing run-flag contract pattern (${missing_saturation_guard_label})" "${tmp_dir}/saturation-guard.log"; then
+  echo "expected missing-pattern diagnostic for ${missing_saturation_guard_label}" >&2
   exit 1
 fi
 

@@ -96,6 +96,8 @@ enum Commands {
         autoscale_scale_up_step: usize,
         #[arg(long, default_value_t = 1)]
         autoscale_scale_down_step: usize,
+        #[arg(long, default_value_t = 4)]
+        autoscale_saturation_boost_step: usize,
         #[arg(long)]
         cluster_relay_workers: Option<usize>,
         #[arg(long)]
@@ -460,6 +462,7 @@ fn main() {
             autoscale_scale_down_cooldown_ms,
             autoscale_scale_up_step,
             autoscale_scale_down_step,
+            autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -487,6 +490,7 @@ fn main() {
             autoscale_scale_down_cooldown_ms,
             autoscale_scale_up_step,
             autoscale_scale_down_step,
+            autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -7781,6 +7785,7 @@ fn cmd_run(
     autoscale_scale_down_cooldown_ms: u64,
     autoscale_scale_up_step: usize,
     autoscale_scale_down_step: usize,
+    autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     reuse_port: bool,
@@ -7817,6 +7822,10 @@ fn cmd_run(
     }
     if autoscale_scale_down_step == 0 {
         eprintln!("run failed: --autoscale-scale-down-step must be >= 1");
+        return Err(2);
+    }
+    if autoscale_saturation_boost_step == 0 {
+        eprintln!("run failed: --autoscale-saturation-boost-step must be >= 1");
         return Err(2);
     }
     if cluster_relay_workers == Some(0) {
@@ -7921,6 +7930,12 @@ fn cmd_run(
         eprintln!("run failed: --autoscale-scale-down-step is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && autoscale_saturation_boost_step != 4 {
+        eprintln!(
+            "run failed: --autoscale-saturation-boost-step is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_relay_workers.is_some() {
         eprintln!("run failed: --cluster-relay-workers is only supported with --backend lasm");
         return Err(2);
@@ -7992,6 +8007,7 @@ fn cmd_run(
             autoscale_scale_down_cooldown_ms,
             autoscale_scale_up_step,
             autoscale_scale_down_step,
+            autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
             reuse_port,
@@ -8332,6 +8348,7 @@ struct LasmClusterConfig {
     autoscale_scale_down_cooldown_ms: u64,
     autoscale_scale_up_step: usize,
     autoscale_scale_down_step: usize,
+    autoscale_saturation_boost_step: usize,
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
@@ -8866,20 +8883,21 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
                 let saturation_events = autoscale_saturation_events.swap(0, Ordering::Relaxed);
+                let mut scale_up_step_budget = autoscale_config.autoscale_scale_up_step;
                 if saturation_events > 0 {
                     let boosted_target = state
                         .workers
                         .len()
-                        .saturating_add(autoscale_config.autoscale_scale_up_step)
+                        .saturating_add(autoscale_config.autoscale_saturation_boost_step)
                         .min(autoscale_config.max_instances);
                     desired = desired.max(boosted_target);
+                    scale_up_step_budget = scale_up_step_budget
+                        .max(autoscale_config.autoscale_saturation_boost_step);
                 }
                 let now = Instant::now();
                 let current_workers = state.workers.len();
                 let up_target = if desired > current_workers {
-                    desired.min(
-                        current_workers.saturating_add(autoscale_config.autoscale_scale_up_step),
-                    )
+                    desired.min(current_workers.saturating_add(scale_up_step_budget))
                 } else {
                     current_workers
                 };
@@ -9014,6 +9032,7 @@ fn cmd_run_lasm_backend(
     autoscale_scale_down_cooldown_ms: u64,
     autoscale_scale_up_step: usize,
     autoscale_scale_down_step: usize,
+    autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     reuse_port: bool,
@@ -9251,6 +9270,7 @@ fn cmd_run_lasm_backend(
             autoscale_scale_down_cooldown_ms,
             autoscale_scale_up_step,
             autoscale_scale_down_step,
+            autoscale_saturation_boost_step,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
@@ -9282,6 +9302,7 @@ fn cmd_run_lasm_backend(
             autoscale_scale_down_cooldown_ms,
             autoscale_scale_up_step,
             autoscale_scale_down_step,
+            autoscale_saturation_boost_step,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
