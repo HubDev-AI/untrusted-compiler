@@ -146,6 +146,7 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   coverage_display="${coverage_pct}"
   p99_fmt="$(awk -v n="${p99_ms}" 'BEGIN { printf "%.2f", n + 0 }')"
   rss_display="$(jq -r '(.rssKb // null) | if . == null then "n/a" else tostring end' <<<"$leader_json")"
+  leader_rss_kb="$(jq -r '(.rssKb // null) | if . == null then "" else tostring end' <<<"$leader_json")"
 
   threshold_pair="$(default_thresholds "$endpoint")"
   abs_status="n/a"
@@ -171,17 +172,33 @@ for raw_endpoint in ${endpoints_csv//,/ }; do
   elif [ -f "$baseline_path" ]; then
     baseline_p99="$(jq -r '.baselineP99Ms // empty' "$baseline_path")"
     baseline_cov="$(jq -r '.baselineCoveragePct // empty' "$baseline_path")"
+    baseline_rss="$(jq -r '.baselineRssKb // empty' "$baseline_path")"
     max_p99_regress="$(jq -r '.maxP99RegressionPct // 20' "$baseline_path")"
     max_cov_drop="$(jq -r '.maxCoverageDropPct // 5' "$baseline_path")"
+    max_rss_regress="$(jq -r '.maxRssRegressionPct // 20' "$baseline_path")"
     if [ -n "$baseline_p99" ] && [ -n "$baseline_cov" ]; then
       baseline_p99_limit="$(awk -v base="${baseline_p99}" -v pct="${max_p99_regress}" 'BEGIN { printf "%.6f", base * (1 + pct / 100.0) }')"
       baseline_cov_limit="$(awk -v base="${baseline_cov}" -v pct="${max_cov_drop}" 'BEGIN { printf "%.6f", base - pct }')"
+      baseline_core_ok="false"
       if awk -v p99="${p99_ms}" -v p99_limit="${baseline_p99_limit}" -v cov="${coverage_pct}" -v cov_limit="${baseline_cov_limit}" 'BEGIN { exit !((p99+0 <= p99_limit+0) && (cov+0 >= cov_limit+0)) }'; then
-        baseline_status="pass"
-        base_passes=$((base_passes + 1))
+        baseline_core_ok="true"
+      fi
+      baseline_rss_ok="true"
+      if [ -n "$baseline_rss" ]; then
+        baseline_rss_ok="false"
+        if [ -n "$leader_rss_kb" ] && awk -v n="${leader_rss_kb}" 'BEGIN { exit !(n+0 > 0) }'; then
+          baseline_rss_limit="$(awk -v base="${baseline_rss}" -v pct="${max_rss_regress}" 'BEGIN { printf "%.6f", base * (1 + pct / 100.0) }')"
+          if awk -v rss="${leader_rss_kb}" -v rss_limit="${baseline_rss_limit}" 'BEGIN { exit !(rss+0 <= rss_limit+0) }'; then
+            baseline_rss_ok="true"
+          fi
+        fi
+      fi
+      if [ "$baseline_core_ok" = "true" ] && [ "$baseline_rss_ok" = "true" ]; then
+          baseline_status="pass"
+          base_passes=$((base_passes + 1))
       else
-        baseline_status="fail"
-        base_fails=$((base_fails + 1))
+          baseline_status="fail"
+          base_fails=$((base_fails + 1))
       fi
     else
       baseline_status="invalid"
