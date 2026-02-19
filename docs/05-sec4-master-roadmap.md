@@ -464,6 +464,7 @@ Post-alpha track acceptance anchors:
      - new `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh` launches `sec4 run --backend lasm` with cluster/tuning flags, runs `wrk`, samples peak RSS, and writes deterministic JSON pass/fail output against target request count,
      - integrated make target: `make -C benchmark-suite lasm-cluster-capacity-probe`,
      - dry-run contract coverage added in benchmark suite script tests.
+     - first 1M-threshold run evidence: `1,278,004` requests in `20s` (`~63.6k req/s`, peak RSS `~10,464 KB`) with tuned relay settings (`workers=32`, `queue=4096`).
      - documented in `docs/book/1029-m39-lasm-cluster-capacity-probe-tooling.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:

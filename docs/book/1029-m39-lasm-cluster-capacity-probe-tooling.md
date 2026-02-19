@@ -30,5 +30,8 @@ Existing capacity probe tooling targets the benchmark service binary path. For L
 
 - `benchmark-suite/scripts/test_run_lasm_cluster_capacity_probe.sh`
 - `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh --dry-run ...` argument plan checks
+- 1M-target probe execution example:
+  - command: `benchmark-suite/scripts/run_lasm_cluster_capacity_probe.sh --skip-build --duration 20s --target-requests 1000000 --threads 8 --connections 256 --instances 4 --autoscale-max-instances 8 --autoscale-target-connections 256 --cluster-relay-workers 32 --cluster-relay-queue 4096 --out benchmark-suite/results/summaries/sec4-lasm-cluster-capacity-probe-1m.json`
+  - result: pass with `1,278,004` requests (`~63,573 req/s`), p99 about `883ms`, peak RSS `10,464 KB`.
 
 This provides a reproducible entry point for 1M-target LASM cluster capacity verification loops.
