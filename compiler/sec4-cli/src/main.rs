@@ -1,5 +1,6 @@
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use crossbeam_channel::{bounded, TrySendError};
 use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
@@ -10,6 +11,7 @@ use sec4_core::{
     AuditHistoryWindowSummary, AuditReport, AuditSeverity, BackendEmitOutput, BackendKind,
     Diagnostic, Policy,
 };
+use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -17,7 +19,6 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{sync_channel, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -87,6 +88,12 @@ enum Commands {
         autoscale_target_connections: Option<usize>,
         #[arg(long, default_value_t = 1000)]
         autoscale_check_ms: u64,
+        #[arg(long)]
+        cluster_relay_workers: Option<usize>,
+        #[arg(long)]
+        cluster_relay_queue: Option<usize>,
+        #[arg(long, hide = true, default_value_t = false)]
+        reuse_port: bool,
         #[arg(long, value_enum, default_value_t = RunBackend::Lasm)]
         backend: RunBackend,
         #[arg(long, value_enum, default_value_t = BuildTlsBackend::Auto)]
@@ -441,6 +448,9 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
+            reuse_port,
             backend,
             tls_backend,
         } => cmd_run(
@@ -461,6 +471,9 @@ fn main() {
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
+            reuse_port,
             backend,
             tls_backend,
         ),
@@ -1508,9 +1521,7 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
 
 fn persist_lasm_dynamic_db_records_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
     match state.db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => {
-            persist_lasm_dynamic_db_records_to_records_log(state)
-        }
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(state),
         LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
     }
 }
@@ -1579,12 +1590,13 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
             path.display()
         )
     })?;
-    tx.execute("DELETE FROM lasm_db_records", []).map_err(|err| {
-        format!(
-            "could not clear LASM dynamic sqlite records store `{}`: {err}",
-            path.display()
-        )
-    })?;
+    tx.execute("DELETE FROM lasm_db_records", [])
+        .map_err(|err| {
+            format!(
+                "could not clear LASM dynamic sqlite records store `{}`: {err}",
+                path.display()
+            )
+        })?;
     let mut ordered = state.db_records.clone();
     ordered.sort_by_key(|record| record.id);
     let mut statement = tx
@@ -7749,6 +7761,9 @@ fn cmd_run(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
+    reuse_port: bool,
     backend: RunBackend,
     tls_backend: BuildTlsBackend,
 ) -> Result<(), i32> {
@@ -7766,6 +7781,14 @@ fn cmd_run(
     }
     if autoscale_check_ms == 0 {
         eprintln!("run failed: --autoscale-check-ms must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_workers == Some(0) {
+        eprintln!("run failed: --cluster-relay-workers must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_queue == Some(0) {
+        eprintln!("run failed: --cluster-relay-queue must be >= 1");
         return Err(2);
     }
     if max_header_bytes == Some(0) {
@@ -7842,7 +7865,28 @@ fn cmd_run(
         eprintln!("run failed: --autoscale-check-ms is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_relay_workers.is_some() {
+        eprintln!("run failed: --cluster-relay-workers is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && reuse_port {
+        eprintln!("run failed: --reuse-port is only supported with --backend lasm");
+        return Err(2);
+    }
     let max_instances = autoscale_max_instances.unwrap_or(instances);
+    let cluster_mode = max_instances > 1 || instances > 1;
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_workers.is_some() {
+        eprintln!("run failed: --cluster-relay-workers requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -7888,6 +7932,9 @@ fn cmd_run(
             autoscale_max_instances,
             autoscale_target_connections,
             autoscale_check_ms,
+            cluster_relay_workers,
+            cluster_relay_queue,
+            reuse_port,
         );
     }
 
@@ -8222,6 +8269,9 @@ struct LasmClusterConfig {
     target_connections_per_instance: usize,
     autoscale_check_ms: u64,
     worker_ready_timeout_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
+    reuse_port_workers: bool,
 }
 
 #[derive(Debug)]
@@ -8299,6 +8349,9 @@ fn spawn_lasm_cluster_worker(
         .arg(worker_port.to_string())
         .arg("--instances")
         .arg("1");
+    if config.reuse_port_workers {
+        cmd.arg("--reuse-port");
+    }
 
     push_optional_u64_run_arg(&mut cmd, "--max-header-bytes", config.max_header_bytes);
     push_optional_u64_run_arg(&mut cmd, "--max-body-bytes", config.max_body_bytes);
@@ -8365,14 +8418,46 @@ fn wait_for_lasm_cluster_worker_ready(
     }
 }
 
+fn wait_for_lasm_cluster_worker_alive(
+    child: &mut Child,
+    worker_port: u16,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let grace_ms = timeout_ms.clamp(200, 2000);
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "LASM cluster worker on port {worker_port} exited early with status {status}"
+                ));
+            }
+            Ok(None) => {
+                if start.elapsed() >= Duration::from_millis(grace_ms) {
+                    return Ok(());
+                }
+            }
+            Err(err) => {
+                return Err(format!(
+                    "could not check LASM cluster worker status on port {worker_port}: {err}"
+                ));
+            }
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn spawn_and_wait_lasm_cluster_worker(
     config: &LasmClusterConfig,
     worker_port: u16,
 ) -> Result<LasmClusterWorker, String> {
     let mut child = spawn_lasm_cluster_worker(config, worker_port)?;
-    if let Err(err) =
+    let wait_result = if config.reuse_port_workers {
+        wait_for_lasm_cluster_worker_alive(&mut child, worker_port, config.worker_ready_timeout_ms)
+    } else {
         wait_for_lasm_cluster_worker_ready(&mut child, worker_port, config.worker_ready_timeout_ms)
-    {
+    };
+    if let Err(err) = wait_result {
         let _ = child.kill();
         let _ = child.wait();
         return Err(err);
@@ -8423,6 +8508,31 @@ fn desired_lasm_cluster_instances(
     needed.clamp(min_instances, max_instances)
 }
 
+fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
+    if let Some(value) = config.cluster_relay_workers {
+        return value;
+    }
+    let host_parallelism = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(4);
+    host_parallelism
+        .max(config.min_instances)
+        .min(config.max_instances.saturating_mul(4).max(4))
+        .min(128)
+}
+
+fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: usize) -> usize {
+    if let Some(value) = config.cluster_relay_queue {
+        return value;
+    }
+    config
+        .target_connections_per_instance
+        .max(1)
+        .saturating_mul(config.max_instances.max(1))
+        .max(worker_count.saturating_mul(2))
+        .min(65_536)
+}
+
 fn write_lasm_cluster_unavailable_response(
     client: &mut TcpStream,
     message: &str,
@@ -8452,12 +8562,6 @@ fn relay_lasm_cluster_connection(
     let mut client_read = client
         .try_clone()
         .map_err(|err| format!("could not clone client stream for proxy read: {err}"))?;
-    let mut client_write = client
-        .try_clone()
-        .map_err(|err| format!("could not clone client stream for proxy write: {err}"))?;
-    let mut upstream_read = upstream
-        .try_clone()
-        .map_err(|err| format!("could not clone upstream stream for proxy read: {err}"))?;
     let mut upstream_write = upstream
         .try_clone()
         .map_err(|err| format!("could not clone upstream stream for proxy write: {err}"))?;
@@ -8467,9 +8571,9 @@ fn relay_lasm_cluster_connection(
         let _ = upstream_write.shutdown(Shutdown::Write);
     });
 
-    let upstream_to_client = std::io::copy(&mut upstream_read, &mut client_write)
+    let upstream_to_client = std::io::copy(upstream, client)
         .map_err(|err| format!("could not relay upstream response to client: {err}"));
-    let _ = client_write.shutdown(Shutdown::Write);
+    let _ = client.shutdown(Shutdown::Write);
     let _ = client_to_upstream.join();
     upstream_to_client.map(|_| ())
 }
@@ -8481,6 +8585,70 @@ fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
     }
     state.workers.clear();
     state.round_robin_index = 0;
+}
+
+fn bind_lasm_listener(listen_port: u16, reuse_port: bool) -> Result<TcpListener, String> {
+    if !reuse_port {
+        return TcpListener::bind(("127.0.0.1", listen_port)).map_err(|err| {
+            format!("could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}")
+        });
+    }
+
+    let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))
+        .map_err(|err| format!("could not create LASM reuse-port socket: {err}"))?;
+    socket.set_reuse_address(true).map_err(|err| {
+        format!("could not set LASM reuse-port socket option SO_REUSEADDR: {err}")
+    })?;
+    #[cfg(unix)]
+    socket.set_reuse_port(true).map_err(|err| {
+        format!("could not set LASM reuse-port socket option SO_REUSEPORT: {err}")
+    })?;
+
+    let addr = std::net::SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, listen_port);
+    socket.bind(&addr.into()).map_err(|err| {
+        format!("could not bind LASM reuse-port listener on 127.0.0.1:{listen_port}: {err}")
+    })?;
+    socket.listen(1024).map_err(|err| {
+        format!("could not listen on LASM reuse-port listener 127.0.0.1:{listen_port}: {err}")
+    })?;
+
+    Ok(socket.into())
+}
+
+fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Result<(), i32> {
+    let mut state = LasmClusterState {
+        workers: Vec::new(),
+        round_robin_index: 0,
+        next_port: config.listen_port,
+    };
+    for _ in 0..config.min_instances {
+        match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {
+            Ok(worker) => state.workers.push(worker),
+            Err(message) => {
+                stop_lasm_cluster_workers(&mut state);
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        }
+    }
+    if state.workers.is_empty() {
+        eprintln!("run failed: could not bootstrap LASM reuse-port workers");
+        return Err(2);
+    }
+
+    loop {
+        std::thread::sleep(Duration::from_millis(config.autoscale_check_ms.max(200)));
+        prune_dead_lasm_cluster_workers(&mut state);
+        while state.workers.len() < config.min_instances {
+            match spawn_and_wait_lasm_cluster_worker(&config, config.listen_port) {
+                Ok(worker) => state.workers.push(worker),
+                Err(message) => {
+                    eprintln!("warning: LASM reuse-port worker recovery failed: {message}");
+                    break;
+                }
+            }
+        }
+    }
 }
 
 fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
@@ -8529,6 +8697,82 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
     let stop_flag = Arc::new(AtomicBool::new(false));
+    let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
+    let relay_queue_capacity =
+        lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
+    let (relay_sender, relay_receiver) = bounded::<TcpStream>(relay_queue_capacity);
+    let mut relay_handles = Vec::with_capacity(relay_worker_count);
+
+    for _ in 0..relay_worker_count {
+        let relay_receiver = relay_receiver.clone();
+        let relay_state = Arc::clone(&shared_state);
+        let relay_config = Arc::clone(&shared_config);
+        let relay_active = Arc::clone(&active_connections);
+        relay_handles.push(std::thread::spawn(move || {
+            loop {
+                let mut client = match relay_receiver.recv() {
+                    Ok(stream) => stream,
+                    Err(_) => break,
+                };
+
+                let backend_port = {
+                    let mut state = match relay_state.lock() {
+                        Ok(state) => state,
+                        Err(_) => {
+                            let _ = write_lasm_cluster_unavailable_response(
+                                &mut client,
+                                "cluster state unavailable",
+                            );
+                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            continue;
+                        }
+                    };
+                    prune_dead_lasm_cluster_workers(&mut state);
+                    while state.workers.len() < relay_config.min_instances {
+                        let worker_port = state.next_port;
+                        state.next_port = state.next_port.saturating_add(1);
+                        match spawn_and_wait_lasm_cluster_worker(&relay_config, worker_port) {
+                            Ok(worker) => state.workers.push(worker),
+                            Err(message) => {
+                                eprintln!("warning: LASM cluster worker recovery failed: {message}");
+                                break;
+                            }
+                        }
+                    }
+                    if state.workers.is_empty() {
+                        None
+                    } else {
+                        let index = state.round_robin_index % state.workers.len();
+                        state.round_robin_index = state.round_robin_index.saturating_add(1);
+                        Some(state.workers[index].port)
+                    }
+                };
+
+                let Some(backend_port) = backend_port else {
+                    let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
+                    relay_active.fetch_sub(1, Ordering::Relaxed);
+                    continue;
+                };
+
+                match TcpStream::connect(("127.0.0.1", backend_port)) {
+                    Ok(mut upstream) => {
+                        let _ = client.set_nodelay(true);
+                        let _ = upstream.set_nodelay(true);
+                        let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "warning: LASM cluster worker {} connect failed: {}",
+                            backend_port, err
+                        );
+                        let _ =
+                            write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                    }
+                }
+                relay_active.fetch_sub(1, Ordering::Relaxed);
+            }
+        }));
+    }
 
     let autoscale_handle = if shared_config.max_instances > shared_config.min_instances {
         let autoscale_state = Arc::clone(&shared_state);
@@ -8580,7 +8824,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     };
 
     for incoming in listener.incoming() {
-        let client_stream = match incoming {
+        let mut client_stream = match incoming {
             Ok(stream) => stream,
             Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(err) => {
@@ -8588,73 +8832,35 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 break;
             }
         };
-
-        let state = Arc::clone(&shared_state);
-        let config = Arc::clone(&shared_config);
-        let active = Arc::clone(&active_connections);
-        std::thread::spawn(move || {
-            active.fetch_add(1, Ordering::Relaxed);
-            let mut client = client_stream;
-
-            let backend_port = {
-                let mut state = match state.lock() {
-                    Ok(state) => state,
-                    Err(_) => {
-                        let _ = write_lasm_cluster_unavailable_response(
-                            &mut client,
-                            "cluster state unavailable",
-                        );
-                        active.fetch_sub(1, Ordering::Relaxed);
-                        return;
-                    }
-                };
-                prune_dead_lasm_cluster_workers(&mut state);
-                while state.workers.len() < config.min_instances {
-                    let worker_port = state.next_port;
-                    state.next_port = state.next_port.saturating_add(1);
-                    match spawn_and_wait_lasm_cluster_worker(&config, worker_port) {
-                        Ok(worker) => state.workers.push(worker),
-                        Err(message) => {
-                            eprintln!("warning: LASM cluster worker recovery failed: {message}");
-                            break;
-                        }
-                    }
-                }
-                if state.workers.is_empty() {
-                    None
-                } else {
-                    let index = state.round_robin_index % state.workers.len();
-                    state.round_robin_index = state.round_robin_index.saturating_add(1);
-                    Some(state.workers[index].port)
-                }
-            };
-
-            let Some(backend_port) = backend_port else {
-                let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
-                active.fetch_sub(1, Ordering::Relaxed);
-                return;
-            };
-
-            match TcpStream::connect(("127.0.0.1", backend_port)) {
-                Ok(mut upstream) => {
-                    let _ = client.set_nodelay(true);
-                    let _ = upstream.set_nodelay(true);
-                    let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
-                }
-                Err(err) => {
-                    eprintln!(
-                        "warning: LASM cluster worker {} connect failed: {}",
-                        backend_port, err
-                    );
-                    let _ =
-                        write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
-                }
+        active_connections.fetch_add(1, Ordering::Relaxed);
+        match relay_sender.try_send(client_stream) {
+            Ok(()) => {}
+            Err(TrySendError::Full(stream)) => {
+                client_stream = stream;
+                active_connections.fetch_sub(1, Ordering::Relaxed);
+                let _ = write_lasm_cluster_unavailable_response(
+                    &mut client_stream,
+                    "cluster relay saturated",
+                );
             }
-            active.fetch_sub(1, Ordering::Relaxed);
-        });
+            Err(TrySendError::Disconnected(stream)) => {
+                client_stream = stream;
+                active_connections.fetch_sub(1, Ordering::Relaxed);
+                let _ = write_lasm_cluster_unavailable_response(
+                    &mut client_stream,
+                    "cluster relay unavailable",
+                );
+                eprintln!("run failed: LASM cluster relay worker pool disconnected unexpectedly");
+                break;
+            }
+        }
     }
 
     stop_flag.store(true, Ordering::Relaxed);
+    drop(relay_sender);
+    for handle in relay_handles {
+        let _ = handle.join();
+    }
     if let Some(handle) = autoscale_handle {
         let _ = handle.join();
     }
@@ -8684,6 +8890,9 @@ fn cmd_run_lasm_backend(
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
     autoscale_check_ms: u64,
+    cluster_relay_workers: Option<usize>,
+    cluster_relay_queue: Option<usize>,
+    reuse_port: bool,
 ) -> Result<(), i32> {
     let program = match analyze_entry(path, manifest) {
         Ok(program) => program,
@@ -8883,6 +9092,43 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: cluster mode does not support --oneshot");
         return Err(2);
     }
+    let fixed_cluster_reuse_port_mode = cluster_mode && max_instances == instances;
+    if fixed_cluster_reuse_port_mode && cluster_relay_workers.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-workers is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode && cluster_relay_queue.is_some() {
+        eprintln!("run failed: --cluster-relay-queue is not used in fixed reuse-port cluster mode");
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode {
+        return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
+            path: path.to_path_buf(),
+            listen_port: port.unwrap_or(8080),
+            max_header_bytes,
+            max_body_bytes,
+            max_concurrency,
+            max_pending,
+            serve_timeout_ms,
+            overflow_probe_timeout_ms: Some(overflow_probe_timeout_ms),
+            max_runtime_steps,
+            max_keep_alive_requests,
+            db_base: db_base.map(Path::to_path_buf),
+            db_adapter,
+            min_instances: instances,
+            max_instances,
+            target_connections_per_instance: autoscale_target_connections
+                .unwrap_or(effective_max_in_flight)
+                .max(1),
+            autoscale_check_ms,
+            worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            cluster_relay_workers: None,
+            cluster_relay_queue: None,
+            reuse_port_workers: true,
+        });
+    }
     if cluster_mode {
         let target_connections_per_instance = autoscale_target_connections
             .unwrap_or(effective_max_in_flight)
@@ -8905,6 +9151,9 @@ fn cmd_run_lasm_backend(
             target_connections_per_instance,
             autoscale_check_ms,
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
+            cluster_relay_workers,
+            cluster_relay_queue,
+            reuse_port_workers: false,
         });
     }
 
@@ -8917,12 +9166,10 @@ fn cmd_run_lasm_backend(
         return Err(1);
     }
     let listen_port = port.unwrap_or(8080);
-    let listener = match TcpListener::bind(("127.0.0.1", listen_port)) {
+    let listener = match bind_lasm_listener(listen_port, reuse_port) {
         Ok(listener) => listener,
-        Err(err) => {
-            eprintln!(
-                "run failed: could not bind LASM backend listener on 127.0.0.1:{listen_port}: {err}"
-            );
+        Err(message) => {
+            eprintln!("run failed: {message}");
             return Err(2);
         }
     };
@@ -8949,10 +9196,9 @@ fn cmd_run_lasm_backend(
     let worker_sender = if oneshot {
         None
     } else {
-        let (sender, receiver) = sync_channel::<TcpStream>(effective_max_pending);
-        let shared_receiver = Arc::new(Mutex::new(receiver));
+        let (sender, receiver) = bounded::<TcpStream>(effective_max_pending);
         for _ in 0..effective_max_in_flight {
-            let worker_receiver = Arc::clone(&shared_receiver);
+            let worker_receiver = receiver.clone();
             let routes_for_worker = routes.clone();
             let trace_counter_for_worker = Arc::clone(&trace_counter);
             let header_defaults_for_worker = Arc::clone(&header_defaults);
@@ -8970,14 +9216,7 @@ fn cmd_run_lasm_backend(
                     }
                 };
                 loop {
-                    let next_stream = {
-                        let receiver = match worker_receiver.lock() {
-                            Ok(receiver) => receiver,
-                            Err(_) => return,
-                        };
-                        receiver.recv()
-                    };
-                    let mut stream = match next_stream {
+                    let mut stream = match worker_receiver.recv() {
                         Ok(stream) => stream,
                         Err(_) => break,
                     };
