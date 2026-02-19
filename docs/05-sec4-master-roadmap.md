@@ -544,6 +544,11 @@ Post-alpha track acceptance anchors:
      - background scaler/maintenance loop now owns dead-worker pruning + min-instance recovery in one place,
      - relay backend-port selection now uses an atomic selection counter over current worker set to keep per-connection critical section minimal.
      - documented in `docs/book/1051-m39-lasm-cluster-hot-path-lock-contention-reduction.md`.
+   - [x] Cluster state lock model optimized for relay-heavy read paths:
+     - cluster worker state now uses `RwLock` so relay workers take shared read locks for backend selection,
+     - background maintenance/autoscale loop remains the only writer for prune/recovery/scale mutations,
+     - this removes unnecessary writer lock serialization between parallel relay workers during steady-state dispatch.
+     - documented in `docs/book/1052-m39-lasm-cluster-read-write-lock-state-optimization.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -19,7 +19,7 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
@@ -8789,7 +8789,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         return Err(2);
     }
 
-    let shared_state = Arc::new(Mutex::new(state));
+    let shared_state = Arc::new(RwLock::new(state));
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
     let stop_flag = Arc::new(AtomicBool::new(false));
@@ -8813,7 +8813,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             };
 
             let backend_port = {
-                let state = match relay_state.lock() {
+                let state = match relay_state.read() {
                     Ok(state) => state,
                     Err(_) => {
                         let _ = write_lasm_cluster_unavailable_response(
@@ -8878,7 +8878,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     break;
                 }
                 let now = Instant::now();
-                let mut state = match autoscale_state.lock() {
+                let mut state = match autoscale_state.write() {
                     Ok(state) => state,
                     Err(_) => break,
                 };
@@ -9012,7 +9012,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let _ = handle.join();
     }
     let _ = autoscale_handle.join();
-    if let Ok(mut state) = shared_state.lock() {
+    if let Ok(mut state) = shared_state.write() {
         stop_lasm_cluster_workers(&mut state);
     }
     Ok(())
