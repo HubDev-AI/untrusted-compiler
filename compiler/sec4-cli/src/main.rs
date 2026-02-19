@@ -8761,6 +8761,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
     let stop_flag = Arc::new(AtomicBool::new(false));
+    let relay_saturation_events = Arc::new(AtomicUsize::new(0));
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
@@ -8842,6 +8843,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_state = Arc::clone(&shared_state);
         let autoscale_config = Arc::clone(&shared_config);
         let autoscale_active_connections = Arc::clone(&active_connections);
+        let autoscale_saturation_events = Arc::clone(&relay_saturation_events);
         let autoscale_stop_flag = Arc::clone(&stop_flag);
         Some(std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
@@ -8852,7 +8854,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     break;
                 }
                 let active = autoscale_active_connections.load(Ordering::Relaxed);
-                let desired = desired_lasm_cluster_instances(
+                let mut desired = desired_lasm_cluster_instances(
                     active,
                     autoscale_config.min_instances,
                     autoscale_config.max_instances,
@@ -8863,6 +8865,15 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     Err(_) => break,
                 };
                 prune_dead_lasm_cluster_workers(&mut state);
+                let saturation_events = autoscale_saturation_events.swap(0, Ordering::Relaxed);
+                if saturation_events > 0 {
+                    let boosted_target = state
+                        .workers
+                        .len()
+                        .saturating_add(autoscale_config.autoscale_scale_up_step)
+                        .min(autoscale_config.max_instances);
+                    desired = desired.max(boosted_target);
+                }
                 let now = Instant::now();
                 let current_workers = state.workers.len();
                 let up_target = if desired > current_workers {
@@ -8945,6 +8956,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             Ok(()) => {}
             Err(TrySendError::Full(stream)) => {
                 client_stream = stream;
+                relay_saturation_events.fetch_add(1, Ordering::Relaxed);
                 active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
