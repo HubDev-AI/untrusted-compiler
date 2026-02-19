@@ -993,5 +993,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1025-m39-lasm-cluster-relay-worker-pool.md`
 - `1026-m39-lasm-cluster-relay-tuning-flags.md`
 - `1027-m39-lasm-worker-dispatch-crossbeam-channel.md`
+- `1028-m39-lasm-autoscale-cooldown-hysteresis-controls.md`
 
 As milestones progress, chapters will be added and linked from this index.

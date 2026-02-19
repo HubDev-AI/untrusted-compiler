@@ -455,6 +455,11 @@ Post-alpha track acceptance anchors:
      - keeps bounded backpressure semantics while avoiding serialized `recv()` lock sections under load,
      - local proxy-mode probe remained stable at about `~60k req/s` after the channel swap.
      - documented in `docs/book/1027-m39-lasm-worker-dispatch-crossbeam-channel.md`.
+   - [x] Added autoscale hysteresis controls for cluster worker scaling:
+     - new LASM flags: `--autoscale-scale-up-cooldown-ms` and `--autoscale-scale-down-cooldown-ms`,
+     - autoscaler now enforces separate up/down cooldown windows to reduce worker-count thrash on bursty traffic,
+     - flags stay LASM-only with deterministic validation and guard diagnostics.
+     - documented in `docs/book/1028-m39-lasm-autoscale-cooldown-hysteresis-controls.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
