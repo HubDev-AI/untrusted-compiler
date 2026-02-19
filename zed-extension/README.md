@@ -28,6 +28,12 @@ Use:
 
 It includes multi-file `.ut` modules plus playground files for diagnostics and formatter checks.
 
+Run the deterministic smoke runner:
+
+```bash
+scripts/run-zed-plugin-smoke.sh
+```
+
 ## Binary resolution order
 
 The extension resolves the LSP binary in this order:

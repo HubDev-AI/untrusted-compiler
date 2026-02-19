@@ -10102,8 +10102,20 @@ M13-S1 go/no-go note:
 - [x] Added operator docs for resolution order + settings override.
 - [x] Added book chapter `1040-m39-zed-plugin-runtime-launch-hardening.md`.
 
+### M39-S2E Zed plugin smoke runner script acceptance criteria
+- Repository includes a single-command smoke runner for `examples/zed-plugin-smoke`.
+- Smoke runner validates grammar pin, sample `sec4 check`, and deterministic formatter output without mutating tracked fixtures.
+- Optional fast mode is available for quick local loops.
+
+### M39-S2E tracking (live status)
+- [x] Added `scripts/run-zed-plugin-smoke.sh`.
+- [x] Added deterministic formatter assertion in temp project copy.
+- [x] Added `--fast`/`FAST=1` mode for lighter operator loops.
+- [x] Updated Zed extension docs to point to smoke runner command.
+- [x] Added book chapter `1041-m39-zed-plugin-smoke-runner-script.md`.
+
 ### Next planned slice
-- M39-S2E Zed plugin smoke runner script (single command to validate diagnostics/navigation/format workflows against `examples/zed-plugin-smoke`).
+- M39-S2F Zed extension release packaging checklist (versioning, artifact verification, and operator install path).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
