@@ -554,6 +554,11 @@ Post-alpha track acceptance anchors:
      - relay workers read the latest snapshot and select backend ports via atomic round-robin counter without touching cluster state locks,
      - state locks remain on maintenance/autoscale mutation paths only.
      - documented in `docs/book/1053-m39-lasm-cluster-lock-free-worker-port-snapshots.md`.
+   - [x] Relay failure handling now feeds autoscale pressure and bounds upstream connect stalls:
+     - relay path increments saturation events on `no healthy workers` and backend connect failures,
+     - backend worker connect now uses deterministic short timeout (`250ms`) instead of unbounded connect waits,
+     - this improves failure-mode responsiveness and helps saturation-based scaling react faster to worker churn.
+     - documented in `docs/book/1054-m39-lasm-cluster-relay-connect-timeout-and-saturation-signal.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

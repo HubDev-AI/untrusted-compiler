@@ -8593,6 +8593,10 @@ fn lasm_cluster_maintenance_interval_ms(config: &LasmClusterConfig) -> u64 {
     config.autoscale_check_ms.clamp(100, 500)
 }
 
+fn lasm_cluster_backend_connect_timeout() -> Duration {
+    Duration::from_millis(250)
+}
+
 fn refresh_lasm_cluster_worker_ports_snapshot(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
@@ -8822,6 +8826,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_active = Arc::clone(&active_connections);
         let relay_selection_counter = Arc::clone(&relay_selection_counter);
         let relay_worker_ports = Arc::clone(&worker_ports_snapshot);
+        let relay_saturation_events = Arc::clone(&relay_saturation_events);
         relay_handles.push(std::thread::spawn(move || loop {
             let mut client = match relay_receiver.recv() {
                 Ok(stream) => stream,
@@ -8840,18 +8845,25 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             };
 
             let Some(backend_port) = backend_port else {
+                relay_saturation_events.fetch_add(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
                 relay_active.fetch_sub(1, Ordering::Relaxed);
                 continue;
             };
 
-            match TcpStream::connect(("127.0.0.1", backend_port)) {
+            let backend_addr =
+                std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, backend_port));
+            match TcpStream::connect_timeout(
+                &backend_addr,
+                lasm_cluster_backend_connect_timeout(),
+            ) {
                 Ok(mut upstream) => {
                     let _ = client.set_nodelay(true);
                     let _ = upstream.set_nodelay(true);
                     let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
                 }
                 Err(err) => {
+                    relay_saturation_events.fetch_add(1, Ordering::Relaxed);
                     eprintln!(
                         "warning: LASM cluster worker {} connect failed: {}",
                         backend_port, err
