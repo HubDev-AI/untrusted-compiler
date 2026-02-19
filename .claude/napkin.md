@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I picked chapter number `1037` for a new slice while another lane had already merged `1037`, forcing a rebase conflict and renumber. | Before adding a new `docs/book/*` chapter, check latest `origin/dev` tail of `docs/book/README.md` and reserve the next free number after fetch/rebase. |
 | 2026-02-19 | self | I reintroduced Cargo lock contention by launching two Cargo validations in parallel during rebase re-validation (`sec4audit-language-server` tests + `sec4 check`). | Keep all Cargo validations strictly sequential in this repo, including quick post-rebase confidence checks; parallelize only read/search commands. |
 | 2026-02-19 | self | I drafted the new Zed smoke sample with parser-valid but statement-invalid UT control flow (`if` block without trailing `;`) and had to fix it after `sec4 check` failed (`P2101`). | For new sample fixtures, run `sec4 check` immediately after first write and fix statement terminators before adding docs/tests around the fixture. |
 | 2026-02-19 | self | I accidentally invoked the web tool (`time`) during a local-only LASM implementation pass, which was unnecessary and breaks our local-first discipline. | Keep LASM/compiler iterations strictly on local repo tooling (`exec_command`/`apply_patch`) unless external information is explicitly required. |

@@ -10088,8 +10088,22 @@ M13-S1 go/no-go note:
 - [x] Added `examples/zed-plugin-smoke` project with plugin-focused operator checklist.
 - [x] Added book chapter `1036-m39-zed-plugin-formatting-and-smoke-project.md`.
 
+### M39-S2D Zed plugin runtime-launch hardening acceptance criteria
+- Zed extension resolves `sec4audit-language-server` with deterministic precedence:
+  - settings override path,
+  - PATH binary,
+  - workspace-local fallback build paths.
+- Missing-binary failure mode returns actionable diagnostics with explicit setting key and build command.
+- Operator docs describe launch precedence and override configuration.
+
+### M39-S2D tracking (live status)
+- [x] Added launch resolution precedence in `zed-extension/src/lib.rs` (settings -> PATH -> local fallback paths).
+- [x] Added clear configured-path and missing-binary diagnostics.
+- [x] Added operator docs for resolution order + settings override.
+- [x] Added book chapter `1040-m39-zed-plugin-runtime-launch-hardening.md`.
+
 ### Next planned slice
-- M39-S2D Zed plugin runtime-launch hardening (clear binary-missing diagnostics + local dev fallback command path).
+- M39-S2E Zed plugin smoke runner script (single command to validate diagnostics/navigation/format workflows against `examples/zed-plugin-smoke`).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

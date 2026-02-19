@@ -10,7 +10,7 @@ This directory contains the official Zed integration for Untrusted<T>.
 - `languages/untrusted/config.toml`:
   - language name/grammar/file suffix/comment/bracket config.
 - `src/lib.rs`:
-  - launches `sec4audit-language-server --stdio` for Zed LSP requests.
+  - resolves and launches `sec4audit-language-server --stdio` for Zed LSP requests.
 
 ## Feature surface (from LSP)
 
@@ -27,6 +27,37 @@ Use:
 - `/Users/vladimirtrifonov/src/ai/AILang/examples/zed-plugin-smoke`
 
 It includes multi-file `.ut` modules plus playground files for diagnostics and formatter checks.
+
+## Binary resolution order
+
+The extension resolves the LSP binary in this order:
+
+1. `lsp.sec4audit-lsp.binary.path` from Zed settings (if provided)
+2. `sec4audit-language-server` on `PATH`
+3. local workspace fallback paths:
+   - `<worktree>/target/debug/sec4audit-language-server`
+   - `<worktree>/target/release/sec4audit-language-server`
+   - `<worktree>/compiler/sec4-lsp/target/debug/sec4audit-language-server`
+   - `<worktree>/compiler/sec4-lsp/target/release/sec4audit-language-server`
+
+If not found, the extension now returns a clear error with searched paths and recovery steps.
+
+## Optional Zed settings override
+
+Use this when you want an explicit binary path:
+
+```json
+{
+  "lsp": {
+    "sec4audit-lsp": {
+      "binary": {
+        "path": "/absolute/path/to/sec4audit-language-server",
+        "arguments": ["--stdio"]
+      }
+    }
+  }
+}
+```
 
 ## Notes
 
