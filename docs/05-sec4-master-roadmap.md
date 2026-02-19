@@ -10108,8 +10108,95 @@ M13-S1 go/no-go note:
 - [x] Added `examples/zed-plugin-smoke` project with plugin-focused operator checklist.
 - [x] Added book chapter `1036-m39-zed-plugin-formatting-and-smoke-project.md`.
 
+### M39-S2D Zed plugin runtime-launch hardening acceptance criteria
+- Zed extension resolves `sec4audit-language-server` with deterministic precedence:
+  - settings override path,
+  - PATH binary,
+  - workspace-local fallback build paths.
+- Missing-binary failure mode returns actionable diagnostics with explicit setting key and build command.
+- Operator docs describe launch precedence and override configuration.
+
+### M39-S2D tracking (live status)
+- [x] Added launch resolution precedence in `zed-extension/src/lib.rs` (settings -> PATH -> local fallback paths).
+- [x] Added clear configured-path and missing-binary diagnostics.
+- [x] Added operator docs for resolution order + settings override.
+- [x] Added book chapter `1040-m39-zed-plugin-runtime-launch-hardening.md`.
+
+### M39-S2E Zed plugin smoke runner script acceptance criteria
+- Repository includes a single-command smoke runner for `examples/zed-plugin-smoke`.
+- Smoke runner validates grammar pin, sample `sec4 check`, and deterministic formatter output without mutating tracked fixtures.
+- Optional fast mode is available for quick local loops.
+
+### M39-S2E tracking (live status)
+- [x] Added `scripts/run-zed-plugin-smoke.sh`.
+- [x] Added deterministic formatter assertion in temp project copy.
+- [x] Added `--fast`/`FAST=1` mode for lighter operator loops.
+- [x] Updated Zed extension docs to point to smoke runner command.
+- [x] Added book chapter `1041-m39-zed-plugin-smoke-runner-script.md`.
+
+### M39-S2F Zed extension release packaging checklist acceptance criteria
+- Repository includes a deterministic release checklist command for Zed extension publishing readiness.
+- Checklist verifies extension manifest wiring, grammar pin validity, and plugin smoke runner success.
+- Operator-facing docs reference the checklist as canonical pre-release validation.
+
+### M39-S2F tracking (live status)
+- [x] Added `scripts/check-zed-extension-release.sh`.
+- [x] Included manifest token/wiring assertions for `zed-extension/extension.toml`.
+- [x] Wired grammar-pin + fast smoke runner execution into checklist.
+- [x] Updated extension README validation section to use release checklist command.
+
+### M39-S2G Zed extension operator install guide acceptance criteria
+- Repository includes deterministic operator workflow for:
+  - local install,
+  - local update,
+  - rollback to previous local install.
+- Install workflow resolves platform-local extension install paths with override support.
+- Operator docs include explicit install/update/rollback commands and backup location notes.
+
+### M39-S2G tracking (live status)
+- [x] Added `scripts/manage-zed-extension-local.sh` with `install|update|rollback|status`.
+- [x] Added platform-default extension directory resolution + override support (`--extensions-dir`).
+- [x] Added timestamped local backup flow for safe rollback.
+- [x] Updated `zed-extension/README.md` with local operator install/update/rollback guide.
+
+### M39-S2H Zed extension end-to-end operator smoke acceptance criteria
+- Repository includes one-command operator smoke for clean-profile extension flow:
+  - install,
+  - plugin smoke validation,
+  - rollback.
+- Smoke flow verifies rollback restoration against seeded previous install state.
+- Operator docs reference the command as the canonical full local-flow check.
+
+### M39-S2H tracking (live status)
+- [x] Added `scripts/run-zed-extension-operator-smoke.sh`.
+- [x] Wired install -> plugin smoke (`--fast`) -> rollback flow using `scripts/manage-zed-extension-local.sh`.
+- [x] Added rollback restoration assertion via seeded marker file.
+- [x] Updated `zed-extension/README.md` with full operator-flow validation command.
+
+### M39-S2I Zed extension publish bundle staging helper acceptance criteria
+- Repository includes deterministic local bundle staging command for Zed extension publish prep.
+- Staging command emits a machine-readable manifest with per-file size/hash inventory.
+- Operator docs include bundle staging command and output artifact location.
+
+### M39-S2I tracking (live status)
+- [x] Added `scripts/stage-zed-extension-bundle.sh`.
+- [x] Added deterministic bundle staging under `build/zed-extension-bundle/`.
+- [x] Added `bundle-manifest.json` emission with per-file `path/size/sha256`.
+- [x] Updated `zed-extension/README.md` with bundle staging usage.
+
+### M39-S2J Zed extension local operator checklist consolidation acceptance criteria
+- Repository includes a single entrypoint command for local operator readiness.
+- Entry command wraps release checklist (without duplicate smoke), operator smoke, and bundle stage.
+- Command emits deterministic pass/fail outcome and validates staged manifest presence.
+
+### M39-S2J tracking (live status)
+- [x] Added `scripts/check-zed-extension-operator-readiness.sh`.
+- [x] Wrapped `check-zed-extension-release.sh --skip-smoke`, `run-zed-extension-operator-smoke.sh`, and `stage-zed-extension-bundle.sh --clean`.
+- [x] Added staged manifest existence assertion in readiness flow.
+- [x] Updated `zed-extension/README.md` with one-command readiness entrypoint.
+
 ### Next planned slice
-- M39-S2D Zed plugin runtime-launch hardening (clear binary-missing diagnostics + local dev fallback command path).
+- M39-S2K Wire Zed operator readiness command into release-operator handoff docs and lane prompts.
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 
