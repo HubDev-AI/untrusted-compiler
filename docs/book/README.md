@@ -1024,5 +1024,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1052-m39-lasm-cluster-read-write-lock-state-optimization.md`
 - `1053-m39-lasm-cluster-lock-free-worker-port-snapshots.md`
 - `1054-m39-lasm-cluster-relay-connect-timeout-and-saturation-signal.md`
+- `1055-m39-lasm-cluster-snapshot-publish-change-detection.md`
 
 As milestones progress, chapters will be added and linked from this index.
