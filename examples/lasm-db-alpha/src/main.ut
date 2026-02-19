@@ -1,0 +1,62 @@
+// lasm-db-alpha:
+// End-to-end LASM backend example that exercises disk-backed DB behavior.
+//
+// The handlers stay simple and return schema-tagged JSON responses.
+// In LASM run mode, those schema tags trigger real dynamic DB logic:
+// - DbExecResponse      -> append record to records.log
+// - DbExecTxResponse    -> append tx record to records.log
+// - DbQueryOneResponse  -> return latest matching record
+// - DbListRecordsResponse -> return all persisted records
+
+fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn dbExec() effects { net } -> Int {
+  // Request query parameters:
+  //   template=<sql template text>   (required)
+  //   params=<parameter payload>     (optional, default "0")
+  //   db=<db handle id>              (optional, default 1)
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn dbExecTx() effects { net } -> Int {
+  // Request query parameters:
+  //   template=<sql template text>   (required)
+  //   params=<parameter payload>     (optional, default "0")
+  //   db=<db handle id>              (optional, default 1)
+  //   tx=<tx handle id>              (optional, default 1)
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbQueryOne() effects { net } -> Int {
+  // Request query parameters:
+  //   template=<sql template text>   (required)
+  //   params=<parameter payload>     (optional, default "0")
+  //   db=<db handle id>              (optional, default 1)
+  //   row_schema=<schema handle id>  (optional, default 1)
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  // Returns all currently persisted DB records from records.log.
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+
+  http.get(router, "/health", health);
+  http.post(router, "/db/exec", dbExec);
+  http.post(router, "/db/exec-tx", dbExecTx);
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.get(router, "/db/records", dbListRecords);
+
+  http.serve(8080, router);
+  0
+}

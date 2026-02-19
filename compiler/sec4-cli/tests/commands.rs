@@ -15090,6 +15090,223 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_persists_records_log_and_query_one_when_db_schema_hints_are_used() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-records-log");
+    let db_base = project_dir.join("lasm-db");
+    let exec_port = find_available_tcp_port();
+    let exec_tx_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+    let list_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbrecordscommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn dbExec() effects { net } -> Int {
+  res.json(200, "DbExecResponse", 0);
+  0
+}
+
+fn dbExecTx() effects { net } -> Int {
+  res.json(200, "DbExecTxResponse", 0);
+  0
+}
+
+fn dbQueryOne() effects { net } -> Int {
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", dbExec);
+  http.post(router, "/db/exec-tx", dbExecTx);
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.get(router, "/db/records", dbListRecords);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let run_lasm_oneshot_request = |port: u16, request: String| -> String {
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                db_base_value.as_str(),
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command exited before request with status: {status}");
+            }
+
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db records flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db records process did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db records process should exit successfully"
+        );
+        response
+    };
+
+    let exec_response = run_lasm_oneshot_request(
+        exec_port,
+        "POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK"),
+        "db exec response should contain deterministic 200 status:\n{exec_response}"
+    );
+    assert!(
+        exec_response.contains("\"recordId\":1") && exec_response.contains("\"op\":\"exec\""),
+        "db exec response should include deterministic first record payload:\n{exec_response}"
+    );
+
+    let exec_tx_response = run_lasm_oneshot_request(
+        exec_tx_port,
+        "POST /db/exec-tx?template=SELECT%201&params=alpha&tx=9 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        exec_tx_response.contains("HTTP/1.1 200 OK"),
+        "db execTx response should contain deterministic 200 status:\n{exec_tx_response}"
+    );
+    assert!(
+        exec_tx_response.contains("\"recordId\":2")
+            && exec_tx_response.contains("\"op\":\"execTx\"")
+            && exec_tx_response.contains("\"tx\":9"),
+        "db execTx response should include deterministic second record payload:\n{exec_tx_response}"
+    );
+
+    let records_log_path = db_base.join("records.log");
+    let records_log = fs::read_to_string(&records_log_path)
+        .expect("LASM db records flow should persist records.log");
+    assert!(
+        records_log.contains("\"id\":1") && records_log.contains("\"id\":2"),
+        "records.log should include deterministic persisted record ids:\n{records_log}"
+    );
+    assert!(
+        records_log.contains("\"op\":\"exec\"") && records_log.contains("\"op\":\"execTx\""),
+        "records.log should include deterministic persisted operations:\n{records_log}"
+    );
+
+    let query_one_response = run_lasm_oneshot_request(
+        query_one_port,
+        "GET /db/query-one?template=SELECT%201&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK"),
+        "db queryOne response should contain deterministic 200 status:\n{query_one_response}"
+    );
+    assert!(
+        query_one_response.contains("\"recordId\":2")
+            && query_one_response.contains("\"rowSchema\":7")
+            && query_one_response.contains("op=execTx"),
+        "db queryOne response should materialize latest matching record deterministically:\n{query_one_response}"
+    );
+
+    let list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        list_response.contains("HTTP/1.1 200 OK"),
+        "db records response should contain deterministic 200 status:\n{list_response}"
+    );
+    assert!(
+        list_response.contains("\"count\":2")
+            && list_response.contains("\"op\":\"exec\"")
+            && list_response.contains("\"op\":\"execTx\""),
+        "db records response should include deterministic persisted record list:\n{list_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_merges_header_names_case_insensitively() {
     let project_dir = temp_dir("sec4-run-command-lasm-header-case-merge");
     let port = find_available_tcp_port();
