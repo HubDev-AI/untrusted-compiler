@@ -975,5 +975,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1007-m39-lasm-db-query-one-intrinsic-parity-and-schema-row-bridge.md`
 - `1008-m39-lasm-default-run-backend-and-explicit-c-fallback.md`
 - `1009-m39-benchmark-rss-memory-baseline-visibility.md`
+- `1010-m39-benchmark-rss-regression-threshold-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.
