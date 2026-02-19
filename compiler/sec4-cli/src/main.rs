@@ -8742,17 +8742,18 @@ impl LasmClusterRelayPump {
     fn pump_once(&mut self) -> Result<LasmClusterRelayPumpStep, String> {
         let mut progressed = false;
 
-        if !self.client_read_closed && self.c2u_end < self.client_to_upstream.len() {
+        while !self.client_read_closed && self.c2u_end < self.client_to_upstream.len() {
             match self.client.read(&mut self.client_to_upstream[self.c2u_end..]) {
                 Ok(0) => {
                     self.client_read_closed = true;
                     progressed = true;
+                    break;
                 }
                 Ok(bytes_read) => {
                     self.c2u_end += bytes_read;
                     progressed = true;
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
                     return Err(format!("could not read proxy client stream: {err}"));
                 }
@@ -8788,17 +8789,18 @@ impl LasmClusterRelayPump {
             }
         }
 
-        if !self.upstream_read_closed && self.u2c_end < self.upstream_to_client.len() {
+        while !self.upstream_read_closed && self.u2c_end < self.upstream_to_client.len() {
             match self.upstream.read(&mut self.upstream_to_client[self.u2c_end..]) {
                 Ok(0) => {
                     self.upstream_read_closed = true;
                     progressed = true;
+                    break;
                 }
                 Ok(bytes_read) => {
                     self.u2c_end += bytes_read;
                     progressed = true;
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
                     return Err(format!("could not read proxy upstream stream: {err}"));
                 }
