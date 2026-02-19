@@ -569,6 +569,11 @@ Post-alpha track acceptance anchors:
      - removes per-connection relay thread creation/cloning overhead while preserving existing overload/autoscale/error-envelope semantics,
      - short capacity probe under unchanged profile improved from `~64.9k req/s` to `~70.5k req/s` (`20s`, `8` threads, `256` connections, `instances=4`, `autoscale-max=8`, `relay-workers=32`, `relay-queue=4096`).
      - documented in `docs/book/1056-m39-lasm-cluster-relay-no-spawn-pump-loop.md`.
+   - [x] Relay worker auto-sizing now follows configured connection pressure:
+     - default `--cluster-relay-workers` (auto mode) now uses `target_connections_per_instance` as the sizing floor (bounded by an adaptive cap from `max_instances * target_connections_per_instance`, clamped `128..512`),
+     - this reduces under-provisioned relay pools in keep-alive-heavy cluster proxy workloads without requiring manual `--cluster-relay-workers` tuning,
+     - short capacity probe with relay settings left in auto mode observed `~71.9k req/s` (`1,446,283` requests in `20s`) under the same baseline profile.
+     - documented in `docs/book/1057-m39-lasm-cluster-relay-auto-worker-pressure-sizing.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
