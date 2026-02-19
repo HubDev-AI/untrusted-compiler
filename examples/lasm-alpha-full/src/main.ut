@@ -151,8 +151,14 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
   0
 }
 
-fn dbQueryOne() effects { net } -> Int {
-  // Dynamic records.log latest matching record query path.
+fn dbQueryOne() effects { net, db.read } -> Int {
+  // Dynamic records.log latest matching record query path via intrinsic DB execution.
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+  db.queryOne(db, query, rowSchema);
   res.json(200, "DbQueryOneResponse", 0);
   0
 }

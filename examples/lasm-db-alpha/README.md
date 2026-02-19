@@ -12,7 +12,7 @@ Larger alpha example for validating LASM server mode with real disk-backed DB be
 ## Files
 
 - `src/main.ut`:
-  - schema-tagged DB routes (`DbExecResponse`, `DbExecTxResponse`, `DbQueryOneResponse`, `DbListRecordsResponse`)
+  - intrinsic-backed DB routes (`db.exec`, `db.execTx`, `db.queryOne`) plus list response
   - comments explain each route and expected query parameters.
 - `sec4.toml`: project manifest.
 - `sec4.policy`: minimal policy for local alpha runs.
@@ -42,21 +42,21 @@ cargo run -p sec4 -- run \
 
 ```bash
 curl -i -X POST \
-  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha&db=1'
+  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha'
 ```
 
 2. Append transactional record:
 
 ```bash
 curl -i -X POST \
-  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha&db=1&tx=9'
+  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha'
 ```
 
 3. Query latest matching record:
 
 ```bash
 curl -i \
-  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&db=1&row_schema=7'
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&row_schema=7'
 ```
 
 4. List all persisted records:
@@ -79,5 +79,6 @@ cat "$DB_BASE/records.log"
 
 ## Notes
 
-- `template` query parameter is required for `db` schema routes.
+- `template`/`params` are required for intrinsic DB routes.
+- `/db/query-one` also requires numeric `row_schema`.
 - Without `--db-base`/`SEC4_RT_LASM_DB_BASE`, records stay in-process only.

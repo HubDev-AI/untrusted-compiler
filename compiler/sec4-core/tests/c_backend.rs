@@ -113,6 +113,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(header.contains("int64_t sec4_rt_cookie_build(int64_t name, int64_t value);"));
     assert!(header.contains("int64_t sec4_rt_set_cookie(int64_t cookie);"));
     assert!(header.contains("int64_t sec4_rt_sql_q(int64_t query_template, int64_t params);"));
+    assert!(header.contains("int64_t sec4_rt_schema_row(int64_t row_schema);"));
     assert!(header.contains("int64_t sec4_rt_db_exec(int64_t db, int64_t query);"));
     assert!(header.contains("int64_t sec4_rt_db_tx(int64_t db);"));
     assert!(header.contains("int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query);"));
@@ -230,6 +231,7 @@ fn c_backend_emits_runtime_header_and_source() {
     assert!(source.contains("int64_t sec4_rt_cookie_build(int64_t name, int64_t value)"));
     assert!(source.contains("int64_t sec4_rt_set_cookie(int64_t cookie)"));
     assert!(source.contains("int64_t sec4_rt_sql_q(int64_t query_template, int64_t params)"));
+    assert!(source.contains("int64_t sec4_rt_schema_row(int64_t row_schema)"));
     assert!(source.contains("int64_t sec4_rt_db_exec(int64_t db, int64_t query)"));
     assert!(source.contains("int64_t sec4_rt_db_tx(int64_t db)"));
     assert!(source.contains("int64_t sec4_rt_db_exec_tx(int64_t tx, int64_t query)"));
@@ -479,7 +481,7 @@ fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
   db.tx(1);
   db.execTx(1, query);
   db.exec(1, query);
-  db.queryOne(1, query, 3);
+  db.queryOne(1, query, schema.row(3));
   fs.read(1, 2);
   fs.write(1, 2, 3);
   httpClient.get(1, 2);
@@ -496,7 +498,7 @@ fn main() effects { db.write, db.read, db.tx, fs.read, fs.write, net } -> Int {
     assert!(c.contains("(void)(sec4_rt_db_tx(1));"));
     assert!(c.contains("(void)(sec4_rt_db_exec_tx(1, query));"));
     assert!(c.contains("(void)(sec4_rt_db_exec(1, query));"));
-    assert!(c.contains("(void)(sec4_rt_db_query_one(1, query, 3));"));
+    assert!(c.contains("(void)(sec4_rt_db_query_one(1, query, sec4_rt_schema_row(3)));"));
     assert!(c.contains("(void)(sec4_rt_fs_read(1, 2));"));
     assert!(c.contains("(void)(sec4_rt_fs_write(1, 2, 3));"));
     assert!(c.contains("(void)(sec4_rt_http_get(1, 2));"));

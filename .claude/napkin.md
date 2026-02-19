@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I attempted one large multi-hunk patch against `semantic.rs` and hit context mismatch on shifted sections. | For heavily edited files, patch in small anchored hunks after fresh `sed` context snapshots to avoid patch-drift retries. |
 | 2026-02-19 | self | I parallelized two Cargo verifications (`commands` test + `sec4 check`) in one turn and reintroduced `Blocking waiting for file lock on package cache` noise. | Keep Cargo verifications strictly sequential even when using `multi_tool_use.parallel`; parallelize only read/search operations. |
 | 2026-02-19 | self | I tried wiring `db.queryOne(..., 7)` in a LASM route fixture and forgot semantic rules require a typed `Schema<_>` row descriptor, so `sec4 run` exited with `E4001` before serving. | Keep route-facing LASM DB intrinsic tests on paths that compile under zero-arg handler constraints (`db.exec` / `db.execTx`) and use legacy query-one schema-hint bridge until typed row-schema wiring is available in runnable handlers. |
 | 2026-02-19 | self | I ran initial LASM async smoke probes against `/health`, but the benchmark service exposes `/ping`, so the first output was a false 404 route miss. | For `lasm-smoke` checks, always confirm the service route table (`src/main.ut`) first and align `--route`/`--request-path` before interpreting async/backpressure behavior. |

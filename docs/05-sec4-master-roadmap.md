@@ -322,6 +322,7 @@ Post-alpha track acceptance anchors:
 - [x] LASM route extraction now materializes `sql.q` + `db.exec`/`db.execTx` intrinsic call plans into internal runtime markers, and LASM run executes those DB operations through deterministic tx-handle registration plus persisted `records.log` writes (instead of schema-name-only DB write bridges for these paths) (`docs/book/1004-m39-lasm-db-intrinsic-execution-baseline.md`).
 - [x] `examples/lasm-alpha-full` DB write routes now execute real intrinsic flows (`DbCap` + `sql.q` + `db.exec`/`db.execTx`) so the canonical LASM operator sample demonstrates intrinsic-backed `records.log` writes end-to-end (`docs/book/1005-m39-lasm-alpha-full-db-intrinsic-routes.md`).
 - [x] Removed LASM schema-switch DB write fallback arms (`DbExecResponse` / `DbExecTxResponse`) from response materialization; DB writes now require intrinsic extraction markers and no longer execute through response-schema-only branches (`docs/book/1006-m39-lasm-remove-schema-fallback-db-write-arms.md`).
+- [x] Added `schema.row(...)` row-schema bridge intrinsic across semantic typing + C backend/runtime, moved LASM query-one routes/examples to real `db.queryOne` intrinsic flows, and removed `DbQueryOneResponse` schema-switch fallback materialization branch (`docs/book/1007-m39-lasm-db-query-one-intrinsic-parity-and-schema-row-bridge.md`).
 - [x] LASM request parser now rejects conflicting duplicate `Content-Length` headers with deterministic `400 Bad Request` diagnostics (`conflicting content-length headers`) to harden request framing behavior (`docs/book/933-m39-lasm-conflicting-content-length-rejection.md`).
 - [x] LASM parser now enforces HTTP/1.1 `Host` header presence (non-empty) with deterministic `400 Bad Request` diagnostics (`missing host header`) for malformed inbound requests (`docs/book/934-m39-lasm-http11-host-header-enforcement.md`).
 - [x] LASM parser now normalizes absolute-form request targets (`http://host/path`) for route matching, rejects invalid request-target forms deterministically, and preserves existing query stripping semantics on normalized paths (`docs/book/935-m39-lasm-request-target-normalization.md`).
@@ -413,7 +414,7 @@ Post-alpha track acceptance anchors:
 
 ### Remaining implementation slices (priority order)
 
-1. Complete LASM DB parity by replacing schema-name/materialization DB branches with real LASM intrinsic execution (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) while keeping deterministic envelopes and `records.log` adapter v1.
+1. [x] Completed LASM DB parity for active DB intrinsics (`sql.q`, `db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) and removed schema-switch fallback branches for write/query-one paths while keeping deterministic envelopes on `records.log` adapter v1.
 2. Make LASM the default server runtime path for `sec4 run` (C backend remains explicit fallback), then validate clean-machine `init -> check -> build -> run` on LASM-first flow.
 3. Harden LASM runtime under sustained load (queue/backpressure/timeout tuning and regression baseline for throughput/latency/memory).
 4. Progress DB adapters behind the same intrinsic surface:

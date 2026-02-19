@@ -114,7 +114,7 @@ Write non-tx record:
 ```bash
 curl -i -X POST \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha&db=1'
+  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha'
 ```
 
 Write tx record:
@@ -122,7 +122,7 @@ Write tx record:
 ```bash
 curl -i -X POST \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha&db=1&tx=9'
+  'http://127.0.0.1:8080/db/exec-tx?template=SELECT%201&params=alpha'
 ```
 
 Query latest matching record:
@@ -130,7 +130,7 @@ Query latest matching record:
 ```bash
 curl -i \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&db=1&row_schema=7'
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&row_schema=7'
 ```
 
 List records:

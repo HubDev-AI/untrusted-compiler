@@ -863,6 +863,42 @@ fn bad(db: DbCap, query: SqlQuery) effects { db.read } -> Int {
 }
 
 #[test]
+fn db_query_one_schema_row_bridge_accepts_numeric_handles() {
+    let source = r#"
+fn ok(db: DbCap, query: SqlQuery) effects { db.read } -> Int {
+  db.queryOne(db, query, schema.row(7));
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program);
+    assert!(
+        diagnostics.is_ok(),
+        "analysis should succeed when row schema uses schema.row bridge"
+    );
+}
+
+#[test]
+fn schema_row_argument_type_diagnostic_has_security_schema_tags() {
+    let source = r#"
+fn bad(db: DbCap, query: SqlQuery) effects { db.read } -> Int {
+  db.queryOne(db, query, schema.row("bad"));
+  1
+}
+"#;
+
+    let program = parse_source(Path::new("main.ut"), source).expect("source should parse");
+    let diagnostics = analyze_program(&program).expect_err("analysis should fail");
+    let diag = diagnostics
+        .iter()
+        .find(|diag| diag.message == "schema.row argument must be numeric")
+        .expect("expected schema.row numeric argument diagnostic");
+    assert!(diag.tags.iter().any(|tag| tag == "security"));
+    assert!(diag.tags.iter().any(|tag| tag == "schema"));
+}
+
+#[test]
 fn sql_q_template_type_diagnostic_has_security_schema_tags() {
     let source = r#"
 fn bad(db: DbCap) effects { db.write } -> Int {

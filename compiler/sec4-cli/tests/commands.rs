@@ -15132,7 +15132,13 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
   0
 }
 
-fn dbQueryOne() effects { net } -> Int {
+fn dbQueryOne() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+  db.queryOne(db, query, rowSchema);
   res.json(200, "DbQueryOneResponse", 0);
   0
 }

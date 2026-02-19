@@ -2818,6 +2818,7 @@ fn extract_lasm_db_value_template(
             if is_lasm_validate_non_empty_call(&resolved_callee)
                 || is_lasm_validate_header_value_call(&resolved_callee)
                 || is_lasm_validate_int64_call(&resolved_callee)
+                || is_lasm_schema_row_call(&resolved_callee)
             {
                 return args
                     .first()
@@ -3399,6 +3400,20 @@ fn is_lasm_validate_int64_call(callee: &sec4_core::ast::Expr) -> bool {
                 && matches!(
                     object.kind,
                     sec4_core::ast::ExprKind::Identifier(ref name) if name == "validate"
+                )
+        }
+        _ => false,
+    }
+}
+
+fn is_lasm_schema_row_call(callee: &sec4_core::ast::Expr) -> bool {
+    match &callee.kind {
+        sec4_core::ast::ExprKind::Identifier(name) => name == "schema_row",
+        sec4_core::ast::ExprKind::Member { object, field } => {
+            field == "row"
+                && matches!(
+                    object.kind,
+                    sec4_core::ast::ExprKind::Identifier(ref name) if name == "schema"
                 )
         }
         _ => false,
@@ -9481,110 +9496,6 @@ fn apply_lasm_dynamic_response_materialization(
                 }),
             );
         }
-        "DbQueryOneResponse" => {
-            let Some(template) = resolve_lasm_db_template(request) else {
-                set_lasm_json_response(
-                    response,
-                    400,
-                    &lasm_error_envelope(
-                        "DB.SQL_TEMPLATE_INVALID",
-                        "validation",
-                        "sql.q query template is required",
-                        400,
-                        trace_id,
-                    ),
-                );
-                return;
-            };
-            let params = resolve_lasm_db_params(request);
-            let db = match resolve_lasm_db_numeric_query_param(request, "db", 1) {
-                Ok(value) if value > 0 => value,
-                _ => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.QUERY_ONE_INVALID",
-                            "validation",
-                            "db.queryOne requires db capability, query, and row schema handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return;
-                }
-            };
-            let row_schema = match resolve_lasm_db_row_schema(request) {
-                Ok(value) if value > 0 => value,
-                _ => {
-                    set_lasm_json_response(
-                        response,
-                        400,
-                        &lasm_error_envelope(
-                            "DB.QUERY_ONE_INVALID",
-                            "validation",
-                            "db.queryOne requires db capability, query, and row schema handles",
-                            400,
-                            trace_id,
-                        ),
-                    );
-                    return;
-                }
-            };
-            let record = match dynamic_state.lock() {
-                Ok(state) => state
-                    .db_records
-                    .iter()
-                    .rev()
-                    .find(|record| {
-                        record.db == db && record.template == template && record.params == params
-                    })
-                    .cloned(),
-                Err(_) => {
-                    set_lasm_json_response(
-                        response,
-                        500,
-                        &lasm_error_envelope(
-                            "HTTP.INTERNAL",
-                            "internal",
-                            "dynamic response state unavailable",
-                            500,
-                            trace_id,
-                        ),
-                    );
-                    return;
-                }
-            };
-            let Some(record) = record else {
-                set_lasm_json_response(
-                    response,
-                    404,
-                    &lasm_error_envelope(
-                        "DB.QUERY_ONE_NOT_FOUND",
-                        "missing_dependency",
-                        "db.queryOne record not found",
-                        404,
-                        trace_id,
-                    ),
-                );
-                return;
-            };
-            let row = format!(
-                "op={};db={};template={};params={};tx={};rowSchema={}",
-                record.op, record.db, record.template, record.params, record.tx, row_schema
-            );
-            set_lasm_json_response(
-                response,
-                200,
-                &serde_json::json!({
-                    "ok": true,
-                    "recordId": record.id,
-                    "rowSchema": row_schema,
-                    "row": row,
-                    "record": lasm_db_record_to_json(&record),
-                }),
-            );
-        }
         "DbListRecordsResponse" => {
             let records = match dynamic_state.lock() {
                 Ok(state) => state.db_records.clone(),
@@ -10383,47 +10294,6 @@ fn resolve_lasm_user_lookup_email(request: &LasmRunRequest) -> Option<String> {
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-fn resolve_lasm_db_template(request: &LasmRunRequest) -> Option<String> {
-    request
-        .query_params
-        .get("template")
-        .or_else(|| request.query_params.get("query"))
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn resolve_lasm_db_params(request: &LasmRunRequest) -> String {
-    request
-        .query_params
-        .get("params")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or("0")
-        .to_string()
-}
-
-fn resolve_lasm_db_numeric_query_param(
-    request: &LasmRunRequest,
-    name: &str,
-    fallback: i64,
-) -> Result<i64, ()> {
-    let Some(raw) = request.query_params.get(name) else {
-        return Ok(fallback);
-    };
-    raw.trim().parse::<i64>().map_err(|_| ())
-}
-
-fn resolve_lasm_db_row_schema(request: &LasmRunRequest) -> Result<i64, ()> {
-    if let Some(raw) = request.query_params.get("row_schema") {
-        return raw.trim().parse::<i64>().map_err(|_| ());
-    }
-    if let Some(raw) = request.query_params.get("rowSchema") {
-        return raw.trim().parse::<i64>().map_err(|_| ());
-    }
-    Ok(1)
 }
 
 fn apply_lasm_internal_db_operation_materialization(
