@@ -9002,6 +9002,7 @@ fn cmd_run_lasm_backend(
             max_runtime_steps,
             max_keep_alive_requests,
             db_base: db_base.map(Path::to_path_buf),
+            db_adapter,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
