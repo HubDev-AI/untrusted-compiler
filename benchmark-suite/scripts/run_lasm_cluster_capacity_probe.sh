@@ -25,6 +25,7 @@ Options:
   --autoscale-scale-down-cooldown-ms <n>           LASM scale-down cooldown (default: 2000)
   --autoscale-scale-up-step <n>                    LASM max scale-up workers per autoscale check (default: 2)
   --autoscale-scale-down-step <n>                  LASM max scale-down workers per autoscale check (default: 1)
+  --autoscale-saturation-boost-step <n>            LASM max scale-up workers per check when relay saturation is observed (default: 4)
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
@@ -55,6 +56,7 @@ autoscale_scale_up_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_COOLDOWN_MS:-
 autoscale_scale_down_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_COOLDOWN_MS:-2000}"
 autoscale_scale_up_step="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_STEP:-2}"
 autoscale_scale_down_step="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_STEP:-1}"
+autoscale_saturation_boost_step="${LASM_CAPACITY_AUTOSCALE_SATURATION_BOOST_STEP:-4}"
 cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
@@ -127,6 +129,10 @@ while [ "$#" -gt 0 ]; do
       autoscale_scale_down_step="${2:-}"
       shift 2
       ;;
+    --autoscale-saturation-boost-step)
+      autoscale_saturation_boost_step="${2:-}"
+      shift 2
+      ;;
     --cluster-relay-workers)
       cluster_relay_workers="${2:-}"
       shift 2
@@ -159,7 +165,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-for field in threads connections target_requests port instances autoscale_max_instances autoscale_target_connections autoscale_check_ms autoscale_scale_up_cooldown_ms autoscale_scale_down_cooldown_ms autoscale_scale_up_step autoscale_scale_down_step; do
+for field in threads connections target_requests port instances autoscale_max_instances autoscale_target_connections autoscale_check_ms autoscale_scale_up_cooldown_ms autoscale_scale_down_cooldown_ms autoscale_scale_up_step autoscale_scale_down_step autoscale_saturation_boost_step; do
   value="${!field}"
   if ! is_number "$value"; then
     echo "${field//_/-} must be numeric, got: $value" >&2
@@ -226,6 +232,7 @@ sec4 LASM cluster capacity probe plan:
   autoscaleScaleDownCooldownMs=$autoscale_scale_down_cooldown_ms
   autoscaleScaleUpStep=$autoscale_scale_up_step
   autoscaleScaleDownStep=$autoscale_scale_down_step
+  autoscaleSaturationBoostStep=$autoscale_saturation_boost_step
   clusterRelayWorkers=${cluster_relay_workers:-auto}
   clusterRelayQueue=${cluster_relay_queue:-auto}
   skipBuild=$skip_build
@@ -268,6 +275,7 @@ run_args=(
   --autoscale-scale-down-cooldown-ms "$autoscale_scale_down_cooldown_ms"
   --autoscale-scale-up-step "$autoscale_scale_up_step"
   --autoscale-scale-down-step "$autoscale_scale_down_step"
+  --autoscale-saturation-boost-step "$autoscale_saturation_boost_step"
 )
 if [ -n "$cluster_relay_workers" ]; then
   run_args+=(--cluster-relay-workers "$cluster_relay_workers")
@@ -399,6 +407,7 @@ jq -n \
   --argjson autoscaleScaleDownCooldownMs "$autoscale_scale_down_cooldown_ms" \
   --argjson autoscaleScaleUpStep "$autoscale_scale_up_step" \
   --argjson autoscaleScaleDownStep "$autoscale_scale_down_step" \
+  --argjson autoscaleSaturationBoostStep "$autoscale_saturation_boost_step" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   '{
@@ -423,6 +432,7 @@ jq -n \
       autoscaleScaleDownCooldownMs: $autoscaleScaleDownCooldownMs,
       autoscaleScaleUpStep: $autoscaleScaleUpStep,
       autoscaleScaleDownStep: $autoscaleScaleDownStep,
+      autoscaleSaturationBoostStep: $autoscaleSaturationBoostStep,
       clusterRelayWorkers: $relayWorkers,
       clusterRelayQueue: $relayQueue
     },

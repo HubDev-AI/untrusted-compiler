@@ -999,5 +999,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1031-m39-lasm-autoscale-step-window-controls.md`
 - `1032-m39-lasm-autoscale-saturation-boost.md`
 - `1033-m39-runtime-smoke-bundle-db-adapter-artifact-validation.md`
+- `1034-m39-lasm-autoscale-saturation-boost-step-control.md`
 
 As milestones progress, chapters will be added and linked from this index.
