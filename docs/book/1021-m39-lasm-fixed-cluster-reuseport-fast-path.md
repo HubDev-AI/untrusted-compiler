@@ -1,4 +1,4 @@
-# 1020 M39 Slice: LASM Fixed-Cluster Reuse-Port Fast Path
+# 1021 M39 Slice: LASM Fixed-Cluster Reuse-Port Fast Path
 
 This slice improves LASM horizontal scaling performance by adding a shared-port fixed-cluster mode that avoids front-proxy relay overhead.
 
