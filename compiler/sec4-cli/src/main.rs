@@ -1279,6 +1279,13 @@ fn resolve_lasm_dynamic_db_records_adapter() -> LasmDbRecordsAdapter {
     LasmDbRecordsAdapter::RecordsLog
 }
 
+fn lasm_db_records_adapter_label(adapter: LasmDbRecordsAdapter) -> &'static str {
+    match adapter {
+        LasmDbRecordsAdapter::RecordsLog => "records.log",
+        LasmDbRecordsAdapter::Sqlite => "sqlite",
+    }
+}
+
 fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {
     let raw = match fs::read(path) {
         Ok(bytes) => bytes,
@@ -9736,8 +9743,11 @@ fn apply_lasm_dynamic_response_materialization(
             );
         }
         "DbListRecordsResponse" => {
-            let records = match dynamic_state.lock() {
-                Ok(state) => state.db_records.clone(),
+            let (records, adapter) = match dynamic_state.lock() {
+                Ok(state) => (
+                    state.db_records.clone(),
+                    lasm_db_records_adapter_label(state.db_records_adapter),
+                ),
                 Err(_) => {
                     set_lasm_json_response(
                         response,
@@ -9759,6 +9769,7 @@ fn apply_lasm_dynamic_response_materialization(
                 &serde_json::json!({
                     "ok": true,
                     "count": records.len(),
+                    "adapter": adapter,
                     "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),
                 }),
             );

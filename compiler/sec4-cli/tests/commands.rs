@@ -15459,6 +15459,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":2")
+            && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\""),
         "db records response should include deterministic persisted record list:\n{list_response}"
@@ -15743,6 +15744,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":2")
+            && list_response.contains("\"adapter\":\"sqlite\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\""),
         "db records response should include deterministic persisted record list:\n{list_response}"
