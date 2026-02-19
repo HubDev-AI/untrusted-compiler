@@ -85,6 +85,14 @@ cargo run -p sec4 -- run --path examples/showcase-api
 
 See `examples/showcase-api/README.md` for detailed route checks and DB/FS/NET capability notes.
 
+LASM + DB alpha walkthrough (disk-backed `records.log` in LASM mode):
+
+```bash
+cargo run -p sec4 -- run --path examples/lasm-db-alpha --backend lasm --db-base /tmp/sec4-lasm-db-alpha
+```
+
+See `examples/lasm-db-alpha/README.md` for full request flow and record inspection steps.
+
 Deterministic one-request run (helpful for scripted checks):
 
 ```bash
