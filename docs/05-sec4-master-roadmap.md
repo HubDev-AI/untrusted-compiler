@@ -579,6 +579,11 @@ Post-alpha track acceptance anchors:
      - preserves deterministic overload/availability envelopes and autoscale saturation signaling while reducing relay worker head-of-line blocking under keep-alive pressure,
      - short auto-mode probe moved from `~71.9k req/s` to `~73.3k req/s` (`1,474,217` requests in `20s`) with lower observed peak RSS (`~21,952 KB` vs `~46,224 KB`) in the same profile.
      - documented in `docs/book/1058-m39-lasm-cluster-relay-worker-multiplex-pump-loop.md`.
+   - [x] Relay workers now apply local backend-port connect-failure cooldown with healthy fast path:
+     - on backend connect failure, relay worker marks the failed worker port unhealthy for a short cooldown window (`500ms`) and skips it during backend selection,
+     - when no unhealthy ports are tracked, relay selection remains a direct round-robin fast path (no cooldown-map scan),
+     - this reduces repeated immediate retries against transiently unavailable worker ports during churn while preserving existing deterministic `503` availability envelopes.
+     - documented in `docs/book/1059-m39-lasm-cluster-relay-port-connect-failure-cooldown.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
