@@ -8469,6 +8469,25 @@ fn desired_lasm_cluster_instances(
     needed.clamp(min_instances, max_instances)
 }
 
+fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
+    let host_parallelism = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(4);
+    host_parallelism
+        .max(config.min_instances)
+        .min(config.max_instances.saturating_mul(4).max(4))
+        .min(128)
+}
+
+fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: usize) -> usize {
+    config
+        .target_connections_per_instance
+        .max(1)
+        .saturating_mul(config.max_instances.max(1))
+        .max(worker_count.saturating_mul(2))
+        .min(65_536)
+}
+
 fn write_lasm_cluster_unavailable_response(
     client: &mut TcpStream,
     message: &str,
@@ -8633,6 +8652,90 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let shared_config = Arc::new(config);
     let active_connections = Arc::new(AtomicUsize::new(0));
     let stop_flag = Arc::new(AtomicBool::new(false));
+    let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
+    let relay_queue_capacity =
+        lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
+    let (relay_sender, relay_receiver) = sync_channel::<TcpStream>(relay_queue_capacity);
+    let relay_receiver = Arc::new(Mutex::new(relay_receiver));
+    let mut relay_handles = Vec::with_capacity(relay_worker_count);
+
+    for _ in 0..relay_worker_count {
+        let relay_receiver = Arc::clone(&relay_receiver);
+        let relay_state = Arc::clone(&shared_state);
+        let relay_config = Arc::clone(&shared_config);
+        let relay_active = Arc::clone(&active_connections);
+        relay_handles.push(std::thread::spawn(move || {
+            loop {
+                let next_stream = {
+                    let receiver = match relay_receiver.lock() {
+                        Ok(receiver) => receiver,
+                        Err(_) => return,
+                    };
+                    receiver.recv()
+                };
+                let mut client = match next_stream {
+                    Ok(stream) => stream,
+                    Err(_) => break,
+                };
+
+                let backend_port = {
+                    let mut state = match relay_state.lock() {
+                        Ok(state) => state,
+                        Err(_) => {
+                            let _ = write_lasm_cluster_unavailable_response(
+                                &mut client,
+                                "cluster state unavailable",
+                            );
+                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            continue;
+                        }
+                    };
+                    prune_dead_lasm_cluster_workers(&mut state);
+                    while state.workers.len() < relay_config.min_instances {
+                        let worker_port = state.next_port;
+                        state.next_port = state.next_port.saturating_add(1);
+                        match spawn_and_wait_lasm_cluster_worker(&relay_config, worker_port) {
+                            Ok(worker) => state.workers.push(worker),
+                            Err(message) => {
+                                eprintln!("warning: LASM cluster worker recovery failed: {message}");
+                                break;
+                            }
+                        }
+                    }
+                    if state.workers.is_empty() {
+                        None
+                    } else {
+                        let index = state.round_robin_index % state.workers.len();
+                        state.round_robin_index = state.round_robin_index.saturating_add(1);
+                        Some(state.workers[index].port)
+                    }
+                };
+
+                let Some(backend_port) = backend_port else {
+                    let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
+                    relay_active.fetch_sub(1, Ordering::Relaxed);
+                    continue;
+                };
+
+                match TcpStream::connect(("127.0.0.1", backend_port)) {
+                    Ok(mut upstream) => {
+                        let _ = client.set_nodelay(true);
+                        let _ = upstream.set_nodelay(true);
+                        let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "warning: LASM cluster worker {} connect failed: {}",
+                            backend_port, err
+                        );
+                        let _ =
+                            write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                    }
+                }
+                relay_active.fetch_sub(1, Ordering::Relaxed);
+            }
+        }));
+    }
 
     let autoscale_handle = if shared_config.max_instances > shared_config.min_instances {
         let autoscale_state = Arc::clone(&shared_state);
@@ -8684,7 +8787,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     };
 
     for incoming in listener.incoming() {
-        let client_stream = match incoming {
+        let mut client_stream = match incoming {
             Ok(stream) => stream,
             Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(err) => {
@@ -8692,73 +8795,35 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 break;
             }
         };
-
-        let state = Arc::clone(&shared_state);
-        let config = Arc::clone(&shared_config);
-        let active = Arc::clone(&active_connections);
-        std::thread::spawn(move || {
-            active.fetch_add(1, Ordering::Relaxed);
-            let mut client = client_stream;
-
-            let backend_port = {
-                let mut state = match state.lock() {
-                    Ok(state) => state,
-                    Err(_) => {
-                        let _ = write_lasm_cluster_unavailable_response(
-                            &mut client,
-                            "cluster state unavailable",
-                        );
-                        active.fetch_sub(1, Ordering::Relaxed);
-                        return;
-                    }
-                };
-                prune_dead_lasm_cluster_workers(&mut state);
-                while state.workers.len() < config.min_instances {
-                    let worker_port = state.next_port;
-                    state.next_port = state.next_port.saturating_add(1);
-                    match spawn_and_wait_lasm_cluster_worker(&config, worker_port) {
-                        Ok(worker) => state.workers.push(worker),
-                        Err(message) => {
-                            eprintln!("warning: LASM cluster worker recovery failed: {message}");
-                            break;
-                        }
-                    }
-                }
-                if state.workers.is_empty() {
-                    None
-                } else {
-                    let index = state.round_robin_index % state.workers.len();
-                    state.round_robin_index = state.round_robin_index.saturating_add(1);
-                    Some(state.workers[index].port)
-                }
-            };
-
-            let Some(backend_port) = backend_port else {
-                let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
-                active.fetch_sub(1, Ordering::Relaxed);
-                return;
-            };
-
-            match TcpStream::connect(("127.0.0.1", backend_port)) {
-                Ok(mut upstream) => {
-                    let _ = client.set_nodelay(true);
-                    let _ = upstream.set_nodelay(true);
-                    let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
-                }
-                Err(err) => {
-                    eprintln!(
-                        "warning: LASM cluster worker {} connect failed: {}",
-                        backend_port, err
-                    );
-                    let _ =
-                        write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
-                }
+        active_connections.fetch_add(1, Ordering::Relaxed);
+        match relay_sender.try_send(client_stream) {
+            Ok(()) => {}
+            Err(TrySendError::Full(stream)) => {
+                client_stream = stream;
+                active_connections.fetch_sub(1, Ordering::Relaxed);
+                let _ = write_lasm_cluster_unavailable_response(
+                    &mut client_stream,
+                    "cluster relay saturated",
+                );
             }
-            active.fetch_sub(1, Ordering::Relaxed);
-        });
+            Err(TrySendError::Disconnected(stream)) => {
+                client_stream = stream;
+                active_connections.fetch_sub(1, Ordering::Relaxed);
+                let _ = write_lasm_cluster_unavailable_response(
+                    &mut client_stream,
+                    "cluster relay unavailable",
+                );
+                eprintln!("run failed: LASM cluster relay worker pool disconnected unexpectedly");
+                break;
+            }
+        }
     }
 
     stop_flag.store(true, Ordering::Relaxed);
+    drop(relay_sender);
+    for handle in relay_handles {
+        let _ = handle.join();
+    }
     if let Some(handle) = autoscale_handle {
         let _ = handle.join();
     }

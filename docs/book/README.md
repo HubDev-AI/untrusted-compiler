@@ -987,5 +987,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1019-m39-run-db-adapter-flag.md`
 - `1020-m39-run-db-adapter-runtime-flag-contract-lock.md`
 - `1021-m39-lasm-fixed-cluster-reuseport-fast-path.md`
+- `1022-m39-lasm-cluster-relay-worker-pool.md`
 
 As milestones progress, chapters will be added and linked from this index.

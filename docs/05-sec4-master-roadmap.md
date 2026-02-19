@@ -437,7 +437,12 @@ Post-alpha track acceptance anchors:
    - [x] Added fast fixed-cluster shared-port mode (`SO_REUSEPORT`) for LASM:
      - when `--instances == --autoscale-max-instances`, workers bind one shared port without front-proxy relay.
      - benchmark probes show improved throughput vs proxy-cluster path (for example ~96k req/s on `/ping` in local wrk profile).
-     - documented in `docs/book/1020-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
+     - documented in `docs/book/1021-m39-lasm-fixed-cluster-reuseport-fast-path.md`.
+   - [x] Replaced front-proxy thread-per-connection relay with bounded relay worker pool:
+     - proxy now uses a fixed worker-count + bounded queue instead of spawning one relay thread per accepted connection,
+     - queue saturation now returns deterministic `503` (`cluster relay saturated`) instead of unbounded relay thread growth,
+     - local load probes after this change reached about `~60k req/s` in autoscale proxy mode and `~121k req/s` in fixed reuse-port mode (`/health`, auth header, local wrk profile).
+     - documented in `docs/book/1022-m39-lasm-cluster-relay-worker-pool.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
