@@ -1007,5 +1007,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1039-m39-lasm-saturation-boost-recommended-followup-verification.md`
 - `1040-m39-lasm-saturation-boost-summary-renderer.md`
 - `1041-m39-publish-report-saturation-summary-integration.md`
+- `1042-m39-lasm-saturation-boost-bundle-orchestration.md`
 
 As milestones progress, chapters will be added and linked from this index.
