@@ -93,6 +93,14 @@ cargo run -p sec4 -- run --path examples/lasm-db-alpha --backend lasm --db-base 
 
 See `examples/lasm-db-alpha/README.md` for full request flow and record inspection steps.
 
+Full LASM alpha app (middleware + placeholders + auth + users store + DB records):
+
+```bash
+cargo run -p sec4 -- run --path examples/lasm-alpha-full --backend lasm --db-base /tmp/sec4-lasm-alpha-full
+```
+
+See `examples/lasm-alpha-full/README.md` for complete end-to-end test commands.
+
 Deterministic one-request run (helpful for scripted checks):
 
 ```bash
