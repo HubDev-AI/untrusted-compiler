@@ -982,5 +982,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1014-m39-trend-note-baseline-rss-guard-evaluation.md`
 - `1015-m39-lasm-db-sqlite-adapter-baseline.md`
 - `1016-m39-lasm-db-list-response-adapter-visibility.md`
+- `1017-m39-benchmark-trend-workflow-endpoint-contract-coherence.md`
 
 As milestones progress, chapters will be added and linked from this index.
