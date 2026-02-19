@@ -494,6 +494,11 @@ Post-alpha track acceptance anchors:
      - run mode now prints `recommendedSaturationBoostStep=<n>` from the generated analysis artifact,
      - `--skip-analysis` keeps matrix-only behavior for explicit operator control.
      - documented in `docs/book/1038-m39-lasm-saturation-boost-matrix-integrated-analysis.md`.
+   - [x] Matrix runner now supports recommended-step follow-up verification:
+     - new flag `--verify-recommended` runs one additional capacity probe using the analyzed recommended boost step,
+     - `--verify-out` controls follow-up artifact location, and the runner now rejects invalid `--verify-recommended --skip-analysis` combinations deterministically,
+     - run mode prints `recommendedVerificationOut=<path>` after follow-up execution.
+     - documented in `docs/book/1039-m39-lasm-saturation-boost-recommended-followup-verification.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

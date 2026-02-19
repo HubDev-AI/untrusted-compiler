@@ -31,6 +31,8 @@ Options:
   --out <path>                                     Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
   --skip-analysis                                  Skip post-run matrix analysis/recommendation output
+  --verify-recommended                             Run one additional capacity probe using the recommended boost step from analysis
+  --verify-out <path>                              Recommended-step verification output path (default: results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json)
   --skip-build                                     Skip sec4 binary rebuild for all probes
   --dry-run                                        Print matrix probe plan only
   -h, --help                                       Show this help
@@ -59,6 +61,8 @@ boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
 skip_analysis="false"
+verify_recommended="false"
+verify_out_rel="${LASM_CAPACITY_SATURATION_VERIFY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json}"
 skip_build="false"
 dry_run="false"
 
@@ -156,6 +160,14 @@ while [ "$#" -gt 0 ]; do
       skip_analysis="true"
       shift
       ;;
+    --verify-recommended)
+      verify_recommended="true"
+      shift
+      ;;
+    --verify-out)
+      verify_out_rel="${2:-}"
+      shift 2
+      ;;
     --skip-build)
       skip_build="true"
       shift
@@ -203,6 +215,10 @@ if [ "${#boost_steps[@]}" -eq 0 ]; then
   echo "boost-steps must contain at least one positive integer" >&2
   exit 2
 fi
+if [ "${verify_recommended}" = "true" ] && [ "${skip_analysis}" = "true" ]; then
+  echo "verify-recommended requires analysis; remove --skip-analysis" >&2
+  exit 2
+fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
@@ -238,6 +254,16 @@ fi
 analysis_out_dir="$(dirname "${analysis_out_path}")"
 mkdir -p "${analysis_out_dir}"
 
+if [[ "${verify_out_rel}" = /* ]]; then
+  verify_out_path="${verify_out_rel}"
+elif [[ "${verify_out_rel}" == benchmark-suite/* ]]; then
+  verify_out_path="${repo_root}/${verify_out_rel}"
+else
+  verify_out_path="${root_dir}/${verify_out_rel}"
+fi
+verify_out_dir="$(dirname "${verify_out_path}")"
+mkdir -p "${verify_out_dir}"
+
 boost_steps_joined="$(IFS=,; echo "${boost_steps[*]}")"
 
 cat <<PLAN
@@ -252,6 +278,8 @@ sec4 LASM saturation boost matrix plan:
   out=${out_path}
   analysisOut=${analysis_out_path}
   skipAnalysis=${skip_analysis}
+  verifyRecommended=${verify_recommended}
+  verifyOut=${verify_out_path}
 PLAN
 
 runs_json='[]'
@@ -323,6 +351,10 @@ done
 if [ "${dry_run}" = "true" ]; then
   if [ "${skip_analysis}" != "true" ]; then
     echo "analysisCmd=${analyze_script} ${out_path} ${analysis_out_path}"
+    if [ "${verify_recommended}" = "true" ]; then
+      echo "verifyRecommendedAfterAnalysis=true"
+      echo "verifyCmd=${probe_script} ... --autoscale-saturation-boost-step <recommended> --out ${verify_out_path} --skip-build"
+    fi
   fi
   exit 0
 fi
@@ -359,4 +391,38 @@ if [ "${skip_analysis}" != "true" ]; then
   "${analyze_script}" "${out_path}" "${analysis_out_path}"
   recommended_step="$(jq -r '.summary.recommendedBoostStep' "${analysis_out_path}")"
   echo "recommendedSaturationBoostStep=${recommended_step}"
+
+  if [ "${verify_recommended}" = "true" ]; then
+    verify_cmd=(
+      "${probe_script}"
+      --project-path "${project_path}"
+      --request-path "${request_path}"
+      --request-header "${request_header}"
+      --duration "${duration}"
+      --threads "${threads}"
+      --connections "${connections}"
+      --target-requests "${target_requests}"
+      --port "${port}"
+      --instances "${instances}"
+      --autoscale-max-instances "${autoscale_max_instances}"
+      --autoscale-target-connections "${autoscale_target_connections}"
+      --autoscale-check-ms "${autoscale_check_ms}"
+      --autoscale-scale-up-cooldown-ms "${autoscale_scale_up_cooldown_ms}"
+      --autoscale-scale-down-cooldown-ms "${autoscale_scale_down_cooldown_ms}"
+      --autoscale-scale-up-step "${autoscale_scale_up_step}"
+      --autoscale-scale-down-step "${autoscale_scale_down_step}"
+      --autoscale-saturation-boost-step "${recommended_step}"
+      --out "${verify_out_path}"
+      --skip-build
+    )
+    if [ -n "${cluster_relay_workers}" ]; then
+      verify_cmd+=(--cluster-relay-workers "${cluster_relay_workers}")
+    fi
+    if [ -n "${cluster_relay_queue}" ]; then
+      verify_cmd+=(--cluster-relay-queue "${cluster_relay_queue}")
+    fi
+    echo "verifyingRecommendedBoostStep=${recommended_step}"
+    "${verify_cmd[@]}"
+    echo "recommendedVerificationOut=${verify_out_path}"
+  fi
 fi

@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -16,6 +16,7 @@ LASM_CAPACITY_TARGET_REQUESTS ?= 1000000
 LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
 LASM_SATURATION_MATRIX ?= results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json
 LASM_SATURATION_ANALYSIS ?= results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json
+LASM_SATURATION_VERIFY_OUT ?= results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json
 
 help:
 	@echo "Targets:"
@@ -43,6 +44,7 @@ help:
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
 	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
 	@echo "  lasm-cluster-saturation-boost-analyze Analyze LASM saturation boost matrix and pick recommended boost step"
+	@echo "  lasm-cluster-saturation-boost-verify Run matrix + analysis and verify one recommended boost-step follow-up probe"
 	@echo "  artifact-manifest Build deterministic artifact manifest from results/"
 	@echo "  verify-bundle Verify expected benchmark bundle artifacts for IMPLS/ENDPOINTS"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -125,6 +127,9 @@ lasm-cluster-saturation-boost-matrix:
 
 lasm-cluster-saturation-boost-analyze:
 	scripts/analyze_lasm_cluster_saturation_boost_matrix.sh "$(LASM_SATURATION_MATRIX)" "$(LASM_SATURATION_ANALYSIS)"
+
+lasm-cluster-saturation-boost-verify:
+	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --out "$(LASM_SATURATION_MATRIX)" --analysis-out "$(LASM_SATURATION_ANALYSIS)" --verify-recommended --verify-out "$(LASM_SATURATION_VERIFY_OUT)"
 
 artifact-manifest:
 	scripts/build_artifact_manifest.sh results "$(ARTIFACT_MANIFEST)"

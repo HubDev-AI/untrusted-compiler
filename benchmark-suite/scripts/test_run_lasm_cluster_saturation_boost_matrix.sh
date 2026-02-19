@@ -18,6 +18,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --autoscale-scale-down-step 1 \
   --out results/summaries/custom-saturation-boost-matrix.json \
   --analysis-out results/summaries/custom-saturation-boost-analysis.json \
+  --verify-recommended \
+  --verify-out results/summaries/custom-saturation-boost-verify.json \
   2>&1)"
 
 if ! grep -q 'sec4 LASM saturation boost matrix plan:' <<<"$out"; then
@@ -56,6 +58,22 @@ if ! grep -q "analysisCmd=${root_dir}/scripts/analyze_lasm_cluster_saturation_bo
   echo "saturation boost matrix dry-run missing analysis command plan" >&2
   exit 1
 fi
+if ! grep -q 'verifyRecommended=true' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing verify-recommended marker" >&2
+  exit 1
+fi
+if ! grep -q "verifyOut=${root_dir}/results/summaries/custom-saturation-boost-verify.json" <<<"$out"; then
+  echo "saturation boost matrix dry-run missing verify output path" >&2
+  exit 1
+fi
+if ! grep -q 'verifyRecommendedAfterAnalysis=true' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing verify-after-analysis marker" >&2
+  exit 1
+fi
+if ! grep -q "verifyCmd=${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh ... --autoscale-saturation-boost-step <recommended> --out ${root_dir}/results/summaries/custom-saturation-boost-verify.json --skip-build" <<<"$out"; then
+  echo "saturation boost matrix dry-run missing verify command plan" >&2
+  exit 1
+fi
 
 out_skip_analysis="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --dry-run \
@@ -68,6 +86,15 @@ if ! grep -q 'skipAnalysis=true' <<<"$out_skip_analysis"; then
 fi
 if grep -q 'analysisCmd=' <<<"$out_skip_analysis"; then
   echo "saturation boost matrix dry-run should not print analysis command when skip-analysis is set" >&2
+  exit 1
+fi
+
+if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --skip-analysis --verify-recommended >/tmp/lasm-sat-boost-matrix-invalid-verify.log 2>&1; then
+  echo "saturation boost matrix accepted verify-recommended with skip-analysis" >&2
+  exit 1
+fi
+if ! grep -q 'verify-recommended requires analysis; remove --skip-analysis' /tmp/lasm-sat-boost-matrix-invalid-verify.log; then
+  echo "saturation boost matrix missing verify-without-analysis diagnostic" >&2
   exit 1
 fi
 
