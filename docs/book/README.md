@@ -1007,5 +1007,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1039-m39-lasm-saturation-boost-recommended-followup-verification.md`
 - `1040-m39-zed-plugin-runtime-launch-hardening.md`
 - `1041-m39-zed-plugin-smoke-runner-script.md`
+- `1042-m39-zed-extension-release-checklist.md`
 
 As milestones progress, chapters will be added and linked from this index.

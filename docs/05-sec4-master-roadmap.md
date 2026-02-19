@@ -10114,8 +10114,19 @@ M13-S1 go/no-go note:
 - [x] Updated Zed extension docs to point to smoke runner command.
 - [x] Added book chapter `1041-m39-zed-plugin-smoke-runner-script.md`.
 
+### M39-S2F Zed extension release packaging checklist acceptance criteria
+- Repository includes a deterministic release checklist command for Zed extension publishing readiness.
+- Checklist verifies extension manifest wiring, grammar pin validity, and plugin smoke runner success.
+- Operator-facing docs reference the checklist as canonical pre-release validation.
+
+### M39-S2F tracking (live status)
+- [x] Added `scripts/check-zed-extension-release.sh`.
+- [x] Included manifest token/wiring assertions for `zed-extension/extension.toml`.
+- [x] Wired grammar-pin + fast smoke runner execution into checklist.
+- [x] Updated extension README validation section to use release checklist command.
+
 ### Next planned slice
-- M39-S2F Zed extension release packaging checklist (versioning, artifact verification, and operator install path).
+- M39-S2G Zed extension operator install guide (local install path, update flow, and rollback notes).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

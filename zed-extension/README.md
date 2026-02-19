@@ -71,10 +71,10 @@ Use this when you want an explicit binary path:
 
 ## Validation
 
-Use the repository check script before release:
+Use the release checklist before publishing:
 
 ```bash
-scripts/check-zed-grammar-pin.sh
+scripts/check-zed-extension-release.sh
 ```
 
-The script fails when `grammars.untrusted.rev` is missing, placeholder, or not commit-like.
+This checklist includes grammar pin validation and fast smoke checks for the plugin sample project.
