@@ -1017,5 +1017,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1045-m39-zed-extension-bundle-staging-helper.md`
 - `1046-m39-zed-extension-operator-readiness-entrypoint.md`
 - `1047-m39-full-suite-saturation-tuning-knob-forwarding.md`
+- `1048-m39-full-suite-saturation-throughput-preset-targets.md`
 
 As milestones progress, chapters will be added and linked from this index.

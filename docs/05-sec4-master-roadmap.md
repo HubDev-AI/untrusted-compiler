@@ -524,6 +524,11 @@ Post-alpha track acceptance anchors:
      - `bench-full-saturation` and `bench-full-saturation-dry` now forward `LASM_CAPACITY_*` tuning values into the saturation lane so operators can tune from one Make invocation,
      - dry-run contract coverage now asserts delegated tuning values and step fanout in full-suite output.
      - documented in `docs/book/1047-m39-full-suite-saturation-tuning-knob-forwarding.md`.
+   - [x] Added throughput-oriented saturation-enabled full-suite preset targets:
+     - new Make targets `bench-full-saturation-throughput` and `bench-full-saturation-throughput-dry` apply tuned defaults for quick iterative throughput probes (`sec4-lasm`, `ping`, skip verify, boosted load/relay knobs),
+     - preset values are overridable through `LASM_SATURATION_THROUGHPUT_*` variables while still delegating through full-suite saturation lane wiring,
+     - added runtime dry-run contract test ensuring preset defaults reach delegated saturation plan output.
+     - documented in `docs/book/1048-m39-full-suite-saturation-throughput-preset-targets.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

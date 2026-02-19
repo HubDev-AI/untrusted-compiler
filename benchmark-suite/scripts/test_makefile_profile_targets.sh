@@ -64,5 +64,12 @@ require_target_contains_token "bench-full-saturation" "--saturation-cluster-rela
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-queue"
 require_target_contains_token "bench-full-saturation-dry" "--dry-run"
 require_target_contains_token "bench-full-saturation-dry" "--include-lasm-saturation"
+require_target_contains_token "bench-full-saturation-throughput" '$(MAKE) bench-full-saturation'
+require_target_contains_token "bench-full-saturation-throughput" 'FULL_SATURATION_SKIP_VERIFY=true'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)"'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)"'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"'
+require_target_contains_token "bench-full-saturation-throughput-dry" '$(MAKE) bench-full-saturation-dry'
+require_target_contains_token "bench-full-saturation-throughput-dry" 'FULL_SATURATION_SKIP_VERIFY=true'
 
 echo "makefile profile target test passed"
