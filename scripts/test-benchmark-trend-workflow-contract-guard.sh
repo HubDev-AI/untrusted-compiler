@@ -19,6 +19,9 @@ jobs:
   scoped-live-benchmark:
     runs-on: ubuntu-latest
     steps:
+      - name: Run scoped live benchmark (node+ping+decode)
+        run: |
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
       - name: Enforce benchmark evidence quality
         run: |
           scripts/check-benchmark-evidence-quality.sh \
@@ -30,10 +33,21 @@ jobs:
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping \
             --max-rss-kb 500000
+      - name: Check regression thresholds (decode)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint decode \
+            --max-rss-kb 500000
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode
       - name: Upload benchmark trend artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-trend-node-ping
+          name: benchmark-trend-node-ping-decode
           path: benchmark-suite/results
 YAML
 
@@ -49,6 +63,9 @@ jobs:
   scoped-live-benchmark:
     runs-on: ubuntu-latest
     steps:
+      - name: Run scoped live benchmark (node+ping+decode)
+        run: |
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
       - name: Enforce benchmark evidence quality
         run: |
           scripts/check-benchmark-evidence-quality.sh \
@@ -59,10 +76,21 @@ jobs:
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping \
             --max-rss-kb 500000
+      - name: Check regression thresholds (decode)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint decode \
+            --max-rss-kb 500000
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode
       - name: Upload benchmark trend artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-trend-node-ping
+          name: benchmark-trend-node-ping-decode
           path: benchmark-suite/results
 YAML
 
@@ -81,6 +109,9 @@ jobs:
   scoped-live-benchmark:
     runs-on: ubuntu-latest
     steps:
+      - name: Run scoped live benchmark (node+ping+decode)
+        run: |
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
       - name: Enforce benchmark evidence quality
         run: |
           scripts/check-benchmark-evidence-quality.sh \
@@ -92,6 +123,17 @@ jobs:
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping \
             --max-rss-kb 500000
+      - name: Check regression thresholds (decode)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint decode \
+            --max-rss-kb 500000
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode
 YAML
 
 if "${contract_script}" --workflow "${workflow_path}" >/dev/null 2>&1; then
@@ -109,6 +151,9 @@ jobs:
   scoped-live-benchmark:
     runs-on: ubuntu-latest
     steps:
+      - name: Run scoped live benchmark (node+ping+decode)
+        run: |
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
       - name: Enforce benchmark evidence quality
         run: |
           scripts/check-benchmark-evidence-quality.sh \
@@ -119,15 +164,67 @@ jobs:
           benchmark-suite/scripts/check_regression_thresholds.sh \
             benchmark-suite/results/summaries/compare-matrix.json \
             --endpoint ping
+      - name: Check regression thresholds (decode)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint decode \
+            --max-rss-kb 500000
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode
       - name: Upload benchmark trend artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-trend-node-ping
+          name: benchmark-trend-node-ping-decode
           path: benchmark-suite/results
 YAML
 
 if "${contract_script}" --workflow "${workflow_path}" >/dev/null 2>&1; then
   echo "expected contract failure when benchmark-trend workflow misses RSS threshold guard flag" >&2
+  exit 1
+fi
+
+cat > "${workflow_path}" <<'YAML'
+name: Benchmark Trend
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+jobs:
+  scoped-live-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run scoped live benchmark (node+ping+decode)
+        run: |
+          benchmark-suite/scripts/run_full_benchmark_suite.sh --impls node --endpoints ping,decode
+      - name: Enforce benchmark evidence quality
+        run: |
+          scripts/check-benchmark-evidence-quality.sh \
+            --matrix benchmark-suite/results/summaries/compare-matrix.json \
+            --fail-on-warning
+      - name: Check regression thresholds (ping)
+        run: |
+          benchmark-suite/scripts/check_regression_thresholds.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoint ping \
+            --max-rss-kb 500000
+      - name: Render trend note entry artifact
+        run: |
+          benchmark-suite/scripts/render_trend_note_entry.sh \
+            benchmark-suite/results/summaries/compare-matrix.json \
+            --endpoints ping,decode
+      - name: Upload benchmark trend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-trend-node-ping-decode
+          path: benchmark-suite/results
+YAML
+
+if "${contract_script}" --workflow "${workflow_path}" >/dev/null 2>&1; then
+  echo "expected contract failure when benchmark-trend workflow misses one threshold endpoint" >&2
   exit 1
 fi
 
