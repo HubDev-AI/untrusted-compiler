@@ -3,7 +3,11 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path] [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
+usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+          [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
+          [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
+          [--saturation-connections n] [--saturation-target-requests n]
+          [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
 
 Runs fixed-target matrix + step-load matrix and emits a combined markdown report
 with step-load signals included.
@@ -17,6 +21,13 @@ sec_audit_path=""
 include_lasm_saturation="false"
 saturation_skip_verify="false"
 saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
+saturation_project_path=""
+saturation_duration=""
+saturation_threads=""
+saturation_connections=""
+saturation_target_requests=""
+saturation_cluster_relay_workers=""
+saturation_cluster_relay_queue=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -78,6 +89,90 @@ while [ "$#" -gt 0 ]; do
       ;;
     --saturation-boost-steps=*)
       saturation_boost_steps_csv="${1#--saturation-boost-steps=}"
+      shift
+      ;;
+    --saturation-project-path)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_project_path="$2"
+      shift 2
+      ;;
+    --saturation-project-path=*)
+      saturation_project_path="${1#--saturation-project-path=}"
+      shift
+      ;;
+    --saturation-duration)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_duration="$2"
+      shift 2
+      ;;
+    --saturation-duration=*)
+      saturation_duration="${1#--saturation-duration=}"
+      shift
+      ;;
+    --saturation-threads)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_threads="$2"
+      shift 2
+      ;;
+    --saturation-threads=*)
+      saturation_threads="${1#--saturation-threads=}"
+      shift
+      ;;
+    --saturation-connections)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_connections="$2"
+      shift 2
+      ;;
+    --saturation-connections=*)
+      saturation_connections="${1#--saturation-connections=}"
+      shift
+      ;;
+    --saturation-target-requests)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_target_requests="$2"
+      shift 2
+      ;;
+    --saturation-target-requests=*)
+      saturation_target_requests="${1#--saturation-target-requests=}"
+      shift
+      ;;
+    --saturation-cluster-relay-workers)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_workers="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-workers=*)
+      saturation_cluster_relay_workers="${1#--saturation-cluster-relay-workers=}"
+      shift
+      ;;
+    --saturation-cluster-relay-queue)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_queue="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-queue=*)
+      saturation_cluster_relay_queue="${1#--saturation-cluster-relay-queue=}"
       shift
       ;;
     -h|--help)
@@ -147,6 +242,27 @@ if [ "${include_lasm_saturation}" = "true" ]; then
     --boost-steps "$saturation_boost_steps_csv"
     --summary-out "$saturation_summary_path"
   )
+  if [ -n "${saturation_project_path}" ]; then
+    saturation_args+=(--project-path "${saturation_project_path}")
+  fi
+  if [ -n "${saturation_duration}" ]; then
+    saturation_args+=(--duration "${saturation_duration}")
+  fi
+  if [ -n "${saturation_threads}" ]; then
+    saturation_args+=(--threads "${saturation_threads}")
+  fi
+  if [ -n "${saturation_connections}" ]; then
+    saturation_args+=(--connections "${saturation_connections}")
+  fi
+  if [ -n "${saturation_target_requests}" ]; then
+    saturation_args+=(--target-requests "${saturation_target_requests}")
+  fi
+  if [ -n "${saturation_cluster_relay_workers}" ]; then
+    saturation_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_queue}" ]; then
+    saturation_args+=(--cluster-relay-queue "${saturation_cluster_relay_queue}")
+  fi
   if [ "${saturation_skip_verify}" = "true" ]; then
     saturation_args+=(--skip-verify)
   fi

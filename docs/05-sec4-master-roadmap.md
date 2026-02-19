@@ -519,6 +519,11 @@ Post-alpha track acceptance anchors:
      - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
      - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
      - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
+   - [x] Full-suite saturation lane now forwards performance-tuning knobs for iterative runs:
+     - `run_full_benchmark_suite.sh` accepts explicit saturation lane pass-through flags (`--saturation-project-path`, `--saturation-duration`, `--saturation-threads`, `--saturation-connections`, `--saturation-target-requests`, relay worker/queue overrides),
+     - `bench-full-saturation` and `bench-full-saturation-dry` now forward `LASM_CAPACITY_*` tuning values into the saturation lane so operators can tune from one Make invocation,
+     - dry-run contract coverage now asserts delegated tuning values and step fanout in full-suite output.
+     - documented in `docs/book/1047-m39-full-suite-saturation-tuning-knob-forwarding.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
