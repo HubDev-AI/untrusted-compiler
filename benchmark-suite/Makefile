@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -14,6 +14,11 @@ CAPACITY_TARGET_REQUESTS ?= 1000000
 LASM_CAPACITY_PROJECT_PATH ?= examples/lasm-alpha-full
 LASM_CAPACITY_TARGET_REQUESTS ?= 1000000
 LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
+LASM_CAPACITY_DURATION ?= 40s
+LASM_CAPACITY_THREADS ?= 8
+LASM_CAPACITY_CONNECTIONS ?= 256
+LASM_CAPACITY_CLUSTER_RELAY_WORKERS ?=
+LASM_CAPACITY_CLUSTER_RELAY_QUEUE ?=
 LASM_SATURATION_MATRIX ?= results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json
 LASM_SATURATION_ANALYSIS ?= results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json
 LASM_SATURATION_VERIFY_OUT ?= results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json
@@ -21,6 +26,24 @@ LASM_SATURATION_SUMMARY ?= results/summaries/sec4-lasm-cluster-saturation-boost-
 LASM_SATURATION_VERIFY_INPUT ?=
 SATURATION_SUMMARY ?=
 FULL_SATURATION_SKIP_VERIFY ?= false
+LASM_SATURATION_THROUGHPUT_IMPLS ?= sec4-lasm
+LASM_SATURATION_THROUGHPUT_ENDPOINTS ?= ping
+LASM_SATURATION_THROUGHPUT_BOOST_STEPS ?= 2,4,6,8
+LASM_SATURATION_THROUGHPUT_DURATION ?= 60s
+LASM_SATURATION_THROUGHPUT_THREADS ?= 12
+LASM_SATURATION_THROUGHPUT_CONNECTIONS ?= 512
+LASM_SATURATION_THROUGHPUT_TARGET_REQUESTS ?= 1000000
+LASM_SATURATION_THROUGHPUT_RELAY_WORKERS ?= 32
+LASM_SATURATION_THROUGHPUT_RELAY_QUEUE ?= 4096
+LASM_SATURATION_LATENCY_IMPLS ?= sec4-lasm
+LASM_SATURATION_LATENCY_ENDPOINTS ?= ping
+LASM_SATURATION_LATENCY_BOOST_STEPS ?= 1,2,3
+LASM_SATURATION_LATENCY_DURATION ?= 30s
+LASM_SATURATION_LATENCY_THREADS ?= 4
+LASM_SATURATION_LATENCY_CONNECTIONS ?= 64
+LASM_SATURATION_LATENCY_TARGET_REQUESTS ?= 250000
+LASM_SATURATION_LATENCY_RELAY_WORKERS ?= 16
+LASM_SATURATION_LATENCY_RELAY_QUEUE ?= 2048
 
 help:
 	@echo "Targets:"
@@ -44,8 +67,14 @@ help:
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
-	@echo "  bench-full-saturation Run full suite plus optional LASM saturation bundle lane"
+	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars)"
 	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
+	@echo "  bench-full-saturation-throughput Run saturation-enabled full suite with tuned throughput preset knobs"
+	@echo "  bench-full-saturation-throughput-dry Print throughput preset full-suite+saturation plan"
+	@echo "  bench-full-saturation-latency Run saturation-enabled full suite with latency-oriented preset knobs"
+	@echo "  bench-full-saturation-latency-dry Print latency preset full-suite+saturation plan"
+	@echo "  bench-full-saturation-presets Run throughput preset followed by latency preset"
+	@echo "  bench-full-saturation-presets-dry Print both preset full-suite+saturation plans"
 	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
 	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
@@ -126,17 +155,77 @@ bench-full-dry:
 
 bench-full-saturation:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify; \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)"; \
 	else \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation; \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)"; \
 	fi
 
 bench-full-saturation-dry:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify; \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)"; \
 	else \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation; \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)"; \
 	fi
+
+bench-full-saturation-throughput:
+	@$(MAKE) bench-full-saturation \
+		IMPLS="$(LASM_SATURATION_THROUGHPUT_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_THROUGHPUT_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_THROUGHPUT_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_THROUGHPUT_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_THROUGHPUT_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_THROUGHPUT_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"
+
+bench-full-saturation-throughput-dry:
+	@$(MAKE) bench-full-saturation-dry \
+		IMPLS="$(LASM_SATURATION_THROUGHPUT_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_THROUGHPUT_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_THROUGHPUT_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_THROUGHPUT_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_THROUGHPUT_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_THROUGHPUT_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"
+
+bench-full-saturation-latency:
+	@$(MAKE) bench-full-saturation \
+		IMPLS="$(LASM_SATURATION_LATENCY_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_LATENCY_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_LATENCY_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_LATENCY_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_LATENCY_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_LATENCY_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"
+
+bench-full-saturation-latency-dry:
+	@$(MAKE) bench-full-saturation-dry \
+		IMPLS="$(LASM_SATURATION_LATENCY_IMPLS)" \
+		ENDPOINTS="$(LASM_SATURATION_LATENCY_ENDPOINTS)" \
+		FULL_SATURATION_SKIP_VERIFY=true \
+		LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)" \
+		LASM_CAPACITY_DURATION="$(LASM_SATURATION_LATENCY_DURATION)" \
+		LASM_CAPACITY_THREADS="$(LASM_SATURATION_LATENCY_THREADS)" \
+		LASM_CAPACITY_CONNECTIONS="$(LASM_SATURATION_LATENCY_CONNECTIONS)" \
+		LASM_CAPACITY_TARGET_REQUESTS="$(LASM_SATURATION_LATENCY_TARGET_REQUESTS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)" \
+		LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"
+
+bench-full-saturation-presets:
+	@$(MAKE) bench-full-saturation-throughput
+	@$(MAKE) bench-full-saturation-latency
+
+bench-full-saturation-presets-dry:
+	@$(MAKE) bench-full-saturation-throughput-dry
+	@$(MAKE) bench-full-saturation-latency-dry
 
 sec4-capacity-probe:
 	scripts/run_sec4_capacity_probe.sh --endpoint "$(CAPACITY_ENDPOINT)" --target-requests "$(CAPACITY_TARGET_REQUESTS)"
@@ -217,6 +306,9 @@ test-scripts:
 	scripts/test_verify_benchmark_bundle.sh
 	scripts/test_preflight.sh
 	scripts/test_makefile_profile_targets.sh
+	scripts/test_bench_full_saturation_throughput_profile.sh
+	scripts/test_bench_full_saturation_latency_profile.sh
+	scripts/test_bench_full_saturation_presets_profile.sh
 	scripts/test_test_service_contracts.sh
 
 test-services:

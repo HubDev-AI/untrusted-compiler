@@ -519,11 +519,32 @@ Post-alpha track acceptance anchors:
      - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
      - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
      - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
+   - [x] Full-suite saturation lane now forwards performance-tuning knobs for iterative runs:
+     - `run_full_benchmark_suite.sh` accepts explicit saturation lane pass-through flags (`--saturation-project-path`, `--saturation-duration`, `--saturation-threads`, `--saturation-connections`, `--saturation-target-requests`, relay worker/queue overrides),
+     - `bench-full-saturation` and `bench-full-saturation-dry` now forward `LASM_CAPACITY_*` tuning values into the saturation lane so operators can tune from one Make invocation,
+     - dry-run contract coverage now asserts delegated tuning values and step fanout in full-suite output.
+     - documented in `docs/book/1047-m39-full-suite-saturation-tuning-knob-forwarding.md`.
+   - [x] Added throughput-oriented saturation-enabled full-suite preset targets:
+     - new Make targets `bench-full-saturation-throughput` and `bench-full-saturation-throughput-dry` apply tuned defaults for quick iterative throughput probes (`sec4-lasm`, `ping`, skip verify, boosted load/relay knobs),
+     - preset values are overridable through `LASM_SATURATION_THROUGHPUT_*` variables while still delegating through full-suite saturation lane wiring,
+     - added runtime dry-run contract test ensuring preset defaults reach delegated saturation plan output.
+     - documented in `docs/book/1048-m39-full-suite-saturation-throughput-preset-targets.md`.
+   - [x] Added latency-oriented saturation-enabled full-suite preset targets:
+     - new Make targets `bench-full-saturation-latency` and `bench-full-saturation-latency-dry` apply lighter default load/relay settings for quicker latency-focused tuning passes,
+     - preset values are overridable through `LASM_SATURATION_LATENCY_*` variables and still flow through full-suite saturation lane delegation,
+     - added runtime dry-run contract test ensuring latency preset defaults reach delegated saturation plan output.
+     - documented in `docs/book/1049-m39-full-suite-saturation-latency-preset-targets.md`.
+   - [x] Added combined saturation preset orchestrator targets for one-command dual-profile sweeps:
+     - new Make targets `bench-full-saturation-presets` and `bench-full-saturation-presets-dry` run throughput and latency presets sequentially via existing preset targets,
+     - this keeps one-command exploratory tuning flows deterministic while preserving existing preset override behavior,
+     - added dry-run contract test validating both preset profiles appear in combined target output.
+     - documented in `docs/book/1050-m39-full-suite-saturation-combined-preset-targets.md`.
    - [x] Cluster proxy hot-path lock contention reduced:
      - relay worker request path no longer performs worker pruning/recovery/spawn under state lock for each incoming connection,
      - background scaler/maintenance loop now owns dead-worker pruning + min-instance recovery in one place,
      - relay backend-port selection now uses an atomic selection counter over current worker set to keep per-connection critical section minimal.
-     - documented in `docs/book/1047-m39-lasm-cluster-hot-path-lock-contention-reduction.md`.
+     - documented in `docs/book/1051-m39-lasm-cluster-hot-path-lock-contention-reduction.md`.
+   - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,

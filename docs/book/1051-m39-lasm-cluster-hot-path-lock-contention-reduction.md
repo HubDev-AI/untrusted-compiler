@@ -1,4 +1,4 @@
-# 1047 M39 Slice: LASM Cluster Hot-Path Lock Contention Reduction
+# 1051 M39 Slice: LASM Cluster Hot-Path Lock Contention Reduction
 
 This slice reduces proxy hot-path work in LASM cluster mode so per-connection dispatch spends less time under shared state locks.
 
