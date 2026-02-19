@@ -703,6 +703,10 @@ jobs:
         run: scripts/smoke-sec4-run-hello-api.sh --artifacts-dir build/runtime-smoke/default
       - name: Run sec4 hello-api operator smoke (max-body)
         run: scripts/smoke-sec4-run-hello-api.sh --max-body-bytes 2048 --artifacts-dir build/runtime-smoke/max-body
+      - name: Run sec4 LASM DB adapter operator smoke (records-log)
+        run: scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter records-log --artifacts-dir build/runtime-smoke/lasm-db-records-log
+      - name: Run sec4 LASM DB adapter operator smoke (sqlite)
+        run: scripts/smoke-sec4-run-lasm-db-adapter.sh --db-adapter sqlite --artifacts-dir build/runtime-smoke/lasm-db-sqlite
       - name: Validate runtime smoke bundle
         run: scripts/check-runtime-smoke-bundle.sh --artifacts-root build/runtime-smoke --index-path build/runtime-smoke/runtime-smoke-branch-index.json
       - name: Upload runtime smoke artifacts
