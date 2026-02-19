@@ -10125,8 +10125,22 @@ M13-S1 go/no-go note:
 - [x] Wired grammar-pin + fast smoke runner execution into checklist.
 - [x] Updated extension README validation section to use release checklist command.
 
+### M39-S2G Zed extension operator install guide acceptance criteria
+- Repository includes deterministic operator workflow for:
+  - local install,
+  - local update,
+  - rollback to previous local install.
+- Install workflow resolves platform-local extension install paths with override support.
+- Operator docs include explicit install/update/rollback commands and backup location notes.
+
+### M39-S2G tracking (live status)
+- [x] Added `scripts/manage-zed-extension-local.sh` with `install|update|rollback|status`.
+- [x] Added platform-default extension directory resolution + override support (`--extensions-dir`).
+- [x] Added timestamped local backup flow for safe rollback.
+- [x] Updated `zed-extension/README.md` with local operator install/update/rollback guide.
+
 ### Next planned slice
-- M39-S2G Zed extension operator install guide (local install path, update flow, and rollback notes).
+- M39-S2H Zed extension end-to-end operator smoke pass in a clean profile (install -> run sample -> rollback).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

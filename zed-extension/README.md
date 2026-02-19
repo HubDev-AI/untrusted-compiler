@@ -24,7 +24,7 @@ This directory contains the official Zed integration for Untrusted<T>.
 
 Use:
 
-- `/Users/vladimirtrifonov/src/ai/AILang/examples/zed-plugin-smoke`
+- `examples/zed-plugin-smoke`
 
 It includes multi-file `.ut` modules plus playground files for diagnostics and formatter checks.
 
@@ -33,6 +33,36 @@ Run the deterministic smoke runner:
 ```bash
 scripts/run-zed-plugin-smoke.sh
 ```
+
+## Local install / update / rollback
+
+Use the operator helper script:
+
+```bash
+# inspect resolved install paths and current state
+scripts/manage-zed-extension-local.sh status
+
+# install current repo extension (default: copy mode)
+scripts/manage-zed-extension-local.sh install
+
+# update existing local install (backs up previous install first)
+scripts/manage-zed-extension-local.sh update
+
+# rollback to most recent backup
+scripts/manage-zed-extension-local.sh rollback
+```
+
+Notes:
+
+- Default install target is auto-detected by platform:
+  - macOS: `~/Library/Application Support/Zed/extensions/installed`
+  - Linux: `~/.local/share/zed/extensions/installed` (fallback `~/.local/share/Zed/extensions/installed`)
+- Backups are timestamped under:
+  - `<extensions-dir>/.sec4-backups/untrusted/`
+- You can force a target path with:
+  - `--extensions-dir <path>`
+- For live-reload style local development, use:
+  - `--mode symlink`
 
 ## Binary resolution order
 

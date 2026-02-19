@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-19 | self | I kicked off a broad `find ~/Library` scan to detect Zed paths and it was slow/noisy for a small operator-doc task. | Prefer focused candidate-path probes first (`~/Library/Application Support/Zed`, `~/.local/share/zed`) and only run broad scans if targeted checks fail. |
 | 2026-02-20 | self | During rebase, sequential chapter numbers collided twice with freshly merged lanes (`1038`, then `1039`), forcing repeated renames. | For high-churn docs/book numbering, reserve chapter number only after final rebase onto `origin/dev`, then add the chapter file/index in the last commit step. |
 | 2026-02-20 | self | I picked chapter number `1037` for a new slice while another lane had already merged `1037`, forcing a rebase conflict and renumber. | Before adding a new `docs/book/*` chapter, check latest `origin/dev` tail of `docs/book/README.md` and reserve the next free number after fetch/rebase. |
 | 2026-02-19 | self | I reintroduced Cargo lock contention by launching two Cargo validations in parallel during rebase re-validation (`sec4audit-language-server` tests + `sec4 check`). | Keep all Cargo validations strictly sequential in this repo, including quick post-rebase confidence checks; parallelize only read/search commands. |
