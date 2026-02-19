@@ -504,6 +504,11 @@ Post-alpha track acceptance anchors:
      - renderer validates recommended-step consistency between analysis and optional verification artifact,
      - Makefile target added: `lasm-cluster-saturation-boost-summary`.
      - documented in `docs/book/1040-m39-lasm-saturation-boost-summary-renderer.md`.
+   - [x] Benchmark publish report now supports saturation summary integration:
+     - `benchmark-suite/scripts/publish_report.sh` now accepts optional saturation-summary input and emits a dedicated `LASM Saturation Boost Tuning` section,
+     - publish flow validates required saturation summary lines (`Selection mode`, `Recommended boost step`) when artifact is provided to catch summary-shape drift,
+     - Makefile `publish-report` target now forwards optional `SATURATION_SUMMARY` input without changing default behavior when unset.
+     - documented in `docs/book/1041-m39-publish-report-saturation-summary-integration.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
