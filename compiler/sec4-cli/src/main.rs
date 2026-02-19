@@ -1,7 +1,7 @@
 use arc_swap::ArcSwap;
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use crossbeam_channel::{bounded, TrySendError};
+use crossbeam_channel::{bounded, RecvTimeoutError, TryRecvError, TrySendError};
 use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
@@ -8687,39 +8687,65 @@ fn write_lasm_cluster_unavailable_response(
     Ok(())
 }
 
-fn relay_lasm_cluster_connection(
-    client: &mut TcpStream,
-    upstream: &mut TcpStream,
-) -> Result<(), String> {
-    client
-        .set_nonblocking(true)
-        .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
-    upstream
-        .set_nonblocking(true)
-        .map_err(|err| format!("could not set upstream proxy stream nonblocking: {err}"))?;
+const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
+const LASM_CLUSTER_RELAY_RECEIVE_WAIT_MS: u64 = 2;
 
-    let mut client_to_upstream = [0_u8; 64 * 1024];
-    let mut upstream_to_client = [0_u8; 64 * 1024];
-    let mut c2u_start = 0_usize;
-    let mut c2u_end = 0_usize;
-    let mut u2c_start = 0_usize;
-    let mut u2c_end = 0_usize;
-    let mut client_read_closed = false;
-    let mut upstream_read_closed = false;
-    let mut client_write_closed = false;
-    let mut upstream_write_closed = false;
-    let mut idle_spins = 0_u32;
+enum LasmClusterRelayPumpStep {
+    Progressed,
+    Idle,
+    Complete,
+}
 
-    loop {
+struct LasmClusterRelayPump {
+    client: TcpStream,
+    upstream: TcpStream,
+    client_to_upstream: Vec<u8>,
+    upstream_to_client: Vec<u8>,
+    c2u_start: usize,
+    c2u_end: usize,
+    u2c_start: usize,
+    u2c_end: usize,
+    client_read_closed: bool,
+    upstream_read_closed: bool,
+    client_write_closed: bool,
+    upstream_write_closed: bool,
+}
+
+impl LasmClusterRelayPump {
+    fn new(client: TcpStream, upstream: TcpStream) -> Result<Self, String> {
+        client
+            .set_nonblocking(true)
+            .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
+        upstream
+            .set_nonblocking(true)
+            .map_err(|err| format!("could not set upstream proxy stream nonblocking: {err}"))?;
+        Ok(Self {
+            client,
+            upstream,
+            client_to_upstream: vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+            upstream_to_client: vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+            c2u_start: 0,
+            c2u_end: 0,
+            u2c_start: 0,
+            u2c_end: 0,
+            client_read_closed: false,
+            upstream_read_closed: false,
+            client_write_closed: false,
+            upstream_write_closed: false,
+        })
+    }
+
+    fn pump_once(&mut self) -> Result<LasmClusterRelayPumpStep, String> {
         let mut progressed = false;
 
-        if !client_read_closed && c2u_end < client_to_upstream.len() {
-            match client.read(&mut client_to_upstream[c2u_end..]) {
+        if !self.client_read_closed && self.c2u_end < self.client_to_upstream.len() {
+            match self.client.read(&mut self.client_to_upstream[self.c2u_end..]) {
                 Ok(0) => {
-                    client_read_closed = true;
+                    self.client_read_closed = true;
+                    progressed = true;
                 }
                 Ok(bytes_read) => {
-                    c2u_end += bytes_read;
+                    self.c2u_end += bytes_read;
                     progressed = true;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -8729,14 +8755,17 @@ fn relay_lasm_cluster_connection(
             }
         }
 
-        while c2u_start < c2u_end {
-            match upstream.write(&client_to_upstream[c2u_start..c2u_end]) {
+        while self.c2u_start < self.c2u_end {
+            match self
+                .upstream
+                .write(&self.client_to_upstream[self.c2u_start..self.c2u_end])
+            {
                 Ok(0) => {
                     return Err("could not relay client payload to upstream: write returned 0 bytes"
                         .to_string());
                 }
                 Ok(bytes_written) => {
-                    c2u_start += bytes_written;
+                    self.c2u_start += bytes_written;
                     progressed = true;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
@@ -8745,23 +8774,24 @@ fn relay_lasm_cluster_connection(
                 }
             }
         }
-        if c2u_start == c2u_end {
-            c2u_start = 0;
-            c2u_end = 0;
-            if client_read_closed && !upstream_write_closed {
-                let _ = upstream.shutdown(Shutdown::Write);
-                upstream_write_closed = true;
+        if self.c2u_start == self.c2u_end {
+            self.c2u_start = 0;
+            self.c2u_end = 0;
+            if self.client_read_closed && !self.upstream_write_closed {
+                let _ = self.upstream.shutdown(Shutdown::Write);
+                self.upstream_write_closed = true;
                 progressed = true;
             }
         }
 
-        if !upstream_read_closed && u2c_end < upstream_to_client.len() {
-            match upstream.read(&mut upstream_to_client[u2c_end..]) {
+        if !self.upstream_read_closed && self.u2c_end < self.upstream_to_client.len() {
+            match self.upstream.read(&mut self.upstream_to_client[self.u2c_end..]) {
                 Ok(0) => {
-                    upstream_read_closed = true;
+                    self.upstream_read_closed = true;
+                    progressed = true;
                 }
                 Ok(bytes_read) => {
-                    u2c_end += bytes_read;
+                    self.u2c_end += bytes_read;
                     progressed = true;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -8771,8 +8801,11 @@ fn relay_lasm_cluster_connection(
             }
         }
 
-        while u2c_start < u2c_end {
-            match client.write(&upstream_to_client[u2c_start..u2c_end]) {
+        while self.u2c_start < self.u2c_end {
+            match self
+                .client
+                .write(&self.upstream_to_client[self.u2c_start..self.u2c_end])
+            {
                 Ok(0) => {
                     return Err(
                         "could not relay upstream response to client: write returned 0 bytes"
@@ -8780,7 +8813,7 @@ fn relay_lasm_cluster_connection(
                     );
                 }
                 Ok(bytes_written) => {
-                    u2c_start += bytes_written;
+                    self.u2c_start += bytes_written;
                     progressed = true;
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
@@ -8789,35 +8822,30 @@ fn relay_lasm_cluster_connection(
                 }
             }
         }
-        if u2c_start == u2c_end {
-            u2c_start = 0;
-            u2c_end = 0;
-            if upstream_read_closed && !client_write_closed {
-                let _ = client.shutdown(Shutdown::Write);
-                client_write_closed = true;
+        if self.u2c_start == self.u2c_end {
+            self.u2c_start = 0;
+            self.u2c_end = 0;
+            if self.upstream_read_closed && !self.client_write_closed {
+                let _ = self.client.shutdown(Shutdown::Write);
+                self.client_write_closed = true;
                 progressed = true;
             }
         }
 
-        if client_write_closed && upstream_write_closed && c2u_end == 0 && u2c_end == 0 {
-            break;
+        if self.client_write_closed
+            && self.upstream_write_closed
+            && self.c2u_end == 0
+            && self.u2c_end == 0
+        {
+            return Ok(LasmClusterRelayPumpStep::Complete);
         }
 
         if progressed {
-            idle_spins = 0;
-            continue;
-        }
-
-        idle_spins = idle_spins.saturating_add(1);
-        if idle_spins < 32 {
-            std::thread::yield_now();
+            Ok(LasmClusterRelayPumpStep::Progressed)
         } else {
-            std::thread::sleep(Duration::from_millis(1));
-            idle_spins = 0;
+            Ok(LasmClusterRelayPumpStep::Idle)
         }
     }
-
-    Ok(())
 }
 
 fn stop_lasm_cluster_workers(state: &mut LasmClusterState) {
@@ -8957,52 +8985,135 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_selection_counter = Arc::clone(&relay_selection_counter);
         let relay_worker_ports = Arc::clone(&worker_ports_snapshot);
         let relay_saturation_events = Arc::clone(&relay_saturation_events);
-        relay_handles.push(std::thread::spawn(move || loop {
-            let mut client = match relay_receiver.recv() {
-                Ok(stream) => stream,
-                Err(_) => break,
-            };
+        relay_handles.push(std::thread::spawn(move || {
+            let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
+            let mut receiver_closed = false;
+            let mut idle_spins = 0_u32;
 
-            let backend_port = {
-                let worker_ports = relay_worker_ports.load();
-                if worker_ports.is_empty() {
-                    None
+            loop {
+                let mut accepted = false;
+                loop {
+                    let incoming = if relay_connections.is_empty() {
+                        match relay_receiver
+                            .recv_timeout(Duration::from_millis(LASM_CLUSTER_RELAY_RECEIVE_WAIT_MS))
+                        {
+                            Ok(stream) => Some(stream),
+                            Err(RecvTimeoutError::Timeout) => None,
+                            Err(RecvTimeoutError::Disconnected) => {
+                                receiver_closed = true;
+                                None
+                            }
+                        }
+                    } else {
+                        match relay_receiver.try_recv() {
+                            Ok(stream) => Some(stream),
+                            Err(TryRecvError::Empty) => None,
+                            Err(TryRecvError::Disconnected) => {
+                                receiver_closed = true;
+                                None
+                            }
+                        }
+                    };
+                    let Some(mut client) = incoming else {
+                        break;
+                    };
+                    accepted = true;
+
+                    let backend_port = {
+                        let worker_ports = relay_worker_ports.load();
+                        if worker_ports.is_empty() {
+                            None
+                        } else {
+                            let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                                % worker_ports.len();
+                            Some(worker_ports[index])
+                        }
+                    };
+
+                    let Some(backend_port) = backend_port else {
+                        relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                        let _ = write_lasm_cluster_unavailable_response(
+                            &mut client,
+                            "no healthy workers",
+                        );
+                        relay_active.fetch_sub(1, Ordering::Relaxed);
+                        continue;
+                    };
+
+                    let backend_addr =
+                        std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, backend_port));
+                    match TcpStream::connect_timeout(
+                        &backend_addr,
+                        lasm_cluster_backend_connect_timeout(),
+                    ) {
+                        Ok(upstream) => {
+                            let _ = client.set_nodelay(true);
+                            let _ = upstream.set_nodelay(true);
+                            match LasmClusterRelayPump::new(client, upstream) {
+                                Ok(relay) => relay_connections.push(relay),
+                                Err(message) => {
+                                    eprintln!("warning: LASM cluster relay init failed: {message}");
+                                    relay_active.fetch_sub(1, Ordering::Relaxed);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "warning: LASM cluster worker {} connect failed: {}",
+                                backend_port, err
+                            );
+                            let _ = write_lasm_cluster_unavailable_response(
+                                &mut client,
+                                "worker unavailable",
+                            );
+                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+
+                let mut progressed = false;
+                let mut index = 0_usize;
+                while index < relay_connections.len() {
+                    match relay_connections[index].pump_once() {
+                        Ok(LasmClusterRelayPumpStep::Progressed) => {
+                            progressed = true;
+                            index += 1;
+                        }
+                        Ok(LasmClusterRelayPumpStep::Idle) => {
+                            index += 1;
+                        }
+                        Ok(LasmClusterRelayPumpStep::Complete) => {
+                            relay_connections.swap_remove(index);
+                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            progressed = true;
+                        }
+                        Err(err) => {
+                            eprintln!("warning: LASM cluster relay pump failed: {err}");
+                            relay_connections.swap_remove(index);
+                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            progressed = true;
+                        }
+                    }
+                }
+
+                if receiver_closed && relay_connections.is_empty() {
+                    break;
+                }
+
+                if accepted || progressed {
+                    idle_spins = 0;
+                    continue;
+                }
+
+                idle_spins = idle_spins.saturating_add(1);
+                if idle_spins < 32 {
+                    std::thread::yield_now();
                 } else {
-                    let index =
-                        relay_selection_counter.fetch_add(1, Ordering::Relaxed) % worker_ports.len();
-                    Some(worker_ports[index])
-                }
-            };
-
-            let Some(backend_port) = backend_port else {
-                relay_saturation_events.fetch_add(1, Ordering::Relaxed);
-                let _ = write_lasm_cluster_unavailable_response(&mut client, "no healthy workers");
-                relay_active.fetch_sub(1, Ordering::Relaxed);
-                continue;
-            };
-
-            let backend_addr =
-                std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, backend_port));
-            match TcpStream::connect_timeout(
-                &backend_addr,
-                lasm_cluster_backend_connect_timeout(),
-            ) {
-                Ok(mut upstream) => {
-                    let _ = client.set_nodelay(true);
-                    let _ = upstream.set_nodelay(true);
-                    let _ = relay_lasm_cluster_connection(&mut client, &mut upstream);
-                }
-                Err(err) => {
-                    relay_saturation_events.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
-                        "warning: LASM cluster worker {} connect failed: {}",
-                        backend_port, err
-                    );
-                    let _ =
-                        write_lasm_cluster_unavailable_response(&mut client, "worker unavailable");
+                    std::thread::sleep(Duration::from_millis(1));
+                    idle_spins = 0;
                 }
             }
-            relay_active.fetch_sub(1, Ordering::Relaxed);
         }));
     }
 
