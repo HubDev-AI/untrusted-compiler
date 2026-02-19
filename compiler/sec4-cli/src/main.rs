@@ -8597,6 +8597,10 @@ fn lasm_cluster_backend_connect_timeout() -> Duration {
     Duration::from_millis(250)
 }
 
+fn lasm_cluster_backend_connect_cooldown() -> Duration {
+    Duration::from_millis(500)
+}
+
 fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     state: &LasmClusterState,
     snapshot: &Arc<ArcSwap<Vec<u16>>>,
@@ -8987,6 +8991,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_saturation_events = Arc::clone(&relay_saturation_events);
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
+            let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
             let mut receiver_closed = false;
             let mut idle_spins = 0_u32;
 
@@ -9024,9 +9029,36 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if worker_ports.is_empty() {
                             None
                         } else {
-                            let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
-                                % worker_ports.len();
-                            Some(worker_ports[index])
+                            if unhealthy_ports_until.is_empty() {
+                                let index =
+                                    relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                                        % worker_ports.len();
+                                Some(worker_ports[index])
+                            } else {
+                                let now = Instant::now();
+                                unhealthy_ports_until.retain(|_, until| *until > now);
+                                if unhealthy_ports_until.is_empty() {
+                                    let index =
+                                        relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                                            % worker_ports.len();
+                                    Some(worker_ports[index])
+                                } else {
+                                    let start_index = relay_selection_counter
+                                        .fetch_add(1, Ordering::Relaxed)
+                                        % worker_ports.len();
+                                    let mut selected = None;
+                                    for offset in 0..worker_ports.len() {
+                                        let candidate = worker_ports
+                                            [(start_index.saturating_add(offset))
+                                                % worker_ports.len()];
+                                        if !unhealthy_ports_until.contains_key(&candidate) {
+                                            selected = Some(candidate);
+                                            break;
+                                        }
+                                    }
+                                    selected
+                                }
+                            }
                         }
                     };
 
@@ -9059,6 +9091,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         Err(err) => {
                             relay_saturation_events.fetch_add(1, Ordering::Relaxed);
+                            unhealthy_ports_until.insert(
+                                backend_port,
+                                Instant::now() + lasm_cluster_backend_connect_cooldown(),
+                            );
                             eprintln!(
                                 "warning: LASM cluster worker {} connect failed: {}",
                                 backend_port, err
