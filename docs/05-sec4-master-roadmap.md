@@ -10139,8 +10139,33 @@ M13-S1 go/no-go note:
 - [x] Added timestamped local backup flow for safe rollback.
 - [x] Updated `zed-extension/README.md` with local operator install/update/rollback guide.
 
+### M39-S2H Zed extension end-to-end operator smoke acceptance criteria
+- Repository includes one-command operator smoke for clean-profile extension flow:
+  - install,
+  - plugin smoke validation,
+  - rollback.
+- Smoke flow verifies rollback restoration against seeded previous install state.
+- Operator docs reference the command as the canonical full local-flow check.
+
+### M39-S2H tracking (live status)
+- [x] Added `scripts/run-zed-extension-operator-smoke.sh`.
+- [x] Wired install -> plugin smoke (`--fast`) -> rollback flow using `scripts/manage-zed-extension-local.sh`.
+- [x] Added rollback restoration assertion via seeded marker file.
+- [x] Updated `zed-extension/README.md` with full operator-flow validation command.
+
+### M39-S2I Zed extension publish bundle staging helper acceptance criteria
+- Repository includes deterministic local bundle staging command for Zed extension publish prep.
+- Staging command emits a machine-readable manifest with per-file size/hash inventory.
+- Operator docs include bundle staging command and output artifact location.
+
+### M39-S2I tracking (live status)
+- [x] Added `scripts/stage-zed-extension-bundle.sh`.
+- [x] Added deterministic bundle staging under `build/zed-extension-bundle/`.
+- [x] Added `bundle-manifest.json` emission with per-file `path/size/sha256`.
+- [x] Updated `zed-extension/README.md` with bundle staging usage.
+
 ### Next planned slice
-- M39-S2H Zed extension end-to-end operator smoke pass in a clean profile (install -> run sample -> rollback).
+- M39-S2J Zed extension local operator checklist consolidation (single entrypoint command wrapping release + operator smoke + bundle stage).
 
 ## 4. Documentation-as-Book Plan (Mandatory Workflow)
 

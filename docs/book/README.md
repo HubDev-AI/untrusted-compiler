@@ -1009,5 +1009,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1041-m39-zed-plugin-smoke-runner-script.md`
 - `1042-m39-zed-extension-release-checklist.md`
 - `1043-m39-zed-extension-operator-install-guide.md`
+- `1044-m39-zed-extension-operator-e2e-smoke.md`
+- `1045-m39-zed-extension-bundle-staging-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.

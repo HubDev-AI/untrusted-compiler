@@ -108,3 +108,17 @@ scripts/check-zed-extension-release.sh
 ```
 
 This checklist includes grammar pin validation and fast smoke checks for the plugin sample project.
+
+For full operator-flow validation (install -> smoke -> rollback in a clean temp profile), run:
+
+```bash
+scripts/run-zed-extension-operator-smoke.sh
+```
+
+For deterministic local release bundle staging, run:
+
+```bash
+scripts/stage-zed-extension-bundle.sh --clean
+```
+
+This writes staged bundle content plus `build/zed-extension-bundle/bundle-manifest.json`.
