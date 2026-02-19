@@ -468,6 +468,11 @@ Post-alpha track acceptance anchors:
      - dry-run contract coverage added in benchmark suite script tests.
      - first 1M-threshold run evidence: `1,278,004` requests in `20s` (`~63.6k req/s`, peak RSS `~10,464 KB`) with tuned relay settings (`workers=32`, `queue=4096`).
      - documented in `docs/book/1029-m39-lasm-cluster-capacity-probe-tooling.md`.
+   - [x] Added saturation-triggered autoscale boost in cluster proxy mode:
+     - relay queue full events are counted and consumed by autoscaler each check window,
+     - saturation pressure can raise `desired` worker count immediately (bounded by autoscale step and max instance caps) instead of relying only on active-connection heuristic,
+     - cooldown and per-check step windows remain enforced.
+     - documented in `docs/book/1032-m39-lasm-autoscale-saturation-boost.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
