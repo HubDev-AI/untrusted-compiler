@@ -499,6 +499,26 @@ Post-alpha track acceptance anchors:
      - `--verify-out` controls follow-up artifact location, and the runner now rejects invalid `--verify-recommended --skip-analysis` combinations deterministically,
      - run mode prints `recommendedVerificationOut=<path>` after follow-up execution.
      - documented in `docs/book/1039-m39-lasm-saturation-boost-recommended-followup-verification.md`.
+   - [x] Added saturation boost markdown summary renderer for operator handoff:
+     - new script `benchmark-suite/scripts/render_lasm_cluster_saturation_boost_summary.sh` renders deterministic markdown from matrix + analysis artifacts (and optional verify artifact),
+     - renderer validates recommended-step consistency between analysis and optional verification artifact,
+     - Makefile target added: `lasm-cluster-saturation-boost-summary`.
+     - documented in `docs/book/1040-m39-lasm-saturation-boost-summary-renderer.md`.
+   - [x] Benchmark publish report now supports saturation summary integration:
+     - `benchmark-suite/scripts/publish_report.sh` now accepts optional saturation-summary input and emits a dedicated `LASM Saturation Boost Tuning` section,
+     - publish flow validates required saturation summary lines (`Selection mode`, `Recommended boost step`) when artifact is provided to catch summary-shape drift,
+     - Makefile `publish-report` target now forwards optional `SATURATION_SUMMARY` input without changing default behavior when unset.
+     - documented in `docs/book/1041-m39-publish-report-saturation-summary-integration.md`.
+   - [x] Added one-command saturation tuning bundle orchestration:
+     - new script `benchmark-suite/scripts/run_lasm_cluster_saturation_boost_bundle.sh` executes matrix + analysis + recommended-step verify + summary rendering as one deterministic flow,
+     - supports `--dry-run` plan output and `--skip-verify` mode for matrix/analysis/summary-only execution,
+     - Makefile target added: `lasm-cluster-saturation-boost-bundle`.
+     - documented in `docs/book/1042-m39-lasm-saturation-boost-bundle-orchestration.md`.
+   - [x] Full benchmark suite orchestration now supports optional LASM saturation lane:
+     - `run_full_benchmark_suite.sh --include-lasm-saturation` now executes the saturation bundle as an explicit phase and forwards generated summary into final report publishing,
+     - deterministic guard rejects saturation-lane requests when `sec4-lasm` is not included in `--impls`,
+     - Makefile targets added: `bench-full-saturation` and `bench-full-saturation-dry`.
+     - documented in `docs/book/1043-m39-full-suite-optional-saturation-lane.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

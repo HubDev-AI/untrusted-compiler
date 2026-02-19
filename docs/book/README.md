@@ -1005,9 +1005,13 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1037-m39-lasm-saturation-boost-analysis-tooling.md`
 - `1038-m39-lasm-saturation-boost-matrix-integrated-analysis.md`
 - `1039-m39-lasm-saturation-boost-recommended-followup-verification.md`
+- `1040-m39-lasm-saturation-boost-summary-renderer.md`
 - `1040-m39-zed-plugin-runtime-launch-hardening.md`
+- `1041-m39-publish-report-saturation-summary-integration.md`
 - `1041-m39-zed-plugin-smoke-runner-script.md`
+- `1042-m39-lasm-saturation-boost-bundle-orchestration.md`
 - `1042-m39-zed-extension-release-checklist.md`
+- `1043-m39-full-suite-optional-saturation-lane.md`
 - `1043-m39-zed-extension-operator-install-guide.md`
 - `1044-m39-zed-extension-operator-e2e-smoke.md`
 - `1045-m39-zed-extension-bundle-staging-helper.md`

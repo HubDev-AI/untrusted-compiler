@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -17,6 +17,10 @@ LASM_CAPACITY_BOOST_STEPS ?= 2,4,6
 LASM_SATURATION_MATRIX ?= results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json
 LASM_SATURATION_ANALYSIS ?= results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json
 LASM_SATURATION_VERIFY_OUT ?= results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json
+LASM_SATURATION_SUMMARY ?= results/summaries/sec4-lasm-cluster-saturation-boost-summary.md
+LASM_SATURATION_VERIFY_INPUT ?=
+SATURATION_SUMMARY ?=
+FULL_SATURATION_SKIP_VERIFY ?= false
 
 help:
 	@echo "Targets:"
@@ -40,11 +44,15 @@ help:
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
+	@echo "  bench-full-saturation Run full suite plus optional LASM saturation bundle lane"
+	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
 	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
 	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
 	@echo "  lasm-cluster-saturation-boost-analyze Analyze LASM saturation boost matrix and pick recommended boost step"
 	@echo "  lasm-cluster-saturation-boost-verify Run matrix + analysis and verify one recommended boost-step follow-up probe"
+	@echo "  lasm-cluster-saturation-boost-summary Render markdown summary from saturation matrix + analysis (+ optional verify artifact)"
+	@echo "  lasm-cluster-saturation-boost-bundle Run matrix + analysis + recommended verify + summary in one command"
 	@echo "  artifact-manifest Build deterministic artifact manifest from results/"
 	@echo "  verify-bundle Verify expected benchmark bundle artifacts for IMPLS/ENDPOINTS"
 	@echo "  summarize    Convert raw wrk2 output to summary JSON"
@@ -52,7 +60,7 @@ help:
 	@echo "  compare      Build endpoint comparison from report files"
 	@echo "  compare-matrix Build comparison matrix across all endpoints"
 	@echo "  analyze-matrix Analyze tail-latency/target-coverage signals from matrix"
-	@echo "  publish-report Build markdown benchmark report from matrix + sec4 audit"
+	@echo "  publish-report Build markdown benchmark report from matrix + sec4 audit (+ optional saturation summary)"
 	@echo "  test-scripts Run benchmark helper script tests"
 	@echo "  test-services Run cross-impl service contract smoke checks"
 
@@ -116,6 +124,20 @@ bench-full:
 bench-full-dry:
 	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
+bench-full-saturation:
+	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify; \
+	else \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation; \
+	fi
+
+bench-full-saturation-dry:
+	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify; \
+	else \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation; \
+	fi
+
 sec4-capacity-probe:
 	scripts/run_sec4_capacity_probe.sh --endpoint "$(CAPACITY_ENDPOINT)" --target-requests "$(CAPACITY_TARGET_REQUESTS)"
 
@@ -130,6 +152,16 @@ lasm-cluster-saturation-boost-analyze:
 
 lasm-cluster-saturation-boost-verify:
 	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --out "$(LASM_SATURATION_MATRIX)" --analysis-out "$(LASM_SATURATION_ANALYSIS)" --verify-recommended --verify-out "$(LASM_SATURATION_VERIFY_OUT)"
+
+lasm-cluster-saturation-boost-summary:
+	@if [ -n "$(LASM_SATURATION_VERIFY_INPUT)" ]; then \
+		scripts/render_lasm_cluster_saturation_boost_summary.sh "$(LASM_SATURATION_MATRIX)" "$(LASM_SATURATION_ANALYSIS)" "$(LASM_SATURATION_SUMMARY)" "$(LASM_SATURATION_VERIFY_INPUT)"; \
+	else \
+		scripts/render_lasm_cluster_saturation_boost_summary.sh "$(LASM_SATURATION_MATRIX)" "$(LASM_SATURATION_ANALYSIS)" "$(LASM_SATURATION_SUMMARY)"; \
+	fi
+
+lasm-cluster-saturation-boost-bundle:
+	scripts/run_lasm_cluster_saturation_boost_bundle.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --matrix-out "$(LASM_SATURATION_MATRIX)" --analysis-out "$(LASM_SATURATION_ANALYSIS)" --verify-out "$(LASM_SATURATION_VERIFY_OUT)" --summary-out "$(LASM_SATURATION_SUMMARY)"
 
 artifact-manifest:
 	scripts/build_artifact_manifest.sh results "$(ARTIFACT_MANIFEST)"
@@ -153,13 +185,19 @@ analyze-matrix:
 	scripts/analyze_matrix.sh results/summaries/compare-matrix.json results/summaries/analysis.json
 
 publish-report:
-	scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json
+	@if [ -n "$(SATURATION_SUMMARY)" ]; then \
+		scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json "" "$(SATURATION_SUMMARY)"; \
+	else \
+		scripts/publish_report.sh results/summaries/compare-matrix.json results/benchmark-report.md ../baselines/sec-audit/default-secure-prod.hello.json results/summaries/analysis.json; \
+	fi
 
 test-scripts:
 	scripts/test_run_sec4_capacity_probe.sh
 	scripts/test_run_lasm_cluster_capacity_probe.sh
 	scripts/test_run_lasm_cluster_saturation_boost_matrix.sh
+	scripts/test_run_lasm_cluster_saturation_boost_bundle.sh
 	scripts/test_analyze_lasm_cluster_saturation_boost_matrix.sh
+	scripts/test_render_lasm_cluster_saturation_boost_summary.sh
 	scripts/test_wrk2_summary.sh
 	scripts/test_run_profile.sh
 	scripts/test_build_report.sh
