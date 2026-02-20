@@ -7982,6 +7982,9 @@ fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
 
     last_published_ports.clear();
     last_published_ports.extend(state.workers.iter().map(|worker| worker.port));
+    if last_published_ports.windows(2).any(|window| window[0] > window[1]) {
+        last_published_ports.sort_unstable();
+    }
     snapshot.store(Arc::new(last_published_ports.clone()));
 }
 
@@ -8328,13 +8331,24 @@ fn run_lasm_cluster_accept_loop(
             relay_dispatch_counter.fetch_add(relay_batch_len, Ordering::Relaxed)
         };
         let mut listener_enqueued_local = 0_usize;
-        for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
-            let dispatch_start = if relay_sender_count == 0 {
-                0
-            } else {
-                (relay_dispatch_start_base + batch_offset) % relay_sender_count
-            };
-            match dispatch_lasm_cluster_relay_stream(client_stream, relay_senders, dispatch_start) {
+        let mut dispatch_start = if relay_sender_count == 0 {
+            0
+        } else {
+            relay_dispatch_start_base % relay_sender_count
+        };
+        for client_stream in relay_listener_batch.drain(..) {
+            let stream_dispatch_start = dispatch_start;
+            if relay_sender_count > 0 {
+                dispatch_start += 1;
+                if dispatch_start == relay_sender_count {
+                    dispatch_start = 0;
+                }
+            }
+            match dispatch_lasm_cluster_relay_stream(
+                client_stream,
+                relay_senders,
+                stream_dispatch_start,
+            ) {
                 Ok(()) => {
                     listener_enqueued_local = listener_enqueued_local.saturating_add(1);
                 }
@@ -8754,8 +8768,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             unhealthy_ports_until.clear();
                             unhealthy_prune_next_at = None;
                         } else {
-                            unhealthy_ports_until
-                                .retain(|port, until| *until > now && snapshot.contains(port));
+                            unhealthy_ports_until.retain(|port, until| {
+                                *until > now && snapshot.binary_search(port).is_ok()
+                            });
                             unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
                                 None
                             } else {
