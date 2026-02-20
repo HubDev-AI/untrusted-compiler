@@ -8281,6 +8281,7 @@ const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
 const LASM_CLUSTER_IDLE_SLEEP_MICROS: u64 = 250;
 
+#[inline(always)]
 fn flush_lasm_cluster_saturation_counters(
     pending_counter: &AtomicUsize,
     total_counter: &AtomicU64,
@@ -8297,6 +8298,7 @@ fn flush_lasm_cluster_saturation_counters(
     }
 }
 
+#[inline(always)]
 fn flush_lasm_cluster_dispatch_fallback_total(counter: &AtomicU64, total_local: &mut u64) {
     if *total_local > 0 {
         counter.fetch_add(*total_local, Ordering::Relaxed);
@@ -8304,6 +8306,7 @@ fn flush_lasm_cluster_dispatch_fallback_total(counter: &AtomicU64, total_local: 
     }
 }
 
+#[inline(always)]
 fn flush_lasm_cluster_active_connection_increments(
     active_counter: &AtomicUsize,
     increments_local: &mut usize,
@@ -8314,6 +8317,7 @@ fn flush_lasm_cluster_active_connection_increments(
     }
 }
 
+#[inline(always)]
 fn flush_lasm_cluster_active_connection_decrements(
     active_counter: &AtomicUsize,
     decrements_local: &mut usize,
@@ -8329,6 +8333,7 @@ enum LasmClusterRelayDispatchError {
     Unavailable(TcpStream),
 }
 
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
@@ -8380,6 +8385,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
     }
 }
 
+#[inline(always)]
 fn handle_lasm_cluster_accept_dispatch_error(
     dispatch_error: LasmClusterRelayDispatchError,
     active_connections: &AtomicUsize,
