@@ -1140,5 +1140,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1168-m39-lasm-cluster-relay-batch-snapshot-lookup-setup.md`
 - `1169-m39-lasm-cluster-connect-warning-map-prune.md`
 - `1170-m39-lasm-cluster-selection-lookup-linear-rebuild.md`
+- `1171-m39-lasm-cluster-selection-lookup-scratch-mask-reuse.md`
 
 As milestones progress, chapters will be added and linked from this index.

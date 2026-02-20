@@ -835,6 +835,10 @@ Post-alpha track acceptance anchors:
      - `rebuild_lasm_cluster_backend_selection_lookup` now computes a per-index healthy mask once and fills lookup via reverse next-healthy propagation (`O(n)`),
      - replaces previous scan-per-start-index fallback rebuild (`O(n^2)`) while preserving unhealthy-skip selection semantics.
      - documented in `docs/book/1170-m39-lasm-cluster-selection-lookup-linear-rebuild.md`.
+   - [x] Removed rebuild-time healthy-mask allocation churn in relay selection lookup:
+     - relay workers now keep a reusable `selection_healthy_mask` scratch buffer and pass it into lookup rebuild helper,
+     - avoids fresh `Vec<bool>` allocation during each topology/health lookup rebuild while preserving linear rebuild logic and selection behavior.
+     - documented in `docs/book/1171-m39-lasm-cluster-selection-lookup-scratch-mask-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
