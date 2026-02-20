@@ -11857,12 +11857,16 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
+            let affected_rows_total = records
+                .iter()
+                .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
             set_lasm_json_response(
                 response,
                 200,
                 &serde_json::json!({
                     "ok": true,
                     "count": records.len(),
+                    "affectedRowsTotal": affected_rows_total,
                     "adapter": adapter,
                     "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),
                 }),
