@@ -1155,5 +1155,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1183-m39-lasm-cluster-relay-index-aligned-unhealthy-state.md`
 - `1184-m39-lasm-cluster-status-relay-backend-connect-timing-fields.md`
 - `1185-m39-lasm-cluster-preferred-shard-direct-dispatch-fast-path.md`
+- `1186-m39-lasm-cluster-relay-dispatch-fallback-telemetry.md`
 
 As milestones progress, chapters will be added and linked from this index.

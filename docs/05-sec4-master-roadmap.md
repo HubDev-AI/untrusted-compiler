@@ -895,6 +895,10 @@ Post-alpha track acceptance anchors:
      - accept loop now tries the preferred relay sender directly first, and only scans remaining relay shards on first-attempt failure,
      - fallback scan now iterates only remaining senders and preserves saturated/unavailable semantics.
      - documented in `docs/book/1185-m39-lasm-cluster-preferred-shard-direct-dispatch-fast-path.md`.
+   - [x] Added relay dispatch fallback telemetry counter:
+     - accept loop now increments a shared `relayDispatchFallbackTotal` counter whenever preferred-shard direct dispatch misses and fallback scanning is used,
+     - cluster status JSON now includes this counter for operator-visible direct-hit vs fallback behavior tracking.
+     - documented in `docs/book/1186-m39-lasm-cluster-relay-dispatch-fallback-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
