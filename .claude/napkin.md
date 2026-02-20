@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | While refactoring DSN single-resolution, I accidentally removed `db_postgres_dsn_file` from `cmd_run` signature, causing immediate compile errors (`cannot find value`, argument count mismatch). | For signature refactors, run one quick focused compile/test after each signature edit before continuing with downstream call-site patches. |
 | 2026-02-20 | self | I initially validated `--db-postgres-dsn-file` only inside `cmd_run_lasm_backend`, so empty-file errors surfaced after project validation and produced exit `1` in a guard test instead of deterministic invalid-config exit `2`. | Keep run-flag validation in `cmd_run` before project validation when deterministic CLI guard status/diagnostics are required. |
 | 2026-02-20 | self | I committed one slice on local `dev` again before creating a `codex/*` branch, which later caused local `gh pr merge` fast-forward failure after the PR merged remotely. | Keep branch verification as a hard pre-edit gate: if on `dev`, branch first before any changes; after merge failures, rebase local `dev` onto `origin/dev` immediately. |
 | 2026-02-20 | self | I attempted one large multi-block patch across multiple DB error-mapping branches in `main.rs`, and context drift caused an avoidable apply-patch failure. | For repeated runtime branch rewrites, patch helper insertion first, then patch each branch block in small anchored hunks with fresh `sed` context. |

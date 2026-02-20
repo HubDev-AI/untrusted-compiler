@@ -8449,18 +8449,24 @@ fn cmd_run(
         eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
         return Err(2);
     }
-    if let Some(dsn) = db_postgres_dsn {
-        if dsn.trim().is_empty() {
+    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
+        let dsn = dsn.trim();
+        if dsn.is_empty() {
             eprintln!("run failed: --db-postgres-dsn must not be empty");
             return Err(2);
         }
-    }
-    if let Some(path) = db_postgres_dsn_file {
-        if let Err(message) = load_lasm_db_postgres_dsn_from_file(path) {
-            eprintln!("run failed: {message}");
-            return Err(2);
+        Some(dsn.to_string())
+    } else if let Some(path) = db_postgres_dsn_file {
+        match load_lasm_db_postgres_dsn_from_file(path) {
+            Ok(dsn) => Some(dsn),
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
         }
-    }
+    } else {
+        None
+    };
     if backend != RunBackend::Lasm && instances != 1 {
         eprintln!("run failed: --instances is only supported with --backend lasm");
         return Err(2);
@@ -8576,8 +8582,7 @@ fn cmd_run(
             max_keep_alive_requests,
             db_base,
             db_adapter,
-            db_postgres_dsn,
-            db_postgres_dsn_file,
+            explicit_db_postgres_dsn.as_deref(),
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -10045,7 +10050,6 @@ fn cmd_run_lasm_backend(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
-    db_postgres_dsn_file: Option<&Path>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10249,19 +10253,7 @@ fn cmd_run_lasm_backend(
     };
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
-    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
-        Some(dsn.trim().to_string())
-    } else if let Some(path) = db_postgres_dsn_file {
-        match load_lasm_db_postgres_dsn_from_file(path) {
-            Ok(dsn) => Some(dsn),
-            Err(message) => {
-                eprintln!("run failed: {message}");
-                return Err(2);
-            }
-        }
-    } else {
-        None
-    };
+    let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
