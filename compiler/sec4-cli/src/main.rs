@@ -8437,6 +8437,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     let now = Instant::now();
                     unhealthy_ports_until.retain(|_, until| *until > now);
                 }
+                let worker_ports_snapshot = relay_worker_ports.load();
+                let worker_ports = worker_ports_snapshot.as_ref();
+                let worker_port_count = worker_ports.len();
                 loop {
                     if accepted_in_batch >= relay_accept_batch_max {
                         break;
@@ -8469,22 +8472,21 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     accepted_in_batch = accepted_in_batch.saturating_add(1);
 
                     let backend_port = {
-                        let worker_ports = relay_worker_ports.load();
-                        if worker_ports.is_empty() {
+                        if worker_port_count == 0 {
                             None
                         } else {
                             if unhealthy_ports_until.is_empty() {
                                 let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
-                                    % worker_ports.len();
+                                    % worker_port_count;
                                 Some(worker_ports[index])
                             } else {
                                 let start_index = relay_selection_counter
                                     .fetch_add(1, Ordering::Relaxed)
-                                    % worker_ports.len();
+                                    % worker_port_count;
                                 let mut selected = None;
-                                for offset in 0..worker_ports.len() {
+                                for offset in 0..worker_port_count {
                                     let candidate = worker_ports
-                                        [(start_index.saturating_add(offset)) % worker_ports.len()];
+                                        [(start_index.saturating_add(offset)) % worker_port_count];
                                     if !unhealthy_ports_until.contains_key(&candidate) {
                                         selected = Some(candidate);
                                         break;
