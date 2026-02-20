@@ -12805,7 +12805,26 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     let bytes = query_template.as_bytes();
     let mut index = 0usize;
     let mut max_placeholder = 0usize;
+    let mut in_single_quote = false;
     while index < bytes.len() {
+        if bytes[index] == b'\'' {
+            if in_single_quote {
+                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                    index += 2;
+                    continue;
+                }
+                in_single_quote = false;
+                index += 1;
+                continue;
+            }
+            in_single_quote = true;
+            index += 1;
+            continue;
+        }
+        if in_single_quote {
+            index += 1;
+            continue;
+        }
         if bytes[index] == b'$' {
             let mut cursor = index + 1;
             while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
@@ -12838,12 +12857,51 @@ fn render_lasm_postgres_query_template(
     if params.is_empty() {
         return Ok(query_template.to_string());
     }
-    let mut rendered = query_template.to_string();
-    for (index, param) in params.iter().enumerate().rev() {
-        let placeholder = format!("${}", index + 1);
-        let literal = render_lasm_postgres_sql_literal(param.as_str());
-        rendered = rendered.replace(placeholder.as_str(), literal.as_str());
+    let bytes = query_template.as_bytes();
+    let mut rendered = String::with_capacity(query_template.len());
+    let mut index = 0usize;
+    let mut copy_from = 0usize;
+    let mut in_single_quote = false;
+    while index < bytes.len() {
+        if bytes[index] == b'\'' {
+            if in_single_quote {
+                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
+                    index += 2;
+                    continue;
+                }
+                in_single_quote = false;
+                index += 1;
+                continue;
+            }
+            in_single_quote = true;
+            index += 1;
+            continue;
+        }
+        if !in_single_quote && bytes[index] == b'$' {
+            let mut cursor = index + 1;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+                cursor += 1;
+            }
+            if cursor > index + 1 {
+                if let Ok(placeholder_index) = query_template[index + 1..cursor].parse::<usize>() {
+                    if placeholder_index > 0 && placeholder_index <= params.len() {
+                        rendered.push_str(&query_template[copy_from..index]);
+                        rendered.push_str(
+                            render_lasm_postgres_sql_literal(
+                                params[placeholder_index - 1].as_str(),
+                            )
+                            .as_str(),
+                        );
+                        index = cursor;
+                        copy_from = index;
+                        continue;
+                    }
+                }
+            }
+        }
+        index += 1;
     }
+    rendered.push_str(&query_template[copy_from..]);
     Ok(rendered)
 }
 
