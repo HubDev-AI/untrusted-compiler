@@ -885,7 +885,7 @@ Post-alpha track acceptance anchors:
      - documented in `docs/book/1182-m39-run-cluster-backend-connect-timing-flags.md`.
    - [x] Replaced relay unhealthy/warning port maps with index-aligned state vectors:
      - relay workers now track backend unhealthy/connect-warning cooldown state by worker index (`Vec<Option<Instant>>`) and remap that state on worker-topology snapshot changes,
-     - selection lookup rebuild now consumes index-aligned unhealthy state directly, removing hot-path hash lookups from backend selection refresh and connect-failure cooldown checks.
+     - selection lookup rebuild now consumes index-aligned unhealthy state directly, and snapshot remap now reuses vector ownership (`mem::take`) instead of cloning cooldown state.
      - documented in `docs/book/1183-m39-lasm-cluster-relay-index-aligned-unhealthy-state.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:

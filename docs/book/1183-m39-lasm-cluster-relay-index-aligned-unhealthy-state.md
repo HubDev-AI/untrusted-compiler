@@ -8,8 +8,9 @@ This slice removes hash-map state from relay backend-health refresh paths.
    - `unhealthy_ports_until_by_index: Vec<Option<Instant>>`
    - `connect_warning_next_allowed_by_index: Vec<Option<Instant>>`
 2. On worker-topology snapshot changes, relay workers remap index-aligned state from previous port snapshots into new snapshots.
-3. Backend-selection lookup rebuild now consumes index-aligned unhealthy state directly (plus unhealthy-count), instead of per-port hash lookups.
-4. Connect-failure cooldown updates now write unhealthy/warning state by selected backend index.
+3. Snapshot remap now reuses vector ownership with `std::mem::take(...)` instead of cloning relay unhealthy/warning vectors before remap.
+4. Backend-selection lookup rebuild now consumes index-aligned unhealthy state directly (plus unhealthy-count), instead of per-port hash lookups.
+5. Connect-failure cooldown updates now write unhealthy/warning state by selected backend index.
 
 ## Why
 
