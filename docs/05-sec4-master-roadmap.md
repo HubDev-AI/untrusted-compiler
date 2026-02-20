@@ -1043,6 +1043,10 @@ Post-alpha track acceptance anchors:
      - status writer now serializes a typed `LasmClusterStatusPayload` struct (serde rename rules) instead of building dynamic JSON maps via `serde_json::json!`,
      - preserves status JSON field contract while reducing dynamic payload construction overhead.
      - documented in `docs/book/1222-m39-lasm-cluster-status-writer-typed-payload-serialization.md`.
+   - [x] Unified relay accept `try_send` error handling branches:
+     - single-relay accept path now maps `TrySendError::{Full,Disconnected}` through one shared error-mapping branch before dispatch-error handling,
+     - multi-relay accept path now uses one shared `TrySendError` branch to drive fallback dispatch with derived `saw_live_sender`.
+     - documented in `docs/book/1223-m39-lasm-cluster-accept-try-send-error-branch-unification.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
