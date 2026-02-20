@@ -1077,5 +1077,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1105-m39-lasm-db-adapter-state-module-extraction.md`
 - `1106-m39-lasm-db-adapter-persist-module-extraction.md`
 - `1107-m39-lasm-db-runtime-postgres-module-extraction.md`
+- `1108-m39-lasm-db-runtime-sqlite-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
