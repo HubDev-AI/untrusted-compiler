@@ -8093,7 +8093,7 @@ fn write_lasm_cluster_status_json(
         "relaySaturationEventsTotal": relay_saturation_events_total,
         "relayAcceptBatchMax": relay_accept_batch_max,
     });
-    let encoded = serde_json::to_vec_pretty(&payload)
+    let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
 
     let tmp_path = path.with_extension(format!(

@@ -687,6 +687,10 @@ Post-alpha track acceptance anchors:
       - relay overload/unavailable paths now write prebuilt response bytes and rely on connection close semantics, without `TcpStream::flush()` per response,
       - preserves deterministic response payload behavior while reducing failure-path syscall overhead.
       - documented in `docs/book/1137-m39-lasm-cluster-unavailable-write-no-flush.md`.
+   - [x] Switched cluster status telemetry emission to compact JSON encoding:
+      - status writer now uses compact `serde_json::to_vec(...)` output instead of pretty-printed payload encoding,
+      - keeps JSON payload fields/semantics unchanged while reducing periodic telemetry serialization and write size overhead.
+      - documented in `docs/book/1138-m39-lasm-cluster-status-compact-json-encoding.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
