@@ -741,6 +741,11 @@ Post-alpha track acceptance anchors:
      - preserves dispatch ordering and existing saturated/unavailable fallback behavior.
      - short LASM cluster probe after this slice recorded `1,429,683` requests in `20s` (`~71.12k req/s`, `p99 9.91ms`, peak RSS `~27,152 KB`) under default settings.
      - documented in `docs/book/1148-m39-lasm-cluster-relay-dispatch-slice-iteration.md`.
+   - [x] Reused relay backend-selection batch reservation for unhealthy-worker fallback path:
+     - relay worker backend selection now draws `start_index` from the same per-batch reserved selection window used by healthy-path selection (instead of fallback per-connection `fetch_add(1)` atomics),
+     - keeps unhealthy-port skip semantics unchanged while removing another high-frequency shared atomic in mixed-health runs.
+     - short LASM cluster probe after this slice recorded `1,467,019` requests in `20s` (`~72.98k req/s`, `p99 9.19ms`, peak RSS `~27,040 KB`) under default settings.
+     - documented in `docs/book/1149-m39-lasm-cluster-relay-selection-batch-fallback-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
