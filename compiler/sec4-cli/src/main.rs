@@ -3,7 +3,7 @@ use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, RecvTimeoutError, TryRecvError, TrySendError};
 use postgres::types::ToSql;
-use postgres::{Client as PostgresClient, NoTls, SimpleQueryMessage};
+use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
@@ -12912,109 +12912,6 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     max_placeholder
 }
 
-fn render_lasm_postgres_query_template(
-    query_template: &str,
-    params: &[LasmPostgresParam],
-) -> Result<String, String> {
-    let required_params = max_lasm_postgres_placeholder_index(query_template);
-    if required_params > params.len() {
-        return Err(format!(
-            "postgres query requires at least {required_params} sql parameters but received {}",
-            params.len()
-        ));
-    }
-    if params.is_empty() {
-        return Ok(query_template.to_string());
-    }
-    let bytes = query_template.as_bytes();
-    let mut rendered = String::with_capacity(query_template.len());
-    let mut index = 0usize;
-    let mut copy_from = 0usize;
-    let mut in_single_quote = false;
-    let mut active_dollar_quote: Option<String> = None;
-    while index < bytes.len() {
-        if let Some(delimiter) = active_dollar_quote.as_ref() {
-            if query_template[index..].starts_with(delimiter.as_str()) {
-                index += delimiter.len();
-                active_dollar_quote = None;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-        if bytes[index] == b'\'' {
-            if in_single_quote {
-                if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
-                    index += 2;
-                    continue;
-                }
-                in_single_quote = false;
-                index += 1;
-                continue;
-            }
-            in_single_quote = true;
-            index += 1;
-            continue;
-        }
-        if !in_single_quote && bytes[index] == b'$' {
-            if let Some(delimiter) =
-                parse_lasm_postgres_dollar_quote_delimiter(query_template, index)
-            {
-                active_dollar_quote = Some(delimiter.to_string());
-                index += delimiter.len();
-                continue;
-            }
-        }
-        if !in_single_quote && bytes[index] == b'$' {
-            let mut cursor = index + 1;
-            while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
-                cursor += 1;
-            }
-            if cursor > index + 1 {
-                if let Ok(placeholder_index) = query_template[index + 1..cursor].parse::<usize>() {
-                    if placeholder_index > 0 && placeholder_index <= params.len() {
-                        rendered.push_str(&query_template[copy_from..index]);
-                        rendered.push_str(
-                            render_lasm_postgres_sql_literal(&params[placeholder_index - 1])
-                                .as_str(),
-                        );
-                        index = cursor;
-                        copy_from = index;
-                        continue;
-                    }
-                }
-            }
-        }
-        index += 1;
-    }
-    rendered.push_str(&query_template[copy_from..]);
-    Ok(rendered)
-}
-
-fn render_lasm_postgres_sql_literal(value: &LasmPostgresParam) -> String {
-    match value {
-        LasmPostgresParam::Text(inner) => {
-            format!("'{}'", inner.replace('\'', "''"))
-        }
-        LasmPostgresParam::Int(inner) => inner.to_string(),
-        LasmPostgresParam::Float(inner) => {
-            if inner.is_finite() {
-                inner.to_string()
-            } else {
-                "NULL".to_string()
-            }
-        }
-        LasmPostgresParam::Bool(inner) => {
-            if *inner {
-                "TRUE".to_string()
-            } else {
-                "FALSE".to_string()
-            }
-        }
-        LasmPostgresParam::Null(_) => "NULL".to_string(),
-    }
-}
-
 fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -13130,18 +13027,29 @@ fn run_lasm_postgres_query_one(
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<Option<serde_json::Value>, String> {
-    let rendered_query = render_lasm_postgres_query_template(query_template, params)?;
+    let required_params = max_lasm_postgres_placeholder_index(query_template);
+    if required_params > params.len() {
+        return Err(format!(
+            "postgres query requires at least {required_params} sql parameters but received {}",
+            params.len()
+        ));
+    }
+    let wrapped_query = format!(
+        "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
+         FROM ({query_template}) AS _sec4_row LIMIT 1"
+    );
     let execute_query =
-        |client: &mut PostgresClient| -> Result<Vec<SimpleQueryMessage>, postgres::Error> {
-            client.simple_query(rendered_query.as_str())
+        |client: &mut PostgresClient| -> Result<Option<postgres::Row>, postgres::Error> {
+            let param_refs = lasm_postgres_query_param_refs(params);
+            client.query_opt(wrapped_query.as_str(), param_refs.as_slice())
         };
-    let rows = {
+    let row = {
         let initial = {
             let client = lasm_dynamic_postgres_client_mut(state)?;
             execute_query(client)
         };
         match initial {
-            Ok(rows) => rows,
+            Ok(row) => row,
             Err(err) if err.is_closed() => {
                 reconnect_lasm_dynamic_postgres_client(state)?;
                 let client = lasm_dynamic_postgres_client_mut(state)?;
@@ -13149,53 +13057,28 @@ fn run_lasm_postgres_query_one(
                     format!("postgres queryOne execution failed after reconnect: {retry_err}")
                 })?
             }
+            Err(err)
+                if err
+                    .to_string()
+                    .contains("cannot insert multiple commands into a prepared statement") =>
+            {
+                return Err(
+                    "postgres parameterized execution requires a single SQL statement".to_string(),
+                )
+            }
             Err(err) => return Err(format!("postgres queryOne execution failed: {err}")),
         }
     };
-    for row in rows {
-        let SimpleQueryMessage::Row(row) = row else {
-            continue;
-        };
-        let mut object = serde_json::Map::new();
-        for (index, column) in row.columns().iter().enumerate() {
-            let value = row
-                .get(index)
-                .map(materialize_lasm_postgres_query_value)
-                .unwrap_or(serde_json::Value::Null);
-            object.insert(column.name().to_string(), value);
-        }
-        return Ok(Some(serde_json::Value::Object(object)));
-    }
-    Ok(None)
-}
-
-fn materialize_lasm_postgres_query_value(value: &str) -> serde_json::Value {
-    let trimmed = value.trim();
-    if trimmed == "t" || trimmed.eq_ignore_ascii_case("true") {
-        return serde_json::Value::Bool(true);
-    }
-    if trimmed == "f" || trimmed.eq_ignore_ascii_case("false") {
-        return serde_json::Value::Bool(false);
-    }
-    if let Ok(parsed) = trimmed.parse::<i64>() {
-        return serde_json::Value::Number(serde_json::Number::from(parsed));
-    }
-    if let Ok(parsed) = trimmed.parse::<u64>() {
-        return serde_json::Value::Number(serde_json::Number::from(parsed));
-    }
-    if let Ok(parsed) = trimmed.parse::<f64>() {
-        if let Some(number) = serde_json::Number::from_f64(parsed) {
-            return serde_json::Value::Number(number);
-        }
-    }
-    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
-        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
-    {
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parsed;
-        }
-    }
-    serde_json::Value::String(value.to_string())
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let row_payload: Option<String> = row
+        .try_get(0)
+        .map_err(|err| format!("postgres queryOne row materialization failed: {err}"))?;
+    let row_payload = row_payload.unwrap_or_else(|| "null".to_string());
+    let row_json = serde_json::from_str::<serde_json::Value>(row_payload.as_str())
+        .map_err(|err| format!("postgres queryOne row json decode failed: {err}"))?;
+    Ok(Some(row_json))
 }
 
 fn set_lasm_json_response(
