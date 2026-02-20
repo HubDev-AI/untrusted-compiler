@@ -9320,7 +9320,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         continue;
                     };
 
-                    let selected_backend_port = worker_ports[selected_backend_index];
                     let backend_addr = selected_worker_backend_addrs[selected_backend_index];
                     match TcpStream::connect_timeout(&backend_addr, relay_backend_connect_timeout) {
                         Ok(upstream) => {
@@ -9390,6 +9389,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 .map(|next| now >= next)
                                 .unwrap_or(true)
                             {
+                                let selected_backend_port = worker_ports[selected_backend_index];
                                 eprintln!(
                                     "warning: LASM cluster worker {} connect failed: {}",
                                     selected_backend_port, err
