@@ -12945,6 +12945,69 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     max_placeholder
 }
 
+fn first_lasm_postgres_keyword(query_template: &str) -> Option<String> {
+    let bytes = query_template.as_bytes();
+    let mut index = 0usize;
+    let mut in_line_comment = false;
+    let mut block_comment_depth = 0usize;
+    while index < bytes.len() {
+        if in_line_comment {
+            if bytes[index] == b'\n' {
+                in_line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth > 0 {
+            if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+                block_comment_depth += 1;
+                index += 2;
+                continue;
+            }
+            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
+                block_comment_depth = block_comment_depth.saturating_sub(1);
+                index += 2;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+        if bytes[index].is_ascii_whitespace() {
+            index += 1;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'-' && bytes[index + 1] == b'-' {
+            in_line_comment = true;
+            index += 2;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+            block_comment_depth = 1;
+            index += 2;
+            continue;
+        }
+        break;
+    }
+    if index >= bytes.len() {
+        return None;
+    }
+    let start = index;
+    while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_') {
+        index += 1;
+    }
+    if index <= start {
+        return None;
+    }
+    Some(query_template[start..index].to_ascii_uppercase())
+}
+
+fn is_lasm_postgres_query_one_select_like(query_template: &str) -> bool {
+    matches!(
+        first_lasm_postgres_keyword(query_template).as_deref(),
+        Some("SELECT" | "WITH" | "VALUES" | "TABLE")
+    )
+}
+
 fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -13060,6 +13123,9 @@ fn run_lasm_postgres_query_one(
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<Option<serde_json::Value>, String> {
+    if !is_lasm_postgres_query_one_select_like(query_template) {
+        return Err("postgres queryOne requires SELECT-style SQL statement".to_string());
+    }
     let required_params = max_lasm_postgres_placeholder_index(query_template);
     if required_params > params.len() {
         return Err(format!(
