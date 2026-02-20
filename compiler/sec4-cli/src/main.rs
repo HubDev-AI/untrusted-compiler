@@ -8380,8 +8380,8 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
     }
 }
 
-fn handle_lasm_cluster_accept_dispatch_result(
-    dispatch_result: Result<(), LasmClusterRelayDispatchError>,
+fn handle_lasm_cluster_accept_dispatch_error(
+    dispatch_error: LasmClusterRelayDispatchError,
     active_connections: &AtomicUsize,
     relay_saturation_events: &AtomicUsize,
     relay_saturation_events_total: &AtomicU64,
@@ -8391,12 +8391,8 @@ fn handle_lasm_cluster_accept_dispatch_result(
     listener_saturation_total_local: &mut u64,
     listener_dispatch_fallback_total_local: &mut u64,
 ) -> Result<(), String> {
-    match dispatch_result {
-        Ok(()) => {
-            *listener_enqueued_local += 1;
-            Ok(())
-        }
-        Err(LasmClusterRelayDispatchError::Saturated(mut stream)) => {
+    match dispatch_error {
+        LasmClusterRelayDispatchError::Saturated(mut stream) => {
             *listener_saturation_pending_local += 1;
             *listener_saturation_total_local += 1;
             let _ = write_lasm_cluster_unavailable_response(
@@ -8413,7 +8409,7 @@ fn handle_lasm_cluster_accept_dispatch_result(
             }
             Ok(())
         }
-        Err(LasmClusterRelayDispatchError::Unavailable(mut stream)) => {
+        LasmClusterRelayDispatchError::Unavailable(mut stream) => {
             let _ = write_lasm_cluster_unavailable_response(
                 &mut stream,
                 LasmClusterUnavailableReason::RelayUnavailable,
@@ -8497,8 +8493,8 @@ fn run_lasm_cluster_accept_loop(
                                 listener_enqueued_local += 1;
                             }
                             Err(TrySendError::Full(stream)) => {
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                                    Err(LasmClusterRelayDispatchError::Saturated(stream)),
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                    LasmClusterRelayDispatchError::Saturated(stream),
                                     active_connections,
                                     relay_saturation_events,
                                     relay_saturation_events_total,
@@ -8512,8 +8508,8 @@ fn run_lasm_cluster_accept_loop(
                                 }
                             }
                             Err(TrySendError::Disconnected(stream)) => {
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                                    Err(LasmClusterRelayDispatchError::Unavailable(stream)),
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                    LasmClusterRelayDispatchError::Unavailable(stream),
                                     active_connections,
                                     relay_saturation_events,
                                     relay_saturation_events_total,
@@ -8570,18 +8566,27 @@ fn run_lasm_cluster_accept_loop(
                                     next_dispatch_index,
                                     true,
                                 );
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                                    dispatch_result,
-                                    active_connections,
-                                    relay_saturation_events,
-                                    relay_saturation_events_total,
-                                    relay_dispatch_fallback_total,
-                                    &mut listener_enqueued_local,
-                                    &mut listener_saturation_pending_local,
-                                    &mut listener_saturation_total_local,
-                                    &mut listener_dispatch_fallback_total_local,
-                                ) {
-                                    return Err(message);
+                                match dispatch_result {
+                                    Ok(()) => {
+                                        listener_enqueued_local += 1;
+                                    }
+                                    Err(dispatch_error) => {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_dispatch_error(
+                                                dispatch_error,
+                                                active_connections,
+                                                relay_saturation_events,
+                                                relay_saturation_events_total,
+                                                relay_dispatch_fallback_total,
+                                                &mut listener_enqueued_local,
+                                                &mut listener_saturation_pending_local,
+                                                &mut listener_saturation_total_local,
+                                                &mut listener_dispatch_fallback_total_local,
+                                            )
+                                        {
+                                            return Err(message);
+                                        }
+                                    }
                                 }
                             }
                             Err(TrySendError::Disconnected(stream)) => {
@@ -8592,18 +8597,27 @@ fn run_lasm_cluster_accept_loop(
                                     next_dispatch_index,
                                     false,
                                 );
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                                    dispatch_result,
-                                    active_connections,
-                                    relay_saturation_events,
-                                    relay_saturation_events_total,
-                                    relay_dispatch_fallback_total,
-                                    &mut listener_enqueued_local,
-                                    &mut listener_saturation_pending_local,
-                                    &mut listener_saturation_total_local,
-                                    &mut listener_dispatch_fallback_total_local,
-                                ) {
-                                    return Err(message);
+                                match dispatch_result {
+                                    Ok(()) => {
+                                        listener_enqueued_local += 1;
+                                    }
+                                    Err(dispatch_error) => {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_dispatch_error(
+                                                dispatch_error,
+                                                active_connections,
+                                                relay_saturation_events,
+                                                relay_saturation_events_total,
+                                                relay_dispatch_fallback_total,
+                                                &mut listener_enqueued_local,
+                                                &mut listener_saturation_pending_local,
+                                                &mut listener_saturation_total_local,
+                                                &mut listener_dispatch_fallback_total_local,
+                                            )
+                                        {
+                                            return Err(message);
+                                        }
+                                    }
                                 }
                             }
                         }

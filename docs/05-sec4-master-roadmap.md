@@ -1003,6 +1003,10 @@ Post-alpha track acceptance anchors:
      - accept dispatch now computes `next_dispatch_index` once and reuses it for both cursor advancement and fallback-start selection,
      - removes duplicate next-index lookup work from the multi-relay accept hot path.
      - documented in `docs/book/1212-m39-lasm-cluster-accept-next-index-single-read.md`.
+   - [x] Restricted accept-dispatch helper handling to error outcomes only:
+     - fallback dispatch now increments enqueue-local counters directly on `Ok(())` without routing through the dispatch helper,
+     - accept dispatch helper now handles only saturated/unavailable error outcomes.
+     - documented in `docs/book/1213-m39-lasm-cluster-accept-fallback-success-direct-enqueue.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
