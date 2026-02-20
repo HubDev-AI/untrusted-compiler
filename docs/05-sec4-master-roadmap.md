@@ -634,6 +634,11 @@ Post-alpha track acceptance anchors:
      - added env-tunable controls (`SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS`, `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS`) with deterministic bounded parsing and lower-latency default timeout path (`100ms`),
      - relay worker threads now consume these precomputed durations directly for backend connect attempts and unhealthy-port cooldown windows.
      - documented in `docs/book/1124-m39-lasm-cluster-backend-connect-timeout-tuning.md`.
+   - [x] Added relay warning throttling in cluster failure paths:
+     - backend connect-failure warnings are now rate-limited per worker port,
+     - relay init/pump failure warnings are rate-limited per relay worker loop,
+     - keeps diagnostics while preventing stderr log spam from dominating runtime under sustained failure churn.
+     - documented in `docs/book/1125-m39-lasm-cluster-relay-warning-throttle.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
