@@ -1073,5 +1073,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1101-m39-lasm-db-list-tx-handle-telemetry.md`
 - `1102-m39-run-db-max-tx-handles-flag.md`
 - `1103-m39-lasm-db-config-module-extraction.md`
+- `1104-m39-lasm-db-records-log-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.

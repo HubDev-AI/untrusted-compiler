@@ -30,11 +30,16 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod lasm_db_config;
+mod lasm_db_records_log;
 
 use lasm_db_config::{
     lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file,
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
+};
+use lasm_db_records_log::{
+    lasm_db_record_to_json, load_lasm_dynamic_db_records_from_disk,
+    persist_lasm_dynamic_db_records_to_records_log,
 };
 
 #[derive(Parser, Debug)]
@@ -1424,49 +1429,6 @@ fn persist_lasm_dynamic_users_to_disk(state: &LasmDynamicResponseState) -> Resul
     Ok(())
 }
 
-fn load_lasm_dynamic_db_records_from_disk(path: &Path) -> Vec<LasmDbRecord> {
-    let raw = match fs::read_to_string(path) {
-        Ok(value) => value,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
-        Err(err) => {
-            eprintln!(
-                "warning: LASM dynamic records store load failed at `{}`: {err}",
-                path.display()
-            );
-            return Vec::new();
-        }
-    };
-    let mut records = Vec::new();
-    for (index, line) in raw.lines().enumerate() {
-        let candidate = line.trim();
-        if candidate.is_empty() {
-            continue;
-        }
-        match serde_json::from_str::<serde_json::Value>(candidate) {
-            Ok(value) => {
-                if let Some(record) = lasm_db_record_from_json(&value) {
-                    records.push(record);
-                } else {
-                    eprintln!(
-                        "warning: LASM dynamic records store parse failed at `{}` line {}: invalid record shape",
-                        path.display(),
-                        index + 1
-                    );
-                }
-            }
-            Err(err) => {
-                eprintln!(
-                    "warning: LASM dynamic records store parse failed at `{}` line {}: {err}",
-                    path.display(),
-                    index + 1
-                );
-            }
-        }
-    }
-    records.sort_by_key(|record| record.id);
-    records
-}
-
 fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
     if !path.exists() {
         return Vec::new();
@@ -1631,42 +1593,13 @@ fn persist_lasm_dynamic_db_records_to_disk(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
     match state.db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(state),
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
+            state.db_records_store_path.as_deref(),
+            &state.db_records,
+        ),
         LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
         LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
     }
-}
-
-fn persist_lasm_dynamic_db_records_to_records_log(
-    state: &mut LasmDynamicResponseState,
-) -> Result<(), String> {
-    let Some(path) = state.db_records_store_path.as_ref() else {
-        return Ok(());
-    };
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "could not create LASM dynamic records store directory `{}`: {err}",
-                parent.display()
-            )
-        })?;
-    }
-    let mut ordered = state.db_records.clone();
-    ordered.sort_by_key(|record| record.id);
-    let mut raw = String::new();
-    for record in ordered {
-        let line = serde_json::to_string(&lasm_db_record_to_json(&record))
-            .map_err(|err| format!("could not serialize LASM dynamic records store: {err}"))?;
-        raw.push_str(line.as_str());
-        raw.push('\n');
-    }
-    fs::write(path, raw.as_bytes()).map_err(|err| {
-        format!(
-            "could not write LASM dynamic records store `{}`: {err}",
-            path.display()
-        )
-    })?;
-    Ok(())
 }
 
 fn persist_lasm_dynamic_db_records_to_sqlite(
@@ -2169,35 +2102,6 @@ fn run_lasm_sqlite_query_one(
         object.insert(name, value);
     }
     Ok(Some(serde_json::Value::Object(object)))
-}
-
-fn lasm_db_record_from_json(value: &serde_json::Value) -> Option<LasmDbRecord> {
-    Some(LasmDbRecord {
-        id: value.get("id")?.as_u64()?,
-        op: value.get("op")?.as_str()?.to_string(),
-        db: value.get("db")?.as_i64()?,
-        template: value.get("template")?.as_str()?.to_string(),
-        params: value.get("params")?.as_str()?.to_string(),
-        tx: value.get("tx")?.as_i64()?,
-        affected_rows: value
-            .get("affected_rows")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0),
-        created_at_ms: value.get("created_at_ms")?.as_u64()?,
-    })
-}
-
-fn lasm_db_record_to_json(record: &LasmDbRecord) -> serde_json::Value {
-    serde_json::json!({
-        "id": record.id,
-        "op": record.op,
-        "db": record.db,
-        "template": record.template,
-        "params": record.params,
-        "tx": record.tx,
-        "affected_rows": record.affected_rows,
-        "created_at_ms": record.created_at_ms,
-    })
 }
 
 fn collect_lasm_route_plans(
