@@ -7688,6 +7688,7 @@ struct LasmClusterConfig {
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_relay_accept_batch_max: usize,
     cluster_backend_connect_timeout_ms: u64,
     cluster_backend_connect_cooldown_ms: u64,
     cluster_status_json: Option<PathBuf>,
@@ -8013,6 +8014,10 @@ fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: u
         .min(65_536)
 }
 
+fn lasm_cluster_relay_accept_batch_max(config: &LasmClusterConfig) -> usize {
+    config.cluster_relay_accept_batch_max.max(1)
+}
+
 fn write_lasm_cluster_unavailable_response(
     client: &mut TcpStream,
     message: &str,
@@ -8045,6 +8050,7 @@ fn write_lasm_cluster_status_json(
     active_connections: usize,
     relay_saturation_events_pending: usize,
     relay_saturation_events_total: u64,
+    relay_accept_batch_max: usize,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -8068,6 +8074,7 @@ fn write_lasm_cluster_status_json(
         "activeConnections": active_connections,
         "relaySaturationEventsPending": relay_saturation_events_pending,
         "relaySaturationEventsTotal": relay_saturation_events_total,
+        "relayAcceptBatchMax": relay_accept_batch_max,
     });
     let encoded = serde_json::to_vec_pretty(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
@@ -8396,6 +8403,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
+    let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
     let (relay_sender, relay_receiver) = bounded::<TcpStream>(relay_queue_capacity);
     let relay_selection_counter = Arc::new(AtomicUsize::new(0));
     let relay_backend_connect_timeout =
@@ -8413,6 +8421,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let relay_backend_connect_timeout = relay_backend_connect_timeout;
         let relay_backend_connect_cooldown = relay_backend_connect_cooldown;
+        let relay_accept_batch_max = relay_accept_batch_max;
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
@@ -8423,7 +8432,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
             loop {
                 let mut accepted = false;
+                let mut accepted_in_batch = 0_usize;
                 loop {
+                    if accepted_in_batch >= relay_accept_batch_max {
+                        break;
+                    }
                     let incoming = if relay_connections.is_empty() {
                         match relay_receiver
                             .recv_timeout(Duration::from_millis(LASM_CLUSTER_RELAY_RECEIVE_WAIT_MS))
@@ -8449,6 +8462,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         break;
                     };
                     accepted = true;
+                    accepted_in_batch = accepted_in_batch.saturating_add(1);
 
                     let backend_port = {
                         let worker_ports = relay_worker_ports.load();
@@ -8640,6 +8654,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 status_active_connections.load(Ordering::Relaxed),
                 status_saturation_events.load(Ordering::Relaxed),
                 status_saturation_events_total.load(Ordering::Relaxed),
+                status_config.cluster_relay_accept_batch_max,
             ) {
                 eprintln!("warning: LASM cluster status json write failed: {err}");
             }
@@ -9051,6 +9066,7 @@ fn cmd_run_lasm_backend(
     let cluster_backend_connect_timeout_ms = resolve_lasm_cluster_backend_connect_timeout_ms();
     let cluster_backend_connect_cooldown_ms =
         resolve_lasm_cluster_backend_connect_cooldown_ms(cluster_backend_connect_timeout_ms);
+    let cluster_relay_accept_batch_max = resolve_lasm_cluster_relay_accept_batch_max();
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
@@ -9108,6 +9124,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
+            cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: None,
@@ -9145,6 +9162,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: cluster_status_json.map(Path::to_path_buf),
@@ -10049,6 +10067,23 @@ fn resolve_lasm_cluster_backend_connect_cooldown_ms(connect_timeout_ms: u64) -> 
         .ok()
         .filter(|parsed| *parsed > 0)
         .map(|parsed| parsed.clamp(25, 10_000))
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_cluster_relay_accept_batch_max() -> usize {
+    let default_value = 64_usize;
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(1, 4_096))
         .unwrap_or(default_value)
 }
 

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I launched branch/status checks in parallel with reading `.claude/napkin.md`, which still violates the "napkin first" gate. | In each continuation, run a standalone napkin read command first; only after that run any status/search/build commands. |
 | 2026-02-20 | self | After merging PR #331, local checkout switched back to `dev`; I continued coding the next relay slice before checking branch and created dirty changes on `dev`. | Immediately after each `gh pr merge`, run `git branch --show-current`; if it is `dev`, create the next `codex/*` branch before any edits. |
 | 2026-02-20 | self | I used broad cargo filter invocation (`cargo test -p sec4 classify_db_runtime_`) which prints many `running 0 tests` lines for unrelated suites, creating confusing noise during validation summaries. | For focused unit checks in this repo, run target-specific commands (`cargo test -p sec4 --bin sec4 classify_db_runtime_`) to avoid zero-test noise and keep validation output unambiguous. |
 | 2026-02-20 | self | I ran branch-switch/reset and repository `rg` inspection in one parallel tool call, and the search raced against checkout/reset (`No such file or directory` noise). | Do branch/checkout/reset operations first, then run read/search commands sequentially on the settled tree; keep parallelization for pure read-only commands only. |
