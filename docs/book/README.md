@@ -1106,5 +1106,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1134-m39-lasm-cluster-listener-saturation-counter-batch.md`
 - `1135-m39-lasm-cluster-enqueue-counter-and-set-reuse.md`
 - `1136-m39-lasm-cluster-active-set-snapshot-cache.md`
+- `1137-m39-lasm-cluster-unavailable-write-no-flush.md`
 
 As milestones progress, chapters will be added and linked from this index.

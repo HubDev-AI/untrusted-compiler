@@ -683,6 +683,10 @@ Post-alpha track acceptance anchors:
       - relay workers now keep the active-port set cache keyed by current worker snapshot pointer identity and rebuild only when snapshot changes,
       - unhealthy membership pruning no longer repopulates the set on every cycle when worker snapshot is unchanged.
       - documented in `docs/book/1136-m39-lasm-cluster-active-set-snapshot-cache.md`.
+   - [x] Removed explicit flush syscall from cluster unavailable response writes:
+      - relay overload/unavailable paths now write prebuilt response bytes and rely on connection close semantics, without `TcpStream::flush()` per response,
+      - preserves deterministic response payload behavior while reducing failure-path syscall overhead.
+      - documented in `docs/book/1137-m39-lasm-cluster-unavailable-write-no-flush.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

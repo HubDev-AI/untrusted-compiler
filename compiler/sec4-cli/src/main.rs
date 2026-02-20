@@ -8054,11 +8054,7 @@ fn write_lasm_cluster_unavailable_response(
     let response = lasm_cluster_unavailable_response(reason);
     client
         .write_all(response)
-        .map_err(|err| format!("could not write LASM cluster overload response: {err}"))?;
-    client
-        .flush()
-        .map_err(|err| format!("could not flush LASM cluster overload response: {err}"))?;
-    Ok(())
+        .map_err(|err| format!("could not write LASM cluster overload response: {err}"))
 }
 
 fn write_lasm_cluster_status_json(
