@@ -8675,10 +8675,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             loop {
                 let mut accepted = false;
                 let mut accepted_in_batch = 0_usize;
-                let worker_ports_snapshot = relay_worker_ports.load();
-                let worker_ports = worker_ports_snapshot.as_ref();
-                let worker_port_count = worker_ports.len();
+                let mut worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
                 if !unhealthy_ports_until.is_empty() {
+                    let snapshot = relay_worker_ports.load_full();
+                    let worker_port_count = snapshot.len();
                     if worker_port_count == 0 {
                         active_worker_ports.clear();
                         active_worker_ports_snapshot = None;
@@ -8686,18 +8686,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     } else {
                         let refresh_active_worker_ports = active_worker_ports_snapshot
                             .as_ref()
-                            .map(|cached| !Arc::ptr_eq(cached, &worker_ports_snapshot))
+                            .map(|cached| !Arc::ptr_eq(cached, &snapshot))
                             .unwrap_or(true);
                         if refresh_active_worker_ports {
                             active_worker_ports.clear();
-                            active_worker_ports.extend(worker_ports.iter().copied());
-                            active_worker_ports_snapshot = Some(Arc::clone(&worker_ports_snapshot));
+                            active_worker_ports.extend(snapshot.iter().copied());
+                            active_worker_ports_snapshot = Some(Arc::clone(&snapshot));
                         }
                         let now = Instant::now();
                         unhealthy_ports_until.retain(|port, until| {
                             *until > now && active_worker_ports.contains(port)
                         });
                     }
+                    worker_ports_snapshot = Some(snapshot);
                 }
                 loop {
                     if accepted_in_batch >= relay_accept_batch_max {
@@ -8717,6 +8718,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     accepted = true;
                     accepted_in_batch = accepted_in_batch.saturating_add(1);
 
+                    if worker_ports_snapshot.is_none() {
+                        worker_ports_snapshot = Some(relay_worker_ports.load_full());
+                    }
+                    let worker_ports_snapshot_ref = worker_ports_snapshot
+                        .as_ref()
+                        .expect("worker port snapshot loaded before backend selection");
+                    let worker_ports = worker_ports_snapshot_ref.as_ref();
+                    let worker_port_count = worker_ports.len();
                     let backend_port = {
                         if worker_port_count == 0 {
                             None
