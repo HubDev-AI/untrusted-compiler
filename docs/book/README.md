@@ -1150,5 +1150,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1178-m39-lasm-cluster-single-sender-accept-loop-inline-dispatch.md`
 - `1179-m39-lasm-cluster-selection-lookup-sentinel-storage.md`
 - `1180-m39-lasm-cluster-selection-lookup-maskless-rebuild.md`
+- `1181-m39-run-cluster-relay-accept-batch-max-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.

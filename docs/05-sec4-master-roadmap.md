@@ -875,6 +875,10 @@ Post-alpha track acceptance anchors:
      - selection lookup rebuild now derives `first_healthy_index` directly from `worker_ports` and writes sentinel lookup entries in reverse index order without building a parallel `Vec<bool>`,
      - avoids per-refresh healthy-mask clear/resize/fill work while preserving healthy/unhealthy remap behavior and identity fast path semantics.
      - documented in `docs/book/1180-m39-lasm-cluster-selection-lookup-maskless-rebuild.md`.
+   - [x] Added explicit run-flag override for relay accept batch size:
+     - `sec4 run` now accepts `--cluster-relay-accept-batch-max <n>` (LASM cluster-only) with deterministic zero-value and backend/cluster guard diagnostics,
+     - runtime resolution now applies CLI override first, then `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX`, then default.
+     - documented in `docs/book/1181-m39-run-cluster-relay-accept-batch-max-flag.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -133,6 +133,8 @@ enum Commands {
         #[arg(long)]
         cluster_accept_workers: Option<usize>,
         #[arg(long)]
+        cluster_relay_accept_batch_max: Option<usize>,
+        #[arg(long)]
         cluster_status_json: Option<PathBuf>,
         #[arg(long, hide = true, default_value_t = false)]
         reuse_port: bool,
@@ -503,6 +505,7 @@ fn main() {
             cluster_relay_workers,
             cluster_relay_queue,
             cluster_accept_workers,
+            cluster_relay_accept_batch_max,
             cluster_status_json,
             reuse_port,
             backend,
@@ -536,6 +539,7 @@ fn main() {
             cluster_relay_workers,
             cluster_relay_queue,
             cluster_accept_workers,
+            cluster_relay_accept_batch_max,
             cluster_status_json.as_deref(),
             reuse_port,
             backend,
@@ -7062,6 +7066,7 @@ fn cmd_run(
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
+    cluster_relay_accept_batch_max: Option<usize>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
     backend: RunBackend,
@@ -7113,6 +7118,10 @@ fn cmd_run(
     }
     if cluster_accept_workers == Some(0) {
         eprintln!("run failed: --cluster-accept-workers must be >= 1");
+        return Err(2);
+    }
+    if cluster_relay_accept_batch_max == Some(0) {
+        eprintln!("run failed: --cluster-relay-accept-batch-max must be >= 1");
         return Err(2);
     }
     if max_header_bytes == Some(0) {
@@ -7280,6 +7289,12 @@ fn cmd_run(
         eprintln!("run failed: --cluster-accept-workers is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_relay_accept_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-accept-batch-max is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_status_json.is_some() {
         eprintln!("run failed: --cluster-status-json is only supported with --backend lasm");
         return Err(2);
@@ -7300,6 +7315,12 @@ fn cmd_run(
     }
     if backend == RunBackend::Lasm && !cluster_mode && cluster_accept_workers.is_some() {
         eprintln!("run failed: --cluster-accept-workers requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_accept_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-accept-batch-max requires cluster mode (--instances > 1)"
+        );
         return Err(2);
     }
     if backend == RunBackend::Lasm && !cluster_mode && cluster_status_json.is_some() {
@@ -7361,6 +7382,7 @@ fn cmd_run(
             cluster_relay_workers,
             cluster_relay_queue,
             cluster_accept_workers,
+            cluster_relay_accept_batch_max,
             cluster_status_json,
             reuse_port,
         );
@@ -8750,18 +8772,25 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     }
     lookup.resize(worker_port_count, LASM_CLUSTER_SELECTION_LOOKUP_NONE);
 
-    let Some(first_healthy_index) = worker_ports
-        .iter()
-        .position(|port| !unhealthy_ports_until.contains_key(port))
-    else {
-        return (false, false);
-    };
-    let mut next_healthy_index = first_healthy_index;
+    let mut first_healthy_index: Option<usize> = None;
+    let mut next_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
     for index in (0..worker_port_count).rev() {
         if !unhealthy_ports_until.contains_key(&worker_ports[index]) {
             next_healthy_index = index;
+            first_healthy_index = Some(index);
         }
         lookup[index] = next_healthy_index;
+    }
+
+    let Some(first_healthy_index) = first_healthy_index else {
+        return (false, false);
+    };
+
+    for index in ((first_healthy_index.saturating_add(1))..worker_port_count).rev() {
+        if lookup[index] != LASM_CLUSTER_SELECTION_LOOKUP_NONE {
+            break;
+        }
+        lookup[index] = first_healthy_index;
     }
     (true, false)
 }
@@ -9658,6 +9687,7 @@ fn cmd_run_lasm_backend(
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
+    cluster_relay_accept_batch_max: Option<usize>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
@@ -9851,7 +9881,8 @@ fn cmd_run_lasm_backend(
     let cluster_backend_connect_timeout_ms = resolve_lasm_cluster_backend_connect_timeout_ms();
     let cluster_backend_connect_cooldown_ms =
         resolve_lasm_cluster_backend_connect_cooldown_ms(cluster_backend_connect_timeout_ms);
-    let cluster_relay_accept_batch_max = resolve_lasm_cluster_relay_accept_batch_max();
+    let effective_cluster_relay_accept_batch_max =
+        resolve_lasm_cluster_relay_accept_batch_max(cluster_relay_accept_batch_max);
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
@@ -9885,6 +9916,12 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: --cluster-status-json is not used in fixed reuse-port cluster mode");
         return Err(2);
     }
+    if fixed_cluster_reuse_port_mode && cluster_relay_accept_batch_max.is_some() {
+        eprintln!(
+            "run failed: --cluster-relay-accept-batch-max is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
     if fixed_cluster_reuse_port_mode {
         return cmd_run_lasm_reuseport_cluster(LasmClusterConfig {
             path: path.to_path_buf(),
@@ -9916,7 +9953,7 @@ fn cmd_run_lasm_backend(
             cluster_relay_workers: None,
             cluster_relay_queue: None,
             cluster_accept_workers: None,
-            cluster_relay_accept_batch_max,
+            cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: None,
@@ -9955,7 +9992,7 @@ fn cmd_run_lasm_backend(
             cluster_relay_workers,
             cluster_relay_queue,
             cluster_accept_workers,
-            cluster_relay_accept_batch_max,
+            cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: cluster_status_json.map(Path::to_path_buf),
@@ -10863,8 +10900,11 @@ fn resolve_lasm_cluster_backend_connect_cooldown_ms(connect_timeout_ms: u64) -> 
         .unwrap_or(default_value)
 }
 
-fn resolve_lasm_cluster_relay_accept_batch_max() -> usize {
+fn resolve_lasm_cluster_relay_accept_batch_max(explicit_override: Option<usize>) -> usize {
     let default_value = 64_usize;
+    if let Some(value) = explicit_override {
+        return value.clamp(1, 4_096);
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX") else {
         return default_value;
     };
