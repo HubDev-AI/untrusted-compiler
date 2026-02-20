@@ -8262,26 +8262,52 @@ fn dispatch_lasm_cluster_relay_stream(
         };
     }
     let start_index = start_index % sender_count;
-    let (sender_head, sender_tail) = relay_senders.split_at(start_index);
-    let mut disconnected_count = 0_usize;
-    for sender in sender_tail.iter().chain(sender_head.iter()) {
-        match sender.try_send(client_stream) {
-            Ok(()) => {
-                return Ok(());
+    let mut saw_live_sender = false;
+
+    if start_index == 0 {
+        for sender in relay_senders {
+            match sender.try_send(client_stream) {
+                Ok(()) => return Ok(()),
+                Err(TrySendError::Full(stream)) => {
+                    saw_live_sender = true;
+                    client_stream = stream;
+                }
+                Err(TrySendError::Disconnected(stream)) => {
+                    client_stream = stream;
+                }
             }
-            Err(TrySendError::Full(stream)) => {
-                client_stream = stream;
+        }
+    } else {
+        for sender in &relay_senders[start_index..] {
+            match sender.try_send(client_stream) {
+                Ok(()) => return Ok(()),
+                Err(TrySendError::Full(stream)) => {
+                    saw_live_sender = true;
+                    client_stream = stream;
+                }
+                Err(TrySendError::Disconnected(stream)) => {
+                    client_stream = stream;
+                }
             }
-            Err(TrySendError::Disconnected(stream)) => {
-                disconnected_count = disconnected_count.saturating_add(1);
-                client_stream = stream;
+        }
+        for sender in &relay_senders[..start_index] {
+            match sender.try_send(client_stream) {
+                Ok(()) => return Ok(()),
+                Err(TrySendError::Full(stream)) => {
+                    saw_live_sender = true;
+                    client_stream = stream;
+                }
+                Err(TrySendError::Disconnected(stream)) => {
+                    client_stream = stream;
+                }
             }
         }
     }
-    if disconnected_count >= sender_count {
-        Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-    } else {
+
+    if saw_live_sender {
         Err(LasmClusterRelayDispatchError::Saturated(client_stream))
+    } else {
+        Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
     }
 }
 

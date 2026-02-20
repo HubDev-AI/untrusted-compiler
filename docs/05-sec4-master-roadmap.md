@@ -843,6 +843,10 @@ Post-alpha track acceptance anchors:
      - lookup rebuild now returns `selection_has_healthy_backends`, and relay selection short-circuits when no healthy backend exists,
      - avoids selection-counter reservation/index arithmetic in known no-healthy states while preserving existing `503 no healthy workers` behavior.
      - documented in `docs/book/1172-m39-lasm-cluster-no-healthy-selection-fast-gate.md`.
+   - [x] Tightened relay dispatch sender-iteration hot path:
+     - `dispatch_lasm_cluster_relay_stream` now uses direct slice loops (`start_index == 0` fast path, then tail/head loops) instead of iterator-chain traversal and disconnected-count tracking,
+     - preserves saturated/unavailable routing semantics while reducing dispatch-path iterator/counter overhead.
+     - documented in `docs/book/1173-m39-lasm-cluster-relay-dispatch-direct-slice-loops.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

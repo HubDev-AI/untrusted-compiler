@@ -1142,5 +1142,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1170-m39-lasm-cluster-selection-lookup-linear-rebuild.md`
 - `1171-m39-lasm-cluster-selection-lookup-scratch-mask-reuse.md`
 - `1172-m39-lasm-cluster-no-healthy-selection-fast-gate.md`
+- `1173-m39-lasm-cluster-relay-dispatch-direct-slice-loops.md`
 
 As milestones progress, chapters will be added and linked from this index.
