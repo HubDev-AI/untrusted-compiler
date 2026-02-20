@@ -16049,8 +16049,6 @@ fn main() effects { net } -> Int {
                 path,
                 "--backend",
                 "lasm",
-                "--db-adapter",
-                "postgres",
                 "--db-postgres-dsn",
                 dsn.as_str(),
                 "--oneshot",
@@ -25383,6 +25381,90 @@ fn run_command_rejects_db_postgres_dsn_file_with_c_backend() {
     assert!(
         stderr.contains("run failed: --db-postgres-dsn-file is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only db-postgres-dsn-file guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_dsn_with_non_postgres_adapter() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-non-postgres-adapter");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "sqlite",
+        "--db-postgres-dsn",
+        "postgres://example",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when postgres dsn flag is combined with non-postgres adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+        ),
+        "stderr should include deterministic postgres-dsn/non-postgres-adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_dsn_file_with_non_postgres_adapter() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-file-non-postgres-adapter");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let dsn_file = project_dir.join("dsn.txt");
+    fs::write(&dsn_file, "postgres://example").expect("dsn file should be written");
+    let dsn_file_value = dsn_file
+        .to_str()
+        .expect("dsn file path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "records-log",
+        "--db-postgres-dsn-file",
+        &dsn_file_value,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when postgres dsn-file flag is combined with non-postgres adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+        ),
+        "stderr should include deterministic postgres-dsn-file/non-postgres-adapter guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

@@ -8449,6 +8449,21 @@ fn cmd_run(
         eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
         return Err(2);
     }
+    let has_explicit_postgres_dsn = db_postgres_dsn.is_some() || db_postgres_dsn_file.is_some();
+    let effective_db_adapter = if backend == RunBackend::Lasm && has_explicit_postgres_dsn {
+        match db_adapter {
+            Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
+            Some(_) => {
+                eprintln!(
+                    "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+                );
+                return Err(2);
+            }
+            None => Some(RunDbAdapter::Postgres),
+        }
+    } else {
+        db_adapter
+    };
     let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
         let dsn = dsn.trim();
         if dsn.is_empty() {
@@ -8581,7 +8596,7 @@ fn cmd_run(
             max_runtime_steps,
             max_keep_alive_requests,
             db_base,
-            db_adapter,
+            effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
             instances,
             autoscale_max_instances,

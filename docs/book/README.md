@@ -1057,5 +1057,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1085-m39-lasm-postgres-dsn-file-env-fallback.md`
 - `1086-m39-run-postgres-dsn-single-resolution.md`
 - `1087-m39-lasm-exec-tx-invalid-handle-preexecution-guard.md`
+- `1088-m39-run-postgres-dsn-adapter-coherence.md`
 
 As milestones progress, chapters will be added and linked from this index.
