@@ -25401,6 +25401,7 @@ fn main() effects { net } -> Int {
             &port_value,
         ])
         .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
         .output()
         .expect("sec4 run command should execute");
 
@@ -25419,6 +25420,88 @@ fn main() effects { net } -> Int {
             "run failed: db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
         ),
         "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_postgres_adapter_with_empty_dsn_file_env() {
+    let project_dir = temp_dir("sec4-run-command-db-adapter-postgres-empty-dsn-file-env");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresemptydsnfileenvcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    let dsn_file_path = project_dir.join("dsn.txt");
+    fs::write(&dsn_file_path, "   \n").expect("dsn file should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .env(
+            "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE",
+            dsn_file_path
+                .to_str()
+                .expect("dsn file path should be valid utf-8"),
+        )
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when env dsn-file content is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE")
+            && stderr.contains("must contain a non-empty DSN"),
+        "stderr should contain deterministic empty env dsn-file guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");

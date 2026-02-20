@@ -1428,16 +1428,38 @@ fn resolve_lasm_dynamic_db_postgres_dsn(
         }
         return Ok(Some(dsn.to_string()));
     }
-    let raw = std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN").map_err(|_| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
-    })?;
-    let dsn = raw.trim().to_string();
-    if dsn.is_empty() {
-        return Err(
-            "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string(),
-        );
+    if let Ok(raw) = std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN") {
+        let dsn = raw.trim().to_string();
+        if dsn.is_empty() {
+            return Err(
+                "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
+                    .to_string(),
+            );
+        }
+        return Ok(Some(dsn));
     }
-    Ok(Some(dsn))
+    if let Ok(raw_file_path) = std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE") {
+        let file_path_value = raw_file_path.trim();
+        if file_path_value.is_empty() {
+            return Err("SEC4_RT_LASM_DB_POSTGRES_DSN_FILE must not be empty".to_string());
+        }
+        let file_path = PathBuf::from(file_path_value);
+        let dsn = fs::read_to_string(&file_path).map_err(|err| {
+            format!(
+                "could not read SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}`: {err}",
+                file_path.display()
+            )
+        })?;
+        let dsn = dsn.trim().to_string();
+        if dsn.is_empty() {
+            return Err(format!(
+                "SEC4_RT_LASM_DB_POSTGRES_DSN_FILE `{}` must contain a non-empty DSN",
+                file_path.display()
+            ));
+        }
+        return Ok(Some(dsn));
+    }
+    Err("db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string())
 }
 
 fn lasm_db_records_adapter_label(adapter: LasmDbRecordsAdapter) -> &'static str {
