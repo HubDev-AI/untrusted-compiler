@@ -1192,5 +1192,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1220-m39-lasm-cluster-status-writer-typed-snapshot-compare.md`
 - `1221-m39-lasm-cluster-status-snapshot-worker-port-arc-reuse.md`
 - `1222-m39-lasm-cluster-status-writer-typed-payload-serialization.md`
+- `1223-m39-lasm-cluster-accept-try-send-error-branch-unification.md`
 
 As milestones progress, chapters will be added and linked from this index.
