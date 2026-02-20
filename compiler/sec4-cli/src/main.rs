@@ -4,7 +4,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, RecvTimeoutError, TryRecvError, TrySendError};
 use postgres::types::ToSql;
 use postgres::{Client as PostgresClient, NoTls};
-use rusqlite::{params, Connection};
+use rusqlite::{
+    params,
+    types::{Value as SqliteValue, ValueRef as SqliteValueRef},
+    Connection,
+};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
     build_security_map_with_allows, emit_program_with_backend, parse_source,
@@ -1879,6 +1883,182 @@ fn ensure_lasm_dynamic_db_records_sqlite_schema(connection: &Connection) -> rusq
             created_at_ms INTEGER NOT NULL
         );",
     )
+}
+
+fn parse_lasm_sqlite_query_param_value(value: serde_json::Value) -> SqliteValue {
+    match value {
+        serde_json::Value::Null => SqliteValue::Null,
+        serde_json::Value::Bool(inner) => SqliteValue::Integer(if inner { 1 } else { 0 }),
+        serde_json::Value::Number(inner) => {
+            if let Some(value) = inner.as_i64() {
+                SqliteValue::Integer(value)
+            } else if let Some(value) = inner.as_f64() {
+                SqliteValue::Real(value)
+            } else {
+                SqliteValue::Text(inner.to_string())
+            }
+        }
+        serde_json::Value::String(inner) => SqliteValue::Text(inner),
+        other => SqliteValue::Text(serde_json::to_string(&other).unwrap_or_default()),
+    }
+}
+
+fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        return Vec::new();
+    }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return match parsed {
+            serde_json::Value::Array(entries) => entries
+                .into_iter()
+                .map(parse_lasm_sqlite_query_param_value)
+                .collect(),
+            serde_json::Value::Null => Vec::new(),
+            other => vec![parse_lasm_sqlite_query_param_value(other)],
+        };
+    }
+    vec![SqliteValue::Text(trimmed.to_string())]
+}
+
+fn lasm_dynamic_sqlite_runtime_connection(
+    state: &LasmDynamicResponseState,
+) -> Result<Connection, String> {
+    let path = state
+        .db_records_sqlite_store_path
+        .as_ref()
+        .ok_or_else(|| "sqlite records store path unavailable".to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic sqlite runtime store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let connection = Connection::open(path).map_err(|err| {
+        format!(
+            "could not open LASM dynamic sqlite runtime store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
+        format!(
+            "could not initialize LASM dynamic sqlite runtime schema `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(connection)
+}
+
+fn sqlite_value_ref_to_json(value: SqliteValueRef<'_>) -> serde_json::Value {
+    match value {
+        SqliteValueRef::Null => serde_json::Value::Null,
+        SqliteValueRef::Integer(inner) => serde_json::Value::Number(inner.into()),
+        SqliteValueRef::Real(inner) => serde_json::Number::from_f64(inner)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        SqliteValueRef::Text(inner) => {
+            serde_json::Value::String(String::from_utf8_lossy(inner).to_string())
+        }
+        SqliteValueRef::Blob(inner) => {
+            serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(inner))
+        }
+    }
+}
+
+fn run_lasm_sqlite_exec(
+    state: &LasmDynamicResponseState,
+    query_template: &str,
+    params: &str,
+) -> Result<(), String> {
+    let mut connection = lasm_dynamic_sqlite_runtime_connection(state)?;
+    let sqlite_params = parse_lasm_sqlite_query_params(params);
+    let tx = connection
+        .transaction()
+        .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
+    let mut statement = tx
+        .prepare(query_template)
+        .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
+    let parameter_count = statement.parameter_count();
+    let use_params = parameter_count > 0 && !sqlite_params.is_empty();
+    let execute_result = if use_params {
+        statement.execute(rusqlite::params_from_iter(sqlite_params.iter()))
+    } else {
+        statement.execute([])
+    };
+    match execute_result {
+        Ok(_) => {}
+        Err(rusqlite::Error::ExecuteReturnedResults) => {
+            let mut rows = if use_params {
+                statement
+                    .query(rusqlite::params_from_iter(sqlite_params.iter()))
+                    .map_err(|err| format!("sqlite execution query failed: {err}"))?
+            } else {
+                statement
+                    .query([])
+                    .map_err(|err| format!("sqlite execution query failed: {err}"))?
+            };
+            while rows
+                .next()
+                .map_err(|err| format!("sqlite execution row drain failed: {err}"))?
+                .is_some()
+            {}
+        }
+        Err(err) => return Err(format!("sqlite execution failed: {err}")),
+    }
+    drop(statement);
+    tx.commit()
+        .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
+    Ok(())
+}
+
+fn run_lasm_sqlite_exec_tx(
+    state: &LasmDynamicResponseState,
+    query_template: &str,
+    params: &str,
+) -> Result<(), String> {
+    run_lasm_sqlite_exec(state, query_template, params)
+}
+
+fn run_lasm_sqlite_query_one(
+    state: &LasmDynamicResponseState,
+    query_template: &str,
+    params: &str,
+) -> Result<Option<serde_json::Value>, String> {
+    let connection = lasm_dynamic_sqlite_runtime_connection(state)?;
+    let sqlite_params = parse_lasm_sqlite_query_params(params);
+    let mut statement = connection
+        .prepare(query_template)
+        .map_err(|err| format!("sqlite queryOne prepare failed: {err}"))?;
+    let parameter_count = statement.parameter_count();
+    let use_params = parameter_count > 0 && !sqlite_params.is_empty();
+    let mut rows = if use_params {
+        statement
+            .query(rusqlite::params_from_iter(sqlite_params.iter()))
+            .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
+    } else {
+        statement
+            .query([])
+            .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
+    };
+    let Some(row) = rows
+        .next()
+        .map_err(|err| format!("sqlite queryOne row fetch failed: {err}"))?
+    else {
+        return Ok(None);
+    };
+    let row_ref = row.as_ref();
+    let mut object = serde_json::Map::new();
+    for index in 0..row_ref.column_count() {
+        let name = row_ref.column_name(index).unwrap_or("").to_string();
+        let value = row
+            .get_ref(index)
+            .map(sqlite_value_ref_to_json)
+            .map_err(|err| format!("sqlite queryOne row decode failed: {err}"))?;
+        object.insert(name, value);
+    }
+    Ok(Some(serde_json::Value::Object(object)))
 }
 
 fn lasm_db_record_from_json(value: &serde_json::Value) -> Option<LasmDbRecord> {
@@ -12276,6 +12456,23 @@ fn apply_lasm_internal_db_operation_materialization(
                             );
                             return true;
                         }
+                    } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        if let Err(message) =
+                            run_lasm_sqlite_exec(&state, template.as_str(), params.as_str())
+                        {
+                            let (code, kind) =
+                                if message.contains("sqlite records store path unavailable") {
+                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
+                                } else {
+                                    ("DB.EXEC_FAILED", "missing_dependency")
+                                };
+                            set_lasm_json_response(
+                                response,
+                                500,
+                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                            );
+                            return true;
+                        }
                     }
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
@@ -12425,6 +12622,23 @@ fn apply_lasm_internal_db_operation_materialization(
                         ) {
                             let (code, kind) =
                                 if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
+                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
+                                } else {
+                                    ("DB.EXEC_TX_FAILED", "missing_dependency")
+                                };
+                            set_lasm_json_response(
+                                response,
+                                500,
+                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                            );
+                            return true;
+                        }
+                    } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        if let Err(message) =
+                            run_lasm_sqlite_exec_tx(&state, template.as_str(), params.as_str())
+                        {
+                            let (code, kind) =
+                                if message.contains("sqlite records store path unavailable") {
                                     ("DB.ADAPTER_CONFIG_INVALID", "internal")
                                 } else {
                                     ("DB.EXEC_TX_FAILED", "missing_dependency")
@@ -12638,6 +12852,66 @@ fn apply_lasm_internal_db_operation_materialization(
                                 return true;
                             }
                         };
+                        let row =
+                            serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+                        let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);
+                        let record_payload = record
+                            .as_ref()
+                            .map(lasm_db_record_to_json)
+                            .unwrap_or(serde_json::Value::Null);
+                        set_lasm_json_response(
+                            response,
+                            200,
+                            &serde_json::json!({
+                                "ok": true,
+                                "recordId": record_id,
+                                "rowSchema": row_schema,
+                                "row": row,
+                                "record": record_payload,
+                            }),
+                        );
+                        return true;
+                    }
+                    if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
+                        let row_object =
+                            match run_lasm_sqlite_query_one(&state, template.as_str(), params.as_str())
+                            {
+                                Ok(Some(value)) => value,
+                                Ok(None) => {
+                                    set_lasm_json_response(
+                                        response,
+                                        404,
+                                        &lasm_error_envelope(
+                                            "DB.QUERY_ONE_NOT_FOUND",
+                                            "missing_dependency",
+                                            "db.queryOne row not found",
+                                            404,
+                                            trace_id,
+                                        ),
+                                    );
+                                    return true;
+                                }
+                                Err(message) => {
+                                    let (code, kind) =
+                                        if message.contains("sqlite records store path unavailable") {
+                                            ("DB.ADAPTER_CONFIG_INVALID", "internal")
+                                        } else {
+                                            ("DB.QUERY_ONE_FAILED", "missing_dependency")
+                                        };
+                                    set_lasm_json_response(
+                                        response,
+                                        500,
+                                        &lasm_error_envelope(
+                                            code,
+                                            kind,
+                                            message.as_str(),
+                                            500,
+                                            trace_id,
+                                        ),
+                                    );
+                                    return true;
+                                }
+                            };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
                         let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);

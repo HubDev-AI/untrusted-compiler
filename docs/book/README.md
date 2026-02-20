@@ -1046,5 +1046,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1074-m39-lasm-postgres-comment-aware-placeholder-arity.md`
 - `1075-m39-lasm-postgres-query-one-select-shape-guard.md`
 - `1076-m39-lasm-postgres-query-one-trailing-semicolon-normalization.md`
+- `1077-m39-lasm-sqlite-runtime-exec-query-one-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.
