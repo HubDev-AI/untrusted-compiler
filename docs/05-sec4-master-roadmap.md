@@ -863,6 +863,10 @@ Post-alpha track acceptance anchors:
      - `run_lasm_cluster_accept_loop` now uses dispatch-counter reservation only when relay sender count is greater than `1`,
      - single-relay/zero-relay paths now keep dispatch start fixed at `0`, avoiding unnecessary shared atomic `fetch_add` churn.
      - documented in `docs/book/1177-m39-lasm-cluster-single-relay-dispatch-counter-bypass.md`.
+   - [x] Inlined single-sender dispatch in accept loop:
+     - when relay sender count is exactly `1`, accept loop now dispatches directly via that sender (`try_send`) without calling the generic dispatch helper,
+     - preserves saturated/unavailable mapping semantics while removing one hot-path function call layer in single-relay deployments.
+     - documented in `docs/book/1178-m39-lasm-cluster-single-sender-accept-loop-inline-dispatch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
