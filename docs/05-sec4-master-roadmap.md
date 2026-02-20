@@ -819,6 +819,10 @@ Post-alpha track acceptance anchors:
      - relay worker loop now rebuilds a `start_index -> selected backend index` lookup table only when worker snapshot or unhealthy-port set changes,
      - per-connection backend selection now uses O(1) lookup with existing selection-counter sequencing, preserving unhealthy-skip semantics while removing per-connection fallback scans.
      - documented in `docs/book/1166-m39-lasm-cluster-relay-selection-precomputed-lookup.md`.
+   - [x] Cached worker backend socket addresses per snapshot in relay workers:
+     - relay workers now rebuild backend `SocketAddr` vector only when worker-port snapshot changes and reuse cached addresses for connect calls,
+     - removes per-connection `SocketAddr` construction on the relay connect hot path while preserving existing backend-port/error semantics.
+     - documented in `docs/book/1167-m39-lasm-cluster-relay-backend-socketaddr-cache.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

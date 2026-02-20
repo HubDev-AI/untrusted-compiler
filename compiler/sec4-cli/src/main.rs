@@ -8722,6 +8722,20 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     }
 }
 
+fn rebuild_lasm_cluster_worker_backend_addrs(
+    worker_ports: &[u16],
+    addrs: &mut Vec<std::net::SocketAddr>,
+) {
+    addrs.clear();
+    addrs.reserve(worker_ports.len());
+    for port in worker_ports {
+        addrs.push(std::net::SocketAddr::from((
+            std::net::Ipv4Addr::LOCALHOST,
+            *port,
+        )));
+    }
+}
+
 fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let listener = match TcpListener::bind(("127.0.0.1", config.listen_port)) {
         Ok(listener) => listener,
@@ -8829,6 +8843,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_worker_port_count = 0_usize;
             let mut unhealthy_prune_next_at: Option<Instant> = None;
             let mut selected_worker_ports_snapshot = relay_worker_ports.load_full();
+            let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> = Vec::new();
+            rebuild_lasm_cluster_worker_backend_addrs(
+                selected_worker_ports_snapshot.as_ref(),
+                &mut selected_worker_backend_addrs,
+            );
             let mut selection_lookup: Vec<Option<usize>> = Vec::new();
             let mut selection_lookup_dirty = true;
 
@@ -8845,6 +8864,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         let snapshot = relay_worker_ports.load_full();
                         if !Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
                             selected_worker_ports_snapshot = Arc::clone(&snapshot);
+                            rebuild_lasm_cluster_worker_backend_addrs(
+                                selected_worker_ports_snapshot.as_ref(),
+                                &mut selected_worker_backend_addrs,
+                            );
                             selection_lookup_dirty = true;
                         }
                         let worker_port_count = snapshot.len();
@@ -8901,6 +8924,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         .expect("worker port snapshot loaded before backend selection");
                     if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref) {
                         selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
+                        rebuild_lasm_cluster_worker_backend_addrs(
+                            selected_worker_ports_snapshot.as_ref(),
+                            &mut selected_worker_backend_addrs,
+                        );
                         selection_lookup_dirty = true;
                     }
                     let worker_ports = selected_worker_ports_snapshot.as_ref();
@@ -8913,7 +8940,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         );
                         selection_lookup_dirty = false;
                     }
-                    let backend_port = {
+                    let selected_backend_index = {
                         let mut next_selection_start_index = || {
                             if relay_selection_reservation_offset >= relay_selection_reservation_len
                                 || relay_selection_reservation_worker_port_count
@@ -8950,11 +8977,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 .get(start_index)
                                 .copied()
                                 .flatten()
-                                .map(|index| worker_ports[index])
+                                .map(|index| index)
                         }
                     };
 
-                    let Some(backend_port) = backend_port else {
+                    let Some(selected_backend_index) = selected_backend_index else {
                         saturation_events_pending_local =
                             saturation_events_pending_local.saturating_add(1);
                         saturation_events_total_local =
@@ -8968,8 +8995,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         continue;
                     };
 
-                    let backend_addr =
-                        std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, backend_port));
+                    let selected_backend_port = worker_ports[selected_backend_index];
+                    let backend_addr = selected_worker_backend_addrs[selected_backend_index];
                     match TcpStream::connect_timeout(&backend_addr, relay_backend_connect_timeout) {
                         Ok(upstream) => {
                             let _ = client.set_nodelay(true);
@@ -9015,7 +9042,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 saturation_events_total_local.saturating_add(1);
                             let now = Instant::now();
                             unhealthy_ports_until.insert(
-                                backend_port,
+                                selected_backend_port,
                                 now + relay_backend_connect_cooldown,
                             );
                             selection_lookup_dirty = true;
@@ -9027,16 +9054,16 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 );
                             }
                             if connect_warning_next_allowed
-                                .get(&backend_port)
+                                .get(&selected_backend_port)
                                 .map(|next| now >= *next)
                                 .unwrap_or(true)
                             {
                                 eprintln!(
                                     "warning: LASM cluster worker {} connect failed: {}",
-                                    backend_port, err
+                                    selected_backend_port, err
                                 );
                                 connect_warning_next_allowed.insert(
-                                    backend_port,
+                                    selected_backend_port,
                                     now + Duration::from_millis(
                                         LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
                                     ),
