@@ -1,3 +1,4 @@
+use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::Connection;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -15755,6 +15756,206 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_available() {
+    let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
+        eprintln!("skipping postgres LASM integration test: SEC4_TEST_POSTGRES_DSN not set");
+        return;
+    };
+    let dsn = dsn_raw.trim().to_string();
+    if dsn.is_empty() {
+        eprintln!("skipping postgres LASM integration test: SEC4_TEST_POSTGRES_DSN is empty");
+        return;
+    }
+    if PostgresClient::connect(dsn.as_str(), NoTls).is_err() {
+        eprintln!("skipping postgres LASM integration test: could not connect to postgres DSN");
+        return;
+    }
+
+    let project_dir = temp_dir("sec4-run-command-lasm-db-postgres");
+    let exec_port = find_available_tcp_port();
+    let query_one_port = find_available_tcp_port();
+    let list_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgrescommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn dbExec() effects { net, db.write } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  db.exec(db, query);
+  res.json(200, "DbExecRuntimeResponse", 0);
+  0
+}
+
+fn dbQueryOne() effects { net, db.read } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let rowSchema = schema.row(validate.int64(req.query("row_schema")));
+  let query = sql.q(template, params);
+  db.queryOne(db, query, rowSchema);
+  res.json(200, "DbQueryOneResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec", dbExec);
+  http.get(router, "/db/query-one", dbQueryOne);
+  http.get(router, "/db/records", dbListRecords);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+
+    let run_lasm_oneshot_request = |port: u16, request: String| -> String {
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path,
+                "--backend",
+                "lasm",
+                "--db-adapter",
+                "postgres",
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn.as_str())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command exited before request with status: {status}");
+            }
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db postgres flow could not connect to server");
+            }
+        };
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db postgres process did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM db postgres process should exit successfully"
+        );
+        response
+    };
+
+    let exec_response = run_lasm_oneshot_request(
+        exec_port,
+        "POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        exec_response.contains("HTTP/1.1 200 OK"),
+        "db exec response should contain deterministic 200 status:\n{exec_response}"
+    );
+    assert!(
+        exec_response.contains("\"recordId\":1") && exec_response.contains("\"op\":\"exec\""),
+        "db exec response should include deterministic first record payload:\n{exec_response}"
+    );
+
+    let query_one_response = run_lasm_oneshot_request(
+        query_one_port,
+        "GET /db/query-one?template=SELECT%2042%20AS%20value&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_response.contains("HTTP/1.1 200 OK"),
+        "db queryOne response should contain deterministic 200 status:\n{query_one_response}"
+    );
+    assert!(
+        query_one_response.contains("\"rowSchema\":7")
+            && query_one_response.contains("value")
+            && query_one_response.contains("42"),
+        "db queryOne response should include postgres-backed row payload:\n{query_one_response}"
+    );
+
+    let list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        list_response.contains("HTTP/1.1 200 OK"),
+        "db records response should contain deterministic 200 status:\n{list_response}"
+    );
+    assert!(
+        list_response.contains("\"adapter\":\"postgres\"") && list_response.contains("\"count\":1"),
+        "db records response should include postgres adapter metadata:\n{list_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_oneshot_lasm_backend_merges_header_names_case_insensitively() {
     let project_dir = temp_dir("sec4-run-command-lasm-header-case-merge");
     let port = find_available_tcp_port();
@@ -24148,7 +24349,8 @@ fn run_command_rejects_cluster_relay_queue_without_cluster_mode() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)"),
+        stderr
+            .contains("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)"),
         "stderr should include deterministic cluster-mode guidance:\n{stderr}"
     );
 
@@ -24258,7 +24460,9 @@ fn run_command_rejects_autoscale_scale_up_step_with_c_backend() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
-        stderr.contains("run failed: --autoscale-scale-up-step is only supported with --backend lasm"),
+        stderr.contains(
+            "run failed: --autoscale-scale-up-step is only supported with --backend lasm"
+        ),
         "stderr should include deterministic lasm-only autoscale scale-up step guidance:\n{stderr}"
     );
 
@@ -24777,6 +24981,81 @@ fn run_command_rejects_db_adapter_with_c_backend() {
     assert!(
         stderr.contains("run failed: --db-adapter is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only db-adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_postgres_adapter_without_dsn() {
+    let project_dir = temp_dir("sec4-run-command-db-adapter-postgres-missing-dsn");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbpostgresmissingdsncommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "ok");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+
+    let output = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--db-adapter",
+            "postgres",
+            "--oneshot",
+            "--port",
+            &port_value,
+        ])
+        .env_remove("SEC4_RT_LASM_DB_POSTGRES_DSN")
+        .output()
+        .expect("sec4 run command should execute");
+
+    assert!(
+        !output.status.success(),
+        "run command should fail when postgres dsn is missing"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
+        ),
+        "stderr should contain deterministic postgres dsn guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
