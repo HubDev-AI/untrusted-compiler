@@ -34,17 +34,13 @@ mod lasm_db_runtime_sqlite;
 use lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
     load_lasm_dynamic_db_records_from_postgres, load_lasm_dynamic_db_records_from_sqlite,
-    persist_lasm_dynamic_db_records_to_postgres, persist_lasm_dynamic_db_records_to_sqlite,
 };
 use lasm_db_config::{
     lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file,
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
     resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
 };
-use lasm_db_records_log::{
-    lasm_db_record_to_json, load_lasm_dynamic_db_records_from_disk,
-    persist_lasm_dynamic_db_records_to_records_log,
-};
+use lasm_db_records_log::{lasm_db_record_to_json, load_lasm_dynamic_db_records_from_disk};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -1431,19 +1427,6 @@ fn persist_lasm_dynamic_users_to_disk(state: &LasmDynamicResponseState) -> Resul
         )
     })?;
     Ok(())
-}
-
-fn persist_lasm_dynamic_db_records_to_disk(
-    state: &mut LasmDynamicResponseState,
-) -> Result<(), String> {
-    match state.db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
-            state.db_records_store_path.as_deref(),
-            &state.db_records,
-        ),
-        LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
-        LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
-    }
 }
 
 pub(crate) fn has_lasm_sql_non_trailing_statement_separator(query_template: &str) -> bool {
