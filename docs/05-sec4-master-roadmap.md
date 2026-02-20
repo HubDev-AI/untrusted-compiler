@@ -717,6 +717,11 @@ Post-alpha track acceptance anchors:
      - cluster status JSON now includes `relayAcceptWorkers` for operator visibility of active accept-loop parallelism.
      - short LASM cluster probe after this slice recorded `1,437,939` requests in `20s` (`~71.53k req/s`, `p99 11.53ms`, peak RSS `~27,216 KB`) under default settings.
      - documented in `docs/book/1143-m39-lasm-cluster-accept-worker-pool.md`.
+   - [x] Lazy-loaded relay worker-port snapshots in accept processing cycles:
+     - relay worker loops no longer load worker-port snapshots unconditionally every cycle; snapshot loads now happen only when needed (unhealthy-port pruning or actual accepted connection handling),
+     - preserves existing backend selection semantics while reducing steady-state hot-loop snapshot churn.
+     - short LASM cluster probe after this slice recorded `1,450,295` requests in `20s` (`~72.14k req/s`, `p99 11.41ms`, peak RSS `~27,312 KB`) under default settings.
+     - documented in `docs/book/1144-m39-lasm-cluster-relay-lazy-worker-snapshot-load.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
