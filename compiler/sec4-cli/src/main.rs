@@ -8096,6 +8096,7 @@ fn write_lasm_cluster_status_json(
 
 const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
 const LASM_CLUSTER_RELAY_RECEIVE_WAIT_MS: u64 = 2;
+const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
 
 enum LasmClusterRelayPumpStep {
     Progressed,
@@ -8415,6 +8416,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
+            let mut connect_warning_next_allowed: HashMap<u16, Instant> = HashMap::new();
+            let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
             let mut idle_spins = 0_u32;
 
@@ -8504,7 +8507,20 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             match LasmClusterRelayPump::new(client, upstream) {
                                 Ok(relay) => relay_connections.push(relay),
                                 Err(message) => {
-                                    eprintln!("warning: LASM cluster relay init failed: {message}");
+                                    let now = Instant::now();
+                                    if pump_warning_next_allowed
+                                        .map(|next| now >= next)
+                                        .unwrap_or(true)
+                                    {
+                                        eprintln!(
+                                            "warning: LASM cluster relay init failed: {message}"
+                                        );
+                                        pump_warning_next_allowed = Some(
+                                            now + Duration::from_millis(
+                                                LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
+                                            ),
+                                        );
+                                    }
                                     relay_active.fetch_sub(1, Ordering::Relaxed);
                                 }
                             }
@@ -8516,10 +8532,23 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 backend_port,
                                 Instant::now() + relay_backend_connect_cooldown,
                             );
-                            eprintln!(
-                                "warning: LASM cluster worker {} connect failed: {}",
-                                backend_port, err
-                            );
+                            let now = Instant::now();
+                            if connect_warning_next_allowed
+                                .get(&backend_port)
+                                .map(|next| now >= *next)
+                                .unwrap_or(true)
+                            {
+                                eprintln!(
+                                    "warning: LASM cluster worker {} connect failed: {}",
+                                    backend_port, err
+                                );
+                                connect_warning_next_allowed.insert(
+                                    backend_port,
+                                    now + Duration::from_millis(
+                                        LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
+                                    ),
+                                );
+                            }
                             let _ = write_lasm_cluster_unavailable_response(
                                 &mut client,
                                 "worker unavailable",
@@ -8546,7 +8575,18 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             progressed = true;
                         }
                         Err(err) => {
-                            eprintln!("warning: LASM cluster relay pump failed: {err}");
+                            let now = Instant::now();
+                            if pump_warning_next_allowed
+                                .map(|next| now >= next)
+                                .unwrap_or(true)
+                            {
+                                eprintln!("warning: LASM cluster relay pump failed: {err}");
+                                pump_warning_next_allowed = Some(
+                                    now + Duration::from_millis(
+                                        LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
+                                    ),
+                                );
+                            }
                             relay_connections.swap_remove(index);
                             relay_active.fetch_sub(1, Ordering::Relaxed);
                             progressed = true;
