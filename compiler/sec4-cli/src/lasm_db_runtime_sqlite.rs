@@ -3,9 +3,8 @@ use rusqlite::{
     types::{Value as SqliteValue, ValueRef as SqliteValueRef},
     Connection,
 };
-use std::fs;
 
-use crate::lasm_db_adapter_state::ensure_lasm_dynamic_db_records_sqlite_schema;
+use crate::lasm_db_adapter_state::connect_lasm_dynamic_db_records_sqlite;
 use crate::lasm_db_runtime_postgres::{
     is_lasm_postgres_query_one_select_like, normalize_lasm_postgres_query_for_subquery,
 };
@@ -47,34 +46,21 @@ fn parse_lasm_sqlite_query_params(value: &str) -> Vec<SqliteValue> {
     vec![SqliteValue::Text(trimmed.to_string())]
 }
 
-fn lasm_dynamic_sqlite_runtime_connection(
-    state: &LasmDynamicResponseState,
-) -> Result<Connection, String> {
-    let path = state
-        .db_records_sqlite_store_path
-        .as_ref()
-        .ok_or_else(|| "sqlite records store path unavailable".to_string())?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "could not create LASM dynamic sqlite runtime store directory `{}`: {err}",
-                parent.display()
-            )
-        })?;
+fn lasm_dynamic_sqlite_runtime_connection_mut(
+    state: &mut LasmDynamicResponseState,
+) -> Result<&mut Connection, String> {
+    if state.db_records_sqlite_connection.is_none() {
+        let path = state
+            .db_records_sqlite_store_path
+            .as_ref()
+            .ok_or_else(|| "sqlite records store path unavailable".to_string())?;
+        let connection = connect_lasm_dynamic_db_records_sqlite(path.as_path())?;
+        state.db_records_sqlite_connection = Some(connection);
     }
-    let connection = Connection::open(path).map_err(|err| {
-        format!(
-            "could not open LASM dynamic sqlite runtime store `{}`: {err}",
-            path.display()
-        )
-    })?;
-    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
-        format!(
-            "could not initialize LASM dynamic sqlite runtime schema `{}`: {err}",
-            path.display()
-        )
-    })?;
-    Ok(connection)
+    state
+        .db_records_sqlite_connection
+        .as_mut()
+        .ok_or_else(|| "sqlite records store connection unavailable".to_string())
 }
 
 fn sqlite_value_ref_to_json(value: SqliteValueRef<'_>) -> serde_json::Value {
@@ -106,61 +92,85 @@ fn validate_lasm_sqlite_parameter_arity(
 }
 
 pub(crate) fn run_lasm_sqlite_exec(
-    state: &LasmDynamicResponseState,
+    state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &str,
 ) -> Result<u64, String> {
-    let mut connection = lasm_dynamic_sqlite_runtime_connection(state)?;
     let sqlite_params = parse_lasm_sqlite_query_params(params);
-    let tx = connection
-        .transaction()
-        .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
-    let mut statement = tx
-        .prepare(query_template)
-        .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
-    let parameter_count = statement.parameter_count();
-    validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
-    let use_params = parameter_count > 0 && !sqlite_params.is_empty();
-    if use_params && has_lasm_sql_non_trailing_statement_separator(query_template) {
-        return Err("sqlite parameterized execution requires a single SQL statement".to_string());
-    }
-    let execute_result = if use_params {
-        statement.execute(rusqlite::params_from_iter(sqlite_params.iter()))
-    } else {
-        statement.execute([])
-    };
-    let affected_rows = match execute_result {
-        Ok(count) => count as u64,
-        Err(rusqlite::Error::ExecuteReturnedResults) => {
-            let mut rows = if use_params {
-                statement
-                    .query(rusqlite::params_from_iter(sqlite_params.iter()))
-                    .map_err(|err| format!("sqlite execution query failed: {err}"))?
-            } else {
-                statement
-                    .query([])
-                    .map_err(|err| format!("sqlite execution query failed: {err}"))?
-            };
-            let mut row_count = 0u64;
-            while rows
-                .next()
-                .map_err(|err| format!("sqlite execution row drain failed: {err}"))?
-                .is_some()
-            {
-                row_count = row_count.saturating_add(1);
-            }
-            row_count
+    let run = |connection: &mut Connection| -> Result<u64, String> {
+        let tx = connection
+            .transaction()
+            .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
+        let mut statement = tx
+            .prepare(query_template)
+            .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
+        let parameter_count = statement.parameter_count();
+        validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
+        let use_params = parameter_count > 0 && !sqlite_params.is_empty();
+        if use_params && has_lasm_sql_non_trailing_statement_separator(query_template) {
+            return Err(
+                "sqlite parameterized execution requires a single SQL statement".to_string(),
+            );
         }
-        Err(err) => return Err(format!("sqlite execution failed: {err}")),
+        let execute_result = if use_params {
+            statement.execute(rusqlite::params_from_iter(sqlite_params.iter()))
+        } else {
+            statement.execute([])
+        };
+        let affected_rows = match execute_result {
+            Ok(count) => count as u64,
+            Err(rusqlite::Error::ExecuteReturnedResults) => {
+                let mut rows = if use_params {
+                    statement
+                        .query(rusqlite::params_from_iter(sqlite_params.iter()))
+                        .map_err(|err| format!("sqlite execution query failed: {err}"))?
+                } else {
+                    statement
+                        .query([])
+                        .map_err(|err| format!("sqlite execution query failed: {err}"))?
+                };
+                let mut row_count = 0u64;
+                while rows
+                    .next()
+                    .map_err(|err| format!("sqlite execution row drain failed: {err}"))?
+                    .is_some()
+                {
+                    row_count = row_count.saturating_add(1);
+                }
+                row_count
+            }
+            Err(err) => return Err(format!("sqlite execution failed: {err}")),
+        };
+        drop(statement);
+        tx.commit()
+            .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
+        Ok(affected_rows)
     };
-    drop(statement);
-    tx.commit()
-        .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
-    Ok(affected_rows)
+    let first = {
+        let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+        run(connection)
+    };
+    match first {
+        Ok(value) => Ok(value),
+        Err(message)
+            if message.contains("database is locked") || message.contains("bad parameter") =>
+        {
+            Err(message)
+        }
+        Err(message) => {
+            state.db_records_sqlite_connection = None;
+            let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+            run(connection).map_err(|retry_error| {
+                format!(
+                    "sqlite execution failed: {message}; retry after reconnect failed: {retry_error}"
+                )
+            })
+        }
+    }
 }
 
 pub(crate) fn run_lasm_sqlite_exec_tx(
-    state: &LasmDynamicResponseState,
+    state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &str,
 ) -> Result<u64, String> {
@@ -168,7 +178,7 @@ pub(crate) fn run_lasm_sqlite_exec_tx(
 }
 
 pub(crate) fn run_lasm_sqlite_query_one(
-    state: &LasmDynamicResponseState,
+    state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &str,
 ) -> Result<Option<serde_json::Value>, String> {
@@ -179,7 +189,7 @@ pub(crate) fn run_lasm_sqlite_query_one(
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
         return Err("sqlite queryOne requires SELECT-style SQL statement".to_string());
     }
-    let connection = lasm_dynamic_sqlite_runtime_connection(state)?;
+    let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
     let sqlite_params = parse_lasm_sqlite_query_params(params);
     let mut statement = connection
         .prepare(normalized_query.as_str())

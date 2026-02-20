@@ -1088,5 +1088,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1116-m39-lasm-db-plan-type-extraction.md`
 - `1117-m39-lasm-db-incremental-record-persistence.md`
 - `1118-m39-lasm-sqlite-connection-reuse-for-append-persistence.md`
+- `1119-m39-lasm-sqlite-connection-reuse-for-runtime-exec-query.md`
 
 As milestones progress, chapters will be added and linked from this index.

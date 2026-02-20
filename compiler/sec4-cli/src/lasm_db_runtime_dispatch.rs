@@ -130,7 +130,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let sqlite_affected_rows = match run_lasm_sqlite_exec(
-                            &state,
+                            &mut state,
                             template.as_str(),
                             params.as_str(),
                         ) {
@@ -361,7 +361,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
-                            &state,
+                            &mut state,
                             template.as_str(),
                             params.as_str(),
                         ) {
@@ -635,7 +635,7 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     }
                     if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
                         let row_object = match run_lasm_sqlite_query_one(
-                            &state,
+                            &mut state,
                             template.as_str(),
                             params.as_str(),
                         ) {
