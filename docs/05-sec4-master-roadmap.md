@@ -787,6 +787,10 @@ Post-alpha track acceptance anchors:
      - this reduces autoscale reaction latency during sustained saturation without changing non-saturation loop cadence.
      - short LASM cluster probe after this slice recorded `1,476,018` requests in `20s` (`~73.43k req/s`, `p99 9.39ms`, peak RSS `~27,104 KB`) under default settings.
      - documented in `docs/book/1158-m39-lasm-cluster-saturation-priority-sleep-interval.md`.
+   - [x] Added autoscale cooldown-remaining telemetry fields to cluster status:
+     - status payload now includes `autoscaleScaleUpCooldownRemainingMs` and `autoscaleScaleDownCooldownRemainingMs`,
+     - autoscale loop publishes these values each cycle from current cooldown state so operators can see when next scale-up/scale-down windows open.
+     - documented in `docs/book/1159-m39-lasm-cluster-status-autoscale-cooldown-remaining-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
