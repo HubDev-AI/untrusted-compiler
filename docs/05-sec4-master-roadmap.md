@@ -705,6 +705,12 @@ Post-alpha track acceptance anchors:
      - this removes an avoidable cross-path atomic contention point between listener enqueue and relay worker backend-port selection.
      - repeated short probes (`20s`, auto relay settings) after this change reported `~63.59k`, `~68.34k`, and `~71.52k req/s` (`peak RSS ~27,008..27,072 KB`), with top-run throughput above the prior short-run baseline.
      - documented in `docs/book/1141-m39-lasm-cluster-dispatch-cursor-decoupling.md`.
+   - [x] Batched active-connection atomics in listener and relay worker loops:
+     - listener now accumulates successful enqueue counts per accept batch and flushes one `active_connections` add per batch,
+     - relay workers now accumulate completion/failure decrements locally and flush one `active_connections` subtract per cycle,
+     - keeps overload/availability semantics unchanged while reducing per-connection atomic churn in hot paths.
+     - short LASM cluster probe after this slice recorded `1,440,370` requests in `20s` (`~71.65k req/s`, `p99 10.16ms`, peak RSS `~27,120 KB`) under auto relay settings.
+     - documented in `docs/book/1142-m39-lasm-cluster-active-connection-atomic-batching.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

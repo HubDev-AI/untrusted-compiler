@@ -8133,6 +8133,26 @@ fn flush_lasm_cluster_saturation_counters(
     }
 }
 
+fn flush_lasm_cluster_active_connection_increments(
+    active_counter: &AtomicUsize,
+    increments_local: &mut usize,
+) {
+    if *increments_local > 0 {
+        active_counter.fetch_add(*increments_local, Ordering::Relaxed);
+        *increments_local = 0;
+    }
+}
+
+fn flush_lasm_cluster_active_connection_decrements(
+    active_counter: &AtomicUsize,
+    decrements_local: &mut usize,
+) {
+    if *decrements_local > 0 {
+        active_counter.fetch_sub(*decrements_local, Ordering::Relaxed);
+        *decrements_local = 0;
+    }
+}
+
 enum LasmClusterRelayDispatchError {
     Saturated(TcpStream),
     Unavailable(TcpStream),
@@ -8508,6 +8528,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut idle_spins = 0_u32;
             let mut saturation_events_pending_local = 0_usize;
             let mut saturation_events_total_local = 0_u64;
+            let mut active_connection_decrements_local = 0_usize;
 
             loop {
                 let mut accepted = false;
@@ -8591,7 +8612,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             &mut client,
                             LasmClusterUnavailableReason::NoHealthyWorkers,
                         );
-                        relay_active.fetch_sub(1, Ordering::Relaxed);
+                        active_connection_decrements_local =
+                            active_connection_decrements_local.saturating_add(1);
                         continue;
                     };
 
@@ -8618,7 +8640,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                             ),
                                         );
                                     }
-                                    relay_active.fetch_sub(1, Ordering::Relaxed);
+                                    active_connection_decrements_local =
+                                        active_connection_decrements_local.saturating_add(1);
                                 }
                             }
                         }
@@ -8652,7 +8675,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 &mut client,
                                 LasmClusterUnavailableReason::WorkerUnavailable,
                             );
-                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            active_connection_decrements_local =
+                                active_connection_decrements_local.saturating_add(1);
                         }
                     }
                 }
@@ -8670,7 +8694,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {
                             relay_connections.swap_remove(index);
-                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            active_connection_decrements_local =
+                                active_connection_decrements_local.saturating_add(1);
                             progressed = true;
                         }
                         Err(err) => {
@@ -8687,7 +8712,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 );
                             }
                             relay_connections.swap_remove(index);
-                            relay_active.fetch_sub(1, Ordering::Relaxed);
+                            active_connection_decrements_local =
+                                active_connection_decrements_local.saturating_add(1);
                             progressed = true;
                         }
                     }
@@ -8698,6 +8724,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     &relay_saturation_events_total,
                     &mut saturation_events_pending_local,
                     &mut saturation_events_total_local,
+                );
+                flush_lasm_cluster_active_connection_decrements(
+                    &relay_active,
+                    &mut active_connection_decrements_local,
                 );
 
                 if receiver_closed && relay_connections.is_empty() {
@@ -8940,6 +8970,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
         let relay_sender_count = relay_senders.len();
         let relay_batch_len = relay_listener_batch.len();
+        let mut listener_enqueued_local = 0_usize;
         for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
             let dispatch_start = if relay_sender_count == 0 {
                 0
@@ -8952,7 +8983,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 dispatch_start,
             ) {
                 Ok(()) => {
-                    active_connections.fetch_add(1, Ordering::Relaxed);
+                    listener_enqueued_local = listener_enqueued_local.saturating_add(1);
                 }
                 Err(LasmClusterRelayDispatchError::Saturated(mut stream)) => {
                     listener_saturation_pending_local =
@@ -8979,6 +9010,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         &mut stream,
                         LasmClusterUnavailableReason::RelayUnavailable,
                     );
+                    flush_lasm_cluster_active_connection_increments(
+                        &active_connections,
+                        &mut listener_enqueued_local,
+                    );
                     flush_lasm_cluster_saturation_counters(
                         &relay_saturation_events,
                         &relay_saturation_events_total,
@@ -8992,6 +9027,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 }
             }
         }
+        flush_lasm_cluster_active_connection_increments(
+            &active_connections,
+            &mut listener_enqueued_local,
+        );
         if relay_sender_count > 0 {
             relay_dispatch_round_robin =
                 (relay_dispatch_round_robin + relay_batch_len) % relay_sender_count;
