@@ -967,6 +967,10 @@ Post-alpha track acceptance anchors:
      - relay connect-failure path now loads warning-throttle slot once into a mutable entry reference and performs direct match-based allowance check (`Some(next) => now >= next`),
      - keeps warning throttle semantics unchanged while removing repeated indexed option-chain reads/writes in the failure path.
      - documented in `docs/book/1203-m39-lasm-cluster-connect-warning-slot-direct-match-check.md`.
+   - [x] Removed per-connection `Option` wrapping from relay backend selection result:
+     - relay backend selection now uses `LASM_CLUSTER_SELECTION_LOOKUP_NONE` sentinel directly across identity and non-identity selection paths,
+     - removes `Option` construction/unwrapping in per-connection selection while preserving no-healthy behavior and selection semantics.
+     - documented in `docs/book/1204-m39-lasm-cluster-selection-sentinel-result-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

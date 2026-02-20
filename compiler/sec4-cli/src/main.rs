@@ -9268,7 +9268,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     let selected_backend_index = if worker_port_count == 0
                         || !selection_has_healthy_backends
                     {
-                        None
+                        LASM_CLUSTER_SELECTION_LOOKUP_NONE
                     } else {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
@@ -9293,19 +9293,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             }
                         }
                         if selection_lookup_is_identity {
-                            Some(start_index)
+                            start_index
                         } else {
                             debug_assert_eq!(selection_lookup.len(), worker_port_count);
-                            let mapped_index = selection_lookup[start_index];
-                            if mapped_index == LASM_CLUSTER_SELECTION_LOOKUP_NONE {
-                                None
-                            } else {
-                                Some(mapped_index)
-                            }
+                            selection_lookup[start_index]
                         }
                     };
 
-                    let Some(selected_backend_index) = selected_backend_index else {
+                    if selected_backend_index == LASM_CLUSTER_SELECTION_LOOKUP_NONE {
                         saturation_events_pending_local += 1;
                         saturation_events_total_local += 1;
                         let _ = write_lasm_cluster_unavailable_response(
@@ -9314,7 +9309,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         );
                         active_connection_decrements_local += 1;
                         continue;
-                    };
+                    }
 
                     let backend_addr = selected_worker_backend_addrs[selected_backend_index];
                     match TcpStream::connect_timeout(&backend_addr, relay_backend_connect_timeout) {
