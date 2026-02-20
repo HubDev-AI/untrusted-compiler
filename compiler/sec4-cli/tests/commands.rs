@@ -26572,6 +26572,124 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_cluster_status_json_skips_unchanged_snapshots() {
+    let project_dir = temp_dir("sec4-run-command-lasm-cluster-status-json");
+    let status_json_path = project_dir.join("status/cluster-status.json");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmclusterstatusjsoncommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn health() effects { net } -> Int {
+  res.text(200, "pong");
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.get(router, "/health", health);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let status_json_value = status_json_path
+        .to_str()
+        .expect("status json path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            &project_path,
+            "--backend",
+            "lasm",
+            "--port",
+            &port_value,
+            "--instances",
+            "2",
+            "--autoscale-max-instances",
+            "3",
+            "--autoscale-check-ms",
+            "100",
+            "--cluster-status-json",
+            &status_json_value,
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run cluster status-json command should start");
+
+    let mut status_json_seen = false;
+    for _ in 0..800 {
+        if let Some(status) = child
+            .try_wait()
+            .expect("run command wait should succeed while waiting for status json")
+        {
+            panic!("run cluster command exited before status json check with status: {status}");
+        }
+        if status_json_path.exists() {
+            status_json_seen = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        status_json_seen,
+        "cluster status json file should be created at {}",
+        status_json_path.display()
+    );
+
+    thread::sleep(Duration::from_millis(300));
+    let first_status_json = fs::read_to_string(&status_json_path)
+        .expect("first status json snapshot should be readable");
+    let first_status: serde_json::Value =
+        serde_json::from_str(&first_status_json).expect("first status json should parse");
+    let first_updated_at_ms = first_status
+        .get("updatedAtMs")
+        .and_then(serde_json::Value::as_u64)
+        .expect("first status json should contain updatedAtMs");
+
+    thread::sleep(Duration::from_millis(350));
+    let second_status_json = fs::read_to_string(&status_json_path)
+        .expect("second status json snapshot should be readable");
+    let second_status: serde_json::Value =
+        serde_json::from_str(&second_status_json).expect("second status json should parse");
+    let second_updated_at_ms = second_status
+        .get("updatedAtMs")
+        .and_then(serde_json::Value::as_u64)
+        .expect("second status json should contain updatedAtMs");
+
+    assert_eq!(
+        second_updated_at_ms, first_updated_at_ms,
+        "status writer should keep updatedAtMs stable when snapshot fields are unchanged"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_db_base_with_c_backend() {
     let project_dir = temp_dir("sec4-run-command-db-base-c-backend");
     let project_path = project_dir
