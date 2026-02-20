@@ -756,6 +756,10 @@ Post-alpha track acceptance anchors:
      - backend-selection snapshot loading remains on-demand for accepted sockets, preserving routing behavior while reducing prune-side snapshot churn.
      - short LASM cluster probe after this slice recorded `1,438,720` requests in `20s` (`~71.57k req/s`, `p99 10.08ms`, peak RSS `~27,280 KB`) under default settings.
      - documented in `docs/book/1151-m39-lasm-cluster-unhealthy-prune-interval-throttle.md`.
+   - [x] Extended cluster status JSON telemetry with relay worker count:
+     - status payload now includes `relayWorkerCount` (resolved queue relay worker pool size) alongside `workerCount` and `relayAcceptWorkers`,
+     - improves operator tuning visibility for relay worker sizing decisions without changing runtime routing semantics.
+     - documented in `docs/book/1152-m39-lasm-cluster-status-relay-worker-count.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
