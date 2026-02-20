@@ -799,6 +799,10 @@ Post-alpha track acceptance anchors:
      - accept-loop relay dispatch now computes modulo once per batch and advances dispatch start index via wrap increment per stream (instead of modulo per stream),
      - unhealthy-port prune membership now uses `binary_search` on the worker-port snapshot (snapshot order guarded before publish) instead of linear `contains` checks.
      - documented in `docs/book/1161-m39-lasm-cluster-hotpath-dispatch-wrap-and-prune-binary-search.md`.
+   - [x] Reduced relay backend-selection per-connection index/modulo overhead:
+     - relay worker backend-selection reservation now tracks wrapped `next_index` per worker-port snapshot and refreshes modulo only when reservation or worker-port cardinality changes,
+     - unhealthy-port fallback candidate scan now uses split-slice iteration (`tail` then `head`) from the selected start index instead of modulo/index arithmetic in each scan step.
+     - documented in `docs/book/1162-m39-lasm-cluster-relay-selection-wrap-and-split-scan.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
