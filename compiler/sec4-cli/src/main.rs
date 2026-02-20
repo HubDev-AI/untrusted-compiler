@@ -8915,12 +8915,6 @@ fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path
     }
 }
 
-fn push_optional_string_run_arg(cmd: &mut Command, flag: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        cmd.arg(flag).arg(value);
-    }
-}
-
 fn run_db_adapter_arg_value(adapter: RunDbAdapter) -> &'static str {
     match adapter {
         RunDbAdapter::RecordsLog => "records-log",
@@ -8982,11 +8976,9 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
-    push_optional_string_run_arg(
-        &mut cmd,
-        "--db-postgres-dsn",
-        config.db_postgres_dsn.as_deref(),
-    );
+    if let Some(dsn) = config.db_postgres_dsn.as_deref() {
+        cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
+    }
 
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());

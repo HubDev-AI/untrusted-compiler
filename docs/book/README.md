@@ -1052,5 +1052,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1080-m39-lasm-sqlite-parameterized-single-statement-guard.md`
 - `1081-m39-lasm-postgres-parameterized-single-statement-precheck.md`
 - `1082-m39-run-db-postgres-dsn-flag.md`
+- `1083-m39-lasm-cluster-postgres-dsn-env-forwarding.md`
 
 As milestones progress, chapters will be added and linked from this index.
