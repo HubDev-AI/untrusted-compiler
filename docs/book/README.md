@@ -1138,5 +1138,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1166-m39-lasm-cluster-relay-selection-precomputed-lookup.md`
 - `1167-m39-lasm-cluster-relay-backend-socketaddr-cache.md`
 - `1168-m39-lasm-cluster-relay-batch-snapshot-lookup-setup.md`
+- `1169-m39-lasm-cluster-connect-warning-map-prune.md`
 
 As milestones progress, chapters will be added and linked from this index.

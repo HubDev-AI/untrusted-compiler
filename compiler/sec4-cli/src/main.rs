@@ -8876,6 +8876,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 unhealthy_ports_until.clear();
                                 selection_lookup_dirty = true;
                             }
+                            if !connect_warning_next_allowed.is_empty() {
+                                connect_warning_next_allowed.clear();
+                            }
                             unhealthy_prune_next_at = None;
                         } else {
                             let unhealthy_before = unhealthy_ports_until.len();
@@ -8885,6 +8888,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             if unhealthy_ports_until.len() != unhealthy_before {
                                 selection_lookup_dirty = true;
                             }
+                            connect_warning_next_allowed
+                                .retain(|port, _| snapshot.binary_search(port).is_ok());
                             unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
                                 None
                             } else {

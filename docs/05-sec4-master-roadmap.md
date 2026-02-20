@@ -827,6 +827,10 @@ Post-alpha track acceptance anchors:
      - relay worker batch loop now refreshes worker snapshot/lookup state only on batch setup (`worker_ports_snapshot` missing) or when lookup is marked dirty,
      - removes repeated pointer/lookup checks on every accepted connection within the same batch while preserving selection and unhealthy-prune semantics.
      - documented in `docs/book/1168-m39-lasm-cluster-relay-batch-snapshot-lookup-setup.md`.
+   - [x] Pruned stale relay connect-warning entries during topology refresh:
+     - relay unhealthy-prune path now drops `connect_warning_next_allowed` entries for ports no longer present in worker snapshot and clears map when no workers remain,
+     - keeps warning-throttle map bounded to active worker ports during autoscale/topology churn.
+     - documented in `docs/book/1169-m39-lasm-cluster-connect-warning-map-prune.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
