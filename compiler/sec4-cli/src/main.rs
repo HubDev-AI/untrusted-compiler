@@ -12256,8 +12256,12 @@ fn apply_lasm_internal_db_operation_materialization(
             let record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        if let Err(message) = run_lasm_postgres_exec(&mut state, template.as_str())
-                        {
+                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+                        if let Err(message) = run_lasm_postgres_exec(
+                            &mut state,
+                            template.as_str(),
+                            postgres_params.as_slice(),
+                        ) {
                             let (code, kind) =
                                 if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
                                     ("DB.ADAPTER_CONFIG_INVALID", "internal")
@@ -12412,9 +12416,12 @@ fn apply_lasm_internal_db_operation_materialization(
             let record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        if let Err(message) =
-                            run_lasm_postgres_exec_tx(&mut state, template.as_str())
-                        {
+                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+                        if let Err(message) = run_lasm_postgres_exec_tx(
+                            &mut state,
+                            template.as_str(),
+                            postgres_params.as_slice(),
+                        ) {
                             let (code, kind) =
                                 if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
                                     ("DB.ADAPTER_CONFIG_INVALID", "internal")
@@ -12588,45 +12595,48 @@ fn apply_lasm_internal_db_operation_materialization(
                         })
                         .cloned();
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
-                        let row_object =
-                            match run_lasm_postgres_query_one(&mut state, template.as_str()) {
-                                Ok(Some(value)) => value,
-                                Ok(None) => {
-                                    set_lasm_json_response(
-                                        response,
+                        let postgres_params = parse_lasm_postgres_query_params(params.as_str());
+                        let row_object = match run_lasm_postgres_query_one(
+                            &mut state,
+                            template.as_str(),
+                            postgres_params.as_slice(),
+                        ) {
+                            Ok(Some(value)) => value,
+                            Ok(None) => {
+                                set_lasm_json_response(
+                                    response,
+                                    404,
+                                    &lasm_error_envelope(
+                                        "DB.QUERY_ONE_NOT_FOUND",
+                                        "missing_dependency",
+                                        "db.queryOne row not found",
                                         404,
-                                        &lasm_error_envelope(
-                                            "DB.QUERY_ONE_NOT_FOUND",
-                                            "missing_dependency",
-                                            "db.queryOne row not found",
-                                            404,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                }
-                                Err(message) => {
-                                    let (code, kind) = if message
-                                        .contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN")
-                                    {
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                            Err(message) => {
+                                let (code, kind) =
+                                    if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
                                         ("DB.ADAPTER_CONFIG_INVALID", "internal")
                                     } else {
                                         ("DB.QUERY_ONE_FAILED", "missing_dependency")
                                     };
-                                    set_lasm_json_response(
-                                        response,
+                                set_lasm_json_response(
+                                    response,
+                                    500,
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
                                         500,
-                                        &lasm_error_envelope(
-                                            code,
-                                            kind,
-                                            message.as_str(),
-                                            500,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                }
-                            };
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
                         let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);
@@ -12763,22 +12773,89 @@ fn reconnect_lasm_dynamic_postgres_client(
     Ok(())
 }
 
+fn parse_lasm_postgres_query_params(value: &str) -> Vec<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        return Vec::new();
+    }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return match parsed {
+            serde_json::Value::Array(entries) => entries
+                .into_iter()
+                .map(lasm_postgres_param_value_to_string)
+                .collect(),
+            serde_json::Value::Null => Vec::new(),
+            other => vec![lasm_postgres_param_value_to_string(other)],
+        };
+    }
+    vec![trimmed.to_string()]
+}
+
+fn lasm_postgres_param_value_to_string(value: serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(inner) => inner,
+        serde_json::Value::Number(inner) => inner.to_string(),
+        serde_json::Value::Bool(inner) => inner.to_string(),
+        serde_json::Value::Null => "null".to_string(),
+        other => serde_json::to_string(&other).unwrap_or_default(),
+    }
+}
+
+fn render_lasm_postgres_query_template(query_template: &str, params: &[String]) -> String {
+    if params.is_empty() {
+        return query_template.to_string();
+    }
+    let mut rendered = query_template.to_string();
+    for (index, param) in params.iter().enumerate().rev() {
+        let placeholder = format!("${}", index + 1);
+        let literal = render_lasm_postgres_sql_literal(param.as_str());
+        rendered = rendered.replace(placeholder.as_str(), literal.as_str());
+    }
+    rendered
+}
+
+fn render_lasm_postgres_sql_literal(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.eq_ignore_ascii_case("null") {
+        return "NULL".to_string();
+    }
+    if trimmed.eq_ignore_ascii_case("true") {
+        return "TRUE".to_string();
+    }
+    if trimmed.eq_ignore_ascii_case("false") {
+        return "FALSE".to_string();
+    }
+    if trimmed.parse::<i64>().is_ok() || trimmed.parse::<u64>().is_ok() {
+        return trimmed.to_string();
+    }
+    if let Ok(parsed) = trimmed.parse::<f64>() {
+        if parsed.is_finite() {
+            return trimmed.to_string();
+        }
+    }
+    format!("'{}'", value.replace('\'', "''"))
+}
+
 fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
+    params: &[String],
 ) -> Result<(), String> {
+    let rendered_query = render_lasm_postgres_query_template(query_template, params);
     let initial = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client.batch_execute(query_template)
+        client.batch_execute(rendered_query.as_str())
     };
     match initial {
         Ok(_) => {}
         Err(err) if err.is_closed() => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             let client = lasm_dynamic_postgres_client_mut(state)?;
-            client.batch_execute(query_template).map_err(|retry_err| {
-                format!("postgres execution failed after reconnect: {retry_err}")
-            })?;
+            client
+                .batch_execute(rendered_query.as_str())
+                .map_err(|retry_err| {
+                    format!("postgres execution failed after reconnect: {retry_err}")
+                })?;
         }
         Err(err) => return Err(format!("postgres execution failed: {err}")),
     }
@@ -12788,10 +12865,12 @@ fn run_lasm_postgres_exec(
 fn run_lasm_postgres_exec_tx(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
+    params: &[String],
 ) -> Result<(), String> {
+    let rendered_query = render_lasm_postgres_query_template(query_template, params);
     let run_once = |client: &mut PostgresClient| -> Result<(), postgres::Error> {
         let mut tx = client.transaction()?;
-        tx.batch_execute(query_template)?;
+        tx.batch_execute(rendered_query.as_str())?;
         tx.commit()?;
         Ok(())
     };
@@ -12816,10 +12895,12 @@ fn run_lasm_postgres_exec_tx(
 fn run_lasm_postgres_query_one(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
+    params: &[String],
 ) -> Result<Option<serde_json::Value>, String> {
+    let rendered_query = render_lasm_postgres_query_template(query_template, params);
     let execute_query =
         |client: &mut PostgresClient| -> Result<Vec<SimpleQueryMessage>, postgres::Error> {
-            client.simple_query(query_template)
+            client.simple_query(rendered_query.as_str())
         };
     let rows = {
         let initial = {
