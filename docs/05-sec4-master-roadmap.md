@@ -700,6 +700,11 @@ Post-alpha track acceptance anchors:
      - listener accept path now runs nonblocking batched intake (`cluster_relay_accept_batch_max`) and round-robins each accepted socket across queue shards with deterministic saturated/unavailable fallbacks.
      - short LASM cluster probe after this slice recorded `1,389,512` requests in `20s` (`~69.45k req/s`, peak RSS `~26,976 KB`, `p99 12.38ms`) under auto relay settings.
      - documented in `docs/book/1140-m39-lasm-cluster-sharded-relay-queue-and-batched-listener-dispatch.md`.
+   - [x] Decoupled queue-shard dispatch cursor from backend-port selection counter:
+     - listener queue-shard dispatch now uses a local batched round-robin cursor instead of sharing the relay backend-selection atomic counter,
+     - this removes an avoidable cross-path atomic contention point between listener enqueue and relay worker backend-port selection.
+     - repeated short probes (`20s`, auto relay settings) after this change reported `~63.59k`, `~68.34k`, and `~71.52k req/s` (`peak RSS ~27,008..27,072 KB`), with top-run throughput above the prior short-run baseline.
+     - documented in `docs/book/1141-m39-lasm-cluster-dispatch-cursor-decoupling.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
