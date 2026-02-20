@@ -1137,5 +1137,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1165-m39-lasm-cluster-relay-dispatch-single-sender-fast-path.md`
 - `1166-m39-lasm-cluster-relay-selection-precomputed-lookup.md`
 - `1167-m39-lasm-cluster-relay-backend-socketaddr-cache.md`
+- `1168-m39-lasm-cluster-relay-batch-snapshot-lookup-setup.md`
 
 As milestones progress, chapters will be added and linked from this index.

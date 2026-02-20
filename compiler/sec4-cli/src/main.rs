@@ -8916,30 +8916,35 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     accepted = true;
                     accepted_in_batch = accepted_in_batch.saturating_add(1);
 
-                    if worker_ports_snapshot.is_none() {
-                        worker_ports_snapshot = Some(relay_worker_ports.load_full());
-                    }
-                    let worker_ports_snapshot_ref = worker_ports_snapshot
-                        .as_ref()
-                        .expect("worker port snapshot loaded before backend selection");
-                    if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref) {
-                        selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
-                        rebuild_lasm_cluster_worker_backend_addrs(
-                            selected_worker_ports_snapshot.as_ref(),
-                            &mut selected_worker_backend_addrs,
-                        );
-                        selection_lookup_dirty = true;
+                    if worker_ports_snapshot.is_none() || selection_lookup_dirty {
+                        if worker_ports_snapshot.is_none() {
+                            worker_ports_snapshot = Some(relay_worker_ports.load_full());
+                        }
+                        let worker_ports_snapshot_ref = worker_ports_snapshot
+                            .as_ref()
+                            .expect("worker port snapshot loaded before backend selection");
+                        if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref)
+                        {
+                            selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
+                            rebuild_lasm_cluster_worker_backend_addrs(
+                                selected_worker_ports_snapshot.as_ref(),
+                                &mut selected_worker_backend_addrs,
+                            );
+                            selection_lookup_dirty = true;
+                        }
+                        let worker_ports = selected_worker_ports_snapshot.as_ref();
+                        let worker_port_count = worker_ports.len();
+                        if selection_lookup_dirty || selection_lookup.len() != worker_port_count {
+                            rebuild_lasm_cluster_backend_selection_lookup(
+                                worker_ports,
+                                &unhealthy_ports_until,
+                                &mut selection_lookup,
+                            );
+                            selection_lookup_dirty = false;
+                        }
                     }
                     let worker_ports = selected_worker_ports_snapshot.as_ref();
                     let worker_port_count = worker_ports.len();
-                    if selection_lookup_dirty || selection_lookup.len() != worker_port_count {
-                        rebuild_lasm_cluster_backend_selection_lookup(
-                            worker_ports,
-                            &unhealthy_ports_until,
-                            &mut selection_lookup,
-                        );
-                        selection_lookup_dirty = false;
-                    }
                     let selected_backend_index = {
                         let mut next_selection_start_index = || {
                             if relay_selection_reservation_offset >= relay_selection_reservation_len
@@ -8977,7 +8982,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 .get(start_index)
                                 .copied()
                                 .flatten()
-                                .map(|index| index)
                         }
                     };
 
