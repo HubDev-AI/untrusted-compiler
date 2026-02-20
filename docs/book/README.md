@@ -1051,5 +1051,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1079-m39-lasm-db-runtime-validation-error-classification.md`
 - `1080-m39-lasm-sqlite-parameterized-single-statement-guard.md`
 - `1081-m39-lasm-postgres-parameterized-single-statement-precheck.md`
+- `1082-m39-run-db-postgres-dsn-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.

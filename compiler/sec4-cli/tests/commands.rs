@@ -15886,13 +15886,14 @@ fn main() effects { net } -> Int {
                 "lasm",
                 "--db-adapter",
                 "postgres",
+                "--db-postgres-dsn",
+                dsn.as_str(),
                 "--oneshot",
                 "--port",
                 port_value.as_str(),
                 "--serve-timeout-ms",
                 "20000",
             ])
-            .env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn.as_str())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -25139,6 +25140,79 @@ fn run_command_rejects_db_adapter_with_c_backend() {
     assert!(
         stderr.contains("run failed: --db-adapter is only supported with --backend lasm"),
         "stderr should include deterministic lasm-only db-adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_postgres_dsn_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-dsn",
+        "postgres://example",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-dsn is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-dsn is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-postgres-dsn guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_empty_db_postgres_dsn() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-empty");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-dsn",
+        " ",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-dsn is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-dsn must not be empty"),
+        "stderr should contain deterministic empty dsn guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
