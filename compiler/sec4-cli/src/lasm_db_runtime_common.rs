@@ -60,6 +60,27 @@ pub(crate) fn classify_lasm_db_runtime_error(
     (500, code, "missing_dependency")
 }
 
+pub(crate) fn parse_lasm_positive_i64(value: &str) -> Option<i64> {
+    value
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .filter(|candidate| *candidate > 0)
+}
+
+pub(crate) fn is_lasm_valid_db_cap_handle(db: i64) -> bool {
+    db == 1
+}
+
+pub(crate) fn normalize_lasm_db_params(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 pub(crate) fn allocate_lasm_db_tx_handle(
     state: &mut LasmDynamicResponseState,
     db: i64,

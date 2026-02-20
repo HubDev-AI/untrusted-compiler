@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I started this continuation by running git checks before opening `.claude/napkin.md`, violating the session-start discipline. | Always read `.claude/napkin.md` first in every new continuation before any status/search/build command. |
 | 2026-02-20 | self | After merging PR #305 I started the next tx-capacity slice edits on `dev` again before branching. | After each merge, run `git branch --show-current` and create the next `codex/*` branch before the first file edit. |
 | 2026-02-20 | self | I ran `rg` with mismatched shell quotes and hit `zsh: unmatched \"` while scanning command fixtures. | For `rg` patterns containing mixed quotes, wrap the full pattern list in single quotes and avoid nested unescaped double quotes. |
 | 2026-02-20 | self | I launched three Cargo tests in parallel with `multi_tool_use.parallel` during this LASM DB slice and reintroduced package-cache lock contention. | Keep Cargo invocations strictly sequential in this repo; only parallelize read/search/docs commands. |
