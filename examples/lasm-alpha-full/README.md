@@ -129,7 +129,7 @@ Write non-tx record:
 ```bash
 curl -i -X POST \
   -H 'Authorization: Bearer token123' \
-  'http://127.0.0.1:8080/db/exec?template=SELECT%201&params=alpha'
+  'http://127.0.0.1:8080/db/exec?template=SELECT%20$1::int&params=%5B1%5D'
 ```
 
 Write tx record:

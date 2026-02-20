@@ -15397,7 +15397,7 @@ fn main() effects { net } -> Int {
 
     let exec_response = run_lasm_oneshot_request(
         exec_port,
-        "POST /db/exec?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+        "POST /db/exec?template=SELECT%20$1::int&params=%5B1%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         exec_response.contains("HTTP/1.1 200 OK"),
