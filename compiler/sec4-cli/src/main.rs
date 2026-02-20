@@ -8252,6 +8252,15 @@ fn dispatch_lasm_cluster_relay_stream(
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
     let sender_count = relay_senders.len();
+    if sender_count == 1 {
+        return match relay_senders[0].try_send(client_stream) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
+            Err(TrySendError::Disconnected(stream)) => {
+                Err(LasmClusterRelayDispatchError::Unavailable(stream))
+            }
+        };
+    }
     let start_index = start_index % sender_count;
     let (sender_head, sender_tail) = relay_senders.split_at(start_index);
     let mut disconnected_count = 0_usize;

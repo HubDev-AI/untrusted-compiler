@@ -1134,5 +1134,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1162-m39-lasm-cluster-relay-selection-wrap-and-split-scan.md`
 - `1163-m39-lasm-cluster-relay-buffer-pool-reuse.md`
 - `1164-m39-lasm-cluster-idle-backoff-microsleep-tuning.md`
+- `1165-m39-lasm-cluster-relay-dispatch-single-sender-fast-path.md`
 
 As milestones progress, chapters will be added and linked from this index.
