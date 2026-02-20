@@ -12464,16 +12464,18 @@ fn apply_lasm_internal_db_operation_materialization(
                             template.as_str(),
                             postgres_params.as_slice(),
                         ) {
-                            let (code, kind) =
-                                if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
-                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                } else {
-                                    ("DB.EXEC_FAILED", "missing_dependency")
-                                };
+                            let (status, code, kind) =
+                                classify_lasm_db_runtime_error("exec", message.as_str());
                             set_lasm_json_response(
                                 response,
-                                500,
-                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                                status,
+                                &lasm_error_envelope(
+                                    code,
+                                    kind,
+                                    message.as_str(),
+                                    status,
+                                    trace_id,
+                                ),
                             );
                             return true;
                         }
@@ -12481,16 +12483,18 @@ fn apply_lasm_internal_db_operation_materialization(
                         if let Err(message) =
                             run_lasm_sqlite_exec(&state, template.as_str(), params.as_str())
                         {
-                            let (code, kind) =
-                                if message.contains("sqlite records store path unavailable") {
-                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                } else {
-                                    ("DB.EXEC_FAILED", "missing_dependency")
-                                };
+                            let (status, code, kind) =
+                                classify_lasm_db_runtime_error("exec", message.as_str());
                             set_lasm_json_response(
                                 response,
-                                500,
-                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                                status,
+                                &lasm_error_envelope(
+                                    code,
+                                    kind,
+                                    message.as_str(),
+                                    status,
+                                    trace_id,
+                                ),
                             );
                             return true;
                         }
@@ -12641,16 +12645,18 @@ fn apply_lasm_internal_db_operation_materialization(
                             template.as_str(),
                             postgres_params.as_slice(),
                         ) {
-                            let (code, kind) =
-                                if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
-                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                } else {
-                                    ("DB.EXEC_TX_FAILED", "missing_dependency")
-                                };
+                            let (status, code, kind) =
+                                classify_lasm_db_runtime_error("execTx", message.as_str());
                             set_lasm_json_response(
                                 response,
-                                500,
-                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                                status,
+                                &lasm_error_envelope(
+                                    code,
+                                    kind,
+                                    message.as_str(),
+                                    status,
+                                    trace_id,
+                                ),
                             );
                             return true;
                         }
@@ -12658,16 +12664,18 @@ fn apply_lasm_internal_db_operation_materialization(
                         if let Err(message) =
                             run_lasm_sqlite_exec_tx(&state, template.as_str(), params.as_str())
                         {
-                            let (code, kind) =
-                                if message.contains("sqlite records store path unavailable") {
-                                    ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                } else {
-                                    ("DB.EXEC_TX_FAILED", "missing_dependency")
-                                };
+                            let (status, code, kind) =
+                                classify_lasm_db_runtime_error("execTx", message.as_str());
                             set_lasm_json_response(
                                 response,
-                                500,
-                                &lasm_error_envelope(code, kind, message.as_str(), 500, trace_id),
+                                status,
+                                &lasm_error_envelope(
+                                    code,
+                                    kind,
+                                    message.as_str(),
+                                    status,
+                                    trace_id,
+                                ),
                             );
                             return true;
                         }
@@ -12853,20 +12861,16 @@ fn apply_lasm_internal_db_operation_materialization(
                                 return true;
                             }
                             Err(message) => {
-                                let (code, kind) =
-                                    if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN") {
-                                        ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                    } else {
-                                        ("DB.QUERY_ONE_FAILED", "missing_dependency")
-                                    };
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("queryOne", message.as_str());
                                 set_lasm_json_response(
                                     response,
-                                    500,
+                                    status,
                                     &lasm_error_envelope(
                                         code,
                                         kind,
                                         message.as_str(),
-                                        500,
+                                        status,
                                         trace_id,
                                     ),
                                 );
@@ -12913,20 +12917,16 @@ fn apply_lasm_internal_db_operation_materialization(
                                     return true;
                                 }
                                 Err(message) => {
-                                    let (code, kind) =
-                                        if message.contains("sqlite records store path unavailable") {
-                                            ("DB.ADAPTER_CONFIG_INVALID", "internal")
-                                        } else {
-                                            ("DB.QUERY_ONE_FAILED", "missing_dependency")
-                                        };
+                                    let (status, code, kind) =
+                                        classify_lasm_db_runtime_error("queryOne", message.as_str());
                                     set_lasm_json_response(
                                         response,
-                                        500,
+                                        status,
                                         &lasm_error_envelope(
                                             code,
                                             kind,
                                             message.as_str(),
-                                            500,
+                                            status,
                                             trace_id,
                                         ),
                                     );
@@ -13040,6 +13040,37 @@ fn normalize_lasm_db_params(value: &str) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+fn classify_lasm_db_runtime_error(
+    operation: &str,
+    message: &str,
+) -> (u16, &'static str, &'static str) {
+    if message.contains("requires SEC4_RT_LASM_DB_POSTGRES_DSN")
+        || message.contains("sqlite records store path unavailable")
+    {
+        return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
+    }
+    if message.contains("requires at least")
+        || message.contains("requires SELECT-style SQL statement")
+        || message.contains("requires non-empty SQL statement")
+        || message.contains("requires a single SQL statement")
+    {
+        let code = match operation {
+            "exec" => "DB.EXEC_INVALID",
+            "execTx" => "DB.EXEC_TX_INVALID",
+            "queryOne" => "DB.QUERY_ONE_INVALID",
+            _ => "DB.OPERATION_INVALID",
+        };
+        return (400, code, "validation");
+    }
+    let code = match operation {
+        "exec" => "DB.EXEC_FAILED",
+        "execTx" => "DB.EXEC_TX_FAILED",
+        "queryOne" => "DB.QUERY_ONE_FAILED",
+        _ => "DB.OPERATION_FAILED",
+    };
+    (500, code, "missing_dependency")
 }
 
 fn allocate_lasm_db_tx_handle(state: &mut LasmDynamicResponseState, db: i64) -> i64 {
