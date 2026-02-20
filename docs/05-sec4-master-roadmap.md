@@ -736,6 +736,11 @@ Post-alpha track acceptance anchors:
      - preserves backend-selection semantics while lowering cross-worker atomic contention on the hot path.
      - short LASM cluster probe after this slice recorded `1,450,919` requests in `20s` (`~72.18k req/s`, `p99 9.15ms`, peak RSS `~27,184 KB`) under default settings.
      - documented in `docs/book/1147-m39-lasm-cluster-relay-selection-counter-batch-reservation.md`.
+   - [x] Removed per-dispatch modulo/index arithmetic from relay queue-sender iteration:
+     - `dispatch_lasm_cluster_relay_stream` now uses split-slice sender traversal (`tail` then `head`) from `start_index` instead of modulo/index calculation in every loop step,
+     - preserves dispatch ordering and existing saturated/unavailable fallback behavior.
+     - short LASM cluster probe after this slice recorded `1,429,683` requests in `20s` (`~71.12k req/s`, `p99 9.91ms`, peak RSS `~27,152 KB`) under default settings.
+     - documented in `docs/book/1148-m39-lasm-cluster-relay-dispatch-slice-iteration.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

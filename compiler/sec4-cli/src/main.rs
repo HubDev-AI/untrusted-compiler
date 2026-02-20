@@ -8209,10 +8209,10 @@ fn dispatch_lasm_cluster_relay_stream(
     }
     let sender_count = relay_senders.len();
     let start_index = start_index % sender_count;
+    let (sender_head, sender_tail) = relay_senders.split_at(start_index);
     let mut disconnected_count = 0_usize;
-    for offset in 0..sender_count {
-        let sender_index = (start_index + offset) % sender_count;
-        match relay_senders[sender_index].try_send(client_stream) {
+    for sender in sender_tail.iter().chain(sender_head.iter()) {
+        match sender.try_send(client_stream) {
             Ok(()) => {
                 return Ok(());
             }
