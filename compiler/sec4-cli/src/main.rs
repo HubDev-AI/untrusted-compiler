@@ -8675,7 +8675,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let status_writer_handle = if let Some(status_path) = shared_config.cluster_status_json.clone()
     {
         let status_stop_flag = Arc::clone(&stop_flag);
-        let status_state = Arc::clone(&shared_state);
         let status_config = Arc::clone(&shared_config);
         let status_active_connections = Arc::clone(&active_connections);
         let status_saturation_events = Arc::clone(&relay_saturation_events);
@@ -8684,10 +8683,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
         Some(std::thread::spawn(move || loop {
             let worker_ports = status_worker_ports.load();
-            let worker_count = match status_state.read() {
-                Ok(state) => state.workers.len(),
-                Err(_) => worker_ports.len(),
-            };
+            let worker_count = worker_ports.len();
             if let Err(err) = write_lasm_cluster_status_json(
                 status_path.as_path(),
                 status_config.listen_port,
