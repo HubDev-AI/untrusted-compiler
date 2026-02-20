@@ -1166,5 +1166,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1194-m39-lasm-cluster-fallback-start-prewrap-and-fixed-span-scan.md`
 - `1195-m39-lasm-cluster-relay-worker-counter-and-conditional-flush-hotpath.md`
 - `1196-m39-lasm-cluster-bounded-counter-direct-increments-hotpath.md`
+- `1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`
 
 As milestones progress, chapters will be added and linked from this index.

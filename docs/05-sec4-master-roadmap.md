@@ -939,6 +939,10 @@ Post-alpha track acceptance anchors:
      - bounded local counters (`listener_idle_spins`, relay `accepted_in_batch`, relay `idle_spins`, and local unhealthy/prune counters) now use direct `+= 1` updates where values are bounded by loop controls/snapshot cardinality,
      - keeps semantics unchanged while trimming saturating arithmetic in the ingress/relay hot path.
      - documented in `docs/book/1196-m39-lasm-cluster-bounded-counter-direct-increments-hotpath.md`.
+   - [x] Reduced relay selection-reservation arithmetic overhead:
+     - relay selection-reservation counters (`relay_selection_reservation_offset`, `relay_selection_reservation_next_index`) now use direct bounded `+= 1` updates in the reservation hot path,
+     - keeps reservation wrap behavior unchanged while removing saturating arithmetic from per-connection backend selection sequencing.
+     - documented in `docs/book/1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -9288,11 +9288,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 };
                             }
                             let index = relay_selection_reservation_next_index;
-                            relay_selection_reservation_offset =
-                                relay_selection_reservation_offset.saturating_add(1);
+                            relay_selection_reservation_offset += 1;
                             if worker_port_count > 1 {
-                                relay_selection_reservation_next_index =
-                                    relay_selection_reservation_next_index.saturating_add(1);
+                                relay_selection_reservation_next_index += 1;
                                 if relay_selection_reservation_next_index >= worker_port_count {
                                     relay_selection_reservation_next_index = 0;
                                 }
