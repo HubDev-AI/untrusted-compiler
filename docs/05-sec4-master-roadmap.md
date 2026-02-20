@@ -927,6 +927,10 @@ Post-alpha track acceptance anchors:
      - `dispatch_lasm_cluster_relay_stream_fallback` now scans fallback relay senders with two linear slice passes (`start..end`, then `0..start`) bounded by remaining attempts,
      - removes per-iteration modulo/wrap index arithmetic while preserving fallback saturated/unavailable semantics and sender-attempt ordering.
      - documented in `docs/book/1193-m39-lasm-cluster-fallback-relay-scan-split-slice.md`.
+   - [x] Removed fallback-start modulo from relay fallback dispatch path:
+     - multi-relay accept dispatch now computes wrapped fallback start index once (`next shard or 0`) and passes it directly into fallback scan,
+     - fallback scan now iterates fixed-size split spans (`start..start+len`, then `0..remaining`) without per-iteration remaining guards or modulo wrapping.
+     - documented in `docs/book/1194-m39-lasm-cluster-fallback-start-prewrap-and-fixed-span-scan.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

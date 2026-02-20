@@ -8332,7 +8332,7 @@ enum LasmClusterRelayDispatchError {
 fn dispatch_lasm_cluster_relay_stream_fallback(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
-    start_index: usize,
+    start_index_wrapped: usize,
     mut saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     let sender_count = relay_senders.len();
@@ -8342,12 +8342,15 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
         }
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
-    let scan_start_index = start_index % sender_count;
+    debug_assert!(start_index_wrapped < sender_count);
+    let scan_start_index = if start_index_wrapped < sender_count {
+        start_index_wrapped
+    } else {
+        0
+    };
     let mut scan_remaining = sender_count.saturating_sub(1);
-    for relay_sender in &relay_senders[scan_start_index..] {
-        if scan_remaining == 0 {
-            break;
-        }
+    let first_span_len = scan_remaining.min(sender_count.saturating_sub(scan_start_index));
+    for relay_sender in &relay_senders[scan_start_index..scan_start_index + first_span_len] {
         match relay_sender.try_send(client_stream) {
             Ok(()) => return Ok(()),
             Err(TrySendError::Full(next_stream)) => {
@@ -8360,10 +8363,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
         }
         scan_remaining -= 1;
     }
-    for relay_sender in &relay_senders[..scan_start_index] {
-        if scan_remaining == 0 {
-            break;
-        }
+    for relay_sender in &relay_senders[..scan_remaining] {
         match relay_sender.try_send(client_stream) {
             Ok(()) => return Ok(()),
             Err(TrySendError::Full(next_stream)) => {
@@ -8539,19 +8539,31 @@ fn run_lasm_cluster_accept_loop(
                                 Ok(()) => Ok(()),
                                 Err(TrySendError::Full(stream)) => {
                                     listener_dispatch_fallback_total_local += 1;
+                                    let fallback_start =
+                                        if stream_dispatch_start + 1 == relay_sender_count {
+                                            0
+                                        } else {
+                                            stream_dispatch_start + 1
+                                        };
                                     dispatch_lasm_cluster_relay_stream_fallback(
                                         stream,
                                         relay_senders,
-                                        stream_dispatch_start.saturating_add(1),
+                                        fallback_start,
                                         true,
                                     )
                                 }
                                 Err(TrySendError::Disconnected(stream)) => {
                                     listener_dispatch_fallback_total_local += 1;
+                                    let fallback_start =
+                                        if stream_dispatch_start + 1 == relay_sender_count {
+                                            0
+                                        } else {
+                                            stream_dispatch_start + 1
+                                        };
                                     dispatch_lasm_cluster_relay_stream_fallback(
                                         stream,
                                         relay_senders,
-                                        stream_dispatch_start.saturating_add(1),
+                                        fallback_start,
                                         false,
                                     )
                                 }
