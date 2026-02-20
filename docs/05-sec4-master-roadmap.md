@@ -907,6 +907,10 @@ Post-alpha track acceptance anchors:
      - accept loops now accumulate fallback dispatch hits locally and flush aggregated totals to `relayDispatchFallbackTotal`,
      - avoids per-fallback atomic increments in fallback-heavy traffic while preserving monotonic telemetry semantics.
      - documented in `docs/book/1188-m39-lasm-cluster-batched-relay-fallback-telemetry-flush.md`.
+   - [x] Added relay fallback rate telemetry in cluster status:
+     - cluster status JSON now includes `relayDispatchFallbackPerSec` computed per status sample interval from fallback-total deltas,
+     - keeps fallback miss pressure visible as both cumulative total and current rate.
+     - documented in `docs/book/1189-m39-lasm-cluster-relay-dispatch-fallback-rate-telemetry.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
