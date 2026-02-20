@@ -659,6 +659,10 @@ Post-alpha track acceptance anchors:
      - cluster relay unavailable envelopes now use prebuilt static response bytes for deterministic failure reasons (`no healthy workers`, `worker unavailable`, `cluster relay saturated`, `cluster relay unavailable`),
      - removes per-request string formatting/allocation on relay failure paths while preserving status/body contract behavior.
      - documented in `docs/book/1130-m39-lasm-cluster-static-unavailable-response-bytes.md`.
+   - [x] Batched relay saturation counter atomics per worker cycle:
+     - relay worker threads now accumulate saturation pending/total increments locally during accept/connect failure handling,
+     - counters are flushed to shared atomics once per worker cycle, reducing repeated atomic writes in failure-heavy intervals while preserving counter semantics.
+     - documented in `docs/book/1131-m39-lasm-cluster-saturation-counter-batch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
