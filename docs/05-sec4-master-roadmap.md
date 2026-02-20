@@ -764,6 +764,10 @@ Post-alpha track acceptance anchors:
      - status payload now includes `relayQueueCapacity` (global relay queue target capacity) and `relayQueueShardCapacity` (per-shard bounded queue capacity),
      - makes relay queue-pressure tuning (`--cluster-relay-queue`, relay worker counts) observable from one status artifact.
      - documented in `docs/book/1153-m39-lasm-cluster-status-relay-queue-capacity-fields.md`.
+   - [x] Extended cluster status JSON telemetry with saturation-rate signal:
+     - status payload now includes `relaySaturationEventsPerSec` derived from `relaySaturationEventsTotal` delta over status emission interval,
+     - keeps existing pending/total counters and adds direct rate visibility for autoscale/tuning diagnosis.
+     - documented in `docs/book/1154-m39-lasm-cluster-status-saturation-rate-field.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -8033,7 +8033,10 @@ fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: u
         .min(65_536)
 }
 
-fn lasm_cluster_accept_worker_count(config: &LasmClusterConfig, relay_worker_count: usize) -> usize {
+fn lasm_cluster_accept_worker_count(
+    config: &LasmClusterConfig,
+    relay_worker_count: usize,
+) -> usize {
     if let Some(value) = config.cluster_accept_workers {
         return value;
     }
@@ -8110,6 +8113,7 @@ fn write_lasm_cluster_status_json(
     active_connections: usize,
     relay_saturation_events_pending: usize,
     relay_saturation_events_total: u64,
+    relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
     relay_accept_workers: usize,
 ) -> Result<(), String> {
@@ -8138,6 +8142,7 @@ fn write_lasm_cluster_status_json(
         "activeConnections": active_connections,
         "relaySaturationEventsPending": relay_saturation_events_pending,
         "relaySaturationEventsTotal": relay_saturation_events_total,
+        "relaySaturationEventsPerSec": relay_saturation_events_per_sec,
         "relayAcceptBatchMax": relay_accept_batch_max,
         "relayAcceptWorkers": relay_accept_workers,
     });
@@ -8315,7 +8320,8 @@ fn run_lasm_cluster_accept_loop(
                         &mut stream,
                         LasmClusterUnavailableReason::RelaySaturated,
                     );
-                    if listener_saturation_pending_local >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH
+                    if listener_saturation_pending_local
+                        >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH
                     {
                         flush_lasm_cluster_saturation_counters(
                             relay_saturation_events,
@@ -8721,9 +8727,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             unhealthy_ports_until.clear();
                             unhealthy_prune_next_at = None;
                         } else {
-                            unhealthy_ports_until.retain(|port, until| {
-                                *until > now && snapshot.contains(port)
-                            });
+                            unhealthy_ports_until
+                                .retain(|port, until| *until > now && snapshot.contains(port));
                             unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
                                 None
                             } else {
@@ -8969,33 +8974,48 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 .and_then(|value| value.to_str())
                 .unwrap_or("json")
         ));
-        Some(std::thread::spawn(move || loop {
-            let worker_ports = status_worker_ports.load();
-            let worker_count = worker_ports.len();
-            if let Err(err) = write_lasm_cluster_status_json(
-                status_path.as_path(),
-                status_tmp_path.as_path(),
-                status_config.listen_port,
-                status_config.min_instances,
-                status_config.max_instances,
-                worker_count,
-                status_relay_worker_count,
-                status_relay_queue_capacity,
-                status_relay_queue_shard_capacity,
-                worker_ports.as_slice(),
-                status_active_connections.load(Ordering::Relaxed),
-                status_saturation_events.load(Ordering::Relaxed),
-                status_saturation_events_total.load(Ordering::Relaxed),
-                status_config.cluster_relay_accept_batch_max,
-                status_relay_accept_workers,
-            ) {
-                eprintln!("warning: LASM cluster status json write failed: {err}");
-            }
+        Some(std::thread::spawn(move || {
+            let mut last_saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
+            let mut last_saturation_sample_at = Instant::now();
+            loop {
+                let sample_now = Instant::now();
+                let saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
+                let saturation_delta = saturation_total.saturating_sub(last_saturation_total);
+                let elapsed_secs = sample_now
+                    .duration_since(last_saturation_sample_at)
+                    .as_secs_f64()
+                    .max(0.001);
+                let saturation_per_sec = (saturation_delta as f64) / elapsed_secs;
+                let worker_ports = status_worker_ports.load();
+                let worker_count = worker_ports.len();
+                if let Err(err) = write_lasm_cluster_status_json(
+                    status_path.as_path(),
+                    status_tmp_path.as_path(),
+                    status_config.listen_port,
+                    status_config.min_instances,
+                    status_config.max_instances,
+                    worker_count,
+                    status_relay_worker_count,
+                    status_relay_queue_capacity,
+                    status_relay_queue_shard_capacity,
+                    worker_ports.as_slice(),
+                    status_active_connections.load(Ordering::Relaxed),
+                    status_saturation_events.load(Ordering::Relaxed),
+                    saturation_total,
+                    saturation_per_sec,
+                    status_config.cluster_relay_accept_batch_max,
+                    status_relay_accept_workers,
+                ) {
+                    eprintln!("warning: LASM cluster status json write failed: {err}");
+                }
+                last_saturation_total = saturation_total;
+                last_saturation_sample_at = sample_now;
 
-            if status_stop_flag.load(Ordering::Relaxed) {
-                break;
+                if status_stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(status_interval_ms));
             }
-            std::thread::sleep(Duration::from_millis(status_interval_ms));
         }))
     } else {
         None

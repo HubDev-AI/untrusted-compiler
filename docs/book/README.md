@@ -1123,5 +1123,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1151-m39-lasm-cluster-unhealthy-prune-interval-throttle.md`
 - `1152-m39-lasm-cluster-status-relay-worker-count.md`
 - `1153-m39-lasm-cluster-status-relay-queue-capacity-fields.md`
+- `1154-m39-lasm-cluster-status-saturation-rate-field.md`
 
 As milestones progress, chapters will be added and linked from this index.
