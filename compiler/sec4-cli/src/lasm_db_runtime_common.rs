@@ -13,6 +13,26 @@ pub(crate) fn classify_lasm_db_runtime_error(
     {
         return (500, "DB.ADAPTER_CONFIG_INVALID", "internal");
     }
+    if message.contains("canceling statement due to statement timeout") {
+        let code = match operation {
+            "exec" => "DB.EXEC_TIMEOUT",
+            "execTx" => "DB.EXEC_TX_TIMEOUT",
+            "queryOne" => "DB.QUERY_ONE_TIMEOUT",
+            _ => "DB.OPERATION_TIMEOUT",
+        };
+        return (504, code, "timeout");
+    }
+    if message.contains("canceling statement due to lock timeout")
+        || message.contains("database is locked")
+    {
+        let code = match operation {
+            "exec" => "DB.EXEC_LOCK_TIMEOUT",
+            "execTx" => "DB.EXEC_TX_LOCK_TIMEOUT",
+            "queryOne" => "DB.QUERY_ONE_LOCK_TIMEOUT",
+            _ => "DB.OPERATION_LOCK_TIMEOUT",
+        };
+        return (409, code, "conflict");
+    }
     if message.contains("requires at least")
         || message.contains("requires SELECT-style SQL statement")
         || message.contains("requires non-empty SQL statement")
@@ -112,4 +132,26 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
     state.db_records_postgres_client = Some(client);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_lasm_db_runtime_error;
+
+    #[test]
+    fn classify_db_runtime_statement_timeout_error() {
+        let (status, code, kind) =
+            classify_lasm_db_runtime_error("exec", "canceling statement due to statement timeout");
+        assert_eq!(status, 504);
+        assert_eq!(code, "DB.EXEC_TIMEOUT");
+        assert_eq!(kind, "timeout");
+    }
+
+    #[test]
+    fn classify_db_runtime_lock_timeout_error() {
+        let (status, code, kind) = classify_lasm_db_runtime_error("queryOne", "database is locked");
+        assert_eq!(status, 409);
+        assert_eq!(code, "DB.QUERY_ONE_LOCK_TIMEOUT");
+        assert_eq!(kind, "conflict");
+    }
 }
