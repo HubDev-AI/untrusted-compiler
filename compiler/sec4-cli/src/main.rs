@@ -8216,6 +8216,37 @@ struct LasmClusterStatusSnapshot {
     autoscale_scale_down_cooldown_remaining_ms: u64,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LasmClusterStatusPayload<'a> {
+    mode: &'static str,
+    updated_at_ms: u64,
+    listen_port: u16,
+    min_instances: usize,
+    max_instances: usize,
+    worker_count: usize,
+    relay_worker_count: usize,
+    relay_queue_capacity: usize,
+    relay_queue_shard_capacity: usize,
+    worker_ports: &'a [u16],
+    active_connections: usize,
+    active_connections_per_worker: f64,
+    relay_saturation_events_pending: usize,
+    relay_saturation_events_total: u64,
+    relay_saturation_events_per_sec: f64,
+    relay_accept_batch_max: usize,
+    relay_accept_workers: usize,
+    relay_backend_connect_timeout_ms: u64,
+    relay_backend_connect_cooldown_ms: u64,
+    relay_dispatch_fallback_total: u64,
+    relay_dispatch_fallback_per_sec: f64,
+    autoscale_desired_instances: usize,
+    autoscale_last_saturation_events: usize,
+    autoscale_last_dynamic_boost_step: usize,
+    autoscale_scale_up_cooldown_remaining_ms: u64,
+    autoscale_scale_down_cooldown_remaining_ms: u64,
+}
+
 fn write_lasm_cluster_status_json(
     path: &Path,
     tmp_path: &Path,
@@ -8290,34 +8321,34 @@ fn write_lasm_cluster_status_json(
         }
     }
 
-    let payload = serde_json::json!({
-        "mode": "lasm-cluster",
-        "updatedAtMs": lasm_now_ms(),
-        "listenPort": listen_port,
-        "minInstances": min_instances,
-        "maxInstances": max_instances,
-        "workerCount": worker_count,
-        "relayWorkerCount": relay_worker_count,
-        "relayQueueCapacity": relay_queue_capacity,
-        "relayQueueShardCapacity": relay_queue_shard_capacity,
-        "workerPorts": worker_ports.as_slice(),
-        "activeConnections": active_connections,
-        "activeConnectionsPerWorker": active_connections_per_worker,
-        "relaySaturationEventsPending": relay_saturation_events_pending,
-        "relaySaturationEventsTotal": relay_saturation_events_total,
-        "relaySaturationEventsPerSec": relay_saturation_events_per_sec,
-        "relayAcceptBatchMax": relay_accept_batch_max,
-        "relayAcceptWorkers": relay_accept_workers,
-        "relayBackendConnectTimeoutMs": relay_backend_connect_timeout_ms,
-        "relayBackendConnectCooldownMs": relay_backend_connect_cooldown_ms,
-        "relayDispatchFallbackTotal": relay_dispatch_fallback_total,
-        "relayDispatchFallbackPerSec": relay_dispatch_fallback_per_sec,
-        "autoscaleDesiredInstances": autoscale_desired_instances,
-        "autoscaleLastSaturationEvents": autoscale_last_saturation_events,
-        "autoscaleLastDynamicBoostStep": autoscale_last_dynamic_boost_step,
-        "autoscaleScaleUpCooldownRemainingMs": autoscale_scale_up_cooldown_remaining_ms,
-        "autoscaleScaleDownCooldownRemainingMs": autoscale_scale_down_cooldown_remaining_ms,
-    });
+    let payload = LasmClusterStatusPayload {
+        mode: "lasm-cluster",
+        updated_at_ms: lasm_now_ms(),
+        listen_port,
+        min_instances,
+        max_instances,
+        worker_count,
+        relay_worker_count,
+        relay_queue_capacity,
+        relay_queue_shard_capacity,
+        worker_ports: worker_ports.as_slice(),
+        active_connections,
+        active_connections_per_worker,
+        relay_saturation_events_pending,
+        relay_saturation_events_total,
+        relay_saturation_events_per_sec,
+        relay_accept_batch_max,
+        relay_accept_workers,
+        relay_backend_connect_timeout_ms,
+        relay_backend_connect_cooldown_ms,
+        relay_dispatch_fallback_total,
+        relay_dispatch_fallback_per_sec,
+        autoscale_desired_instances,
+        autoscale_last_saturation_events,
+        autoscale_last_dynamic_boost_step,
+        autoscale_scale_up_cooldown_remaining_ms,
+        autoscale_scale_down_cooldown_remaining_ms,
+    };
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
 
