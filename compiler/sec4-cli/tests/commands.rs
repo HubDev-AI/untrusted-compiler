@@ -15476,6 +15476,8 @@ fn run_command_lasm_backend_persists_sqlite_records_and_query_one_when_db_intrin
     let exec_port = find_available_tcp_port();
     let exec_tx_port = find_available_tcp_port();
     let query_one_port = find_available_tcp_port();
+    let query_one_missing_param_port = find_available_tcp_port();
+    let query_one_non_select_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -15735,6 +15737,30 @@ fn main() effects { net } -> Int {
             && query_one_response.contains("\"op\":\"execTx\"")
             && query_one_response.contains("\"row\":\"{\\\"1\\\":1}\""),
         "db queryOne response should return deterministic sqlite-backed row payload and matching record metadata:\n{query_one_response}"
+    );
+
+    let query_one_missing_param_response = run_lasm_oneshot_request(
+        query_one_missing_param_port,
+        "GET /db/query-one?template=SELECT%20%3F1&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_missing_param_response.contains("HTTP/1.1 500 Internal Server Error")
+            && query_one_missing_param_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+            && query_one_missing_param_response
+                .contains("sqlite query requires at least 1 sql parameters but received 0"),
+        "sqlite queryOne should fail deterministically on parameter arity mismatch:\n{query_one_missing_param_response}"
+    );
+
+    let query_one_non_select_response = run_lasm_oneshot_request(
+        query_one_non_select_port,
+        "GET /db/query-one?template=DELETE%20FROM%20lasm_db_records&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_non_select_response.contains("HTTP/1.1 500 Internal Server Error")
+            && query_one_non_select_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+            && query_one_non_select_response
+                .contains("sqlite queryOne requires SELECT-style SQL statement"),
+        "sqlite queryOne should reject non-row-returning SQL deterministically:\n{query_one_non_select_response}"
     );
 
     let list_response = run_lasm_oneshot_request(

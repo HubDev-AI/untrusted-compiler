@@ -1967,6 +1967,18 @@ fn sqlite_value_ref_to_json(value: SqliteValueRef<'_>) -> serde_json::Value {
     }
 }
 
+fn validate_lasm_sqlite_parameter_arity(
+    parameter_count: usize,
+    provided_count: usize,
+) -> Result<(), String> {
+    if provided_count >= parameter_count {
+        return Ok(());
+    }
+    Err(format!(
+        "sqlite query requires at least {parameter_count} sql parameters but received {provided_count}"
+    ))
+}
+
 fn run_lasm_sqlite_exec(
     state: &LasmDynamicResponseState,
     query_template: &str,
@@ -1981,6 +1993,7 @@ fn run_lasm_sqlite_exec(
         .prepare(query_template)
         .map_err(|err| format!("sqlite execution prepare failed: {err}"))?;
     let parameter_count = statement.parameter_count();
+    validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
     let use_params = parameter_count > 0 && !sqlite_params.is_empty();
     let execute_result = if use_params {
         statement.execute(rusqlite::params_from_iter(sqlite_params.iter()))
@@ -2026,12 +2039,20 @@ fn run_lasm_sqlite_query_one(
     query_template: &str,
     params: &str,
 ) -> Result<Option<serde_json::Value>, String> {
+    let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
+    if normalized_query.trim().is_empty() {
+        return Err("sqlite queryOne requires non-empty SQL statement".to_string());
+    }
+    if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
+        return Err("sqlite queryOne requires SELECT-style SQL statement".to_string());
+    }
     let connection = lasm_dynamic_sqlite_runtime_connection(state)?;
     let sqlite_params = parse_lasm_sqlite_query_params(params);
     let mut statement = connection
-        .prepare(query_template)
+        .prepare(normalized_query.as_str())
         .map_err(|err| format!("sqlite queryOne prepare failed: {err}"))?;
     let parameter_count = statement.parameter_count();
+    validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
     let use_params = parameter_count > 0 && !sqlite_params.is_empty();
     let mut rows = if use_params {
         statement

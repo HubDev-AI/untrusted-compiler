@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | While extending sqlite command coverage, I inserted new port vars into the wrong neighboring test block (`records-log` instead of `sqlite`) and broke compile with undefined symbols. | For adjacent long integration tests, anchor edits by function name and re-open the exact block before patching shared setup lines. |
 | 2026-02-20 | self | I added real sqlite runtime execution paths but initially assumed the db-base parent directory already existed, so first-run sqlite intrinsic execution failed with `unable to open database file`. | For runtime-backed file stores, always `create_dir_all(parent)` before first `Connection::open(...)`, then keep the deterministic adapter-config/error envelope mapping intact. |
 | 2026-02-20 | self | I continued to forget branch re-creation after merge and started additional edits on `dev` before branching. | Add a fixed post-merge sequence: `git branch --show-current`, `git checkout -b codex/<next-slice>`, then start edits; do not skip this sequence. |
 | 2026-02-20 | self | I repeated the post-merge branch mistake and started another slice on `dev` before branching, even after documenting it once. | Treat post-merge branch verification as a mandatory gate: run `git branch --show-current` and branch to `codex/*` before the first edit of every new slice. |
