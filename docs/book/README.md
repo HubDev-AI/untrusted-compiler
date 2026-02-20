@@ -1080,5 +1080,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1108-m39-lasm-db-runtime-sqlite-module-extraction.md`
 - `1109-m39-lasm-db-runtime-common-module-extraction.md`
 - `1110-m39-lasm-db-sqlite-schema-helper-module-extraction.md`
+- `1111-m39-lasm-db-runtime-common-helper-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
