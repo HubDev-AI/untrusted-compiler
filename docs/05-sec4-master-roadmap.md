@@ -891,6 +891,10 @@ Post-alpha track acceptance anchors:
      - cluster status JSON now includes `relayBackendConnectTimeoutMs` and `relayBackendConnectCooldownMs`,
      - these fields report the effective runtime connect-timeout/cooldown values used by relay workers.
      - documented in `docs/book/1184-m39-lasm-cluster-status-relay-backend-connect-timing-fields.md`.
+   - [x] Added preferred-shard direct dispatch fast path for multi-relay accept:
+     - accept loop now tries the preferred relay sender directly first, and only scans remaining relay shards on first-attempt failure,
+     - fallback scan now iterates only remaining senders and preserves saturated/unavailable semantics.
+     - documented in `docs/book/1185-m39-lasm-cluster-preferred-shard-direct-dispatch-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
