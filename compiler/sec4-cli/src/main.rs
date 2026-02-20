@@ -8018,21 +8018,42 @@ fn lasm_cluster_relay_accept_batch_max(config: &LasmClusterConfig) -> usize {
     config.cluster_relay_accept_batch_max.max(1)
 }
 
+enum LasmClusterUnavailableReason {
+    NoHealthyWorkers,
+    WorkerUnavailable,
+    RelaySaturated,
+    RelayUnavailable,
+}
+
+const LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 54\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"no healthy workers\"}";
+const LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 54\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"worker unavailable\"}";
+const LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 59\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay saturated\"}";
+const LASM_CLUSTER_UNAVAILABLE_RELAY_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 61\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay unavailable\"}";
+
+fn lasm_cluster_unavailable_response(reason: LasmClusterUnavailableReason) -> &'static [u8] {
+    match reason {
+        LasmClusterUnavailableReason::NoHealthyWorkers => {
+            LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE
+        }
+        LasmClusterUnavailableReason::WorkerUnavailable => {
+            LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE
+        }
+        LasmClusterUnavailableReason::RelaySaturated => {
+            LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE
+        }
+        LasmClusterUnavailableReason::RelayUnavailable => {
+            LASM_CLUSTER_UNAVAILABLE_RELAY_UNAVAILABLE_RESPONSE
+        }
+    }
+}
+
 fn write_lasm_cluster_unavailable_response(
     client: &mut TcpStream,
-    message: &str,
+    reason: LasmClusterUnavailableReason,
 ) -> Result<(), String> {
-    let body = format!(
-        "{{\"ok\":false,\"status\":503,\"error\":\"{}\"}}",
-        message.replace('\\', "\\\\").replace('"', "\\\"")
-    );
-    let response = format!(
-        "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    );
+    let response = lasm_cluster_unavailable_response(reason);
     client
-        .write_all(response.as_bytes())
+        .write_all(response)
         .map_err(|err| format!("could not write LASM cluster overload response: {err}"))?;
     client
         .flush()
@@ -8505,7 +8526,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
                         let _ = write_lasm_cluster_unavailable_response(
                             &mut client,
-                            "no healthy workers",
+                            LasmClusterUnavailableReason::NoHealthyWorkers,
                         );
                         relay_active.fetch_sub(1, Ordering::Relaxed);
                         continue;
@@ -8564,7 +8585,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             }
                             let _ = write_lasm_cluster_unavailable_response(
                                 &mut client,
-                                "worker unavailable",
+                                LasmClusterUnavailableReason::WorkerUnavailable,
                             );
                             relay_active.fetch_sub(1, Ordering::Relaxed);
                         }
@@ -8812,7 +8833,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
-                    "cluster relay saturated",
+                    LasmClusterUnavailableReason::RelaySaturated,
                 );
             }
             Err(TrySendError::Disconnected(stream)) => {
@@ -8820,7 +8841,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
-                    "cluster relay unavailable",
+                    LasmClusterUnavailableReason::RelayUnavailable,
                 );
                 eprintln!("run failed: LASM cluster relay worker pool disconnected unexpectedly");
                 break;

@@ -655,6 +655,10 @@ Post-alpha track acceptance anchors:
      - relay workers now drop unhealthy-port cooldown entries that no longer belong to the current worker snapshot while pruning expirations,
      - when all current workers are marked unhealthy in a cycle, backend selection now short-circuits directly to unavailable handling without scanning the full worker list.
      - documented in `docs/book/1129-m39-lasm-cluster-unhealthy-membership-prune.md`.
+   - [x] Replaced formatted 503 relay-envelope construction with static response payloads:
+     - cluster relay unavailable envelopes now use prebuilt static response bytes for deterministic failure reasons (`no healthy workers`, `worker unavailable`, `cluster relay saturated`, `cluster relay unavailable`),
+     - removes per-request string formatting/allocation on relay failure paths while preserving status/body contract behavior.
+     - documented in `docs/book/1130-m39-lasm-cluster-static-unavailable-response-bytes.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
