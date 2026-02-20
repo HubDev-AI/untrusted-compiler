@@ -671,6 +671,10 @@ Post-alpha track acceptance anchors:
      - cluster status writer now derives `workerCount` directly from the lock-free worker-port snapshot (`worker_ports.len()`),
      - removes periodic `shared_state` read-lock usage from telemetry path while preserving status payload semantics.
      - documented in `docs/book/1133-m39-lasm-cluster-status-lockfree-worker-count.md`.
+   - [x] Batched listener-side saturation counter atomics under overload:
+      - accept loop now accumulates saturation pending/total increments locally on queue-full events and flushes atomics in small batches (`LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH`),
+      - shared helper now standardizes saturation-counter flush behavior across relay worker and listener paths.
+      - documented in `docs/book/1134-m39-lasm-cluster-listener-saturation-counter-batch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
