@@ -1043,5 +1043,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1071-m39-lasm-postgres-prepared-exec-and-exec-tx.md`
 - `1072-m39-lasm-postgres-prepared-query-one-row-to-json.md`
 - `1073-m39-lasm-postgres-exec-tx-prepared-flow-coverage.md`
+- `1074-m39-lasm-postgres-comment-aware-placeholder-arity.md`
 
 As milestones progress, chapters will be added and linked from this index.
