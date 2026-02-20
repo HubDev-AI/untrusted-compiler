@@ -8361,6 +8361,7 @@ fn run_lasm_cluster_accept_loop(
         listener_idle_spins = 0;
 
         let relay_sender_count = relay_senders.len();
+        let relay_single_sender = relay_senders.first();
         let relay_dispatch_uses_counter = relay_sender_count > 1;
         let relay_batch_len = relay_listener_batch.len();
         let relay_dispatch_start_base = if !relay_dispatch_uses_counter {
@@ -8382,11 +8383,23 @@ fn run_lasm_cluster_accept_loop(
                     dispatch_start = 0;
                 }
             }
-            match dispatch_lasm_cluster_relay_stream(
-                client_stream,
-                relay_senders,
-                stream_dispatch_start,
-            ) {
+            let dispatch_result = if relay_sender_count == 1 {
+                match relay_single_sender {
+                    Some(sender) => match sender.try_send(client_stream) {
+                        Ok(()) => Ok(()),
+                        Err(TrySendError::Full(stream)) => {
+                            Err(LasmClusterRelayDispatchError::Saturated(stream))
+                        }
+                        Err(TrySendError::Disconnected(stream)) => {
+                            Err(LasmClusterRelayDispatchError::Unavailable(stream))
+                        }
+                    },
+                    None => Err(LasmClusterRelayDispatchError::Unavailable(client_stream)),
+                }
+            } else {
+                dispatch_lasm_cluster_relay_stream(client_stream, relay_senders, stream_dispatch_start)
+            };
+            match dispatch_result {
                 Ok(()) => {
                     listener_enqueued_local = listener_enqueued_local.saturating_add(1);
                 }

@@ -1147,5 +1147,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1175-m39-lasm-cluster-selection-identity-no-table-materialization.md`
 - `1176-m39-lasm-cluster-worker-port-membership-cache.md`
 - `1177-m39-lasm-cluster-single-relay-dispatch-counter-bypass.md`
+- `1178-m39-lasm-cluster-single-sender-accept-loop-inline-dispatch.md`
 
 As milestones progress, chapters will be added and linked from this index.
