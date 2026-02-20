@@ -1093,5 +1093,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1121-m39-lasm-sqlite-runtime-busy-timeout-and-foreign-keys.md`
 - `1122-m39-lasm-postgres-runtime-timeout-defaults.md`
 - `1123-m39-lasm-db-timeout-lock-error-classification.md`
+- `1124-m39-lasm-cluster-backend-connect-timeout-tuning.md`
 
 As milestones progress, chapters will be added and linked from this index.

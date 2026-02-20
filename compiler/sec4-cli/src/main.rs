@@ -7688,6 +7688,8 @@ struct LasmClusterConfig {
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_backend_connect_timeout_ms: u64,
+    cluster_backend_connect_cooldown_ms: u64,
     cluster_status_json: Option<PathBuf>,
     reuse_port_workers: bool,
 }
@@ -7935,12 +7937,12 @@ fn lasm_cluster_maintenance_interval_ms(config: &LasmClusterConfig) -> u64 {
     config.autoscale_check_ms.clamp(100, 500)
 }
 
-fn lasm_cluster_backend_connect_timeout() -> Duration {
-    Duration::from_millis(250)
+fn lasm_cluster_backend_connect_timeout(config: &LasmClusterConfig) -> Duration {
+    Duration::from_millis(config.cluster_backend_connect_timeout_ms.max(25))
 }
 
-fn lasm_cluster_backend_connect_cooldown() -> Duration {
-    Duration::from_millis(500)
+fn lasm_cluster_backend_connect_cooldown(config: &LasmClusterConfig) -> Duration {
+    Duration::from_millis(config.cluster_backend_connect_cooldown_ms.max(25))
 }
 
 fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
@@ -8395,6 +8397,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let (relay_sender, relay_receiver) = bounded::<TcpStream>(relay_queue_capacity);
     let relay_selection_counter = Arc::new(AtomicUsize::new(0));
+    let relay_backend_connect_timeout =
+        lasm_cluster_backend_connect_timeout(shared_config.as_ref());
+    let relay_backend_connect_cooldown =
+        lasm_cluster_backend_connect_cooldown(shared_config.as_ref());
     let mut relay_handles = Vec::with_capacity(relay_worker_count);
 
     for _ in 0..relay_worker_count {
@@ -8404,6 +8410,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_worker_ports = Arc::clone(&worker_ports_snapshot);
         let relay_saturation_events = Arc::clone(&relay_saturation_events);
         let relay_saturation_events_total = Arc::clone(&relay_saturation_events_total);
+        let relay_backend_connect_timeout = relay_backend_connect_timeout;
+        let relay_backend_connect_cooldown = relay_backend_connect_cooldown;
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
@@ -8489,10 +8497,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
                     let backend_addr =
                         std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, backend_port));
-                    match TcpStream::connect_timeout(
-                        &backend_addr,
-                        lasm_cluster_backend_connect_timeout(),
-                    ) {
+                    match TcpStream::connect_timeout(&backend_addr, relay_backend_connect_timeout) {
                         Ok(upstream) => {
                             let _ = client.set_nodelay(true);
                             let _ = upstream.set_nodelay(true);
@@ -8509,7 +8514,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
                             unhealthy_ports_until.insert(
                                 backend_port,
-                                Instant::now() + lasm_cluster_backend_connect_cooldown(),
+                                Instant::now() + relay_backend_connect_cooldown,
                             );
                             eprintln!(
                                 "warning: LASM cluster worker {} connect failed: {}",
@@ -9003,6 +9008,9 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
+    let cluster_backend_connect_timeout_ms = resolve_lasm_cluster_backend_connect_timeout_ms();
+    let cluster_backend_connect_cooldown_ms =
+        resolve_lasm_cluster_backend_connect_cooldown_ms(cluster_backend_connect_timeout_ms);
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
@@ -9060,6 +9068,8 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
+            cluster_backend_connect_timeout_ms,
+            cluster_backend_connect_cooldown_ms,
             cluster_status_json: None,
             reuse_port_workers: true,
         });
@@ -9095,6 +9105,8 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_backend_connect_timeout_ms,
+            cluster_backend_connect_cooldown_ms,
             cluster_status_json: cluster_status_json.map(Path::to_path_buf),
             reuse_port_workers: false,
         });
@@ -9964,6 +9976,40 @@ fn resolve_lasm_overflow_probe_timeout_ms(
         );
     }
     Ok(parsed.min(effective_timeout_ms).max(1))
+}
+
+fn resolve_lasm_cluster_backend_connect_timeout_ms() -> u64 {
+    let default_value = 100_u64;
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(25, 5_000))
+        .unwrap_or(default_value)
+}
+
+fn resolve_lasm_cluster_backend_connect_cooldown_ms(connect_timeout_ms: u64) -> u64 {
+    let default_value = connect_timeout_ms.saturating_mul(2).clamp(150, 2_000);
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(25, 10_000))
+        .unwrap_or(default_value)
 }
 
 fn resolve_lasm_max_requests_per_connection(

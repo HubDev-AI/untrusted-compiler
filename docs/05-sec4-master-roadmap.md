@@ -629,6 +629,11 @@ Post-alpha track acceptance anchors:
      - cluster front process now emits periodic JSON snapshots with worker counts/ports, active connections, and relay saturation counters (`pending` + `total`) for operator tuning/debug workflows,
      - healthy hot path remains unchanged when the flag is not set (status writer thread is not started).
      - documented in `docs/book/1061-m39-lasm-cluster-status-json-telemetry.md`.
+   - [x] Tuned relay backend-connect failover behavior with precomputed configurable timing defaults:
+     - moved relay backend connect timeout/cooldown off fixed constants into cluster config resolution,
+     - added env-tunable controls (`SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS`, `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS`) with deterministic bounded parsing and lower-latency default timeout path (`100ms`),
+     - relay worker threads now consume these precomputed durations directly for backend connect attempts and unhealthy-port cooldown windows.
+     - documented in `docs/book/1124-m39-lasm-cluster-backend-connect-timeout-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
