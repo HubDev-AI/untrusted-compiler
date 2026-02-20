@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I removed root-level runtime-common imports during module extraction and broke dependent sibling modules that still imported those symbols from `crate::...`, causing compile errors. | When removing root alias imports, first rewrite dependent module imports to target their source module paths directly (`crate::lasm_db_runtime_common::...`) before cleanup. |
 | 2026-02-20 | self | I started this continuation by running git checks before opening `.claude/napkin.md`, violating the session-start discipline. | Always read `.claude/napkin.md` first in every new continuation before any status/search/build command. |
 | 2026-02-20 | self | After merging PR #305 I started the next tx-capacity slice edits on `dev` again before branching. | After each merge, run `git branch --show-current` and create the next `codex/*` branch before the first file edit. |
 | 2026-02-20 | self | I ran `rg` with mismatched shell quotes and hit `zsh: unmatched \"` while scanning command fixtures. | For `rg` patterns containing mixed quotes, wrap the full pattern list in single quotes and avoid nested unescaped double quotes. |

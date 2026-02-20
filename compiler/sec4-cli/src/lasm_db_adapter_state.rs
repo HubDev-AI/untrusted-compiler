@@ -1,7 +1,7 @@
-use crate::{
-    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client, LasmDbRecord,
-    LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
+use crate::lasm_db_runtime_common::{
+    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
 };
+use crate::{LasmDbRecord, LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE};
 use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
 use std::fs;
