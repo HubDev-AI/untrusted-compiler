@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I made a feature commit while checked out on local `dev` instead of branching first, then had to recover by branching from that commit. | Before any code edits, confirm branch with `git branch --show-current` and create a `codex/*` branch immediately if currently on `dev`. |
 | 2026-02-20 | self | I used an `if ... && let ...` chain in `main.rs` for JSON parsing and hit unstable-expression compile failure on this toolchain. | Prefer portable nested `if` + `if let` control flow in runtime slices unless compiler support is already confirmed in this repo. |
 | 2026-02-20 | self | I launched two targeted Cargo tests in parallel during LASM Postgres reconnect validation and reintroduced package/build lock waits. | Keep every Cargo validation strictly sequential in this repo; parallelize only read/search/document commands. |
 | 2026-02-20 | self | I ran `git fetch` and `git rev-parse origin/dev` in parallel and briefly read a stale `origin/dev` hash before fetch completed. | For branch-base verification, run `fetch` first, then resolve refs sequentially before branching/rebasing. |

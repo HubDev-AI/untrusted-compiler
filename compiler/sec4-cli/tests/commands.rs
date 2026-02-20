@@ -15926,7 +15926,7 @@ fn main() effects { net } -> Int {
 
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
-        "GET /db/query-one?template=SELECT%2042%20AS%20value,%20TRUE%20AS%20enabled,%203.25%20AS%20ratio&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+        "GET /db/query-one?template=SELECT%20$1::int%20AS%20value,%20$2::boolean%20AS%20enabled,%20$3::double%20precision%20AS%20ratio&params=%5B42%2Ctrue%2C3.25%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         query_one_response.contains("HTTP/1.1 200 OK"),
