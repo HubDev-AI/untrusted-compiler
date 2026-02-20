@@ -3,6 +3,8 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I launched three Cargo tests in parallel with `multi_tool_use.parallel` during this LASM DB slice and reintroduced package-cache lock contention. | Keep Cargo invocations strictly sequential in this repo; only parallelize read/search/docs commands. |
+| 2026-02-20 | self | I hardcoded sqlite `affected_rows=0` for `db.exec` test expectations and immediately hit a deterministic mismatch (`affected_rows=1` in this runtime path). | For affected-row persistence checks, assert stable shape/constraints unless a specific runtime count is part of the contract under test. |
 | 2026-02-20 | self | I assumed omitting `id` in sqlite insert would trigger NOT NULL, but this schema accepted it and the validation-classification regression falsely passed as success. | For deterministic sqlite constraint tests, trigger explicit violations (for example `op = NULL` on NOT NULL column) instead of relying on implicit PK/autoincrement behavior. |
 | 2026-02-20 | self | After merging PR #299, I still started the next conflict-classification slice on local `dev` before branching. | Treat merge completion as branch handoff: immediately create the next `codex/*` branch before any roadmap/test/doc edits. |
 | 2026-02-20 | self | My first sqlite duplicate-key conflict fixture used `id=4242`, but sqlite persistence rewrites table rows from runtime state after each exec, so that row was removed and no duplicate occurred on restart. | For sqlite conflict regressions in LASM runtime, target persisted runtime-managed IDs (for example `id=1`) or assert against state-owned rows, not transient rows that persistence rewrite removes. |

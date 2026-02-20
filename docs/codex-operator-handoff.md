@@ -32,15 +32,17 @@ Use it to keep speed high without losing architecture direction.
 
 1. Keep file adapter (`records.log`) as alpha v1.
 2. Add SQLite adapter behind same DB intrinsic surface.
-3. Keep external DB adapters post-alpha.
+3. Extract adapter layers into packages/modules **without changing language semantics**.
+4. Keep external DB adapters post-alpha.
 
 ### P2: Fixed order after DB integration (must follow)
 
 1. Keep LASM as default server backend for `sec4 run` (already active; C remains explicit fallback).
 2. Complete LASM stability/load hardening on that default path (throughput/latency/memory regressions tracked).
 3. Move DB adapter progression behind same intrinsic surface (SQLite next).
-4. Finalize one canonical LASM+DB operator flow (`init/check/build/run/load-test`) with reproducible docs.
-5. Only then move additional capacity to WASM/browser track.
+4. Extract adapter layers into packages/modules while preserving intrinsic contracts/diagnostics.
+5. Finalize one canonical LASM+DB operator flow (`init/check/build/run/load-test`) with reproducible docs.
+6. Only then move additional capacity to WASM/browser track.
 
 ## 4) DB Status (Explicit)
 
@@ -153,7 +155,7 @@ Read first:
 Execution mode:
 - Implementation-first.
 - Focus now: LASM DB parity (real intrinsic path), not composition analyzer.
-- After DB parity: follow P2 order exactly (LASM default -> load hardening -> SQLite adapter -> alpha usability -> WASM).
+- After DB parity: follow P2 order exactly (LASM default -> load hardening -> SQLite adapter -> adapter extraction -> alpha usability -> WASM).
 - Keep Cargo runs sequential.
 - Run only targeted tests for touched behavior.
 

@@ -632,9 +632,14 @@ Post-alpha track acceptance anchors:
    - keep file adapter (`records.log`) for alpha path,
    - add SQLite adapter as first real embedded DB target,
    - keep external DB adapters post-alpha.
-5. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
+   - [x] Persisted `affected_rows` metadata in LASM DB record history across records-log/sqlite/postgres adapters (including schema migration/back-compat defaulting for pre-field artifacts) so `DbListRecordsResponse` exposes stable per-record write impact metadata (`docs/book/1096-m39-lasm-db-record-affected-rows-persistence.md`).
+5. Extract runtime adapter layers into packages/modules without changing language semantics (priority immediately after DB implementation completion).
+   - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
+   - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
+   - keep CLI/operator behavior unchanged while refactoring boundaries.
+6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
    - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
-6. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
+7. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
 
 ### Post-DB execution lock (authoritative order)
 
@@ -643,8 +648,9 @@ When LASM DB intrinsic parity is complete, execution order is fixed:
 1. LASM default backend.
 2. LASM stability/load hardening.
 3. DB adapter progression (SQLite first).
-4. Alpha usability/reproducibility closure.
-5. WASM/browser track.
+4. Adapter-layer extraction into packages/modules without semantic changes.
+5. Alpha usability/reproducibility closure.
+6. WASM/browser track.
 
 ## M37 - No-Stub Alpha Sprint (Execution-Complete; Tag Pending)
 
