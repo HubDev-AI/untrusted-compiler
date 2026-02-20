@@ -2,6 +2,7 @@ use arc_swap::ArcSwap;
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, RecvTimeoutError, TryRecvError, TrySendError};
+use postgres::{Client as PostgresClient, NoTls, SimpleQueryMessage};
 use rusqlite::{params, Connection};
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
@@ -260,6 +261,8 @@ enum RunDbAdapter {
     #[value(alias = "records", alias = "records.log")]
     RecordsLog,
     Sqlite,
+    #[value(alias = "pg")]
+    Postgres,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -1218,6 +1221,7 @@ enum LasmDbRecordsAdapter {
     #[default]
     RecordsLog,
     Sqlite,
+    Postgres,
 }
 
 #[derive(Debug, Default)]
@@ -1228,6 +1232,7 @@ struct LasmDynamicResponseState {
     db_records_adapter: LasmDbRecordsAdapter,
     db_records_store_path: Option<PathBuf>,
     db_records_sqlite_store_path: Option<PathBuf>,
+    db_records_postgres_dsn: Option<String>,
     db_tx_handles: HashMap<i64, i64>,
     next_db_tx_handle: i64,
     next_db_record_id: u64,
@@ -1257,16 +1262,18 @@ const LASM_INTERNAL_DB_PARAMS_HEADER: &str = "X-Sec4-Internal-Db-Params";
 const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
 const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
+const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
 
 fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
     explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
-) -> LasmDynamicResponseState {
+) -> Result<LasmDynamicResponseState, String> {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
     let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
+    let db_records_postgres_dsn = resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter)?;
     let users_by_id = users_store_path
         .as_ref()
         .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
@@ -1280,6 +1287,16 @@ fn build_lasm_dynamic_response_state(
             .as_ref()
             .map(|path| load_lasm_dynamic_db_records_from_sqlite(path.as_path()))
             .unwrap_or_default(),
+        LasmDbRecordsAdapter::Postgres => {
+            let dsn = db_records_postgres_dsn
+                .as_ref()
+                .ok_or_else(|| {
+                    "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
+                        .to_string()
+                })?
+                .as_str();
+            load_lasm_dynamic_db_records_from_postgres(dsn)?
+        }
     };
     let next_db_record_id = db_records
         .iter()
@@ -1300,17 +1317,18 @@ fn build_lasm_dynamic_response_state(
         .unwrap_or(0)
         .saturating_add(1)
         .max(1);
-    LasmDynamicResponseState {
+    Ok(LasmDynamicResponseState {
         users_by_id,
         users_store_path,
         db_records,
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
+        db_records_postgres_dsn,
         db_tx_handles,
         next_db_tx_handle,
         next_db_record_id,
-    }
+    })
 }
 
 fn resolve_lasm_dynamic_store_base(explicit_db_base: Option<&Path>) -> Option<PathBuf> {
@@ -1345,6 +1363,9 @@ fn resolve_lasm_dynamic_db_records_adapter(
     if normalized == "sqlite" {
         return LasmDbRecordsAdapter::Sqlite;
     }
+    if normalized == "postgres" || normalized == "pg" {
+        return LasmDbRecordsAdapter::Postgres;
+    }
     eprintln!(
         "warning: unsupported SEC4_RT_LASM_DB_ADAPTER value `{}`; defaulting to records.log adapter",
         raw.trim()
@@ -1352,10 +1373,29 @@ fn resolve_lasm_dynamic_db_records_adapter(
     LasmDbRecordsAdapter::RecordsLog
 }
 
+fn resolve_lasm_dynamic_db_postgres_dsn(
+    adapter: LasmDbRecordsAdapter,
+) -> Result<Option<String>, String> {
+    if adapter != LasmDbRecordsAdapter::Postgres {
+        return Ok(None);
+    }
+    let raw = std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN").map_err(|_| {
+        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+    })?;
+    let dsn = raw.trim().to_string();
+    if dsn.is_empty() {
+        return Err(
+            "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string(),
+        );
+    }
+    Ok(Some(dsn))
+}
+
 fn lasm_db_records_adapter_label(adapter: LasmDbRecordsAdapter) -> &'static str {
     match adapter {
         LasmDbRecordsAdapter::RecordsLog => "records.log",
         LasmDbRecordsAdapter::Sqlite => "sqlite",
+        LasmDbRecordsAdapter::Postgres => "postgres",
     }
 }
 
@@ -1544,10 +1584,77 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
     records
 }
 
+fn connect_lasm_dynamic_db_records_postgres(dsn: &str) -> Result<PostgresClient, String> {
+    PostgresClient::connect(dsn, NoTls)
+        .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))
+}
+
+fn ensure_lasm_dynamic_db_records_postgres_schema(
+    client: &mut PostgresClient,
+) -> Result<(), String> {
+    let statement = format!(
+        "CREATE TABLE IF NOT EXISTS {} (
+            id BIGINT PRIMARY KEY NOT NULL,
+            op TEXT NOT NULL,
+            db BIGINT NOT NULL,
+            template TEXT NOT NULL,
+            params TEXT NOT NULL,
+            tx BIGINT NOT NULL,
+            created_at_ms BIGINT NOT NULL
+        )",
+        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+    );
+    client
+        .batch_execute(statement.as_str())
+        .map_err(|err| format!("could not initialize LASM dynamic postgres records schema: {err}"))
+}
+
+fn load_lasm_dynamic_db_records_from_postgres(dsn: &str) -> Result<Vec<LasmDbRecord>, String> {
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
+    let query = format!(
+        "SELECT id, op, db, template, params, tx, created_at_ms \
+         FROM {} \
+         ORDER BY id ASC",
+        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+    );
+    let rows = client
+        .query(query.as_str(), &[])
+        .map_err(|err| format!("could not query LASM dynamic postgres records store: {err}"))?;
+    let mut records = Vec::with_capacity(rows.len());
+    for (index, row) in rows.into_iter().enumerate() {
+        let id: i64 = row.get(0);
+        let created_at_ms: i64 = row.get(6);
+        if id < 0 {
+            return Err(format!(
+                "could not load LASM dynamic postgres record row {}: id out of u64 range",
+                index + 1
+            ));
+        }
+        if created_at_ms < 0 {
+            return Err(format!(
+                "could not load LASM dynamic postgres record row {}: created_at_ms out of u64 range",
+                index + 1
+            ));
+        }
+        records.push(LasmDbRecord {
+            id: id as u64,
+            op: row.get(1),
+            db: row.get(2),
+            template: row.get(3),
+            params: row.get(4),
+            tx: row.get(5),
+            created_at_ms: created_at_ms as u64,
+        });
+    }
+    Ok(records)
+}
+
 fn persist_lasm_dynamic_db_records_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
     match state.db_records_adapter {
         LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(state),
         LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
+        LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
     }
 }
 
@@ -1674,6 +1781,64 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
             path.display()
         )
     })?;
+    Ok(())
+}
+
+fn persist_lasm_dynamic_db_records_to_postgres(
+    state: &LasmDynamicResponseState,
+) -> Result<(), String> {
+    let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
+        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+    })?;
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
+    let mut tx = client.transaction().map_err(|err| {
+        format!("could not start LASM dynamic postgres records transaction: {err}")
+    })?;
+    let delete_statement = format!("DELETE FROM {}", LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE);
+    tx.execute(delete_statement.as_str(), &[])
+        .map_err(|err| format!("could not clear LASM dynamic postgres records store: {err}"))?;
+    let insert_statement = format!(
+        "INSERT INTO {} (id, op, db, template, params, tx, created_at_ms) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+    );
+    let mut ordered = state.db_records.clone();
+    ordered.sort_by_key(|record| record.id);
+    for record in &ordered {
+        let id = i64::try_from(record.id).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic postgres record id {}: out of i64 range",
+                record.id
+            )
+        })?;
+        let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic postgres record timestamp {}: out of i64 range",
+                record.created_at_ms
+            )
+        })?;
+        tx.execute(
+            insert_statement.as_str(),
+            &[
+                &id,
+                &record.op,
+                &record.db,
+                &record.template,
+                &record.params,
+                &record.tx,
+                &created_at_ms,
+            ],
+        )
+        .map_err(|err| {
+            format!(
+                "could not insert LASM dynamic postgres record {}: {err}",
+                record.id
+            )
+        })?;
+    }
+    tx.commit()
+        .map_err(|err| format!("could not commit LASM dynamic postgres records store: {err}"))?;
     Ok(())
 }
 
@@ -8412,6 +8577,7 @@ fn run_db_adapter_arg_value(adapter: RunDbAdapter) -> &'static str {
     match adapter {
         RunDbAdapter::RecordsLog => "records-log",
         RunDbAdapter::Sqlite => "sqlite",
+        RunDbAdapter::Postgres => "postgres",
     }
 }
 
@@ -8419,6 +8585,7 @@ fn run_db_adapter_to_lasm_db_records_adapter(adapter: RunDbAdapter) -> LasmDbRec
     match adapter {
         RunDbAdapter::RecordsLog => LasmDbRecordsAdapter::RecordsLog,
         RunDbAdapter::Sqlite => LasmDbRecordsAdapter::Sqlite,
+        RunDbAdapter::Postgres => LasmDbRecordsAdapter::Postgres,
     }
 }
 
@@ -8745,7 +8912,9 @@ fn write_lasm_cluster_status_json(
 
     let tmp_path = path.with_extension(format!(
         "{}.tmp",
-        path.extension().and_then(|value| value.to_str()).unwrap_or("json")
+        path.extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("json")
     ));
     fs::write(&tmp_path, encoded).map_err(|err| {
         format!(
@@ -8815,7 +8984,10 @@ impl LasmClusterRelayPump {
         let mut progressed = false;
 
         while !self.client_read_closed && self.c2u_end < self.client_to_upstream.len() {
-            match self.client.read(&mut self.client_to_upstream[self.c2u_end..]) {
+            match self
+                .client
+                .read(&mut self.client_to_upstream[self.c2u_end..])
+            {
                 Ok(0) => {
                     self.client_read_closed = true;
                     progressed = true;
@@ -8838,8 +9010,10 @@ impl LasmClusterRelayPump {
                 .write(&self.client_to_upstream[self.c2u_start..self.c2u_end])
             {
                 Ok(0) => {
-                    return Err("could not relay client payload to upstream: write returned 0 bytes"
-                        .to_string());
+                    return Err(
+                        "could not relay client payload to upstream: write returned 0 bytes"
+                            .to_string(),
+                    );
                 }
                 Ok(bytes_written) => {
                     self.c2u_start += bytes_written;
@@ -8862,7 +9036,10 @@ impl LasmClusterRelayPump {
         }
 
         while !self.upstream_read_closed && self.u2c_end < self.upstream_to_client.len() {
-            match self.upstream.read(&mut self.upstream_to_client[self.u2c_end..]) {
+            match self
+                .upstream
+                .read(&mut self.upstream_to_client[self.u2c_end..])
+            {
                 Ok(0) => {
                     self.upstream_read_closed = true;
                     progressed = true;
@@ -8896,7 +9073,9 @@ impl LasmClusterRelayPump {
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(err) => {
-                    return Err(format!("could not relay upstream response to client: {err}"));
+                    return Err(format!(
+                        "could not relay upstream response to client: {err}"
+                    ));
                 }
             }
         }
@@ -9106,17 +9285,16 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             None
                         } else {
                             if unhealthy_ports_until.is_empty() {
-                                let index =
-                                    relay_selection_counter.fetch_add(1, Ordering::Relaxed)
-                                        % worker_ports.len();
+                                let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                                    % worker_ports.len();
                                 Some(worker_ports[index])
                             } else {
                                 let now = Instant::now();
                                 unhealthy_ports_until.retain(|_, until| *until > now);
                                 if unhealthy_ports_until.is_empty() {
-                                    let index =
-                                        relay_selection_counter.fetch_add(1, Ordering::Relaxed)
-                                            % worker_ports.len();
+                                    let index = relay_selection_counter
+                                        .fetch_add(1, Ordering::Relaxed)
+                                        % worker_ports.len();
                                     Some(worker_ports[index])
                                 } else {
                                     let start_index = relay_selection_counter
@@ -9124,9 +9302,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                         % worker_ports.len();
                                     let mut selected = None;
                                     for offset in 0..worker_ports.len() {
-                                        let candidate = worker_ports
-                                            [(start_index.saturating_add(offset))
-                                                % worker_ports.len()];
+                                        let candidate = worker_ports[(start_index
+                                            .saturating_add(offset))
+                                            % worker_ports.len()];
                                         if !unhealthy_ports_until.contains_key(&candidate) {
                                             selected = Some(candidate);
                                             break;
@@ -9241,32 +9419,30 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let status_worker_ports = Arc::clone(&worker_ports_snapshot);
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
-        Some(std::thread::spawn(move || {
-            loop {
-                let worker_ports = status_worker_ports.load();
-                let worker_count = match status_state.read() {
-                    Ok(state) => state.workers.len(),
-                    Err(_) => worker_ports.len(),
-                };
-                if let Err(err) = write_lasm_cluster_status_json(
-                    status_path.as_path(),
-                    status_config.listen_port,
-                    status_config.min_instances,
-                    status_config.max_instances,
-                    worker_count,
-                    worker_ports.as_slice(),
-                    status_active_connections.load(Ordering::Relaxed),
-                    status_saturation_events.load(Ordering::Relaxed),
-                    status_saturation_events_total.load(Ordering::Relaxed),
-                ) {
-                    eprintln!("warning: LASM cluster status json write failed: {err}");
-                }
-
-                if status_stop_flag.load(Ordering::Relaxed) {
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(status_interval_ms));
+        Some(std::thread::spawn(move || loop {
+            let worker_ports = status_worker_ports.load();
+            let worker_count = match status_state.read() {
+                Ok(state) => state.workers.len(),
+                Err(_) => worker_ports.len(),
+            };
+            if let Err(err) = write_lasm_cluster_status_json(
+                status_path.as_path(),
+                status_config.listen_port,
+                status_config.min_instances,
+                status_config.max_instances,
+                worker_count,
+                worker_ports.as_slice(),
+                status_active_connections.load(Ordering::Relaxed),
+                status_saturation_events.load(Ordering::Relaxed),
+                status_saturation_events_total.load(Ordering::Relaxed),
+            ) {
+                eprintln!("warning: LASM cluster status json write failed: {err}");
             }
+
+            if status_stop_flag.load(Ordering::Relaxed) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(status_interval_ms));
         }))
     } else {
         None
@@ -9777,10 +9953,16 @@ fn cmd_run_lasm_backend(
     let mut worker_handles = Vec::new();
     let trace_counter = Arc::new(AtomicU64::new(0));
     let header_defaults = Arc::new(build_lasm_response_header_defaults(policy));
-    let dynamic_state = Arc::new(Mutex::new(build_lasm_dynamic_response_state(
-        db_base,
-        db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
-    )));
+    let dynamic_state = Arc::new(Mutex::new(
+        build_lasm_dynamic_response_state(
+            db_base,
+            db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
+        )
+        .map_err(|message| {
+            eprintln!("run failed: {message}");
+            2
+        })?,
+    ));
     let mut oneshot_runtime = if oneshot {
         Some(
             build_lasm_http_runtime(&routes, effective_timeout_ms, effective_max_pending).map_err(
@@ -12045,14 +12227,66 @@ fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             };
+            let template = template.trim().to_string();
+            let params = normalize_lasm_db_params(params.as_str());
+            let (adapter, postgres_dsn) = match dynamic_state.lock() {
+                Ok(state) => (
+                    state.db_records_adapter,
+                    state.db_records_postgres_dsn.clone(),
+                ),
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            if adapter == LasmDbRecordsAdapter::Postgres {
+                let Some(dsn) = postgres_dsn.as_deref() else {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.ADAPTER_CONFIG_INVALID",
+                            "internal",
+                            "postgres adapter requires SEC4_RT_LASM_DB_POSTGRES_DSN",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                if let Err(message) = run_lasm_postgres_exec(dsn, template.as_str()) {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.EXEC_FAILED",
+                            "missing_dependency",
+                            message.as_str(),
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            }
             let record = match dynamic_state.lock() {
                 Ok(mut state) => {
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
                         op: "exec".to_string(),
                         db,
-                        template: template.trim().to_string(),
-                        params: normalize_lasm_db_params(params.as_str()),
+                        template: template.clone(),
+                        params: params.clone(),
                         tx: 0,
                         created_at_ms: lasm_now_ms(),
                     };
@@ -12130,55 +12364,61 @@ fn apply_lasm_internal_db_operation_materialization(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_TX_HEADER).map(
                     |value| materialize_lasm_internal_header_value(value, request, path_params),
                 );
-            let record = match dynamic_state.lock() {
-                Ok(mut state) => {
-                    let (db, tx) = if let Some(db_raw) = tx_db_source {
-                        let Some(db_value) = parse_lasm_positive_i64(db_raw.trim()) else {
-                            set_lasm_json_response(
-                                response,
-                                400,
-                                &lasm_error_envelope(
-                                    "DB.EXEC_TX_INVALID",
-                                    "validation",
-                                    "db.execTx requires transaction and query handles",
-                                    400,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        };
-                        let tx_value = allocate_lasm_db_tx_handle(&mut state, db_value);
-                        (db_value, tx_value)
-                    } else {
-                        let Some(tx_raw) = tx_handle_raw.as_ref() else {
-                            set_lasm_json_response(
-                                response,
-                                400,
-                                &lasm_error_envelope(
-                                    "DB.EXEC_TX_INVALID",
-                                    "validation",
-                                    "db.execTx requires transaction and query handles",
-                                    400,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        };
-                        let Some(tx_value) = parse_lasm_positive_i64(tx_raw.trim()) else {
-                            set_lasm_json_response(
-                                response,
-                                400,
-                                &lasm_error_envelope(
-                                    "DB.EXEC_TX_INVALID",
-                                    "validation",
-                                    "db.execTx requires transaction and query handles",
-                                    400,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        };
-                        let Some(db_value) = state.db_tx_handles.get(&tx_value).copied() else {
+            let template = template.trim().to_string();
+            let params = normalize_lasm_db_params(params.as_str());
+            enum ExecTxSource {
+                AllocateFromDb(i64),
+                ExistingTx { tx: i64, db: i64 },
+            }
+            let tx_source = if let Some(db_raw) = tx_db_source {
+                let Some(db_value) = parse_lasm_positive_i64(db_raw.trim()) else {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires transaction and query handles",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                ExecTxSource::AllocateFromDb(db_value)
+            } else {
+                let Some(tx_raw) = tx_handle_raw.as_ref() else {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires transaction and query handles",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                let Some(tx_value) = parse_lasm_positive_i64(tx_raw.trim()) else {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires transaction and query handles",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                let db_value = match dynamic_state.lock() {
+                    Ok(state) => match state.db_tx_handles.get(&tx_value).copied() {
+                        Some(value) => value,
+                        None => {
                             set_lasm_json_response(
                                 response,
                                 400,
@@ -12191,15 +12431,95 @@ fn apply_lasm_internal_db_operation_materialization(
                                 ),
                             );
                             return true;
-                        };
-                        (db_value, tx_value)
+                        }
+                    },
+                    Err(_) => {
+                        set_lasm_json_response(
+                            response,
+                            500,
+                            &lasm_error_envelope(
+                                "HTTP.INTERNAL",
+                                "internal",
+                                "dynamic response state unavailable",
+                                500,
+                                trace_id,
+                            ),
+                        );
+                        return true;
+                    }
+                };
+                ExecTxSource::ExistingTx {
+                    tx: tx_value,
+                    db: db_value,
+                }
+            };
+
+            let (adapter, postgres_dsn) = match dynamic_state.lock() {
+                Ok(state) => (
+                    state.db_records_adapter,
+                    state.db_records_postgres_dsn.clone(),
+                ),
+                Err(_) => {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "HTTP.INTERNAL",
+                            "internal",
+                            "dynamic response state unavailable",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            };
+            if adapter == LasmDbRecordsAdapter::Postgres {
+                let Some(dsn) = postgres_dsn.as_deref() else {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.ADAPTER_CONFIG_INVALID",
+                            "internal",
+                            "postgres adapter requires SEC4_RT_LASM_DB_POSTGRES_DSN",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                if let Err(message) = run_lasm_postgres_exec_tx(dsn, template.as_str()) {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.EXEC_TX_FAILED",
+                            "missing_dependency",
+                            message.as_str(),
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            }
+
+            let record = match dynamic_state.lock() {
+                Ok(mut state) => {
+                    let (db, tx) = match tx_source {
+                        ExecTxSource::AllocateFromDb(db_value) => {
+                            let tx_value = allocate_lasm_db_tx_handle(&mut state, db_value);
+                            (db_value, tx_value)
+                        }
+                        ExecTxSource::ExistingTx { tx, db } => (db, tx),
                     };
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
                         op: "execTx".to_string(),
                         db,
-                        template: template.trim().to_string(),
-                        params: normalize_lasm_db_params(params.as_str()),
+                        template: template.clone(),
+                        params: params.clone(),
                         tx,
                         created_at_ms: lasm_now_ms(),
                     };
@@ -12317,15 +12637,21 @@ fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let record = match dynamic_state.lock() {
-                Ok(state) => state
-                    .db_records
-                    .iter()
-                    .rev()
-                    .find(|record| {
-                        record.db == db && record.template == template && record.params == params
-                    })
-                    .cloned(),
+            let (adapter, postgres_dsn, record) = match dynamic_state.lock() {
+                Ok(state) => (
+                    state.db_records_adapter,
+                    state.db_records_postgres_dsn.clone(),
+                    state
+                        .db_records
+                        .iter()
+                        .rev()
+                        .find(|record| {
+                            record.db == db
+                                && record.template == template.as_str()
+                                && record.params == params.as_str()
+                        })
+                        .cloned(),
+                ),
                 Err(_) => {
                     set_lasm_json_response(
                         response,
@@ -12341,6 +12667,71 @@ fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             };
+            if adapter == LasmDbRecordsAdapter::Postgres {
+                let Some(dsn) = postgres_dsn.as_deref() else {
+                    set_lasm_json_response(
+                        response,
+                        500,
+                        &lasm_error_envelope(
+                            "DB.ADAPTER_CONFIG_INVALID",
+                            "internal",
+                            "postgres adapter requires SEC4_RT_LASM_DB_POSTGRES_DSN",
+                            500,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                };
+                let row_object = match run_lasm_postgres_query_one(dsn, template.as_str()) {
+                    Ok(Some(value)) => value,
+                    Ok(None) => {
+                        set_lasm_json_response(
+                            response,
+                            404,
+                            &lasm_error_envelope(
+                                "DB.QUERY_ONE_NOT_FOUND",
+                                "missing_dependency",
+                                "db.queryOne row not found",
+                                404,
+                                trace_id,
+                            ),
+                        );
+                        return true;
+                    }
+                    Err(message) => {
+                        set_lasm_json_response(
+                            response,
+                            500,
+                            &lasm_error_envelope(
+                                "DB.QUERY_ONE_FAILED",
+                                "missing_dependency",
+                                message.as_str(),
+                                500,
+                                trace_id,
+                            ),
+                        );
+                        return true;
+                    }
+                };
+                let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
+                let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);
+                let record_payload = record
+                    .as_ref()
+                    .map(lasm_db_record_to_json)
+                    .unwrap_or(serde_json::Value::Null);
+                set_lasm_json_response(
+                    response,
+                    200,
+                    &serde_json::json!({
+                        "ok": true,
+                        "recordId": record_id,
+                        "rowSchema": row_schema,
+                        "row": row,
+                        "record": record_payload,
+                    }),
+                );
+                return true;
+            }
             let Some(record) = record else {
                 set_lasm_json_response(
                     response,
@@ -12418,6 +12809,51 @@ fn allocate_lasm_db_tx_handle(state: &mut LasmDynamicResponseState, db: i64) -> 
     state.next_db_tx_handle = tx.saturating_add(1).max(1);
     state.db_tx_handles.insert(tx, db);
     tx
+}
+
+fn run_lasm_postgres_exec(dsn: &str, query_template: &str) -> Result<(), String> {
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    client
+        .batch_execute(query_template)
+        .map_err(|err| format!("postgres execution failed: {err}"))?;
+    Ok(())
+}
+
+fn run_lasm_postgres_exec_tx(dsn: &str, query_template: &str) -> Result<(), String> {
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    let mut tx = client
+        .transaction()
+        .map_err(|err| format!("postgres transaction start failed: {err}"))?;
+    tx.batch_execute(query_template)
+        .map_err(|err| format!("postgres transaction execution failed: {err}"))?;
+    tx.commit()
+        .map_err(|err| format!("postgres transaction commit failed: {err}"))?;
+    Ok(())
+}
+
+fn run_lasm_postgres_query_one(
+    dsn: &str,
+    query_template: &str,
+) -> Result<Option<serde_json::Value>, String> {
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    let rows = client
+        .simple_query(query_template)
+        .map_err(|err| format!("postgres queryOne execution failed: {err}"))?;
+    for row in rows {
+        let SimpleQueryMessage::Row(row) = row else {
+            continue;
+        };
+        let mut object = serde_json::Map::new();
+        for (index, column) in row.columns().iter().enumerate() {
+            let value = row
+                .get(index)
+                .map(|entry| serde_json::Value::String(entry.to_string()))
+                .unwrap_or(serde_json::Value::Null);
+            object.insert(column.name().to_string(), value);
+        }
+        return Ok(Some(serde_json::Value::Object(object)));
+    }
+    Ok(None)
 }
 
 fn set_lasm_json_response(

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I wrote the first postgres-missing-DSN commands fixture with an invalid route shape, so `sec4 run` failed with compile diagnostics (`exit 1`) before reaching the adapter-config guard I wanted to validate. | For runtime flag/config guard tests, keep fixture routes parser/semantic-valid and minimal (`res.text`/simple router) so the test reaches the intended runtime gate deterministically. |
 | 2026-02-19 | self | I launched two Cargo tests in parallel again during cluster-status feature validation and reintroduced lock-wait noise. | Keep Cargo validations strictly sequential in this repo, even when using multi-tool calls. |
 | 2026-02-19 | self | I accidentally triggered the web tool while comparing local benchmark artifacts during a local-only runtime tuning pass. | Keep LASM tuning iterations strictly on local tools (`exec_command`/`apply_patch`) and use local `jq` for artifact comparisons. |
 | 2026-02-19 | self | I ran multiple relay tuning experiments (accept batching, buffer pool, worker-floor variants) that regressed the short healthy profile before settling on a resilience-targeted change. | For proxy hot-path tuning, gate each experiment with one quick probe and immediately revert regressions before layering another idea; keep only proven wins or explicitly resilience-scoped changes. |
