@@ -7985,6 +7985,21 @@ fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
     snapshot.store(Arc::new(last_published_ports.clone()));
 }
 
+fn lasm_cluster_remaining_cooldown_ms(
+    now: Instant,
+    last_at: Option<Instant>,
+    cooldown_ms: u64,
+) -> u64 {
+    let Some(last_at) = last_at else {
+        return 0;
+    };
+    let elapsed_ms = now
+        .duration_since(last_at)
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64;
+    cooldown_ms.saturating_sub(elapsed_ms)
+}
+
 fn desired_lasm_cluster_instances(
     active_connections: usize,
     min_instances: usize,
@@ -8119,6 +8134,8 @@ fn write_lasm_cluster_status_json(
     autoscale_desired_instances: usize,
     autoscale_last_saturation_events: usize,
     autoscale_last_dynamic_boost_step: usize,
+    autoscale_scale_up_cooldown_remaining_ms: u64,
+    autoscale_scale_down_cooldown_remaining_ms: u64,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -8151,6 +8168,8 @@ fn write_lasm_cluster_status_json(
         "autoscaleDesiredInstances": autoscale_desired_instances,
         "autoscaleLastSaturationEvents": autoscale_last_saturation_events,
         "autoscaleLastDynamicBoostStep": autoscale_last_dynamic_boost_step,
+        "autoscaleScaleUpCooldownRemainingMs": autoscale_scale_up_cooldown_remaining_ms,
+        "autoscaleScaleDownCooldownRemainingMs": autoscale_scale_down_cooldown_remaining_ms,
     });
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
@@ -8965,6 +8984,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let autoscale_last_dynamic_boost_step = Arc::new(AtomicUsize::new(
         shared_config.autoscale_scale_up_step.max(1),
     ));
+    let autoscale_scale_up_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
+    let autoscale_scale_down_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
 
     let status_writer_handle = if let Some(status_path) = shared_config.cluster_status_json.clone()
     {
@@ -8982,6 +9003,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
         let status_autoscale_last_dynamic_boost_step =
             Arc::clone(&autoscale_last_dynamic_boost_step);
+        let status_autoscale_scale_up_cooldown_remaining_ms =
+            Arc::clone(&autoscale_scale_up_cooldown_remaining_ms);
+        let status_autoscale_scale_down_cooldown_remaining_ms =
+            Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
         let status_tmp_path = status_path.with_extension(format!(
             "{}.tmp",
@@ -9024,6 +9049,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_autoscale_last_desired_instances.load(Ordering::Relaxed),
                     status_autoscale_last_saturation_events.load(Ordering::Relaxed),
                     status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
+                    status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
+                    status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
                 ) {
                     eprintln!("warning: LASM cluster status json write failed: {err}");
                 }
@@ -9053,6 +9080,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
         let autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
         let autoscale_last_dynamic_boost_step = Arc::clone(&autoscale_last_dynamic_boost_step);
+        let autoscale_scale_up_cooldown_remaining_ms =
+            Arc::clone(&autoscale_scale_up_cooldown_remaining_ms);
+        let autoscale_scale_down_cooldown_remaining_ms =
+            Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
         std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
@@ -9091,8 +9122,26 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         autoscale_config.autoscale_scale_up_step.max(1),
                         Ordering::Relaxed,
                     );
+                    autoscale_scale_up_cooldown_remaining_ms.store(0, Ordering::Relaxed);
+                    autoscale_scale_down_cooldown_remaining_ms.store(0, Ordering::Relaxed);
                     continue;
                 }
+                autoscale_scale_up_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_up_at,
+                        autoscale_config.autoscale_scale_up_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
+                );
+                autoscale_scale_down_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_down_at,
+                        autoscale_config.autoscale_scale_down_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
+                );
                 let saturation_events_pending = autoscale_saturation_events.load(Ordering::Relaxed);
                 if now.duration_since(last_scale_eval_at)
                     < Duration::from_millis(autoscale_config.autoscale_check_ms)
@@ -9190,6 +9239,22 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     &state,
                     &autoscale_worker_ports,
                     &mut last_published_worker_ports,
+                );
+                autoscale_scale_up_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_up_at,
+                        autoscale_config.autoscale_scale_up_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
+                );
+                autoscale_scale_down_cooldown_remaining_ms.store(
+                    lasm_cluster_remaining_cooldown_ms(
+                        now,
+                        last_scale_down_at,
+                        autoscale_config.autoscale_scale_down_cooldown_ms,
+                    ),
+                    Ordering::Relaxed,
                 );
             }
         })
