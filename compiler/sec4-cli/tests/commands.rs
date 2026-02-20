@@ -15477,6 +15477,8 @@ fn main() effects { net } -> Int {
         list_response.contains("\"count\":3")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"records.log\"")
+            && list_response.contains("\"txHandleCount\":")
+            && list_response.contains("\"txHandleCapacity\":")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("\"op\":\"queryOne\"")
@@ -15816,6 +15818,8 @@ fn main() effects { net } -> Int {
         list_response.contains("\"count\":3")
             && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"sqlite\"")
+            && list_response.contains("\"txHandleCount\":")
+            && list_response.contains("\"txHandleCapacity\":")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("\"op\":\"queryOne\"")
@@ -16491,6 +16495,8 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":1")
+            && list_response.contains("\"txHandleCount\":1")
+            && list_response.contains("\"txHandleCapacity\":1")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("alpha")
             && !list_response.contains("beta"),
@@ -17189,6 +17195,8 @@ fn main() effects { net } -> Int {
         list_response.contains("\"adapter\":\"postgres\"")
             && list_response.contains("\"count\":3")
             && list_response.contains("\"affectedRowsTotal\":")
+            && list_response.contains("\"txHandleCount\":")
+            && list_response.contains("\"txHandleCapacity\":")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("\"op\":\"queryOne\"")
