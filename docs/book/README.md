@@ -1071,5 +1071,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1099-m39-lasm-db-list-records-affected-rows-total.md`
 - `1100-m39-lasm-db-tx-handle-capacity-guard.md`
 - `1101-m39-lasm-db-list-tx-handle-telemetry.md`
+- `1102-m39-run-db-max-tx-handles-flag.md`
 
 As milestones progress, chapters will be added and linked from this index.

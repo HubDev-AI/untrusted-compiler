@@ -16356,7 +16356,7 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
-fn run_command_lasm_backend_enforces_db_tx_handle_capacity_when_sqlite_adapter() {
+fn run_command_lasm_backend_enforces_db_tx_handle_capacity_with_cli_flag_when_sqlite_adapter() {
     let project_dir = temp_dir("sec4-run-command-lasm-db-tx-capacity-sqlite");
     let db_base = project_dir.join("lasm-db");
     let port = find_available_tcp_port();
@@ -16420,12 +16420,14 @@ fn main() effects { net } -> Int {
             db_base_value.as_str(),
             "--db-adapter",
             "sqlite",
+            "--db-max-tx-handles",
+            "1",
             "--port",
             port_value.as_str(),
             "--serve-timeout-ms",
             "20000",
         ])
-        .env("SEC4_RT_LASM_DB_MAX_TX_HANDLES", "1")
+        .env("SEC4_RT_LASM_DB_MAX_TX_HANDLES", "3")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -16505,6 +16507,78 @@ fn main() effects { net } -> Int {
 
     let _ = child.kill();
     let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_max_tx_handles_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-max-tx-handles-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-max-tx-handles",
+        "8",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-max-tx-handles is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-max-tx-handles is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-max-tx-handles guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_max_tx_handles_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-max-tx-handles");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-max-tx-handles",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-max-tx-handles override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-max-tx-handles must be >= 1"),
+        "stderr should include deterministic db-max-tx-handles validation message:\n{stderr}"
+    );
+
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
 }
 

@@ -91,6 +91,8 @@ enum Commands {
         db_postgres_dsn: Option<String>,
         #[arg(long)]
         db_postgres_dsn_file: Option<PathBuf>,
+        #[arg(long)]
+        db_max_tx_handles: Option<u64>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -471,6 +473,7 @@ fn main() {
             db_adapter,
             db_postgres_dsn,
             db_postgres_dsn_file,
+            db_max_tx_handles,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -502,6 +505,7 @@ fn main() {
             db_adapter,
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
+            db_max_tx_handles,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -1285,6 +1289,7 @@ fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
     explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
     explicit_db_postgres_dsn: Option<&str>,
+    explicit_db_tx_max_handles: Option<usize>,
 ) -> Result<LasmDynamicResponseState, String> {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
@@ -1328,7 +1333,7 @@ fn build_lasm_dynamic_response_state(
         .max()
         .unwrap_or(0)
         .saturating_add(1);
-    let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles()?;
+    let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles(explicit_db_tx_max_handles)?;
     // Tx handles are runtime-local capabilities and must not be resurrected from persisted
     // record history across process restarts.
     let db_tx_handles = HashMap::new();
@@ -1391,7 +1396,15 @@ fn resolve_lasm_dynamic_db_records_adapter(
     LasmDbRecordsAdapter::RecordsLog
 }
 
-fn resolve_lasm_dynamic_db_tx_max_handles() -> Result<usize, String> {
+fn resolve_lasm_dynamic_db_tx_max_handles(
+    explicit_db_tx_max_handles: Option<usize>,
+) -> Result<usize, String> {
+    if let Some(value) = explicit_db_tx_max_handles {
+        if value == 0 {
+            return Err("invalid --db-max-tx-handles: expected usize >= 1".to_string());
+        }
+        return Ok(value);
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_DB_MAX_TX_HANDLES") else {
         return Ok(LASM_DB_TX_MAX_HANDLES_DEFAULT);
     };
@@ -8390,6 +8403,7 @@ fn cmd_run(
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
+    db_max_tx_handles: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -8512,6 +8526,14 @@ fn cmd_run(
     }
     if backend != RunBackend::Lasm && db_postgres_dsn_file.is_some() {
         eprintln!("run failed: --db-postgres-dsn-file is only supported with --backend lasm");
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_max_tx_handles.is_some() {
+        eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
+        return Err(2);
+    }
+    if db_max_tx_handles == Some(0) {
+        eprintln!("run failed: --db-max-tx-handles must be >= 1");
         return Err(2);
     }
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
@@ -8667,6 +8689,7 @@ fn cmd_run(
             db_base,
             effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
+            db_max_tx_handles,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -9010,6 +9033,7 @@ struct LasmClusterConfig {
     db_base: Option<PathBuf>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<String>,
+    db_max_tx_handles: Option<u64>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -9124,6 +9148,7 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
+    push_optional_u64_run_arg(&mut cmd, "--db-max-tx-handles", config.db_max_tx_handles);
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
     }
@@ -10134,6 +10159,7 @@ fn cmd_run_lasm_backend(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
+    db_max_tx_handles: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10377,6 +10403,7 @@ fn cmd_run_lasm_backend(
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
+            db_max_tx_handles,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -10413,6 +10440,7 @@ fn cmd_run_lasm_backend(
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
+            db_max_tx_handles,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
@@ -10455,6 +10483,13 @@ fn cmd_run_lasm_backend(
             db_base,
             db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
             explicit_db_postgres_dsn.as_deref(),
+            db_max_tx_handles
+                .map(|value| usize::try_from(value))
+                .transpose()
+                .map_err(|_| {
+                    eprintln!("run failed: --db-max-tx-handles exceeds platform limits");
+                    2
+                })?,
         )
         .map_err(|message| {
             eprintln!("run failed: {message}");
