@@ -639,6 +639,10 @@ Post-alpha track acceptance anchors:
      - relay init/pump failure warnings are rate-limited per relay worker loop,
      - keeps diagnostics while preventing stderr log spam from dominating runtime under sustained failure churn.
      - documented in `docs/book/1125-m39-lasm-cluster-relay-warning-throttle.md`.
+   - [x] Added bounded relay accept batching per worker loop iteration:
+     - relay workers now cap the number of accepted client sockets per cycle before returning to pump existing active relays, preventing accept-path starvation under sustained intake pressure,
+     - new env override `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX` controls the per-cycle cap (default `64`, clamped `1..4096`) without changing CLI surface.
+     - documented in `docs/book/1126-m39-lasm-cluster-relay-accept-batch-fairness.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
