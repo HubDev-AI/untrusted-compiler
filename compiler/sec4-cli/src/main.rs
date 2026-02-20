@@ -12704,6 +12704,20 @@ fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             };
+            if !is_lasm_valid_db_cap_handle(db) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.EXEC_INVALID",
+                        "validation",
+                        "db.exec requires db capability and query handle",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
             let (record, affected_rows) = match dynamic_state.lock() {
@@ -12899,6 +12913,22 @@ fn apply_lasm_internal_db_operation_materialization(
                 };
                 ExecTxSource::ExistingTx(tx_value)
             };
+            if let ExecTxSource::AllocateFromDb(db_value) = &tx_source {
+                if !is_lasm_valid_db_cap_handle(*db_value) {
+                    set_lasm_json_response(
+                        response,
+                        400,
+                        &lasm_error_envelope(
+                            "DB.EXEC_TX_INVALID",
+                            "validation",
+                            "db.execTx requires db.tx(dbCap) with valid db capability handle",
+                            400,
+                            trace_id,
+                        ),
+                    );
+                    return true;
+                }
+            }
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
@@ -13083,6 +13113,20 @@ fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             };
+            if !is_lasm_valid_db_cap_handle(db) {
+                set_lasm_json_response(
+                    response,
+                    400,
+                    &lasm_error_envelope(
+                        "DB.QUERY_ONE_INVALID",
+                        "validation",
+                        "db.queryOne requires db capability, query, and row schema handles",
+                        400,
+                        trace_id,
+                    ),
+                );
+                return true;
+            }
             let row_schema_raw = materialize_lasm_internal_header_value(
                 take_lasm_internal_header_value(response, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER)
                     .unwrap_or_else(|| "1".to_string()),
@@ -13369,6 +13413,10 @@ fn parse_lasm_positive_i64(value: &str) -> Option<i64> {
         .parse::<i64>()
         .ok()
         .filter(|candidate| *candidate > 0)
+}
+
+fn is_lasm_valid_db_cap_handle(db: i64) -> bool {
+    db == 1
 }
 
 fn normalize_lasm_db_params(value: &str) -> String {
