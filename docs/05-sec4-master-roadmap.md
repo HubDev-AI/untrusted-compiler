@@ -768,6 +768,11 @@ Post-alpha track acceptance anchors:
      - status payload now includes `relaySaturationEventsPerSec` derived from `relaySaturationEventsTotal` delta over status emission interval,
      - keeps existing pending/total counters and adds direct rate visibility for autoscale/tuning diagnosis.
      - documented in `docs/book/1154-m39-lasm-cluster-status-saturation-rate-field.md`.
+   - [x] Made saturation-triggered autoscale boost step dynamic by event volume:
+     - autoscale loop now derives `dynamic_boost_step` from saturation-event batch count (`relaySaturationEvents` per eval) instead of applying a fixed one-step saturation boost,
+     - keeps existing cooldown and max-instance bounds while allowing faster scale-up reaction when saturation bursts are larger.
+     - short LASM cluster probe after this slice recorded `1,433,593` requests in `20s` (`~71.32k req/s`, `p99 11.03ms`, peak RSS `~27,120 KB`) under default settings.
+     - documented in `docs/book/1155-m39-lasm-cluster-dynamic-saturation-boost-step.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

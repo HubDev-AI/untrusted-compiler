@@ -1124,5 +1124,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1152-m39-lasm-cluster-status-relay-worker-count.md`
 - `1153-m39-lasm-cluster-status-relay-queue-capacity-fields.md`
 - `1154-m39-lasm-cluster-status-saturation-rate-field.md`
+- `1155-m39-lasm-cluster-dynamic-saturation-boost-step.md`
 
 As milestones progress, chapters will be added and linked from this index.
