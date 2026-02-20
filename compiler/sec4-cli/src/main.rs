@@ -13034,9 +13034,9 @@ fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let record = match dynamic_state.lock() {
+            let matched_record = match dynamic_state.lock() {
                 Ok(mut state) => {
-                    let record = state
+                    let record_match = state
                         .db_records
                         .iter()
                         .rev()
@@ -13087,20 +13087,31 @@ fn apply_lasm_internal_db_operation_materialization(
                         };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-                        let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);
-                        let record_payload = record
-                            .as_ref()
-                            .map(lasm_db_record_to_json)
-                            .unwrap_or(serde_json::Value::Null);
+                        let record = LasmDbRecord {
+                            id: state.next_db_record_id,
+                            op: "queryOne".to_string(),
+                            db,
+                            template: template.clone(),
+                            params: params.clone(),
+                            tx: 0,
+                            created_at_ms: lasm_now_ms(),
+                        };
+                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                        state.db_records.push(record.clone());
+                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                            eprintln!(
+                                "warning: LASM dynamic records store persistence failed: {message}"
+                            );
+                        }
                         set_lasm_json_response(
                             response,
                             200,
                             &serde_json::json!({
                                 "ok": true,
-                                "recordId": record_id,
+                                "recordId": record.id,
                                 "rowSchema": row_schema,
                                 "row": row,
-                                "record": record_payload,
+                                "record": lasm_db_record_to_json(&record),
                             }),
                         );
                         return true;
@@ -13143,25 +13154,36 @@ fn apply_lasm_internal_db_operation_materialization(
                             };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
-                        let record_id = record.as_ref().map(|entry| entry.id).unwrap_or(0);
-                        let record_payload = record
-                            .as_ref()
-                            .map(lasm_db_record_to_json)
-                            .unwrap_or(serde_json::Value::Null);
+                        let record = LasmDbRecord {
+                            id: state.next_db_record_id,
+                            op: "queryOne".to_string(),
+                            db,
+                            template: template.clone(),
+                            params: params.clone(),
+                            tx: 0,
+                            created_at_ms: lasm_now_ms(),
+                        };
+                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                        state.db_records.push(record.clone());
+                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                            eprintln!(
+                                "warning: LASM dynamic records store persistence failed: {message}"
+                            );
+                        }
                         set_lasm_json_response(
                             response,
                             200,
                             &serde_json::json!({
                                 "ok": true,
-                                "recordId": record_id,
+                                "recordId": record.id,
                                 "rowSchema": row_schema,
                                 "row": row,
-                                "record": record_payload,
+                                "record": lasm_db_record_to_json(&record),
                             }),
                         );
                         return true;
                     }
-                    record
+                    record_match
                 }
                 Err(_) => {
                     set_lasm_json_response(
@@ -13178,7 +13200,7 @@ fn apply_lasm_internal_db_operation_materialization(
                     return true;
                 }
             };
-            let Some(record) = record else {
+            let Some(record) = matched_record else {
                 set_lasm_json_response(
                     response,
                     404,

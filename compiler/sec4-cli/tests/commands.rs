@@ -15733,11 +15733,11 @@ fn main() effects { net } -> Int {
         "db queryOne response should contain deterministic 200 status:\n{query_one_response}"
     );
     assert!(
-        query_one_response.contains("\"recordId\":2")
+        query_one_response.contains("\"recordId\":3")
             && query_one_response.contains("\"rowSchema\":7")
-            && query_one_response.contains("\"op\":\"execTx\"")
+            && query_one_response.contains("\"op\":\"queryOne\"")
             && query_one_response.contains("\"row\":\"{\\\"1\\\":1}\""),
-        "db queryOne response should return deterministic sqlite-backed row payload and matching record metadata:\n{query_one_response}"
+        "db queryOne response should return deterministic sqlite-backed row payload and queryOne record metadata:\n{query_one_response}"
     );
 
     let query_one_missing_param_response = run_lasm_oneshot_request(
@@ -15785,10 +15785,11 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"count\":2")
+        list_response.contains("\"count\":3")
             && list_response.contains("\"adapter\":\"sqlite\"")
             && list_response.contains("\"op\":\"exec\"")
-            && list_response.contains("\"op\":\"execTx\""),
+            && list_response.contains("\"op\":\"execTx\"")
+            && list_response.contains("\"op\":\"queryOne\""),
         "db records response should include deterministic persisted record list:\n{list_response}"
     );
 
@@ -16156,10 +16157,12 @@ fn main() effects { net } -> Int {
         "db queryOne response should contain deterministic 200 status:\n{query_one_response}"
     );
     assert!(
-        query_one_response.contains("\"rowSchema\":7")
+        query_one_response.contains("\"recordId\":3")
+            && query_one_response.contains("\"rowSchema\":7")
+            && query_one_response.contains("\"op\":\"queryOne\"")
             && query_one_response.contains("value")
             && query_one_response.contains("42"),
-        "db queryOne response should include postgres-backed row payload:\n{query_one_response}"
+        "db queryOne response should include postgres-backed row payload and queryOne record metadata:\n{query_one_response}"
     );
     let query_one_body = query_one_response
         .split("\r\n\r\n")
@@ -16268,9 +16271,10 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"adapter\":\"postgres\"")
-            && list_response.contains("\"count\":2")
+            && list_response.contains("\"count\":3")
             && list_response.contains("\"op\":\"exec\"")
-            && list_response.contains("\"op\":\"execTx\""),
+            && list_response.contains("\"op\":\"execTx\"")
+            && list_response.contains("\"op\":\"queryOne\""),
         "db records response should include postgres adapter metadata:\n{list_response}"
     );
 

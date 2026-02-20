@@ -1058,5 +1058,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1086-m39-run-postgres-dsn-single-resolution.md`
 - `1087-m39-lasm-exec-tx-invalid-handle-preexecution-guard.md`
 - `1088-m39-run-postgres-dsn-adapter-coherence.md`
+- `1089-m39-lasm-query-one-record-persistence-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
