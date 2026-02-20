@@ -8343,11 +8343,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
     debug_assert!(start_index_wrapped < sender_count);
-    let scan_start_index = if start_index_wrapped < sender_count {
-        start_index_wrapped
-    } else {
-        0
-    };
+    let scan_start_index = start_index_wrapped;
     let mut scan_remaining = sender_count.saturating_sub(1);
     let first_span_len = scan_remaining.min(sender_count.saturating_sub(scan_start_index));
     for relay_sender in &relay_senders[scan_start_index..scan_start_index + first_span_len] {

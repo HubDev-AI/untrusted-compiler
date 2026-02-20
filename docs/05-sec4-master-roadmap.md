@@ -959,6 +959,10 @@ Post-alpha track acceptance anchors:
      - relay connect-failure path now updates unhealthy cooldown and warning-throttle vectors via direct index access (`[selected_backend_index]`) instead of repeated `get()/get_mut()` option chains,
      - preserves cooldown/throttle behavior while reducing option-layer overhead on the failure-path hot loop.
      - documented in `docs/book/1201-m39-lasm-cluster-direct-index-connect-failure-state-access.md`.
+   - [x] Removed redundant fallback-start normalization branch:
+     - fallback dispatch now consumes pre-wrapped start indexes directly (`scan_start_index = start_index_wrapped`) after existing debug invariant check,
+     - removes one runtime normalization branch from relay fallback dispatch while preserving fallback scan behavior.
+     - documented in `docs/book/1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
