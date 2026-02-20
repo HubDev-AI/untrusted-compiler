@@ -8750,6 +8750,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_base = 0_usize;
             let mut relay_selection_reservation_len = 0_usize;
             let mut relay_selection_reservation_offset = 0_usize;
+            let mut relay_selection_reservation_next_index = 0_usize;
+            let mut relay_selection_reservation_worker_port_count = 0_usize;
             let mut unhealthy_prune_next_at: Option<Instant> = None;
 
             loop {
@@ -8811,36 +8813,49 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     let worker_ports = worker_ports_snapshot_ref.as_ref();
                     let worker_port_count = worker_ports.len();
                     let backend_port = {
-                        let mut next_selection_index = || {
+                        let mut next_selection_start_index = || {
                             if relay_selection_reservation_offset >= relay_selection_reservation_len
+                                || relay_selection_reservation_worker_port_count
+                                    != worker_port_count
                             {
                                 relay_selection_reservation_base = relay_selection_counter
                                     .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
                                 relay_selection_reservation_len = relay_accept_batch_max;
                                 relay_selection_reservation_offset = 0;
+                                relay_selection_reservation_worker_port_count = worker_port_count;
+                                relay_selection_reservation_next_index = if worker_port_count <= 1 {
+                                    0
+                                } else {
+                                    relay_selection_reservation_base % worker_port_count
+                                };
                             }
-                            let index = relay_selection_reservation_base
-                                .saturating_add(relay_selection_reservation_offset);
+                            let index = relay_selection_reservation_next_index;
                             relay_selection_reservation_offset =
                                 relay_selection_reservation_offset.saturating_add(1);
+                            if worker_port_count > 1 {
+                                relay_selection_reservation_next_index =
+                                    relay_selection_reservation_next_index.saturating_add(1);
+                                if relay_selection_reservation_next_index >= worker_port_count {
+                                    relay_selection_reservation_next_index = 0;
+                                }
+                            }
                             index
                         };
                         if worker_port_count == 0 {
                             None
                         } else {
                             if unhealthy_ports_until.is_empty() {
-                                let index = next_selection_index() % worker_port_count;
+                                let index = next_selection_start_index();
                                 Some(worker_ports[index])
                             } else if unhealthy_ports_until.len() >= worker_port_count {
                                 None
                             } else {
-                                let start_index = next_selection_index() % worker_port_count;
+                                let start_index = next_selection_start_index();
+                                let (tail, head) = worker_ports.split_at(start_index);
                                 let mut selected = None;
-                                for offset in 0..worker_port_count {
-                                    let candidate = worker_ports
-                                        [(start_index.saturating_add(offset)) % worker_port_count];
-                                    if !unhealthy_ports_until.contains_key(&candidate) {
-                                        selected = Some(candidate);
+                                for candidate in tail.iter().chain(head.iter()) {
+                                    if !unhealthy_ports_until.contains_key(candidate) {
+                                        selected = Some(*candidate);
                                         break;
                                     }
                                 }

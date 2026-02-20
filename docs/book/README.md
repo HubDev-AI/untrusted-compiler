@@ -1131,5 +1131,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1159-m39-lasm-cluster-status-autoscale-cooldown-remaining-fields.md`
 - `1160-m39-lasm-cluster-status-active-connections-per-worker.md`
 - `1161-m39-lasm-cluster-hotpath-dispatch-wrap-and-prune-binary-search.md`
+- `1162-m39-lasm-cluster-relay-selection-wrap-and-split-scan.md`
 
 As milestones progress, chapters will be added and linked from this index.
