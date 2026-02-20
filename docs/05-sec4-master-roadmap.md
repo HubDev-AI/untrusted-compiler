@@ -803,6 +803,10 @@ Post-alpha track acceptance anchors:
      - relay worker backend-selection reservation now tracks wrapped `next_index` per worker-port snapshot and refreshes modulo only when reservation or worker-port cardinality changes,
      - unhealthy-port fallback candidate scan now uses split-slice iteration (`tail` then `head`) from the selected start index instead of modulo/index arithmetic in each scan step.
      - documented in `docs/book/1162-m39-lasm-cluster-relay-selection-wrap-and-split-scan.md`.
+   - [x] Added relay per-connection buffer reuse in worker pumps:
+     - relay workers now keep a bounded local buffer pool (`relay_accept_batch_max * 4`, minimum `64`) and reuse relay pump buffers across connection lifecycles,
+     - avoids fresh dual-buffer allocation on every connection when reusable buffers are available while keeping bounded-memory behavior.
+     - documented in `docs/book/1163-m39-lasm-cluster-relay-buffer-pool-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
