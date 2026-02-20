@@ -987,6 +987,10 @@ Post-alpha track acceptance anchors:
      - single-relay and multi-relay accept loops now update `listener_enqueued_local` directly on immediate `try_send` success,
      - helper-based dispatch handling remains on saturation/unavailable fallback paths only.
      - documented in `docs/book/1208-m39-lasm-cluster-accept-fast-path-direct-enqueue.md`.
+   - [x] Added relay worker vector preallocation for steady-state capacities:
+     - relay connection and relay buffer-pool vectors are now initialized with capacity derived from `relay_accept_batch_max` / `relay_buffer_pool_max`,
+     - selected backend address vector now preallocates to current worker-port snapshot length before initial rebuild.
+     - documented in `docs/book/1209-m39-lasm-cluster-relay-vector-preallocation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

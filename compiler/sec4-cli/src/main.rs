@@ -9126,9 +9126,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_backend_connect_cooldown = relay_backend_connect_cooldown;
         let relay_accept_batch_max = relay_accept_batch_max;
         relay_handles.push(std::thread::spawn(move || {
-            let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
-            let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
             let relay_buffer_pool_max = relay_accept_batch_max.saturating_mul(4).max(64);
+            let mut relay_connections: Vec<LasmClusterRelayPump> =
+                Vec::with_capacity(relay_accept_batch_max.max(1));
+            let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> =
+                Vec::with_capacity(relay_buffer_pool_max);
             let mut unhealthy_ports_until_by_index: Vec<Option<Instant>> = Vec::new();
             let mut connect_warning_next_allowed_by_index: Vec<Option<Instant>> = Vec::new();
             let mut unhealthy_port_count = 0_usize;
@@ -9148,7 +9150,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let unhealthy_prune_interval =
                 Duration::from_millis(LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS);
             let mut selected_worker_ports_snapshot = relay_worker_ports.load_full();
-            let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> = Vec::new();
+            let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> =
+                Vec::with_capacity(selected_worker_ports_snapshot.len());
             rebuild_lasm_cluster_worker_backend_addrs(
                 selected_worker_ports_snapshot.as_ref(),
                 &mut selected_worker_backend_addrs,
