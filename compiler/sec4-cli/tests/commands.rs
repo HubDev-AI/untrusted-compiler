@@ -15478,6 +15478,7 @@ fn run_command_lasm_backend_persists_sqlite_records_and_query_one_when_db_intrin
     let query_one_port = find_available_tcp_port();
     let query_one_missing_param_port = find_available_tcp_port();
     let query_one_non_select_port = find_available_tcp_port();
+    let query_one_multi_statement_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -15761,6 +15762,18 @@ fn main() effects { net } -> Int {
             && query_one_non_select_response
                 .contains("sqlite queryOne requires SELECT-style SQL statement"),
         "sqlite queryOne should reject non-row-returning SQL deterministically:\n{query_one_non_select_response}"
+    );
+
+    let query_one_multi_statement_response = run_lasm_oneshot_request(
+        query_one_multi_statement_port,
+        "GET /db/query-one?template=SELECT%20%3F1%20AS%20value%3B%20SELECT%201&params=%5B42%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        query_one_multi_statement_response.contains("HTTP/1.1 400 Bad Request")
+            && query_one_multi_statement_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
+            && query_one_multi_statement_response
+                .contains("sqlite parameterized execution requires a single SQL statement"),
+        "sqlite queryOne should reject parameterized multi-statement SQL deterministically:\n{query_one_multi_statement_response}"
     );
 
     let list_response = run_lasm_oneshot_request(
