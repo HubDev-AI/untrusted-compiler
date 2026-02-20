@@ -133,6 +133,30 @@ pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmD
     records
 }
 
+pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Connection, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic sqlite records store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let connection = Connection::open(path).map_err(|err| {
+        format!(
+            "could not open LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
+        format!(
+            "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(connection)
+}
+
 pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     dsn: &str,
 ) -> Result<PostgresClient, String> {
@@ -396,29 +420,13 @@ pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
     state: &mut LasmDynamicResponseState,
     record: &LasmDbRecord,
 ) -> Result<(), String> {
-    let Some(path) = state.db_records_sqlite_store_path.as_ref() else {
+    let Some(path) = state.db_records_sqlite_store_path.as_ref().cloned() else {
         return Ok(());
     };
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "could not create LASM dynamic sqlite records store directory `{}`: {err}",
-                parent.display()
-            )
-        })?;
+    if state.db_records_sqlite_connection.is_none() {
+        let connection = connect_lasm_dynamic_db_records_sqlite(path.as_path())?;
+        state.db_records_sqlite_connection = Some(connection);
     }
-    let connection = Connection::open(path).map_err(|err| {
-        format!(
-            "could not open LASM dynamic sqlite records store `{}`: {err}",
-            path.display()
-        )
-    })?;
-    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
-        format!(
-            "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
-            path.display()
-        )
-    })?;
     let id = i64::try_from(record.id).map_err(|_| {
         format!(
             "could not persist LASM dynamic sqlite record id {}: out of i64 range",
@@ -437,8 +445,9 @@ pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
             record.affected_rows
         )
     })?;
-    match connection.execute(
-        "INSERT INTO lasm_db_records \
+    let result = match state.db_records_sqlite_connection.as_mut() {
+        Some(connection) => connection.execute(
+            "INSERT INTO lasm_db_records \
              (id, op, db, template, params, tx, affected_rows, created_at_ms) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
              ON CONFLICT(id) DO UPDATE SET \
@@ -449,19 +458,23 @@ pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
                  tx = excluded.tx, \
                  affected_rows = excluded.affected_rows, \
                  created_at_ms = excluded.created_at_ms",
-        params![
-            id,
-            record.op.as_str(),
-            record.db,
-            record.template.as_str(),
-            record.params.as_str(),
-            record.tx,
-            affected_rows,
-            created_at_ms
-        ],
-    ) {
+            params![
+                id,
+                record.op.as_str(),
+                record.db,
+                record.template.as_str(),
+                record.params.as_str(),
+                record.tx,
+                affected_rows,
+                created_at_ms
+            ],
+        ),
+        None => Err(rusqlite::Error::InvalidQuery),
+    };
+    match result {
         Ok(_) => Ok(()),
         Err(err) => {
+            state.db_records_sqlite_connection = None;
             let append_error = format!(
                 "could not append LASM dynamic sqlite record {} into `{}`: {err}",
                 record.id,
