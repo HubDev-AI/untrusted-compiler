@@ -1218,35 +1218,6 @@ struct LasmRouteMiddlewareRequirements {
     require_csrf: bool,
 }
 
-#[derive(Debug, Clone)]
-struct LasmSqlQueryPlan {
-    template: String,
-    params: String,
-}
-
-#[derive(Debug, Clone)]
-enum LasmDbTxPlan {
-    FromDb { db: String },
-    Handle { tx: String },
-}
-
-#[derive(Debug, Clone)]
-enum LasmDbOperationPlan {
-    Exec {
-        db: String,
-        query: LasmSqlQueryPlan,
-    },
-    ExecTx {
-        tx: LasmDbTxPlan,
-        query: LasmSqlQueryPlan,
-    },
-    QueryOne {
-        db: String,
-        row_schema: String,
-        query: LasmSqlQueryPlan,
-    },
-}
-
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 enum LasmDbRecordsAdapter {
     #[default]

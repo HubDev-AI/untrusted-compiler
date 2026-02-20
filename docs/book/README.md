@@ -1085,5 +1085,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1113-m39-lasm-db-runtime-dispatch-helper-extraction.md`
 - `1114-m39-lasm-db-persist-dispatch-move-to-adapter-state.md`
 - `1115-m39-lasm-db-plan-module-extraction.md`
+- `1116-m39-lasm-db-plan-type-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
