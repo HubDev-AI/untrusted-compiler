@@ -15817,6 +15817,7 @@ fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_av
     let query_one_port = find_available_tcp_port();
     let missing_param_port = find_available_tcp_port();
     let non_select_query_port = find_available_tcp_port();
+    let multi_statement_query_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -16076,6 +16077,21 @@ fn main() effects { net } -> Int {
         non_select_query_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && non_select_query_response.contains("postgres queryOne requires SELECT-style SQL statement"),
         "db queryOne non-select response should include deterministic statement-shape diagnostic:\n{non_select_query_response}"
+    );
+
+    let multi_statement_query_response = run_lasm_oneshot_request(
+        multi_statement_query_port,
+        "GET /db/query-one?template=SELECT%20$1::int%20AS%20value%3B%20SELECT%201&params=%5B42%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        multi_statement_query_response.contains("HTTP/1.1 400 Bad Request"),
+        "db queryOne multi-statement response should contain deterministic 400 status:\n{multi_statement_query_response}"
+    );
+    assert!(
+        multi_statement_query_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
+            && multi_statement_query_response
+                .contains("postgres parameterized execution requires a single SQL statement"),
+        "db queryOne multi-statement response should include deterministic single-statement diagnostic:\n{multi_statement_query_response}"
     );
 
     let list_response = run_lasm_oneshot_request(
