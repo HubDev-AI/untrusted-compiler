@@ -711,6 +711,12 @@ Post-alpha track acceptance anchors:
      - keeps overload/availability semantics unchanged while reducing per-connection atomic churn in hot paths.
      - short LASM cluster probe after this slice recorded `1,440,370` requests in `20s` (`~71.65k req/s`, `p99 10.16ms`, peak RSS `~27,120 KB`) under auto relay settings.
      - documented in `docs/book/1142-m39-lasm-cluster-active-connection-atomic-batching.md`.
+   - [x] Added parallel accept-worker pool for cluster proxy intake/dispatch:
+     - proxy listener now supports a bounded accept-worker pool (`SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS`, default `min(4, relay_workers)`) using cloned nonblocking listener sockets,
+     - accept workers run batched intake/dispatch loops in parallel and share deterministic saturation/unavailable response handling,
+     - cluster status JSON now includes `relayAcceptWorkers` for operator visibility of active accept-loop parallelism.
+     - short LASM cluster probe after this slice recorded `1,437,939` requests in `20s` (`~71.53k req/s`, `p99 11.53ms`, peak RSS `~27,216 KB`) under default settings.
+     - documented in `docs/book/1143-m39-lasm-cluster-accept-worker-pool.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
