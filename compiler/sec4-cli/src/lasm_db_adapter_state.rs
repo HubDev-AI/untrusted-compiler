@@ -1,4 +1,7 @@
-use crate::lasm_db_records_log::persist_lasm_dynamic_db_records_to_records_log;
+use crate::lasm_db_records_log::{
+    persist_lasm_dynamic_db_record_append_to_records_log,
+    persist_lasm_dynamic_db_records_to_records_log,
+};
 use crate::lasm_db_runtime_common::{
     lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
 };
@@ -561,10 +564,19 @@ pub(crate) fn persist_lasm_dynamic_db_record_append(
     record: &LasmDbRecord,
 ) -> Result<(), String> {
     match state.db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_record_append_to_records_log(
             state.db_records_store_path.as_deref(),
-            &state.db_records,
-        ),
+            record,
+        )
+        .or_else(|append_error| {
+            persist_lasm_dynamic_db_records_to_records_log(
+                state.db_records_store_path.as_deref(),
+                &state.db_records,
+            )
+            .map_err(|full_sync_error| {
+                format!("{append_error}; full records.log sync fallback failed: {full_sync_error}")
+            })
+        }),
         LasmDbRecordsAdapter::Sqlite => {
             persist_lasm_dynamic_db_record_append_to_sqlite(state, record)
         }

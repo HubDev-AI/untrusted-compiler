@@ -1,5 +1,6 @@
 use crate::LasmDbRecord;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 
 pub(crate) fn load_lasm_dynamic_db_records_from_disk(path: &Path) -> Vec<LasmDbRecord> {
@@ -72,6 +73,49 @@ pub(crate) fn persist_lasm_dynamic_db_records_to_records_log(
     fs::write(path, raw.as_bytes()).map_err(|err| {
         format!(
             "could not write LASM dynamic records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
+pub(crate) fn persist_lasm_dynamic_db_record_append_to_records_log(
+    path: Option<&Path>,
+    record: &LasmDbRecord,
+) -> Result<(), String> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic records store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let line = serde_json::to_string(&lasm_db_record_to_json(record))
+        .map_err(|err| format!("could not serialize LASM dynamic records store: {err}"))?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|err| {
+            format!(
+                "could not open LASM dynamic records store `{}` for append: {err}",
+                path.display()
+            )
+        })?;
+    file.write_all(line.as_bytes()).map_err(|err| {
+        format!(
+            "could not append LASM dynamic record {} to `{}`: {err}",
+            record.id,
+            path.display()
+        )
+    })?;
+    file.write_all(b"\n").map_err(|err| {
+        format!(
+            "could not append newline to LASM dynamic records store `{}`: {err}",
             path.display()
         )
     })?;
