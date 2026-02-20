@@ -8450,6 +8450,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
             let mut idle_spins = 0_u32;
+            let mut saturation_events_pending_local = 0_usize;
+            let mut saturation_events_total_local = 0_u64;
 
             loop {
                 let mut accepted = false;
@@ -8522,8 +8524,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     };
 
                     let Some(backend_port) = backend_port else {
-                        relay_saturation_events.fetch_add(1, Ordering::Relaxed);
-                        relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
+                        saturation_events_pending_local =
+                            saturation_events_pending_local.saturating_add(1);
+                        saturation_events_total_local =
+                            saturation_events_total_local.saturating_add(1);
                         let _ = write_lasm_cluster_unavailable_response(
                             &mut client,
                             LasmClusterUnavailableReason::NoHealthyWorkers,
@@ -8560,8 +8564,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             }
                         }
                         Err(err) => {
-                            relay_saturation_events.fetch_add(1, Ordering::Relaxed);
-                            relay_saturation_events_total.fetch_add(1, Ordering::Relaxed);
+                            saturation_events_pending_local =
+                                saturation_events_pending_local.saturating_add(1);
+                            saturation_events_total_local =
+                                saturation_events_total_local.saturating_add(1);
                             unhealthy_ports_until.insert(
                                 backend_port,
                                 Instant::now() + relay_backend_connect_cooldown,
@@ -8626,6 +8632,17 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             progressed = true;
                         }
                     }
+                }
+
+                if saturation_events_pending_local > 0 {
+                    relay_saturation_events
+                        .fetch_add(saturation_events_pending_local, Ordering::Relaxed);
+                    saturation_events_pending_local = 0;
+                }
+                if saturation_events_total_local > 0 {
+                    relay_saturation_events_total
+                        .fetch_add(saturation_events_total_local, Ordering::Relaxed);
+                    saturation_events_total_local = 0;
                 }
 
                 if receiver_closed && relay_connections.is_empty() {
