@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I committed one slice on local `dev` again before creating a `codex/*` branch, which later caused local `gh pr merge` fast-forward failure after the PR merged remotely. | Keep branch verification as a hard pre-edit gate: if on `dev`, branch first before any changes; after merge failures, rebase local `dev` onto `origin/dev` immediately. |
 | 2026-02-20 | self | I attempted one large multi-block patch across multiple DB error-mapping branches in `main.rs`, and context drift caused an avoidable apply-patch failure. | For repeated runtime branch rewrites, patch helper insertion first, then patch each branch block in small anchored hunks with fresh `sed` context. |
 | 2026-02-20 | self | While extending sqlite command coverage, I inserted new port vars into the wrong neighboring test block (`records-log` instead of `sqlite`) and broke compile with undefined symbols. | For adjacent long integration tests, anchor edits by function name and re-open the exact block before patching shared setup lines. |
 | 2026-02-20 | self | I added real sqlite runtime execution paths but initially assumed the db-base parent directory already existed, so first-run sqlite intrinsic execution failed with `unable to open database file`. | For runtime-backed file stores, always `create_dir_all(parent)` before first `Connection::open(...)`, then keep the deterministic adapter-config/error envelope mapping intact. |
