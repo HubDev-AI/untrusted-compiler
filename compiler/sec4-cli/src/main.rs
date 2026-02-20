@@ -12826,6 +12826,26 @@ fn apply_lasm_internal_db_operation_materialization(
 
             let record = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    let existing_tx_binding = match &tx_source {
+                        ExecTxSource::AllocateFromDb(_) => None,
+                        ExecTxSource::ExistingTx(tx) => {
+                            let Some(db) = state.db_tx_handles.get(tx).copied() else {
+                                set_lasm_json_response(
+                                    response,
+                                    400,
+                                    &lasm_error_envelope(
+                                        "DB.EXEC_TX_HANDLE_INVALID",
+                                        "validation",
+                                        "db.execTx transaction handle must come from db.tx",
+                                        400,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            };
+                            Some((db, *tx))
+                        }
+                    };
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
                         let postgres_params = parse_lasm_postgres_query_params(params.as_str());
                         if let Err(message) = run_lasm_postgres_exec_tx(
@@ -12873,23 +12893,8 @@ fn apply_lasm_internal_db_operation_materialization(
                             let tx_value = allocate_lasm_db_tx_handle(&mut state, db_value);
                             (db_value, tx_value)
                         }
-                        ExecTxSource::ExistingTx(tx) => {
-                            let Some(db) = state.db_tx_handles.get(&tx).copied() else {
-                                set_lasm_json_response(
-                                    response,
-                                    400,
-                                    &lasm_error_envelope(
-                                        "DB.EXEC_TX_HANDLE_INVALID",
-                                        "validation",
-                                        "db.execTx transaction handle must come from db.tx",
-                                        400,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            };
-                            (db, tx)
-                        }
+                        ExecTxSource::ExistingTx(_) => existing_tx_binding
+                            .expect("existing tx binding should be validated before execution"),
                     };
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
