@@ -1144,5 +1144,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1172-m39-lasm-cluster-no-healthy-selection-fast-gate.md`
 - `1173-m39-lasm-cluster-relay-dispatch-direct-slice-loops.md`
 - `1174-m39-lasm-cluster-selection-identity-fast-path.md`
+- `1175-m39-lasm-cluster-selection-identity-no-table-materialization.md`
 
 As milestones progress, chapters will be added and linked from this index.

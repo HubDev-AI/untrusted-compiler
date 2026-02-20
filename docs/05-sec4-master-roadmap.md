@@ -851,6 +851,10 @@ Post-alpha track acceptance anchors:
      - lookup rebuild now reports whether selection mapping is identity (`selected_index = start_index`),
      - relay selection path uses direct start-index selection when mapping is identity, skipping lookup table reads in healthy steady-state traffic.
      - documented in `docs/book/1174-m39-lasm-cluster-selection-identity-fast-path.md`.
+   - [x] Removed identity-state lookup table materialization:
+     - lookup rebuild now skips `lookup.resize/fill` entirely when mapping is identity (all healthy backends),
+     - rebuild gating now treats lookup length checks as non-required in identity mode, avoiding redundant table writes in healthy steady-state rebuilds.
+     - documented in `docs/book/1175-m39-lasm-cluster-selection-identity-no-table-materialization.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
