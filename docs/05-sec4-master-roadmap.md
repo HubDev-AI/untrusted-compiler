@@ -919,6 +919,10 @@ Post-alpha track acceptance anchors:
      - `run_lasm_cluster_accept_loop` now chooses single-sender vs multi-sender dispatch loop once per iteration and avoids per-stream sender-count branching in the inner accept hot path,
      - preserved dispatch-result semantics by routing both paths through shared accept-dispatch result handling.
      - documented in `docs/book/1191-m39-lasm-cluster-split-single-vs-multi-relay-accept-dispatch.md`.
+   - [x] Reduced accept-loop counter/flush overhead on steady-state path:
+     - accept-loop per-batch counters (`listener_accepted_in_batch`, `listener_enqueued_local`, fallback-local total) now use direct `+= 1` updates on bounded hot-path counters,
+     - end-of-iteration atomic flush helpers are now called only when local counters are non-zero, avoiding unconditional helper calls on the no-fallback/no-idle fast path.
+     - documented in `docs/book/1192-m39-lasm-cluster-accept-loop-counter-and-conditional-flush-hotpath.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
