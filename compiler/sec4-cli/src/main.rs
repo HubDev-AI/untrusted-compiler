@@ -8059,6 +8059,7 @@ fn write_lasm_cluster_unavailable_response(
 
 fn write_lasm_cluster_status_json(
     path: &Path,
+    tmp_path: &Path,
     listen_port: u16,
     min_instances: usize,
     max_instances: usize,
@@ -8096,19 +8097,13 @@ fn write_lasm_cluster_status_json(
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
 
-    let tmp_path = path.with_extension(format!(
-        "{}.tmp",
-        path.extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or("json")
-    ));
-    fs::write(&tmp_path, encoded).map_err(|err| {
+    fs::write(tmp_path, encoded).map_err(|err| {
         format!(
             "could not write cluster status json temporary file {}: {err}",
             tmp_path.display()
         )
     })?;
-    fs::rename(&tmp_path, path).map_err(|err| {
+    fs::rename(tmp_path, path).map_err(|err| {
         format!(
             "could not move cluster status json temporary file {} to {}: {err}",
             tmp_path.display(),
@@ -8701,11 +8696,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let status_worker_ports = Arc::clone(&worker_ports_snapshot);
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
+        let status_tmp_path = status_path.with_extension(format!(
+            "{}.tmp",
+            status_path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or("json")
+        ));
         Some(std::thread::spawn(move || loop {
             let worker_ports = status_worker_ports.load();
             let worker_count = worker_ports.len();
             if let Err(err) = write_lasm_cluster_status_json(
                 status_path.as_path(),
+                status_tmp_path.as_path(),
                 status_config.listen_port,
                 status_config.min_instances,
                 status_config.max_instances,
