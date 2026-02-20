@@ -663,6 +663,10 @@ Post-alpha track acceptance anchors:
      - relay worker threads now accumulate saturation pending/total increments locally during accept/connect failure handling,
      - counters are flushed to shared atomics once per worker cycle, reducing repeated atomic writes in failure-heavy intervals while preserving counter semantics.
      - documented in `docs/book/1131-m39-lasm-cluster-saturation-counter-batch.md`.
+   - [x] Optimized unhealthy membership pruning with per-cycle active-port set:
+      - relay workers now build a per-cycle active worker-port set for unhealthy-map membership checks instead of repeated linear `Vec::contains` scans during retain,
+      - when worker snapshot is empty, unhealthy cooldown map now clears immediately to avoid stale carry-over.
+      - documented in `docs/book/1132-m39-lasm-cluster-unhealthy-membership-set-prune.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
