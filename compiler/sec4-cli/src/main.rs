@@ -13008,6 +13008,15 @@ fn is_lasm_postgres_query_one_select_like(query_template: &str) -> bool {
     )
 }
 
+fn normalize_lasm_postgres_query_for_subquery(query_template: &str) -> String {
+    let mut normalized = query_template.trim().to_string();
+    while normalized.ends_with(';') {
+        normalized.pop();
+        normalized = normalized.trim_end().to_string();
+    }
+    normalized
+}
+
 fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
@@ -13123,10 +13132,14 @@ fn run_lasm_postgres_query_one(
     query_template: &str,
     params: &[LasmPostgresParam],
 ) -> Result<Option<serde_json::Value>, String> {
-    if !is_lasm_postgres_query_one_select_like(query_template) {
+    let normalized_query = normalize_lasm_postgres_query_for_subquery(query_template);
+    if normalized_query.trim().is_empty() {
+        return Err("postgres queryOne requires non-empty SQL statement".to_string());
+    }
+    if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
         return Err("postgres queryOne requires SELECT-style SQL statement".to_string());
     }
-    let required_params = max_lasm_postgres_placeholder_index(query_template);
+    let required_params = max_lasm_postgres_placeholder_index(normalized_query.as_str());
     if required_params > params.len() {
         return Err(format!(
             "postgres query requires at least {required_params} sql parameters but received {}",
@@ -13135,7 +13148,8 @@ fn run_lasm_postgres_query_one(
     }
     let wrapped_query = format!(
         "SELECT row_to_json(_sec4_row)::text AS __sec4_row \
-         FROM ({query_template}) AS _sec4_row LIMIT 1"
+         FROM ({}) AS _sec4_row LIMIT 1",
+        normalized_query
     );
     let execute_query =
         |client: &mut PostgresClient| -> Result<Option<postgres::Row>, postgres::Error> {

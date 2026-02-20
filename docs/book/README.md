@@ -1045,5 +1045,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1073-m39-lasm-postgres-exec-tx-prepared-flow-coverage.md`
 - `1074-m39-lasm-postgres-comment-aware-placeholder-arity.md`
 - `1075-m39-lasm-postgres-query-one-select-shape-guard.md`
+- `1076-m39-lasm-postgres-query-one-trailing-semicolon-normalization.md`
 
 As milestones progress, chapters will be added and linked from this index.
