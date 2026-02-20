@@ -12801,9 +12801,42 @@ fn lasm_postgres_param_value_to_string(value: serde_json::Value) -> String {
     }
 }
 
-fn render_lasm_postgres_query_template(query_template: &str, params: &[String]) -> String {
+fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
+    let bytes = query_template.as_bytes();
+    let mut index = 0usize;
+    let mut max_placeholder = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'$' {
+            let mut cursor = index + 1;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+                cursor += 1;
+            }
+            if cursor > index + 1 {
+                if let Ok(value) = query_template[index + 1..cursor].parse::<usize>() {
+                    max_placeholder = max_placeholder.max(value);
+                }
+            }
+            index = cursor;
+            continue;
+        }
+        index += 1;
+    }
+    max_placeholder
+}
+
+fn render_lasm_postgres_query_template(
+    query_template: &str,
+    params: &[String],
+) -> Result<String, String> {
+    let required_params = max_lasm_postgres_placeholder_index(query_template);
+    if required_params > params.len() {
+        return Err(format!(
+            "postgres query requires at least {required_params} sql parameters but received {}",
+            params.len()
+        ));
+    }
     if params.is_empty() {
-        return query_template.to_string();
+        return Ok(query_template.to_string());
     }
     let mut rendered = query_template.to_string();
     for (index, param) in params.iter().enumerate().rev() {
@@ -12811,7 +12844,7 @@ fn render_lasm_postgres_query_template(query_template: &str, params: &[String]) 
         let literal = render_lasm_postgres_sql_literal(param.as_str());
         rendered = rendered.replace(placeholder.as_str(), literal.as_str());
     }
-    rendered
+    Ok(rendered)
 }
 
 fn render_lasm_postgres_sql_literal(value: &str) -> String {
@@ -12841,7 +12874,7 @@ fn run_lasm_postgres_exec(
     query_template: &str,
     params: &[String],
 ) -> Result<(), String> {
-    let rendered_query = render_lasm_postgres_query_template(query_template, params);
+    let rendered_query = render_lasm_postgres_query_template(query_template, params)?;
     let initial = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
         client.batch_execute(rendered_query.as_str())
@@ -12867,7 +12900,7 @@ fn run_lasm_postgres_exec_tx(
     query_template: &str,
     params: &[String],
 ) -> Result<(), String> {
-    let rendered_query = render_lasm_postgres_query_template(query_template, params);
+    let rendered_query = render_lasm_postgres_query_template(query_template, params)?;
     let run_once = |client: &mut PostgresClient| -> Result<(), postgres::Error> {
         let mut tx = client.transaction()?;
         tx.batch_execute(rendered_query.as_str())?;
@@ -12897,7 +12930,7 @@ fn run_lasm_postgres_query_one(
     query_template: &str,
     params: &[String],
 ) -> Result<Option<serde_json::Value>, String> {
-    let rendered_query = render_lasm_postgres_query_template(query_template, params);
+    let rendered_query = render_lasm_postgres_query_template(query_template, params)?;
     let execute_query =
         |client: &mut PostgresClient| -> Result<Vec<SimpleQueryMessage>, postgres::Error> {
             client.simple_query(rendered_query.as_str())

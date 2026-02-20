@@ -15774,6 +15774,7 @@ fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_av
     let project_dir = temp_dir("sec4-run-command-lasm-db-postgres");
     let exec_port = find_available_tcp_port();
     let query_one_port = find_available_tcp_port();
+    let missing_param_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
     fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
     fs::write(
@@ -15973,6 +15974,21 @@ fn main() effects { net } -> Int {
     assert!(
         (ratio - 3.25).abs() < 0.00001,
         "db queryOne ratio column should materialize as numeric json: {ratio}"
+    );
+
+    let missing_param_response = run_lasm_oneshot_request(
+        missing_param_port,
+        "GET /db/query-one?template=SELECT%20$2::int%20AS%20value&params=%5B42%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        missing_param_response.contains("HTTP/1.1 500 Internal Server Error"),
+        "db queryOne missing-param response should contain deterministic 500 status:\n{missing_param_response}"
+    );
+    assert!(
+        missing_param_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+            && missing_param_response
+                .contains("postgres query requires at least 2 sql parameters but received 1"),
+        "db queryOne missing-param response should include deterministic parameter-arity diagnostic:\n{missing_param_response}"
     );
 
     let list_response = run_lasm_oneshot_request(
