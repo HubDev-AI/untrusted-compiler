@@ -1160,5 +1160,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1188-m39-lasm-cluster-batched-relay-fallback-telemetry-flush.md`
 - `1189-m39-lasm-cluster-relay-dispatch-fallback-rate-telemetry.md`
 - `1190-m39-lasm-cluster-streaming-accept-dispatch-no-batch-buffer.md`
+- `1191-m39-lasm-cluster-split-single-vs-multi-relay-accept-dispatch.md`
 
 As milestones progress, chapters will be added and linked from this index.

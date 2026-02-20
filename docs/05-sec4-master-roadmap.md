@@ -915,6 +915,10 @@ Post-alpha track acceptance anchors:
      - `run_lasm_cluster_accept_loop` now dispatches accepted streams immediately within the accept loop instead of push/clear/drain over a temporary `Vec<TcpStream>`,
      - preserves dispatch cursor ordering, fallback/saturation/unavailable handling, and batched counter flush semantics while removing per-iteration batch-buffer churn.
      - documented in `docs/book/1190-m39-lasm-cluster-streaming-accept-dispatch-no-batch-buffer.md`.
+   - [x] Split single-relay and multi-relay accept dispatch paths:
+     - `run_lasm_cluster_accept_loop` now chooses single-sender vs multi-sender dispatch loop once per iteration and avoids per-stream sender-count branching in the inner accept hot path,
+     - preserved dispatch-result semantics by routing both paths through shared accept-dispatch result handling.
+     - documented in `docs/book/1191-m39-lasm-cluster-split-single-vs-multi-relay-accept-dispatch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
