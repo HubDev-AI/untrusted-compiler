@@ -1039,6 +1039,10 @@ Post-alpha track acceptance anchors:
      - `LasmClusterStatusSnapshot` now stores worker ports as `Arc<Vec<u16>>` and status writer passes `load_full()` worker-port snapshots directly,
      - removes per-interval worker-port vector cloning from unchanged-snapshot comparison.
      - documented in `docs/book/1221-m39-lasm-cluster-status-snapshot-worker-port-arc-reuse.md`.
+   - [x] Switched status JSON encoding path to typed payload serialization:
+     - status writer now serializes a typed `LasmClusterStatusPayload` struct (serde rename rules) instead of building dynamic JSON maps via `serde_json::json!`,
+     - preserves status JSON field contract while reducing dynamic payload construction overhead.
+     - documented in `docs/book/1222-m39-lasm-cluster-status-writer-typed-payload-serialization.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
