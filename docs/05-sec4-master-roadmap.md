@@ -867,6 +867,10 @@ Post-alpha track acceptance anchors:
      - when relay sender count is exactly `1`, accept loop now dispatches directly via that sender (`try_send`) without calling the generic dispatch helper,
      - preserves saturated/unavailable mapping semantics while removing one hot-path function call layer in single-relay deployments.
      - documented in `docs/book/1178-m39-lasm-cluster-single-sender-accept-loop-inline-dispatch.md`.
+   - [x] Switched selection-lookup storage to sentinel-index vector:
+     - relay selection lookup now uses `Vec<usize>` with sentinel `usize::MAX` for “no backend” entries instead of `Vec<Option<usize>>`,
+     - reduces lookup-entry option wrapping overhead while preserving unhealthy remap semantics and identity fast path behavior.
+     - documented in `docs/book/1179-m39-lasm-cluster-selection-lookup-sentinel-storage.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
