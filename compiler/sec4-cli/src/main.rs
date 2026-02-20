@@ -9044,9 +9044,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             let previous_ports_snapshot =
                                 Arc::clone(&selected_worker_ports_snapshot);
                             let previous_unhealthy_ports_until_by_index =
-                                unhealthy_ports_until_by_index.clone();
+                                std::mem::take(&mut unhealthy_ports_until_by_index);
                             let previous_connect_warning_next_allowed_by_index =
-                                connect_warning_next_allowed_by_index.clone();
+                                std::mem::take(&mut connect_warning_next_allowed_by_index);
                             selected_worker_ports_snapshot = Arc::clone(&snapshot);
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
@@ -9121,9 +9121,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             let previous_ports_snapshot =
                                 Arc::clone(&selected_worker_ports_snapshot);
                             let previous_unhealthy_ports_until_by_index =
-                                unhealthy_ports_until_by_index.clone();
+                                std::mem::take(&mut unhealthy_ports_until_by_index);
                             let previous_connect_warning_next_allowed_by_index =
-                                connect_warning_next_allowed_by_index.clone();
+                                std::mem::take(&mut connect_warning_next_allowed_by_index);
                             selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
