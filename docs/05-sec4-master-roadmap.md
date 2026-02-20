@@ -647,6 +647,10 @@ Post-alpha track acceptance anchors:
      - relay workers now prune expired unhealthy-port entries once per worker cycle (before accept batching) instead of re-running map retention for every accepted connection,
      - backend selection in the unhealthy-path now uses the already-pruned map, keeping the fast path unchanged and reducing per-connection bookkeeping churn under sustained traffic.
      - documented in `docs/book/1127-m39-lasm-cluster-unhealthy-map-fastpath.md`.
+   - [x] Reduced per-accept worker-port snapshot overhead in relay loop:
+     - relay workers now capture worker-port snapshot once per worker cycle and reuse it across that cycle’s accept batch,
+     - backend selection no longer performs a fresh `ArcSwap` load per accepted connection, reducing hot-path atomic/snapshot churn while keeping behavior deterministic.
+     - documented in `docs/book/1128-m39-lasm-cluster-worker-snapshot-per-cycle.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
