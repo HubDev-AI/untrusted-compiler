@@ -1108,5 +1108,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1136-m39-lasm-cluster-active-set-snapshot-cache.md`
 - `1137-m39-lasm-cluster-unavailable-write-no-flush.md`
 - `1138-m39-lasm-cluster-status-compact-json-encoding.md`
+- `1139-m39-lasm-cluster-status-precompute-tmp-path.md`
 
 As milestones progress, chapters will be added and linked from this index.

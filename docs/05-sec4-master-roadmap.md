@@ -691,6 +691,10 @@ Post-alpha track acceptance anchors:
       - status writer now uses compact `serde_json::to_vec(...)` output instead of pretty-printed payload encoding,
       - keeps JSON payload fields/semantics unchanged while reducing periodic telemetry serialization and write size overhead.
       - documented in `docs/book/1138-m39-lasm-cluster-status-compact-json-encoding.md`.
+   - [x] Precomputed status writer temp-file path outside write loop:
+      - status thread now derives the `<status>.tmp` path once before entering the periodic loop and passes it into status writer calls,
+      - removes repeated path-extension formatting/allocations from every status-write iteration.
+      - documented in `docs/book/1139-m39-lasm-cluster-status-precompute-tmp-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
