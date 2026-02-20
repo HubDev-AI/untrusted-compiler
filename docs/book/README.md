@@ -1119,5 +1119,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1147-m39-lasm-cluster-relay-selection-counter-batch-reservation.md`
 - `1148-m39-lasm-cluster-relay-dispatch-slice-iteration.md`
 - `1149-m39-lasm-cluster-relay-selection-batch-fallback-reuse.md`
+- `1150-m39-lasm-cluster-unhealthy-prune-snapshot-membership.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -8686,8 +8686,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
-            let mut active_worker_ports = HashSet::new();
-            let mut active_worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
             let mut connect_warning_next_allowed: HashMap<u16, Instant> = HashMap::new();
             let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
@@ -8707,22 +8705,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     let snapshot = relay_worker_ports.load_full();
                     let worker_port_count = snapshot.len();
                     if worker_port_count == 0 {
-                        active_worker_ports.clear();
-                        active_worker_ports_snapshot = None;
                         unhealthy_ports_until.clear();
                     } else {
-                        let refresh_active_worker_ports = active_worker_ports_snapshot
-                            .as_ref()
-                            .map(|cached| !Arc::ptr_eq(cached, &snapshot))
-                            .unwrap_or(true);
-                        if refresh_active_worker_ports {
-                            active_worker_ports.clear();
-                            active_worker_ports.extend(snapshot.iter().copied());
-                            active_worker_ports_snapshot = Some(Arc::clone(&snapshot));
-                        }
                         let now = Instant::now();
                         unhealthy_ports_until.retain(|port, until| {
-                            *until > now && active_worker_ports.contains(port)
+                            *until > now && snapshot.contains(port)
                         });
                     }
                     worker_ports_snapshot = Some(snapshot);
