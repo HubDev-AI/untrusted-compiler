@@ -1098,5 +1098,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1126-m39-lasm-cluster-relay-accept-batch-fairness.md`
 - `1127-m39-lasm-cluster-unhealthy-map-fastpath.md`
 - `1128-m39-lasm-cluster-worker-snapshot-per-cycle.md`
+- `1129-m39-lasm-cluster-unhealthy-membership-prune.md`
 
 As milestones progress, chapters will be added and linked from this index.
