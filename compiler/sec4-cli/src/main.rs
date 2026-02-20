@@ -1260,6 +1260,7 @@ struct LasmDbRecord {
     template: String,
     params: String,
     tx: i64,
+    affected_rows: u64,
     created_at_ms: u64,
 }
 
@@ -1423,8 +1424,7 @@ fn resolve_lasm_dynamic_db_postgres_dsn(
         let dsn = raw.trim().to_string();
         if dsn.is_empty() {
             return Err(
-                "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
-                    .to_string(),
+                "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string(),
             );
         }
         return Ok(Some(dsn));
@@ -1589,7 +1589,7 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
         return Vec::new();
     }
     let mut statement = match connection.prepare(
-        "SELECT id, op, db, template, params, tx, created_at_ms \
+        "SELECT id, op, db, template, params, tx, affected_rows, created_at_ms \
          FROM lasm_db_records \
          ORDER BY id ASC",
     ) {
@@ -1607,9 +1607,13 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
         if id < 0 {
             return Err(rusqlite::Error::IntegralValueOutOfRange(0, id));
         }
-        let created_at_ms = row.get::<_, i64>(6)?;
+        let affected_rows = row.get::<_, i64>(6)?;
+        if affected_rows < 0 {
+            return Err(rusqlite::Error::IntegralValueOutOfRange(6, affected_rows));
+        }
+        let created_at_ms = row.get::<_, i64>(7)?;
         if created_at_ms < 0 {
-            return Err(rusqlite::Error::IntegralValueOutOfRange(6, created_at_ms));
+            return Err(rusqlite::Error::IntegralValueOutOfRange(7, created_at_ms));
         }
         Ok(LasmDbRecord {
             id: id as u64,
@@ -1618,6 +1622,7 @@ fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
             template: row.get(3)?,
             params: row.get(4)?,
             tx: row.get(5)?,
+            affected_rows: affected_rows as u64,
             created_at_ms: created_at_ms as u64,
         })
     }) {
@@ -1662,9 +1667,11 @@ fn ensure_lasm_dynamic_db_records_postgres_schema(
             template TEXT NOT NULL,
             params TEXT NOT NULL,
             tx BIGINT NOT NULL,
+            affected_rows BIGINT NOT NULL DEFAULT 0,
             created_at_ms BIGINT NOT NULL
-        )",
-        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+        );
+        ALTER TABLE {} ADD COLUMN IF NOT EXISTS affected_rows BIGINT NOT NULL DEFAULT 0;",
+        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
     );
     client
         .batch_execute(statement.as_str())
@@ -1675,7 +1682,7 @@ fn load_lasm_dynamic_db_records_from_postgres(
     client: &mut PostgresClient,
 ) -> Result<Vec<LasmDbRecord>, String> {
     let query = format!(
-        "SELECT id, op, db, template, params, tx, created_at_ms \
+        "SELECT id, op, db, template, params, tx, affected_rows, created_at_ms \
          FROM {} \
          ORDER BY id ASC",
         LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
@@ -1686,10 +1693,17 @@ fn load_lasm_dynamic_db_records_from_postgres(
     let mut records = Vec::with_capacity(rows.len());
     for (index, row) in rows.into_iter().enumerate() {
         let id: i64 = row.get(0);
-        let created_at_ms: i64 = row.get(6);
+        let affected_rows: i64 = row.get(6);
+        let created_at_ms: i64 = row.get(7);
         if id < 0 {
             return Err(format!(
                 "could not load LASM dynamic postgres record row {}: id out of u64 range",
+                index + 1
+            ));
+        }
+        if affected_rows < 0 {
+            return Err(format!(
+                "could not load LASM dynamic postgres record row {}: affected_rows out of u64 range",
                 index + 1
             ));
         }
@@ -1706,6 +1720,7 @@ fn load_lasm_dynamic_db_records_from_postgres(
             template: row.get(3),
             params: row.get(4),
             tx: row.get(5),
+            affected_rows: affected_rows as u64,
             created_at_ms: created_at_ms as u64,
         });
     }
@@ -1798,8 +1813,8 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
     let mut statement = tx
         .prepare(
             "INSERT INTO lasm_db_records \
-             (id, op, db, template, params, tx, created_at_ms) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .map_err(|err| {
             format!(
@@ -1820,6 +1835,12 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
                 record.created_at_ms
             )
         })?;
+        let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record affected_rows {}: out of i64 range",
+                record.affected_rows
+            )
+        })?;
         statement
             .execute(params![
                 id,
@@ -1828,6 +1849,7 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
                 record.template.as_str(),
                 record.params.as_str(),
                 record.tx,
+                affected_rows,
                 created_at_ms
             ])
             .map_err(|err| {
@@ -1863,8 +1885,8 @@ fn persist_lasm_dynamic_db_records_to_postgres(
         tx.execute(delete_statement.as_str(), &[])
             .map_err(|err| format!("could not clear LASM dynamic postgres records store: {err}"))?;
         let insert_statement = format!(
-            "INSERT INTO {} (id, op, db, template, params, tx, created_at_ms) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO {} (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
         );
         for record in &ordered {
@@ -1880,6 +1902,12 @@ fn persist_lasm_dynamic_db_records_to_postgres(
                     record.created_at_ms
                 )
             })?;
+            let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record affected_rows {}: out of i64 range",
+                    record.affected_rows
+                )
+            })?;
             tx.execute(
                 insert_statement.as_str(),
                 &[
@@ -1889,6 +1917,7 @@ fn persist_lasm_dynamic_db_records_to_postgres(
                     &record.template,
                     &record.params,
                     &record.tx,
+                    &affected_rows,
                     &created_at_ms,
                 ],
             )
@@ -1930,9 +1959,28 @@ fn ensure_lasm_dynamic_db_records_sqlite_schema(connection: &Connection) -> rusq
             template TEXT NOT NULL,
             params TEXT NOT NULL,
             tx INTEGER NOT NULL,
+            affected_rows INTEGER NOT NULL DEFAULT 0,
             created_at_ms INTEGER NOT NULL
         );",
-    )
+    )?;
+    let mut statement = connection.prepare("PRAGMA table_info(lasm_db_records)")?;
+    let mut rows = statement.query([])?;
+    let mut has_affected_rows = false;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == "affected_rows" {
+            has_affected_rows = true;
+            break;
+        }
+    }
+    drop(rows);
+    drop(statement);
+    if !has_affected_rows {
+        connection.execute_batch(
+            "ALTER TABLE lasm_db_records ADD COLUMN affected_rows INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+    Ok(())
 }
 
 fn parse_lasm_sqlite_query_param_value(value: serde_json::Value) -> SqliteValue {
@@ -2231,6 +2279,10 @@ fn lasm_db_record_from_json(value: &serde_json::Value) -> Option<LasmDbRecord> {
         template: value.get("template")?.as_str()?.to_string(),
         params: value.get("params")?.as_str()?.to_string(),
         tx: value.get("tx")?.as_i64()?,
+        affected_rows: value
+            .get("affected_rows")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0),
         created_at_ms: value.get("created_at_ms")?.as_u64()?,
     })
 }
@@ -2243,6 +2295,7 @@ fn lasm_db_record_to_json(record: &LasmDbRecord) -> serde_json::Value {
         "template": record.template,
         "params": record.params,
         "tx": record.tx,
+        "affected_rows": record.affected_rows,
         "created_at_ms": record.created_at_ms,
     })
 }
@@ -12683,26 +12736,29 @@ fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let sqlite_affected_rows =
-                            match run_lasm_sqlite_exec(&state, template.as_str(), params.as_str()) {
-                                Ok(value) => value,
-                                Err(message) => {
-                                    let (status, code, kind) =
-                                        classify_lasm_db_runtime_error("exec", message.as_str());
-                                    set_lasm_json_response(
-                                        response,
+                        let sqlite_affected_rows = match run_lasm_sqlite_exec(
+                            &state,
+                            template.as_str(),
+                            params.as_str(),
+                        ) {
+                            Ok(value) => value,
+                            Err(message) => {
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("exec", message.as_str());
+                                set_lasm_json_response(
+                                    response,
+                                    status,
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
                                         status,
-                                        &lasm_error_envelope(
-                                            code,
-                                            kind,
-                                            message.as_str(),
-                                            status,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                }
-                            };
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         affected_rows = sqlite_affected_rows;
                     }
                     let record = LasmDbRecord {
@@ -12712,6 +12768,7 @@ fn apply_lasm_internal_db_operation_materialization(
                         template: template.clone(),
                         params: params.clone(),
                         tx: 0,
+                        affected_rows,
                         created_at_ms: lasm_now_ms(),
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
@@ -12933,6 +12990,7 @@ fn apply_lasm_internal_db_operation_materialization(
                         template: template.clone(),
                         params: params.clone(),
                         tx,
+                        affected_rows,
                         created_at_ms: lasm_now_ms(),
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
@@ -13110,6 +13168,7 @@ fn apply_lasm_internal_db_operation_materialization(
                             template: template.clone(),
                             params: params.clone(),
                             tx: 0,
+                            affected_rows: 1,
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
@@ -13134,41 +13193,43 @@ fn apply_lasm_internal_db_operation_materialization(
                         return true;
                     }
                     if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        let row_object =
-                            match run_lasm_sqlite_query_one(&state, template.as_str(), params.as_str())
-                            {
-                                Ok(Some(value)) => value,
-                                Ok(None) => {
-                                    set_lasm_json_response(
-                                        response,
+                        let row_object = match run_lasm_sqlite_query_one(
+                            &state,
+                            template.as_str(),
+                            params.as_str(),
+                        ) {
+                            Ok(Some(value)) => value,
+                            Ok(None) => {
+                                set_lasm_json_response(
+                                    response,
+                                    404,
+                                    &lasm_error_envelope(
+                                        "DB.QUERY_ONE_NOT_FOUND",
+                                        "missing_dependency",
+                                        "db.queryOne row not found",
                                         404,
-                                        &lasm_error_envelope(
-                                            "DB.QUERY_ONE_NOT_FOUND",
-                                            "missing_dependency",
-                                            "db.queryOne row not found",
-                                            404,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                }
-                                Err(message) => {
-                                    let (status, code, kind) =
-                                        classify_lasm_db_runtime_error("queryOne", message.as_str());
-                                    set_lasm_json_response(
-                                        response,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                            Err(message) => {
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("queryOne", message.as_str());
+                                set_lasm_json_response(
+                                    response,
+                                    status,
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
                                         status,
-                                        &lasm_error_envelope(
-                                            code,
-                                            kind,
-                                            message.as_str(),
-                                            status,
-                                            trace_id,
-                                        ),
-                                    );
-                                    return true;
-                                }
-                            };
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
                         let row =
                             serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
                         let record = LasmDbRecord {
@@ -13178,6 +13239,7 @@ fn apply_lasm_internal_db_operation_materialization(
                             template: template.clone(),
                             params: params.clone(),
                             tx: 0,
+                            affected_rows: 1,
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
@@ -13211,6 +13273,7 @@ fn apply_lasm_internal_db_operation_materialization(
                             template: template.clone(),
                             params: params.clone(),
                             tx: 0,
+                            affected_rows: 1,
                             created_at_ms: lasm_now_ms(),
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);

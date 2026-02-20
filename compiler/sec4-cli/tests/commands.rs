@@ -15442,6 +15442,10 @@ fn main() effects { net } -> Int {
         records_log.contains("\"op\":\"exec\"") && records_log.contains("\"op\":\"execTx\""),
         "records.log should include deterministic persisted operations:\n{records_log}"
     );
+    assert!(
+        records_log.contains("\"affected_rows\":"),
+        "records.log should include affected_rows persistence metadata:\n{records_log}"
+    );
 
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
@@ -15472,7 +15476,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
-            && list_response.contains("\"op\":\"queryOne\""),
+            && list_response.contains("\"op\":\"queryOne\"")
+            && list_response.contains("\"affected_rows\":"),
         "db records response should include deterministic persisted record list:\n{list_response}"
     );
 
@@ -15695,7 +15700,7 @@ fn main() effects { net } -> Int {
         Connection::open(&sqlite_path).expect("LASM db sqlite flow should open sqlite records db");
     let mut statement = connection
         .prepare(
-            "SELECT id, op, db, template, params, tx \
+            "SELECT id, op, db, template, params, tx, affected_rows \
              FROM lasm_db_records \
              ORDER BY id ASC",
         )
@@ -15709,6 +15714,7 @@ fn main() effects { net } -> Int {
                 row.get::<_, String>(3)?,
                 row.get::<_, String>(4)?,
                 row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })
         .expect("LASM db sqlite flow should query rows")
@@ -15719,17 +15725,16 @@ fn main() effects { net } -> Int {
         2,
         "sqlite store should contain deterministic record count"
     );
-    assert_eq!(
-        sqlite_rows[0],
-        (
-            1,
-            "exec".to_string(),
-            1,
-            "SELECT 1".to_string(),
-            "alpha".to_string(),
-            0
-        ),
-        "sqlite first record should match deterministic db.exec payload"
+    assert!(
+        sqlite_rows[0].0 == 1
+            && sqlite_rows[0].1 == "exec"
+            && sqlite_rows[0].2 == 1
+            && sqlite_rows[0].3 == "SELECT 1"
+            && sqlite_rows[0].4 == "alpha"
+            && sqlite_rows[0].5 == 0
+            && sqlite_rows[0].6 >= 0,
+        "sqlite first record should match deterministic db.exec payload: {:?}",
+        sqlite_rows[0]
     );
     assert!(
         sqlite_rows[1].0 == 2
@@ -15737,7 +15742,8 @@ fn main() effects { net } -> Int {
             && sqlite_rows[1].2 == 1
             && sqlite_rows[1].3 == "SELECT 1"
             && sqlite_rows[1].4 == "alpha"
-            && sqlite_rows[1].5 > 0,
+            && sqlite_rows[1].5 > 0
+            && sqlite_rows[1].6 >= 0,
         "sqlite second record should match deterministic db.execTx payload: {:?}",
         sqlite_rows[1]
     );
@@ -15808,7 +15814,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"adapter\":\"sqlite\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
-            && list_response.contains("\"op\":\"queryOne\""),
+            && list_response.contains("\"op\":\"queryOne\"")
+            && list_response.contains("\"affected_rows\":"),
         "db records response should include deterministic persisted record list:\n{list_response}"
     );
 
@@ -16479,7 +16486,9 @@ fn main() effects { net } -> Int {
             None => {
                 let _ = child.kill();
                 let _ = child.wait();
-                panic!("run command LASM sqlite validation process did not exit in expected window");
+                panic!(
+                    "run command LASM sqlite validation process did not exit in expected window"
+                );
             }
         };
         assert!(
@@ -16511,8 +16520,7 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"count\":0")
-            && !list_response.contains("\"op\":\"bad\""),
+        list_response.contains("\"count\":0") && !list_response.contains("\"op\":\"bad\""),
         "validation-failed exec should not append runtime records:\n{list_response}"
     );
 
@@ -16860,7 +16868,8 @@ fn main() effects { net } -> Int {
             && list_response.contains("\"count\":3")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
-            && list_response.contains("\"op\":\"queryOne\""),
+            && list_response.contains("\"op\":\"queryOne\"")
+            && list_response.contains("\"affected_rows\":"),
         "db records response should include postgres adapter metadata:\n{list_response}"
     );
 
