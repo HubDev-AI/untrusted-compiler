@@ -903,6 +903,10 @@ Post-alpha track acceptance anchors:
      - cluster accept loops now use per-accept-worker local dispatch cursors (seeded by accept worker index) instead of a shared `AtomicUsize` reservation counter,
      - preserves deterministic round-robin-per-worker dispatch behavior while removing shared atomic contention from accept hot path.
      - documented in `docs/book/1187-m39-lasm-cluster-per-accept-worker-local-dispatch-cursors.md`.
+   - [x] Batched relay fallback telemetry counter flush in accept loops:
+     - accept loops now accumulate fallback dispatch hits locally and flush aggregated totals to `relayDispatchFallbackTotal`,
+     - avoids per-fallback atomic increments in fallback-heavy traffic while preserving monotonic telemetry semantics.
+     - documented in `docs/book/1188-m39-lasm-cluster-batched-relay-fallback-telemetry-flush.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -8295,6 +8295,13 @@ fn flush_lasm_cluster_saturation_counters(
     }
 }
 
+fn flush_lasm_cluster_dispatch_fallback_total(counter: &AtomicU64, total_local: &mut u64) {
+    if *total_local > 0 {
+        counter.fetch_add(*total_local, Ordering::Relaxed);
+        *total_local = 0;
+    }
+}
+
 fn flush_lasm_cluster_active_connection_increments(
     active_counter: &AtomicUsize,
     increments_local: &mut usize,
@@ -8373,6 +8380,7 @@ fn run_lasm_cluster_accept_loop(
 ) -> Result<(), String> {
     let mut listener_saturation_pending_local = 0_usize;
     let mut listener_saturation_total_local = 0_u64;
+    let mut listener_dispatch_fallback_total_local = 0_u64;
     let mut listener_idle_spins = 0_u32;
     let mut relay_listener_batch: Vec<TcpStream> = Vec::with_capacity(relay_accept_batch_max);
     let mut relay_dispatch_cursor = initial_dispatch_cursor;
@@ -8393,6 +8401,10 @@ fn run_lasm_cluster_accept_loop(
                         relay_saturation_events_total,
                         &mut listener_saturation_pending_local,
                         &mut listener_saturation_total_local,
+                    );
+                    flush_lasm_cluster_dispatch_fallback_total(
+                        relay_dispatch_fallback_total,
+                        &mut listener_dispatch_fallback_total_local,
                     );
                     return Err(format!("LASM cluster proxy accept error: {err}"));
                 }
@@ -8448,7 +8460,8 @@ fn run_lasm_cluster_accept_loop(
                 match relay_senders[stream_dispatch_start].try_send(client_stream) {
                     Ok(()) => Ok(()),
                     Err(TrySendError::Full(stream)) => {
-                        relay_dispatch_fallback_total.fetch_add(1, Ordering::Relaxed);
+                        listener_dispatch_fallback_total_local =
+                            listener_dispatch_fallback_total_local.saturating_add(1);
                         dispatch_lasm_cluster_relay_stream_fallback(
                             stream,
                             relay_senders,
@@ -8457,7 +8470,8 @@ fn run_lasm_cluster_accept_loop(
                         )
                     }
                     Err(TrySendError::Disconnected(stream)) => {
-                        relay_dispatch_fallback_total.fetch_add(1, Ordering::Relaxed);
+                        listener_dispatch_fallback_total_local =
+                            listener_dispatch_fallback_total_local.saturating_add(1);
                         dispatch_lasm_cluster_relay_stream_fallback(
                             stream,
                             relay_senders,
@@ -8506,6 +8520,10 @@ fn run_lasm_cluster_accept_loop(
                         &mut listener_saturation_pending_local,
                         &mut listener_saturation_total_local,
                     );
+                    flush_lasm_cluster_dispatch_fallback_total(
+                        relay_dispatch_fallback_total,
+                        &mut listener_dispatch_fallback_total_local,
+                    );
                     return Err(
                         "LASM cluster relay worker pool disconnected unexpectedly".to_string()
                     );
@@ -8516,6 +8534,10 @@ fn run_lasm_cluster_accept_loop(
             active_connections,
             &mut listener_enqueued_local,
         );
+        flush_lasm_cluster_dispatch_fallback_total(
+            relay_dispatch_fallback_total,
+            &mut listener_dispatch_fallback_total_local,
+        );
     }
 
     flush_lasm_cluster_saturation_counters(
@@ -8523,6 +8545,10 @@ fn run_lasm_cluster_accept_loop(
         relay_saturation_events_total,
         &mut listener_saturation_pending_local,
         &mut listener_saturation_total_local,
+    );
+    flush_lasm_cluster_dispatch_fallback_total(
+        relay_dispatch_fallback_total,
+        &mut listener_dispatch_fallback_total_local,
     );
     Ok(())
 }
