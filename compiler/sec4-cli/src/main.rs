@@ -8116,6 +8116,9 @@ fn write_lasm_cluster_status_json(
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
     relay_accept_workers: usize,
+    autoscale_desired_instances: usize,
+    autoscale_last_saturation_events: usize,
+    autoscale_last_dynamic_boost_step: usize,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -8145,6 +8148,9 @@ fn write_lasm_cluster_status_json(
         "relaySaturationEventsPerSec": relay_saturation_events_per_sec,
         "relayAcceptBatchMax": relay_accept_batch_max,
         "relayAcceptWorkers": relay_accept_workers,
+        "autoscaleDesiredInstances": autoscale_desired_instances,
+        "autoscaleLastSaturationEvents": autoscale_last_saturation_events,
+        "autoscaleLastDynamicBoostStep": autoscale_last_dynamic_boost_step,
     });
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
@@ -8954,6 +8960,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         }));
     }
 
+    let autoscale_last_desired_instances = Arc::new(AtomicUsize::new(shared_config.min_instances));
+    let autoscale_last_saturation_events = Arc::new(AtomicUsize::new(0));
+    let autoscale_last_dynamic_boost_step = Arc::new(AtomicUsize::new(
+        shared_config.autoscale_scale_up_step.max(1),
+    ));
+
     let status_writer_handle = if let Some(status_path) = shared_config.cluster_status_json.clone()
     {
         let status_stop_flag = Arc::clone(&stop_flag);
@@ -8966,6 +8978,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_relay_queue_capacity = relay_queue_capacity;
         let status_relay_queue_shard_capacity = relay_queue_shard_capacity;
         let status_relay_accept_workers = relay_accept_worker_count;
+        let status_autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
+        let status_autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
+        let status_autoscale_last_dynamic_boost_step =
+            Arc::clone(&autoscale_last_dynamic_boost_step);
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
         let status_tmp_path = status_path.with_extension(format!(
             "{}.tmp",
@@ -9005,6 +9021,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     saturation_per_sec,
                     status_config.cluster_relay_accept_batch_max,
                     status_relay_accept_workers,
+                    status_autoscale_last_desired_instances.load(Ordering::Relaxed),
+                    status_autoscale_last_saturation_events.load(Ordering::Relaxed),
+                    status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
                 ) {
                     eprintln!("warning: LASM cluster status json write failed: {err}");
                 }
@@ -9030,6 +9049,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_saturation_events = Arc::clone(&relay_saturation_events);
         let autoscale_stop_flag = Arc::clone(&stop_flag);
         let autoscale_worker_ports = Arc::clone(&worker_ports_snapshot);
+        let autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
+        let autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
+        let autoscale_last_dynamic_boost_step = Arc::clone(&autoscale_last_dynamic_boost_step);
         std::thread::spawn(move || {
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
@@ -9055,6 +9077,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     &mut last_published_worker_ports,
                 );
                 if !autoscale_enabled {
+                    autoscale_last_desired_instances.store(state.workers.len(), Ordering::Relaxed);
+                    autoscale_last_saturation_events.store(0, Ordering::Relaxed);
+                    autoscale_last_dynamic_boost_step.store(
+                        autoscale_config.autoscale_scale_up_step.max(1),
+                        Ordering::Relaxed,
+                    );
                     continue;
                 }
                 if now.duration_since(last_scale_eval_at)
@@ -9091,6 +9119,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     desired = desired.max(boosted_target);
                     scale_up_step_budget = scale_up_step_budget.max(dynamic_boost_step);
                 }
+                autoscale_last_desired_instances.store(desired, Ordering::Relaxed);
+                autoscale_last_saturation_events.store(saturation_events, Ordering::Relaxed);
+                autoscale_last_dynamic_boost_step.store(scale_up_step_budget, Ordering::Relaxed);
                 let up_target = if desired > current_workers {
                     desired.min(current_workers.saturating_add(scale_up_step_budget))
                 } else {

@@ -773,6 +773,10 @@ Post-alpha track acceptance anchors:
      - keeps existing cooldown and max-instance bounds while allowing faster scale-up reaction when saturation bursts are larger.
      - short LASM cluster probe after this slice recorded `1,433,593` requests in `20s` (`~71.32k req/s`, `p99 11.03ms`, peak RSS `~27,120 KB`) under default settings.
      - documented in `docs/book/1155-m39-lasm-cluster-dynamic-saturation-boost-step.md`.
+   - [x] Added autoscale-decision telemetry fields to cluster status JSON:
+     - status payload now includes `autoscaleDesiredInstances`, `autoscaleLastSaturationEvents`, and `autoscaleLastDynamicBoostStep`,
+     - autoscale loop publishes these values from each evaluation cycle via shared atomics, so status snapshots show latest autoscale decision context directly.
+     - documented in `docs/book/1156-m39-lasm-cluster-status-autoscale-decision-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
