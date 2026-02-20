@@ -811,6 +811,10 @@ Post-alpha track acceptance anchors:
      - replaced hardcoded idle thresholds/sleeps with shared constants (`LASM_CLUSTER_IDLE_SPIN_THRESHOLD`, `LASM_CLUSTER_IDLE_SLEEP_MICROS`),
      - accept and relay loops now use bounded short micro-sleep (`250us`) after spin threshold instead of `1ms` sleeps, reducing wake-up latency while preserving busy-loop protection.
      - documented in `docs/book/1164-m39-lasm-cluster-idle-backoff-microsleep-tuning.md`.
+   - [x] Added relay-dispatch single-sender fast path:
+     - `dispatch_lasm_cluster_relay_stream` now short-circuits to direct `try_send` handling when relay sender count is `1`,
+     - avoids split-slice dispatch iteration overhead for single-relay-worker deployments while preserving saturated/unavailable error semantics.
+     - documented in `docs/book/1165-m39-lasm-cluster-relay-dispatch-single-sender-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
