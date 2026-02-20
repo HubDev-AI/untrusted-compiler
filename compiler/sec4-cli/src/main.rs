@@ -8014,6 +8014,23 @@ fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: u
         .min(65_536)
 }
 
+fn lasm_cluster_accept_worker_count(relay_worker_count: usize) -> usize {
+    let default_value = relay_worker_count.max(1).min(4);
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(1, relay_worker_count.max(1).min(16)))
+        .unwrap_or(default_value)
+}
+
 fn lasm_cluster_relay_accept_batch_max(config: &LasmClusterConfig) -> usize {
     config.cluster_relay_accept_batch_max.max(1)
 }
@@ -8069,6 +8086,7 @@ fn write_lasm_cluster_status_json(
     relay_saturation_events_pending: usize,
     relay_saturation_events_total: u64,
     relay_accept_batch_max: usize,
+    relay_accept_workers: usize,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -8093,6 +8111,7 @@ fn write_lasm_cluster_status_json(
         "relaySaturationEventsPending": relay_saturation_events_pending,
         "relaySaturationEventsTotal": relay_saturation_events_total,
         "relayAcceptBatchMax": relay_accept_batch_max,
+        "relayAcceptWorkers": relay_accept_workers,
     });
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
@@ -8189,6 +8208,127 @@ fn dispatch_lasm_cluster_relay_stream(
     } else {
         Err(LasmClusterRelayDispatchError::Saturated(client_stream))
     }
+}
+
+fn run_lasm_cluster_accept_loop(
+    listener: &TcpListener,
+    relay_senders: &[Sender<TcpStream>],
+    active_connections: &AtomicUsize,
+    relay_saturation_events: &AtomicUsize,
+    relay_saturation_events_total: &AtomicU64,
+    stop_flag: &AtomicBool,
+    relay_accept_batch_max: usize,
+) -> Result<(), String> {
+    let mut listener_saturation_pending_local = 0_usize;
+    let mut listener_saturation_total_local = 0_u64;
+    let mut listener_idle_spins = 0_u32;
+    let mut relay_dispatch_round_robin = 0_usize;
+    let mut relay_listener_batch: Vec<TcpStream> = Vec::with_capacity(relay_accept_batch_max);
+
+    loop {
+        if stop_flag.load(Ordering::Relaxed) {
+            break;
+        }
+        relay_listener_batch.clear();
+        while relay_listener_batch.len() < relay_accept_batch_max {
+            match listener.accept() {
+                Ok((stream, _)) => relay_listener_batch.push(stream),
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(err) => {
+                    flush_lasm_cluster_saturation_counters(
+                        relay_saturation_events,
+                        relay_saturation_events_total,
+                        &mut listener_saturation_pending_local,
+                        &mut listener_saturation_total_local,
+                    );
+                    return Err(format!("LASM cluster proxy accept error: {err}"));
+                }
+            }
+        }
+
+        if relay_listener_batch.is_empty() {
+            listener_idle_spins = listener_idle_spins.saturating_add(1);
+            if listener_idle_spins < 32 {
+                std::thread::yield_now();
+            } else {
+                std::thread::sleep(Duration::from_millis(1));
+                listener_idle_spins = 0;
+            }
+            continue;
+        }
+        listener_idle_spins = 0;
+
+        let relay_sender_count = relay_senders.len();
+        let relay_batch_len = relay_listener_batch.len();
+        let mut listener_enqueued_local = 0_usize;
+        for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
+            let dispatch_start = if relay_sender_count == 0 {
+                0
+            } else {
+                (relay_dispatch_round_robin + batch_offset) % relay_sender_count
+            };
+            match dispatch_lasm_cluster_relay_stream(client_stream, relay_senders, dispatch_start) {
+                Ok(()) => {
+                    listener_enqueued_local = listener_enqueued_local.saturating_add(1);
+                }
+                Err(LasmClusterRelayDispatchError::Saturated(mut stream)) => {
+                    listener_saturation_pending_local =
+                        listener_saturation_pending_local.saturating_add(1);
+                    listener_saturation_total_local =
+                        listener_saturation_total_local.saturating_add(1);
+                    let _ = write_lasm_cluster_unavailable_response(
+                        &mut stream,
+                        LasmClusterUnavailableReason::RelaySaturated,
+                    );
+                    if listener_saturation_pending_local >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH
+                    {
+                        flush_lasm_cluster_saturation_counters(
+                            relay_saturation_events,
+                            relay_saturation_events_total,
+                            &mut listener_saturation_pending_local,
+                            &mut listener_saturation_total_local,
+                        );
+                    }
+                }
+                Err(LasmClusterRelayDispatchError::Unavailable(mut stream)) => {
+                    let _ = write_lasm_cluster_unavailable_response(
+                        &mut stream,
+                        LasmClusterUnavailableReason::RelayUnavailable,
+                    );
+                    flush_lasm_cluster_active_connection_increments(
+                        active_connections,
+                        &mut listener_enqueued_local,
+                    );
+                    flush_lasm_cluster_saturation_counters(
+                        relay_saturation_events,
+                        relay_saturation_events_total,
+                        &mut listener_saturation_pending_local,
+                        &mut listener_saturation_total_local,
+                    );
+                    return Err(
+                        "LASM cluster relay worker pool disconnected unexpectedly".to_string()
+                    );
+                }
+            }
+        }
+        flush_lasm_cluster_active_connection_increments(
+            active_connections,
+            &mut listener_enqueued_local,
+        );
+        if relay_sender_count > 0 {
+            relay_dispatch_round_robin =
+                (relay_dispatch_round_robin + relay_batch_len) % relay_sender_count;
+        }
+    }
+
+    flush_lasm_cluster_saturation_counters(
+        relay_saturation_events,
+        relay_saturation_events_total,
+        &mut listener_saturation_pending_local,
+        &mut listener_saturation_total_local,
+    );
+    Ok(())
 }
 
 enum LasmClusterRelayPumpStep {
@@ -8487,6 +8627,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_saturation_events = Arc::new(AtomicUsize::new(0));
     let relay_saturation_events_total = Arc::new(AtomicU64::new(0));
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
+    let relay_accept_worker_count = lasm_cluster_accept_worker_count(relay_worker_count);
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
@@ -8501,6 +8642,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_senders.push(relay_sender);
         relay_receivers.push(relay_receiver);
     }
+    let relay_senders = Arc::new(relay_senders);
     let relay_selection_counter = Arc::new(AtomicUsize::new(0));
     let relay_backend_connect_timeout =
         lasm_cluster_backend_connect_timeout(shared_config.as_ref());
@@ -8758,6 +8900,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_saturation_events = Arc::clone(&relay_saturation_events);
         let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let status_worker_ports = Arc::clone(&worker_ports_snapshot);
+        let status_relay_accept_workers = relay_accept_worker_count;
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
         let status_tmp_path = status_path.with_extension(format!(
             "{}.tmp",
@@ -8781,6 +8924,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 status_saturation_events.load(Ordering::Relaxed),
                 status_saturation_events_total.load(Ordering::Relaxed),
                 status_config.cluster_relay_accept_batch_max,
+                status_relay_accept_workers,
             ) {
                 eprintln!("warning: LASM cluster status json write failed: {err}");
             }
@@ -8937,113 +9081,70 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         return Err(2);
     }
 
-    let mut listener_saturation_pending_local = 0_usize;
-    let mut listener_saturation_total_local = 0_u64;
-    let mut listener_idle_spins = 0_u32;
-    let mut relay_dispatch_round_robin = 0_usize;
-    let mut relay_listener_batch: Vec<TcpStream> = Vec::with_capacity(relay_accept_batch_max);
-    'listener_loop: loop {
-        relay_listener_batch.clear();
-        while relay_listener_batch.len() < relay_accept_batch_max {
-            match listener.accept() {
-                Ok((stream, _)) => relay_listener_batch.push(stream),
-                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
-                Err(err) => {
-                    eprintln!("run failed: LASM cluster proxy accept error: {err}");
-                    break 'listener_loop;
+    let accept_error_reported = Arc::new(AtomicBool::new(false));
+    let mut accept_handles = Vec::with_capacity(relay_accept_worker_count.saturating_sub(1));
+    for _ in 1..relay_accept_worker_count {
+        let accept_listener = match listener.try_clone() {
+            Ok(listener) => listener,
+            Err(err) => {
+                eprintln!("run failed: could not clone LASM cluster listener: {err}");
+                stop_flag.store(true, Ordering::Relaxed);
+                drop(relay_senders);
+                for handle in relay_handles {
+                    let _ = handle.join();
                 }
+                let _ = autoscale_handle.join();
+                if let Some(handle) = status_writer_handle {
+                    let _ = handle.join();
+                }
+                if let Ok(mut state) = shared_state.write() {
+                    stop_lasm_cluster_workers(&mut state);
+                }
+                return Err(2);
             }
-        }
-
-        if relay_listener_batch.is_empty() {
-            listener_idle_spins = listener_idle_spins.saturating_add(1);
-            if listener_idle_spins < 32 {
-                std::thread::yield_now();
-            } else {
-                std::thread::sleep(Duration::from_millis(1));
-                listener_idle_spins = 0;
-            }
-            continue;
-        }
-        listener_idle_spins = 0;
-
-        let relay_sender_count = relay_senders.len();
-        let relay_batch_len = relay_listener_batch.len();
-        let mut listener_enqueued_local = 0_usize;
-        for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
-            let dispatch_start = if relay_sender_count == 0 {
-                0
-            } else {
-                (relay_dispatch_round_robin + batch_offset) % relay_sender_count
-            };
-            match dispatch_lasm_cluster_relay_stream(
-                client_stream,
-                relay_senders.as_slice(),
-                dispatch_start,
+        };
+        let accept_relay_senders = Arc::clone(&relay_senders);
+        let accept_active_connections = Arc::clone(&active_connections);
+        let accept_saturation_events = Arc::clone(&relay_saturation_events);
+        let accept_saturation_events_total = Arc::clone(&relay_saturation_events_total);
+        let accept_stop_flag = Arc::clone(&stop_flag);
+        let accept_error_reported = Arc::clone(&accept_error_reported);
+        accept_handles.push(std::thread::spawn(move || {
+            if let Err(message) = run_lasm_cluster_accept_loop(
+                &accept_listener,
+                accept_relay_senders.as_slice(),
+                accept_active_connections.as_ref(),
+                accept_saturation_events.as_ref(),
+                accept_saturation_events_total.as_ref(),
+                accept_stop_flag.as_ref(),
+                relay_accept_batch_max,
             ) {
-                Ok(()) => {
-                    listener_enqueued_local = listener_enqueued_local.saturating_add(1);
+                if !accept_error_reported.swap(true, Ordering::Relaxed) {
+                    eprintln!("run failed: {message}");
                 }
-                Err(LasmClusterRelayDispatchError::Saturated(mut stream)) => {
-                    listener_saturation_pending_local =
-                        listener_saturation_pending_local.saturating_add(1);
-                    listener_saturation_total_local =
-                        listener_saturation_total_local.saturating_add(1);
-                    let _ = write_lasm_cluster_unavailable_response(
-                        &mut stream,
-                        LasmClusterUnavailableReason::RelaySaturated,
-                    );
-                    if listener_saturation_pending_local
-                        >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH
-                    {
-                        flush_lasm_cluster_saturation_counters(
-                            &relay_saturation_events,
-                            &relay_saturation_events_total,
-                            &mut listener_saturation_pending_local,
-                            &mut listener_saturation_total_local,
-                        );
-                    }
-                }
-                Err(LasmClusterRelayDispatchError::Unavailable(mut stream)) => {
-                    let _ = write_lasm_cluster_unavailable_response(
-                        &mut stream,
-                        LasmClusterUnavailableReason::RelayUnavailable,
-                    );
-                    flush_lasm_cluster_active_connection_increments(
-                        &active_connections,
-                        &mut listener_enqueued_local,
-                    );
-                    flush_lasm_cluster_saturation_counters(
-                        &relay_saturation_events,
-                        &relay_saturation_events_total,
-                        &mut listener_saturation_pending_local,
-                        &mut listener_saturation_total_local,
-                    );
-                    eprintln!(
-                        "run failed: LASM cluster relay worker pool disconnected unexpectedly"
-                    );
-                    break 'listener_loop;
-                }
+                accept_stop_flag.store(true, Ordering::Relaxed);
             }
-        }
-        flush_lasm_cluster_active_connection_increments(
-            &active_connections,
-            &mut listener_enqueued_local,
-        );
-        if relay_sender_count > 0 {
-            relay_dispatch_round_robin =
-                (relay_dispatch_round_robin + relay_batch_len) % relay_sender_count;
+        }));
+    }
+
+    if let Err(message) = run_lasm_cluster_accept_loop(
+        &listener,
+        relay_senders.as_slice(),
+        active_connections.as_ref(),
+        relay_saturation_events.as_ref(),
+        relay_saturation_events_total.as_ref(),
+        stop_flag.as_ref(),
+        relay_accept_batch_max,
+    ) {
+        if !accept_error_reported.swap(true, Ordering::Relaxed) {
+            eprintln!("run failed: {message}");
         }
     }
-    flush_lasm_cluster_saturation_counters(
-        &relay_saturation_events,
-        &relay_saturation_events_total,
-        &mut listener_saturation_pending_local,
-        &mut listener_saturation_total_local,
-    );
 
     stop_flag.store(true, Ordering::Relaxed);
+    for handle in accept_handles {
+        let _ = handle.join();
+    }
     drop(relay_senders);
     for handle in relay_handles {
         let _ = handle.join();

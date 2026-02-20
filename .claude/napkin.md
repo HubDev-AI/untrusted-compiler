@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I initially auto-sized `SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS` from host parallelism and produced a throughput regression in probe results before settling the tuning. | For new parallelism knobs on hot paths, verify at least one override matrix (`1` vs tuned value) before locking defaults; use conservative deterministic default and then document the measured winner. |
 | 2026-02-20 | self | I committed the active-connection batching slice while still checked out on local `dev` before creating a `codex/*` branch. | Keep a hard pre-commit gate: run `git branch --show-current` before every commit and branch immediately if current branch is `dev`. |
 | 2026-02-20 | self | I queried fresh LASM capacity probe output with stale JSON paths (`.throughput.*`, `.memory.*`) and read `null` metrics, which could hide real regressions/improvements. | For benchmark/capacity artifacts, inspect schema keys first (`jq 'keys'`, then section keys) and extract metrics only from confirmed paths (`.observed.*` in this probe format). |
 | 2026-02-20 | self | I launched branch/status checks in parallel with reading `.claude/napkin.md`, which still violates the "napkin first" gate. | In each continuation, run a standalone napkin read command first; only after that run any status/search/build commands. |

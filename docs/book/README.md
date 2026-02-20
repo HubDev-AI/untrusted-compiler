@@ -1112,5 +1112,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1140-m39-lasm-cluster-sharded-relay-queue-and-batched-listener-dispatch.md`
 - `1141-m39-lasm-cluster-dispatch-cursor-decoupling.md`
 - `1142-m39-lasm-cluster-active-connection-atomic-batching.md`
+- `1143-m39-lasm-cluster-accept-worker-pool.md`
 
 As milestones progress, chapters will be added and linked from this index.
