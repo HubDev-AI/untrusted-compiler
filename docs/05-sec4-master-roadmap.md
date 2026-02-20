@@ -943,6 +943,10 @@ Post-alpha track acceptance anchors:
      - relay selection-reservation counters (`relay_selection_reservation_offset`, `relay_selection_reservation_next_index`) now use direct bounded `+= 1` updates in the reservation hot path,
      - keeps reservation wrap behavior unchanged while removing saturating arithmetic from per-connection backend selection sequencing.
      - documented in `docs/book/1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`.
+   - [x] Removed per-connection closure from relay selection-reservation start-index path:
+     - relay backend selection now computes reservation refill and start-index progression inline (no closure allocation/call in per-connection loop),
+     - keeps reservation refill/wrap and identity-lookup behavior unchanged while simplifying the hot path.
+     - documented in `docs/book/1198-m39-lasm-cluster-inline-relay-selection-reservation-start-index.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -9113,7 +9113,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut saturation_events_pending_local = 0_usize;
             let mut saturation_events_total_local = 0_u64;
             let mut active_connection_decrements_local = 0_usize;
-            let mut relay_selection_reservation_base = 0_usize;
             let mut relay_selection_reservation_len = 0_usize;
             let mut relay_selection_reservation_offset = 0_usize;
             let mut relay_selection_reservation_next_index = 0_usize;
@@ -9270,45 +9269,40 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                     let worker_ports = selected_worker_ports_snapshot.as_ref();
                     let worker_port_count = worker_ports.len();
-                    let selected_backend_index = {
-                        let mut next_selection_start_index = || {
-                            if relay_selection_reservation_offset >= relay_selection_reservation_len
-                                || relay_selection_reservation_worker_port_count
-                                    != worker_port_count
-                            {
-                                relay_selection_reservation_base = relay_selection_counter
-                                    .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
-                                relay_selection_reservation_len = relay_accept_batch_max;
-                                relay_selection_reservation_offset = 0;
-                                relay_selection_reservation_worker_port_count = worker_port_count;
-                                relay_selection_reservation_next_index = if worker_port_count <= 1 {
-                                    0
-                                } else {
-                                    relay_selection_reservation_base % worker_port_count
-                                };
-                            }
-                            let index = relay_selection_reservation_next_index;
-                            relay_selection_reservation_offset += 1;
-                            if worker_port_count > 1 {
-                                relay_selection_reservation_next_index += 1;
-                                if relay_selection_reservation_next_index >= worker_port_count {
-                                    relay_selection_reservation_next_index = 0;
-                                }
-                            }
-                            index
-                        };
-                        if worker_port_count == 0 || !selection_has_healthy_backends {
-                            None
-                        } else {
-                            let start_index = next_selection_start_index();
-                            if selection_lookup_is_identity {
-                                Some(start_index)
+                    let selected_backend_index = if worker_port_count == 0
+                        || !selection_has_healthy_backends
+                    {
+                        None
+                    } else {
+                        if relay_selection_reservation_offset >= relay_selection_reservation_len
+                            || relay_selection_reservation_worker_port_count != worker_port_count
+                        {
+                            let relay_selection_reservation_base = relay_selection_counter
+                                .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
+                            relay_selection_reservation_len = relay_accept_batch_max;
+                            relay_selection_reservation_offset = 0;
+                            relay_selection_reservation_worker_port_count = worker_port_count;
+                            relay_selection_reservation_next_index = if worker_port_count <= 1 {
+                                0
                             } else {
-                                selection_lookup
-                                    .get(start_index)
-                                    .copied()
-                                    .filter(|index| *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE)
+                                relay_selection_reservation_base % worker_port_count
+                            };
+                        }
+                        let start_index = relay_selection_reservation_next_index;
+                        relay_selection_reservation_offset += 1;
+                        if worker_port_count > 1 {
+                            relay_selection_reservation_next_index += 1;
+                            if relay_selection_reservation_next_index >= worker_port_count {
+                                relay_selection_reservation_next_index = 0;
                             }
+                        }
+                        if selection_lookup_is_identity {
+                            Some(start_index)
+                        } else {
+                            selection_lookup
+                                .get(start_index)
+                                .copied()
+                                .filter(|index| *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE)
                         }
                     };
 
