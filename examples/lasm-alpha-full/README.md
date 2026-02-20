@@ -6,11 +6,13 @@ Full LASM alpha example app that combines:
 - request placeholder materialization
 - auth helper enforcement
 - dynamic user-store flows (`users.json`)
-- dynamic DB record flows (`records.log`)
+- dynamic DB record flows (`records.log`, `sqlite`, `postgres`)
 
 Use this app to test LASM + DB behavior end-to-end.
 
 ## 1) Start
+
+Default adapter (`records.log`):
 
 ```bash
 DB_BASE="$(pwd)/examples/lasm-alpha-full/.lasm-db"
@@ -18,6 +20,19 @@ cargo run -p sec4 -- run \
   --path examples/lasm-alpha-full \
   --backend lasm \
   --db-base "$DB_BASE" \
+  --port 8080
+```
+
+Postgres adapter:
+
+```bash
+DB_BASE="$(pwd)/examples/lasm-alpha-full/.lasm-db"
+export SEC4_RT_LASM_DB_POSTGRES_DSN='postgres://user:pass@127.0.0.1:5432/postgres'
+cargo run -p sec4 -- run \
+  --path examples/lasm-alpha-full \
+  --backend lasm \
+  --db-base "$DB_BASE" \
+  --db-adapter postgres \
   --port 8080
 ```
 
@@ -107,7 +122,7 @@ Inspect persisted users file:
 cat "$DB_BASE/users.json"
 ```
 
-## 6) Dynamic DB flows (`records.log`)
+## 6) Dynamic DB flows (`records.log` / `sqlite` / `postgres`)
 
 Write non-tx record:
 
@@ -131,6 +146,22 @@ Query latest matching record:
 curl -i \
   -H 'Authorization: Bearer token123' \
   'http://127.0.0.1:8080/db/query-one?template=SELECT%201&params=alpha&row_schema=7'
+```
+
+Postgres parameterized query demo (`$N` placeholders + JSON-array params):
+
+```bash
+curl -i \
+  -H 'Authorization: Bearer token123' \
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%20%27$1-literal%27%20AS%20literal,%20$1::int%20AS%20value,%20$2::boolean%20AS%20enabled,%20$3::double%20precision%20AS%20ratio&params=%5B42%2Ctrue%2C3.25%5D&row_schema=7'
+```
+
+Postgres deterministic placeholder-arity failure demo:
+
+```bash
+curl -i \
+  -H 'Authorization: Bearer token123' \
+  'http://127.0.0.1:8080/db/query-one?template=SELECT%20$2::int%20AS%20value&params=%5B42%5D&row_schema=7'
 ```
 
 List records:
