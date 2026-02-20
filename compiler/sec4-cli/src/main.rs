@@ -13315,10 +13315,16 @@ fn apply_lasm_internal_db_operation_materialization(
                 );
                 return true;
             };
-            let row = format!(
-                "op={};db={};template={};params={};tx={};rowSchema={}",
-                record.op, record.db, record.template, record.params, record.tx, row_schema
-            );
+            let row_object = serde_json::json!({
+                "op": record.op,
+                "db": record.db,
+                "template": record.template,
+                "params": record.params,
+                "tx": record.tx,
+                "affected_rows": record.affected_rows,
+                "rowSchema": row_schema,
+            });
+            let row = serde_json::to_string(&row_object).unwrap_or_else(|_| "{}".to_string());
             set_lasm_json_response(
                 response,
                 200,
@@ -13327,7 +13333,7 @@ fn apply_lasm_internal_db_operation_materialization(
                     "recordId": record.id,
                     "rowSchema": row_schema,
                     "row": row,
-                    "rowObject": serde_json::Value::Null,
+                    "rowObject": row_object,
                     "record": lasm_db_record_to_json(&record),
                 }),
             );

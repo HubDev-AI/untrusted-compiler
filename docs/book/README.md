@@ -1066,5 +1066,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1094-m39-lasm-db-unique-conflict-error-classification.md`
 - `1095-m39-lasm-db-constraint-validation-error-classification.md`
 - `1096-m39-lasm-db-record-affected-rows-persistence.md`
+- `1097-m39-lasm-records-log-query-one-row-object-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
