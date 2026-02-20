@@ -1172,5 +1172,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`
 - `1201-m39-lasm-cluster-direct-index-connect-failure-state-access.md`
 - `1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`
+- `1203-m39-lasm-cluster-connect-warning-slot-direct-match-check.md`
 
 As milestones progress, chapters will be added and linked from this index.

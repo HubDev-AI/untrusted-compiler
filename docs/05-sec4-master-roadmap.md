@@ -963,6 +963,10 @@ Post-alpha track acceptance anchors:
      - fallback dispatch now consumes pre-wrapped start indexes directly (`scan_start_index = start_index_wrapped`) after existing debug invariant check,
      - removes one runtime normalization branch from relay fallback dispatch while preserving fallback scan behavior.
      - documented in `docs/book/1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`.
+   - [x] Tightened relay connect-warning throttle slot path:
+     - relay connect-failure path now loads warning-throttle slot once into a mutable entry reference and performs direct match-based allowance check (`Some(next) => now >= next`),
+     - keeps warning throttle semantics unchanged while removing repeated indexed option-chain reads/writes in the failure path.
+     - documented in `docs/book/1203-m39-lasm-cluster-connect-warning-slot-direct-match-check.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
