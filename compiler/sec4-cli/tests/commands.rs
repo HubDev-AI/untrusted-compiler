@@ -15458,8 +15458,10 @@ fn main() effects { net } -> Int {
     assert!(
         query_one_response.contains("\"recordId\":3")
             && query_one_response.contains("\"rowSchema\":7")
-            && query_one_response.contains("op=queryOne")
-            && query_one_response.contains("\"rowObject\":null"),
+            && query_one_response.contains("\"rowObject\":{")
+            && query_one_response.contains("\"op\":\"queryOne\"")
+            && query_one_response.contains("\"affected_rows\":")
+            && !query_one_response.contains("\"rowObject\":null"),
         "db queryOne response should materialize latest matching record deterministically:\n{query_one_response}"
     );
 
