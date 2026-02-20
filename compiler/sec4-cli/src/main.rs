@@ -8141,13 +8141,13 @@ enum LasmClusterRelayDispatchError {
 fn dispatch_lasm_cluster_relay_stream(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
-    dispatch_counter: &AtomicUsize,
+    start_index: usize,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     if relay_senders.is_empty() {
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
     let sender_count = relay_senders.len();
-    let start_index = dispatch_counter.fetch_add(1, Ordering::Relaxed) % sender_count;
+    let start_index = start_index % sender_count;
     let mut disconnected_count = 0_usize;
     for offset in 0..sender_count {
         let sender_index = (start_index + offset) % sender_count;
@@ -8910,6 +8910,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let mut listener_saturation_pending_local = 0_usize;
     let mut listener_saturation_total_local = 0_u64;
     let mut listener_idle_spins = 0_u32;
+    let mut relay_dispatch_round_robin = 0_usize;
     let mut relay_listener_batch: Vec<TcpStream> = Vec::with_capacity(relay_accept_batch_max);
     'listener_loop: loop {
         relay_listener_batch.clear();
@@ -8937,11 +8938,18 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         }
         listener_idle_spins = 0;
 
-        for client_stream in relay_listener_batch.drain(..) {
+        let relay_sender_count = relay_senders.len();
+        let relay_batch_len = relay_listener_batch.len();
+        for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
+            let dispatch_start = if relay_sender_count == 0 {
+                0
+            } else {
+                (relay_dispatch_round_robin + batch_offset) % relay_sender_count
+            };
             match dispatch_lasm_cluster_relay_stream(
                 client_stream,
                 relay_senders.as_slice(),
-                relay_selection_counter.as_ref(),
+                dispatch_start,
             ) {
                 Ok(()) => {
                     active_connections.fetch_add(1, Ordering::Relaxed);
@@ -8983,6 +8991,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     break 'listener_loop;
                 }
             }
+        }
+        if relay_sender_count > 0 {
+            relay_dispatch_round_robin =
+                (relay_dispatch_round_robin + relay_batch_len) % relay_sender_count;
         }
     }
     flush_lasm_cluster_saturation_counters(
