@@ -871,6 +871,10 @@ Post-alpha track acceptance anchors:
      - relay selection lookup now uses `Vec<usize>` with sentinel `usize::MAX` for “no backend” entries instead of `Vec<Option<usize>>`,
      - reduces lookup-entry option wrapping overhead while preserving unhealthy remap semantics and identity fast path behavior.
      - documented in `docs/book/1179-m39-lasm-cluster-selection-lookup-sentinel-storage.md`.
+   - [x] Removed selection healthy-mask scratch vector from lookup rebuild:
+     - selection lookup rebuild now derives `first_healthy_index` directly from `worker_ports` and writes sentinel lookup entries in reverse index order without building a parallel `Vec<bool>`,
+     - avoids per-refresh healthy-mask clear/resize/fill work while preserving healthy/unhealthy remap behavior and identity fast path semantics.
+     - documented in `docs/book/1180-m39-lasm-cluster-selection-lookup-maskless-rebuild.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
