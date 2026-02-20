@@ -15732,8 +15732,9 @@ fn main() effects { net } -> Int {
     assert!(
         query_one_response.contains("\"recordId\":2")
             && query_one_response.contains("\"rowSchema\":7")
-            && query_one_response.contains("op=execTx"),
-        "db queryOne response should materialize latest matching sqlite-backed record deterministically:\n{query_one_response}"
+            && query_one_response.contains("\"op\":\"execTx\"")
+            && query_one_response.contains("\"row\":\"{\\\"1\\\":1}\""),
+        "db queryOne response should return deterministic sqlite-backed row payload and matching record metadata:\n{query_one_response}"
     );
 
     let list_response = run_lasm_oneshot_request(
