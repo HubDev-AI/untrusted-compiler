@@ -1015,6 +1015,10 @@ Post-alpha track acceptance anchors:
      - fallback dispatch now consumes the precomputed sender next-index lookup and iterates by fixed attempt count,
      - removes split-slice scan arithmetic from fallback traversal while preserving sender-attempt ordering.
      - documented in `docs/book/1215-m39-lasm-cluster-fallback-next-index-iteration.md`.
+   - [x] Precomputed idle-sleep durations in accept/relay loops:
+     - accept and relay loops now allocate idle sleep durations once and reuse them instead of rebuilding microsecond durations per idle cycle,
+     - keeps idle backoff behavior unchanged while trimming repeated duration construction in hot loops.
+     - documented in `docs/book/1216-m39-lasm-cluster-idle-sleep-duration-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

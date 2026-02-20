@@ -8442,6 +8442,7 @@ fn run_lasm_cluster_accept_loop(
     let mut listener_saturation_total_local = 0_u64;
     let mut listener_dispatch_fallback_total_local = 0_u64;
     let mut listener_idle_spins = 0_u32;
+    let listener_idle_sleep_duration = Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS);
     let relay_sender_count = relay_senders.len();
     if relay_sender_count == 0 {
         return Err("LASM cluster relay sender pool unavailable".to_string());
@@ -8642,7 +8643,7 @@ fn run_lasm_cluster_accept_loop(
             if listener_idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                 std::thread::yield_now();
             } else {
-                std::thread::sleep(Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS));
+                std::thread::sleep(listener_idle_sleep_duration);
                 listener_idle_spins = 0;
             }
             continue;
@@ -9149,6 +9150,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
             let mut idle_spins = 0_u32;
+            let relay_idle_sleep_duration = Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS);
             let mut saturation_events_pending_local = 0_usize;
             let mut saturation_events_total_local = 0_u64;
             let mut active_connection_decrements_local = 0_usize;
@@ -9518,7 +9520,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 if idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                     std::thread::yield_now();
                 } else {
-                    std::thread::sleep(Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS));
+                    std::thread::sleep(relay_idle_sleep_duration);
                     idle_spins = 0;
                 }
             }
