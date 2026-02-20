@@ -1035,6 +1035,10 @@ Post-alpha track acceptance anchors:
      - status writer now compares a typed in-memory `LasmClusterStatusSnapshot` (including worker port set + autoscale/relay metrics) to detect unchanged state,
      - removes per-interval baseline JSON encoding from unchanged-snapshot detection while preserving unchanged-write skip semantics.
      - documented in `docs/book/1220-m39-lasm-cluster-status-writer-typed-snapshot-compare.md`.
+   - [x] Removed status-snapshot worker-port cloning via shared worker-port arcs:
+     - `LasmClusterStatusSnapshot` now stores worker ports as `Arc<Vec<u16>>` and status writer passes `load_full()` worker-port snapshots directly,
+     - removes per-interval worker-port vector cloning from unchanged-snapshot comparison.
+     - documented in `docs/book/1221-m39-lasm-cluster-status-snapshot-worker-port-arc-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

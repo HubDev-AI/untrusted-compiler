@@ -8197,7 +8197,7 @@ struct LasmClusterStatusSnapshot {
     relay_worker_count: usize,
     relay_queue_capacity: usize,
     relay_queue_shard_capacity: usize,
-    worker_ports: Vec<u16>,
+    worker_ports: Arc<Vec<u16>>,
     active_connections: usize,
     active_connections_per_worker: f64,
     relay_saturation_events_pending: usize,
@@ -8226,7 +8226,7 @@ fn write_lasm_cluster_status_json(
     relay_worker_count: usize,
     relay_queue_capacity: usize,
     relay_queue_shard_capacity: usize,
-    worker_ports: &[u16],
+    worker_ports: &Arc<Vec<u16>>,
     active_connections: usize,
     active_connections_per_worker: f64,
     relay_saturation_events_pending: usize,
@@ -8253,7 +8253,7 @@ fn write_lasm_cluster_status_json(
         relay_worker_count,
         relay_queue_capacity,
         relay_queue_shard_capacity,
-        worker_ports: worker_ports.to_vec(),
+        worker_ports: Arc::clone(worker_ports),
         active_connections,
         active_connections_per_worker,
         relay_saturation_events_pending,
@@ -8300,7 +8300,7 @@ fn write_lasm_cluster_status_json(
         "relayWorkerCount": relay_worker_count,
         "relayQueueCapacity": relay_queue_capacity,
         "relayQueueShardCapacity": relay_queue_shard_capacity,
-        "workerPorts": worker_ports,
+        "workerPorts": worker_ports.as_slice(),
         "activeConnections": active_connections,
         "activeConnectionsPerWorker": active_connections_per_worker,
         "relaySaturationEventsPending": relay_saturation_events_pending,
@@ -9646,7 +9646,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     .max(0.001);
                 let saturation_per_sec = (saturation_delta as f64) / elapsed_secs;
                 let dispatch_fallback_per_sec = (dispatch_fallback_delta as f64) / elapsed_secs;
-                let worker_ports = status_worker_ports.load();
+                let worker_ports = status_worker_ports.load_full();
                 let worker_count = worker_ports.len();
                 let active_connections = status_active_connections.load(Ordering::Relaxed);
                 let active_connections_per_worker = if worker_count == 0 {
@@ -9664,7 +9664,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_relay_worker_count,
                     status_relay_queue_capacity,
                     status_relay_queue_shard_capacity,
-                    worker_ports.as_slice(),
+                    &worker_ports,
                     active_connections,
                     active_connections_per_worker,
                     status_saturation_events.load(Ordering::Relaxed),
