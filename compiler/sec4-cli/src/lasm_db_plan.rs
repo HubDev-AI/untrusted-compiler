@@ -4,10 +4,39 @@ use crate::{
     is_lasm_schema_row_call, is_lasm_validate_header_value_call, is_lasm_validate_int64_call,
     is_lasm_validate_non_empty_call, parse_lasm_request_text_placeholder,
     parse_lasm_res_text_template, resolve_response_expr, resolve_route_registration_expr,
-    LasmDbOperationPlan, LasmDbTxPlan, LasmSqlQueryPlan, LASM_INTERNAL_DB_HANDLE_HEADER,
-    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
-    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+    LASM_INTERNAL_DB_HANDLE_HEADER, LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER,
+    LASM_INTERNAL_DB_ROW_SCHEMA_HEADER, LASM_INTERNAL_DB_TEMPLATE_HEADER,
+    LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
+
+#[derive(Debug, Clone)]
+pub(crate) struct LasmSqlQueryPlan {
+    pub(crate) template: String,
+    pub(crate) params: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LasmDbTxPlan {
+    FromDb { db: String },
+    Handle { tx: String },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LasmDbOperationPlan {
+    Exec {
+        db: String,
+        query: LasmSqlQueryPlan,
+    },
+    ExecTx {
+        tx: LasmDbTxPlan,
+        query: LasmSqlQueryPlan,
+    },
+    QueryOne {
+        db: String,
+        row_schema: String,
+        query: LasmSqlQueryPlan,
+    },
+}
 
 pub(crate) fn apply_lasm_db_operation_plan_headers(
     headers: &mut BTreeMap<String, String>,
