@@ -9042,6 +9042,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
 
     let autoscale_enabled = shared_config.max_instances > shared_config.min_instances;
     let maintenance_interval_ms = lasm_cluster_maintenance_interval_ms(shared_config.as_ref());
+    let saturation_priority_interval_ms = maintenance_interval_ms.min(100);
     let autoscale_handle = {
         let autoscale_state = Arc::clone(&shared_state);
         let autoscale_config = Arc::clone(&shared_config);
@@ -9060,7 +9061,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 .checked_sub(Duration::from_millis(autoscale_config.autoscale_check_ms))
                 .unwrap_or_else(Instant::now);
             while !autoscale_stop_flag.load(Ordering::Relaxed) {
-                std::thread::sleep(Duration::from_millis(maintenance_interval_ms));
+                let saturation_pending_before_sleep =
+                    autoscale_saturation_events.load(Ordering::Relaxed);
+                let sleep_ms = if autoscale_enabled && saturation_pending_before_sleep > 0 {
+                    saturation_priority_interval_ms
+                } else {
+                    maintenance_interval_ms
+                };
+                std::thread::sleep(Duration::from_millis(sleep_ms));
                 if autoscale_stop_flag.load(Ordering::Relaxed) {
                     break;
                 }
