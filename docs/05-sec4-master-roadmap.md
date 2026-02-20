@@ -899,6 +899,10 @@ Post-alpha track acceptance anchors:
      - accept loop now increments a shared `relayDispatchFallbackTotal` counter whenever preferred-shard direct dispatch misses and fallback scanning is used,
      - cluster status JSON now includes this counter for operator-visible direct-hit vs fallback behavior tracking.
      - documented in `docs/book/1186-m39-lasm-cluster-relay-dispatch-fallback-telemetry.md`.
+   - [x] Removed shared accept-loop dispatch atomic in cluster mode:
+     - cluster accept loops now use per-accept-worker local dispatch cursors (seeded by accept worker index) instead of a shared `AtomicUsize` reservation counter,
+     - preserves deterministic round-robin-per-worker dispatch behavior while removing shared atomic contention from accept hot path.
+     - documented in `docs/book/1187-m39-lasm-cluster-per-accept-worker-local-dispatch-cursors.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
