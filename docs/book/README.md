@@ -1179,5 +1179,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1207-m39-lasm-cluster-duration-reuse-in-relay-autoscale-loops.md`
 - `1208-m39-lasm-cluster-accept-fast-path-direct-enqueue.md`
 - `1209-m39-lasm-cluster-relay-vector-preallocation.md`
+- `1210-m39-lasm-cluster-accept-next-index-lookup.md`
 
 As milestones progress, chapters will be added and linked from this index.
