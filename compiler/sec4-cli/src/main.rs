@@ -8208,6 +8208,7 @@ fn write_lasm_cluster_status_json(
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
+    relay_dispatch_fallback_total: u64,
     autoscale_desired_instances: usize,
     autoscale_last_saturation_events: usize,
     autoscale_last_dynamic_boost_step: usize,
@@ -8245,6 +8246,7 @@ fn write_lasm_cluster_status_json(
         "relayAcceptWorkers": relay_accept_workers,
         "relayBackendConnectTimeoutMs": relay_backend_connect_timeout_ms,
         "relayBackendConnectCooldownMs": relay_backend_connect_cooldown_ms,
+        "relayDispatchFallbackTotal": relay_dispatch_fallback_total,
         "autoscaleDesiredInstances": autoscale_desired_instances,
         "autoscaleLastSaturationEvents": autoscale_last_saturation_events,
         "autoscaleLastDynamicBoostStep": autoscale_last_dynamic_boost_step,
@@ -8365,6 +8367,7 @@ fn run_lasm_cluster_accept_loop(
     relay_saturation_events: &AtomicUsize,
     relay_saturation_events_total: &AtomicU64,
     relay_dispatch_counter: &AtomicUsize,
+    relay_dispatch_fallback_total: &AtomicU64,
     stop_flag: &AtomicBool,
     relay_accept_batch_max: usize,
 ) -> Result<(), String> {
@@ -8446,13 +8449,17 @@ fn run_lasm_cluster_accept_loop(
             } else {
                 match relay_senders[stream_dispatch_start].try_send(client_stream) {
                     Ok(()) => Ok(()),
-                    Err(TrySendError::Full(stream)) => dispatch_lasm_cluster_relay_stream_fallback(
-                        stream,
-                        relay_senders,
-                        stream_dispatch_start.saturating_add(1),
-                        true,
-                    ),
+                    Err(TrySendError::Full(stream)) => {
+                        relay_dispatch_fallback_total.fetch_add(1, Ordering::Relaxed);
+                        dispatch_lasm_cluster_relay_stream_fallback(
+                            stream,
+                            relay_senders,
+                            stream_dispatch_start.saturating_add(1),
+                            true,
+                        )
+                    }
                     Err(TrySendError::Disconnected(stream)) => {
+                        relay_dispatch_fallback_total.fetch_add(1, Ordering::Relaxed);
                         dispatch_lasm_cluster_relay_stream_fallback(
                             stream,
                             relay_senders,
@@ -8967,6 +8974,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     }
     let relay_senders = Arc::new(relay_senders);
     let relay_selection_counter = Arc::new(AtomicUsize::new(0));
+    let relay_dispatch_fallback_total = Arc::new(AtomicU64::new(0));
     let relay_backend_connect_timeout =
         lasm_cluster_backend_connect_timeout(shared_config.as_ref());
     let relay_backend_connect_cooldown =
@@ -9403,6 +9411,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_relay_queue_capacity = relay_queue_capacity;
         let status_relay_queue_shard_capacity = relay_queue_shard_capacity;
         let status_relay_accept_workers = relay_accept_worker_count;
+        let status_relay_dispatch_fallback_total = Arc::clone(&relay_dispatch_fallback_total);
         let status_autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
         let status_autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
         let status_autoscale_last_dynamic_boost_step =
@@ -9459,6 +9468,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_relay_accept_workers,
                     status_config.cluster_backend_connect_timeout_ms,
                     status_config.cluster_backend_connect_cooldown_ms,
+                    status_relay_dispatch_fallback_total.load(Ordering::Relaxed),
                     status_autoscale_last_desired_instances.load(Ordering::Relaxed),
                     status_autoscale_last_saturation_events.load(Ordering::Relaxed),
                     status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
@@ -9718,6 +9728,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let accept_saturation_events = Arc::clone(&relay_saturation_events);
         let accept_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let accept_dispatch_counter = Arc::clone(&relay_dispatch_counter);
+        let accept_dispatch_fallback_total = Arc::clone(&relay_dispatch_fallback_total);
         let accept_stop_flag = Arc::clone(&stop_flag);
         let accept_error_reported = Arc::clone(&accept_error_reported);
         accept_handles.push(std::thread::spawn(move || {
@@ -9728,6 +9739,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 accept_saturation_events.as_ref(),
                 accept_saturation_events_total.as_ref(),
                 accept_dispatch_counter.as_ref(),
+                accept_dispatch_fallback_total.as_ref(),
                 accept_stop_flag.as_ref(),
                 relay_accept_batch_max,
             ) {
@@ -9746,6 +9758,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_saturation_events.as_ref(),
         relay_saturation_events_total.as_ref(),
         relay_dispatch_counter.as_ref(),
+        relay_dispatch_fallback_total.as_ref(),
         stop_flag.as_ref(),
         relay_accept_batch_max,
     ) {
