@@ -8461,6 +8461,20 @@ fn run_lasm_cluster_accept_loop(
     } else {
         None
     };
+    let relay_dispatch_next_index_by_sender = if relay_sender_count > 1 {
+        let mut next_index_by_sender = Vec::with_capacity(relay_sender_count);
+        for sender_index in 0..relay_sender_count {
+            let next_index = if sender_index + 1 == relay_sender_count {
+                0
+            } else {
+                sender_index + 1
+            };
+            next_index_by_sender.push(next_index);
+        }
+        Some(next_index_by_sender)
+    } else {
+        None
+    };
     let mut relay_dispatch_cursor = if relay_sender_count > 1 {
         initial_dispatch_cursor % relay_sender_count
     } else {
@@ -8532,15 +8546,16 @@ fn run_lasm_cluster_accept_loop(
                 }
             }
         } else {
+            let relay_dispatch_next_index_by_sender = relay_dispatch_next_index_by_sender
+                .as_ref()
+                .expect("multi-relay accept path requires next-index lookup");
             while listener_accepted_in_batch < relay_accept_batch_max {
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
                         let stream_dispatch_start = relay_dispatch_cursor;
-                        relay_dispatch_cursor += 1;
-                        if relay_dispatch_cursor == relay_sender_count {
-                            relay_dispatch_cursor = 0;
-                        }
+                        relay_dispatch_cursor =
+                            relay_dispatch_next_index_by_sender[stream_dispatch_start];
 
                         match relay_senders[stream_dispatch_start].try_send(client_stream) {
                             Ok(()) => {
@@ -8548,13 +8563,8 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Full(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let fallback_start = if stream_dispatch_start + 1
-                                    == relay_sender_count
-                                {
-                                    0
-                                } else {
-                                    stream_dispatch_start + 1
-                                };
+                                let fallback_start =
+                                    relay_dispatch_next_index_by_sender[stream_dispatch_start];
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
@@ -8577,13 +8587,8 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Disconnected(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let fallback_start = if stream_dispatch_start + 1
-                                    == relay_sender_count
-                                {
-                                    0
-                                } else {
-                                    stream_dispatch_start + 1
-                                };
+                                let fallback_start =
+                                    relay_dispatch_next_index_by_sender[stream_dispatch_start];
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
