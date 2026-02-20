@@ -8724,11 +8724,13 @@ fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Result<(), i32> 
     }
 }
 
+const LASM_CLUSTER_SELECTION_LOOKUP_NONE: usize = usize::MAX;
+
 fn rebuild_lasm_cluster_backend_selection_lookup(
     worker_ports: &[u16],
     unhealthy_ports_until: &HashMap<u16, Instant>,
     healthy_mask: &mut Vec<bool>,
-    lookup: &mut Vec<Option<usize>>,
+    lookup: &mut Vec<usize>,
 ) -> (bool, bool) {
     let worker_port_count = worker_ports.len();
     lookup.clear();
@@ -8738,7 +8740,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     if unhealthy_ports_until.is_empty() {
         return (true, true);
     }
-    lookup.resize(worker_port_count, None);
+    lookup.resize(worker_port_count, LASM_CLUSTER_SELECTION_LOOKUP_NONE);
 
     healthy_mask.clear();
     healthy_mask.resize(worker_port_count, false);
@@ -8763,7 +8765,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
         if healthy_mask[index] {
             next_healthy_index = index;
         }
-        lookup[index] = Some(next_healthy_index);
+        lookup[index] = next_healthy_index;
     }
     (true, false)
 }
@@ -8908,7 +8910,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 selected_worker_ports_snapshot.as_ref(),
                 &mut selected_worker_port_membership_set,
             );
-            let mut selection_lookup: Vec<Option<usize>> = Vec::new();
+            let mut selection_lookup: Vec<usize> = Vec::new();
             let mut selection_healthy_mask: Vec<bool> = Vec::new();
             let mut selection_has_healthy_backends = false;
             let mut selection_lookup_is_identity = false;
@@ -9065,7 +9067,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 selection_lookup
                                     .get(start_index)
                                     .copied()
-                                    .flatten()
+                                    .filter(|index| {
+                                        *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE
+                                    })
                             }
                         }
                     };
