@@ -6,10 +6,10 @@
 // - request-source placeholders in text/header/cookie output
 // - auth helper enforcement (require + requireRole)
 // - schema-tagged dynamic user-store flows (users.json)
-// - schema-tagged dynamic DB record flows (records.log)
+// - schema-tagged dynamic DB record flows (records.log / sqlite / postgres)
 //
 // Run with:
-// sec4 run --path examples/lasm-alpha-full --backend lasm --db-base <dir> --port 8080
+// sec4 run --path examples/lasm-alpha-full --backend lasm --db-base <dir> --db-adapter <records-log|sqlite|postgres> --port 8080
 
 fn health() effects { net } -> Int {
   // Basic liveness endpoint.
@@ -129,7 +129,7 @@ fn listUsers() effects { net } -> Int {
 }
 
 fn dbExec() effects { net, db.write } -> Int {
-  // Dynamic records.log write path via intrinsic DB execution.
+  // Dynamic DB adapter write path via intrinsic DB execution.
   let db = DbCap();
   let template = validate.nonEmpty(req.query("template"));
   let params = validate.nonEmpty(req.query("params"));
@@ -140,7 +140,7 @@ fn dbExec() effects { net, db.write } -> Int {
 }
 
 fn dbExecTx() effects { net, db.write, db.tx } -> Int {
-  // Dynamic records.log tx write path via intrinsic DB execution.
+  // Dynamic DB adapter tx write path via intrinsic DB execution.
   let db = DbCap();
   let template = validate.nonEmpty(req.query("template"));
   let params = validate.nonEmpty(req.query("params"));
@@ -152,7 +152,7 @@ fn dbExecTx() effects { net, db.write, db.tx } -> Int {
 }
 
 fn dbQueryOne() effects { net, db.read } -> Int {
-  // Dynamic records.log latest matching record query path via intrinsic DB execution.
+  // Dynamic DB adapter queryOne path via intrinsic DB execution.
   let db = DbCap();
   let template = validate.nonEmpty(req.query("template"));
   let params = validate.nonEmpty(req.query("params"));
@@ -164,7 +164,7 @@ fn dbQueryOne() effects { net, db.read } -> Int {
 }
 
 fn dbListRecords() effects { net } -> Int {
-  // Dynamic records.log full list path.
+  // Dynamic DB adapter records metadata list path.
   res.json(200, "DbListRecordsResponse", 0);
   0
 }

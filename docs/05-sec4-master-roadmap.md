@@ -607,6 +607,7 @@ Post-alpha track acceptance anchors:
    - add SQLite adapter as first real embedded DB target,
    - keep external DB adapters post-alpha.
 5. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
+   - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
 6. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
 
 ### Post-DB execution lock (authoritative order)
