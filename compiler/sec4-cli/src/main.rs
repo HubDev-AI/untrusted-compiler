@@ -9085,8 +9085,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     );
                     continue;
                 }
+                let saturation_events_pending = autoscale_saturation_events.load(Ordering::Relaxed);
                 if now.duration_since(last_scale_eval_at)
                     < Duration::from_millis(autoscale_config.autoscale_check_ms)
+                    && saturation_events_pending == 0
                 {
                     continue;
                 }

@@ -777,6 +777,11 @@ Post-alpha track acceptance anchors:
      - status payload now includes `autoscaleDesiredInstances`, `autoscaleLastSaturationEvents`, and `autoscaleLastDynamicBoostStep`,
      - autoscale loop publishes these values from each evaluation cycle via shared atomics, so status snapshots show latest autoscale decision context directly.
      - documented in `docs/book/1156-m39-lasm-cluster-status-autoscale-decision-fields.md`.
+   - [x] Prioritized autoscale evaluation when saturation is pending:
+     - autoscale loop now bypasses the normal `autoscale_check_ms` gate when saturation events are pending, so saturation-driven scale decisions can run at maintenance-loop cadence,
+     - preserves existing autoscale cadence when saturation is absent.
+     - short LASM cluster probe after this slice recorded `1,470,366` requests in `20s` (`~73.15k req/s`, `p99 9.64ms`, peak RSS `~27,216 KB`) under default settings.
+     - documented in `docs/book/1157-m39-lasm-cluster-saturation-priority-autoscale-eval.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
