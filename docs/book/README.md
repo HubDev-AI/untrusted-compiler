@@ -1103,5 +1103,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1131-m39-lasm-cluster-saturation-counter-batch.md`
 - `1132-m39-lasm-cluster-unhealthy-membership-set-prune.md`
 - `1133-m39-lasm-cluster-status-lockfree-worker-count.md`
+- `1134-m39-lasm-cluster-listener-saturation-counter-batch.md`
 
 As milestones progress, chapters will be added and linked from this index.
