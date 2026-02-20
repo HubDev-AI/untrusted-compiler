@@ -8334,7 +8334,7 @@ enum LasmClusterRelayDispatchError {
 }
 
 #[inline(always)]
-fn dispatch_lasm_cluster_relay_stream_fallback(
+fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
     relay_dispatch_next_index_by_sender: &[usize],
@@ -8342,12 +8342,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
     mut saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     let sender_count = relay_senders.len();
-    if sender_count <= 1 {
-        if saw_live_sender {
-            return Err(LasmClusterRelayDispatchError::Saturated(client_stream));
-        }
-        return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
-    }
+    debug_assert!(sender_count > 1);
     debug_assert!(start_index_wrapped < sender_count);
     debug_assert_eq!(relay_dispatch_next_index_by_sender.len(), sender_count);
     let mut scan_index = start_index_wrapped;
@@ -8555,13 +8550,14 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Full(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
-                                    stream,
-                                    relay_senders,
-                                    relay_dispatch_next_index_by_sender,
-                                    next_dispatch_index,
-                                    true,
-                                );
+                                let dispatch_result =
+                                    dispatch_lasm_cluster_relay_stream_fallback_multi(
+                                        stream,
+                                        relay_senders,
+                                        relay_dispatch_next_index_by_sender,
+                                        next_dispatch_index,
+                                        true,
+                                    );
                                 match dispatch_result {
                                     Ok(()) => {
                                         listener_enqueued_local += 1;
@@ -8587,13 +8583,14 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Disconnected(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
-                                    stream,
-                                    relay_senders,
-                                    relay_dispatch_next_index_by_sender,
-                                    next_dispatch_index,
-                                    false,
-                                );
+                                let dispatch_result =
+                                    dispatch_lasm_cluster_relay_stream_fallback_multi(
+                                        stream,
+                                        relay_senders,
+                                        relay_dispatch_next_index_by_sender,
+                                        next_dispatch_index,
+                                        false,
+                                    );
                                 match dispatch_result {
                                     Ok(()) => {
                                         listener_enqueued_local += 1;

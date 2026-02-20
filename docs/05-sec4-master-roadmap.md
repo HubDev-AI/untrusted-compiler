@@ -1019,6 +1019,10 @@ Post-alpha track acceptance anchors:
      - accept and relay loops now allocate idle sleep durations once and reuse them instead of rebuilding microsecond durations per idle cycle,
      - keeps idle backoff behavior unchanged while trimming repeated duration construction in hot loops.
      - documented in `docs/book/1216-m39-lasm-cluster-idle-sleep-duration-reuse.md`.
+   - [x] Specialized fallback scan helper for multi-relay mode:
+     - fallback dispatch helper is now explicitly multi-relay (`sender_count > 1`) and no longer carries single-sender guard branching,
+     - accept multi-relay path now calls the specialized helper directly.
+     - documented in `docs/book/1217-m39-lasm-cluster-multi-relay-fallback-helper-specialization.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
