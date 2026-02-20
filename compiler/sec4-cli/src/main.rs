@@ -9317,16 +9317,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     };
 
                     let Some(selected_backend_index) = selected_backend_index else {
-                        saturation_events_pending_local =
-                            saturation_events_pending_local.saturating_add(1);
-                        saturation_events_total_local =
-                            saturation_events_total_local.saturating_add(1);
+                        saturation_events_pending_local += 1;
+                        saturation_events_total_local += 1;
                         let _ = write_lasm_cluster_unavailable_response(
                             &mut client,
                             LasmClusterUnavailableReason::NoHealthyWorkers,
                         );
-                        active_connection_decrements_local =
-                            active_connection_decrements_local.saturating_add(1);
+                        active_connection_decrements_local += 1;
                         continue;
                     };
 
@@ -9366,16 +9363,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                             ),
                                         );
                                     }
-                                    active_connection_decrements_local =
-                                        active_connection_decrements_local.saturating_add(1);
+                                    active_connection_decrements_local += 1;
                                 }
                             }
                         }
                         Err(err) => {
-                            saturation_events_pending_local =
-                                saturation_events_pending_local.saturating_add(1);
-                            saturation_events_total_local =
-                                saturation_events_total_local.saturating_add(1);
+                            saturation_events_pending_local += 1;
+                            saturation_events_total_local += 1;
                             let now = Instant::now();
                             let unhealthy_until = now + relay_backend_connect_cooldown;
                             if let Some(entry) =
@@ -9421,8 +9415,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 &mut client,
                                 LasmClusterUnavailableReason::WorkerUnavailable,
                             );
-                            active_connection_decrements_local =
-                                active_connection_decrements_local.saturating_add(1);
+                            active_connection_decrements_local += 1;
                         }
                     }
                 }
@@ -9443,8 +9436,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             if relay_buffer_pool.len() < relay_buffer_pool_max {
                                 relay_buffer_pool.push(relay.into_buffers());
                             }
-                            active_connection_decrements_local =
-                                active_connection_decrements_local.saturating_add(1);
+                            active_connection_decrements_local += 1;
                             progressed = true;
                         }
                         Err(err) => {
@@ -9464,23 +9456,26 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             if relay_buffer_pool.len() < relay_buffer_pool_max {
                                 relay_buffer_pool.push(relay.into_buffers());
                             }
-                            active_connection_decrements_local =
-                                active_connection_decrements_local.saturating_add(1);
+                            active_connection_decrements_local += 1;
                             progressed = true;
                         }
                     }
                 }
 
-                flush_lasm_cluster_saturation_counters(
-                    &relay_saturation_events,
-                    &relay_saturation_events_total,
-                    &mut saturation_events_pending_local,
-                    &mut saturation_events_total_local,
-                );
-                flush_lasm_cluster_active_connection_decrements(
-                    &relay_active,
-                    &mut active_connection_decrements_local,
-                );
+                if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
+                    flush_lasm_cluster_saturation_counters(
+                        &relay_saturation_events,
+                        &relay_saturation_events_total,
+                        &mut saturation_events_pending_local,
+                        &mut saturation_events_total_local,
+                    );
+                }
+                if active_connection_decrements_local > 0 {
+                    flush_lasm_cluster_active_connection_decrements(
+                        &relay_active,
+                        &mut active_connection_decrements_local,
+                    );
+                }
 
                 if receiver_closed && relay_connections.is_empty() {
                     break;
