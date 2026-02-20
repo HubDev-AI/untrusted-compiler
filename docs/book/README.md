@@ -1163,5 +1163,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1191-m39-lasm-cluster-split-single-vs-multi-relay-accept-dispatch.md`
 - `1192-m39-lasm-cluster-accept-loop-counter-and-conditional-flush-hotpath.md`
 - `1193-m39-lasm-cluster-fallback-relay-scan-split-slice.md`
+- `1194-m39-lasm-cluster-fallback-start-prewrap-and-fixed-span-scan.md`
 
 As milestones progress, chapters will be added and linked from this index.
