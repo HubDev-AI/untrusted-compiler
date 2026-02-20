@@ -1,7 +1,7 @@
-use crate::{
-    has_lasm_sql_non_trailing_statement_separator, lasm_dynamic_postgres_client_mut,
-    reconnect_lasm_dynamic_postgres_client, LasmDynamicResponseState,
+use crate::lasm_db_runtime_common::{
+    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
 };
+use crate::{has_lasm_sql_non_trailing_statement_separator, LasmDynamicResponseState};
 use postgres::types::ToSql;
 use postgres::Client as PostgresClient;
 
