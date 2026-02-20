@@ -8754,30 +8754,30 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     let worker_ports = worker_ports_snapshot_ref.as_ref();
                     let worker_port_count = worker_ports.len();
                     let backend_port = {
+                        let mut next_selection_index = || {
+                            if relay_selection_reservation_offset >= relay_selection_reservation_len
+                            {
+                                relay_selection_reservation_base = relay_selection_counter
+                                    .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
+                                relay_selection_reservation_len = relay_accept_batch_max;
+                                relay_selection_reservation_offset = 0;
+                            }
+                            let index = relay_selection_reservation_base
+                                .saturating_add(relay_selection_reservation_offset);
+                            relay_selection_reservation_offset =
+                                relay_selection_reservation_offset.saturating_add(1);
+                            index
+                        };
                         if worker_port_count == 0 {
                             None
                         } else {
                             if unhealthy_ports_until.is_empty() {
-                                if relay_selection_reservation_offset
-                                    >= relay_selection_reservation_len
-                                {
-                                    relay_selection_reservation_base = relay_selection_counter
-                                        .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
-                                    relay_selection_reservation_len = relay_accept_batch_max;
-                                    relay_selection_reservation_offset = 0;
-                                }
-                                let index = (relay_selection_reservation_base
-                                    + relay_selection_reservation_offset)
-                                    % worker_port_count;
-                                relay_selection_reservation_offset =
-                                    relay_selection_reservation_offset.saturating_add(1);
+                                let index = next_selection_index() % worker_port_count;
                                 Some(worker_ports[index])
                             } else if unhealthy_ports_until.len() >= worker_port_count {
                                 None
                             } else {
-                                let start_index = relay_selection_counter
-                                    .fetch_add(1, Ordering::Relaxed)
-                                    % worker_port_count;
+                                let start_index = next_selection_index() % worker_port_count;
                                 let mut selected = None;
                                 for offset in 0..worker_port_count {
                                     let candidate = worker_ports
