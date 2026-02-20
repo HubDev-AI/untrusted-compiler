@@ -15926,7 +15926,7 @@ fn main() effects { net } -> Int {
 
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
-        "GET /db/query-one?template=SELECT%2042%20AS%20value&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+        "GET /db/query-one?template=SELECT%2042%20AS%20value,%20TRUE%20AS%20enabled,%203.25%20AS%20ratio&params=alpha&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
         query_one_response.contains("HTTP/1.1 200 OK"),
@@ -15937,6 +15937,42 @@ fn main() effects { net } -> Int {
             && query_one_response.contains("value")
             && query_one_response.contains("42"),
         "db queryOne response should include postgres-backed row payload:\n{query_one_response}"
+    );
+    let query_one_body = query_one_response
+        .split("\r\n\r\n")
+        .nth(1)
+        .expect("db queryOne response should include a body");
+    let query_one_json: serde_json::Value =
+        serde_json::from_str(query_one_body).expect("db queryOne body should be valid json");
+    let row_payload = query_one_json
+        .get("row")
+        .and_then(serde_json::Value::as_str)
+        .expect("db queryOne row payload should be serialized json");
+    let row_json: serde_json::Value =
+        serde_json::from_str(row_payload).expect("db queryOne row payload should parse as json");
+    assert_eq!(
+        row_json
+            .get("value")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or_default(),
+        42,
+        "db queryOne value column should materialize as numeric json"
+    );
+    assert_eq!(
+        row_json
+            .get("enabled")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        true,
+        "db queryOne enabled column should materialize as boolean json"
+    );
+    let ratio = row_json
+        .get("ratio")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_default();
+    assert!(
+        (ratio - 3.25).abs() < 0.00001,
+        "db queryOne ratio column should materialize as numeric json: {ratio}"
     );
 
     let list_response = run_lasm_oneshot_request(
