@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I repeated the same napkin-gate mistake by launching branch/status checks in parallel with reading `.claude/napkin.md` at continuation start. | Treat napkin read as a strict standalone first command; only after that run status/search/build commands (parallelization allowed for read-only steps after napkin). |
 | 2026-02-20 | self | I almost treated one low-throughput probe outlier as a code regression even though the slice was CLI-only and repeated performance runs in this environment were noisy. | For non-hot-path slices, avoid performance claims from single probes; if perf matters, run a small repeated sample set and only report stable trends. |
 | 2026-02-20 | self | I used `jq --argfile` in this environment where that option is unsupported, which interrupted quick probe-metric comparison. | Use portable `jq --slurpfile` for JSON file imports in this repo environment unless tool version support is explicitly verified. |
 | 2026-02-20 | self | I initially auto-sized `SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS` from host parallelism and produced a throughput regression in probe results before settling the tuning. | For new parallelism knobs on hot paths, verify at least one override matrix (`1` vs tuned value) before locking defaults; use conservative deterministic default and then document the measured winner. |

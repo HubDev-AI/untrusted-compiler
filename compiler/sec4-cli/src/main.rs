@@ -8238,13 +8238,13 @@ fn run_lasm_cluster_accept_loop(
     active_connections: &AtomicUsize,
     relay_saturation_events: &AtomicUsize,
     relay_saturation_events_total: &AtomicU64,
+    relay_dispatch_counter: &AtomicUsize,
     stop_flag: &AtomicBool,
     relay_accept_batch_max: usize,
 ) -> Result<(), String> {
     let mut listener_saturation_pending_local = 0_usize;
     let mut listener_saturation_total_local = 0_u64;
     let mut listener_idle_spins = 0_u32;
-    let mut relay_dispatch_round_robin = 0_usize;
     let mut relay_listener_batch: Vec<TcpStream> = Vec::with_capacity(relay_accept_batch_max);
 
     loop {
@@ -8283,12 +8283,17 @@ fn run_lasm_cluster_accept_loop(
 
         let relay_sender_count = relay_senders.len();
         let relay_batch_len = relay_listener_batch.len();
+        let relay_dispatch_start_base = if relay_sender_count == 0 {
+            0
+        } else {
+            relay_dispatch_counter.fetch_add(relay_batch_len, Ordering::Relaxed)
+        };
         let mut listener_enqueued_local = 0_usize;
         for (batch_offset, client_stream) in relay_listener_batch.drain(..).enumerate() {
             let dispatch_start = if relay_sender_count == 0 {
                 0
             } else {
-                (relay_dispatch_round_robin + batch_offset) % relay_sender_count
+                (relay_dispatch_start_base + batch_offset) % relay_sender_count
             };
             match dispatch_lasm_cluster_relay_stream(client_stream, relay_senders, dispatch_start) {
                 Ok(()) => {
@@ -8338,10 +8343,6 @@ fn run_lasm_cluster_accept_loop(
             active_connections,
             &mut listener_enqueued_local,
         );
-        if relay_sender_count > 0 {
-            relay_dispatch_round_robin =
-                (relay_dispatch_round_robin + relay_batch_len) % relay_sender_count;
-        }
     }
 
     flush_lasm_cluster_saturation_counters(
@@ -9114,6 +9115,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     }
 
     let accept_error_reported = Arc::new(AtomicBool::new(false));
+    let relay_dispatch_counter = Arc::new(AtomicUsize::new(0));
     let mut accept_handles = Vec::with_capacity(relay_accept_worker_count.saturating_sub(1));
     for _ in 1..relay_accept_worker_count {
         let accept_listener = match listener.try_clone() {
@@ -9139,6 +9141,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let accept_active_connections = Arc::clone(&active_connections);
         let accept_saturation_events = Arc::clone(&relay_saturation_events);
         let accept_saturation_events_total = Arc::clone(&relay_saturation_events_total);
+        let accept_dispatch_counter = Arc::clone(&relay_dispatch_counter);
         let accept_stop_flag = Arc::clone(&stop_flag);
         let accept_error_reported = Arc::clone(&accept_error_reported);
         accept_handles.push(std::thread::spawn(move || {
@@ -9148,6 +9151,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 accept_active_connections.as_ref(),
                 accept_saturation_events.as_ref(),
                 accept_saturation_events_total.as_ref(),
+                accept_dispatch_counter.as_ref(),
                 accept_stop_flag.as_ref(),
                 relay_accept_batch_max,
             ) {
@@ -9165,6 +9169,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         active_connections.as_ref(),
         relay_saturation_events.as_ref(),
         relay_saturation_events_total.as_ref(),
+        relay_dispatch_counter.as_ref(),
         stop_flag.as_ref(),
         relay_accept_batch_max,
     ) {
