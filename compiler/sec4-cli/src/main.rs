@@ -89,6 +89,8 @@ enum Commands {
         db_adapter: Option<RunDbAdapter>,
         #[arg(long)]
         db_postgres_dsn: Option<String>,
+        #[arg(long)]
+        db_postgres_dsn_file: Option<PathBuf>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -468,6 +470,7 @@ fn main() {
             db_base,
             db_adapter,
             db_postgres_dsn,
+            db_postgres_dsn_file,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -498,6 +501,7 @@ fn main() {
             db_base.as_deref(),
             db_adapter,
             db_postgres_dsn.as_deref(),
+            db_postgres_dsn_file.as_deref(),
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -1389,6 +1393,23 @@ fn resolve_lasm_dynamic_db_records_adapter(
         raw.trim()
     );
     LasmDbRecordsAdapter::RecordsLog
+}
+
+fn load_lasm_db_postgres_dsn_from_file(path: &Path) -> Result<String, String> {
+    let raw = fs::read_to_string(path).map_err(|err| {
+        format!(
+            "could not read --db-postgres-dsn-file `{}`: {err}",
+            path.display()
+        )
+    })?;
+    let dsn = raw.trim().to_string();
+    if dsn.is_empty() {
+        return Err(format!(
+            "--db-postgres-dsn-file `{}` must contain a non-empty DSN",
+            path.display()
+        ));
+    }
+    Ok(dsn)
 }
 
 fn resolve_lasm_dynamic_db_postgres_dsn(
@@ -8277,6 +8298,7 @@ fn cmd_run(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
+    db_postgres_dsn_file: Option<&Path>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -8397,9 +8419,23 @@ fn cmd_run(
         eprintln!("run failed: --db-postgres-dsn is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_dsn_file.is_some() {
+        eprintln!("run failed: --db-postgres-dsn-file is only supported with --backend lasm");
+        return Err(2);
+    }
+    if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
+        eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
+        return Err(2);
+    }
     if let Some(dsn) = db_postgres_dsn {
         if dsn.trim().is_empty() {
             eprintln!("run failed: --db-postgres-dsn must not be empty");
+            return Err(2);
+        }
+    }
+    if let Some(path) = db_postgres_dsn_file {
+        if let Err(message) = load_lasm_db_postgres_dsn_from_file(path) {
+            eprintln!("run failed: {message}");
             return Err(2);
         }
     }
@@ -8519,6 +8555,7 @@ fn cmd_run(
             db_base,
             db_adapter,
             db_postgres_dsn,
+            db_postgres_dsn_file,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -9986,6 +10023,7 @@ fn cmd_run_lasm_backend(
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
+    db_postgres_dsn_file: Option<&Path>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10189,7 +10227,19 @@ fn cmd_run_lasm_backend(
     };
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
-    let explicit_db_postgres_dsn = db_postgres_dsn.map(|value| value.trim().to_string());
+    let explicit_db_postgres_dsn = if let Some(dsn) = db_postgres_dsn {
+        Some(dsn.trim().to_string())
+    } else if let Some(path) = db_postgres_dsn_file {
+        match load_lasm_db_postgres_dsn_from_file(path) {
+            Ok(dsn) => Some(dsn),
+            Err(message) => {
+                eprintln!("run failed: {message}");
+                return Err(2);
+            }
+        }
+    } else {
+        None
+    };
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);

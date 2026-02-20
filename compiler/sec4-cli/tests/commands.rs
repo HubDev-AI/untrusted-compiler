@@ -25182,6 +25182,48 @@ fn run_command_rejects_db_postgres_dsn_with_c_backend() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_dsn_file_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-file-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let dsn_file = project_dir.join("dsn.txt");
+    fs::write(&dsn_file, "postgres://example").expect("dsn file should be written");
+    let dsn_file_value = dsn_file
+        .to_str()
+        .expect("dsn file path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-dsn-file",
+        &dsn_file_value,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-dsn-file is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-dsn-file is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-postgres-dsn-file guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_rejects_empty_db_postgres_dsn() {
     let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-empty");
     let project_path = project_dir
@@ -25213,6 +25255,95 @@ fn run_command_rejects_empty_db_postgres_dsn() {
     assert!(
         stderr.contains("run failed: --db-postgres-dsn must not be empty"),
         "stderr should contain deterministic empty dsn guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_both_db_postgres_dsn_and_file() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-conflict");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let dsn_file = project_dir.join("dsn.txt");
+    fs::write(&dsn_file, "postgres://example").expect("dsn file should be written");
+    let dsn_file_value = dsn_file
+        .to_str()
+        .expect("dsn file path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-dsn",
+        "postgres://inline",
+        "--db-postgres-dsn-file",
+        &dsn_file_value,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when both postgres dsn sources are provided"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file"),
+        "stderr should contain deterministic postgres dsn source conflict guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_empty_db_postgres_dsn_file() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-dsn-file-empty");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+    let dsn_file = project_dir.join("dsn.txt");
+    fs::write(&dsn_file, "   \n").expect("dsn file should be written");
+    let dsn_file_value = dsn_file
+        .to_str()
+        .expect("dsn file path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-dsn-file",
+        &dsn_file_value,
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-dsn-file content is empty"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should fail with deterministic invalid-config status"
+    );
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-dsn-file")
+            && stderr.contains("must contain a non-empty DSN"),
+        "stderr should contain deterministic empty dsn-file guidance:\n{stderr}"
     );
 
     fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
