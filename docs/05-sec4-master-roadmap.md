@@ -791,6 +791,10 @@ Post-alpha track acceptance anchors:
      - status payload now includes `autoscaleScaleUpCooldownRemainingMs` and `autoscaleScaleDownCooldownRemainingMs`,
      - autoscale loop publishes these values each cycle from current cooldown state so operators can see when next scale-up/scale-down windows open.
      - documented in `docs/book/1159-m39-lasm-cluster-status-autoscale-cooldown-remaining-fields.md`.
+   - [x] Added active-connection density telemetry to cluster status:
+     - status payload now includes `activeConnectionsPerWorker` derived from live `activeConnections / workerCount`,
+     - improves visibility of per-worker load density during tuning and autoscale diagnosis.
+     - documented in `docs/book/1160-m39-lasm-cluster-status-active-connections-per-worker.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

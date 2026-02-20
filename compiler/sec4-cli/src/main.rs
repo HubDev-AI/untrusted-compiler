@@ -8126,6 +8126,7 @@ fn write_lasm_cluster_status_json(
     relay_queue_shard_capacity: usize,
     worker_ports: &[u16],
     active_connections: usize,
+    active_connections_per_worker: f64,
     relay_saturation_events_pending: usize,
     relay_saturation_events_total: u64,
     relay_saturation_events_per_sec: f64,
@@ -8160,6 +8161,7 @@ fn write_lasm_cluster_status_json(
         "relayQueueShardCapacity": relay_queue_shard_capacity,
         "workerPorts": worker_ports,
         "activeConnections": active_connections,
+        "activeConnectionsPerWorker": active_connections_per_worker,
         "relaySaturationEventsPending": relay_saturation_events_pending,
         "relaySaturationEventsTotal": relay_saturation_events_total,
         "relaySaturationEventsPerSec": relay_saturation_events_per_sec,
@@ -9029,6 +9031,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 let saturation_per_sec = (saturation_delta as f64) / elapsed_secs;
                 let worker_ports = status_worker_ports.load();
                 let worker_count = worker_ports.len();
+                let active_connections = status_active_connections.load(Ordering::Relaxed);
+                let active_connections_per_worker = if worker_count == 0 {
+                    0.0
+                } else {
+                    (active_connections as f64) / (worker_count as f64)
+                };
                 if let Err(err) = write_lasm_cluster_status_json(
                     status_path.as_path(),
                     status_tmp_path.as_path(),
@@ -9040,7 +9048,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_relay_queue_capacity,
                     status_relay_queue_shard_capacity,
                     worker_ports.as_slice(),
-                    status_active_connections.load(Ordering::Relaxed),
+                    active_connections,
+                    active_connections_per_worker,
                     status_saturation_events.load(Ordering::Relaxed),
                     saturation_total,
                     saturation_per_sec,
