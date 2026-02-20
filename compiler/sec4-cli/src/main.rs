@@ -13111,6 +13111,7 @@ fn apply_lasm_internal_db_operation_materialization(
                                 "recordId": record.id,
                                 "rowSchema": row_schema,
                                 "row": row,
+                                "rowObject": row_object,
                                 "record": lasm_db_record_to_json(&record),
                             }),
                         );
@@ -13178,6 +13179,7 @@ fn apply_lasm_internal_db_operation_materialization(
                                 "recordId": record.id,
                                 "rowSchema": row_schema,
                                 "row": row,
+                                "rowObject": row_object,
                                 "record": lasm_db_record_to_json(&record),
                             }),
                         );
@@ -13226,6 +13228,7 @@ fn apply_lasm_internal_db_operation_materialization(
                     "recordId": record.id,
                     "rowSchema": row_schema,
                     "row": row,
+                    "rowObject": serde_json::Value::Null,
                     "record": lasm_db_record_to_json(&record),
                 }),
             );
