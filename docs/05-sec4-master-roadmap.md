@@ -795,6 +795,10 @@ Post-alpha track acceptance anchors:
      - status payload now includes `activeConnectionsPerWorker` derived from live `activeConnections / workerCount`,
      - improves visibility of per-worker load density during tuning and autoscale diagnosis.
      - documented in `docs/book/1160-m39-lasm-cluster-status-active-connections-per-worker.md`.
+   - [x] Reduced relay-loop arithmetic and membership-check overhead on hot paths:
+     - accept-loop relay dispatch now computes modulo once per batch and advances dispatch start index via wrap increment per stream (instead of modulo per stream),
+     - unhealthy-port prune membership now uses `binary_search` on the worker-port snapshot (snapshot order guarded before publish) instead of linear `contains` checks.
+     - documented in `docs/book/1161-m39-lasm-cluster-hotpath-dispatch-wrap-and-prune-binary-search.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
