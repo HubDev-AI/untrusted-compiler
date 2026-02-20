@@ -12859,7 +12859,30 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     let mut max_placeholder = 0usize;
     let mut in_single_quote = false;
     let mut active_dollar_quote: Option<String> = None;
+    let mut in_line_comment = false;
+    let mut block_comment_depth = 0usize;
     while index < bytes.len() {
+        if in_line_comment {
+            if bytes[index] == b'\n' {
+                in_line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+        if block_comment_depth > 0 {
+            if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+                block_comment_depth += 1;
+                index += 2;
+                continue;
+            }
+            if index + 1 < bytes.len() && bytes[index] == b'*' && bytes[index + 1] == b'/' {
+                block_comment_depth = block_comment_depth.saturating_sub(1);
+                index += 2;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
         if let Some(delimiter) = active_dollar_quote.as_ref() {
             if query_template[index..].starts_with(delimiter.as_str()) {
                 index += delimiter.len();
@@ -12885,6 +12908,16 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
         }
         if in_single_quote {
             index += 1;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'-' && bytes[index + 1] == b'-' {
+            in_line_comment = true;
+            index += 2;
+            continue;
+        }
+        if index + 1 < bytes.len() && bytes[index] == b'/' && bytes[index + 1] == b'*' {
+            block_comment_depth = 1;
+            index += 2;
             continue;
         }
         if bytes[index] == b'$' {
