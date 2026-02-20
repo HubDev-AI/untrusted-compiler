@@ -389,15 +389,187 @@ pub(crate) fn persist_lasm_dynamic_db_records_to_postgres(
     Ok(())
 }
 
-pub(crate) fn persist_lasm_dynamic_db_records_to_disk(
+pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
     state: &mut LasmDynamicResponseState,
+    record: &LasmDbRecord,
+) -> Result<(), String> {
+    let Some(path) = state.db_records_sqlite_store_path.as_ref() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic sqlite records store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let connection = Connection::open(path).map_err(|err| {
+        format!(
+            "could not open LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
+        format!(
+            "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
+            path.display()
+        )
+    })?;
+    let id = i64::try_from(record.id).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic sqlite record id {}: out of i64 range",
+            record.id
+        )
+    })?;
+    let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic sqlite record timestamp {}: out of i64 range",
+            record.created_at_ms
+        )
+    })?;
+    let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic sqlite record affected_rows {}: out of i64 range",
+            record.affected_rows
+        )
+    })?;
+    match connection.execute(
+        "INSERT INTO lasm_db_records \
+             (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+             ON CONFLICT(id) DO UPDATE SET \
+                 op = excluded.op, \
+                 db = excluded.db, \
+                 template = excluded.template, \
+                 params = excluded.params, \
+                 tx = excluded.tx, \
+                 affected_rows = excluded.affected_rows, \
+                 created_at_ms = excluded.created_at_ms",
+        params![
+            id,
+            record.op.as_str(),
+            record.db,
+            record.template.as_str(),
+            record.params.as_str(),
+            record.tx,
+            affected_rows,
+            created_at_ms
+        ],
+    ) {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            let append_error = format!(
+                "could not append LASM dynamic sqlite record {} into `{}`: {err}",
+                record.id,
+                path.display()
+            );
+            persist_lasm_dynamic_db_records_to_sqlite(state).map_err(|full_sync_error| {
+                format!("{append_error}; full sqlite sync fallback failed: {full_sync_error}")
+            })
+        }
+    }
+}
+
+pub(crate) fn persist_lasm_dynamic_db_record_append_to_postgres(
+    state: &mut LasmDynamicResponseState,
+    record: &LasmDbRecord,
+) -> Result<(), String> {
+    let id = i64::try_from(record.id).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic postgres record id {}: out of i64 range",
+            record.id
+        )
+    })?;
+    let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic postgres record timestamp {}: out of i64 range",
+            record.created_at_ms
+        )
+    })?;
+    let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+        format!(
+            "could not persist LASM dynamic postgres record affected_rows {}: out of i64 range",
+            record.affected_rows
+        )
+    })?;
+    let run_sync = |client: &mut PostgresClient| -> Result<(), String> {
+        ensure_lasm_dynamic_db_records_postgres_schema(client)?;
+        let insert_statement = format!(
+            "INSERT INTO {} (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+             ON CONFLICT (id) DO UPDATE SET \
+                 op = EXCLUDED.op, \
+                 db = EXCLUDED.db, \
+                 template = EXCLUDED.template, \
+                 params = EXCLUDED.params, \
+                 tx = EXCLUDED.tx, \
+                 affected_rows = EXCLUDED.affected_rows, \
+                 created_at_ms = EXCLUDED.created_at_ms",
+            LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+        );
+        client
+            .execute(
+                insert_statement.as_str(),
+                &[
+                    &id,
+                    &record.op,
+                    &record.db,
+                    &record.template,
+                    &record.params,
+                    &record.tx,
+                    &affected_rows,
+                    &created_at_ms,
+                ],
+            )
+            .map_err(|err| {
+                format!(
+                    "could not append LASM dynamic postgres record {}: {err}",
+                    record.id
+                )
+            })?;
+        Ok(())
+    };
+    let initial = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        run_sync(client)
+    };
+    match initial {
+        Ok(()) => Ok(()),
+        Err(message) if message.contains("closed") || message.contains("broken pipe") => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            run_sync(client).or_else(|retry_error| {
+                persist_lasm_dynamic_db_records_to_postgres(state).map_err(|full_sync_error| {
+                    format!(
+                        "{retry_error}; full postgres sync fallback failed after reconnect: \
+                         {full_sync_error}"
+                    )
+                })
+            })
+        }
+        Err(message) => {
+            persist_lasm_dynamic_db_records_to_postgres(state).map_err(|full_sync_error| {
+                format!("{message}; full postgres sync fallback failed: {full_sync_error}")
+            })
+        }
+    }
+}
+
+pub(crate) fn persist_lasm_dynamic_db_record_append(
+    state: &mut LasmDynamicResponseState,
+    record: &LasmDbRecord,
 ) -> Result<(), String> {
     match state.db_records_adapter {
         LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
             state.db_records_store_path.as_deref(),
             &state.db_records,
         ),
-        LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
-        LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
+        LasmDbRecordsAdapter::Sqlite => {
+            persist_lasm_dynamic_db_record_append_to_sqlite(state, record)
+        }
+        LasmDbRecordsAdapter::Postgres => {
+            persist_lasm_dynamic_db_record_append_to_postgres(state, record)
+        }
     }
 }

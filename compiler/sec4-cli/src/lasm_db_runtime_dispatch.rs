@@ -1,4 +1,4 @@
-use crate::lasm_db_adapter_state::persist_lasm_dynamic_db_records_to_disk;
+use crate::lasm_db_adapter_state::persist_lasm_dynamic_db_record_append;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
     normalize_lasm_db_params, parse_lasm_positive_i64,
@@ -166,7 +166,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                     state.db_records.push(record.clone());
-                    if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                    if let Err(message) = persist_lasm_dynamic_db_record_append(&mut state, &record)
+                    {
                         eprintln!(
                             "warning: LASM dynamic records store persistence failed: {message}"
                         );
@@ -418,7 +419,8 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                     };
                     state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                     state.db_records.push(record.clone());
-                    if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                    if let Err(message) = persist_lasm_dynamic_db_record_append(&mut state, &record)
+                    {
                         eprintln!(
                             "warning: LASM dynamic records store persistence failed: {message}"
                         );
@@ -610,7 +612,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                         state.db_records.push(record.clone());
-                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                        if let Err(message) =
+                            persist_lasm_dynamic_db_record_append(&mut state, &record)
+                        {
                             eprintln!(
                                 "warning: LASM dynamic records store persistence failed: {message}"
                             );
@@ -681,7 +685,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                         state.db_records.push(record.clone());
-                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                        if let Err(message) =
+                            persist_lasm_dynamic_db_record_append(&mut state, &record)
+                        {
                             eprintln!(
                                 "warning: LASM dynamic records store persistence failed: {message}"
                             );
@@ -715,7 +721,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         state.next_db_record_id = state.next_db_record_id.saturating_add(1);
                         state.db_records.push(record.clone());
-                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                        if let Err(message) =
+                            persist_lasm_dynamic_db_record_append(&mut state, &record)
+                        {
                             eprintln!(
                                 "warning: LASM dynamic records store persistence failed: {message}"
                             );

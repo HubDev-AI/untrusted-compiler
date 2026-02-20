@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I introduced incremental DB append helpers but initially left the legacy full-sync wrapper unused, causing dead-code warnings during targeted runs. | When replacing runtime paths, either remove legacy wrappers in the same slice or wire deterministic fallback references so builds stay warning-free. |
 | 2026-02-20 | self | I accidentally invoked a web-tool action while trying to continue local repository analysis. | Keep implementation loops local-only; for repo analysis use shell tools (`rg`, `sed`, `git`) unless external data is explicitly needed. |
 | 2026-02-20 | self | I removed root-level runtime-common imports during module extraction and broke dependent sibling modules that still imported those symbols from `crate::...`, causing compile errors. | When removing root alias imports, first rewrite dependent module imports to target their source module paths directly (`crate::lasm_db_runtime_common::...`) before cleanup. |
 | 2026-02-20 | self | I started this continuation by running git checks before opening `.claude/napkin.md`, violating the session-start discipline. | Always read `.claude/napkin.md` first in every new continuation before any status/search/build command. |
