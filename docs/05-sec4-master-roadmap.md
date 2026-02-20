@@ -1031,6 +1031,10 @@ Post-alpha track acceptance anchors:
      - command integration test `run_command_lasm_cluster_status_json_skips_unchanged_snapshots` now locks stable `updatedAtMs` behavior for unchanged status snapshots,
      - prevents regressions that would reintroduce periodic unchanged status-file rewrites.
      - documented in `docs/book/1219-m39-lasm-cluster-status-writer-unchanged-snapshot-test-lock.md`.
+   - [x] Replaced status-writer baseline-byte comparison with typed snapshot comparison:
+     - status writer now compares a typed in-memory `LasmClusterStatusSnapshot` (including worker port set + autoscale/relay metrics) to detect unchanged state,
+     - removes per-interval baseline JSON encoding from unchanged-snapshot detection while preserving unchanged-write skip semantics.
+     - documented in `docs/book/1220-m39-lasm-cluster-status-writer-typed-snapshot-compare.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
