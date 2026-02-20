@@ -8687,6 +8687,7 @@ fn cmd_run_lasm_reuseport_cluster(config: LasmClusterConfig) -> Result<(), i32> 
 fn rebuild_lasm_cluster_backend_selection_lookup(
     worker_ports: &[u16],
     unhealthy_ports_until: &HashMap<u16, Instant>,
+    healthy_mask: &mut Vec<bool>,
     lookup: &mut Vec<Option<usize>>,
 ) {
     let worker_port_count = worker_ports.len();
@@ -8702,7 +8703,8 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
         return;
     }
 
-    let mut healthy_mask = vec![false; worker_port_count];
+    healthy_mask.clear();
+    healthy_mask.resize(worker_port_count, false);
     let mut healthy_count = 0_usize;
     for (index, port) in worker_ports.iter().enumerate() {
         let is_healthy = !unhealthy_ports_until.contains_key(port);
@@ -8855,6 +8857,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 &mut selected_worker_backend_addrs,
             );
             let mut selection_lookup: Vec<Option<usize>> = Vec::new();
+            let mut selection_healthy_mask: Vec<bool> = Vec::new();
             let mut selection_lookup_dirty = true;
 
             loop {
@@ -8949,6 +8952,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             rebuild_lasm_cluster_backend_selection_lookup(
                                 worker_ports,
                                 &unhealthy_ports_until,
+                                &mut selection_healthy_mask,
                                 &mut selection_lookup,
                             );
                             selection_lookup_dirty = false;
