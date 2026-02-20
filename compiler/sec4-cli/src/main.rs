@@ -13185,7 +13185,27 @@ fn apply_lasm_internal_db_operation_materialization(
                         );
                         return true;
                     }
-                    record_match
+                    if record_match.is_none() {
+                        None
+                    } else {
+                        let record = LasmDbRecord {
+                            id: state.next_db_record_id,
+                            op: "queryOne".to_string(),
+                            db,
+                            template: template.clone(),
+                            params: params.clone(),
+                            tx: 0,
+                            created_at_ms: lasm_now_ms(),
+                        };
+                        state.next_db_record_id = state.next_db_record_id.saturating_add(1);
+                        state.db_records.push(record.clone());
+                        if let Err(message) = persist_lasm_dynamic_db_records_to_disk(&mut state) {
+                            eprintln!(
+                                "warning: LASM dynamic records store persistence failed: {message}"
+                            );
+                        }
+                        Some(record)
+                    }
                 }
                 Err(_) => {
                     set_lasm_json_response(

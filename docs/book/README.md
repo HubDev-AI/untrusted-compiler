@@ -1060,5 +1060,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1088-m39-run-postgres-dsn-adapter-coherence.md`
 - `1089-m39-lasm-query-one-record-persistence-parity.md`
 - `1090-m39-lasm-query-one-row-object-response.md`
+- `1091-m39-lasm-query-one-records-log-parity.md`
 
 As milestones progress, chapters will be added and linked from this index.
