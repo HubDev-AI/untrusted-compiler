@@ -9114,6 +9114,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_next_index = 0_usize;
             let mut relay_selection_reservation_worker_port_count = 0_usize;
             let mut unhealthy_prune_next_at: Option<Instant> = None;
+            let relay_warning_throttle_duration =
+                Duration::from_millis(LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS);
+            let unhealthy_prune_interval =
+                Duration::from_millis(LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS);
             let mut selected_worker_ports_snapshot = relay_worker_ports.load_full();
             let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> = Vec::new();
             rebuild_lasm_cluster_worker_backend_addrs(
@@ -9180,11 +9184,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         unhealthy_prune_next_at = if unhealthy_port_count == 0 {
                             None
                         } else {
-                            Some(
-                                now + Duration::from_millis(
-                                    LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
-                                ),
-                            )
+                            Some(now + unhealthy_prune_interval)
                         };
                         worker_ports_snapshot = Some(snapshot);
                     }
@@ -9240,11 +9240,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             unhealthy_prune_next_at = if unhealthy_port_count == 0 {
                                 None
                             } else {
-                                Some(
-                                    now + Duration::from_millis(
-                                        LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
-                                    ),
-                                )
+                                Some(now + unhealthy_prune_interval)
                             };
                             selection_lookup_dirty = true;
                         }
@@ -9342,11 +9338,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                         eprintln!(
                                             "warning: LASM cluster relay init failed: {message}"
                                         );
-                                        pump_warning_next_allowed = Some(
-                                            now + Duration::from_millis(
-                                                LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
-                                            ),
-                                        );
+                                        pump_warning_next_allowed =
+                                            Some(now + relay_warning_throttle_duration);
                                     }
                                     active_connection_decrements_local += 1;
                                 }
@@ -9369,11 +9362,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             *unhealthy_entry = Some(unhealthy_until);
                             selection_lookup_dirty = true;
                             if unhealthy_prune_next_at.is_none() && unhealthy_port_count > 0 {
-                                unhealthy_prune_next_at = Some(
-                                    now + Duration::from_millis(
-                                        LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
-                                    ),
-                                );
+                                unhealthy_prune_next_at = Some(now + unhealthy_prune_interval);
                             }
                             let warning_next_allowed_entry =
                                 &mut connect_warning_next_allowed_by_index[selected_backend_index];
@@ -9387,11 +9376,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     "warning: LASM cluster worker {} connect failed: {}",
                                     selected_backend_port, err
                                 );
-                                *warning_next_allowed_entry = Some(
-                                    now + Duration::from_millis(
-                                        LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
-                                    ),
-                                );
+                                *warning_next_allowed_entry =
+                                    Some(now + relay_warning_throttle_duration);
                             }
                             let _ = write_lasm_cluster_unavailable_response(
                                 &mut client,
@@ -9429,11 +9415,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             };
                             if warning_allowed {
                                 eprintln!("warning: LASM cluster relay pump failed: {err}");
-                                pump_warning_next_allowed = Some(
-                                    now + Duration::from_millis(
-                                        LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
-                                    ),
-                                );
+                                pump_warning_next_allowed =
+                                    Some(now + relay_warning_throttle_duration);
                             }
                             let relay = relay_connections.swap_remove(index);
                             if relay_buffer_pool.len() < relay_buffer_pool_max {
@@ -9510,6 +9493,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_autoscale_scale_down_cooldown_remaining_ms =
             Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
+        let status_interval_duration = Duration::from_millis(status_interval_ms);
         let status_tmp_path = status_path.with_extension(format!(
             "{}.tmp",
             status_path
@@ -9581,7 +9565,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 if status_stop_flag.load(Ordering::Relaxed) {
                     break;
                 }
-                std::thread::sleep(Duration::from_millis(status_interval_ms));
+                std::thread::sleep(status_interval_duration);
             }
         }))
     } else {
@@ -9606,11 +9590,17 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let autoscale_scale_down_cooldown_remaining_ms =
             Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
         std::thread::spawn(move || {
+            let autoscale_check_interval =
+                Duration::from_millis(autoscale_config.autoscale_check_ms);
+            let autoscale_scale_up_cooldown =
+                Duration::from_millis(autoscale_config.autoscale_scale_up_cooldown_ms);
+            let autoscale_scale_down_cooldown =
+                Duration::from_millis(autoscale_config.autoscale_scale_down_cooldown_ms);
             let mut last_scale_up_at: Option<Instant> = None;
             let mut last_scale_down_at: Option<Instant> = None;
             let mut last_published_worker_ports = autoscale_worker_ports.load().as_ref().clone();
             let mut last_scale_eval_at = Instant::now()
-                .checked_sub(Duration::from_millis(autoscale_config.autoscale_check_ms))
+                .checked_sub(autoscale_check_interval)
                 .unwrap_or_else(Instant::now);
             while !autoscale_stop_flag.load(Ordering::Relaxed) {
                 let saturation_pending_before_sleep =
@@ -9665,7 +9655,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 );
                 let saturation_events_pending = autoscale_saturation_events.load(Ordering::Relaxed);
                 if now.duration_since(last_scale_eval_at)
-                    < Duration::from_millis(autoscale_config.autoscale_check_ms)
+                    < autoscale_check_interval
                     && saturation_events_pending == 0
                 {
                     continue;
@@ -9708,10 +9698,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     current_workers
                 };
                 let scale_up_cooldown_elapsed = match last_scale_up_at {
-                    Some(at) => {
-                        now.duration_since(at)
-                            >= Duration::from_millis(autoscale_config.autoscale_scale_up_cooldown_ms)
-                    }
+                    Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
                     None => true,
                 };
                 if desired > state.workers.len()
@@ -9739,12 +9726,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     current_workers
                 };
                 let scale_down_cooldown_elapsed = match last_scale_down_at {
-                    Some(at) => {
-                        now.duration_since(at)
-                            >= Duration::from_millis(
-                                autoscale_config.autoscale_scale_down_cooldown_ms,
-                            )
-                    }
+                    Some(at) => now.duration_since(at) >= autoscale_scale_down_cooldown,
                     None => true,
                 };
                 if desired < state.workers.len()
