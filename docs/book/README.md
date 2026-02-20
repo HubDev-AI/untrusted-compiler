@@ -1184,5 +1184,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1212-m39-lasm-cluster-accept-next-index-single-read.md`
 - `1213-m39-lasm-cluster-accept-fallback-success-direct-enqueue.md`
 - `1214-m39-lasm-cluster-inline-hints-on-hot-helpers.md`
+- `1215-m39-lasm-cluster-fallback-next-index-iteration.md`
 
 As milestones progress, chapters will be added and linked from this index.
