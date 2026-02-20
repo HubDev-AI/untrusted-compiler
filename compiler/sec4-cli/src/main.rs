@@ -87,6 +87,8 @@ enum Commands {
         db_base: Option<PathBuf>,
         #[arg(long, value_enum)]
         db_adapter: Option<RunDbAdapter>,
+        #[arg(long)]
+        db_postgres_dsn: Option<String>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -465,6 +467,7 @@ fn main() {
             max_keep_alive_requests,
             db_base,
             db_adapter,
+            db_postgres_dsn,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -494,6 +497,7 @@ fn main() {
             max_keep_alive_requests,
             db_base.as_deref(),
             db_adapter,
+            db_postgres_dsn.as_deref(),
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -1273,13 +1277,15 @@ const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
 fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
     explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
+    explicit_db_postgres_dsn: Option<&str>,
 ) -> Result<LasmDynamicResponseState, String> {
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
     let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
     let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
-    let db_records_postgres_dsn = resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter)?;
+    let db_records_postgres_dsn =
+        resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter, explicit_db_postgres_dsn)?;
     let mut db_records_postgres_client = None;
     let users_by_id = users_store_path
         .as_ref()
@@ -1387,9 +1393,19 @@ fn resolve_lasm_dynamic_db_records_adapter(
 
 fn resolve_lasm_dynamic_db_postgres_dsn(
     adapter: LasmDbRecordsAdapter,
+    explicit_dsn: Option<&str>,
 ) -> Result<Option<String>, String> {
     if adapter != LasmDbRecordsAdapter::Postgres {
         return Ok(None);
+    }
+    if let Some(explicit_dsn) = explicit_dsn {
+        let dsn = explicit_dsn.trim();
+        if dsn.is_empty() {
+            return Err(
+                "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string(),
+            );
+        }
+        return Ok(Some(dsn.to_string()));
     }
     let raw = std::env::var("SEC4_RT_LASM_DB_POSTGRES_DSN").map_err(|_| {
         "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
@@ -8260,6 +8276,7 @@ fn cmd_run(
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
+    db_postgres_dsn: Option<&str>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -8376,6 +8393,16 @@ fn cmd_run(
         eprintln!("run failed: --db-adapter is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_dsn.is_some() {
+        eprintln!("run failed: --db-postgres-dsn is only supported with --backend lasm");
+        return Err(2);
+    }
+    if let Some(dsn) = db_postgres_dsn {
+        if dsn.trim().is_empty() {
+            eprintln!("run failed: --db-postgres-dsn must not be empty");
+            return Err(2);
+        }
+    }
     if backend != RunBackend::Lasm && instances != 1 {
         eprintln!("run failed: --instances is only supported with --backend lasm");
         return Err(2);
@@ -8491,6 +8518,7 @@ fn cmd_run(
             max_keep_alive_requests,
             db_base,
             db_adapter,
+            db_postgres_dsn,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -8833,6 +8861,7 @@ struct LasmClusterConfig {
     max_keep_alive_requests: Option<u64>,
     db_base: Option<PathBuf>,
     db_adapter: Option<RunDbAdapter>,
+    db_postgres_dsn: Option<String>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -8881,6 +8910,12 @@ fn push_optional_u64_run_arg(cmd: &mut Command, flag: &str, value: Option<u64>) 
 }
 
 fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path>) {
+    if let Some(value) = value {
+        cmd.arg(flag).arg(value);
+    }
+}
+
+fn push_optional_string_run_arg(cmd: &mut Command, flag: &str, value: Option<&str>) {
     if let Some(value) = value {
         cmd.arg(flag).arg(value);
     }
@@ -8947,6 +8982,11 @@ fn spawn_lasm_cluster_worker(
     );
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
+    push_optional_string_run_arg(
+        &mut cmd,
+        "--db-postgres-dsn",
+        config.db_postgres_dsn.as_deref(),
+    );
 
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
@@ -9953,6 +9993,7 @@ fn cmd_run_lasm_backend(
     max_keep_alive_requests: Option<u64>,
     db_base: Option<&Path>,
     db_adapter: Option<RunDbAdapter>,
+    db_postgres_dsn: Option<&str>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10156,6 +10197,7 @@ fn cmd_run_lasm_backend(
     };
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
+    let explicit_db_postgres_dsn = db_postgres_dsn.map(|value| value.trim().to_string());
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -10194,6 +10236,7 @@ fn cmd_run_lasm_backend(
             max_keep_alive_requests,
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
+            db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -10229,6 +10272,7 @@ fn cmd_run_lasm_backend(
             max_keep_alive_requests,
             db_base: db_base.map(Path::to_path_buf),
             db_adapter,
+            db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
@@ -10270,6 +10314,7 @@ fn cmd_run_lasm_backend(
         build_lasm_dynamic_response_state(
             db_base,
             db_adapter.map(run_db_adapter_to_lasm_db_records_adapter),
+            explicit_db_postgres_dsn.as_deref(),
         )
         .map_err(|message| {
             eprintln!("run failed: {message}");
