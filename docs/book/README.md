@@ -1055,5 +1055,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1083-m39-lasm-cluster-postgres-dsn-env-forwarding.md`
 - `1084-m39-run-db-postgres-dsn-file-flag.md`
 - `1085-m39-lasm-postgres-dsn-file-env-fallback.md`
+- `1086-m39-run-postgres-dsn-single-resolution.md`
 
 As milestones progress, chapters will be added and linked from this index.
