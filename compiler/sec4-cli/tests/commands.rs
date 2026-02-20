@@ -15446,7 +15446,8 @@ fn main() effects { net } -> Int {
     assert!(
         query_one_response.contains("\"recordId\":2")
             && query_one_response.contains("\"rowSchema\":7")
-            && query_one_response.contains("op=execTx"),
+            && query_one_response.contains("op=execTx")
+            && query_one_response.contains("\"rowObject\":null"),
         "db queryOne response should materialize latest matching record deterministically:\n{query_one_response}"
     );
 
@@ -15736,8 +15737,9 @@ fn main() effects { net } -> Int {
         query_one_response.contains("\"recordId\":3")
             && query_one_response.contains("\"rowSchema\":7")
             && query_one_response.contains("\"op\":\"queryOne\"")
-            && query_one_response.contains("\"row\":\"{\\\"1\\\":1}\""),
-        "db queryOne response should return deterministic sqlite-backed row payload and queryOne record metadata:\n{query_one_response}"
+            && query_one_response.contains("\"row\":\"{\\\"1\\\":1}\"")
+            && query_one_response.contains("\"rowObject\":{\"1\":1}"),
+        "db queryOne response should return deterministic sqlite-backed row payload and rowObject metadata:\n{query_one_response}"
     );
 
     let query_one_missing_param_response = run_lasm_oneshot_request(
@@ -16176,6 +16178,10 @@ fn main() effects { net } -> Int {
         .expect("db queryOne row payload should be serialized json");
     let row_json: serde_json::Value =
         serde_json::from_str(row_payload).expect("db queryOne row payload should parse as json");
+    let row_object_json = query_one_json
+        .get("rowObject")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
     assert_eq!(
         row_json
             .get("value")
@@ -16215,6 +16221,22 @@ fn main() effects { net } -> Int {
     assert!(
         (ratio - 3.25).abs() < 0.00001,
         "db queryOne ratio column should materialize as numeric json: {ratio}"
+    );
+    assert_eq!(
+        row_object_json
+            .get("value")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or_default(),
+        42,
+        "db queryOne rowObject should expose numeric values"
+    );
+    assert_eq!(
+        row_object_json
+            .get("enabled")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        true,
+        "db queryOne rowObject should expose boolean values"
     );
 
     let missing_param_response = run_lasm_oneshot_request(
