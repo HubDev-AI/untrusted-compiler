@@ -675,6 +675,10 @@ Post-alpha track acceptance anchors:
       - accept loop now accumulates saturation pending/total increments locally on queue-full events and flushes atomics in small batches (`LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH`),
       - shared helper now standardizes saturation-counter flush behavior across relay worker and listener paths.
       - documented in `docs/book/1134-m39-lasm-cluster-listener-saturation-counter-batch.md`.
+   - [x] Reduced enqueue-counter atomics and unhealthy-set allocations in relay hot paths:
+      - listener path now increments `active_connections` only after successful relay queue enqueue (no add/sub pair on rejected connections),
+      - relay workers now reuse a mutable active-port set for unhealthy membership pruning instead of allocating a new set each cycle.
+      - documented in `docs/book/1135-m39-lasm-cluster-enqueue-counter-and-set-reuse.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
