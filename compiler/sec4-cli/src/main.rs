@@ -9370,28 +9370,30 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             }
                             *unhealthy_entry = Some(unhealthy_until);
                             selection_lookup_dirty = true;
-                            if unhealthy_port_count > 0 && unhealthy_prune_next_at.is_none() {
+                            if unhealthy_prune_next_at.is_none() && unhealthy_port_count > 0 {
                                 unhealthy_prune_next_at = Some(
                                     now + Duration::from_millis(
                                         LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
                                     ),
                                 );
                             }
-                            if connect_warning_next_allowed_by_index[selected_backend_index]
-                                .map(|next| now >= next)
-                                .unwrap_or(true)
-                            {
+                            let warning_next_allowed_entry =
+                                &mut connect_warning_next_allowed_by_index[selected_backend_index];
+                            let warning_allowed = match *warning_next_allowed_entry {
+                                Some(next_allowed_at) => now >= next_allowed_at,
+                                None => true,
+                            };
+                            if warning_allowed {
                                 let selected_backend_port = worker_ports[selected_backend_index];
                                 eprintln!(
                                     "warning: LASM cluster worker {} connect failed: {}",
                                     selected_backend_port, err
                                 );
-                                connect_warning_next_allowed_by_index[selected_backend_index] =
-                                    Some(
-                                        now + Duration::from_millis(
-                                            LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
-                                        ),
-                                    );
+                                *warning_next_allowed_entry = Some(
+                                    now + Duration::from_millis(
+                                        LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
+                                    ),
+                                );
                             }
                             let _ = write_lasm_cluster_unavailable_response(
                                 &mut client,
