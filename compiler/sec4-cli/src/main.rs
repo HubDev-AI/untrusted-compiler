@@ -8695,6 +8695,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut saturation_events_pending_local = 0_usize;
             let mut saturation_events_total_local = 0_u64;
             let mut active_connection_decrements_local = 0_usize;
+            let mut relay_selection_reservation_base = 0_usize;
+            let mut relay_selection_reservation_len = 0_usize;
+            let mut relay_selection_reservation_offset = 0_usize;
 
             loop {
                 let mut accepted = false;
@@ -8755,8 +8758,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             None
                         } else {
                             if unhealthy_ports_until.is_empty() {
-                                let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
+                                if relay_selection_reservation_offset
+                                    >= relay_selection_reservation_len
+                                {
+                                    relay_selection_reservation_base = relay_selection_counter
+                                        .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
+                                    relay_selection_reservation_len = relay_accept_batch_max;
+                                    relay_selection_reservation_offset = 0;
+                                }
+                                let index = (relay_selection_reservation_base
+                                    + relay_selection_reservation_offset)
                                     % worker_port_count;
+                                relay_selection_reservation_offset =
+                                    relay_selection_reservation_offset.saturating_add(1);
                                 Some(worker_ports[index])
                             } else if unhealthy_ports_until.len() >= worker_port_count {
                                 None

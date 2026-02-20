@@ -731,6 +731,11 @@ Post-alpha track acceptance anchors:
      - keeps dispatch and relay backend selection decoupled while removing per-accept-worker cursor skew under parallel intake,
      - short LASM cluster probe after this slice recorded `1,431,766` requests in `20s` (`~71.58k req/s`, `p99 9.08ms`, peak RSS `~27,296 KB`) under default settings.
      - documented in `docs/book/1146-m39-lasm-cluster-shared-accept-dispatch-cursor.md`.
+   - [x] Batched relay backend-selection counter reservations in worker accept loops:
+     - relay workers now reserve backend-selection counter slots once per accepted batch (`relay_accept_batch_max`) instead of one atomic `fetch_add(1)` per accepted socket when healthy-port fast path is active,
+     - preserves backend-selection semantics while lowering cross-worker atomic contention on the hot path.
+     - short LASM cluster probe after this slice recorded `1,450,919` requests in `20s` (`~72.18k req/s`, `p99 9.15ms`, peak RSS `~27,184 KB`) under default settings.
+     - documented in `docs/book/1147-m39-lasm-cluster-relay-selection-counter-batch-reservation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

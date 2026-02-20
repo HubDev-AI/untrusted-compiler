@@ -1116,5 +1116,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1144-m39-lasm-cluster-relay-lazy-worker-snapshot-load.md`
 - `1145-m39-lasm-cluster-accept-workers-cli-flag.md`
 - `1146-m39-lasm-cluster-shared-accept-dispatch-cursor.md`
+- `1147-m39-lasm-cluster-relay-selection-counter-batch-reservation.md`
 
 As milestones progress, chapters will be added and linked from this index.
