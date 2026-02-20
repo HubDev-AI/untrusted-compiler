@@ -1,9 +1,11 @@
 use crate::{
-    ensure_lasm_dynamic_db_records_sqlite_schema, LasmDbRecord,
+    ensure_lasm_dynamic_db_records_sqlite_schema, lasm_dynamic_postgres_client_mut,
+    reconnect_lasm_dynamic_postgres_client, LasmDbRecord, LasmDynamicResponseState,
     LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
 use postgres::{Client as PostgresClient, NoTls};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use std::fs;
 use std::path::Path;
 
 pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
@@ -166,4 +168,185 @@ pub(crate) fn load_lasm_dynamic_db_records_from_postgres(
         });
     }
     Ok(records)
+}
+
+pub(crate) fn persist_lasm_dynamic_db_records_to_sqlite(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    let Some(path) = state.db_records_sqlite_store_path.as_ref() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "could not create LASM dynamic sqlite records store directory `{}`: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let mut connection = Connection::open(path).map_err(|err| {
+        format!(
+            "could not open LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
+        format!(
+            "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
+            path.display()
+        )
+    })?;
+    let tx = connection.transaction().map_err(|err| {
+        format!(
+            "could not start LASM dynamic sqlite records transaction `{}`: {err}",
+            path.display()
+        )
+    })?;
+    tx.execute("DELETE FROM lasm_db_records", [])
+        .map_err(|err| {
+            format!(
+                "could not clear LASM dynamic sqlite records store `{}`: {err}",
+                path.display()
+            )
+        })?;
+    let mut ordered = state.db_records.clone();
+    ordered.sort_by_key(|record| record.id);
+    let mut statement = tx
+        .prepare(
+            "INSERT INTO lasm_db_records \
+             (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .map_err(|err| {
+            format!(
+                "could not prepare LASM dynamic sqlite records insert `{}`: {err}",
+                path.display()
+            )
+        })?;
+    for record in &ordered {
+        let id = i64::try_from(record.id).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record id {}: out of i64 range",
+                record.id
+            )
+        })?;
+        let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record timestamp {}: out of i64 range",
+                record.created_at_ms
+            )
+        })?;
+        let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+            format!(
+                "could not persist LASM dynamic sqlite record affected_rows {}: out of i64 range",
+                record.affected_rows
+            )
+        })?;
+        statement
+            .execute(params![
+                id,
+                record.op.as_str(),
+                record.db,
+                record.template.as_str(),
+                record.params.as_str(),
+                record.tx,
+                affected_rows,
+                created_at_ms
+            ])
+            .map_err(|err| {
+                format!(
+                    "could not insert LASM dynamic sqlite record {} into `{}`: {err}",
+                    record.id,
+                    path.display()
+                )
+            })?;
+    }
+    drop(statement);
+    tx.commit().map_err(|err| {
+        format!(
+            "could not commit LASM dynamic sqlite records store `{}`: {err}",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
+pub(crate) fn persist_lasm_dynamic_db_records_to_postgres(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    let mut ordered = state.db_records.clone();
+    ordered.sort_by_key(|record| record.id);
+
+    let run_sync = |client: &mut PostgresClient| -> Result<(), String> {
+        ensure_lasm_dynamic_db_records_postgres_schema(client)?;
+        let mut tx = client.transaction().map_err(|err| {
+            format!("could not start LASM dynamic postgres records transaction: {err}")
+        })?;
+        let delete_statement = format!("DELETE FROM {}", LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE);
+        tx.execute(delete_statement.as_str(), &[])
+            .map_err(|err| format!("could not clear LASM dynamic postgres records store: {err}"))?;
+        let insert_statement = format!(
+            "INSERT INTO {} (id, op, db, template, params, tx, affected_rows, created_at_ms) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+        );
+        for record in &ordered {
+            let id = i64::try_from(record.id).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record id {}: out of i64 range",
+                    record.id
+                )
+            })?;
+            let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record timestamp {}: out of i64 range",
+                    record.created_at_ms
+                )
+            })?;
+            let affected_rows = i64::try_from(record.affected_rows).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record affected_rows {}: out of i64 range",
+                    record.affected_rows
+                )
+            })?;
+            tx.execute(
+                insert_statement.as_str(),
+                &[
+                    &id,
+                    &record.op,
+                    &record.db,
+                    &record.template,
+                    &record.params,
+                    &record.tx,
+                    &affected_rows,
+                    &created_at_ms,
+                ],
+            )
+            .map_err(|err| {
+                format!(
+                    "could not insert LASM dynamic postgres record {}: {err}",
+                    record.id
+                )
+            })?;
+        }
+        tx.commit().map_err(|err| {
+            format!("could not commit LASM dynamic postgres records store: {err}")
+        })?;
+        Ok(())
+    };
+
+    let initial = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        run_sync(client)
+    };
+    match initial {
+        Ok(()) => {}
+        Err(message) if message.contains("closed") || message.contains("broken pipe") => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            run_sync(client)?;
+        }
+        Err(message) => return Err(message),
+    }
+    Ok(())
 }
