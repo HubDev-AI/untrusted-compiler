@@ -16352,6 +16352,157 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_enforces_db_tx_handle_capacity_when_sqlite_adapter() {
+    let project_dir = temp_dir("sec4-run-command-lasm-db-tx-capacity-sqlite");
+    let db_base = project_dir.join("lasm-db");
+    let port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmdbtxcapacitysqlitecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn execTxRoute() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/exec-tx", execTxRoute);
+  http.get(router, "/db/records", dbListRecords);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+    let port_value = port.to_string();
+    let mut child = Command::new(cli_bin())
+        .args([
+            "run",
+            "--path",
+            path,
+            "--backend",
+            "lasm",
+            "--db-base",
+            db_base_value.as_str(),
+            "--db-adapter",
+            "sqlite",
+            "--port",
+            port_value.as_str(),
+            "--serve-timeout-ms",
+            "20000",
+        ])
+        .env("SEC4_RT_LASM_DB_MAX_TX_HANDLES", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("sec4 run command should start");
+
+    let mut send_request = |request: &str| -> String {
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command exited before request with status: {status}");
+            }
+
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM db tx-capacity sqlite flow could not connect to server");
+            }
+        }
+    };
+
+    let first_exec_tx_response = send_request(
+        "POST /db/exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    );
+    assert!(
+        first_exec_tx_response.contains("HTTP/1.1 200 OK")
+            && first_exec_tx_response.contains("\"op\":\"execTx\"")
+            && first_exec_tx_response.contains("\"recordId\":1"),
+        "first execTx request should succeed under tx-capacity limit:\n{first_exec_tx_response}"
+    );
+
+    let second_exec_tx_response = send_request(
+        "POST /db/exec-tx?template=SELECT%202&params=beta HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    );
+    assert!(
+        second_exec_tx_response.contains("HTTP/1.1 500 Internal Server Error")
+            && second_exec_tx_response.contains("\"code\":\"DB.TX_INTERNAL\"")
+            && second_exec_tx_response.contains("db.tx runtime failure"),
+        "second execTx request should fail deterministically after tx-handle capacity is exhausted:\n{second_exec_tx_response}"
+    );
+
+    let list_response =
+        send_request("GET /db/records HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    assert!(
+        list_response.contains("HTTP/1.1 200 OK"),
+        "db records response should contain deterministic 200 status:\n{list_response}"
+    );
+    assert!(
+        list_response.contains("\"count\":1")
+            && list_response.contains("\"op\":\"execTx\"")
+            && list_response.contains("alpha")
+            && !list_response.contains("beta"),
+        "tx-capacity overflow should not append second execTx record:\n{list_response}"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_maps_sqlite_duplicate_key_exec_to_conflict() {
     let project_dir = temp_dir("sec4-run-command-lasm-sqlite-exec-conflict");
     let db_base = project_dir.join("lasm-db");

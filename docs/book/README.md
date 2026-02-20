@@ -1069,5 +1069,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1097-m39-lasm-records-log-query-one-row-object-parity.md`
 - `1098-m39-lasm-db-capability-handle-validation-guard.md`
 - `1099-m39-lasm-db-list-records-affected-rows-total.md`
+- `1100-m39-lasm-db-tx-handle-capacity-guard.md`
 
 As milestones progress, chapters will be added and linked from this index.
