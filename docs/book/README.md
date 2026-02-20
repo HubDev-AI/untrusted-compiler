@@ -1048,5 +1048,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1076-m39-lasm-postgres-query-one-trailing-semicolon-normalization.md`
 - `1077-m39-lasm-sqlite-runtime-exec-query-one-materialization.md`
 - `1078-m39-lasm-sqlite-query-one-shape-and-arity-guard.md`
+- `1079-m39-lasm-db-runtime-validation-error-classification.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -15744,8 +15744,8 @@ fn main() effects { net } -> Int {
         "GET /db/query-one?template=SELECT%20%3F1&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
-        query_one_missing_param_response.contains("HTTP/1.1 500 Internal Server Error")
-            && query_one_missing_param_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+        query_one_missing_param_response.contains("HTTP/1.1 400 Bad Request")
+            && query_one_missing_param_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && query_one_missing_param_response
                 .contains("sqlite query requires at least 1 sql parameters but received 0"),
         "sqlite queryOne should fail deterministically on parameter arity mismatch:\n{query_one_missing_param_response}"
@@ -15756,8 +15756,8 @@ fn main() effects { net } -> Int {
         "GET /db/query-one?template=DELETE%20FROM%20lasm_db_records&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
-        query_one_non_select_response.contains("HTTP/1.1 500 Internal Server Error")
-            && query_one_non_select_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+        query_one_non_select_response.contains("HTTP/1.1 400 Bad Request")
+            && query_one_non_select_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && query_one_non_select_response
                 .contains("sqlite queryOne requires SELECT-style SQL statement"),
         "sqlite queryOne should reject non-row-returning SQL deterministically:\n{query_one_non_select_response}"
@@ -16041,11 +16041,11 @@ fn main() effects { net } -> Int {
         "GET /db/query-one?template=SELECT%20$2::int%20AS%20value&params=%5B42%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
-        missing_param_response.contains("HTTP/1.1 500 Internal Server Error"),
-        "db queryOne missing-param response should contain deterministic 500 status:\n{missing_param_response}"
+        missing_param_response.contains("HTTP/1.1 400 Bad Request"),
+        "db queryOne missing-param response should contain deterministic 400 status:\n{missing_param_response}"
     );
     assert!(
-        missing_param_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+        missing_param_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && missing_param_response
                 .contains("postgres query requires at least 2 sql parameters but received 1"),
         "db queryOne missing-param response should include deterministic parameter-arity diagnostic:\n{missing_param_response}"
@@ -16056,11 +16056,11 @@ fn main() effects { net } -> Int {
         "GET /db/query-one?template=DELETE%20FROM%20sec4_lasm_db_records&params=0&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
     );
     assert!(
-        non_select_query_response.contains("HTTP/1.1 500 Internal Server Error"),
-        "db queryOne non-select response should contain deterministic 500 status:\n{non_select_query_response}"
+        non_select_query_response.contains("HTTP/1.1 400 Bad Request"),
+        "db queryOne non-select response should contain deterministic 400 status:\n{non_select_query_response}"
     );
     assert!(
-        non_select_query_response.contains("\"code\":\"DB.QUERY_ONE_FAILED\"")
+        non_select_query_response.contains("\"code\":\"DB.QUERY_ONE_INVALID\"")
             && non_select_query_response.contains("postgres queryOne requires SELECT-style SQL statement"),
         "db queryOne non-select response should include deterministic statement-shape diagnostic:\n{non_select_query_response}"
     );
