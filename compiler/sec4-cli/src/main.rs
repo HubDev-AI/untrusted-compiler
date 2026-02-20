@@ -8361,21 +8361,22 @@ fn run_lasm_cluster_accept_loop(
         listener_idle_spins = 0;
 
         let relay_sender_count = relay_senders.len();
+        let relay_dispatch_uses_counter = relay_sender_count > 1;
         let relay_batch_len = relay_listener_batch.len();
-        let relay_dispatch_start_base = if relay_sender_count == 0 {
+        let relay_dispatch_start_base = if !relay_dispatch_uses_counter {
             0
         } else {
             relay_dispatch_counter.fetch_add(relay_batch_len, Ordering::Relaxed)
         };
         let mut listener_enqueued_local = 0_usize;
-        let mut dispatch_start = if relay_sender_count == 0 {
+        let mut dispatch_start = if !relay_dispatch_uses_counter {
             0
         } else {
             relay_dispatch_start_base % relay_sender_count
         };
         for client_stream in relay_listener_batch.drain(..) {
             let stream_dispatch_start = dispatch_start;
-            if relay_sender_count > 0 {
+            if relay_dispatch_uses_counter {
                 dispatch_start += 1;
                 if dispatch_start == relay_sender_count {
                     dispatch_start = 0;
