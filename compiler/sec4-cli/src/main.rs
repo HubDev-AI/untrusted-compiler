@@ -12846,13 +12846,42 @@ fn run_lasm_postgres_query_one(
         for (index, column) in row.columns().iter().enumerate() {
             let value = row
                 .get(index)
-                .map(|entry| serde_json::Value::String(entry.to_string()))
+                .map(materialize_lasm_postgres_query_value)
                 .unwrap_or(serde_json::Value::Null);
             object.insert(column.name().to_string(), value);
         }
         return Ok(Some(serde_json::Value::Object(object)));
     }
     Ok(None)
+}
+
+fn materialize_lasm_postgres_query_value(value: &str) -> serde_json::Value {
+    let trimmed = value.trim();
+    if trimmed == "t" || trimmed.eq_ignore_ascii_case("true") {
+        return serde_json::Value::Bool(true);
+    }
+    if trimmed == "f" || trimmed.eq_ignore_ascii_case("false") {
+        return serde_json::Value::Bool(false);
+    }
+    if let Ok(parsed) = trimmed.parse::<i64>() {
+        return serde_json::Value::Number(serde_json::Number::from(parsed));
+    }
+    if let Ok(parsed) = trimmed.parse::<u64>() {
+        return serde_json::Value::Number(serde_json::Number::from(parsed));
+    }
+    if let Ok(parsed) = trimmed.parse::<f64>() {
+        if let Some(number) = serde_json::Number::from_f64(parsed) {
+            return serde_json::Value::Number(number);
+        }
+    }
+    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            return parsed;
+        }
+    }
+    serde_json::Value::String(value.to_string())
 }
 
 fn set_lasm_json_response(

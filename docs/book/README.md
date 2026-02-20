@@ -1034,5 +1034,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1062-m39-lasm-db-postgres-adapter-runtime-client.md`
 - `1063-m39-lasm-postgres-client-reuse-in-runtime-state.md`
 - `1064-m39-lasm-postgres-client-auto-reconnect.md`
+- `1065-m39-lasm-postgres-query-one-typed-row-values.md`
 
 As milestones progress, chapters will be added and linked from this index.
