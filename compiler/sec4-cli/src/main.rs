@@ -8768,6 +8768,15 @@ fn rebuild_lasm_cluster_worker_backend_addrs(
     }
 }
 
+fn rebuild_lasm_cluster_worker_port_membership_set(
+    worker_ports: &[u16],
+    membership_set: &mut HashSet<u16>,
+) {
+    membership_set.clear();
+    membership_set.reserve(worker_ports.len());
+    membership_set.extend(worker_ports.iter().copied());
+}
+
 fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let listener = match TcpListener::bind(("127.0.0.1", config.listen_port)) {
         Ok(listener) => listener,
@@ -8880,6 +8889,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 selected_worker_ports_snapshot.as_ref(),
                 &mut selected_worker_backend_addrs,
             );
+            let mut selected_worker_port_membership_set: HashSet<u16> = HashSet::new();
+            rebuild_lasm_cluster_worker_port_membership_set(
+                selected_worker_ports_snapshot.as_ref(),
+                &mut selected_worker_port_membership_set,
+            );
             let mut selection_lookup: Vec<Option<usize>> = Vec::new();
             let mut selection_healthy_mask: Vec<bool> = Vec::new();
             let mut selection_has_healthy_backends = false;
@@ -8903,6 +8917,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 selected_worker_ports_snapshot.as_ref(),
                                 &mut selected_worker_backend_addrs,
                             );
+                            rebuild_lasm_cluster_worker_port_membership_set(
+                                selected_worker_ports_snapshot.as_ref(),
+                                &mut selected_worker_port_membership_set,
+                            );
                             selection_lookup_dirty = true;
                         }
                         let worker_port_count = snapshot.len();
@@ -8918,13 +8936,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         } else {
                             let unhealthy_before = unhealthy_ports_until.len();
                             unhealthy_ports_until.retain(|port, until| {
-                                *until > now && snapshot.binary_search(port).is_ok()
+                                *until > now && selected_worker_port_membership_set.contains(port)
                             });
                             if unhealthy_ports_until.len() != unhealthy_before {
                                 selection_lookup_dirty = true;
                             }
                             connect_warning_next_allowed
-                                .retain(|port, _| snapshot.binary_search(port).is_ok());
+                                .retain(|port, _| selected_worker_port_membership_set.contains(port));
                             unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
                                 None
                             } else {
@@ -8969,6 +8987,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
                                 &mut selected_worker_backend_addrs,
+                            );
+                            rebuild_lasm_cluster_worker_port_membership_set(
+                                selected_worker_ports_snapshot.as_ref(),
+                                &mut selected_worker_port_membership_set,
                             );
                             selection_lookup_dirty = true;
                         }
