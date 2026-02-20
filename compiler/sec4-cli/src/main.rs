@@ -9364,17 +9364,15 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             saturation_events_total_local += 1;
                             let now = Instant::now();
                             let unhealthy_until = now + relay_backend_connect_cooldown;
-                            if let Some(entry) =
-                                unhealthy_ports_until_by_index.get_mut(selected_backend_index)
+                            let unhealthy_entry =
+                                &mut unhealthy_ports_until_by_index[selected_backend_index];
+                            if unhealthy_entry
+                                .map(|existing_until| existing_until <= now)
+                                .unwrap_or(true)
                             {
-                                if entry
-                                    .map(|existing_until| existing_until <= now)
-                                    .unwrap_or(true)
-                                {
-                                    unhealthy_port_count += 1;
-                                }
-                                *entry = Some(unhealthy_until);
+                                unhealthy_port_count += 1;
                             }
+                            *unhealthy_entry = Some(unhealthy_until);
                             selection_lookup_dirty = true;
                             if unhealthy_port_count > 0 && unhealthy_prune_next_at.is_none() {
                                 unhealthy_prune_next_at = Some(
@@ -9383,9 +9381,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     ),
                                 );
                             }
-                            if connect_warning_next_allowed_by_index
-                                .get(selected_backend_index)
-                                .and_then(|next| *next)
+                            if connect_warning_next_allowed_by_index[selected_backend_index]
                                 .map(|next| now >= next)
                                 .unwrap_or(true)
                             {
@@ -9394,15 +9390,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     "warning: LASM cluster worker {} connect failed: {}",
                                     selected_backend_port, err
                                 );
-                                if let Some(entry) = connect_warning_next_allowed_by_index
-                                    .get_mut(selected_backend_index)
-                                {
-                                    *entry = Some(
+                                connect_warning_next_allowed_by_index[selected_backend_index] =
+                                    Some(
                                         now + Duration::from_millis(
                                             LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS,
                                         ),
                                     );
-                                }
                             }
                             let _ = write_lasm_cluster_unavailable_response(
                                 &mut client,

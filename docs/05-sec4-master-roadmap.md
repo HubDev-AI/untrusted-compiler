@@ -955,6 +955,10 @@ Post-alpha track acceptance anchors:
      - relay worker now reads `selected_backend_port` only inside connect-failure warning path instead of unconditionally before each connect attempt,
      - keeps warning output unchanged while removing one success-path array read from the relay hot path.
      - documented in `docs/book/1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`.
+   - [x] Switched relay connect-failure state access to direct index reads:
+     - relay connect-failure path now updates unhealthy cooldown and warning-throttle vectors via direct index access (`[selected_backend_index]`) instead of repeated `get()/get_mut()` option chains,
+     - preserves cooldown/throttle behavior while reducing option-layer overhead on the failure-path hot loop.
+     - documented in `docs/book/1201-m39-lasm-cluster-direct-index-connect-failure-state-access.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
