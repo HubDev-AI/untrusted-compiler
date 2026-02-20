@@ -8718,16 +8718,13 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
 ) -> (bool, bool) {
     let worker_port_count = worker_ports.len();
     lookup.clear();
-    lookup.resize(worker_port_count, None);
     if worker_port_count == 0 {
         return (false, false);
     }
     if unhealthy_ports_until.is_empty() {
-        for (index, slot) in lookup.iter_mut().enumerate() {
-            *slot = Some(index);
-        }
         return (true, true);
     }
+    lookup.resize(worker_port_count, None);
 
     healthy_mask.clear();
     healthy_mask.resize(worker_port_count, false);
@@ -8977,7 +8974,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         let worker_ports = selected_worker_ports_snapshot.as_ref();
                         let worker_port_count = worker_ports.len();
-                        if selection_lookup_dirty || selection_lookup.len() != worker_port_count {
+                        if selection_lookup_dirty
+                            || (!selection_lookup_is_identity
+                                && selection_lookup.len() != worker_port_count)
+                        {
                             (selection_has_healthy_backends, selection_lookup_is_identity) =
                                 rebuild_lasm_cluster_backend_selection_lookup(
                                     worker_ports,
