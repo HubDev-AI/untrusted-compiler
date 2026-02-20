@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | After `gh pr merge` I resumed work before verifying checkout and discovered local HEAD had jumped back to stale `dev` (`2c0a8a0`), which could have dropped already-merged roadmap/doc context. | After every merge, immediately run `git branch --show-current` + `git rev-parse --short HEAD`; if not on fresh `origin/dev` branch, stash local delta and recreate `codex/*` branch from `origin/dev` before continuing. |
 | 2026-02-20 | self | I repeated the same napkin-gate mistake by launching branch/status checks in parallel with reading `.claude/napkin.md` at continuation start. | Treat napkin read as a strict standalone first command; only after that run status/search/build commands (parallelization allowed for read-only steps after napkin). |
 | 2026-02-20 | self | I almost treated one low-throughput probe outlier as a code regression even though the slice was CLI-only and repeated performance runs in this environment were noisy. | For non-hot-path slices, avoid performance claims from single probes; if perf matters, run a small repeated sample set and only report stable trends. |
 | 2026-02-20 | self | I used `jq --argfile` in this environment where that option is unsupported, which interrupted quick probe-metric comparison. | Use portable `jq --slurpfile` for JSON file imports in this repo environment unless tool version support is explicitly verified. |
