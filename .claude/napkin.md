@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I assumed omitting `id` in sqlite insert would trigger NOT NULL, but this schema accepted it and the validation-classification regression falsely passed as success. | For deterministic sqlite constraint tests, trigger explicit violations (for example `op = NULL` on NOT NULL column) instead of relying on implicit PK/autoincrement behavior. |
 | 2026-02-20 | self | After merging PR #299, I still started the next conflict-classification slice on local `dev` before branching. | Treat merge completion as branch handoff: immediately create the next `codex/*` branch before any roadmap/test/doc edits. |
 | 2026-02-20 | self | My first sqlite duplicate-key conflict fixture used `id=4242`, but sqlite persistence rewrites table rows from runtime state after each exec, so that row was removed and no duplicate occurred on restart. | For sqlite conflict regressions in LASM runtime, target persisted runtime-managed IDs (for example `id=1`) or assert against state-owned rows, not transient rows that persistence rewrite removes. |
 | 2026-02-20 | self | After merging PR #297, I again started the next LASM DB slice on local `dev` before creating a `codex/*` branch. | Make post-merge branch creation automatic: run `git checkout -b codex/<slice>` immediately after every successful `gh pr merge`, before reading/editing files. |

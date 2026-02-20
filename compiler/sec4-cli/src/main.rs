@@ -13333,6 +13333,20 @@ fn classify_lasm_db_runtime_error(
         };
         return (400, code, "validation");
     }
+    if message.contains("NOT NULL constraint failed")
+        || message.contains("CHECK constraint failed")
+        || message.contains("violates not-null constraint")
+        || message.contains("violates check constraint")
+        || message.contains("invalid input syntax for")
+    {
+        let code = match operation {
+            "exec" => "DB.EXEC_INVALID",
+            "execTx" => "DB.EXEC_TX_INVALID",
+            "queryOne" => "DB.QUERY_ONE_INVALID",
+            _ => "DB.OPERATION_INVALID",
+        };
+        return (400, code, "validation");
+    }
     if message.contains("UNIQUE constraint failed")
         || message.contains("duplicate key value violates unique constraint")
     {

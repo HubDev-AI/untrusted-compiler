@@ -16353,6 +16353,173 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_maps_sqlite_not_null_exec_to_validation() {
+    let project_dir = temp_dir("sec4-run-command-lasm-sqlite-exec-validation");
+    let db_base = project_dir.join("lasm-db");
+    let invalid_exec_port = find_available_tcp_port();
+    let list_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmsqliteexecvalidationcommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn invalidExec() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("exec"));
+  res.setHeader(headers.name("X-Sec4-Internal-Db"), headers.value("1"));
+  res.setHeader(
+    headers.name("X-Sec4-Internal-Db-Template"),
+    headers.value("INSERT INTO lasm_db_records (id, op, db, template, params, tx, created_at_ms) VALUES (5, NULL, 1, 'x', 'x', 0, 1)")
+  );
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Params"), headers.value("0"));
+  res.json(200, "DbExecRuntimeResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/invalid-exec", invalidExec);
+  http.get(router, "/db/records", dbListRecords);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let run_lasm_oneshot_request = |port: u16, request: String| -> String {
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                db_base_value.as_str(),
+                "--db-adapter",
+                "sqlite",
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command exited before request with status: {status}");
+            }
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM sqlite validation flow could not connect to server");
+            }
+        };
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM sqlite validation process did not exit in expected window");
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM sqlite validation process should exit successfully"
+        );
+        response
+    };
+
+    let invalid_exec_response = run_lasm_oneshot_request(
+        invalid_exec_port,
+        "POST /db/invalid-exec HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        invalid_exec_response.contains("HTTP/1.1 400 Bad Request"),
+        "sqlite invalid exec should map to deterministic 400 validation status:\n{invalid_exec_response}"
+    );
+    assert!(
+        invalid_exec_response.contains("\"code\":\"DB.EXEC_INVALID\""),
+        "sqlite invalid exec should expose deterministic DB.EXEC_INVALID code:\n{invalid_exec_response}"
+    );
+
+    let list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        list_response.contains("HTTP/1.1 200 OK"),
+        "db records response should contain deterministic 200 status:\n{list_response}"
+    );
+    assert!(
+        list_response.contains("\"count\":0")
+            && !list_response.contains("\"op\":\"bad\""),
+        "validation-failed exec should not append runtime records:\n{list_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_available() {
     let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
         eprintln!("skipping postgres LASM integration test: SEC4_TEST_POSTGRES_DSN not set");
