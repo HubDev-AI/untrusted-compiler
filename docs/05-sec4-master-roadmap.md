@@ -643,6 +643,7 @@ Post-alpha track acceptance anchors:
    - preserve existing intrinsic contracts and diagnostics (`db.exec`, `db.execTx`, `db.queryOne`, `db.tx`) as-is,
    - move adapter-specific wiring behind package boundaries so runtime backends can evolve independently,
    - keep CLI/operator behavior unchanged while refactoring boundaries.
+   - [x] Extracted LASM DB config/adapter resolution helpers from `compiler/sec4-cli/src/main.rs` into dedicated module `compiler/sec4-cli/src/lasm_db_config.rs` (store-base resolution, adapter selection, tx-handle capacity resolution, postgres DSN resolution, adapter label), keeping command/runtime semantics unchanged while establishing the first explicit adapter-boundary seam (`docs/book/1103-m39-lasm-db-config-module-extraction.md`).
 6. Close alpha usability readiness with LASM+DB canonical example flow and reproducible operator docs.
    - [x] `examples/lasm-alpha-full` operator guide now documents real Postgres adapter run flow plus parameterized `db.queryOne` demos (typed values, literal-preserving placeholders, deterministic placeholder-arity failure), so DB-client behavior can be validated end-to-end from one canonical example (`docs/book/1069-m39-lasm-alpha-full-postgres-operator-flow.md`).
 7. Start/expand WASM/browser execution track only after LASM+DB alpha path is stable and benchmarked.
