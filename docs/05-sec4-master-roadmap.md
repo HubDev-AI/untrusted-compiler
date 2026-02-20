@@ -692,9 +692,14 @@ Post-alpha track acceptance anchors:
       - keeps JSON payload fields/semantics unchanged while reducing periodic telemetry serialization and write size overhead.
       - documented in `docs/book/1138-m39-lasm-cluster-status-compact-json-encoding.md`.
    - [x] Precomputed status writer temp-file path outside write loop:
-      - status thread now derives the `<status>.tmp` path once before entering the periodic loop and passes it into status writer calls,
-      - removes repeated path-extension formatting/allocations from every status-write iteration.
-      - documented in `docs/book/1139-m39-lasm-cluster-status-precompute-tmp-path.md`.
+     - status thread now derives the `<status>.tmp` path once before entering the periodic loop and passes it into status writer calls,
+     - removes repeated path-extension formatting/allocations from every status-write iteration.
+     - documented in `docs/book/1139-m39-lasm-cluster-status-precompute-tmp-path.md`.
+   - [x] Replaced single relay queue with sharded queues + listener accept/dispatch batching:
+     - cluster proxy now allocates one bounded relay queue per relay worker shard instead of one globally contended queue (`crossbeam` fan-in hot spot removed),
+     - listener accept path now runs nonblocking batched intake (`cluster_relay_accept_batch_max`) and round-robins each accepted socket across queue shards with deterministic saturated/unavailable fallbacks.
+     - short LASM cluster probe after this slice recorded `1,389,512` requests in `20s` (`~69.45k req/s`, peak RSS `~26,976 KB`, `p99 12.38ms`) under auto relay settings.
+     - documented in `docs/book/1140-m39-lasm-cluster-sharded-relay-queue-and-batched-listener-dispatch.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

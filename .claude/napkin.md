@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I queried fresh LASM capacity probe output with stale JSON paths (`.throughput.*`, `.memory.*`) and read `null` metrics, which could hide real regressions/improvements. | For benchmark/capacity artifacts, inspect schema keys first (`jq 'keys'`, then section keys) and extract metrics only from confirmed paths (`.observed.*` in this probe format). |
 | 2026-02-20 | self | I launched branch/status checks in parallel with reading `.claude/napkin.md`, which still violates the "napkin first" gate. | In each continuation, run a standalone napkin read command first; only after that run any status/search/build commands. |
 | 2026-02-20 | self | After merging PR #331, local checkout switched back to `dev`; I continued coding the next relay slice before checking branch and created dirty changes on `dev`. | Immediately after each `gh pr merge`, run `git branch --show-current`; if it is `dev`, create the next `codex/*` branch before any edits. |
 | 2026-02-20 | self | I used broad cargo filter invocation (`cargo test -p sec4 classify_db_runtime_`) which prints many `running 0 tests` lines for unrelated suites, creating confusing noise during validation summaries. | For focused unit checks in this repo, run target-specific commands (`cargo test -p sec4 --bin sec4 classify_db_runtime_`) to avoid zero-test noise and keep validation output unambiguous. |
