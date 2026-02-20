@@ -8715,18 +8715,18 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     unhealthy_ports_until: &HashMap<u16, Instant>,
     healthy_mask: &mut Vec<bool>,
     lookup: &mut Vec<Option<usize>>,
-) -> bool {
+) -> (bool, bool) {
     let worker_port_count = worker_ports.len();
     lookup.clear();
     lookup.resize(worker_port_count, None);
     if worker_port_count == 0 {
-        return false;
+        return (false, false);
     }
     if unhealthy_ports_until.is_empty() {
         for (index, slot) in lookup.iter_mut().enumerate() {
             *slot = Some(index);
         }
-        return true;
+        return (true, true);
     }
 
     healthy_mask.clear();
@@ -8740,7 +8740,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
         }
     }
     if healthy_count == 0 {
-        return false;
+        return (false, false);
     }
 
     let first_healthy_index = healthy_mask
@@ -8754,7 +8754,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
         }
         lookup[index] = Some(next_healthy_index);
     }
-    true
+    (true, false)
 }
 
 fn rebuild_lasm_cluster_worker_backend_addrs(
@@ -8886,6 +8886,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut selection_lookup: Vec<Option<usize>> = Vec::new();
             let mut selection_healthy_mask: Vec<bool> = Vec::new();
             let mut selection_has_healthy_backends = false;
+            let mut selection_lookup_is_identity = false;
             let mut selection_lookup_dirty = true;
 
             loop {
@@ -8977,13 +8978,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         let worker_ports = selected_worker_ports_snapshot.as_ref();
                         let worker_port_count = worker_ports.len();
                         if selection_lookup_dirty || selection_lookup.len() != worker_port_count {
-                            selection_has_healthy_backends =
+                            (selection_has_healthy_backends, selection_lookup_is_identity) =
                                 rebuild_lasm_cluster_backend_selection_lookup(
-                                worker_ports,
-                                &unhealthy_ports_until,
-                                &mut selection_healthy_mask,
-                                &mut selection_lookup,
-                            );
+                                    worker_ports,
+                                    &unhealthy_ports_until,
+                                    &mut selection_healthy_mask,
+                                    &mut selection_lookup,
+                                );
                             selection_lookup_dirty = false;
                         }
                     }
@@ -9022,10 +9023,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             None
                         } else {
                             let start_index = next_selection_start_index();
-                            selection_lookup
-                                .get(start_index)
-                                .copied()
-                                .flatten()
+                            if selection_lookup_is_identity {
+                                Some(start_index)
+                            } else {
+                                selection_lookup
+                                    .get(start_index)
+                                    .copied()
+                                    .flatten()
+                            }
                         }
                     };
 

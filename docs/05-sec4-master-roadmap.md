@@ -847,6 +847,10 @@ Post-alpha track acceptance anchors:
      - `dispatch_lasm_cluster_relay_stream` now uses direct slice loops (`start_index == 0` fast path, then tail/head loops) instead of iterator-chain traversal and disconnected-count tracking,
      - preserves saturated/unavailable routing semantics while reducing dispatch-path iterator/counter overhead.
      - documented in `docs/book/1173-m39-lasm-cluster-relay-dispatch-direct-slice-loops.md`.
+   - [x] Added identity-selection fast path for healthy steady state:
+     - lookup rebuild now reports whether selection mapping is identity (`selected_index = start_index`),
+     - relay selection path uses direct start-index selection when mapping is identity, skipping lookup table reads in healthy steady-state traffic.
+     - documented in `docs/book/1174-m39-lasm-cluster-selection-identity-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
