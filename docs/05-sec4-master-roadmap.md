@@ -879,6 +879,10 @@ Post-alpha track acceptance anchors:
      - `sec4 run` now accepts `--cluster-relay-accept-batch-max <n>` (LASM cluster-only) with deterministic zero-value and backend/cluster guard diagnostics,
      - runtime resolution now applies CLI override first, then `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX`, then default.
      - documented in `docs/book/1181-m39-run-cluster-relay-accept-batch-max-flag.md`.
+   - [x] Added explicit run-flag overrides for proxy worker connect timing:
+     - `sec4 run` now accepts `--cluster-backend-connect-timeout-ms <n>` and `--cluster-backend-connect-cooldown-ms <n>` (LASM cluster-only) with deterministic zero-value and backend/cluster guard diagnostics,
+     - runtime resolution now applies CLI overrides first, then `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS` / `SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS`, then defaults.
+     - documented in `docs/book/1182-m39-run-cluster-backend-connect-timing-flags.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
