@@ -9333,10 +9333,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 Ok(relay) => relay_connections.push(relay),
                                 Err(message) => {
                                     let now = Instant::now();
-                                    if pump_warning_next_allowed
-                                        .map(|next| now >= next)
-                                        .unwrap_or(true)
-                                    {
+                                    let warning_allowed = match pump_warning_next_allowed {
+                                        Some(next_allowed_at) => now >= next_allowed_at,
+                                        None => true,
+                                    };
+                                    if warning_allowed {
                                         eprintln!(
                                             "warning: LASM cluster relay init failed: {message}"
                                         );
@@ -9420,10 +9421,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         Err(err) => {
                             let now = Instant::now();
-                            if pump_warning_next_allowed
-                                .map(|next| now >= next)
-                                .unwrap_or(true)
-                            {
+                            let warning_allowed = match pump_warning_next_allowed {
+                                Some(next_allowed_at) => now >= next_allowed_at,
+                                None => true,
+                            };
+                            if warning_allowed {
                                 eprintln!("warning: LASM cluster relay pump failed: {err}");
                                 pump_warning_next_allowed = Some(
                                     now + Duration::from_millis(

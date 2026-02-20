@@ -971,6 +971,10 @@ Post-alpha track acceptance anchors:
      - relay backend selection now uses `LASM_CLUSTER_SELECTION_LOOKUP_NONE` sentinel directly across identity and non-identity selection paths,
      - removes `Option` construction/unwrapping in per-connection selection while preserving no-healthy behavior and selection semantics.
      - documented in `docs/book/1204-m39-lasm-cluster-selection-sentinel-result-path.md`.
+   - [x] Simplified relay init/pump warning-throttle checks:
+     - relay init-failure and relay pump-failure warning gates now use direct `match`-based checks on `pump_warning_next_allowed` (`Some(next) => now >= next`, `None => true`) instead of map/unwrap option chains,
+     - preserves warning-throttle behavior while reducing option-chain overhead in warning paths.
+     - documented in `docs/book/1205-m39-lasm-cluster-relay-warning-throttle-direct-match-checks.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -1174,5 +1174,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`
 - `1203-m39-lasm-cluster-connect-warning-slot-direct-match-check.md`
 - `1204-m39-lasm-cluster-selection-sentinel-result-path.md`
+- `1205-m39-lasm-cluster-relay-warning-throttle-direct-match-checks.md`
 
 As milestones progress, chapters will be added and linked from this index.
