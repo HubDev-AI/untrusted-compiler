@@ -931,6 +931,10 @@ Post-alpha track acceptance anchors:
      - multi-relay accept dispatch now computes wrapped fallback start index once (`next shard or 0`) and passes it directly into fallback scan,
      - fallback scan now iterates fixed-size split spans (`start..start+len`, then `0..remaining`) without per-iteration remaining guards or modulo wrapping.
      - documented in `docs/book/1194-m39-lasm-cluster-fallback-start-prewrap-and-fixed-span-scan.md`.
+   - [x] Reduced relay-worker loop counter/flush overhead:
+     - relay-worker per-iteration local counters (`saturation_events_*_local`, `active_connection_decrements_local`) now use direct `+= 1` updates on bounded loop-local counters,
+     - relay-worker end-of-iteration flush helpers now run only when local counters are non-zero.
+     - documented in `docs/book/1195-m39-lasm-cluster-relay-worker-counter-and-conditional-flush-hotpath.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
