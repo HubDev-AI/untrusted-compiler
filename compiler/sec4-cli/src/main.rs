@@ -12801,12 +12801,44 @@ fn lasm_postgres_param_value_to_string(value: serde_json::Value) -> String {
     }
 }
 
+fn parse_lasm_postgres_dollar_quote_delimiter<'a>(
+    query_template: &'a str,
+    index: usize,
+) -> Option<&'a str> {
+    let bytes = query_template.as_bytes();
+    if index >= bytes.len() || bytes[index] != b'$' {
+        return None;
+    }
+    let mut cursor = index + 1;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if byte == b'$' {
+            return Some(&query_template[index..=cursor]);
+        }
+        if !(byte == b'_' || byte.is_ascii_alphanumeric()) {
+            return None;
+        }
+        cursor += 1;
+    }
+    None
+}
+
 fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
     let bytes = query_template.as_bytes();
     let mut index = 0usize;
     let mut max_placeholder = 0usize;
     let mut in_single_quote = false;
+    let mut active_dollar_quote: Option<String> = None;
     while index < bytes.len() {
+        if let Some(delimiter) = active_dollar_quote.as_ref() {
+            if query_template[index..].starts_with(delimiter.as_str()) {
+                index += delimiter.len();
+                active_dollar_quote = None;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
         if bytes[index] == b'\'' {
             if in_single_quote {
                 if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
@@ -12826,6 +12858,13 @@ fn max_lasm_postgres_placeholder_index(query_template: &str) -> usize {
             continue;
         }
         if bytes[index] == b'$' {
+            if let Some(delimiter) =
+                parse_lasm_postgres_dollar_quote_delimiter(query_template, index)
+            {
+                active_dollar_quote = Some(delimiter.to_string());
+                index += delimiter.len();
+                continue;
+            }
             let mut cursor = index + 1;
             while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
                 cursor += 1;
@@ -12862,7 +12901,17 @@ fn render_lasm_postgres_query_template(
     let mut index = 0usize;
     let mut copy_from = 0usize;
     let mut in_single_quote = false;
+    let mut active_dollar_quote: Option<String> = None;
     while index < bytes.len() {
+        if let Some(delimiter) = active_dollar_quote.as_ref() {
+            if query_template[index..].starts_with(delimiter.as_str()) {
+                index += delimiter.len();
+                active_dollar_quote = None;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
         if bytes[index] == b'\'' {
             if in_single_quote {
                 if index + 1 < bytes.len() && bytes[index + 1] == b'\'' {
@@ -12876,6 +12925,15 @@ fn render_lasm_postgres_query_template(
             in_single_quote = true;
             index += 1;
             continue;
+        }
+        if !in_single_quote && bytes[index] == b'$' {
+            if let Some(delimiter) =
+                parse_lasm_postgres_dollar_quote_delimiter(query_template, index)
+            {
+                active_dollar_quote = Some(delimiter.to_string());
+                index += delimiter.len();
+                continue;
+            }
         }
         if !in_single_quote && bytes[index] == b'$' {
             let mut cursor = index + 1;
