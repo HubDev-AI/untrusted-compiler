@@ -1096,5 +1096,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1124-m39-lasm-cluster-backend-connect-timeout-tuning.md`
 - `1125-m39-lasm-cluster-relay-warning-throttle.md`
 - `1126-m39-lasm-cluster-relay-accept-batch-fairness.md`
+- `1127-m39-lasm-cluster-unhealthy-map-fastpath.md`
 
 As milestones progress, chapters will be added and linked from this index.

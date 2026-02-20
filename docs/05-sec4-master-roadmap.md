@@ -643,6 +643,10 @@ Post-alpha track acceptance anchors:
      - relay workers now cap the number of accepted client sockets per cycle before returning to pump existing active relays, preventing accept-path starvation under sustained intake pressure,
      - new env override `SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX` controls the per-cycle cap (default `64`, clamped `1..4096`) without changing CLI surface.
      - documented in `docs/book/1126-m39-lasm-cluster-relay-accept-batch-fairness.md`.
+   - [x] Reduced unhealthy-port cooldown-map maintenance overhead in relay accept path:
+     - relay workers now prune expired unhealthy-port entries once per worker cycle (before accept batching) instead of re-running map retention for every accepted connection,
+     - backend selection in the unhealthy-path now uses the already-pruned map, keeping the fast path unchanged and reducing per-connection bookkeeping churn under sustained traffic.
+     - documented in `docs/book/1127-m39-lasm-cluster-unhealthy-map-fastpath.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

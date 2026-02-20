@@ -8433,6 +8433,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             loop {
                 let mut accepted = false;
                 let mut accepted_in_batch = 0_usize;
+                if !unhealthy_ports_until.is_empty() {
+                    let now = Instant::now();
+                    unhealthy_ports_until.retain(|_, until| *until > now);
+                }
                 loop {
                     if accepted_in_batch >= relay_accept_batch_max {
                         break;
@@ -8474,29 +8478,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     % worker_ports.len();
                                 Some(worker_ports[index])
                             } else {
-                                let now = Instant::now();
-                                unhealthy_ports_until.retain(|_, until| *until > now);
-                                if unhealthy_ports_until.is_empty() {
-                                    let index = relay_selection_counter
-                                        .fetch_add(1, Ordering::Relaxed)
-                                        % worker_ports.len();
-                                    Some(worker_ports[index])
-                                } else {
-                                    let start_index = relay_selection_counter
-                                        .fetch_add(1, Ordering::Relaxed)
-                                        % worker_ports.len();
-                                    let mut selected = None;
-                                    for offset in 0..worker_ports.len() {
-                                        let candidate = worker_ports[(start_index
-                                            .saturating_add(offset))
-                                            % worker_ports.len()];
-                                        if !unhealthy_ports_until.contains_key(&candidate) {
-                                            selected = Some(candidate);
-                                            break;
-                                        }
+                                let start_index = relay_selection_counter
+                                    .fetch_add(1, Ordering::Relaxed)
+                                    % worker_ports.len();
+                                let mut selected = None;
+                                for offset in 0..worker_ports.len() {
+                                    let candidate = worker_ports
+                                        [(start_index.saturating_add(offset)) % worker_ports.len()];
+                                    if !unhealthy_ports_until.contains_key(&candidate) {
+                                        selected = Some(candidate);
+                                        break;
                                     }
-                                    selected
                                 }
+                                selected
                             }
                         }
                     };
