@@ -8463,6 +8463,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
+            let mut active_worker_ports = HashSet::new();
             let mut connect_warning_next_allowed: HashMap<u16, Instant> = HashMap::new();
             let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
@@ -8478,11 +8479,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 let worker_port_count = worker_ports.len();
                 if !unhealthy_ports_until.is_empty() {
                     if worker_port_count == 0 {
+                        active_worker_ports.clear();
                         unhealthy_ports_until.clear();
                     } else {
                         let now = Instant::now();
-                        let active_worker_ports =
-                            worker_ports.iter().copied().collect::<HashSet<u16>>();
+                        active_worker_ports.clear();
+                        active_worker_ports.extend(worker_ports.iter().copied());
                         unhealthy_ports_until.retain(|port, until| {
                             *until > now && active_worker_ports.contains(port)
                         });
@@ -8858,15 +8860,15 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 break;
             }
         };
-        active_connections.fetch_add(1, Ordering::Relaxed);
         match relay_sender.try_send(client_stream) {
-            Ok(()) => {}
+            Ok(()) => {
+                active_connections.fetch_add(1, Ordering::Relaxed);
+            }
             Err(TrySendError::Full(stream)) => {
                 client_stream = stream;
                 listener_saturation_pending_local =
                     listener_saturation_pending_local.saturating_add(1);
                 listener_saturation_total_local = listener_saturation_total_local.saturating_add(1);
-                active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
                     LasmClusterUnavailableReason::RelaySaturated,
@@ -8883,7 +8885,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             }
             Err(TrySendError::Disconnected(stream)) => {
                 client_stream = stream;
-                active_connections.fetch_sub(1, Ordering::Relaxed);
                 let _ = write_lasm_cluster_unavailable_response(
                     &mut client_stream,
                     LasmClusterUnavailableReason::RelayUnavailable,
