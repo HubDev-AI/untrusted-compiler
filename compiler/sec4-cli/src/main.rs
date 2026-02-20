@@ -9299,10 +9299,13 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if selection_lookup_is_identity {
                             Some(start_index)
                         } else {
-                            selection_lookup
-                                .get(start_index)
-                                .copied()
-                                .filter(|index| *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE)
+                            debug_assert_eq!(selection_lookup.len(), worker_port_count);
+                            let mapped_index = selection_lookup[start_index];
+                            if mapped_index == LASM_CLUSTER_SELECTION_LOOKUP_NONE {
+                                None
+                            } else {
+                                Some(mapped_index)
+                            }
                         }
                     };
 

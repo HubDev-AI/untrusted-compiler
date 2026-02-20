@@ -947,6 +947,10 @@ Post-alpha track acceptance anchors:
      - relay backend selection now computes reservation refill and start-index progression inline (no closure allocation/call in per-connection loop),
      - keeps reservation refill/wrap and identity-lookup behavior unchanged while simplifying the hot path.
      - documented in `docs/book/1198-m39-lasm-cluster-inline-relay-selection-reservation-start-index.md`.
+   - [x] Simplified non-identity relay selection lookup read path:
+     - relay backend selection now reads precomputed lookup entries via direct sentinel-index access instead of `get().copied().filter(...)`,
+     - keeps sentinel semantics unchanged while removing option-chain overhead on the non-identity selection path.
+     - documented in `docs/book/1199-m39-lasm-cluster-non-identity-selection-direct-lookup-read.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
