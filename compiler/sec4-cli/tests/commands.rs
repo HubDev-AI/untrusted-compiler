@@ -15773,6 +15773,7 @@ fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_av
 
     let project_dir = temp_dir("sec4-run-command-lasm-db-postgres");
     let exec_port = find_available_tcp_port();
+    let exec_tx_port = find_available_tcp_port();
     let query_one_port = find_available_tcp_port();
     let missing_param_port = find_available_tcp_port();
     let list_port = find_available_tcp_port();
@@ -15925,6 +15926,21 @@ fn main() effects { net } -> Int {
         "db exec response should include deterministic first record payload:\n{exec_response}"
     );
 
+    let exec_tx_response = run_lasm_oneshot_request(
+        exec_tx_port,
+        "POST /db/exec-tx?template=SELECT%20$1::int&params=%5B2%5D HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        exec_tx_response.contains("HTTP/1.1 200 OK"),
+        "db execTx response should contain deterministic 200 status:\n{exec_tx_response}"
+    );
+    assert!(
+        exec_tx_response.contains("\"recordId\":2")
+            && exec_tx_response.contains("\"op\":\"execTx\"")
+            && exec_tx_response.contains("\"tx\":1"),
+        "db execTx response should include deterministic tx record payload:\n{exec_tx_response}"
+    );
+
     let query_one_response = run_lasm_oneshot_request(
         query_one_port,
         "GET /db/query-one?template=SELECT%20%24%24%242-dollar%24%24%20AS%20dollar_literal,%20%27$1-literal%27%20AS%20literal,%20$1::int%20AS%20value,%20$2::boolean%20AS%20enabled,%20$3::double%20precision%20AS%20ratio&params=%5B42%2Ctrue%2C3.25%5D&row_schema=7 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
@@ -16016,7 +16032,10 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"adapter\":\"postgres\"") && list_response.contains("\"count\":1"),
+        list_response.contains("\"adapter\":\"postgres\"")
+            && list_response.contains("\"count\":2")
+            && list_response.contains("\"op\":\"exec\"")
+            && list_response.contains("\"op\":\"execTx\""),
         "db records response should include postgres adapter metadata:\n{list_response}"
     );
 
