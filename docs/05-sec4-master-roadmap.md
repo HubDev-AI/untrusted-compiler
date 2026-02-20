@@ -722,6 +722,10 @@ Post-alpha track acceptance anchors:
      - preserves existing backend selection semantics while reducing steady-state hot-loop snapshot churn.
      - short LASM cluster probe after this slice recorded `1,450,295` requests in `20s` (`~72.14k req/s`, `p99 11.41ms`, peak RSS `~27,312 KB`) under default settings.
      - documented in `docs/book/1144-m39-lasm-cluster-relay-lazy-worker-snapshot-load.md`.
+   - [x] Added explicit CLI tuning flag for cluster accept-worker pool:
+     - new LASM-only cluster flag: `--cluster-accept-workers <n>` (`n >= 1`) to override accept-loop parallelism without env-only tuning,
+     - guardrails enforce LASM backend + cluster mode only, and reject the flag in fixed reuse-port mode where proxy relay is bypassed.
+     - documented in `docs/book/1145-m39-lasm-cluster-accept-workers-cli-flag.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

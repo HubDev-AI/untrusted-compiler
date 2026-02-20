@@ -131,6 +131,8 @@ enum Commands {
         #[arg(long)]
         cluster_relay_queue: Option<usize>,
         #[arg(long)]
+        cluster_accept_workers: Option<usize>,
+        #[arg(long)]
         cluster_status_json: Option<PathBuf>,
         #[arg(long, hide = true, default_value_t = false)]
         reuse_port: bool,
@@ -500,6 +502,7 @@ fn main() {
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_accept_workers,
             cluster_status_json,
             reuse_port,
             backend,
@@ -532,6 +535,7 @@ fn main() {
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_accept_workers,
             cluster_status_json.as_deref(),
             reuse_port,
             backend,
@@ -7057,6 +7061,7 @@ fn cmd_run(
     autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_accept_workers: Option<usize>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
     backend: RunBackend,
@@ -7104,6 +7109,10 @@ fn cmd_run(
     }
     if cluster_relay_queue == Some(0) {
         eprintln!("run failed: --cluster-relay-queue must be >= 1");
+        return Err(2);
+    }
+    if cluster_accept_workers == Some(0) {
+        eprintln!("run failed: --cluster-accept-workers must be >= 1");
         return Err(2);
     }
     if max_header_bytes == Some(0) {
@@ -7267,6 +7276,10 @@ fn cmd_run(
         eprintln!("run failed: --cluster-relay-queue is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_accept_workers.is_some() {
+        eprintln!("run failed: --cluster-accept-workers is only supported with --backend lasm");
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_status_json.is_some() {
         eprintln!("run failed: --cluster-status-json is only supported with --backend lasm");
         return Err(2);
@@ -7283,6 +7296,10 @@ fn cmd_run(
     }
     if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_queue.is_some() {
         eprintln!("run failed: --cluster-relay-queue requires cluster mode (--instances > 1)");
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_accept_workers.is_some() {
+        eprintln!("run failed: --cluster-accept-workers requires cluster mode (--instances > 1)");
         return Err(2);
     }
     if backend == RunBackend::Lasm && !cluster_mode && cluster_status_json.is_some() {
@@ -7343,6 +7360,7 @@ fn cmd_run(
             autoscale_saturation_boost_step,
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_accept_workers,
             cluster_status_json,
             reuse_port,
         );
@@ -7688,6 +7706,7 @@ struct LasmClusterConfig {
     worker_ready_timeout_ms: u64,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: usize,
     cluster_backend_connect_timeout_ms: u64,
     cluster_backend_connect_cooldown_ms: u64,
@@ -8014,7 +8033,10 @@ fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: u
         .min(65_536)
 }
 
-fn lasm_cluster_accept_worker_count(relay_worker_count: usize) -> usize {
+fn lasm_cluster_accept_worker_count(config: &LasmClusterConfig, relay_worker_count: usize) -> usize {
+    if let Some(value) = config.cluster_accept_workers {
+        return value;
+    }
     let default_value = relay_worker_count.max(1).min(4);
     let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS") else {
         return default_value;
@@ -8627,7 +8649,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let relay_saturation_events = Arc::new(AtomicUsize::new(0));
     let relay_saturation_events_total = Arc::new(AtomicU64::new(0));
     let relay_worker_count = lasm_cluster_proxy_worker_count(shared_config.as_ref());
-    let relay_accept_worker_count = lasm_cluster_accept_worker_count(relay_worker_count);
+    let relay_accept_worker_count =
+        lasm_cluster_accept_worker_count(shared_config.as_ref(), relay_worker_count);
     let relay_queue_capacity =
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
@@ -9197,6 +9220,7 @@ fn cmd_run_lasm_backend(
     autoscale_saturation_boost_step: usize,
     cluster_relay_workers: Option<usize>,
     cluster_relay_queue: Option<usize>,
+    cluster_accept_workers: Option<usize>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
@@ -9414,6 +9438,12 @@ fn cmd_run_lasm_backend(
         eprintln!("run failed: --cluster-relay-queue is not used in fixed reuse-port cluster mode");
         return Err(2);
     }
+    if fixed_cluster_reuse_port_mode && cluster_accept_workers.is_some() {
+        eprintln!(
+            "run failed: --cluster-accept-workers is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
     if fixed_cluster_reuse_port_mode && cluster_status_json.is_some() {
         eprintln!("run failed: --cluster-status-json is not used in fixed reuse-port cluster mode");
         return Err(2);
@@ -9448,6 +9478,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers: None,
             cluster_relay_queue: None,
+            cluster_accept_workers: None,
             cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
@@ -9486,6 +9517,7 @@ fn cmd_run_lasm_backend(
             worker_ready_timeout_ms: effective_timeout_ms.max(2000),
             cluster_relay_workers,
             cluster_relay_queue,
+            cluster_accept_workers,
             cluster_relay_accept_batch_max,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
