@@ -1158,5 +1158,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1186-m39-lasm-cluster-relay-dispatch-fallback-telemetry.md`
 - `1187-m39-lasm-cluster-per-accept-worker-local-dispatch-cursors.md`
 - `1188-m39-lasm-cluster-batched-relay-fallback-telemetry-flush.md`
+- `1189-m39-lasm-cluster-relay-dispatch-fallback-rate-telemetry.md`
 
 As milestones progress, chapters will be added and linked from this index.

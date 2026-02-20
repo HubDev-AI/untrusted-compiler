@@ -8209,6 +8209,7 @@ fn write_lasm_cluster_status_json(
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
     relay_dispatch_fallback_total: u64,
+    relay_dispatch_fallback_per_sec: f64,
     autoscale_desired_instances: usize,
     autoscale_last_saturation_events: usize,
     autoscale_last_dynamic_boost_step: usize,
@@ -8247,6 +8248,7 @@ fn write_lasm_cluster_status_json(
         "relayBackendConnectTimeoutMs": relay_backend_connect_timeout_ms,
         "relayBackendConnectCooldownMs": relay_backend_connect_cooldown_ms,
         "relayDispatchFallbackTotal": relay_dispatch_fallback_total,
+        "relayDispatchFallbackPerSec": relay_dispatch_fallback_per_sec,
         "autoscaleDesiredInstances": autoscale_desired_instances,
         "autoscaleLastSaturationEvents": autoscale_last_saturation_events,
         "autoscaleLastDynamicBoostStep": autoscale_last_dynamic_boost_step,
@@ -9454,16 +9456,23 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         ));
         Some(std::thread::spawn(move || {
             let mut last_saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
+            let mut last_dispatch_fallback_total =
+                status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
             let mut last_saturation_sample_at = Instant::now();
             loop {
                 let sample_now = Instant::now();
                 let saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
                 let saturation_delta = saturation_total.saturating_sub(last_saturation_total);
+                let dispatch_fallback_total =
+                    status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
+                let dispatch_fallback_delta =
+                    dispatch_fallback_total.saturating_sub(last_dispatch_fallback_total);
                 let elapsed_secs = sample_now
                     .duration_since(last_saturation_sample_at)
                     .as_secs_f64()
                     .max(0.001);
                 let saturation_per_sec = (saturation_delta as f64) / elapsed_secs;
+                let dispatch_fallback_per_sec = (dispatch_fallback_delta as f64) / elapsed_secs;
                 let worker_ports = status_worker_ports.load();
                 let worker_count = worker_ports.len();
                 let active_connections = status_active_connections.load(Ordering::Relaxed);
@@ -9492,7 +9501,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_relay_accept_workers,
                     status_config.cluster_backend_connect_timeout_ms,
                     status_config.cluster_backend_connect_cooldown_ms,
-                    status_relay_dispatch_fallback_total.load(Ordering::Relaxed),
+                    dispatch_fallback_total,
+                    dispatch_fallback_per_sec,
                     status_autoscale_last_desired_instances.load(Ordering::Relaxed),
                     status_autoscale_last_saturation_events.load(Ordering::Relaxed),
                     status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
@@ -9502,6 +9512,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     eprintln!("warning: LASM cluster status json write failed: {err}");
                 }
                 last_saturation_total = saturation_total;
+                last_dispatch_fallback_total = dispatch_fallback_total;
                 last_saturation_sample_at = sample_now;
 
                 if status_stop_flag.load(Ordering::Relaxed) {
