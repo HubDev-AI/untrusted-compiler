@@ -9134,9 +9134,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 let mut worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
                 if unhealthy_port_count > 0 {
                     let now = Instant::now();
-                    let should_prune = unhealthy_prune_next_at
-                        .map(|next_at| now >= next_at)
-                        .unwrap_or(true);
+                    let should_prune = match unhealthy_prune_next_at {
+                        Some(next_at) => now >= next_at,
+                        None => true,
+                    };
                     if should_prune {
                         let snapshot = relay_worker_ports.load_full();
                         if !Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
@@ -9358,10 +9359,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             let unhealthy_until = now + relay_backend_connect_cooldown;
                             let unhealthy_entry =
                                 &mut unhealthy_ports_until_by_index[selected_backend_index];
-                            if unhealthy_entry
-                                .map(|existing_until| existing_until <= now)
-                                .unwrap_or(true)
-                            {
+                            let should_mark_unhealthy = match *unhealthy_entry {
+                                Some(existing_until) => existing_until <= now,
+                                None => true,
+                            };
+                            if should_mark_unhealthy {
                                 unhealthy_port_count += 1;
                             }
                             *unhealthy_entry = Some(unhealthy_until);
@@ -9705,15 +9707,15 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 } else {
                     current_workers
                 };
+                let scale_up_cooldown_elapsed = match last_scale_up_at {
+                    Some(at) => {
+                        now.duration_since(at)
+                            >= Duration::from_millis(autoscale_config.autoscale_scale_up_cooldown_ms)
+                    }
+                    None => true,
+                };
                 if desired > state.workers.len()
-                    && last_scale_up_at
-                        .map(|at| {
-                            now.duration_since(at)
-                                >= Duration::from_millis(
-                                    autoscale_config.autoscale_scale_up_cooldown_ms,
-                                )
-                        })
-                        .unwrap_or(true)
+                    && scale_up_cooldown_elapsed
                 {
                     while state.workers.len() < up_target {
                         let worker_port = state.next_port;
@@ -9736,15 +9738,17 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 } else {
                     current_workers
                 };
+                let scale_down_cooldown_elapsed = match last_scale_down_at {
+                    Some(at) => {
+                        now.duration_since(at)
+                            >= Duration::from_millis(
+                                autoscale_config.autoscale_scale_down_cooldown_ms,
+                            )
+                    }
+                    None => true,
+                };
                 if desired < state.workers.len()
-                    && last_scale_down_at
-                        .map(|at| {
-                            now.duration_since(at)
-                                >= Duration::from_millis(
-                                    autoscale_config.autoscale_scale_down_cooldown_ms,
-                                )
-                        })
-                        .unwrap_or(true)
+                    && scale_down_cooldown_elapsed
                 {
                     while state.workers.len() > down_target {
                         if let Some(mut worker) = state.workers.pop() {
