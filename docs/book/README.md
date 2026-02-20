@@ -1090,5 +1090,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1118-m39-lasm-sqlite-connection-reuse-for-append-persistence.md`
 - `1119-m39-lasm-sqlite-connection-reuse-for-runtime-exec-query.md`
 - `1120-m39-lasm-sqlite-query-one-reconnect-retry.md`
+- `1121-m39-lasm-sqlite-runtime-busy-timeout-and-foreign-keys.md`
 
 As milestones progress, chapters will be added and linked from this index.

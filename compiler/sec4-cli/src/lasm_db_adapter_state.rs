@@ -11,8 +11,10 @@ use crate::{
 };
 use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
+use std::env;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 pub(crate) fn ensure_lasm_dynamic_db_records_sqlite_schema(
     connection: &Connection,
@@ -148,6 +150,27 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Conn
             path.display()
         )
     })?;
+    let busy_timeout_ms = env::var("SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(2000);
+    connection
+        .busy_timeout(Duration::from_millis(busy_timeout_ms))
+        .map_err(|err| {
+            format!(
+                "could not set LASM dynamic sqlite busy timeout `{}`: {err}",
+                path.display()
+            )
+        })?;
+    connection
+        .execute_batch("PRAGMA foreign_keys = ON;")
+        .map_err(|err| {
+            format!(
+                "could not enable LASM dynamic sqlite foreign keys `{}`: {err}",
+                path.display()
+            )
+        })?;
     ensure_lasm_dynamic_db_records_sqlite_schema(&connection).map_err(|err| {
         format!(
             "could not initialize LASM dynamic sqlite records schema `{}`: {err}",
