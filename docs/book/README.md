@@ -1167,5 +1167,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1195-m39-lasm-cluster-relay-worker-counter-and-conditional-flush-hotpath.md`
 - `1196-m39-lasm-cluster-bounded-counter-direct-increments-hotpath.md`
 - `1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`
+- `1198-m39-lasm-cluster-inline-relay-selection-reservation-start-index.md`
 
 As milestones progress, chapters will be added and linked from this index.
