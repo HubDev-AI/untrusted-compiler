@@ -15475,6 +15475,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":3")
+            && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
@@ -15813,6 +15814,7 @@ fn main() effects { net } -> Int {
     );
     assert!(
         list_response.contains("\"count\":3")
+            && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"adapter\":\"sqlite\"")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
@@ -17035,6 +17037,7 @@ fn main() effects { net } -> Int {
     assert!(
         list_response.contains("\"adapter\":\"postgres\"")
             && list_response.contains("\"count\":3")
+            && list_response.contains("\"affectedRowsTotal\":")
             && list_response.contains("\"op\":\"exec\"")
             && list_response.contains("\"op\":\"execTx\"")
             && list_response.contains("\"op\":\"queryOne\"")
