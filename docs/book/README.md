@@ -1176,5 +1176,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1204-m39-lasm-cluster-selection-sentinel-result-path.md`
 - `1205-m39-lasm-cluster-relay-warning-throttle-direct-match-checks.md`
 - `1206-m39-lasm-cluster-relay-autoscale-direct-match-checks.md`
+- `1207-m39-lasm-cluster-duration-reuse-in-relay-autoscale-loops.md`
 
 As milestones progress, chapters will be added and linked from this index.

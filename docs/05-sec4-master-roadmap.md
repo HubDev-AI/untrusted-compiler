@@ -979,6 +979,10 @@ Post-alpha track acceptance anchors:
      - relay unhealthy-prune gate and unhealthy-slot marking now use direct `match` checks on option values instead of map/unwrap chains,
      - autoscale up/down cooldown checks now use direct `match`-based elapsed guards.
      - documented in `docs/book/1206-m39-lasm-cluster-relay-autoscale-direct-match-checks.md`.
+   - [x] Reused precomputed duration values across relay/autoscale loops:
+     - relay warning-throttle and unhealthy-prune intervals are now precomputed once per relay worker and reused on warning/cooldown updates,
+     - status writer and autoscale loop now precompute interval/cooldown durations and reuse them for loop sleeps + cooldown checks.
+     - documented in `docs/book/1207-m39-lasm-cluster-duration-reuse-in-relay-autoscale-loops.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
