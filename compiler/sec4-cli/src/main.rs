@@ -2114,7 +2114,7 @@ fn run_lasm_sqlite_exec(
     state: &LasmDynamicResponseState,
     query_template: &str,
     params: &str,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     let mut connection = lasm_dynamic_sqlite_runtime_connection(state)?;
     let sqlite_params = parse_lasm_sqlite_query_params(params);
     let tx = connection
@@ -2134,8 +2134,8 @@ fn run_lasm_sqlite_exec(
     } else {
         statement.execute([])
     };
-    match execute_result {
-        Ok(_) => {}
+    let affected_rows = match execute_result {
+        Ok(count) => count as u64,
         Err(rusqlite::Error::ExecuteReturnedResults) => {
             let mut rows = if use_params {
                 statement
@@ -2146,25 +2146,29 @@ fn run_lasm_sqlite_exec(
                     .query([])
                     .map_err(|err| format!("sqlite execution query failed: {err}"))?
             };
+            let mut row_count = 0u64;
             while rows
                 .next()
                 .map_err(|err| format!("sqlite execution row drain failed: {err}"))?
                 .is_some()
-            {}
+            {
+                row_count = row_count.saturating_add(1);
+            }
+            row_count
         }
         Err(err) => return Err(format!("sqlite execution failed: {err}")),
-    }
+    };
     drop(statement);
     tx.commit()
         .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
-    Ok(())
+    Ok(affected_rows)
 }
 
 fn run_lasm_sqlite_exec_tx(
     state: &LasmDynamicResponseState,
     query_template: &str,
     params: &str,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     run_lasm_sqlite_exec(state, query_template, params)
 }
 
@@ -12649,49 +12653,57 @@ fn apply_lasm_internal_db_operation_materialization(
             };
             let template = template.trim().to_string();
             let params = normalize_lasm_db_params(params.as_str());
-            let record = match dynamic_state.lock() {
+            let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
                         let postgres_params = parse_lasm_postgres_query_params(params.as_str());
-                        if let Err(message) = run_lasm_postgres_exec(
+                        let postgres_affected_rows = match run_lasm_postgres_exec(
                             &mut state,
                             template.as_str(),
                             postgres_params.as_slice(),
                         ) {
-                            let (status, code, kind) =
-                                classify_lasm_db_runtime_error("exec", message.as_str());
-                            set_lasm_json_response(
-                                response,
-                                status,
-                                &lasm_error_envelope(
-                                    code,
-                                    kind,
-                                    message.as_str(),
+                            Ok(value) => value,
+                            Err(message) => {
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("exec", message.as_str());
+                                set_lasm_json_response(
+                                    response,
                                     status,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        }
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
+                                        status,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
+                        affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        if let Err(message) =
-                            run_lasm_sqlite_exec(&state, template.as_str(), params.as_str())
-                        {
-                            let (status, code, kind) =
-                                classify_lasm_db_runtime_error("exec", message.as_str());
-                            set_lasm_json_response(
-                                response,
-                                status,
-                                &lasm_error_envelope(
-                                    code,
-                                    kind,
-                                    message.as_str(),
-                                    status,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        }
+                        let sqlite_affected_rows =
+                            match run_lasm_sqlite_exec(&state, template.as_str(), params.as_str()) {
+                                Ok(value) => value,
+                                Err(message) => {
+                                    let (status, code, kind) =
+                                        classify_lasm_db_runtime_error("exec", message.as_str());
+                                    set_lasm_json_response(
+                                        response,
+                                        status,
+                                        &lasm_error_envelope(
+                                            code,
+                                            kind,
+                                            message.as_str(),
+                                            status,
+                                            trace_id,
+                                        ),
+                                    );
+                                    return true;
+                                }
+                            };
+                        affected_rows = sqlite_affected_rows;
                     }
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
@@ -12709,7 +12721,7 @@ fn apply_lasm_internal_db_operation_materialization(
                             "warning: LASM dynamic records store persistence failed: {message}"
                         );
                     }
-                    record
+                    (record, affected_rows)
                 }
                 Err(_) => {
                     set_lasm_json_response(
@@ -12737,6 +12749,7 @@ fn apply_lasm_internal_db_operation_materialization(
                     "template": record.template,
                     "params": record.params,
                     "tx": record.tx,
+                    "affectedRows": affected_rows,
                 }),
             );
             true
@@ -12830,8 +12843,9 @@ fn apply_lasm_internal_db_operation_materialization(
                 ExecTxSource::ExistingTx(tx_value)
             };
 
-            let record = match dynamic_state.lock() {
+            let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
+                    let mut affected_rows = 0u64;
                     let existing_tx_binding = match &tx_source {
                         ExecTxSource::AllocateFromDb(_) => None,
                         ExecTxSource::ExistingTx(tx) => {
@@ -12854,45 +12868,55 @@ fn apply_lasm_internal_db_operation_materialization(
                     };
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
                         let postgres_params = parse_lasm_postgres_query_params(params.as_str());
-                        if let Err(message) = run_lasm_postgres_exec_tx(
+                        let postgres_affected_rows = match run_lasm_postgres_exec_tx(
                             &mut state,
                             template.as_str(),
                             postgres_params.as_slice(),
                         ) {
-                            let (status, code, kind) =
-                                classify_lasm_db_runtime_error("execTx", message.as_str());
-                            set_lasm_json_response(
-                                response,
-                                status,
-                                &lasm_error_envelope(
-                                    code,
-                                    kind,
-                                    message.as_str(),
+                            Ok(value) => value,
+                            Err(message) => {
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("execTx", message.as_str());
+                                set_lasm_json_response(
+                                    response,
                                     status,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        }
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
+                                        status,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
+                        affected_rows = postgres_affected_rows;
                     } else if state.db_records_adapter == LasmDbRecordsAdapter::Sqlite {
-                        if let Err(message) =
-                            run_lasm_sqlite_exec_tx(&state, template.as_str(), params.as_str())
-                        {
-                            let (status, code, kind) =
-                                classify_lasm_db_runtime_error("execTx", message.as_str());
-                            set_lasm_json_response(
-                                response,
-                                status,
-                                &lasm_error_envelope(
-                                    code,
-                                    kind,
-                                    message.as_str(),
+                        let sqlite_affected_rows = match run_lasm_sqlite_exec_tx(
+                            &state,
+                            template.as_str(),
+                            params.as_str(),
+                        ) {
+                            Ok(value) => value,
+                            Err(message) => {
+                                let (status, code, kind) =
+                                    classify_lasm_db_runtime_error("execTx", message.as_str());
+                                set_lasm_json_response(
+                                    response,
                                     status,
-                                    trace_id,
-                                ),
-                            );
-                            return true;
-                        }
+                                    &lasm_error_envelope(
+                                        code,
+                                        kind,
+                                        message.as_str(),
+                                        status,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            }
+                        };
+                        affected_rows = sqlite_affected_rows;
                     }
                     let (db, tx) = match tx_source {
                         ExecTxSource::AllocateFromDb(db_value) => {
@@ -12918,7 +12942,7 @@ fn apply_lasm_internal_db_operation_materialization(
                             "warning: LASM dynamic records store persistence failed: {message}"
                         );
                     }
-                    record
+                    (record, affected_rows)
                 }
                 Err(_) => {
                     set_lasm_json_response(
@@ -12946,6 +12970,7 @@ fn apply_lasm_internal_db_operation_materialization(
                     "template": record.template,
                     "params": record.params,
                     "tx": record.tx,
+                    "affectedRows": affected_rows,
                 }),
             );
             true
@@ -13591,7 +13616,7 @@ fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &[LasmPostgresParam],
-) -> Result<(), String> {
+) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index(query_template);
     if required_params > params.len() {
         return Err(format!(
@@ -13606,15 +13631,13 @@ fn run_lasm_postgres_exec(
     let initial = if use_prepared {
         let param_refs = lasm_postgres_query_param_refs(params);
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client
-            .execute(query_template, param_refs.as_slice())
-            .map(|_| ())
+        client.execute(query_template, param_refs.as_slice())
     } else {
         let client = lasm_dynamic_postgres_client_mut(state)?;
-        client.batch_execute(query_template)
+        client.batch_execute(query_template).map(|_| 0u64)
     };
-    match initial {
-        Ok(_) => {}
+    let affected_rows = match initial {
+        Ok(count) => count,
         Err(err) if err.is_closed() => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             if use_prepared {
@@ -13622,15 +13645,17 @@ fn run_lasm_postgres_exec(
                 let client = lasm_dynamic_postgres_client_mut(state)?;
                 client
                     .execute(query_template, param_refs.as_slice())
-                    .map(|_| ())
                     .map_err(|retry_err| {
                         format!("postgres execution failed after reconnect: {retry_err}")
-                    })?;
+                    })?
             } else {
                 let client = lasm_dynamic_postgres_client_mut(state)?;
-                client.batch_execute(query_template).map_err(|retry_err| {
-                    format!("postgres execution failed after reconnect: {retry_err}")
-                })?;
+                client
+                    .batch_execute(query_template)
+                    .map(|_| 0u64)
+                    .map_err(|retry_err| {
+                        format!("postgres execution failed after reconnect: {retry_err}")
+                    })?
             }
         }
         Err(err)
@@ -13644,15 +13669,15 @@ fn run_lasm_postgres_exec(
             )
         }
         Err(err) => return Err(format!("postgres execution failed: {err}")),
-    }
-    Ok(())
+    };
+    Ok(affected_rows)
 }
 
 fn run_lasm_postgres_exec_tx(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
     params: &[LasmPostgresParam],
-) -> Result<(), String> {
+) -> Result<u64, String> {
     let required_params = max_lasm_postgres_placeholder_index(query_template);
     if required_params > params.len() {
         return Err(format!(
@@ -13664,29 +13689,30 @@ fn run_lasm_postgres_exec_tx(
     if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
         return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
-    let run_once = |client: &mut PostgresClient| -> Result<(), postgres::Error> {
+    let run_once = |client: &mut PostgresClient| -> Result<u64, postgres::Error> {
         let mut tx = client.transaction()?;
-        if use_prepared {
+        let affected_rows = if use_prepared {
             let param_refs = lasm_postgres_query_param_refs(params);
-            tx.execute(query_template, param_refs.as_slice())?;
+            tx.execute(query_template, param_refs.as_slice())?
         } else {
             tx.batch_execute(query_template)?;
-        }
+            0
+        };
         tx.commit()?;
-        Ok(())
+        Ok(affected_rows)
     };
     let initial = {
         let client = lasm_dynamic_postgres_client_mut(state)?;
         run_once(client)
     };
-    match initial {
-        Ok(_) => {}
+    let affected_rows = match initial {
+        Ok(count) => count,
         Err(err) if err.is_closed() => {
             reconnect_lasm_dynamic_postgres_client(state)?;
             let client = lasm_dynamic_postgres_client_mut(state)?;
             run_once(client).map_err(|retry_err| {
                 format!("postgres transaction execution failed after reconnect: {retry_err}")
-            })?;
+            })?
         }
         Err(err)
             if use_prepared
@@ -13699,8 +13725,8 @@ fn run_lasm_postgres_exec_tx(
             )
         }
         Err(err) => return Err(format!("postgres transaction execution failed: {err}")),
-    }
-    Ok(())
+    };
+    Ok(affected_rows)
 }
 
 fn run_lasm_postgres_query_one(

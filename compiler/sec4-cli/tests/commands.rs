@@ -15407,6 +15407,10 @@ fn main() effects { net } -> Int {
         exec_response.contains("\"recordId\":1") && exec_response.contains("\"op\":\"exec\""),
         "db exec response should include deterministic first record payload:\n{exec_response}"
     );
+    assert!(
+        exec_response.contains("\"affectedRows\":"),
+        "db exec response should expose affectedRows metadata:\n{exec_response}"
+    );
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
@@ -15421,6 +15425,10 @@ fn main() effects { net } -> Int {
             && exec_tx_response.contains("\"op\":\"execTx\"")
             && exec_tx_response.contains("\"tx\":"),
         "db execTx response should include deterministic second record payload:\n{exec_tx_response}"
+    );
+    assert!(
+        exec_tx_response.contains("\"affectedRows\":"),
+        "db execTx response should expose affectedRows metadata:\n{exec_tx_response}"
     );
 
     let records_log_path = db_base.join("records.log");
@@ -15649,6 +15657,10 @@ fn main() effects { net } -> Int {
         exec_response.contains("\"recordId\":1") && exec_response.contains("\"op\":\"exec\""),
         "db exec response should include deterministic first record payload:\n{exec_response}"
     );
+    assert!(
+        exec_response.contains("\"affectedRows\":"),
+        "db exec response should expose affectedRows metadata:\n{exec_response}"
+    );
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
@@ -15663,6 +15675,10 @@ fn main() effects { net } -> Int {
             && exec_tx_response.contains("\"op\":\"execTx\"")
             && exec_tx_response.contains("\"tx\":"),
         "db execTx response should include deterministic second record payload:\n{exec_tx_response}"
+    );
+    assert!(
+        exec_tx_response.contains("\"affectedRows\":"),
+        "db execTx response should expose affectedRows metadata:\n{exec_tx_response}"
     );
 
     let sqlite_path = db_base.join("records.sqlite3");
@@ -16328,6 +16344,10 @@ fn main() effects { net } -> Int {
         exec_response.contains("\"recordId\":1") && exec_response.contains("\"op\":\"exec\""),
         "db exec response should include deterministic first record payload:\n{exec_response}"
     );
+    assert!(
+        exec_response.contains("\"affectedRows\":"),
+        "db exec response should expose affectedRows metadata:\n{exec_response}"
+    );
 
     let exec_tx_response = run_lasm_oneshot_request(
         exec_tx_port,
@@ -16342,6 +16362,10 @@ fn main() effects { net } -> Int {
             && exec_tx_response.contains("\"op\":\"execTx\"")
             && exec_tx_response.contains("\"tx\":1"),
         "db execTx response should include deterministic tx record payload:\n{exec_tx_response}"
+    );
+    assert!(
+        exec_tx_response.contains("\"affectedRows\":"),
+        "db execTx response should expose affectedRows metadata:\n{exec_tx_response}"
     );
 
     let query_one_response = run_lasm_oneshot_request(
