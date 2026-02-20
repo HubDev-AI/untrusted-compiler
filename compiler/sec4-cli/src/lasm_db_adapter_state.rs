@@ -1,12 +1,46 @@
 use crate::{
-    ensure_lasm_dynamic_db_records_sqlite_schema, lasm_dynamic_postgres_client_mut,
-    reconnect_lasm_dynamic_postgres_client, LasmDbRecord, LasmDynamicResponseState,
-    LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
+    lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client, LasmDbRecord,
+    LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
 use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
 use std::fs;
 use std::path::Path;
+
+pub(crate) fn ensure_lasm_dynamic_db_records_sqlite_schema(
+    connection: &Connection,
+) -> rusqlite::Result<()> {
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS lasm_db_records (
+            id INTEGER PRIMARY KEY NOT NULL,
+            op TEXT NOT NULL,
+            db INTEGER NOT NULL,
+            template TEXT NOT NULL,
+            params TEXT NOT NULL,
+            tx INTEGER NOT NULL,
+            affected_rows INTEGER NOT NULL DEFAULT 0,
+            created_at_ms INTEGER NOT NULL
+        );",
+    )?;
+    let mut statement = connection.prepare("PRAGMA table_info(lasm_db_records)")?;
+    let mut rows = statement.query([])?;
+    let mut has_affected_rows = false;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == "affected_rows" {
+            has_affected_rows = true;
+            break;
+        }
+    }
+    drop(rows);
+    drop(statement);
+    if !has_affected_rows {
+        connection.execute_batch(
+            "ALTER TABLE lasm_db_records ADD COLUMN affected_rows INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+    Ok(())
+}
 
 pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmDbRecord> {
     if !path.exists() {

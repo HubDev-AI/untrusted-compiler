@@ -3,7 +3,6 @@ use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, RecvTimeoutError, TryRecvError, TrySendError};
 use postgres::Client as PostgresClient;
-use rusqlite::Connection;
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
     build_security_map_with_allows, emit_program_with_backend, parse_source,
@@ -1455,39 +1454,6 @@ fn persist_lasm_dynamic_db_records_to_disk(
         LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
         LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
     }
-}
-
-fn ensure_lasm_dynamic_db_records_sqlite_schema(connection: &Connection) -> rusqlite::Result<()> {
-    connection.execute_batch(
-        "CREATE TABLE IF NOT EXISTS lasm_db_records (
-            id INTEGER PRIMARY KEY NOT NULL,
-            op TEXT NOT NULL,
-            db INTEGER NOT NULL,
-            template TEXT NOT NULL,
-            params TEXT NOT NULL,
-            tx INTEGER NOT NULL,
-            affected_rows INTEGER NOT NULL DEFAULT 0,
-            created_at_ms INTEGER NOT NULL
-        );",
-    )?;
-    let mut statement = connection.prepare("PRAGMA table_info(lasm_db_records)")?;
-    let mut rows = statement.query([])?;
-    let mut has_affected_rows = false;
-    while let Some(row) = rows.next()? {
-        let name: String = row.get(1)?;
-        if name == "affected_rows" {
-            has_affected_rows = true;
-            break;
-        }
-    }
-    drop(rows);
-    drop(statement);
-    if !has_affected_rows {
-        connection.execute_batch(
-            "ALTER TABLE lasm_db_records ADD COLUMN affected_rows INTEGER NOT NULL DEFAULT 0;",
-        )?;
-    }
-    Ok(())
 }
 
 pub(crate) fn has_lasm_sql_non_trailing_statement_separator(query_template: &str) -> bool {
