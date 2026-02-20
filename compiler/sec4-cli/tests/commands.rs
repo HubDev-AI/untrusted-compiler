@@ -15444,9 +15444,9 @@ fn main() effects { net } -> Int {
         "db queryOne response should contain deterministic 200 status:\n{query_one_response}"
     );
     assert!(
-        query_one_response.contains("\"recordId\":2")
+        query_one_response.contains("\"recordId\":3")
             && query_one_response.contains("\"rowSchema\":7")
-            && query_one_response.contains("op=execTx")
+            && query_one_response.contains("op=queryOne")
             && query_one_response.contains("\"rowObject\":null"),
         "db queryOne response should materialize latest matching record deterministically:\n{query_one_response}"
     );
@@ -15460,10 +15460,11 @@ fn main() effects { net } -> Int {
         "db records response should contain deterministic 200 status:\n{list_response}"
     );
     assert!(
-        list_response.contains("\"count\":2")
+        list_response.contains("\"count\":3")
             && list_response.contains("\"adapter\":\"records.log\"")
             && list_response.contains("\"op\":\"exec\"")
-            && list_response.contains("\"op\":\"execTx\""),
+            && list_response.contains("\"op\":\"execTx\"")
+            && list_response.contains("\"op\":\"queryOne\""),
         "db records response should include deterministic persisted record list:\n{list_response}"
     );
 
