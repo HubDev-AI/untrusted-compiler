@@ -1037,5 +1037,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1065-m39-lasm-postgres-query-one-typed-row-values.md`
 - `1066-m39-lasm-postgres-parameter-rendering-for-db-intrinsics.md`
 - `1067-m39-lasm-postgres-placeholder-arity-validation.md`
+- `1068-m39-lasm-postgres-literal-aware-placeholder-rendering.md`
 
 As milestones progress, chapters will be added and linked from this index.

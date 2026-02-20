@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I repeated the post-merge branch mistake and started another slice on `dev` before branching, even after documenting it once. | Treat post-merge branch verification as a mandatory gate: run `git branch --show-current` and branch to `codex/*` before the first edit of every new slice. |
 | 2026-02-20 | self | After a PR merge, I started the next implementation slice while still on local `dev` again, because `gh pr merge` switched branches. | After every merge command, immediately run `git branch --show-current`; if it is `dev`, branch to `codex/*` before any edits. |
 | 2026-02-20 | self | I made a feature commit while checked out on local `dev` instead of branching first, then had to recover by branching from that commit. | Before any code edits, confirm branch with `git branch --show-current` and create a `codex/*` branch immediately if currently on `dev`. |
 | 2026-02-20 | self | I used an `if ... && let ...` chain in `main.rs` for JSON parsing and hit unstable-expression compile failure on this toolchain. | Prefer portable nested `if` + `if let` control flow in runtime slices unless compiler support is already confirmed in this repo. |
