@@ -13443,6 +13443,9 @@ fn run_lasm_postgres_exec(
         ));
     }
     let use_prepared = required_params > 0 || !params.is_empty();
+    if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
+    }
     let initial = if use_prepared {
         let param_refs = lasm_postgres_query_param_refs(params);
         let client = lasm_dynamic_postgres_client_mut(state)?;
@@ -13501,6 +13504,9 @@ fn run_lasm_postgres_exec_tx(
         ));
     }
     let use_prepared = required_params > 0 || !params.is_empty();
+    if use_prepared && has_lasm_sql_non_trailing_statement_separator(query_template) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
+    }
     let run_once = |client: &mut PostgresClient| -> Result<(), postgres::Error> {
         let mut tx = client.transaction()?;
         if use_prepared {
@@ -13551,6 +13557,9 @@ fn run_lasm_postgres_query_one(
     }
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
         return Err("postgres queryOne requires SELECT-style SQL statement".to_string());
+    }
+    if has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
+        return Err("postgres parameterized execution requires a single SQL statement".to_string());
     }
     let required_params = max_lasm_postgres_placeholder_index(normalized_query.as_str());
     if required_params > params.len() {
