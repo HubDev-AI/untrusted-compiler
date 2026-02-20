@@ -1169,5 +1169,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1197-m39-lasm-cluster-relay-selection-reservation-direct-increments.md`
 - `1198-m39-lasm-cluster-inline-relay-selection-reservation-start-index.md`
 - `1199-m39-lasm-cluster-non-identity-selection-direct-lookup-read.md`
+- `1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`
 
 As milestones progress, chapters will be added and linked from this index.

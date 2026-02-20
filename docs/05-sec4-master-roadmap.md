@@ -951,6 +951,10 @@ Post-alpha track acceptance anchors:
      - relay backend selection now reads precomputed lookup entries via direct sentinel-index access instead of `get().copied().filter(...)`,
      - keeps sentinel semantics unchanged while removing option-chain overhead on the non-identity selection path.
      - documented in `docs/book/1199-m39-lasm-cluster-non-identity-selection-direct-lookup-read.md`.
+   - [x] Removed success-path backend-port lookup in relay connect path:
+     - relay worker now reads `selected_backend_port` only inside connect-failure warning path instead of unconditionally before each connect attempt,
+     - keeps warning output unchanged while removing one success-path array read from the relay hot path.
+     - documented in `docs/book/1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
