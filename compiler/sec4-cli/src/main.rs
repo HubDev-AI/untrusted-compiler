@@ -8215,21 +8215,11 @@ fn write_lasm_cluster_status_json(
     autoscale_last_dynamic_boost_step: usize,
     autoscale_scale_up_cooldown_remaining_ms: u64,
     autoscale_scale_down_cooldown_remaining_ms: u64,
+    last_payload_without_timestamp: &mut Option<Vec<u8>>,
 ) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|err| {
-                format!(
-                    "could not create cluster status json parent directory {}: {err}",
-                    parent.display()
-                )
-            })?;
-        }
-    }
-
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "mode": "lasm-cluster",
-        "updatedAtMs": lasm_now_ms(),
+        "updatedAtMs": 0_u64,
         "listenPort": listen_port,
         "minInstances": min_instances,
         "maxInstances": max_instances,
@@ -8255,6 +8245,28 @@ fn write_lasm_cluster_status_json(
         "autoscaleScaleUpCooldownRemainingMs": autoscale_scale_up_cooldown_remaining_ms,
         "autoscaleScaleDownCooldownRemainingMs": autoscale_scale_down_cooldown_remaining_ms,
     });
+    let encoded_without_timestamp = serde_json::to_vec(&payload)
+        .map_err(|err| format!("could not encode cluster status json payload baseline: {err}"))?;
+    if last_payload_without_timestamp
+        .as_ref()
+        .map(|previous| previous == &encoded_without_timestamp)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|err| {
+                format!(
+                    "could not create cluster status json parent directory {}: {err}",
+                    parent.display()
+                )
+            })?;
+        }
+    }
+
+    payload["updatedAtMs"] = serde_json::Value::from(lasm_now_ms());
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
 
@@ -8271,6 +8283,7 @@ fn write_lasm_cluster_status_json(
             path.display()
         )
     })?;
+    *last_payload_without_timestamp = Some(encoded_without_timestamp);
     Ok(())
 }
 
@@ -9567,6 +9580,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut last_dispatch_fallback_total =
                 status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
             let mut last_saturation_sample_at = Instant::now();
+            let mut last_status_payload_without_timestamp: Option<Vec<u8>> = None;
             loop {
                 let sample_now = Instant::now();
                 let saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
@@ -9616,6 +9630,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
                     status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
                     status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
+                    &mut last_status_payload_without_timestamp,
                 ) {
                     eprintln!("warning: LASM cluster status json write failed: {err}");
                 }

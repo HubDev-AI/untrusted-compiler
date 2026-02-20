@@ -1023,6 +1023,10 @@ Post-alpha track acceptance anchors:
      - fallback dispatch helper is now explicitly multi-relay (`sender_count > 1`) and no longer carries single-sender guard branching,
      - accept multi-relay path now calls the specialized helper directly.
      - documented in `docs/book/1217-m39-lasm-cluster-multi-relay-fallback-helper-specialization.md`.
+   - [x] Reduced unchanged status-writer disk churn in cluster mode:
+     - status writer now skips atomic status JSON rewrites when all status fields are unchanged (excluding `updatedAtMs`),
+     - status file updates now occur only on meaningful status-snapshot changes.
+     - documented in `docs/book/1218-m39-lasm-cluster-status-writer-unchanged-snapshot-skip.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -1187,5 +1187,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1215-m39-lasm-cluster-fallback-next-index-iteration.md`
 - `1216-m39-lasm-cluster-idle-sleep-duration-reuse.md`
 - `1217-m39-lasm-cluster-multi-relay-fallback-helper-specialization.md`
+- `1218-m39-lasm-cluster-status-writer-unchanged-snapshot-skip.md`
 
 As milestones progress, chapters will be added and linked from this index.
