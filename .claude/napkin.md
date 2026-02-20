@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | I launched two targeted Cargo tests in parallel during LASM Postgres reconnect validation and reintroduced package/build lock waits. | Keep every Cargo validation strictly sequential in this repo; parallelize only read/search/document commands. |
 | 2026-02-20 | self | I ran `git fetch` and `git rev-parse origin/dev` in parallel and briefly read a stale `origin/dev` hash before fetch completed. | For branch-base verification, run `fetch` first, then resolve refs sequentially before branching/rebasing. |
 | 2026-02-20 | self | I used inline backticks in `gh pr create --body \"...\"` again, and zsh executed command substitutions (`postgres`, test commands, file paths) while composing the PR body. | For PR text containing backticks, always use a single-quoted heredoc body file (`--body-file`) instead of inline quoted `--body` strings. |
 | 2026-02-20 | self | I wrote the first postgres-missing-DSN commands fixture with an invalid route shape, so `sec4 run` failed with compile diagnostics (`exit 1`) before reaching the adapter-config guard I wanted to validate. | For runtime flag/config guard tests, keep fixture routes parser/semantic-valid and minimal (`res.text`/simple router) so the test reaches the intended runtime gate deterministically. |

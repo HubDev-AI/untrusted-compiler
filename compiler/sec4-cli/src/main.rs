@@ -1232,6 +1232,7 @@ struct LasmDynamicResponseState {
     db_records_adapter: LasmDbRecordsAdapter,
     db_records_store_path: Option<PathBuf>,
     db_records_sqlite_store_path: Option<PathBuf>,
+    db_records_postgres_dsn: Option<String>,
     db_records_postgres_client: Option<PostgresClient>,
     db_tx_handles: HashMap<i64, i64>,
     next_db_tx_handle: i64,
@@ -1329,6 +1330,7 @@ fn build_lasm_dynamic_response_state(
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
+        db_records_postgres_dsn,
         db_records_postgres_client,
         db_tx_handles,
         next_db_tx_handle,
@@ -1794,57 +1796,73 @@ fn persist_lasm_dynamic_db_records_to_sqlite(
 fn persist_lasm_dynamic_db_records_to_postgres(
     state: &mut LasmDynamicResponseState,
 ) -> Result<(), String> {
-    let client = state.db_records_postgres_client.as_mut().ok_or_else(|| {
-        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
-    })?;
-    ensure_lasm_dynamic_db_records_postgres_schema(client)?;
-    let mut tx = client.transaction().map_err(|err| {
-        format!("could not start LASM dynamic postgres records transaction: {err}")
-    })?;
-    let delete_statement = format!("DELETE FROM {}", LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE);
-    tx.execute(delete_statement.as_str(), &[])
-        .map_err(|err| format!("could not clear LASM dynamic postgres records store: {err}"))?;
-    let insert_statement = format!(
-        "INSERT INTO {} (id, op, db, template, params, tx, created_at_ms) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
-    );
     let mut ordered = state.db_records.clone();
     ordered.sort_by_key(|record| record.id);
-    for record in &ordered {
-        let id = i64::try_from(record.id).map_err(|_| {
-            format!(
-                "could not persist LASM dynamic postgres record id {}: out of i64 range",
-                record.id
-            )
+
+    let run_sync = |client: &mut PostgresClient| -> Result<(), String> {
+        ensure_lasm_dynamic_db_records_postgres_schema(client)?;
+        let mut tx = client.transaction().map_err(|err| {
+            format!("could not start LASM dynamic postgres records transaction: {err}")
         })?;
-        let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
-            format!(
-                "could not persist LASM dynamic postgres record timestamp {}: out of i64 range",
-                record.created_at_ms
+        let delete_statement = format!("DELETE FROM {}", LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE);
+        tx.execute(delete_statement.as_str(), &[])
+            .map_err(|err| format!("could not clear LASM dynamic postgres records store: {err}"))?;
+        let insert_statement = format!(
+            "INSERT INTO {} (id, op, db, template, params, tx, created_at_ms) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE
+        );
+        for record in &ordered {
+            let id = i64::try_from(record.id).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record id {}: out of i64 range",
+                    record.id
+                )
+            })?;
+            let created_at_ms = i64::try_from(record.created_at_ms).map_err(|_| {
+                format!(
+                    "could not persist LASM dynamic postgres record timestamp {}: out of i64 range",
+                    record.created_at_ms
+                )
+            })?;
+            tx.execute(
+                insert_statement.as_str(),
+                &[
+                    &id,
+                    &record.op,
+                    &record.db,
+                    &record.template,
+                    &record.params,
+                    &record.tx,
+                    &created_at_ms,
+                ],
             )
+            .map_err(|err| {
+                format!(
+                    "could not insert LASM dynamic postgres record {}: {err}",
+                    record.id
+                )
+            })?;
+        }
+        tx.commit().map_err(|err| {
+            format!("could not commit LASM dynamic postgres records store: {err}")
         })?;
-        tx.execute(
-            insert_statement.as_str(),
-            &[
-                &id,
-                &record.op,
-                &record.db,
-                &record.template,
-                &record.params,
-                &record.tx,
-                &created_at_ms,
-            ],
-        )
-        .map_err(|err| {
-            format!(
-                "could not insert LASM dynamic postgres record {}: {err}",
-                record.id
-            )
-        })?;
+        Ok(())
+    };
+
+    let initial = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        run_sync(client)
+    };
+    match initial {
+        Ok(()) => {}
+        Err(message) if message.contains("closed") || message.contains("broken pipe") => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            run_sync(client)?;
+        }
+        Err(message) => return Err(message),
     }
-    tx.commit()
-        .map_err(|err| format!("could not commit LASM dynamic postgres records store: {err}"))?;
     Ok(())
 }
 
@@ -12733,14 +12751,37 @@ fn lasm_dynamic_postgres_client_mut(
     })
 }
 
+fn reconnect_lasm_dynamic_postgres_client(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
+        "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
+    })?;
+    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
+    state.db_records_postgres_client = Some(client);
+    Ok(())
+}
+
 fn run_lasm_postgres_exec(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> Result<(), String> {
-    let client = lasm_dynamic_postgres_client_mut(state)?;
-    client
-        .batch_execute(query_template)
-        .map_err(|err| format!("postgres execution failed: {err}"))?;
+    let initial = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        client.batch_execute(query_template)
+    };
+    match initial {
+        Ok(_) => {}
+        Err(err) if err.is_closed() => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            client.batch_execute(query_template).map_err(|retry_err| {
+                format!("postgres execution failed after reconnect: {retry_err}")
+            })?;
+        }
+        Err(err) => return Err(format!("postgres execution failed: {err}")),
+    }
     Ok(())
 }
 
@@ -12748,14 +12789,27 @@ fn run_lasm_postgres_exec_tx(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> Result<(), String> {
-    let client = lasm_dynamic_postgres_client_mut(state)?;
-    let mut tx = client
-        .transaction()
-        .map_err(|err| format!("postgres transaction start failed: {err}"))?;
-    tx.batch_execute(query_template)
-        .map_err(|err| format!("postgres transaction execution failed: {err}"))?;
-    tx.commit()
-        .map_err(|err| format!("postgres transaction commit failed: {err}"))?;
+    let run_once = |client: &mut PostgresClient| -> Result<(), postgres::Error> {
+        let mut tx = client.transaction()?;
+        tx.batch_execute(query_template)?;
+        tx.commit()?;
+        Ok(())
+    };
+    let initial = {
+        let client = lasm_dynamic_postgres_client_mut(state)?;
+        run_once(client)
+    };
+    match initial {
+        Ok(_) => {}
+        Err(err) if err.is_closed() => {
+            reconnect_lasm_dynamic_postgres_client(state)?;
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            run_once(client).map_err(|retry_err| {
+                format!("postgres transaction execution failed after reconnect: {retry_err}")
+            })?;
+        }
+        Err(err) => return Err(format!("postgres transaction execution failed: {err}")),
+    }
     Ok(())
 }
 
@@ -12763,10 +12817,27 @@ fn run_lasm_postgres_query_one(
     state: &mut LasmDynamicResponseState,
     query_template: &str,
 ) -> Result<Option<serde_json::Value>, String> {
-    let client = lasm_dynamic_postgres_client_mut(state)?;
-    let rows = client
-        .simple_query(query_template)
-        .map_err(|err| format!("postgres queryOne execution failed: {err}"))?;
+    let execute_query =
+        |client: &mut PostgresClient| -> Result<Vec<SimpleQueryMessage>, postgres::Error> {
+            client.simple_query(query_template)
+        };
+    let rows = {
+        let initial = {
+            let client = lasm_dynamic_postgres_client_mut(state)?;
+            execute_query(client)
+        };
+        match initial {
+            Ok(rows) => rows,
+            Err(err) if err.is_closed() => {
+                reconnect_lasm_dynamic_postgres_client(state)?;
+                let client = lasm_dynamic_postgres_client_mut(state)?;
+                execute_query(client).map_err(|retry_err| {
+                    format!("postgres queryOne execution failed after reconnect: {retry_err}")
+                })?
+            }
+            Err(err) => return Err(format!("postgres queryOne execution failed: {err}")),
+        }
+    };
     for row in rows {
         let SimpleQueryMessage::Row(row) = row else {
             continue;
