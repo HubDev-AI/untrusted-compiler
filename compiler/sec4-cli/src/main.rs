@@ -33,8 +33,9 @@ mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_sqlite;
 
 use lasm_db_adapter_state::{
-    connect_lasm_dynamic_db_records_postgres, ensure_lasm_dynamic_db_records_postgres_schema,
-    load_lasm_dynamic_db_records_from_postgres, load_lasm_dynamic_db_records_from_sqlite,
+    connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
+    ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
+    load_lasm_dynamic_db_records_from_sqlite,
 };
 use lasm_db_config::{
     lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file,
@@ -1234,6 +1235,7 @@ struct LasmDynamicResponseState {
     db_records_adapter: LasmDbRecordsAdapter,
     db_records_store_path: Option<PathBuf>,
     db_records_sqlite_store_path: Option<PathBuf>,
+    db_records_sqlite_connection: Option<rusqlite::Connection>,
     db_records_postgres_dsn: Option<String>,
     db_records_postgres_client: Option<PostgresClient>,
     db_tx_handles: HashMap<i64, i64>,
@@ -1282,6 +1284,7 @@ fn build_lasm_dynamic_response_state(
     let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
     let db_records_postgres_dsn =
         resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter, explicit_db_postgres_dsn)?;
+    let mut db_records_sqlite_connection = None;
     let mut db_records_postgres_client = None;
     let users_by_id = users_store_path
         .as_ref()
@@ -1294,7 +1297,21 @@ fn build_lasm_dynamic_response_state(
             .unwrap_or_default(),
         LasmDbRecordsAdapter::Sqlite => db_records_sqlite_store_path
             .as_ref()
-            .map(|path| load_lasm_dynamic_db_records_from_sqlite(path.as_path()))
+            .map(|path| {
+                let records = load_lasm_dynamic_db_records_from_sqlite(path.as_path());
+                match connect_lasm_dynamic_db_records_sqlite(path.as_path()) {
+                    Ok(connection) => {
+                        db_records_sqlite_connection = Some(connection);
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "warning: LASM dynamic sqlite records connection bootstrap failed at `{}`: {err}",
+                            path.display()
+                        );
+                    }
+                }
+                records
+            })
             .unwrap_or_default(),
         LasmDbRecordsAdapter::Postgres => {
             let dsn = db_records_postgres_dsn
@@ -1329,6 +1346,7 @@ fn build_lasm_dynamic_response_state(
         db_records_adapter,
         db_records_store_path,
         db_records_sqlite_store_path,
+        db_records_sqlite_connection,
         db_records_postgres_dsn,
         db_records_postgres_client,
         db_tx_handles,
