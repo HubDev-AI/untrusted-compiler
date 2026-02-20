@@ -1171,5 +1171,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1199-m39-lasm-cluster-non-identity-selection-direct-lookup-read.md`
 - `1200-m39-lasm-cluster-lazy-backend-port-read-on-connect-failure.md`
 - `1201-m39-lasm-cluster-direct-index-connect-failure-state-access.md`
+- `1202-m39-lasm-cluster-fallback-scan-direct-prewrapped-start.md`
 
 As milestones progress, chapters will be added and linked from this index.
