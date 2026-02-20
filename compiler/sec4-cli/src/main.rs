@@ -8401,9 +8401,8 @@ fn handle_lasm_cluster_accept_dispatch_result(
             Ok(())
         }
         Err(LasmClusterRelayDispatchError::Saturated(mut stream)) => {
-            *listener_saturation_pending_local =
-                listener_saturation_pending_local.saturating_add(1);
-            *listener_saturation_total_local = listener_saturation_total_local.saturating_add(1);
+            *listener_saturation_pending_local += 1;
+            *listener_saturation_total_local += 1;
             let _ = write_lasm_cluster_unavailable_response(
                 &mut stream,
                 LasmClusterUnavailableReason::RelaySaturated,
@@ -8602,7 +8601,7 @@ fn run_lasm_cluster_accept_loop(
         }
 
         if listener_accepted_in_batch == 0 {
-            listener_idle_spins = listener_idle_spins.saturating_add(1);
+            listener_idle_spins += 1;
             if listener_idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                 std::thread::yield_now();
             } else {
@@ -8995,7 +8994,7 @@ fn remap_lasm_cluster_relay_port_state_by_index(
                 {
                     if until > now {
                         unhealthy_ports_until_by_index[next_index] = Some(until);
-                        unhealthy_port_count = unhealthy_port_count.saturating_add(1);
+                        unhealthy_port_count += 1;
                     }
                 }
                 if let Some(next_allowed) = previous_connect_warning_next_allowed_by_index
@@ -9174,8 +9173,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 if until <= now {
                                     *entry = None;
                                 } else {
-                                    unhealthy_port_count_after_prune =
-                                        unhealthy_port_count_after_prune.saturating_add(1);
+                                    unhealthy_port_count_after_prune += 1;
                                 }
                             }
                         }
@@ -9211,7 +9209,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         break;
                     };
                     accepted = true;
-                    accepted_in_batch = accepted_in_batch.saturating_add(1);
+                    accepted_in_batch += 1;
 
                     if worker_ports_snapshot.is_none() || selection_lookup_dirty {
                         if worker_ports_snapshot.is_none() {
@@ -9379,7 +9377,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     .map(|existing_until| existing_until <= now)
                                     .unwrap_or(true)
                                 {
-                                    unhealthy_port_count = unhealthy_port_count.saturating_add(1);
+                                    unhealthy_port_count += 1;
                                 }
                                 *entry = Some(unhealthy_until);
                             }
@@ -9486,7 +9484,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     continue;
                 }
 
-                idle_spins = idle_spins.saturating_add(1);
+                idle_spins += 1;
                 if idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                     std::thread::yield_now();
                 } else {

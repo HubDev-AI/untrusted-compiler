@@ -935,6 +935,10 @@ Post-alpha track acceptance anchors:
      - relay-worker per-iteration local counters (`saturation_events_*_local`, `active_connection_decrements_local`) now use direct `+= 1` updates on bounded loop-local counters,
      - relay-worker end-of-iteration flush helpers now run only when local counters are non-zero.
      - documented in `docs/book/1195-m39-lasm-cluster-relay-worker-counter-and-conditional-flush-hotpath.md`.
+   - [x] Removed remaining bounded saturating increments in accept/relay hot loops:
+     - bounded local counters (`listener_idle_spins`, relay `accepted_in_batch`, relay `idle_spins`, and local unhealthy/prune counters) now use direct `+= 1` updates where values are bounded by loop controls/snapshot cardinality,
+     - keeps semantics unchanged while trimming saturating arithmetic in the ingress/relay hot path.
+     - documented in `docs/book/1196-m39-lasm-cluster-bounded-counter-direct-increments-hotpath.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
