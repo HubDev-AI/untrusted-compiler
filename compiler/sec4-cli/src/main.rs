@@ -8478,27 +8478,40 @@ fn run_lasm_cluster_accept_loop(
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
-                        let dispatch_result = match relay_single_sender.try_send(client_stream) {
-                            Ok(()) => Ok(()),
+                        match relay_single_sender.try_send(client_stream) {
+                            Ok(()) => {
+                                listener_enqueued_local += 1;
+                            }
                             Err(TrySendError::Full(stream)) => {
-                                Err(LasmClusterRelayDispatchError::Saturated(stream))
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
+                                    Err(LasmClusterRelayDispatchError::Saturated(stream)),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                ) {
+                                    return Err(message);
+                                }
                             }
                             Err(TrySendError::Disconnected(stream)) => {
-                                Err(LasmClusterRelayDispatchError::Unavailable(stream))
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
+                                    Err(LasmClusterRelayDispatchError::Unavailable(stream)),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                ) {
+                                    return Err(message);
+                                }
                             }
-                        };
-                        if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                            dispatch_result,
-                            active_connections,
-                            relay_saturation_events,
-                            relay_saturation_events_total,
-                            relay_dispatch_fallback_total,
-                            &mut listener_enqueued_local,
-                            &mut listener_saturation_pending_local,
-                            &mut listener_saturation_total_local,
-                            &mut listener_dispatch_fallback_total_local,
-                        ) {
-                            return Err(message);
                         }
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -8529,52 +8542,68 @@ fn run_lasm_cluster_accept_loop(
                             relay_dispatch_cursor = 0;
                         }
 
-                        let dispatch_result =
-                            match relay_senders[stream_dispatch_start].try_send(client_stream) {
-                                Ok(()) => Ok(()),
-                                Err(TrySendError::Full(stream)) => {
-                                    listener_dispatch_fallback_total_local += 1;
-                                    let fallback_start =
-                                        if stream_dispatch_start + 1 == relay_sender_count {
-                                            0
-                                        } else {
-                                            stream_dispatch_start + 1
-                                        };
-                                    dispatch_lasm_cluster_relay_stream_fallback(
-                                        stream,
-                                        relay_senders,
-                                        fallback_start,
-                                        true,
-                                    )
+                        match relay_senders[stream_dispatch_start].try_send(client_stream) {
+                            Ok(()) => {
+                                listener_enqueued_local += 1;
+                            }
+                            Err(TrySendError::Full(stream)) => {
+                                listener_dispatch_fallback_total_local += 1;
+                                let fallback_start = if stream_dispatch_start + 1
+                                    == relay_sender_count
+                                {
+                                    0
+                                } else {
+                                    stream_dispatch_start + 1
+                                };
+                                let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
+                                    stream,
+                                    relay_senders,
+                                    fallback_start,
+                                    true,
+                                );
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
+                                    dispatch_result,
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                ) {
+                                    return Err(message);
                                 }
-                                Err(TrySendError::Disconnected(stream)) => {
-                                    listener_dispatch_fallback_total_local += 1;
-                                    let fallback_start =
-                                        if stream_dispatch_start + 1 == relay_sender_count {
-                                            0
-                                        } else {
-                                            stream_dispatch_start + 1
-                                        };
-                                    dispatch_lasm_cluster_relay_stream_fallback(
-                                        stream,
-                                        relay_senders,
-                                        fallback_start,
-                                        false,
-                                    )
+                            }
+                            Err(TrySendError::Disconnected(stream)) => {
+                                listener_dispatch_fallback_total_local += 1;
+                                let fallback_start = if stream_dispatch_start + 1
+                                    == relay_sender_count
+                                {
+                                    0
+                                } else {
+                                    stream_dispatch_start + 1
+                                };
+                                let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
+                                    stream,
+                                    relay_senders,
+                                    fallback_start,
+                                    false,
+                                );
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
+                                    dispatch_result,
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                ) {
+                                    return Err(message);
                                 }
-                            };
-                        if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
-                            dispatch_result,
-                            active_connections,
-                            relay_saturation_events,
-                            relay_saturation_events_total,
-                            relay_dispatch_fallback_total,
-                            &mut listener_enqueued_local,
-                            &mut listener_saturation_pending_local,
-                            &mut listener_saturation_total_local,
-                            &mut listener_dispatch_fallback_total_local,
-                        ) {
-                            return Err(message);
+                            }
                         }
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
