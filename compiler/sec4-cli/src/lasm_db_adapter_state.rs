@@ -1,7 +1,11 @@
+use crate::lasm_db_records_log::persist_lasm_dynamic_db_records_to_records_log;
 use crate::lasm_db_runtime_common::{
     lasm_dynamic_postgres_client_mut, reconnect_lasm_dynamic_postgres_client,
 };
-use crate::{LasmDbRecord, LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE};
+use crate::{
+    LasmDbRecord, LasmDbRecordsAdapter, LasmDynamicResponseState,
+    LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
+};
 use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
 use std::fs;
@@ -383,4 +387,17 @@ pub(crate) fn persist_lasm_dynamic_db_records_to_postgres(
         Err(message) => return Err(message),
     }
     Ok(())
+}
+
+pub(crate) fn persist_lasm_dynamic_db_records_to_disk(
+    state: &mut LasmDynamicResponseState,
+) -> Result<(), String> {
+    match state.db_records_adapter {
+        LasmDbRecordsAdapter::RecordsLog => persist_lasm_dynamic_db_records_to_records_log(
+            state.db_records_store_path.as_deref(),
+            &state.db_records,
+        ),
+        LasmDbRecordsAdapter::Sqlite => persist_lasm_dynamic_db_records_to_sqlite(state),
+        LasmDbRecordsAdapter::Postgres => persist_lasm_dynamic_db_records_to_postgres(state),
+    }
 }

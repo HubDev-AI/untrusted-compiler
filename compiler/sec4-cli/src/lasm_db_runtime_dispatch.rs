@@ -1,3 +1,4 @@
+use crate::lasm_db_adapter_state::persist_lasm_dynamic_db_records_to_disk;
 use crate::lasm_db_runtime_common::{
     allocate_lasm_db_tx_handle, classify_lasm_db_runtime_error, is_lasm_valid_db_cap_handle,
     normalize_lasm_db_params, parse_lasm_positive_i64,
@@ -10,8 +11,7 @@ use crate::lasm_db_runtime_sqlite::{
     run_lasm_sqlite_exec, run_lasm_sqlite_exec_tx, run_lasm_sqlite_query_one,
 };
 use crate::{
-    lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
-    persist_lasm_dynamic_db_records_to_disk, set_lasm_json_response, LasmDbRecord,
+    lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms, set_lasm_json_response, LasmDbRecord,
     LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
     LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
