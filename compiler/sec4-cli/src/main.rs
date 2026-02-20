@@ -8431,17 +8431,37 @@ struct LasmClusterRelayPump {
 
 impl LasmClusterRelayPump {
     fn new(client: TcpStream, upstream: TcpStream) -> Result<Self, String> {
+        Self::new_with_buffers(
+            client,
+            upstream,
+            vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+            vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+        )
+    }
+
+    fn new_with_buffers(
+        client: TcpStream,
+        upstream: TcpStream,
+        mut client_to_upstream: Vec<u8>,
+        mut upstream_to_client: Vec<u8>,
+    ) -> Result<Self, String> {
         client
             .set_nonblocking(true)
             .map_err(|err| format!("could not set client proxy stream nonblocking: {err}"))?;
         upstream
             .set_nonblocking(true)
             .map_err(|err| format!("could not set upstream proxy stream nonblocking: {err}"))?;
+        if client_to_upstream.len() != LASM_CLUSTER_RELAY_BUFFER_BYTES {
+            client_to_upstream.resize(LASM_CLUSTER_RELAY_BUFFER_BYTES, 0_u8);
+        }
+        if upstream_to_client.len() != LASM_CLUSTER_RELAY_BUFFER_BYTES {
+            upstream_to_client.resize(LASM_CLUSTER_RELAY_BUFFER_BYTES, 0_u8);
+        }
         Ok(Self {
             client,
             upstream,
-            client_to_upstream: vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
-            upstream_to_client: vec![0_u8; LASM_CLUSTER_RELAY_BUFFER_BYTES],
+            client_to_upstream,
+            upstream_to_client,
             c2u_start: 0,
             c2u_end: 0,
             u2c_start: 0,
@@ -8575,6 +8595,10 @@ impl LasmClusterRelayPump {
         } else {
             Ok(LasmClusterRelayPumpStep::Idle)
         }
+    }
+
+    fn into_buffers(self) -> (Vec<u8>, Vec<u8>) {
+        (self.client_to_upstream, self.upstream_to_client)
     }
 }
 
@@ -8739,6 +8763,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_accept_batch_max = relay_accept_batch_max;
         relay_handles.push(std::thread::spawn(move || {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
+            let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+            let relay_buffer_pool_max = relay_accept_batch_max.saturating_mul(4).max(64);
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
             let mut connect_warning_next_allowed: HashMap<u16, Instant> = HashMap::new();
             let mut pump_warning_next_allowed: Option<Instant> = None;
@@ -8884,7 +8910,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         Ok(upstream) => {
                             let _ = client.set_nodelay(true);
                             let _ = upstream.set_nodelay(true);
-                            match LasmClusterRelayPump::new(client, upstream) {
+                            let relay_result = if let Some((client_to_upstream, upstream_to_client)) =
+                                relay_buffer_pool.pop()
+                            {
+                                LasmClusterRelayPump::new_with_buffers(
+                                    client,
+                                    upstream,
+                                    client_to_upstream,
+                                    upstream_to_client,
+                                )
+                            } else {
+                                LasmClusterRelayPump::new(client, upstream)
+                            };
+                            match relay_result {
                                 Ok(relay) => relay_connections.push(relay),
                                 Err(message) => {
                                     let now = Instant::now();
@@ -8954,7 +8992,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             index += 1;
                         }
                         Ok(LasmClusterRelayPumpStep::Complete) => {
-                            relay_connections.swap_remove(index);
+                            let relay = relay_connections.swap_remove(index);
+                            if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                relay_buffer_pool.push(relay.into_buffers());
+                            }
                             active_connection_decrements_local =
                                 active_connection_decrements_local.saturating_add(1);
                             progressed = true;
@@ -8972,7 +9013,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     ),
                                 );
                             }
-                            relay_connections.swap_remove(index);
+                            let relay = relay_connections.swap_remove(index);
+                            if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                relay_buffer_pool.push(relay.into_buffers());
+                            }
                             active_connection_decrements_local =
                                 active_connection_decrements_local.saturating_add(1);
                             progressed = true;
