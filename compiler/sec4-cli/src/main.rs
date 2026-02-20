@@ -7982,7 +7982,10 @@ fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
 
     last_published_ports.clear();
     last_published_ports.extend(state.workers.iter().map(|worker| worker.port));
-    if last_published_ports.windows(2).any(|window| window[0] > window[1]) {
+    if last_published_ports
+        .windows(2)
+        .any(|window| window[0] > window[1])
+    {
         last_published_ports.sort_unstable();
     }
     snapshot.store(Arc::new(last_published_ports.clone()));
@@ -8255,7 +8258,9 @@ fn dispatch_lasm_cluster_relay_stream(
     if sender_count == 1 {
         return match relay_senders[0].try_send(client_stream) {
             Ok(()) => Ok(()),
-            Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
+            Err(TrySendError::Full(stream)) => {
+                Err(LasmClusterRelayDispatchError::Saturated(stream))
+            }
             Err(TrySendError::Disconnected(stream)) => {
                 Err(LasmClusterRelayDispatchError::Unavailable(stream))
             }
@@ -8397,7 +8402,11 @@ fn run_lasm_cluster_accept_loop(
                     None => Err(LasmClusterRelayDispatchError::Unavailable(client_stream)),
                 }
             } else {
-                dispatch_lasm_cluster_relay_stream(client_stream, relay_senders, stream_dispatch_start)
+                dispatch_lasm_cluster_relay_stream(
+                    client_stream,
+                    relay_senders,
+                    stream_dispatch_start,
+                )
             };
             match dispatch_result {
                 Ok(()) => {
@@ -8729,7 +8738,6 @@ const LASM_CLUSTER_SELECTION_LOOKUP_NONE: usize = usize::MAX;
 fn rebuild_lasm_cluster_backend_selection_lookup(
     worker_ports: &[u16],
     unhealthy_ports_until: &HashMap<u16, Instant>,
-    healthy_mask: &mut Vec<bool>,
     lookup: &mut Vec<usize>,
 ) -> (bool, bool) {
     let worker_port_count = worker_ports.len();
@@ -8742,27 +8750,15 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     }
     lookup.resize(worker_port_count, LASM_CLUSTER_SELECTION_LOOKUP_NONE);
 
-    healthy_mask.clear();
-    healthy_mask.resize(worker_port_count, false);
-    let mut healthy_count = 0_usize;
-    for (index, port) in worker_ports.iter().enumerate() {
-        let is_healthy = !unhealthy_ports_until.contains_key(port);
-        healthy_mask[index] = is_healthy;
-        if is_healthy {
-            healthy_count = healthy_count.saturating_add(1);
-        }
-    }
-    if healthy_count == 0 {
-        return (false, false);
-    }
-
-    let first_healthy_index = healthy_mask
+    let Some(first_healthy_index) = worker_ports
         .iter()
-        .position(|healthy| *healthy)
-        .expect("healthy_count > 0 ensures at least one healthy index");
+        .position(|port| !unhealthy_ports_until.contains_key(port))
+    else {
+        return (false, false);
+    };
     let mut next_healthy_index = first_healthy_index;
     for index in (0..worker_port_count).rev() {
-        if healthy_mask[index] {
+        if !unhealthy_ports_until.contains_key(&worker_ports[index]) {
             next_healthy_index = index;
         }
         lookup[index] = next_healthy_index;
@@ -8911,7 +8907,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 &mut selected_worker_port_membership_set,
             );
             let mut selection_lookup: Vec<usize> = Vec::new();
-            let mut selection_healthy_mask: Vec<bool> = Vec::new();
             let mut selection_has_healthy_backends = false;
             let mut selection_lookup_is_identity = false;
             let mut selection_lookup_dirty = true;
@@ -8957,8 +8952,9 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             if unhealthy_ports_until.len() != unhealthy_before {
                                 selection_lookup_dirty = true;
                             }
-                            connect_warning_next_allowed
-                                .retain(|port, _| selected_worker_port_membership_set.contains(port));
+                            connect_warning_next_allowed.retain(|port, _| {
+                                selected_worker_port_membership_set.contains(port)
+                            });
                             unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
                                 None
                             } else {
@@ -9020,7 +9016,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 rebuild_lasm_cluster_backend_selection_lookup(
                                     worker_ports,
                                     &unhealthy_ports_until,
-                                    &mut selection_healthy_mask,
                                     &mut selection_lookup,
                                 );
                             selection_lookup_dirty = false;
@@ -9067,9 +9062,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 selection_lookup
                                     .get(start_index)
                                     .copied()
-                                    .filter(|index| {
-                                        *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE
-                                    })
+                                    .filter(|index| *index != LASM_CLUSTER_SELECTION_LOOKUP_NONE)
                             }
                         }
                     };
@@ -9094,18 +9087,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         Ok(upstream) => {
                             let _ = client.set_nodelay(true);
                             let _ = upstream.set_nodelay(true);
-                            let relay_result = if let Some((client_to_upstream, upstream_to_client)) =
-                                relay_buffer_pool.pop()
-                            {
-                                LasmClusterRelayPump::new_with_buffers(
-                                    client,
-                                    upstream,
-                                    client_to_upstream,
-                                    upstream_to_client,
-                                )
-                            } else {
-                                LasmClusterRelayPump::new(client, upstream)
-                            };
+                            let relay_result =
+                                if let Some((client_to_upstream, upstream_to_client)) =
+                                    relay_buffer_pool.pop()
+                                {
+                                    LasmClusterRelayPump::new_with_buffers(
+                                        client,
+                                        upstream,
+                                        client_to_upstream,
+                                        upstream_to_client,
+                                    )
+                                } else {
+                                    LasmClusterRelayPump::new(client, upstream)
+                                };
                             match relay_result {
                                 Ok(relay) => relay_connections.push(relay),
                                 Err(message) => {
