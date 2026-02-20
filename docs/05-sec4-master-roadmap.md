@@ -855,6 +855,10 @@ Post-alpha track acceptance anchors:
      - lookup rebuild now skips `lookup.resize/fill` entirely when mapping is identity (all healthy backends),
      - rebuild gating now treats lookup length checks as non-required in identity mode, avoiding redundant table writes in healthy steady-state rebuilds.
      - documented in `docs/book/1175-m39-lasm-cluster-selection-identity-no-table-materialization.md`.
+   - [x] Added worker-port membership set cache for prune paths:
+     - relay workers now rebuild a `HashSet<u16>` membership cache on snapshot changes,
+     - unhealthy-port and warning-map prune paths now use membership-set contains checks instead of per-entry snapshot binary searches.
+     - documented in `docs/book/1176-m39-lasm-cluster-worker-port-membership-cache.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
