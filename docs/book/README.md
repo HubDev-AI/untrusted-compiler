@@ -1120,5 +1120,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1148-m39-lasm-cluster-relay-dispatch-slice-iteration.md`
 - `1149-m39-lasm-cluster-relay-selection-batch-fallback-reuse.md`
 - `1150-m39-lasm-cluster-unhealthy-prune-snapshot-membership.md`
+- `1151-m39-lasm-cluster-unhealthy-prune-interval-throttle.md`
 
 As milestones progress, chapters will be added and linked from this index.

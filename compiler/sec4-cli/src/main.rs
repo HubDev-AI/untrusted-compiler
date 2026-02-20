@@ -8157,6 +8157,7 @@ fn write_lasm_cluster_status_json(
 const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
 const LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH: usize = 8;
+const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 
 fn flush_lasm_cluster_saturation_counters(
     pending_counter: &AtomicUsize,
@@ -8696,23 +8697,39 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_base = 0_usize;
             let mut relay_selection_reservation_len = 0_usize;
             let mut relay_selection_reservation_offset = 0_usize;
+            let mut unhealthy_prune_next_at: Option<Instant> = None;
 
             loop {
                 let mut accepted = false;
                 let mut accepted_in_batch = 0_usize;
                 let mut worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
                 if !unhealthy_ports_until.is_empty() {
-                    let snapshot = relay_worker_ports.load_full();
-                    let worker_port_count = snapshot.len();
-                    if worker_port_count == 0 {
-                        unhealthy_ports_until.clear();
-                    } else {
-                        let now = Instant::now();
-                        unhealthy_ports_until.retain(|port, until| {
-                            *until > now && snapshot.contains(port)
-                        });
+                    let now = Instant::now();
+                    let should_prune = unhealthy_prune_next_at
+                        .map(|next_at| now >= next_at)
+                        .unwrap_or(true);
+                    if should_prune {
+                        let snapshot = relay_worker_ports.load_full();
+                        let worker_port_count = snapshot.len();
+                        if worker_port_count == 0 {
+                            unhealthy_ports_until.clear();
+                            unhealthy_prune_next_at = None;
+                        } else {
+                            unhealthy_ports_until.retain(|port, until| {
+                                *until > now && snapshot.contains(port)
+                            });
+                            unhealthy_prune_next_at = if unhealthy_ports_until.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    now + Duration::from_millis(
+                                        LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS,
+                                    ),
+                                )
+                            };
+                        }
+                        worker_ports_snapshot = Some(snapshot);
                     }
-                    worker_ports_snapshot = Some(snapshot);
                 }
                 loop {
                     if accepted_in_batch >= relay_accept_batch_max {

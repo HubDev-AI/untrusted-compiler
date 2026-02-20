@@ -751,6 +751,11 @@ Post-alpha track acceptance anchors:
      - removes hash-set cache refresh churn while preserving unhealthy-port retention semantics.
      - short LASM cluster probe after this slice recorded `1,462,382` requests in `20s` (`~72.75k req/s`, `p99 8.84ms`, peak RSS `~27,200 KB`) under default settings.
      - documented in `docs/book/1150-m39-lasm-cluster-unhealthy-prune-snapshot-membership.md`.
+   - [x] Throttled unhealthy-port prune cadence in relay worker hot loop:
+     - relay workers now prune `unhealthy_ports_until` on a short bounded interval (`LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS=2`) instead of every loop cycle while unhealthy entries exist,
+     - backend-selection snapshot loading remains on-demand for accepted sockets, preserving routing behavior while reducing prune-side snapshot churn.
+     - short LASM cluster probe after this slice recorded `1,438,720` requests in `20s` (`~71.57k req/s`, `p99 10.08ms`, peak RSS `~27,280 KB`) under default settings.
+     - documented in `docs/book/1151-m39-lasm-cluster-unhealthy-prune-interval-throttle.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
