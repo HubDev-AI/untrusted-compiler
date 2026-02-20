@@ -995,6 +995,10 @@ Post-alpha track acceptance anchors:
      - multi-relay accept loop now precomputes sender-next indexes once and reuses them for dispatch-cursor advancement and fallback start selection,
      - removes per-request wrap branches for cursor/fallback index progression.
      - documented in `docs/book/1210-m39-lasm-cluster-accept-next-index-lookup.md`.
+   - [x] Added precomputed relay selection next-index lookup for backend reservation progression:
+     - relay worker backend selection now precomputes worker-next indexes when worker cardinality changes and reuses them to advance reservation indexes,
+     - removes per-selection wrap branches from reservation progression while preserving selection order semantics.
+     - documented in `docs/book/1211-m39-lasm-cluster-relay-selection-next-index-lookup.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
