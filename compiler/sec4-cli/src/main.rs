@@ -8199,6 +8199,8 @@ const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
 const LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH: usize = 8;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
+const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
+const LASM_CLUSTER_IDLE_SLEEP_MICROS: u64 = 250;
 
 fn flush_lasm_cluster_saturation_counters(
     pending_counter: &AtomicUsize,
@@ -8313,10 +8315,10 @@ fn run_lasm_cluster_accept_loop(
 
         if relay_listener_batch.is_empty() {
             listener_idle_spins = listener_idle_spins.saturating_add(1);
-            if listener_idle_spins < 32 {
+            if listener_idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                 std::thread::yield_now();
             } else {
-                std::thread::sleep(Duration::from_millis(1));
+                std::thread::sleep(Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS));
                 listener_idle_spins = 0;
             }
             continue;
@@ -9045,10 +9047,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 }
 
                 idle_spins = idle_spins.saturating_add(1);
-                if idle_spins < 32 {
+                if idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
                     std::thread::yield_now();
                 } else {
-                    std::thread::sleep(Duration::from_millis(1));
+                    std::thread::sleep(Duration::from_micros(LASM_CLUSTER_IDLE_SLEEP_MICROS));
                     idle_spins = 0;
                 }
             }

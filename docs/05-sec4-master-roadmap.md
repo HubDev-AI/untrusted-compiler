@@ -807,6 +807,10 @@ Post-alpha track acceptance anchors:
      - relay workers now keep a bounded local buffer pool (`relay_accept_batch_max * 4`, minimum `64`) and reuse relay pump buffers across connection lifecycles,
      - avoids fresh dual-buffer allocation on every connection when reusable buffers are available while keeping bounded-memory behavior.
      - documented in `docs/book/1163-m39-lasm-cluster-relay-buffer-pool-reuse.md`.
+   - [x] Tuned LASM accept/relay idle backoff cadence for lower burst wake latency:
+     - replaced hardcoded idle thresholds/sleeps with shared constants (`LASM_CLUSTER_IDLE_SPIN_THRESHOLD`, `LASM_CLUSTER_IDLE_SLEEP_MICROS`),
+     - accept and relay loops now use bounded short micro-sleep (`250us`) after spin threshold instead of `1ms` sleeps, reducing wake-up latency while preserving busy-loop protection.
+     - documented in `docs/book/1164-m39-lasm-cluster-idle-backoff-microsleep-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
