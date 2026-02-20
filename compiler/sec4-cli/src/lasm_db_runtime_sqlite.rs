@@ -63,6 +63,37 @@ fn lasm_dynamic_sqlite_runtime_connection_mut(
         .ok_or_else(|| "sqlite records store connection unavailable".to_string())
 }
 
+fn lasm_sqlite_runtime_error_is_no_retry(message: &str) -> bool {
+    message.contains("database is locked") || message.contains("bad parameter")
+}
+
+fn run_lasm_sqlite_with_connection_retry<T, F>(
+    state: &mut LasmDynamicResponseState,
+    error_prefix: &str,
+    mut run: F,
+) -> Result<T, String>
+where
+    F: FnMut(&mut Connection) -> Result<T, String>,
+{
+    let first = {
+        let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+        run(connection)
+    };
+    match first {
+        Ok(value) => Ok(value),
+        Err(message) if lasm_sqlite_runtime_error_is_no_retry(message.as_str()) => Err(message),
+        Err(message) => {
+            state.db_records_sqlite_connection = None;
+            let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
+            run(connection).map_err(|retry_error| {
+                format!(
+                    "{error_prefix} failed: {message}; retry after reconnect failed: {retry_error}"
+                )
+            })
+        }
+    }
+}
+
 fn sqlite_value_ref_to_json(value: SqliteValueRef<'_>) -> serde_json::Value {
     match value {
         SqliteValueRef::Null => serde_json::Value::Null,
@@ -97,7 +128,7 @@ pub(crate) fn run_lasm_sqlite_exec(
     params: &str,
 ) -> Result<u64, String> {
     let sqlite_params = parse_lasm_sqlite_query_params(params);
-    let run = |connection: &mut Connection| -> Result<u64, String> {
+    run_lasm_sqlite_with_connection_retry(state, "sqlite execution", |connection| {
         let tx = connection
             .transaction()
             .map_err(|err| format!("sqlite execution transaction start failed: {err}"))?;
@@ -145,28 +176,7 @@ pub(crate) fn run_lasm_sqlite_exec(
         tx.commit()
             .map_err(|err| format!("sqlite execution transaction commit failed: {err}"))?;
         Ok(affected_rows)
-    };
-    let first = {
-        let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
-        run(connection)
-    };
-    match first {
-        Ok(value) => Ok(value),
-        Err(message)
-            if message.contains("database is locked") || message.contains("bad parameter") =>
-        {
-            Err(message)
-        }
-        Err(message) => {
-            state.db_records_sqlite_connection = None;
-            let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
-            run(connection).map_err(|retry_error| {
-                format!(
-                    "sqlite execution failed: {message}; retry after reconnect failed: {retry_error}"
-                )
-            })
-        }
-    }
+    })
 }
 
 pub(crate) fn run_lasm_sqlite_exec_tx(
@@ -189,41 +199,44 @@ pub(crate) fn run_lasm_sqlite_query_one(
     if !is_lasm_postgres_query_one_select_like(normalized_query.as_str()) {
         return Err("sqlite queryOne requires SELECT-style SQL statement".to_string());
     }
-    let connection = lasm_dynamic_sqlite_runtime_connection_mut(state)?;
     let sqlite_params = parse_lasm_sqlite_query_params(params);
-    let mut statement = connection
-        .prepare(normalized_query.as_str())
-        .map_err(|err| format!("sqlite queryOne prepare failed: {err}"))?;
-    let parameter_count = statement.parameter_count();
-    validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
-    let use_params = parameter_count > 0 && !sqlite_params.is_empty();
-    if use_params && has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
-        return Err("sqlite parameterized execution requires a single SQL statement".to_string());
-    }
-    let mut rows = if use_params {
-        statement
-            .query(rusqlite::params_from_iter(sqlite_params.iter()))
-            .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
-    } else {
-        statement
-            .query([])
-            .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
-    };
-    let Some(row) = rows
-        .next()
-        .map_err(|err| format!("sqlite queryOne row fetch failed: {err}"))?
-    else {
-        return Ok(None);
-    };
-    let row_ref = row.as_ref();
-    let mut object = serde_json::Map::new();
-    for index in 0..row_ref.column_count() {
-        let name = row_ref.column_name(index).unwrap_or("").to_string();
-        let value = row
-            .get_ref(index)
-            .map(sqlite_value_ref_to_json)
-            .map_err(|err| format!("sqlite queryOne row decode failed: {err}"))?;
-        object.insert(name, value);
-    }
-    Ok(Some(serde_json::Value::Object(object)))
+    run_lasm_sqlite_with_connection_retry(state, "sqlite queryOne", |connection| {
+        let mut statement = connection
+            .prepare(normalized_query.as_str())
+            .map_err(|err| format!("sqlite queryOne prepare failed: {err}"))?;
+        let parameter_count = statement.parameter_count();
+        validate_lasm_sqlite_parameter_arity(parameter_count, sqlite_params.len())?;
+        let use_params = parameter_count > 0 && !sqlite_params.is_empty();
+        if use_params && has_lasm_sql_non_trailing_statement_separator(normalized_query.as_str()) {
+            return Err(
+                "sqlite parameterized execution requires a single SQL statement".to_string(),
+            );
+        }
+        let mut rows = if use_params {
+            statement
+                .query(rusqlite::params_from_iter(sqlite_params.iter()))
+                .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
+        } else {
+            statement
+                .query([])
+                .map_err(|err| format!("sqlite queryOne execution failed: {err}"))?
+        };
+        let Some(row) = rows
+            .next()
+            .map_err(|err| format!("sqlite queryOne row fetch failed: {err}"))?
+        else {
+            return Ok(None);
+        };
+        let row_ref = row.as_ref();
+        let mut object = serde_json::Map::new();
+        for index in 0..row_ref.column_count() {
+            let name = row_ref.column_name(index).unwrap_or("").to_string();
+            let value = row
+                .get_ref(index)
+                .map(sqlite_value_ref_to_json)
+                .map_err(|err| format!("sqlite queryOne row decode failed: {err}"))?;
+            object.insert(name, value);
+        }
+        Ok(Some(serde_json::Value::Object(object)))
+    })
 }
