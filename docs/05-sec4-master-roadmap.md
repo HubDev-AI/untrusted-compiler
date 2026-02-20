@@ -760,6 +760,10 @@ Post-alpha track acceptance anchors:
      - status payload now includes `relayWorkerCount` (resolved queue relay worker pool size) alongside `workerCount` and `relayAcceptWorkers`,
      - improves operator tuning visibility for relay worker sizing decisions without changing runtime routing semantics.
      - documented in `docs/book/1152-m39-lasm-cluster-status-relay-worker-count.md`.
+   - [x] Extended cluster status JSON telemetry with relay queue sizing fields:
+     - status payload now includes `relayQueueCapacity` (global relay queue target capacity) and `relayQueueShardCapacity` (per-shard bounded queue capacity),
+     - makes relay queue-pressure tuning (`--cluster-relay-queue`, relay worker counts) observable from one status artifact.
+     - documented in `docs/book/1153-m39-lasm-cluster-status-relay-queue-capacity-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

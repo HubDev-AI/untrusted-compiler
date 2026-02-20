@@ -8104,6 +8104,8 @@ fn write_lasm_cluster_status_json(
     max_instances: usize,
     worker_count: usize,
     relay_worker_count: usize,
+    relay_queue_capacity: usize,
+    relay_queue_shard_capacity: usize,
     worker_ports: &[u16],
     active_connections: usize,
     relay_saturation_events_pending: usize,
@@ -8130,6 +8132,8 @@ fn write_lasm_cluster_status_json(
         "maxInstances": max_instances,
         "workerCount": worker_count,
         "relayWorkerCount": relay_worker_count,
+        "relayQueueCapacity": relay_queue_capacity,
+        "relayQueueShardCapacity": relay_queue_shard_capacity,
         "workerPorts": worker_ports,
         "activeConnections": active_connections,
         "relaySaturationEventsPending": relay_saturation_events_pending,
@@ -8954,6 +8958,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
         let status_worker_ports = Arc::clone(&worker_ports_snapshot);
         let status_relay_worker_count = relay_worker_count;
+        let status_relay_queue_capacity = relay_queue_capacity;
+        let status_relay_queue_shard_capacity = relay_queue_shard_capacity;
         let status_relay_accept_workers = relay_accept_worker_count;
         let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
         let status_tmp_path = status_path.with_extension(format!(
@@ -8974,6 +8980,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 status_config.max_instances,
                 worker_count,
                 status_relay_worker_count,
+                status_relay_queue_capacity,
+                status_relay_queue_shard_capacity,
                 worker_ports.as_slice(),
                 status_active_connections.load(Ordering::Relaxed),
                 status_saturation_events.load(Ordering::Relaxed),
