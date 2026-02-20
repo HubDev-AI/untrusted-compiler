@@ -679,6 +679,10 @@ Post-alpha track acceptance anchors:
       - listener path now increments `active_connections` only after successful relay queue enqueue (no add/sub pair on rejected connections),
       - relay workers now reuse a mutable active-port set for unhealthy membership pruning instead of allocating a new set each cycle.
       - documented in `docs/book/1135-m39-lasm-cluster-enqueue-counter-and-set-reuse.md`.
+   - [x] Cached active-port membership set by worker snapshot identity:
+      - relay workers now keep the active-port set cache keyed by current worker snapshot pointer identity and rebuild only when snapshot changes,
+      - unhealthy membership pruning no longer repopulates the set on every cycle when worker snapshot is unchanged.
+      - documented in `docs/book/1136-m39-lasm-cluster-active-set-snapshot-cache.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

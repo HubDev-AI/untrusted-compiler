@@ -8464,6 +8464,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_connections: Vec<LasmClusterRelayPump> = Vec::new();
             let mut unhealthy_ports_until: HashMap<u16, Instant> = HashMap::new();
             let mut active_worker_ports = HashSet::new();
+            let mut active_worker_ports_snapshot: Option<Arc<Vec<u16>>> = None;
             let mut connect_warning_next_allowed: HashMap<u16, Instant> = HashMap::new();
             let mut pump_warning_next_allowed: Option<Instant> = None;
             let mut receiver_closed = false;
@@ -8480,11 +8481,19 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 if !unhealthy_ports_until.is_empty() {
                     if worker_port_count == 0 {
                         active_worker_ports.clear();
+                        active_worker_ports_snapshot = None;
                         unhealthy_ports_until.clear();
                     } else {
+                        let refresh_active_worker_ports = active_worker_ports_snapshot
+                            .as_ref()
+                            .map(|cached| !Arc::ptr_eq(cached, &worker_ports_snapshot))
+                            .unwrap_or(true);
+                        if refresh_active_worker_ports {
+                            active_worker_ports.clear();
+                            active_worker_ports.extend(worker_ports.iter().copied());
+                            active_worker_ports_snapshot = Some(Arc::clone(&worker_ports_snapshot));
+                        }
                         let now = Instant::now();
-                        active_worker_ports.clear();
-                        active_worker_ports.extend(worker_ports.iter().copied());
                         unhealthy_ports_until.retain(|port, until| {
                             *until > now && active_worker_ports.contains(port)
                         });
