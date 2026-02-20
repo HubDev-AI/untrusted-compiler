@@ -11,9 +11,8 @@ use crate::lasm_db_runtime_sqlite::{
 };
 use crate::{
     lasm_db_record_to_json, lasm_error_envelope, lasm_now_ms,
-    materialize_lasm_internal_header_value, persist_lasm_dynamic_db_records_to_disk,
-    set_lasm_json_response, take_lasm_internal_header_value, LasmDbRecord, LasmDbRecordsAdapter,
-    LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
+    persist_lasm_dynamic_db_records_to_disk, set_lasm_json_response, LasmDbRecord,
+    LasmDbRecordsAdapter, LasmDynamicResponseState, LasmRunRequest, LASM_INTERNAL_DB_HANDLE_HEADER,
     LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
     LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
 };
@@ -778,5 +777,25 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
             true
         }
         _ => false,
+    }
+}
+
+fn take_lasm_internal_header_value(
+    response: &mut sec4_core::HttpResponse,
+    header_name: &str,
+) -> Option<String> {
+    let key = crate::find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
+    response.headers.remove(&key)
+}
+
+fn materialize_lasm_internal_header_value(
+    value: String,
+    request: &LasmRunRequest,
+    path_params: &BTreeMap<String, String>,
+) -> String {
+    if crate::contains_lasm_request_placeholder_tokens(value.as_str()) {
+        crate::materialize_lasm_request_placeholders(value.as_str(), request, path_params)
+    } else {
+        value
     }
 }

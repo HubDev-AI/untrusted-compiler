@@ -11914,26 +11914,6 @@ fn apply_lasm_internal_db_operation_materialization(
     )
 }
 
-fn take_lasm_internal_header_value(
-    response: &mut sec4_core::HttpResponse,
-    header_name: &str,
-) -> Option<String> {
-    let key = find_lasm_header_key_case_insensitive(&response.headers, header_name)?;
-    response.headers.remove(&key)
-}
-
-fn materialize_lasm_internal_header_value(
-    value: String,
-    request: &LasmRunRequest,
-    path_params: &BTreeMap<String, String>,
-) -> String {
-    if contains_lasm_request_placeholder_tokens(value.as_str()) {
-        materialize_lasm_request_placeholders(value.as_str(), request, path_params)
-    } else {
-        value
-    }
-}
-
 fn set_lasm_json_response(
     response: &mut sec4_core::HttpResponse,
     status: u16,
