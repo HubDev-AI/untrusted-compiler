@@ -975,6 +975,10 @@ Post-alpha track acceptance anchors:
      - relay init-failure and relay pump-failure warning gates now use direct `match`-based checks on `pump_warning_next_allowed` (`Some(next) => now >= next`, `None => true`) instead of map/unwrap option chains,
      - preserves warning-throttle behavior while reducing option-chain overhead in warning paths.
      - documented in `docs/book/1205-m39-lasm-cluster-relay-warning-throttle-direct-match-checks.md`.
+   - [x] Removed remaining map/unwrap option-chain checks from relay/autoscale paths:
+     - relay unhealthy-prune gate and unhealthy-slot marking now use direct `match` checks on option values instead of map/unwrap chains,
+     - autoscale up/down cooldown checks now use direct `match`-based elapsed guards.
+     - documented in `docs/book/1206-m39-lasm-cluster-relay-autoscale-direct-match-checks.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
