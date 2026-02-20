@@ -887,6 +887,10 @@ Post-alpha track acceptance anchors:
      - relay workers now track backend unhealthy/connect-warning cooldown state by worker index (`Vec<Option<Instant>>`) and remap that state on worker-topology snapshot changes,
      - selection lookup rebuild now consumes index-aligned unhealthy state directly, and snapshot remap now reuses vector ownership (`mem::take`) instead of cloning cooldown state.
      - documented in `docs/book/1183-m39-lasm-cluster-relay-index-aligned-unhealthy-state.md`.
+   - [x] Exposed relay backend connect timing in cluster status telemetry:
+     - cluster status JSON now includes `relayBackendConnectTimeoutMs` and `relayBackendConnectCooldownMs`,
+     - these fields report the effective runtime connect-timeout/cooldown values used by relay workers.
+     - documented in `docs/book/1184-m39-lasm-cluster-status-relay-backend-connect-timing-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
