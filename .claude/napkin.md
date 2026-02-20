@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | After merging PR #294, I started the next LASM DB slice on local `dev` again before branching, then had to recover by branching with a dirty worktree. | After every merge, run a fixed two-command gate before any edit: `git branch --show-current` then `git checkout -b codex/<next-slice>` if on `dev`. |
 | 2026-02-20 | self | `db.execTx` runtime branch validated existing tx handles after adapter execution, which could allow SQL side effects before returning `DB.EXEC_TX_HANDLE_INVALID`. | For operation branches mixing validation + execution, resolve and validate handle bindings first, then execute adapter calls; lock with one side-effect-focused regression test. |
 | 2026-02-20 | self | While refactoring DSN single-resolution, I accidentally removed `db_postgres_dsn_file` from `cmd_run` signature, causing immediate compile errors (`cannot find value`, argument count mismatch). | For signature refactors, run one quick focused compile/test after each signature edit before continuing with downstream call-site patches. |
 | 2026-02-20 | self | I initially validated `--db-postgres-dsn-file` only inside `cmd_run_lasm_backend`, so empty-file errors surfaced after project validation and produced exit `1` in a guard test instead of deterministic invalid-config exit `2`. | Keep run-flag validation in `cmd_run` before project validation when deterministic CLI guard status/diagnostics are required. |
