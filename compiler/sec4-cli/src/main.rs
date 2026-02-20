@@ -11858,10 +11858,13 @@ fn apply_lasm_dynamic_response_materialization(
             );
         }
         "DbListRecordsResponse" => {
-            let (records, adapter) = match dynamic_state.lock() {
+            let (records, adapter, tx_handle_count, tx_handle_capacity) = match dynamic_state.lock()
+            {
                 Ok(state) => (
                     state.db_records.clone(),
                     lasm_db_records_adapter_label(state.db_records_adapter),
+                    state.db_tx_handles.len(),
+                    state.db_tx_max_handles,
                 ),
                 Err(_) => {
                     set_lasm_json_response(
@@ -11889,6 +11892,8 @@ fn apply_lasm_dynamic_response_materialization(
                     "count": records.len(),
                     "affectedRowsTotal": affected_rows_total,
                     "adapter": adapter,
+                    "txHandleCount": tx_handle_count,
+                    "txHandleCapacity": tx_handle_capacity,
                     "records": records.iter().map(lasm_db_record_to_json).collect::<Vec<_>>(),
                 }),
             );
