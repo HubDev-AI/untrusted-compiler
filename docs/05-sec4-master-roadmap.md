@@ -782,6 +782,11 @@ Post-alpha track acceptance anchors:
      - preserves existing autoscale cadence when saturation is absent.
      - short LASM cluster probe after this slice recorded `1,470,366` requests in `20s` (`~73.15k req/s`, `p99 9.64ms`, peak RSS `~27,216 KB`) under default settings.
      - documented in `docs/book/1157-m39-lasm-cluster-saturation-priority-autoscale-eval.md`.
+   - [x] Added saturation-priority autoscale sleep interval:
+     - autoscale loop now shortens sleep cadence to `min(maintenance_interval_ms, 100ms)` while saturation is pending, while keeping baseline maintenance cadence when saturation is absent,
+     - this reduces autoscale reaction latency during sustained saturation without changing non-saturation loop cadence.
+     - short LASM cluster probe after this slice recorded `1,476,018` requests in `20s` (`~73.43k req/s`, `p99 9.39ms`, peak RSS `~27,104 KB`) under default settings.
+     - documented in `docs/book/1158-m39-lasm-cluster-saturation-priority-sleep-interval.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

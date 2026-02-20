@@ -1127,5 +1127,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1155-m39-lasm-cluster-dynamic-saturation-boost-step.md`
 - `1156-m39-lasm-cluster-status-autoscale-decision-fields.md`
 - `1157-m39-lasm-cluster-saturation-priority-autoscale-eval.md`
+- `1158-m39-lasm-cluster-saturation-priority-sleep-interval.md`
 
 As milestones progress, chapters will be added and linked from this index.
