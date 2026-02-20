@@ -1325,19 +1325,10 @@ fn build_lasm_dynamic_response_state(
         .max()
         .unwrap_or(0)
         .saturating_add(1);
-    let mut db_tx_handles = HashMap::new();
-    for record in &db_records {
-        if record.tx > 0 {
-            db_tx_handles.insert(record.tx, record.db);
-        }
-    }
-    let next_db_tx_handle = db_tx_handles
-        .keys()
-        .copied()
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1)
-        .max(1);
+    // Tx handles are runtime-local capabilities and must not be resurrected from persisted
+    // record history across process restarts.
+    let db_tx_handles = HashMap::new();
+    let next_db_tx_handle = 1;
     Ok(LasmDynamicResponseState {
         users_by_id,
         users_store_path,
