@@ -8433,13 +8433,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             loop {
                 let mut accepted = false;
                 let mut accepted_in_batch = 0_usize;
-                if !unhealthy_ports_until.is_empty() {
-                    let now = Instant::now();
-                    unhealthy_ports_until.retain(|_, until| *until > now);
-                }
                 let worker_ports_snapshot = relay_worker_ports.load();
                 let worker_ports = worker_ports_snapshot.as_ref();
                 let worker_port_count = worker_ports.len();
+                if !unhealthy_ports_until.is_empty() {
+                    let now = Instant::now();
+                    unhealthy_ports_until
+                        .retain(|port, until| *until > now && worker_ports.contains(port));
+                }
                 loop {
                     if accepted_in_batch >= relay_accept_batch_max {
                         break;
@@ -8479,6 +8480,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 let index = relay_selection_counter.fetch_add(1, Ordering::Relaxed)
                                     % worker_port_count;
                                 Some(worker_ports[index])
+                            } else if unhealthy_ports_until.len() >= worker_port_count {
+                                None
                             } else {
                                 let start_index = relay_selection_counter
                                     .fetch_add(1, Ordering::Relaxed)
