@@ -911,6 +911,10 @@ Post-alpha track acceptance anchors:
      - cluster status JSON now includes `relayDispatchFallbackPerSec` computed per status sample interval from fallback-total deltas,
      - keeps fallback miss pressure visible as both cumulative total and current rate.
      - documented in `docs/book/1189-m39-lasm-cluster-relay-dispatch-fallback-rate-telemetry.md`.
+   - [x] Removed temporary accept-batch stream buffer from cluster accept hot path:
+     - `run_lasm_cluster_accept_loop` now dispatches accepted streams immediately within the accept loop instead of push/clear/drain over a temporary `Vec<TcpStream>`,
+     - preserves dispatch cursor ordering, fallback/saturation/unavailable handling, and batched counter flush semantics while removing per-iteration batch-buffer churn.
+     - documented in `docs/book/1190-m39-lasm-cluster-streaming-accept-dispatch-no-batch-buffer.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
