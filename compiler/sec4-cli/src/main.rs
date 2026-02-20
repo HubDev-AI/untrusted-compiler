@@ -8337,6 +8337,7 @@ enum LasmClusterRelayDispatchError {
 fn dispatch_lasm_cluster_relay_stream_fallback(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
+    relay_dispatch_next_index_by_sender: &[usize],
     start_index_wrapped: usize,
     mut saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
@@ -8348,11 +8349,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
         return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
     }
     debug_assert!(start_index_wrapped < sender_count);
-    let scan_start_index = start_index_wrapped;
-    let mut scan_remaining = sender_count.saturating_sub(1);
-    let first_span_len = scan_remaining.min(sender_count.saturating_sub(scan_start_index));
-    for relay_sender in &relay_senders[scan_start_index..scan_start_index + first_span_len] {
-        match relay_sender.try_send(client_stream) {
+    debug_assert_eq!(relay_dispatch_next_index_by_sender.len(), sender_count);
+    let mut scan_index = start_index_wrapped;
+    let scan_attempts = sender_count.saturating_sub(1);
+    for _ in 0..scan_attempts {
+        match relay_senders[scan_index].try_send(client_stream) {
             Ok(()) => return Ok(()),
             Err(TrySendError::Full(next_stream)) => {
                 saw_live_sender = true;
@@ -8362,20 +8363,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback(
                 client_stream = next_stream;
             }
         }
-        scan_remaining -= 1;
-    }
-    for relay_sender in &relay_senders[..scan_remaining] {
-        match relay_sender.try_send(client_stream) {
-            Ok(()) => return Ok(()),
-            Err(TrySendError::Full(next_stream)) => {
-                saw_live_sender = true;
-                client_stream = next_stream;
-            }
-            Err(TrySendError::Disconnected(next_stream)) => {
-                client_stream = next_stream;
-            }
-        }
-        scan_remaining -= 1;
+        scan_index = relay_dispatch_next_index_by_sender[scan_index];
     }
 
     if saw_live_sender {
@@ -8569,6 +8557,7 @@ fn run_lasm_cluster_accept_loop(
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
+                                    relay_dispatch_next_index_by_sender,
                                     next_dispatch_index,
                                     true,
                                 );
@@ -8600,6 +8589,7 @@ fn run_lasm_cluster_accept_loop(
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
+                                    relay_dispatch_next_index_by_sender,
                                     next_dispatch_index,
                                     false,
                                 );

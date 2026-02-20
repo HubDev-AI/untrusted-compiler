@@ -1011,6 +1011,10 @@ Post-alpha track acceptance anchors:
      - counter flush helpers, fallback dispatch scan helper, and accept-dispatch error helper now carry `#[inline(always)]`,
      - keeps helper decomposition while reducing call overhead risk in release hot paths.
      - documented in `docs/book/1214-m39-lasm-cluster-inline-hints-on-hot-helpers.md`.
+   - [x] Switched fallback relay scan traversal to next-index lookup iteration:
+     - fallback dispatch now consumes the precomputed sender next-index lookup and iterates by fixed attempt count,
+     - removes split-slice scan arithmetic from fallback traversal while preserving sender-attempt ordering.
+     - documented in `docs/book/1215-m39-lasm-cluster-fallback-next-index-iteration.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
