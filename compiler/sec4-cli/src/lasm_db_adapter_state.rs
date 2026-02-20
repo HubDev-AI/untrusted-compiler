@@ -183,8 +183,27 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Conn
 pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     dsn: &str,
 ) -> Result<PostgresClient, String> {
-    PostgresClient::connect(dsn, NoTls)
-        .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))
+    let mut client = PostgresClient::connect(dsn, NoTls)
+        .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))?;
+    let statement_timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(5000);
+    let lock_timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(2000);
+    let timeout_settings = format!(
+        "SET statement_timeout = {statement_timeout_ms}; SET lock_timeout = {lock_timeout_ms};"
+    );
+    client
+        .batch_execute(timeout_settings.as_str())
+        .map_err(|err| {
+            format!("could not configure LASM dynamic postgres session timeouts: {err}")
+        })?;
+    Ok(client)
 }
 
 pub(crate) fn ensure_lasm_dynamic_db_records_postgres_schema(
