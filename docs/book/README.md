@@ -1033,5 +1033,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1061-m39-lasm-cluster-status-json-telemetry.md`
 - `1062-m39-lasm-db-postgres-adapter-runtime-client.md`
 - `1063-m39-lasm-postgres-client-reuse-in-runtime-state.md`
+- `1064-m39-lasm-postgres-client-auto-reconnect.md`
 
 As milestones progress, chapters will be added and linked from this index.
