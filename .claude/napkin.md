@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-20 | self | After merging PR #305 I started the next tx-capacity slice edits on `dev` again before branching. | After each merge, run `git branch --show-current` and create the next `codex/*` branch before the first file edit. |
 | 2026-02-20 | self | I ran `rg` with mismatched shell quotes and hit `zsh: unmatched \"` while scanning command fixtures. | For `rg` patterns containing mixed quotes, wrap the full pattern list in single quotes and avoid nested unescaped double quotes. |
 | 2026-02-20 | self | I launched three Cargo tests in parallel with `multi_tool_use.parallel` during this LASM DB slice and reintroduced package-cache lock contention. | Keep Cargo invocations strictly sequential in this repo; only parallelize read/search/docs commands. |
 | 2026-02-20 | self | I hardcoded sqlite `affected_rows=0` for `db.exec` test expectations and immediately hit a deterministic mismatch (`affected_rows=1` in this runtime path). | For affected-row persistence checks, assert stable shape/constraints unless a specific runtime count is part of the contract under test. |

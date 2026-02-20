@@ -1248,6 +1248,7 @@ struct LasmDynamicResponseState {
     db_records_postgres_dsn: Option<String>,
     db_records_postgres_client: Option<PostgresClient>,
     db_tx_handles: HashMap<i64, i64>,
+    db_tx_max_handles: usize,
     next_db_tx_handle: i64,
     next_db_record_id: u64,
 }
@@ -1278,6 +1279,7 @@ const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
 const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
+const LASM_DB_TX_MAX_HANDLES_DEFAULT: usize = 256;
 
 fn build_lasm_dynamic_response_state(
     explicit_db_base: Option<&Path>,
@@ -1326,6 +1328,7 @@ fn build_lasm_dynamic_response_state(
         .max()
         .unwrap_or(0)
         .saturating_add(1);
+    let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles()?;
     // Tx handles are runtime-local capabilities and must not be resurrected from persisted
     // record history across process restarts.
     let db_tx_handles = HashMap::new();
@@ -1340,6 +1343,7 @@ fn build_lasm_dynamic_response_state(
         db_records_postgres_dsn,
         db_records_postgres_client,
         db_tx_handles,
+        db_tx_max_handles,
         next_db_tx_handle,
         next_db_record_id,
     })
@@ -1385,6 +1389,23 @@ fn resolve_lasm_dynamic_db_records_adapter(
         raw.trim()
     );
     LasmDbRecordsAdapter::RecordsLog
+}
+
+fn resolve_lasm_dynamic_db_tx_max_handles() -> Result<usize, String> {
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_DB_MAX_TX_HANDLES") else {
+        return Ok(LASM_DB_TX_MAX_HANDLES_DEFAULT);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(LASM_DB_TX_MAX_HANDLES_DEFAULT);
+    }
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| "invalid SEC4_RT_LASM_DB_MAX_TX_HANDLES: expected usize >= 1".to_string())?;
+    if parsed == 0 {
+        return Err("invalid SEC4_RT_LASM_DB_MAX_TX_HANDLES: expected usize >= 1".to_string());
+    }
+    Ok(parsed)
 }
 
 fn load_lasm_db_postgres_dsn_from_file(path: &Path) -> Result<String, String> {
@@ -13011,7 +13032,21 @@ fn apply_lasm_internal_db_operation_materialization(
                     }
                     let (db, tx) = match tx_source {
                         ExecTxSource::AllocateFromDb(db_value) => {
-                            let tx_value = allocate_lasm_db_tx_handle(&mut state, db_value);
+                            let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, db_value)
+                            else {
+                                set_lasm_json_response(
+                                    response,
+                                    500,
+                                    &lasm_error_envelope(
+                                        "DB.TX_INTERNAL",
+                                        "internal",
+                                        "db.tx runtime failure",
+                                        500,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            };
                             (db_value, tx_value)
                         }
                         ExecTxSource::ExistingTx(_) => existing_tx_binding
@@ -13488,11 +13523,14 @@ fn classify_lasm_db_runtime_error(
     (500, code, "missing_dependency")
 }
 
-fn allocate_lasm_db_tx_handle(state: &mut LasmDynamicResponseState, db: i64) -> i64 {
+fn allocate_lasm_db_tx_handle(state: &mut LasmDynamicResponseState, db: i64) -> Option<i64> {
+    if state.db_tx_handles.len() >= state.db_tx_max_handles {
+        return None;
+    }
     let tx = state.next_db_tx_handle.max(1);
     state.next_db_tx_handle = tx.saturating_add(1).max(1);
     state.db_tx_handles.insert(tx, db);
-    tx
+    Some(tx)
 }
 
 fn lasm_dynamic_postgres_client_mut(
