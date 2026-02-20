@@ -1152,5 +1152,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1180-m39-lasm-cluster-selection-lookup-maskless-rebuild.md`
 - `1181-m39-run-cluster-relay-accept-batch-max-flag.md`
 - `1182-m39-run-cluster-backend-connect-timing-flags.md`
+- `1183-m39-lasm-cluster-relay-index-aligned-unhealthy-state.md`
 
 As milestones progress, chapters will be added and linked from this index.
