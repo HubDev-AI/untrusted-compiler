@@ -8701,24 +8701,30 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
         }
         return;
     }
-    if unhealthy_ports_until.len() >= worker_port_count {
+
+    let mut healthy_mask = vec![false; worker_port_count];
+    let mut healthy_count = 0_usize;
+    for (index, port) in worker_ports.iter().enumerate() {
+        let is_healthy = !unhealthy_ports_until.contains_key(port);
+        healthy_mask[index] = is_healthy;
+        if is_healthy {
+            healthy_count = healthy_count.saturating_add(1);
+        }
+    }
+    if healthy_count == 0 {
         return;
     }
-    for start_index in 0..worker_port_count {
-        let (tail, head) = worker_ports.split_at(start_index);
-        let mut selected = None;
-        let mut candidate_index = start_index;
-        for candidate in tail.iter().chain(head.iter()) {
-            if !unhealthy_ports_until.contains_key(candidate) {
-                selected = Some(candidate_index);
-                break;
-            }
-            candidate_index = candidate_index.saturating_add(1);
-            if candidate_index >= worker_port_count {
-                candidate_index = 0;
-            }
+
+    let first_healthy_index = healthy_mask
+        .iter()
+        .position(|healthy| *healthy)
+        .expect("healthy_count > 0 ensures at least one healthy index");
+    let mut next_healthy_index = first_healthy_index;
+    for index in (0..worker_port_count).rev() {
+        if healthy_mask[index] {
+            next_healthy_index = index;
         }
-        lookup[start_index] = selected;
+        lookup[index] = Some(next_healthy_index);
     }
 }
 

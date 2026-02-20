@@ -831,6 +831,10 @@ Post-alpha track acceptance anchors:
      - relay unhealthy-prune path now drops `connect_warning_next_allowed` entries for ports no longer present in worker snapshot and clears map when no workers remain,
      - keeps warning-throttle map bounded to active worker ports during autoscale/topology churn.
      - documented in `docs/book/1169-m39-lasm-cluster-connect-warning-map-prune.md`.
+   - [x] Reduced backend-selection lookup rebuild complexity to linear time:
+     - `rebuild_lasm_cluster_backend_selection_lookup` now computes a per-index healthy mask once and fills lookup via reverse next-healthy propagation (`O(n)`),
+     - replaces previous scan-per-start-index fallback rebuild (`O(n^2)`) while preserving unhealthy-skip selection semantics.
+     - documented in `docs/book/1170-m39-lasm-cluster-selection-lookup-linear-rebuild.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
