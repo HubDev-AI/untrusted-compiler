@@ -15965,6 +15965,199 @@ fn main() effects { net } -> Int {
 }
 
 #[test]
+fn run_command_lasm_backend_rejects_stale_exec_tx_handle_after_restart_when_sqlite_adapter() {
+    let project_dir = temp_dir("sec4-run-command-lasm-stale-exec-tx-sqlite");
+    let db_base = project_dir.join("lasm-db");
+    let seed_exec_tx_port = find_available_tcp_port();
+    let stale_exec_tx_port = find_available_tcp_port();
+    let list_port = find_available_tcp_port();
+    fs::create_dir_all(project_dir.join("src")).expect("src directory should be created");
+    fs::write(
+        project_dir.join("sec4.toml"),
+        r#"[package]
+name = "runlasmstaleexectxsqlitecommand"
+version = "0.1.0"
+
+[build]
+entry = "src/main.ut"
+"#,
+    )
+    .expect("manifest should be written");
+    fs::write(
+        project_dir.join("src/main.ut"),
+        r#"fn seedExecTx() effects { net, db.write, db.tx } -> Int {
+  let db = DbCap();
+  let template = validate.nonEmpty(req.query("template"));
+  let params = validate.nonEmpty(req.query("params"));
+  let query = sql.q(template, params);
+  let tx = db.tx(db);
+  db.execTx(tx, query);
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn staleExecTx() effects { net } -> Int {
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Op"), headers.value("execTx"));
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Tx"), headers.value("1"));
+  res.setHeader(
+    headers.name("X-Sec4-Internal-Db-Template"),
+    headers.value("INSERT INTO lasm_db_records (id, op, db, template, params, tx, created_at_ms) VALUES (999, 'leak', 1, 'x', 'x', 1, 1)")
+  );
+  res.setHeader(headers.name("X-Sec4-Internal-Db-Params"), headers.value("0"));
+  res.json(200, "DbExecTxRuntimeResponse", 0);
+  0
+}
+
+fn dbListRecords() effects { net } -> Int {
+  res.json(200, "DbListRecordsResponse", 0);
+  0
+}
+
+fn main() effects { net } -> Int {
+  let router = http.router();
+  http.post(router, "/db/seed-exec-tx", seedExecTx);
+  http.post(router, "/db/stale-exec-tx", staleExecTx);
+  http.get(router, "/db/records", dbListRecords);
+  http.serve(8080, router);
+  0
+}
+"#,
+    )
+    .expect("source should be written");
+
+    let path = project_dir
+        .to_str()
+        .expect("project path should be valid utf-8");
+    let db_base_value = db_base
+        .to_str()
+        .expect("db base path should be valid utf-8")
+        .to_string();
+
+    let run_lasm_oneshot_request = |port: u16, request: String| -> String {
+        let port_value = port.to_string();
+        let mut child = Command::new(cli_bin())
+            .args([
+                "run",
+                "--path",
+                path,
+                "--backend",
+                "lasm",
+                "--db-base",
+                db_base_value.as_str(),
+                "--db-adapter",
+                "sqlite",
+                "--oneshot",
+                "--port",
+                port_value.as_str(),
+                "--serve-timeout-ms",
+                "20000",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("sec4 run command should start");
+
+        let mut response = None;
+        for _ in 0..800 {
+            if let Some(status) = child
+                .try_wait()
+                .expect("run command wait should succeed while connecting")
+            {
+                panic!("run command exited before request with status: {status}");
+            }
+
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(mut stream) => {
+                    stream
+                        .write_all(request.as_bytes())
+                        .expect("request should be written");
+                    let mut body = String::new();
+                    stream
+                        .read_to_string(&mut body)
+                        .expect("response should be readable");
+                    response = Some(body);
+                    break;
+                }
+                Err(_) => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+
+        let response = match response {
+            Some(response) => response,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("run command LASM stale execTx sqlite flow could not connect to server");
+            }
+        };
+
+        let mut status = None;
+        for _ in 0..240 {
+            match child.try_wait().expect("run command wait should succeed") {
+                Some(next) => {
+                    status = Some(next);
+                    break;
+                }
+                None => thread::sleep(Duration::from_millis(25)),
+            }
+        }
+        let status = match status {
+            Some(status) => status,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "run command LASM stale execTx sqlite process did not exit in expected window"
+                );
+            }
+        };
+        assert!(
+            status.success(),
+            "run command LASM stale execTx sqlite process should exit successfully"
+        );
+        response
+    };
+
+    let seed_exec_tx_response = run_lasm_oneshot_request(
+        seed_exec_tx_port,
+        "POST /db/seed-exec-tx?template=SELECT%201&params=alpha HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        seed_exec_tx_response.contains("HTTP/1.1 200 OK")
+            && seed_exec_tx_response.contains("\"op\":\"execTx\"")
+            && seed_exec_tx_response.contains("\"recordId\":1"),
+        "seed execTx response should materialize deterministic first tx record:\n{seed_exec_tx_response}"
+    );
+
+    let stale_exec_tx_response = run_lasm_oneshot_request(
+        stale_exec_tx_port,
+        "POST /db/stale-exec-tx HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        stale_exec_tx_response.contains("HTTP/1.1 400 Bad Request")
+            && stale_exec_tx_response.contains("\"code\":\"DB.EXEC_TX_HANDLE_INVALID\""),
+        "stale execTx handle should be rejected deterministically after restart:\n{stale_exec_tx_response}"
+    );
+
+    let list_response = run_lasm_oneshot_request(
+        list_port,
+        "GET /db/records HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".to_string(),
+    );
+    assert!(
+        list_response.contains("HTTP/1.1 200 OK"),
+        "db records response should contain deterministic 200 status:\n{list_response}"
+    );
+    assert!(
+        list_response.contains("\"count\":1")
+            && list_response.contains("\"op\":\"execTx\"")
+            && !list_response.contains("\"op\":\"leak\""),
+        "stale tx-handle flow should not execute sqlite mutation side effects after restart:\n{list_response}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_exec_and_query_one_with_postgres_adapter_when_dsn_available() {
     let Ok(dsn_raw) = std::env::var("SEC4_TEST_POSTGRES_DSN") else {
         eprintln!("skipping postgres LASM integration test: SEC4_TEST_POSTGRES_DSN not set");
