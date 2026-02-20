@@ -9073,17 +9073,24 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 );
                 let saturation_events = autoscale_saturation_events.swap(0, Ordering::Relaxed);
                 let mut scale_up_step_budget = autoscale_config.autoscale_scale_up_step;
+                let current_workers = state.workers.len();
                 if saturation_events > 0 {
-                    let boosted_target = state
-                        .workers
-                        .len()
-                        .saturating_add(autoscale_config.autoscale_saturation_boost_step)
+                    let saturation_batch_size = LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH.max(1);
+                    let saturation_batches = saturation_events
+                        .saturating_add(saturation_batch_size.saturating_sub(1))
+                        / saturation_batch_size;
+                    let dynamic_boost_step = autoscale_config
+                        .autoscale_saturation_boost_step
+                        .saturating_mul(saturation_batches.max(1))
+                        .max(autoscale_config.autoscale_saturation_boost_step)
+                        .max(1)
+                        .min(autoscale_config.max_instances);
+                    let boosted_target = current_workers
+                        .saturating_add(dynamic_boost_step)
                         .min(autoscale_config.max_instances);
                     desired = desired.max(boosted_target);
-                    scale_up_step_budget =
-                        scale_up_step_budget.max(autoscale_config.autoscale_saturation_boost_step);
+                    scale_up_step_budget = scale_up_step_budget.max(dynamic_boost_step);
                 }
-                let current_workers = state.workers.len();
                 let up_target = if desired > current_workers {
                     desired.min(current_workers.saturating_add(scale_up_step_budget))
                 } else {
