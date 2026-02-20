@@ -135,6 +135,10 @@ enum Commands {
         #[arg(long)]
         cluster_relay_accept_batch_max: Option<usize>,
         #[arg(long)]
+        cluster_backend_connect_timeout_ms: Option<u64>,
+        #[arg(long)]
+        cluster_backend_connect_cooldown_ms: Option<u64>,
+        #[arg(long)]
         cluster_status_json: Option<PathBuf>,
         #[arg(long, hide = true, default_value_t = false)]
         reuse_port: bool,
@@ -506,6 +510,8 @@ fn main() {
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_backend_connect_timeout_ms,
+            cluster_backend_connect_cooldown_ms,
             cluster_status_json,
             reuse_port,
             backend,
@@ -540,6 +546,8 @@ fn main() {
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_backend_connect_timeout_ms,
+            cluster_backend_connect_cooldown_ms,
             cluster_status_json.as_deref(),
             reuse_port,
             backend,
@@ -7067,6 +7075,8 @@ fn cmd_run(
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: Option<usize>,
+    cluster_backend_connect_timeout_ms: Option<u64>,
+    cluster_backend_connect_cooldown_ms: Option<u64>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
     backend: RunBackend,
@@ -7122,6 +7132,14 @@ fn cmd_run(
     }
     if cluster_relay_accept_batch_max == Some(0) {
         eprintln!("run failed: --cluster-relay-accept-batch-max must be >= 1");
+        return Err(2);
+    }
+    if cluster_backend_connect_timeout_ms == Some(0) {
+        eprintln!("run failed: --cluster-backend-connect-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if cluster_backend_connect_cooldown_ms == Some(0) {
+        eprintln!("run failed: --cluster-backend-connect-cooldown-ms must be >= 1");
         return Err(2);
     }
     if max_header_bytes == Some(0) {
@@ -7295,6 +7313,18 @@ fn cmd_run(
         );
         return Err(2);
     }
+    if backend != RunBackend::Lasm && cluster_backend_connect_timeout_ms.is_some() {
+        eprintln!(
+            "run failed: --cluster-backend-connect-timeout-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && cluster_backend_connect_cooldown_ms.is_some() {
+        eprintln!(
+            "run failed: --cluster-backend-connect-cooldown-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if backend != RunBackend::Lasm && cluster_status_json.is_some() {
         eprintln!("run failed: --cluster-status-json is only supported with --backend lasm");
         return Err(2);
@@ -7320,6 +7350,20 @@ fn cmd_run(
     if backend == RunBackend::Lasm && !cluster_mode && cluster_relay_accept_batch_max.is_some() {
         eprintln!(
             "run failed: --cluster-relay-accept-batch-max requires cluster mode (--instances > 1)"
+        );
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_backend_connect_timeout_ms.is_some()
+    {
+        eprintln!(
+            "run failed: --cluster-backend-connect-timeout-ms requires cluster mode (--instances > 1)"
+        );
+        return Err(2);
+    }
+    if backend == RunBackend::Lasm && !cluster_mode && cluster_backend_connect_cooldown_ms.is_some()
+    {
+        eprintln!(
+            "run failed: --cluster-backend-connect-cooldown-ms requires cluster mode (--instances > 1)"
         );
         return Err(2);
     }
@@ -7383,6 +7427,8 @@ fn cmd_run(
             cluster_relay_queue,
             cluster_accept_workers,
             cluster_relay_accept_batch_max,
+            cluster_backend_connect_timeout_ms,
+            cluster_backend_connect_cooldown_ms,
             cluster_status_json,
             reuse_port,
         );
@@ -9688,6 +9734,8 @@ fn cmd_run_lasm_backend(
     cluster_relay_queue: Option<usize>,
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: Option<usize>,
+    cluster_backend_connect_timeout_ms_override: Option<u64>,
+    cluster_backend_connect_cooldown_ms_override: Option<u64>,
     cluster_status_json: Option<&Path>,
     reuse_port: bool,
 ) -> Result<(), i32> {
@@ -9878,9 +9926,13 @@ fn cmd_run_lasm_backend(
             return Err(2);
         }
     };
-    let cluster_backend_connect_timeout_ms = resolve_lasm_cluster_backend_connect_timeout_ms();
-    let cluster_backend_connect_cooldown_ms =
-        resolve_lasm_cluster_backend_connect_cooldown_ms(cluster_backend_connect_timeout_ms);
+    let cluster_backend_connect_timeout_ms = resolve_lasm_cluster_backend_connect_timeout_ms(
+        cluster_backend_connect_timeout_ms_override,
+    );
+    let cluster_backend_connect_cooldown_ms = resolve_lasm_cluster_backend_connect_cooldown_ms(
+        cluster_backend_connect_cooldown_ms_override,
+        cluster_backend_connect_timeout_ms,
+    );
     let effective_cluster_relay_accept_batch_max =
         resolve_lasm_cluster_relay_accept_batch_max(cluster_relay_accept_batch_max);
 
@@ -9919,6 +9971,18 @@ fn cmd_run_lasm_backend(
     if fixed_cluster_reuse_port_mode && cluster_relay_accept_batch_max.is_some() {
         eprintln!(
             "run failed: --cluster-relay-accept-batch-max is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode && cluster_backend_connect_timeout_ms_override.is_some() {
+        eprintln!(
+            "run failed: --cluster-backend-connect-timeout-ms is not used in fixed reuse-port cluster mode"
+        );
+        return Err(2);
+    }
+    if fixed_cluster_reuse_port_mode && cluster_backend_connect_cooldown_ms_override.is_some() {
+        eprintln!(
+            "run failed: --cluster-backend-connect-cooldown-ms is not used in fixed reuse-port cluster mode"
         );
         return Err(2);
     }
@@ -10866,8 +10930,11 @@ fn resolve_lasm_overflow_probe_timeout_ms(
     Ok(parsed.min(effective_timeout_ms).max(1))
 }
 
-fn resolve_lasm_cluster_backend_connect_timeout_ms() -> u64 {
+fn resolve_lasm_cluster_backend_connect_timeout_ms(explicit_override: Option<u64>) -> u64 {
     let default_value = 100_u64;
+    if let Some(value) = explicit_override {
+        return value.clamp(25, 5_000);
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_TIMEOUT_MS") else {
         return default_value;
     };
@@ -10883,8 +10950,14 @@ fn resolve_lasm_cluster_backend_connect_timeout_ms() -> u64 {
         .unwrap_or(default_value)
 }
 
-fn resolve_lasm_cluster_backend_connect_cooldown_ms(connect_timeout_ms: u64) -> u64 {
+fn resolve_lasm_cluster_backend_connect_cooldown_ms(
+    explicit_override: Option<u64>,
+    connect_timeout_ms: u64,
+) -> u64 {
     let default_value = connect_timeout_ms.saturating_mul(2).clamp(150, 2_000);
+    if let Some(value) = explicit_override {
+        return value.clamp(25, 10_000);
+    }
     let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_BACKEND_CONNECT_COOLDOWN_MS") else {
         return default_value;
     };
