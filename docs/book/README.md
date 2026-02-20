@@ -1063,5 +1063,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1091-m39-lasm-query-one-records-log-parity.md`
 - `1092-m39-lasm-ephemeral-tx-handle-runtime-scope.md`
 - `1093-m39-lasm-exec-affected-rows-runtime-metadata.md`
+- `1094-m39-lasm-db-unique-conflict-error-classification.md`
 
 As milestones progress, chapters will be added and linked from this index.

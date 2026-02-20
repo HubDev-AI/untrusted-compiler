@@ -13333,6 +13333,17 @@ fn classify_lasm_db_runtime_error(
         };
         return (400, code, "validation");
     }
+    if message.contains("UNIQUE constraint failed")
+        || message.contains("duplicate key value violates unique constraint")
+    {
+        let code = match operation {
+            "exec" => "DB.EXEC_CONFLICT",
+            "execTx" => "DB.EXEC_TX_CONFLICT",
+            "queryOne" => "DB.QUERY_ONE_CONFLICT",
+            _ => "DB.OPERATION_CONFLICT",
+        };
+        return (409, code, "conflict");
+    }
     let code = match operation {
         "exec" => "DB.EXEC_FAILED",
         "execTx" => "DB.EXEC_TX_FAILED",
