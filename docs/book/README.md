@@ -1039,5 +1039,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1067-m39-lasm-postgres-placeholder-arity-validation.md`
 - `1068-m39-lasm-postgres-literal-aware-placeholder-rendering.md`
 - `1069-m39-lasm-alpha-full-postgres-operator-flow.md`
+- `1070-m39-lasm-postgres-dollar-quoted-placeholder-preservation.md`
 
 As milestones progress, chapters will be added and linked from this index.
