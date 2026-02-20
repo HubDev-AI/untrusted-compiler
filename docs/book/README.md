@@ -1181,5 +1181,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1209-m39-lasm-cluster-relay-vector-preallocation.md`
 - `1210-m39-lasm-cluster-accept-next-index-lookup.md`
 - `1211-m39-lasm-cluster-relay-selection-next-index-lookup.md`
+- `1212-m39-lasm-cluster-accept-next-index-single-read.md`
 
 As milestones progress, chapters will be added and linked from this index.

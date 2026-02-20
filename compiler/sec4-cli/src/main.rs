@@ -8554,8 +8554,9 @@ fn run_lasm_cluster_accept_loop(
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
                         let stream_dispatch_start = relay_dispatch_cursor;
-                        relay_dispatch_cursor =
+                        let next_dispatch_index =
                             relay_dispatch_next_index_by_sender[stream_dispatch_start];
+                        relay_dispatch_cursor = next_dispatch_index;
 
                         match relay_senders[stream_dispatch_start].try_send(client_stream) {
                             Ok(()) => {
@@ -8563,12 +8564,10 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Full(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let fallback_start =
-                                    relay_dispatch_next_index_by_sender[stream_dispatch_start];
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
-                                    fallback_start,
+                                    next_dispatch_index,
                                     true,
                                 );
                                 if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
@@ -8587,12 +8586,10 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(TrySendError::Disconnected(stream)) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let fallback_start =
-                                    relay_dispatch_next_index_by_sender[stream_dispatch_start];
                                 let dispatch_result = dispatch_lasm_cluster_relay_stream_fallback(
                                     stream,
                                     relay_senders,
-                                    fallback_start,
+                                    next_dispatch_index,
                                     false,
                                 );
                                 if let Err(message) = handle_lasm_cluster_accept_dispatch_result(
