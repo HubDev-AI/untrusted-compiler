@@ -726,6 +726,11 @@ Post-alpha track acceptance anchors:
      - new LASM-only cluster flag: `--cluster-accept-workers <n>` (`n >= 1`) to override accept-loop parallelism without env-only tuning,
      - guardrails enforce LASM backend + cluster mode only, and reject the flag in fixed reuse-port mode where proxy relay is bypassed.
      - documented in `docs/book/1145-m39-lasm-cluster-accept-workers-cli-flag.md`.
+   - [x] Switched cluster queue-shard dispatch cursor to a shared atomic across accept workers:
+     - accept-loop queue dispatch now uses one global `AtomicUsize` cursor shared by all accept worker threads instead of per-thread local round-robin state,
+     - keeps dispatch and relay backend selection decoupled while removing per-accept-worker cursor skew under parallel intake,
+     - short LASM cluster probe after this slice recorded `1,431,766` requests in `20s` (`~71.58k req/s`, `p99 9.08ms`, peak RSS `~27,296 KB`) under default settings.
+     - documented in `docs/book/1146-m39-lasm-cluster-shared-accept-dispatch-cursor.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
