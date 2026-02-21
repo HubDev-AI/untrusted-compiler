@@ -7006,17 +7006,42 @@ fn cmd_run(
         eprintln!("run failed: use only one of --db-postgres-dsn or --db-postgres-dsn-file");
         return Err(2);
     }
-    let has_explicit_postgres_dsn = db_postgres_dsn.is_some() || db_postgres_dsn_file.is_some();
-    let effective_db_adapter = if backend == RunBackend::Lasm && has_explicit_postgres_dsn {
+    let postgres_runtime_overrides = db_postgres_dsn.is_some()
+        || db_postgres_dsn_file.is_some()
+        || db_postgres_statement_timeout_ms.is_some()
+        || db_postgres_lock_timeout_ms.is_some();
+    let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some();
+    if backend == RunBackend::Lasm
+        && postgres_runtime_overrides
+        && sqlite_runtime_overrides
+        && db_adapter.is_none()
+    {
+        eprintln!(
+            "run failed: db timeout overrides target different adapters; set --db-adapter explicitly"
+        );
+        return Err(2);
+    }
+    let effective_db_adapter = if backend == RunBackend::Lasm && postgres_runtime_overrides {
         match db_adapter {
             Some(RunDbAdapter::Postgres) => Some(RunDbAdapter::Postgres),
             Some(_) => {
                 eprintln!(
-                    "run failed: --db-postgres-dsn and --db-postgres-dsn-file require --db-adapter postgres when adapter is set explicitly"
+                    "run failed: postgres DSN/timeout overrides require --db-adapter postgres when adapter is set explicitly"
                 );
                 return Err(2);
             }
             None => Some(RunDbAdapter::Postgres),
+        }
+    } else if backend == RunBackend::Lasm && sqlite_runtime_overrides {
+        match db_adapter {
+            Some(RunDbAdapter::Sqlite) => Some(RunDbAdapter::Sqlite),
+            Some(_) => {
+                eprintln!(
+                    "run failed: --db-sqlite-busy-timeout-ms requires --db-adapter sqlite when adapter is set explicitly"
+                );
+                return Err(2);
+            }
+            None => Some(RunDbAdapter::Sqlite),
         }
     } else {
         db_adapter
