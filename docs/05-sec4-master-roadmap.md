@@ -1219,6 +1219,10 @@ Post-alpha track acceptance anchors:
      - when degraded mode has exactly one live relay shard (`relay_live_sender_count == 1`), accept dispatch now reuses cached `relay_single_live_sender_index` and pins dispatch cursor directly to it,
      - avoids repeated generic live-shard scan lookups on each request in single-live-shard degraded states while preserving deterministic unavailable behavior if no live shard remains.
      - documented in `docs/book/1264-m39-lasm-single-live-shard-dispatch-fast-path.md`.
+   - [x] Replaced relay-shard liveness bitset with byte flags in dispatch hot path:
+     - multi-sender liveness tracking now uses `Vec<u8>` (`LIVE=1` / `DEAD=0`) instead of `Vec<bool>` specialized bitset storage for relay dispatch and fallback checks,
+     - keeps liveness semantics unchanged while avoiding `Vec<bool>` proxy/bitset overhead in tight accept/fallback loops.
+     - documented in `docs/book/1265-m39-lasm-relay-live-byte-flag-tracking.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
