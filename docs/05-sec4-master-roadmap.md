@@ -1103,6 +1103,10 @@ Post-alpha track acceptance anchors:
      - lookup rebuild now reads unhealthy markers with direct indexed access (`unhealthy_ports_until_by_index[index]`) and a debug precondition on slice length,
      - removes repeated bounds/option combinator overhead in selection lookup scan loops.
      - documented in `docs/book/1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`.
+   - [x] Added pointer-aware status snapshot equality for worker-port sets:
+     - `LasmClusterStatusSnapshot` now uses manual `PartialEq` with `Arc::ptr_eq` short-circuit for `worker_ports` before slice fallback comparison,
+     - preserves unchanged-snapshot semantics while reducing repeated deep vector comparisons when worker-port snapshot pointer is unchanged.
+     - documented in `docs/book/1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
