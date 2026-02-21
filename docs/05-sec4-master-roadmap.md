@@ -1351,6 +1351,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi now handles `scan_live_target <= 1` with one shared single-attempt branch instead of duplicated `== 0` and `== 1` blocks,
      - preserves deterministic saturated/unavailable outcomes while reducing hot-path branch depth and duplicate send/disconnect handling logic.
      - documented in `docs/book/1297-m39-lasm-fallback-single-attempt-branch-merge.md`.
+   - [x] Extracted shared fallback terminal-result helper across single/dual/multi paths:
+     - added inline helper `lasm_cluster_fallback_terminal_dispatch_error(...)` and routed repeated saturated/unavailable return branches through it,
+     - reduces duplicate terminal-result branch logic in fallback dispatch paths while preserving deterministic error envelopes.
+     - documented in `docs/book/1298-m39-lasm-fallback-terminal-result-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

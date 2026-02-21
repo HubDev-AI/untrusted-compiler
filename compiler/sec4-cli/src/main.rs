@@ -8358,6 +8358,19 @@ enum LasmClusterRelayDispatchError {
 }
 
 #[inline(always)]
+fn lasm_cluster_fallback_terminal_dispatch_error(
+    client_stream: TcpStream,
+    saw_live_sender: bool,
+    relay_live_sender_count: usize,
+) -> Result<(), LasmClusterRelayDispatchError> {
+    if saw_live_sender && relay_live_sender_count > 0 {
+        Err(LasmClusterRelayDispatchError::Saturated(client_stream))
+    } else {
+        Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
+    }
+}
+
+#[inline(always)]
 fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
     debug_assert!(count > 0);
     if index + 1 == count {
@@ -8651,11 +8664,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
         .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
         != LASM_CLUSTER_RELAY_SENDER_LIVE
     {
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     match relay_senders[alternate_live_index].try_send(client_stream) {
         Ok(()) => Ok(()),
@@ -8664,11 +8677,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
             relay_sender_live[alternate_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
             *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
             *relay_all_senders_live = false;
-            if saw_live_sender && *relay_live_sender_count > 0 {
-                Err(LasmClusterRelayDispatchError::Saturated(stream))
-            } else {
-                Err(LasmClusterRelayDispatchError::Unavailable(stream))
-            }
+            lasm_cluster_fallback_terminal_dispatch_error(
+                stream,
+                saw_live_sender,
+                *relay_live_sender_count,
+            )
         }
     }
 }
@@ -8690,11 +8703,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_single_live(
         .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
         != LASM_CLUSTER_RELAY_SENDER_LIVE
     {
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     match relay_senders[single_live_index].try_send(client_stream) {
         Ok(()) => Ok(()),
@@ -8703,11 +8716,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_single_live(
             relay_sender_live[single_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
             *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
             *relay_all_senders_live = false;
-            if saw_live_sender && *relay_live_sender_count > 0 {
-                Err(LasmClusterRelayDispatchError::Saturated(stream))
-            } else {
-                Err(LasmClusterRelayDispatchError::Unavailable(stream))
-            }
+            lasm_cluster_fallback_terminal_dispatch_error(
+                stream,
+                saw_live_sender,
+                *relay_live_sender_count,
+            )
         }
     }
 }
@@ -8747,11 +8760,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 }
             }
         }
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     let mut scan_index = start_index_wrapped;
     let scan_slot_limit = sender_count.saturating_sub(1);
@@ -8772,11 +8785,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             }
             scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
         }
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     let scan_live_target = relay_live_sender_count.saturating_sub(1);
     if scan_live_target <= 1 {
@@ -8799,11 +8812,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 }
             }
         }
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     if scan_live_target == 2 {
         if let Some(first_live_index) = resolve_lasm_cluster_next_live_sender_index(
@@ -8845,11 +8858,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 }
             }
         }
-        return if saw_live_sender && *relay_live_sender_count > 0 {
-            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-        } else {
-            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-        };
+        return lasm_cluster_fallback_terminal_dispatch_error(
+            client_stream,
+            saw_live_sender,
+            *relay_live_sender_count,
+        );
     }
     let mut scan_live_target_dynamic = scan_live_target;
     let mut scanned_slots = 0usize;
@@ -8901,11 +8914,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         scanned_slots = scanned_slots.saturating_add(advanced_slots);
     }
 
-    if saw_live_sender && *relay_live_sender_count > 0 {
-        Err(LasmClusterRelayDispatchError::Saturated(client_stream))
-    } else {
-        Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-    }
+    lasm_cluster_fallback_terminal_dispatch_error(
+        client_stream,
+        saw_live_sender,
+        *relay_live_sender_count,
+    )
 }
 
 #[inline(always)]
