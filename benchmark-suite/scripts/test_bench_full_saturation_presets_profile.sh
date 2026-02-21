@@ -20,5 +20,9 @@ if ! grep -q 'clusterRelayWorkers=16' <<<"${out}"; then
   echo "missing latency relay defaults in combined presets target" >&2
   exit 1
 fi
+if [ "$(grep -c 'clusterRelayPumpBatchMax=auto' <<<"${out}")" -lt 2 ]; then
+  echo "missing relay-pump-batch default marker in combined presets target" >&2
+  exit 1
+fi
 
 echo "bench_full_saturation_presets_profile test passed"

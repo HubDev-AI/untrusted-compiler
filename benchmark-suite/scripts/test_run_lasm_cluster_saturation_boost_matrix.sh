@@ -18,6 +18,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
   --autoscale-scale-down-step 1 \
   --cluster-accept-workers 3 \
   --cluster-relay-accept-batch-max 123 \
+  --cluster-relay-pump-batch-max 456 \
   --out results/summaries/custom-saturation-boost-matrix.json \
   --analysis-out results/summaries/custom-saturation-boost-analysis.json \
   --verify-recommended \
@@ -54,6 +55,10 @@ if ! grep -q 'clusterAcceptWorkers=3' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayAcceptBatchMax=123' <<<"$out"; then
   echo "saturation boost matrix dry-run missing relay accept batch override output" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayPumpBatchMax=456' <<<"$out"; then
+  echo "saturation boost matrix dry-run missing relay pump batch override output" >&2
   exit 1
 fi
 if ! grep -q "out=${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-7.json" <<<"$out"; then

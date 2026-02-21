@@ -9578,15 +9578,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                     relay_pump_cursor = 0;
                 } else {
-                    let mut pumped = 0_usize;
-                    while pumped < relay_pump_batch_max {
-                        if relay_connections.is_empty() {
-                            relay_pump_cursor = 0;
-                            break;
-                        }
-                        if relay_pump_cursor >= relay_connections.len() {
-                            relay_pump_cursor = 0;
-                        }
+                    if relay_pump_cursor >= relay_connections.len() {
+                        relay_pump_cursor = 0;
+                    }
+                    let mut pump_budget = relay_pump_batch_max.min(relay_connections.len());
+                    while pump_budget > 0 {
                         let relay_len_before_step = relay_connections.len();
                         match relay_connections[relay_pump_cursor].pump_once() {
                             Ok(LasmClusterRelayPumpStep::Progressed) => {
@@ -9595,28 +9591,30 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                     relay_pump_cursor,
                                     relay_len_before_step,
                                 );
-                                pumped += 1;
+                                pump_budget -= 1;
                             }
                             Ok(LasmClusterRelayPumpStep::Idle) => {
                                 relay_pump_cursor = lasm_cluster_next_index_wrapped(
                                     relay_pump_cursor,
                                     relay_len_before_step,
                                 );
-                                pumped += 1;
+                                pump_budget -= 1;
                             }
                             Ok(LasmClusterRelayPumpStep::Complete) => {
                                 let relay = relay_connections.swap_remove(relay_pump_cursor);
                                 if relay_buffer_pool.len() < relay_buffer_pool_max {
                                     relay_buffer_pool.push(relay.into_buffers());
                                 }
-                                if relay_pump_cursor >= relay_connections.len()
-                                    && !relay_connections.is_empty()
-                                {
-                                    relay_pump_cursor = 0;
-                                }
                                 active_connection_decrements_local += 1;
                                 progressed = true;
-                                pumped += 1;
+                                pump_budget -= 1;
+                                if relay_connections.is_empty() {
+                                    relay_pump_cursor = 0;
+                                    break;
+                                }
+                                if relay_pump_cursor >= relay_connections.len() {
+                                    relay_pump_cursor = 0;
+                                }
                             }
                             Err(err) => {
                                 let now = Instant::now();
@@ -9633,14 +9631,16 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 if relay_buffer_pool.len() < relay_buffer_pool_max {
                                     relay_buffer_pool.push(relay.into_buffers());
                                 }
-                                if relay_pump_cursor >= relay_connections.len()
-                                    && !relay_connections.is_empty()
-                                {
-                                    relay_pump_cursor = 0;
-                                }
                                 active_connection_decrements_local += 1;
                                 progressed = true;
-                                pumped += 1;
+                                pump_budget -= 1;
+                                if relay_connections.is_empty() {
+                                    relay_pump_cursor = 0;
+                                    break;
+                                }
+                                if relay_pump_cursor >= relay_connections.len() {
+                                    relay_pump_cursor = 0;
+                                }
                             }
                         }
                     }

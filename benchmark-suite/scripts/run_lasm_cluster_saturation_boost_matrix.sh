@@ -30,6 +30,7 @@ Options:
   --cluster-relay-queue <n>                        Optional relay queue override
   --cluster-accept-workers <n>                     Optional relay accept-worker override
   --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
+  --cluster-relay-pump-batch-max <n>               Optional relay pump batch max override
   --out <path>                                     Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
   --skip-analysis                                  Skip post-run matrix analysis/recommendation output
@@ -61,6 +62,7 @@ cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
+cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -158,6 +160,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --cluster-relay-accept-batch-max)
       cluster_relay_accept_batch_max="${2:-}"
+      shift 2
+      ;;
+    --cluster-relay-pump-batch-max)
+      cluster_relay_pump_batch_max="${2:-}"
       shift 2
       ;;
     --out)
@@ -291,6 +297,7 @@ sec4 LASM saturation boost matrix plan:
   clusterRelayQueue=${cluster_relay_queue:-auto}
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
+  clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
   out=${out_path}
   analysisOut=${analysis_out_path}
   skipAnalysis=${skip_analysis}
@@ -337,6 +344,9 @@ for step in "${boost_steps[@]}"; do
   if [ -n "${cluster_relay_accept_batch_max}" ]; then
     cmd+=(--cluster-relay-accept-batch-max "${cluster_relay_accept_batch_max}")
   fi
+  if [ -n "${cluster_relay_pump_batch_max}" ]; then
+    cmd+=(--cluster-relay-pump-batch-max "${cluster_relay_pump_batch_max}")
+  fi
 
   if [ "${dry_run}" = "true" ]; then
     cmd+=(--dry-run)
@@ -359,6 +369,7 @@ for step in "${boost_steps[@]}"; do
       --argjson clusterRelayWorkersResolved "$(jq '.run.clusterRelayWorkersResolved // null' "${step_out}")" \
       --argjson clusterAcceptWorkersResolved "$(jq '.run.clusterAcceptWorkersResolved // null' "${step_out}")" \
       --argjson clusterRelayAcceptBatchMaxResolved "$(jq '.run.clusterRelayAcceptBatchMaxResolved // null' "${step_out}")" \
+      --argjson clusterRelayPumpBatchMaxResolved "$(jq '.run.clusterRelayPumpBatchMaxResolved // null' "${step_out}")" \
       --argjson clusterRelayQueueCapacityResolved "$(jq '.run.clusterRelayQueueCapacityResolved // null' "${step_out}")" \
       --argjson clusterRelayQueueShardCapacityResolved "$(jq '.run.clusterRelayQueueShardCapacityResolved // null' "${step_out}")" \
       '{
@@ -372,6 +383,7 @@ for step in "${boost_steps[@]}"; do
         clusterRelayWorkersResolved: $clusterRelayWorkersResolved,
         clusterAcceptWorkersResolved: $clusterAcceptWorkersResolved,
         clusterRelayAcceptBatchMaxResolved: $clusterRelayAcceptBatchMaxResolved,
+        clusterRelayPumpBatchMaxResolved: $clusterRelayPumpBatchMaxResolved,
         clusterRelayQueueCapacityResolved: $clusterRelayQueueCapacityResolved,
         clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved
       }'
@@ -403,6 +415,7 @@ jq -n \
   --arg clusterRelayQueue "${cluster_relay_queue:-auto}" \
   --arg clusterAcceptWorkers "${cluster_accept_workers:-auto}" \
   --arg clusterRelayAcceptBatchMax "${cluster_relay_accept_batch_max:-auto}" \
+  --arg clusterRelayPumpBatchMax "${cluster_relay_pump_batch_max:-auto}" \
   --argjson threads "${threads}" \
   --argjson connections "${connections}" \
   --argjson targetRequests "${target_requests}" \
@@ -421,7 +434,8 @@ jq -n \
       clusterRelayWorkers: $clusterRelayWorkers,
       clusterRelayQueue: $clusterRelayQueue,
       clusterAcceptWorkers: $clusterAcceptWorkers,
-      clusterRelayAcceptBatchMax: $clusterRelayAcceptBatchMax
+      clusterRelayAcceptBatchMax: $clusterRelayAcceptBatchMax,
+      clusterRelayPumpBatchMax: $clusterRelayPumpBatchMax
     },
     boostSteps: $boostSteps,
     runs: $runs
@@ -468,6 +482,9 @@ if [ "${skip_analysis}" != "true" ]; then
     fi
     if [ -n "${cluster_relay_accept_batch_max}" ]; then
       verify_cmd+=(--cluster-relay-accept-batch-max "${cluster_relay_accept_batch_max}")
+    fi
+    if [ -n "${cluster_relay_pump_batch_max}" ]; then
+      verify_cmd+=(--cluster-relay-pump-batch-max "${cluster_relay_pump_batch_max}")
     fi
     echo "verifyingRecommendedBoostStep=${recommended_step}"
     "${verify_cmd[@]}"
