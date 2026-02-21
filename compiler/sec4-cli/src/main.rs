@@ -9019,6 +9019,7 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(send_error) => {
                                 listener_dispatch_fallback_total_local += 1;
+                                let mut live_count_before_fallback = relay_live_sender_count;
                                 let (stream, saw_live_sender) = match send_error {
                                     TrySendError::Full(stream) => (stream, true),
                                     TrySendError::Disconnected(stream) => {
@@ -9035,6 +9036,7 @@ fn run_lasm_cluster_accept_loop(
                                             &mut relay_single_live_sender_index,
                                             &mut relay_dual_live_sender_indices,
                                         );
+                                        live_count_before_fallback = relay_live_sender_count;
                                         (stream, false)
                                     }
                                 };
@@ -9093,14 +9095,16 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_dispatch_cursor,
                                     );
                                 }
-                                refresh_lasm_cluster_live_sender_hints(
-                                    relay_sender_live.as_slice(),
-                                    relay_live_sender_count,
-                                    &mut relay_single_live_sender_index,
-                                    &mut relay_dual_live_sender_indices,
-                                );
-                                relay_live_sender_count_observed
-                                    .fetch_min(relay_live_sender_count, Ordering::Relaxed);
+                                if relay_live_sender_count != live_count_before_fallback {
+                                    refresh_lasm_cluster_live_sender_hints(
+                                        relay_sender_live.as_slice(),
+                                        relay_live_sender_count,
+                                        &mut relay_single_live_sender_index,
+                                        &mut relay_dual_live_sender_indices,
+                                    );
+                                    relay_live_sender_count_observed
+                                        .fetch_min(relay_live_sender_count, Ordering::Relaxed);
+                                }
                                 match dispatch_result {
                                     Ok(()) => {
                                         listener_enqueued_local += 1;
