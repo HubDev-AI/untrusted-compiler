@@ -421,6 +421,15 @@ jq -n \
       relayDispatchShortCircuitTotalFixed: ($fixed.run.clusterRelayDispatchSaturationShortCircuitTotal // null),
       relayDispatchShortCircuitPerSecProxy: ($proxy.run.clusterRelayDispatchSaturationShortCircuitPerSec // null),
       relayDispatchShortCircuitPerSecFixed: ($fixed.run.clusterRelayDispatchSaturationShortCircuitPerSec // null),
+      relayLiveSenderCountProxy: ($proxy.run.clusterRelayLiveSenderCountResolved // null),
+      relayLiveSenderCountFixed: ($fixed.run.clusterRelayLiveSenderCountResolved // null),
+      relayLiveSenderCountDelta: (
+        if ($proxy.run.clusterRelayLiveSenderCountResolved // null) == null
+           or ($fixed.run.clusterRelayLiveSenderCountResolved // null) == null
+        then null
+        else (($fixed.run.clusterRelayLiveSenderCountResolved // 0) - ($proxy.run.clusterRelayLiveSenderCountResolved // 0))
+        end
+      ),
       relayDispatchShortCircuitTotalDelta: (
         if ($proxy.run.clusterRelayDispatchSaturationShortCircuitTotal // null) == null
            or ($fixed.run.clusterRelayDispatchSaturationShortCircuitTotal // null) == null

@@ -1227,6 +1227,10 @@ Post-alpha track acceptance anchors:
      - status writer now includes `relayLiveSenderCount` in cluster status JSON payloads so relay-shard degradation is directly observable during load/probe runs,
      - value is sourced from shared accept-loop liveness counters and exposed alongside existing relay dispatch fallback/short-circuit telemetry.
      - documented in `docs/book/1266-m39-lasm-cluster-status-relay-live-shard-telemetry.md`.
+   - [x] Propagated relay live-shard telemetry through LASM benchmark artifacts:
+     - capacity probe summaries now include `run.clusterRelayLiveSenderCountResolved` from cluster status snapshots,
+     - saturation matrix/analyzer/summary and mode-compare/report outputs now thread and render relay live-shard metrics for operator comparison.
+     - documented in `docs/book/1267-m39-lasm-live-shard-telemetry-artifact-propagation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

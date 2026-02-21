@@ -450,6 +450,7 @@ resolved_relay_queue_capacity="null"
 resolved_relay_queue_shard_capacity="null"
 resolved_relay_dispatch_short_circuit_total="null"
 resolved_relay_dispatch_short_circuit_per_sec="null"
+resolved_relay_live_sender_count="null"
 if [ -f "$raw_file" ]; then
   observed_requests_raw="$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$raw_file")"
   if is_number "$observed_requests_raw"; then
@@ -503,6 +504,10 @@ if [ -f "$status_json_file" ]; then
   if is_number "$status_relay_dispatch_short_circuit_per_sec"; then
     resolved_relay_dispatch_short_circuit_per_sec="$status_relay_dispatch_short_circuit_per_sec"
   fi
+  status_relay_live_sender_count="$(jq -r '.relayLiveSenderCount // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_live_sender_count"; then
+    resolved_relay_live_sender_count="$status_relay_live_sender_count"
+  fi
 fi
 
 target_met="false"
@@ -552,6 +557,7 @@ jq -n \
   --argjson resolvedRelayQueueShardCapacity "$resolved_relay_queue_shard_capacity" \
   --argjson resolvedRelayDispatchShortCircuitTotal "$resolved_relay_dispatch_short_circuit_total" \
   --argjson resolvedRelayDispatchShortCircuitPerSec "$resolved_relay_dispatch_short_circuit_per_sec" \
+  --argjson resolvedRelayLiveSenderCount "$resolved_relay_live_sender_count" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
@@ -593,7 +599,8 @@ jq -n \
       clusterRelayQueueCapacityResolved: $resolvedRelayQueueCapacity,
       clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity,
       clusterRelayDispatchSaturationShortCircuitTotal: $resolvedRelayDispatchShortCircuitTotal,
-      clusterRelayDispatchSaturationShortCircuitPerSec: $resolvedRelayDispatchShortCircuitPerSec
+      clusterRelayDispatchSaturationShortCircuitPerSec: $resolvedRelayDispatchShortCircuitPerSec,
+      clusterRelayLiveSenderCountResolved: $resolvedRelayLiveSenderCount
     },
     observed: {
       requests: $observedRequests,

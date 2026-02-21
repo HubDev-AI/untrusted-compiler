@@ -388,6 +388,7 @@ for step in "${boost_steps[@]}"; do
       --argjson clusterRelayQueueShardCapacityResolved "$(jq '.run.clusterRelayQueueShardCapacityResolved // null' "${step_out}")" \
       --argjson clusterRelayDispatchSaturationShortCircuitTotal "$(jq '.run.clusterRelayDispatchSaturationShortCircuitTotal // null' "${step_out}")" \
       --argjson clusterRelayDispatchSaturationShortCircuitPerSec "$(jq '.run.clusterRelayDispatchSaturationShortCircuitPerSec // null' "${step_out}")" \
+      --argjson clusterRelayLiveSenderCountResolved "$(jq '.run.clusterRelayLiveSenderCountResolved // null' "${step_out}")" \
       '{
         saturationBoostStep: $saturationBoostStep,
         summaryFile: $summaryFile,
@@ -403,7 +404,8 @@ for step in "${boost_steps[@]}"; do
         clusterRelayQueueCapacityResolved: $clusterRelayQueueCapacityResolved,
         clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved,
         clusterRelayDispatchSaturationShortCircuitTotal: $clusterRelayDispatchSaturationShortCircuitTotal,
-        clusterRelayDispatchSaturationShortCircuitPerSec: $clusterRelayDispatchSaturationShortCircuitPerSec
+        clusterRelayDispatchSaturationShortCircuitPerSec: $clusterRelayDispatchSaturationShortCircuitPerSec,
+        clusterRelayLiveSenderCountResolved: $clusterRelayLiveSenderCountResolved
       }'
     )"
     runs_json="$(jq --argjson item "${run_item}" '. + [$item]' <<<"${runs_json}")"
