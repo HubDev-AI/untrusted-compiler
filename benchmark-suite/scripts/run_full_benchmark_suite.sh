@@ -9,6 +9,7 @@ usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,
           [--saturation-connections n] [--saturation-target-requests n]
           [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
           [--saturation-cluster-accept-workers n] [--saturation-cluster-relay-accept-batch-max n]
+          [--saturation-cluster-relay-pump-batch-max n]
 
 Runs fixed-target matrix + step-load matrix and emits a combined markdown report
 with step-load signals included.
@@ -31,6 +32,7 @@ saturation_cluster_relay_workers=""
 saturation_cluster_relay_queue=""
 saturation_cluster_accept_workers=""
 saturation_cluster_relay_accept_batch_max=""
+saturation_cluster_relay_pump_batch_max=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -202,6 +204,18 @@ while [ "$#" -gt 0 ]; do
       saturation_cluster_relay_accept_batch_max="${1#--saturation-cluster-relay-accept-batch-max=}"
       shift
       ;;
+    --saturation-cluster-relay-pump-batch-max)
+      if [ "$#" -lt 2 ]; then
+        usage
+        exit 2
+      fi
+      saturation_cluster_relay_pump_batch_max="$2"
+      shift 2
+      ;;
+    --saturation-cluster-relay-pump-batch-max=*)
+      saturation_cluster_relay_pump_batch_max="${1#--saturation-cluster-relay-pump-batch-max=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -295,6 +309,9 @@ if [ "${include_lasm_saturation}" = "true" ]; then
   fi
   if [ -n "${saturation_cluster_relay_accept_batch_max}" ]; then
     saturation_args+=(--cluster-relay-accept-batch-max "${saturation_cluster_relay_accept_batch_max}")
+  fi
+  if [ -n "${saturation_cluster_relay_pump_batch_max}" ]; then
+    saturation_args+=(--cluster-relay-pump-batch-max "${saturation_cluster_relay_pump_batch_max}")
   fi
   if [ "${saturation_skip_verify}" = "true" ]; then
     saturation_args+=(--skip-verify)

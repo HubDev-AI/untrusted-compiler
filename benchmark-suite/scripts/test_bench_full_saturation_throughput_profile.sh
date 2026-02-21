@@ -36,5 +36,9 @@ if ! grep -q 'clusterRelayQueue=4096' <<<"${out}"; then
   echo "missing throughput preset relay-queue default" >&2
   exit 1
 fi
+if ! grep -q 'clusterRelayPumpBatchMax=auto' <<<"${out}"; then
+  echo "missing throughput preset relay-pump-batch default marker" >&2
+  exit 1
+fi
 
 echo "bench_full_saturation_throughput_profile test passed"

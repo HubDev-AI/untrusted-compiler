@@ -64,6 +64,7 @@ require_target_contains_token "bench-full-saturation" "--saturation-cluster-rela
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-queue"
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-accept-workers"
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-accept-batch-max"
+require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-pump-batch-max"
 require_target_contains_token "bench-full-saturation-dry" "--dry-run"
 require_target_contains_token "bench-full-saturation-dry" "--include-lasm-saturation"
 require_target_contains_token "bench-full-saturation-throughput" '$(MAKE) bench-full-saturation'
@@ -71,6 +72,7 @@ require_target_contains_token "bench-full-saturation-throughput" 'FULL_SATURATIO
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)"'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_THROUGHPUT_RELAY_WORKERS)"'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_THROUGHPUT_RELAY_QUEUE)"'
+require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX="$(LASM_SATURATION_THROUGHPUT_RELAY_PUMP_BATCH_MAX)"'
 require_target_contains_token "bench-full-saturation-throughput-dry" '$(MAKE) bench-full-saturation-dry'
 require_target_contains_token "bench-full-saturation-throughput-dry" 'FULL_SATURATION_SKIP_VERIFY=true'
 require_target_contains_token "bench-full-saturation-latency" '$(MAKE) bench-full-saturation'
@@ -78,6 +80,7 @@ require_target_contains_token "bench-full-saturation-latency" 'FULL_SATURATION_S
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_LATENCY_BOOST_STEPS)"'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_WORKERS="$(LASM_SATURATION_LATENCY_RELAY_WORKERS)"'
 require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_QUEUE="$(LASM_SATURATION_LATENCY_RELAY_QUEUE)"'
+require_target_contains_token "bench-full-saturation-latency" 'LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX="$(LASM_SATURATION_LATENCY_RELAY_PUMP_BATCH_MAX)"'
 require_target_contains_token "bench-full-saturation-latency-dry" '$(MAKE) bench-full-saturation-dry'
 require_target_contains_token "bench-full-saturation-latency-dry" 'FULL_SATURATION_SKIP_VERIFY=true'
 require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-full-saturation-throughput'

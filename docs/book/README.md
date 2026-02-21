@@ -1218,5 +1218,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1246-m39-lasm-saturation-summary-p99-resolved-columns.md`
 - `1247-m39-lasm-cluster-relay-hybrid-pump-scheduling.md`
 - `1248-m39-lasm-cluster-relay-pump-batch-override-and-telemetry.md`
+- `1249-m39-lasm-saturation-suite-relay-pump-batch-forwarding.md`
 
 As milestones progress, chapters will be added and linked from this index.

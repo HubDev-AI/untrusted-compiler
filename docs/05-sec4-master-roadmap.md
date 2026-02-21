@@ -1151,6 +1151,11 @@ Post-alpha track acceptance anchors:
      - runtime status telemetry now reports `relayPumpBatchMax` so resolved runtime behavior is visible in status snapshots,
      - capacity probe script now supports `--cluster-relay-pump-batch-max` (and env counterpart), includes requested/resolved pump-batch values in summary artifacts, and keeps dry-run contract visibility.
      - documented in `docs/book/1248-m39-lasm-cluster-relay-pump-batch-override-and-telemetry.md`.
+   - [x] Forwarded relay pump-batch override through saturation/full-suite orchestration:
+     - saturation matrix and bundle scripts now accept/pass `--cluster-relay-pump-batch-max`,
+     - full benchmark suite + Makefile saturation targets now forward `--saturation-cluster-relay-pump-batch-max` / `LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX`,
+     - dry-run contract tests for matrix/bundle/full-suite/make presets now assert relay pump-batch visibility end-to-end.
+     - documented in `docs/book/1249-m39-lasm-saturation-suite-relay-pump-batch-forwarding.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -15,6 +15,7 @@ out="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
   --target-requests 12345 \
   --cluster-accept-workers 5 \
   --cluster-relay-accept-batch-max 222 \
+  --cluster-relay-pump-batch-max 333 \
   --summary-out results/summaries/custom-saturation-boost-summary.md \
   2>&1)"
 
@@ -36,6 +37,10 @@ if ! grep -q 'clusterAcceptWorkers=5' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayAcceptBatchMax=222' <<<"$out"; then
   echo "saturation boost bundle dry-run missing relay accept batch passthrough" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayPumpBatchMax=333' <<<"$out"; then
+  echo "saturation boost bundle dry-run missing relay pump batch passthrough" >&2
   exit 1
 fi
 if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boost_summary.sh ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json ${root_dir}/results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json ${root_dir}/results/summaries/custom-saturation-boost-summary.md ${root_dir}/results/summaries/sec4-lasm-cluster-capacity-probe-sat-boost-recommended.json" <<<"$out"; then

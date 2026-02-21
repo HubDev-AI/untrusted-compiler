@@ -36,5 +36,9 @@ if ! grep -q 'clusterRelayQueue=2048' <<<"${out}"; then
   echo "missing latency preset relay-queue default" >&2
   exit 1
 fi
+if ! grep -q 'clusterRelayPumpBatchMax=auto' <<<"${out}"; then
+  echo "missing latency preset relay-pump-batch default marker" >&2
+  exit 1
+fi
 
 echo "bench_full_saturation_latency_profile test passed"
