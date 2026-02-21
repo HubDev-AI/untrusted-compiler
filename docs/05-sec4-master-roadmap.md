@@ -1087,6 +1087,10 @@ Post-alpha track acceptance anchors:
      - relay loop now skips `rebuild_lasm_cluster_backend_selection_lookup(...)` when selected worker-port count is `0` or `1`,
      - for those trivial counts, it sets deterministic healthy/identity flags directly and clears lookup storage, avoiding unnecessary lookup rebuild calls in the hot path.
      - documented in `docs/book/1233-m39-lasm-cluster-trivial-worker-count-selection-lookup-bypass.md`.
+   - [x] Added healthy-state selection-lookup rebuild bypass:
+     - relay loop now short-circuits selection state when `unhealthy_port_count == 0` (for any non-zero worker count), setting healthy/identity flags directly and clearing lookup storage,
+     - `rebuild_lasm_cluster_backend_selection_lookup(...)` now runs only for non-trivial unhealthy multi-backend states.
+     - documented in `docs/book/1234-m39-lasm-cluster-healthy-state-selection-lookup-bypass.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
