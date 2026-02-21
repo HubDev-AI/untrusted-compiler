@@ -1255,6 +1255,10 @@ Post-alpha track acceptance anchors:
      - when `relay_live_sender_count == 0`, accept-loop dispatch now skips repeated per-request `relay_live_sender_count_observed.fetch_min(0)` writes,
      - live-count telemetry remains correct because transition-to-zero is already recorded when liveness changes.
      - documented in `docs/book/1273-m39-lasm-no-live-telemetry-atomic-elision.md`.
+   - [x] Deduplicated fallback live-count telemetry atomics on primary disconnect path:
+     - accept-loop fallback now records primary relay-sender disconnect live-count changes through the existing end-of-fallback live-count delta branch, instead of issuing an immediate extra `fetch_min` before fallback completion,
+     - keeps live telemetry semantics unchanged while removing duplicate disconnect-path atomic updates.
+     - documented in `docs/book/1274-m39-lasm-fallback-live-count-atomic-dedup.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
