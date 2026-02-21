@@ -1229,5 +1229,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`
 - `1258-m39-lasm-relay-shard-liveness-tracking.md`
 - `1259-m39-lasm-relay-selection-reservation-chunk-sizing.md`
+- `1260-m39-lasm-fallback-live-shard-scan-budget.md`
 
 As milestones progress, chapters will be added and linked from this index.
