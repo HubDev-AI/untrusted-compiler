@@ -1331,6 +1331,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi general degraded scan now exits before post-attempt jump work when disconnect-driven live-target reduction makes current `scanned_live` already sufficient,
      - avoids unnecessary next-index resolution/jump bookkeeping after target shrink while preserving deterministic fallback outcomes.
      - documented in `docs/book/1292-m39-lasm-fallback-early-break-on-target-shrink.md`.
+   - [x] Extracted shared fallback scan-index jump advancement helper:
+     - fallback-multi now centralizes dead-slot and post-attempt jump progression into `advance_lasm_cluster_fallback_scan_index(...)`,
+     - preserves existing jump-distance accounting and next-live resolver semantics while reducing duplicated hot-path branch logic.
+     - documented in `docs/book/1293-m39-lasm-fallback-scan-index-advance-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
