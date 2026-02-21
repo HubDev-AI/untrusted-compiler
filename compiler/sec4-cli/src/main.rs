@@ -118,6 +118,10 @@ enum Commands {
         db_postgres_dsn_file: Option<PathBuf>,
         #[arg(long)]
         db_max_tx_handles: Option<u64>,
+        #[arg(long)]
+        db_postgres_statement_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_lock_timeout_ms: Option<u64>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -509,6 +513,8 @@ fn main() {
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -546,6 +552,8 @@ fn main() {
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -6802,6 +6810,8 @@ fn cmd_run(
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -6955,8 +6965,28 @@ fn cmd_run(
         eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_statement_timeout_ms.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_postgres_lock_timeout_ms.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-lock-timeout-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if db_max_tx_handles == Some(0) {
         eprintln!("run failed: --db-max-tx-handles must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_statement_timeout_ms == Some(0) {
+        eprintln!("run failed: --db-postgres-statement-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_lock_timeout_ms == Some(0) {
+        eprintln!("run failed: --db-postgres-lock-timeout-ms must be >= 1");
         return Err(2);
     }
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
@@ -7171,6 +7201,8 @@ fn cmd_run(
             effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -7520,6 +7552,8 @@ struct LasmClusterConfig {
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<String>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -7618,6 +7652,16 @@ fn spawn_lasm_cluster_worker(
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
     push_optional_u64_run_arg(&mut cmd, "--db-max-tx-handles", config.db_max_tx_handles);
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-statement-timeout-ms",
+        config.db_postgres_statement_timeout_ms,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-lock-timeout-ms",
+        config.db_postgres_lock_timeout_ms,
+    );
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
     }
@@ -8316,6 +8360,90 @@ fn refresh_lasm_cluster_dual_live_sender_indices(
 }
 
 #[inline(always)]
+fn refresh_lasm_cluster_live_sender_hints(
+    relay_sender_live: &[u8],
+    relay_live_sender_count: usize,
+    relay_single_live_sender_index: &mut Option<usize>,
+    relay_dual_live_sender_indices: &mut Option<(usize, usize)>,
+) {
+    if relay_live_sender_count == 1 {
+        let mut single_live_index = if let Some(index) = *relay_single_live_sender_index {
+            if relay_sender_live[index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                Some(index)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if single_live_index.is_none() {
+            if let Some((first, second)) = *relay_dual_live_sender_indices {
+                if relay_sender_live[first] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                    single_live_index = Some(first);
+                } else if relay_sender_live[second] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                    single_live_index = Some(second);
+                }
+            }
+        }
+        if single_live_index.is_none() {
+            single_live_index = lasm_cluster_next_live_sender_index(relay_sender_live, 0);
+        }
+        *relay_single_live_sender_index = single_live_index;
+        *relay_dual_live_sender_indices = None;
+        return;
+    }
+    *relay_single_live_sender_index = None;
+    if relay_live_sender_count == 2 {
+        refresh_lasm_cluster_dual_live_sender_indices(
+            relay_sender_live,
+            relay_live_sender_count,
+            relay_dual_live_sender_indices,
+        );
+        return;
+    }
+    *relay_dual_live_sender_indices = None;
+}
+
+#[inline(always)]
+fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
+    client_stream: TcpStream,
+    relay_senders: &[Sender<TcpStream>],
+    relay_sender_live: &mut [u8],
+    relay_live_sender_count: &mut usize,
+    relay_all_senders_live: &mut bool,
+    alternate_live_index: usize,
+    saw_live_sender: bool,
+) -> Result<(), LasmClusterRelayDispatchError> {
+    debug_assert!(alternate_live_index < relay_senders.len());
+    if relay_sender_live
+        .get(alternate_live_index)
+        .copied()
+        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
+        != LASM_CLUSTER_RELAY_SENDER_LIVE
+    {
+        return if saw_live_sender && *relay_live_sender_count > 0 {
+            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
+        } else {
+            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
+        };
+    }
+    match relay_senders[alternate_live_index].try_send(client_stream) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
+        Err(TrySendError::Disconnected(stream)) => {
+            relay_sender_live[alternate_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
+            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
+            *relay_all_senders_live = false;
+            if saw_live_sender && *relay_live_sender_count > 0 {
+                Err(LasmClusterRelayDispatchError::Saturated(stream))
+            } else {
+                Err(LasmClusterRelayDispatchError::Unavailable(stream))
+            }
+        }
+    }
+}
+
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
@@ -8813,29 +8941,59 @@ fn run_lasm_cluster_accept_loop(
                                         relay_live_sender_count_observed
                                             .fetch_min(relay_live_sender_count, Ordering::Relaxed);
                                         relay_all_senders_live = false;
-                                        refresh_lasm_cluster_single_live_sender_index(
+                                        refresh_lasm_cluster_live_sender_hints(
                                             relay_sender_live.as_slice(),
                                             relay_live_sender_count,
                                             &mut relay_single_live_sender_index,
-                                        );
-                                        refresh_lasm_cluster_dual_live_sender_indices(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
                                             &mut relay_dual_live_sender_indices,
                                         );
                                         (stream, false)
                                     }
                                 };
                                 let dispatch_result =
-                                    dispatch_lasm_cluster_relay_stream_fallback_multi(
-                                        stream,
-                                        relay_senders,
-                                        relay_sender_live.as_mut_slice(),
-                                        &mut relay_live_sender_count,
-                                        &mut relay_all_senders_live,
-                                        next_dispatch_index,
-                                        saw_live_sender,
-                                    );
+                                    if !relay_all_senders_live && relay_live_sender_count == 2 {
+                                        if let Some((first_live, second_live)) =
+                                            relay_dual_live_sender_indices
+                                        {
+                                            let alternate_live_index =
+                                                if stream_dispatch_start == first_live {
+                                                    second_live
+                                                } else if stream_dispatch_start == second_live {
+                                                    first_live
+                                                } else {
+                                                    first_live
+                                                };
+                                            dispatch_lasm_cluster_relay_stream_fallback_dual_live(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                alternate_live_index,
+                                                saw_live_sender,
+                                            )
+                                        } else {
+                                            dispatch_lasm_cluster_relay_stream_fallback_multi(
+                                                stream,
+                                                relay_senders,
+                                                relay_sender_live.as_mut_slice(),
+                                                &mut relay_live_sender_count,
+                                                &mut relay_all_senders_live,
+                                                next_dispatch_index,
+                                                saw_live_sender,
+                                            )
+                                        }
+                                    } else {
+                                        dispatch_lasm_cluster_relay_stream_fallback_multi(
+                                            stream,
+                                            relay_senders,
+                                            relay_sender_live.as_mut_slice(),
+                                            &mut relay_live_sender_count,
+                                            &mut relay_all_senders_live,
+                                            next_dispatch_index,
+                                            saw_live_sender,
+                                        )
+                                    };
                                 if !relay_all_senders_live
                                     && relay_live_sender_count > 0
                                     && relay_live_sender_count > 1
@@ -8847,14 +9005,10 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_dispatch_cursor,
                                     );
                                 }
-                                refresh_lasm_cluster_single_live_sender_index(
+                                refresh_lasm_cluster_live_sender_hints(
                                     relay_sender_live.as_slice(),
                                     relay_live_sender_count,
                                     &mut relay_single_live_sender_index,
-                                );
-                                refresh_lasm_cluster_dual_live_sender_indices(
-                                    relay_sender_live.as_slice(),
-                                    relay_live_sender_count,
                                     &mut relay_dual_live_sender_indices,
                                 );
                                 relay_live_sender_count_observed
@@ -10353,6 +10507,8 @@ fn cmd_run_lasm_backend(
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10575,6 +10731,18 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    if let Some(timeout_ms) = db_postgres_statement_timeout_ms {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
+            timeout_ms.to_string(),
+        );
+    }
+    if let Some(timeout_ms) = db_postgres_lock_timeout_ms {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS",
+            timeout_ms.to_string(),
+        );
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -10645,6 +10813,8 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -10687,6 +10857,8 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
