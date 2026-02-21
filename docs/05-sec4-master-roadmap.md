@@ -1315,6 +1315,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi dead-slot and post-attempt jump paths now check wrapped `next_scan_start` liveness directly before invoking next-live resolver,
      - avoids resolver/cache dispatch overhead when the immediate wrapped next slot is already live.
      - documented in `docs/book/1288-m39-lasm-fallback-next-slot-live-fast-path.md`.
+   - [x] Made degraded fallback general scan target adaptive to disconnects:
+     - fallback-multi general degraded scan now tracks dynamic `scan_live_target` and updates it after disconnect-driven live-count drops inside the loop,
+     - avoids iterating against stale pre-disconnect live-target counts while preserving bounded scan semantics.
+     - documented in `docs/book/1289-m39-lasm-fallback-dynamic-scan-live-target.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
