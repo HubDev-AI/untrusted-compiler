@@ -1199,6 +1199,10 @@ Post-alpha track acceptance anchors:
      - relay worker selection reservation now allocates a larger minimum chunk (`LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK`, 64) instead of always reserving only `relay_accept_batch_max`,
      - keeps deterministic round-robin reservation semantics while reducing `fetch_add` frequency on the shared `relay_selection_counter` hot path under load.
      - documented in `docs/book/1259-m39-lasm-relay-selection-reservation-chunk-sizing.md`.
+   - [x] Tightened fallback scan budget to live relay shards:
+     - multi-sender fallback dispatch now tracks scanned live shards and stops after it has attempted all remaining live non-primary shards (`relay_live_sender_count - 1`),
+     - avoids wasting fallback-loop iterations on known-dead shards while preserving saturated vs unavailable error semantics.
+     - documented in `docs/book/1260-m39-lasm-fallback-live-shard-scan-budget.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
