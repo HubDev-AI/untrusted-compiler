@@ -103,6 +103,36 @@ if ! grep -q 'autoscaleMaxInstances=4' <<<"$fixed_sat"; then
   exit 1
 fi
 
+out_mode="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-mode-compare --saturation-duration 12s --saturation-threads 3 --saturation-connections 44 --saturation-target-requests 555 --saturation-cluster-relay-pump-batch-max 77)"
+if ! grep -q '^phase: lasm mode compare$' <<<"$out_mode"; then
+  echo "missing lasm mode-compare phase" >&2
+  exit 1
+fi
+if ! grep -q '^sec4 LASM cluster mode compare plan:$' <<<"$out_mode"; then
+  echo "missing delegated mode-compare plan output" >&2
+  exit 1
+fi
+if ! grep -q 'duration=12s' <<<"$out_mode"; then
+  echo "missing delegated mode-compare duration override" >&2
+  exit 1
+fi
+if ! grep -q 'threads=3' <<<"$out_mode"; then
+  echo "missing delegated mode-compare threads override" >&2
+  exit 1
+fi
+if ! grep -q 'connections=44' <<<"$out_mode"; then
+  echo "missing delegated mode-compare connections override" >&2
+  exit 1
+fi
+if ! grep -q 'targetRequests=555' <<<"$out_mode"; then
+  echo "missing delegated mode-compare target-requests override" >&2
+  exit 1
+fi
+if ! grep -q 'proxyClusterRelayPumpBatchMax=77' <<<"$out_mode"; then
+  echo "missing delegated mode-compare relay-pump-batch override" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls unknown --endpoints ping >/dev/null 2>&1; then
   echo "expected invalid impl to fail via delegated validation" >&2
   exit 1
@@ -113,6 +143,14 @@ if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls node --endp
 fi
 if ! grep -q -- '--include-lasm-saturation requires sec4-lasm in --impls' /tmp/run-full-sat-invalid.log; then
   echo "missing include-lasm-saturation guard diagnostic" >&2
+  exit 1
+fi
+if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls node --endpoints ping --include-lasm-mode-compare >/tmp/run-full-mode-compare-invalid.log 2>&1; then
+  echo "expected include-lasm-mode-compare without sec4-lasm to fail" >&2
+  exit 1
+fi
+if ! grep -q -- '--include-lasm-mode-compare requires sec4-lasm in --impls' /tmp/run-full-mode-compare-invalid.log; then
+  echo "missing include-lasm-mode-compare guard diagnostic" >&2
   exit 1
 fi
 

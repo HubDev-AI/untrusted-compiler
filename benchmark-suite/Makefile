@@ -30,6 +30,7 @@ LASM_SATURATION_SUMMARY ?= results/summaries/sec4-lasm-cluster-saturation-boost-
 LASM_SATURATION_VERIFY_INPUT ?=
 SATURATION_SUMMARY ?=
 FULL_SATURATION_SKIP_VERIFY ?= false
+FULL_LASM_INCLUDE_MODE_COMPARE ?= false
 LASM_SATURATION_THROUGHPUT_IMPLS ?= sec4-lasm
 LASM_SATURATION_THROUGHPUT_ENDPOINTS ?= ping
 LASM_SATURATION_THROUGHPUT_BOOST_STEPS ?= 2,4,6,8
@@ -55,6 +56,7 @@ LASM_SATURATION_LATENCY_FIXED_REUSE_PORT_MODE ?= false
 
 SATURATION_FIXED_REUSE_PORT_FLAG = $(if $(filter true,$(LASM_CAPACITY_FIXED_REUSE_PORT_MODE)),--saturation-fixed-reuse-port-mode,)
 FIXED_REUSE_PORT_FLAG = $(if $(filter true,$(LASM_CAPACITY_FIXED_REUSE_PORT_MODE)),--fixed-reuse-port-mode,)
+LASM_MODE_COMPARE_FLAG = $(if $(filter true,$(FULL_LASM_INCLUDE_MODE_COMPARE)),--include-lasm-mode-compare,)
 
 help:
 	@echo "Targets:"
@@ -78,7 +80,7 @@ help:
 	@echo "  bench-matrix-dry Print orchestrator commands without executing load"
 	@echo "  bench-full Run fixed-target + step-load suites and publish combined report"
 	@echo "  bench-full-dry Print full-suite command plan"
-	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars)"
+	@echo "  bench-full-saturation Run full suite plus LASM saturation lane (tunable via LASM_CAPACITY_* vars); set FULL_LASM_INCLUDE_MODE_COMPARE=true to add mode compare lane"
 	@echo "  bench-full-saturation-dry Print full-suite+saturation command plan"
 	@echo "  bench-full-saturation-throughput Run saturation-enabled full suite with tuned throughput preset knobs"
 	@echo "  bench-full-saturation-throughput-dry Print throughput preset full-suite+saturation plan"
@@ -160,23 +162,23 @@ bench-matrix-dry:
 	scripts/run_comparison_matrix.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
 
 bench-full:
-	scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_MODE_COMPARE_FLAG)
 
 bench-full-dry:
-	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)"
+	scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" $(LASM_MODE_COMPARE_FLAG)
 
 bench-full-saturation:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG); \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	else \
-		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG); \
+		scripts/run_full_benchmark_suite.sh --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	fi
 
 bench-full-saturation-dry:
 	@if [ "$(FULL_SATURATION_SKIP_VERIFY)" = "true" ]; then \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG); \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-skip-verify --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	else \
-		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG); \
+		scripts/run_full_benchmark_suite.sh --dry-run --impls "$(IMPLS)" --endpoints "$(ENDPOINTS)" --include-lasm-saturation --saturation-boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --saturation-project-path "$(LASM_CAPACITY_PROJECT_PATH)" --saturation-target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --saturation-duration "$(LASM_CAPACITY_DURATION)" --saturation-threads "$(LASM_CAPACITY_THREADS)" --saturation-connections "$(LASM_CAPACITY_CONNECTIONS)" --saturation-cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --saturation-cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --saturation-cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --saturation-cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --saturation-cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(SATURATION_FIXED_REUSE_PORT_FLAG) $(LASM_MODE_COMPARE_FLAG); \
 	fi
 
 bench-full-saturation-throughput:
