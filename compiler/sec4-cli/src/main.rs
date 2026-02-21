@@ -8391,12 +8391,36 @@ fn refresh_lasm_cluster_next_live_sender_lookup(
     relay_next_live_sender_lookup: &mut [usize],
 ) {
     debug_assert_eq!(relay_sender_live.len(), relay_next_live_sender_lookup.len());
-    if relay_sender_live.is_empty() {
+    let sender_count = relay_sender_live.len();
+    if sender_count == 0 {
         return;
     }
-    for (start_index, slot) in relay_next_live_sender_lookup.iter_mut().enumerate() {
-        *slot = lasm_cluster_next_live_sender_index(relay_sender_live, start_index)
-            .unwrap_or(start_index);
+    let Some(first_live_index) = relay_sender_live
+        .iter()
+        .position(|value| *value == LASM_CLUSTER_RELAY_SENDER_LIVE)
+    else {
+        for (index, slot) in relay_next_live_sender_lookup.iter_mut().enumerate() {
+            *slot = index;
+        }
+        return;
+    };
+
+    let mut next_live_index = first_live_index;
+    for reverse_offset in 0..sender_count {
+        let index = if reverse_offset == 0 {
+            first_live_index
+        } else {
+            first_live_index + sender_count - reverse_offset
+        };
+        let wrapped_index = if index >= sender_count {
+            index - sender_count
+        } else {
+            index
+        };
+        if relay_sender_live[wrapped_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+            next_live_index = wrapped_index;
+        }
+        relay_next_live_sender_lookup[wrapped_index] = next_live_index;
     }
 }
 
