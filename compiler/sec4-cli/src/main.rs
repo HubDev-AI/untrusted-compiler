@@ -9349,23 +9349,22 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         || !selection_has_healthy_backends
                     {
                         LASM_CLUSTER_SELECTION_LOOKUP_NONE
+                    } else if worker_port_count == 1 {
+                        0
                     } else {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
                         {
                             if relay_selection_reservation_worker_port_count != worker_port_count {
                                 relay_selection_next_index_by_worker.clear();
-                                if worker_port_count > 1 {
-                                    relay_selection_next_index_by_worker
-                                        .resize(worker_port_count, 0);
-                                    for worker_index in 0..worker_port_count {
-                                        relay_selection_next_index_by_worker[worker_index] =
-                                            if worker_index + 1 == worker_port_count {
-                                                0
-                                            } else {
-                                                worker_index + 1
-                                            };
-                                    }
+                                relay_selection_next_index_by_worker.resize(worker_port_count, 0);
+                                for worker_index in 0..worker_port_count {
+                                    relay_selection_next_index_by_worker[worker_index] =
+                                        if worker_index + 1 == worker_port_count {
+                                            0
+                                        } else {
+                                            worker_index + 1
+                                        };
                                 }
                             }
                             let relay_selection_reservation_base = relay_selection_counter
@@ -9381,14 +9380,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         let start_index = relay_selection_reservation_next_index;
                         relay_selection_reservation_offset += 1;
-                        if worker_port_count > 1 {
-                            debug_assert_eq!(
-                                relay_selection_next_index_by_worker.len(),
-                                worker_port_count
-                            );
-                            relay_selection_reservation_next_index =
-                                relay_selection_next_index_by_worker[start_index];
-                        }
+                        debug_assert_eq!(
+                            relay_selection_next_index_by_worker.len(),
+                            worker_port_count
+                        );
+                        relay_selection_reservation_next_index =
+                            relay_selection_next_index_by_worker[start_index];
                         if selection_lookup_is_identity {
                             start_index
                         } else {
