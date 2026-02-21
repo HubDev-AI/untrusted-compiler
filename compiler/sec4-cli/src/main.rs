@@ -8386,6 +8386,41 @@ fn lasm_cluster_next_live_sender_index(
 }
 
 #[inline(always)]
+fn refresh_lasm_cluster_next_live_sender_lookup(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: &mut [usize],
+) {
+    debug_assert_eq!(relay_sender_live.len(), relay_next_live_sender_lookup.len());
+    if relay_sender_live.is_empty() {
+        return;
+    }
+    for (start_index, slot) in relay_next_live_sender_lookup.iter_mut().enumerate() {
+        *slot = lasm_cluster_next_live_sender_index(relay_sender_live, start_index)
+            .unwrap_or(start_index);
+    }
+}
+
+#[inline(always)]
+fn lookup_lasm_cluster_next_live_sender_index(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: &[usize],
+    start_index_wrapped: usize,
+) -> Option<usize> {
+    debug_assert_eq!(relay_sender_live.len(), relay_next_live_sender_lookup.len());
+    if relay_sender_live.is_empty() {
+        return None;
+    }
+    debug_assert!(start_index_wrapped < relay_sender_live.len());
+    let cached_index = relay_next_live_sender_lookup[start_index_wrapped];
+    if cached_index < relay_sender_live.len()
+        && relay_sender_live[cached_index] == LASM_CLUSTER_RELAY_SENDER_LIVE
+    {
+        return Some(cached_index);
+    }
+    lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
+}
+
+#[inline(always)]
 fn realign_lasm_cluster_dispatch_cursor_to_live(
     relay_sender_live: &[u8],
     relay_dispatch_cursor: &mut usize,
@@ -8868,6 +8903,11 @@ fn run_lasm_cluster_accept_loop(
     } else {
         Vec::new()
     };
+    let mut relay_next_live_sender_lookup = if relay_sender_count > 1 {
+        (0..relay_sender_count).collect::<Vec<usize>>()
+    } else {
+        Vec::new()
+    };
     let mut relay_live_sender_count = relay_sender_count;
     let mut relay_all_senders_live = relay_sender_count > 1;
     let mut relay_single_live_sender_index: Option<usize> = None;
@@ -9035,26 +9075,38 @@ fn run_lasm_cluster_accept_loop(
                                 {
                                     relay_dispatch_cursor = first_live;
                                 }
-                            } else if !realign_lasm_cluster_dispatch_cursor_to_live(
-                                relay_sender_live.as_slice(),
-                                &mut relay_dispatch_cursor,
-                            ) {
-                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                    LasmClusterRelayDispatchError::Unavailable(client_stream),
-                                    active_connections,
-                                    relay_saturation_events,
-                                    relay_saturation_events_total,
-                                    relay_dispatch_fallback_total,
-                                    relay_dispatch_short_circuit_total,
-                                    &mut listener_enqueued_local,
-                                    &mut listener_saturation_pending_local,
-                                    &mut listener_saturation_total_local,
-                                    &mut listener_dispatch_fallback_total_local,
-                                    &mut listener_dispatch_short_circuit_total_local,
+                            } else if relay_sender_live[relay_dispatch_cursor]
+                                != LASM_CLUSTER_RELAY_SENDER_LIVE
+                            {
+                                if let Some(next_live_index) =
+                                    lookup_lasm_cluster_next_live_sender_index(
+                                        relay_sender_live.as_slice(),
+                                        relay_next_live_sender_lookup.as_slice(),
+                                        relay_dispatch_cursor,
+                                    )
+                                {
+                                    relay_dispatch_cursor = next_live_index;
+                                } else if !realign_lasm_cluster_dispatch_cursor_to_live(
+                                    relay_sender_live.as_slice(),
+                                    &mut relay_dispatch_cursor,
                                 ) {
-                                    return Err(message);
+                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                        LasmClusterRelayDispatchError::Unavailable(client_stream),
+                                        active_connections,
+                                        relay_saturation_events,
+                                        relay_saturation_events_total,
+                                        relay_dispatch_fallback_total,
+                                        relay_dispatch_short_circuit_total,
+                                        &mut listener_enqueued_local,
+                                        &mut listener_saturation_pending_local,
+                                        &mut listener_saturation_total_local,
+                                        &mut listener_dispatch_fallback_total_local,
+                                        &mut listener_dispatch_short_circuit_total_local,
+                                    ) {
+                                        return Err(message);
+                                    }
+                                    continue;
                                 }
-                                continue;
                             }
                         }
                         let stream_dispatch_start = relay_dispatch_cursor;
@@ -9082,8 +9134,9 @@ fn run_lasm_cluster_accept_loop(
                             {
                                 next_dispatch_wrapped
                             } else if let Some(next_live_index) =
-                                lasm_cluster_next_live_sender_index(
+                                lookup_lasm_cluster_next_live_sender_index(
                                     relay_sender_live.as_slice(),
+                                    relay_next_live_sender_lookup.as_slice(),
                                     next_dispatch_wrapped,
                                 )
                             {
@@ -9246,6 +9299,10 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_single_live_sender_index,
                                         &mut relay_dual_live_sender_indices,
                                     );
+                                    refresh_lasm_cluster_next_live_sender_lookup(
+                                        relay_sender_live.as_slice(),
+                                        relay_next_live_sender_lookup.as_mut_slice(),
+                                    );
                                     relay_live_sender_count_observed
                                         .fetch_min(relay_live_sender_count, Ordering::Relaxed);
                                 }
@@ -9305,7 +9362,6 @@ fn run_lasm_cluster_accept_loop(
                 }
             }
         }
-
         if listener_accepted_in_batch == 0 {
             listener_idle_spins += 1;
             if listener_idle_spins < LASM_CLUSTER_IDLE_SPIN_THRESHOLD {
