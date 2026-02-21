@@ -1277,5 +1277,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1305-m39-lasm-accept-primary-shared-send-helper.md`
 - `1306-m39-lasm-single-sender-dispatch-helper.md`
 - `1307-m39-lasm-relay-send-module-extraction.md`
+- `1308-m39-lasm-relay-topology-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
