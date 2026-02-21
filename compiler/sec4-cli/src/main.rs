@@ -8597,6 +8597,30 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         };
     }
     let scan_live_target = relay_live_sender_count.saturating_sub(1);
+    if scan_live_target == 0 {
+        if let Some(live_index) =
+            lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
+        {
+            match relay_senders[live_index].try_send(client_stream) {
+                Ok(()) => return Ok(()),
+                Err(TrySendError::Full(next_stream)) => {
+                    saw_live_sender = true;
+                    client_stream = next_stream;
+                }
+                Err(TrySendError::Disconnected(next_stream)) => {
+                    relay_sender_live[live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
+                    *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
+                    *relay_all_senders_live = false;
+                    client_stream = next_stream;
+                }
+            }
+        }
+        return if saw_live_sender && *relay_live_sender_count > 0 {
+            Err(LasmClusterRelayDispatchError::Saturated(client_stream))
+        } else {
+            Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
+        };
+    }
     if scan_live_target == 2 {
         if let Some(first_live_index) =
             lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
@@ -8890,18 +8914,17 @@ fn run_lasm_cluster_accept_loop(
                                 continue;
                             }
                             if relay_live_sender_count == 1 {
-                                let single_live_index = if let Some(index) =
-                                    relay_single_live_sender_index
-                                {
-                                    index
-                                } else {
-                                    refresh_lasm_cluster_single_live_sender_index(
-                                        relay_sender_live.as_slice(),
-                                        relay_live_sender_count,
-                                        &mut relay_single_live_sender_index,
-                                    );
-                                    let Some(index) = relay_single_live_sender_index else {
-                                        if let Err(message) =
+                                let single_live_index =
+                                    if let Some(index) = relay_single_live_sender_index {
+                                        index
+                                    } else {
+                                        refresh_lasm_cluster_single_live_sender_index(
+                                            relay_sender_live.as_slice(),
+                                            relay_live_sender_count,
+                                            &mut relay_single_live_sender_index,
+                                        );
+                                        let Some(index) = relay_single_live_sender_index else {
+                                            if let Err(message) =
                                             handle_lasm_cluster_accept_dispatch_error(
                                                 LasmClusterRelayDispatchError::Unavailable(
                                                     client_stream,
@@ -8920,24 +8943,23 @@ fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                        continue;
+                                            continue;
+                                        };
+                                        index
                                     };
-                                    index
-                                };
                                 relay_dispatch_cursor = single_live_index;
                             } else if relay_live_sender_count == 2 {
-                                let (first_live, second_live) = if let Some(indices) =
-                                    relay_dual_live_sender_indices
-                                {
-                                    indices
-                                } else {
-                                    refresh_lasm_cluster_dual_live_sender_indices(
-                                        relay_sender_live.as_slice(),
-                                        relay_live_sender_count,
-                                        &mut relay_dual_live_sender_indices,
-                                    );
-                                    let Some(indices) = relay_dual_live_sender_indices else {
-                                        if let Err(message) =
+                                let (first_live, second_live) =
+                                    if let Some(indices) = relay_dual_live_sender_indices {
+                                        indices
+                                    } else {
+                                        refresh_lasm_cluster_dual_live_sender_indices(
+                                            relay_sender_live.as_slice(),
+                                            relay_live_sender_count,
+                                            &mut relay_dual_live_sender_indices,
+                                        );
+                                        let Some(indices) = relay_dual_live_sender_indices else {
+                                            if let Err(message) =
                                             handle_lasm_cluster_accept_dispatch_error(
                                                 LasmClusterRelayDispatchError::Unavailable(
                                                     client_stream,
@@ -8956,10 +8978,10 @@ fn run_lasm_cluster_accept_loop(
                                         {
                                             return Err(message);
                                         }
-                                        continue;
+                                            continue;
+                                        };
+                                        indices
                                     };
-                                    indices
-                                };
                                 if relay_dispatch_cursor != first_live
                                     && relay_dispatch_cursor != second_live
                                 {

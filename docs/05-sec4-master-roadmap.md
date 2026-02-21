@@ -1243,6 +1243,10 @@ Post-alpha track acceptance anchors:
      - when degraded mode has one or two live relay shards, accept dispatch now reuses cached `relay_single_live_sender_index` / `relay_dual_live_sender_indices` and refreshes only when missing,
      - avoids repeated per-request hint rescans in degraded steady state while preserving deterministic unavailable fallback behavior if cached hints are absent.
      - documented in `docs/book/1270-m39-lasm-degraded-single-dual-hint-cache-reuse.md`.
+   - [x] Fixed single-live degraded fallback dispatch in multi-sender relay pools:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now handles `scan_live_target == 0` by attempting the remaining live shard once before returning deterministic saturated/unavailable errors,
+     - prevents false immediate unavailable outcomes when exactly one live shard remains in pools with more than two relay senders.
+     - documented in `docs/book/1271-m39-lasm-single-live-degraded-fallback-dispatch-fix.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
