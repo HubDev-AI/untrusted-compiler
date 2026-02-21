@@ -8608,6 +8608,7 @@ fn run_lasm_cluster_accept_loop(
         }
         let mut listener_enqueued_local = 0_usize;
         let mut listener_accepted_in_batch = 0_usize;
+        let mut listener_all_senders_saturated_in_batch = false;
         if let Some(relay_single_sender) = relay_single_sender {
             while listener_accepted_in_batch < relay_accept_batch_max {
                 match listener.accept() {
@@ -8674,6 +8675,24 @@ fn run_lasm_cluster_accept_loop(
                         match relay_senders[stream_dispatch_start].try_send(client_stream) {
                             Ok(()) => {
                                 listener_enqueued_local += 1;
+                                listener_all_senders_saturated_in_batch = false;
+                            }
+                            Err(TrySendError::Full(stream))
+                                if listener_all_senders_saturated_in_batch =>
+                            {
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                    LasmClusterRelayDispatchError::Saturated(stream),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                ) {
+                                    return Err(message);
+                                }
                             }
                             Err(send_error) => {
                                 listener_dispatch_fallback_total_local += 1;
@@ -8691,8 +8710,15 @@ fn run_lasm_cluster_accept_loop(
                                 match dispatch_result {
                                     Ok(()) => {
                                         listener_enqueued_local += 1;
+                                        listener_all_senders_saturated_in_batch = false;
                                     }
                                     Err(dispatch_error) => {
+                                        if matches!(
+                                            &dispatch_error,
+                                            LasmClusterRelayDispatchError::Saturated(_)
+                                        ) {
+                                            listener_all_senders_saturated_in_batch = true;
+                                        }
                                         if let Err(message) =
                                             handle_lasm_cluster_accept_dispatch_error(
                                                 dispatch_error,
