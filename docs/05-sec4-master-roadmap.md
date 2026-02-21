@@ -1107,6 +1107,11 @@ Post-alpha track acceptance anchors:
      - `LasmClusterStatusSnapshot` now uses manual `PartialEq` with `Arc::ptr_eq` short-circuit for `worker_ports` before slice fallback comparison,
      - preserves unchanged-snapshot semantics while reducing repeated deep vector comparisons when worker-port snapshot pointer is unchanged.
      - documented in `docs/book/1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`.
+   - [x] Replaced over-scaled auto relay-worker sizing with bounded instance-based heuristic:
+     - default relay worker auto-sizing no longer scales with `target_connections_per_instance` (which produced excessive defaults like `256` workers for `4..8` instance configs),
+     - new auto heuristic uses bounded sublinear instance hint (`ceil(sqrt(max(min_instances, max_instances)))`, min `2` for multi-instance, clamped by host parallelism and `1..16` hard bound).
+     - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~68.6k req/s` (`p99 11.99ms`) to `~75.5k req/s` (`p99 6.41ms`) under default auto relay settings with the same config envelope.
+     - documented in `docs/book/1239-m39-lasm-cluster-auto-relay-worker-sizing-fix.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
