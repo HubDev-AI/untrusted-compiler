@@ -1125,6 +1125,10 @@ Post-alpha track acceptance anchors:
      - saturation matrix + bundle scripts now accept/pass `--cluster-accept-workers` and `--cluster-relay-accept-batch-max`,
      - full benchmark suite and Makefile saturation targets now thread matching saturation flags/variables end-to-end.
      - documented in `docs/book/1242-m39-lasm-saturation-suite-accept-path-override-forwarding.md`.
+   - [x] Added resolved cluster-status telemetry capture in capacity probe artifacts:
+     - `run_lasm_cluster_capacity_probe.sh` now writes a per-run `--cluster-status-json` artifact and records resolved relay/accept/queue runtime fields in probe summary JSON (`*Resolved` run fields),
+     - keeps requested vs resolved relay settings visible in one deterministic probe artifact for tuning loops.
+     - documented in `docs/book/1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

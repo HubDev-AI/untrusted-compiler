@@ -231,6 +231,7 @@ fi
 raw_file="${root_dir}/results/raw/sec4-lasm-cluster-${probe_label}.txt"
 server_log="${root_dir}/results/raw/sec4-lasm-cluster-capacity-server.log"
 rss_peak_file="${root_dir}/results/raw/sec4-lasm-cluster-capacity-peak-rss-kb.txt"
+status_json_file="${root_dir}/results/raw/sec4-lasm-cluster-capacity-status-${port}.json"
 
 mkdir -p "$(dirname "$out_path")" "$(dirname "$raw_file")"
 
@@ -257,6 +258,7 @@ sec4 LASM cluster capacity probe plan:
   clusterRelayQueue=${cluster_relay_queue:-auto}
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
+  clusterStatusJson=${status_json_file}
   skipBuild=$skip_build
   out=$out_path
 PLAN
@@ -298,6 +300,7 @@ run_args=(
   --autoscale-scale-up-step "$autoscale_scale_up_step"
   --autoscale-scale-down-step "$autoscale_scale_down_step"
   --autoscale-saturation-boost-step "$autoscale_saturation_boost_step"
+  --cluster-status-json "$status_json_file"
 )
 if [ -n "$cluster_relay_workers" ]; then
   run_args+=(--cluster-relay-workers "$cluster_relay_workers")
@@ -378,6 +381,11 @@ observed_requests=0
 observed_requests_per_sec=0
 peak_rss_kb=0
 p99=""
+resolved_relay_worker_count="null"
+resolved_relay_accept_workers="null"
+resolved_relay_accept_batch_max="null"
+resolved_relay_queue_capacity="null"
+resolved_relay_queue_shard_capacity="null"
 if [ -f "$raw_file" ]; then
   observed_requests_raw="$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$raw_file")"
   if is_number "$observed_requests_raw"; then
@@ -396,6 +404,28 @@ if [ -f "$rss_peak_file" ]; then
   peak_rss_raw="$(cat "$rss_peak_file")"
   if is_number "$peak_rss_raw"; then
     peak_rss_kb="$peak_rss_raw"
+  fi
+fi
+if [ -f "$status_json_file" ]; then
+  status_relay_worker_count="$(jq -r '.relayWorkerCount // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_worker_count"; then
+    resolved_relay_worker_count="$status_relay_worker_count"
+  fi
+  status_relay_accept_workers="$(jq -r '.relayAcceptWorkers // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_accept_workers"; then
+    resolved_relay_accept_workers="$status_relay_accept_workers"
+  fi
+  status_relay_accept_batch_max="$(jq -r '.relayAcceptBatchMax // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_accept_batch_max"; then
+    resolved_relay_accept_batch_max="$status_relay_accept_batch_max"
+  fi
+  status_relay_queue_capacity="$(jq -r '.relayQueueCapacity // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_queue_capacity"; then
+    resolved_relay_queue_capacity="$status_relay_queue_capacity"
+  fi
+  status_relay_queue_shard_capacity="$(jq -r '.relayQueueShardCapacity // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_queue_shard_capacity"; then
+    resolved_relay_queue_shard_capacity="$status_relay_queue_shard_capacity"
   fi
 fi
 
@@ -418,6 +448,7 @@ jq -n \
   --arg p99 "$p99" \
   --arg rawFile "$raw_file" \
   --arg serverLog "$server_log" \
+  --arg statusJsonFile "$status_json_file" \
   --argjson threads "$threads" \
   --argjson connections "$connections" \
   --argjson targetRequests "$target_requests" \
@@ -436,6 +467,11 @@ jq -n \
   --argjson autoscaleScaleUpStep "$autoscale_scale_up_step" \
   --argjson autoscaleScaleDownStep "$autoscale_scale_down_step" \
   --argjson autoscaleSaturationBoostStep "$autoscale_saturation_boost_step" \
+  --argjson resolvedRelayWorkerCount "$resolved_relay_worker_count" \
+  --argjson resolvedRelayAcceptWorkers "$resolved_relay_accept_workers" \
+  --argjson resolvedRelayAcceptBatchMax "$resolved_relay_accept_batch_max" \
+  --argjson resolvedRelayQueueCapacity "$resolved_relay_queue_capacity" \
+  --argjson resolvedRelayQueueShardCapacity "$resolved_relay_queue_shard_capacity" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
@@ -466,7 +502,12 @@ jq -n \
       clusterRelayWorkers: $relayWorkers,
       clusterRelayQueue: $relayQueue,
       clusterAcceptWorkers: $acceptWorkers,
-      clusterRelayAcceptBatchMax: $relayAcceptBatchMax
+      clusterRelayAcceptBatchMax: $relayAcceptBatchMax,
+      clusterRelayWorkersResolved: $resolvedRelayWorkerCount,
+      clusterAcceptWorkersResolved: $resolvedRelayAcceptWorkers,
+      clusterRelayAcceptBatchMaxResolved: $resolvedRelayAcceptBatchMax,
+      clusterRelayQueueCapacityResolved: $resolvedRelayQueueCapacity,
+      clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity
     },
     observed: {
       requests: $observedRequests,
@@ -476,7 +517,8 @@ jq -n \
     },
     artifacts: {
       raw: $rawFile,
-      serverLog: $serverLog
+      serverLog: $serverLog,
+      clusterStatusJson: $statusJsonFile
     }
   }' >"$out_path"
 

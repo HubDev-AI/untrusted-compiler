@@ -81,6 +81,10 @@ if ! grep -q "out=${root_dir}/results/summaries/custom-lasm-capacity.json" <<<"$
   echo "lasm capacity probe dry-run missing resolved output path" >&2
   exit 1
 fi
+if ! grep -q "clusterStatusJson=${root_dir}/results/raw/sec4-lasm-cluster-capacity-status-19091.json" <<<"$out"; then
+  echo "lasm capacity probe dry-run missing resolved cluster status json path" >&2
+  exit 1
+fi
 
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --request-header invalid >/tmp/lasm-capacity-probe-invalid.log 2>&1; then
   echo "lasm capacity probe accepted invalid request header" >&2
