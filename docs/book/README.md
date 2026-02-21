@@ -1270,5 +1270,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1298-m39-lasm-fallback-terminal-result-helper.md`
 - `1299-m39-lasm-fallback-dual-attempt-no-live-guard.md`
 - `1300-m39-lasm-fallback-two-sender-single-helper-reuse.md`
+- `1301-m39-lasm-fallback-single-target-helper-reuse.md`
 
 As milestones progress, chapters will be added and linked from this index.
