@@ -1063,6 +1063,10 @@ Post-alpha track acceptance anchors:
      - relay worker selection now short-circuits to backend index `0` when only one worker port is available,
      - skips reservation-counter `fetch_add` and next-index rotation bookkeeping in the single-backend case while preserving selection semantics for multi-backend clusters.
      - documented in `docs/book/1227-m39-lasm-cluster-single-backend-selection-fast-path.md`.
+   - [x] Removed relay next-index lookup vector from round-robin dispatch:
+     - relay worker selection now advances round-robin start index with direct wrapped arithmetic (`start + 1` with wrap) instead of prebuilding/reading a per-worker next-index vector,
+     - removes worker-port-change vector rebuild overhead and per-dispatch lookup reads while preserving selection order semantics.
+     - documented in `docs/book/1228-m39-lasm-cluster-direct-round-robin-next-index.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
