@@ -62,6 +62,8 @@ require_target_contains_token "bench-full-saturation" "--saturation-threads"
 require_target_contains_token "bench-full-saturation" "--saturation-connections"
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-workers"
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-queue"
+require_target_contains_token "bench-full-saturation" "--saturation-cluster-accept-workers"
+require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-accept-batch-max"
 require_target_contains_token "bench-full-saturation-dry" "--dry-run"
 require_target_contains_token "bench-full-saturation-dry" "--include-lasm-saturation"
 require_target_contains_token "bench-full-saturation-throughput" '$(MAKE) bench-full-saturation'
