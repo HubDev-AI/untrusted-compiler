@@ -8250,59 +8250,10 @@ struct LasmClusterStatusPayload<'a> {
 fn write_lasm_cluster_status_json(
     path: &Path,
     tmp_path: &Path,
-    listen_port: u16,
-    min_instances: usize,
-    max_instances: usize,
-    worker_count: usize,
-    relay_worker_count: usize,
-    relay_queue_capacity: usize,
-    relay_queue_shard_capacity: usize,
-    worker_ports: &Arc<Vec<u16>>,
-    active_connections: usize,
-    active_connections_per_worker: f64,
-    relay_saturation_events_pending: usize,
-    relay_saturation_events_total: u64,
-    relay_saturation_events_per_sec: f64,
-    relay_accept_batch_max: usize,
-    relay_accept_workers: usize,
-    relay_backend_connect_timeout_ms: u64,
-    relay_backend_connect_cooldown_ms: u64,
-    relay_dispatch_fallback_total: u64,
-    relay_dispatch_fallback_per_sec: f64,
-    autoscale_desired_instances: usize,
-    autoscale_last_saturation_events: usize,
-    autoscale_last_dynamic_boost_step: usize,
-    autoscale_scale_up_cooldown_remaining_ms: u64,
-    autoscale_scale_down_cooldown_remaining_ms: u64,
+    snapshot: LasmClusterStatusSnapshot,
     last_snapshot: &mut Option<LasmClusterStatusSnapshot>,
     status_parent_ready: &mut bool,
 ) -> Result<(), String> {
-    let snapshot = LasmClusterStatusSnapshot {
-        listen_port,
-        min_instances,
-        max_instances,
-        worker_count,
-        relay_worker_count,
-        relay_queue_capacity,
-        relay_queue_shard_capacity,
-        worker_ports: Arc::clone(worker_ports),
-        active_connections,
-        active_connections_per_worker,
-        relay_saturation_events_pending,
-        relay_saturation_events_total,
-        relay_saturation_events_per_sec,
-        relay_accept_batch_max,
-        relay_accept_workers,
-        relay_backend_connect_timeout_ms,
-        relay_backend_connect_cooldown_ms,
-        relay_dispatch_fallback_total,
-        relay_dispatch_fallback_per_sec,
-        autoscale_desired_instances,
-        autoscale_last_saturation_events,
-        autoscale_last_dynamic_boost_step,
-        autoscale_scale_up_cooldown_remaining_ms,
-        autoscale_scale_down_cooldown_remaining_ms,
-    };
     if last_snapshot
         .as_ref()
         .map(|previous| previous == &snapshot)
@@ -8333,30 +8284,31 @@ fn write_lasm_cluster_status_json(
     let payload = LasmClusterStatusPayload {
         mode: "lasm-cluster",
         updated_at_ms: lasm_now_ms(),
-        listen_port,
-        min_instances,
-        max_instances,
-        worker_count,
-        relay_worker_count,
-        relay_queue_capacity,
-        relay_queue_shard_capacity,
-        worker_ports: worker_ports.as_slice(),
-        active_connections,
-        active_connections_per_worker,
-        relay_saturation_events_pending,
-        relay_saturation_events_total,
-        relay_saturation_events_per_sec,
-        relay_accept_batch_max,
-        relay_accept_workers,
-        relay_backend_connect_timeout_ms,
-        relay_backend_connect_cooldown_ms,
-        relay_dispatch_fallback_total,
-        relay_dispatch_fallback_per_sec,
-        autoscale_desired_instances,
-        autoscale_last_saturation_events,
-        autoscale_last_dynamic_boost_step,
-        autoscale_scale_up_cooldown_remaining_ms,
-        autoscale_scale_down_cooldown_remaining_ms,
+        listen_port: snapshot.listen_port,
+        min_instances: snapshot.min_instances,
+        max_instances: snapshot.max_instances,
+        worker_count: snapshot.worker_count,
+        relay_worker_count: snapshot.relay_worker_count,
+        relay_queue_capacity: snapshot.relay_queue_capacity,
+        relay_queue_shard_capacity: snapshot.relay_queue_shard_capacity,
+        worker_ports: snapshot.worker_ports.as_slice(),
+        active_connections: snapshot.active_connections,
+        active_connections_per_worker: snapshot.active_connections_per_worker,
+        relay_saturation_events_pending: snapshot.relay_saturation_events_pending,
+        relay_saturation_events_total: snapshot.relay_saturation_events_total,
+        relay_saturation_events_per_sec: snapshot.relay_saturation_events_per_sec,
+        relay_accept_batch_max: snapshot.relay_accept_batch_max,
+        relay_accept_workers: snapshot.relay_accept_workers,
+        relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
+        relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
+        relay_dispatch_fallback_total: snapshot.relay_dispatch_fallback_total,
+        relay_dispatch_fallback_per_sec: snapshot.relay_dispatch_fallback_per_sec,
+        autoscale_desired_instances: snapshot.autoscale_desired_instances,
+        autoscale_last_saturation_events: snapshot.autoscale_last_saturation_events,
+        autoscale_last_dynamic_boost_step: snapshot.autoscale_last_dynamic_boost_step,
+        autoscale_scale_up_cooldown_remaining_ms: snapshot.autoscale_scale_up_cooldown_remaining_ms,
+        autoscale_scale_down_cooldown_remaining_ms: snapshot
+            .autoscale_scale_down_cooldown_remaining_ms,
     };
     let tmp_file = match fs::File::create(tmp_path) {
         Ok(file) => file,
@@ -9678,33 +9630,44 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 } else {
                     (active_connections as f64) / (worker_count as f64)
                 };
+                let status_snapshot = LasmClusterStatusSnapshot {
+                    listen_port: status_config.listen_port,
+                    min_instances: status_config.min_instances,
+                    max_instances: status_config.max_instances,
+                    worker_count,
+                    relay_worker_count: status_relay_worker_count,
+                    relay_queue_capacity: status_relay_queue_capacity,
+                    relay_queue_shard_capacity: status_relay_queue_shard_capacity,
+                    worker_ports,
+                    active_connections,
+                    active_connections_per_worker,
+                    relay_saturation_events_pending: status_saturation_events
+                        .load(Ordering::Relaxed),
+                    relay_saturation_events_total: saturation_total,
+                    relay_saturation_events_per_sec: saturation_per_sec,
+                    relay_accept_batch_max: status_config.cluster_relay_accept_batch_max,
+                    relay_accept_workers: status_relay_accept_workers,
+                    relay_backend_connect_timeout_ms: status_config
+                        .cluster_backend_connect_timeout_ms,
+                    relay_backend_connect_cooldown_ms: status_config
+                        .cluster_backend_connect_cooldown_ms,
+                    relay_dispatch_fallback_total: dispatch_fallback_total,
+                    relay_dispatch_fallback_per_sec: dispatch_fallback_per_sec,
+                    autoscale_desired_instances: status_autoscale_last_desired_instances
+                        .load(Ordering::Relaxed),
+                    autoscale_last_saturation_events: status_autoscale_last_saturation_events
+                        .load(Ordering::Relaxed),
+                    autoscale_last_dynamic_boost_step: status_autoscale_last_dynamic_boost_step
+                        .load(Ordering::Relaxed),
+                    autoscale_scale_up_cooldown_remaining_ms:
+                        status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
+                    autoscale_scale_down_cooldown_remaining_ms:
+                        status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
+                };
                 if let Err(err) = write_lasm_cluster_status_json(
                     status_path.as_path(),
                     status_tmp_path.as_path(),
-                    status_config.listen_port,
-                    status_config.min_instances,
-                    status_config.max_instances,
-                    worker_count,
-                    status_relay_worker_count,
-                    status_relay_queue_capacity,
-                    status_relay_queue_shard_capacity,
-                    &worker_ports,
-                    active_connections,
-                    active_connections_per_worker,
-                    status_saturation_events.load(Ordering::Relaxed),
-                    saturation_total,
-                    saturation_per_sec,
-                    status_config.cluster_relay_accept_batch_max,
-                    status_relay_accept_workers,
-                    status_config.cluster_backend_connect_timeout_ms,
-                    status_config.cluster_backend_connect_cooldown_ms,
-                    dispatch_fallback_total,
-                    dispatch_fallback_per_sec,
-                    status_autoscale_last_desired_instances.load(Ordering::Relaxed),
-                    status_autoscale_last_saturation_events.load(Ordering::Relaxed),
-                    status_autoscale_last_dynamic_boost_step.load(Ordering::Relaxed),
-                    status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
-                    status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
+                    status_snapshot,
                     &mut last_status_snapshot,
                     &mut status_parent_ready,
                 ) {
@@ -9806,8 +9769,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     Ordering::Relaxed,
                 );
                 let saturation_events_pending = autoscale_saturation_events.load(Ordering::Relaxed);
-                if now.duration_since(last_scale_eval_at)
-                    < autoscale_check_interval
+                if now.duration_since(last_scale_eval_at) < autoscale_check_interval
                     && saturation_events_pending == 0
                 {
                     continue;
@@ -9853,9 +9815,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     Some(at) => now.duration_since(at) >= autoscale_scale_up_cooldown,
                     None => true,
                 };
-                if desired > state.workers.len()
-                    && scale_up_cooldown_elapsed
-                {
+                if desired > state.workers.len() && scale_up_cooldown_elapsed {
                     while state.workers.len() < up_target {
                         let worker_port = state.next_port;
                         state.next_port = state.next_port.saturating_add(1);
@@ -9881,9 +9841,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     Some(at) => now.duration_since(at) >= autoscale_scale_down_cooldown,
                     None => true,
                 };
-                if desired < state.workers.len()
-                    && scale_down_cooldown_elapsed
-                {
+                if desired < state.workers.len() && scale_down_cooldown_elapsed {
                     while state.workers.len() > down_target {
                         if let Some(mut worker) = state.workers.pop() {
                             let _ = worker.child.kill();
