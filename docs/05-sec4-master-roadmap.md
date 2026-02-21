@@ -1399,6 +1399,10 @@ Post-alpha track acceptance anchors:
       - extracted `refresh_lasm_cluster_next_live_sender_lookup`, `refresh_lasm_cluster_single_live_sender_index`, `refresh_lasm_cluster_dual_live_sender_indices`, and `refresh_lasm_cluster_live_sender_hints` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`,
       - accept-loop/fallback call-sites now consume these helpers from module imports, continuing LASM cluster decomposition without runtime behavior changes.
       - documented in `docs/book/1309-m39-lasm-relay-live-hint-module-extraction.md`.
+   - [x] Extracted fallback dispatch mechanics into dedicated module:
+      - moved fallback dispatch enum + helpers (`dispatch_lasm_cluster_relay_stream_fallback_*` and scan-advance internals) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_fallback_dispatch.rs`,
+      - `main.rs` now imports fallback dispatch functions from module boundaries while retaining accept-loop orchestration and error handling.
+      - documented in `docs/book/1310-m39-lasm-fallback-dispatch-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

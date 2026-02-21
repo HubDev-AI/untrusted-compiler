@@ -1279,5 +1279,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1307-m39-lasm-relay-send-module-extraction.md`
 - `1308-m39-lasm-relay-topology-module-extraction.md`
 - `1309-m39-lasm-relay-live-hint-module-extraction.md`
+- `1310-m39-lasm-fallback-dispatch-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.
