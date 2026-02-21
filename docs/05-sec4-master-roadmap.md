@@ -1174,6 +1174,10 @@ Post-alpha track acceptance anchors:
      - deterministic guardrails now enforce `sec4-lasm` presence in `--impls` for mode-compare lane activation,
      - Makefile full-suite targets (`bench-full*`, `bench-full-saturation*`) now forward `FULL_LASM_INCLUDE_MODE_COMPARE=true` via `--include-lasm-mode-compare`.
      - documented in `docs/book/1253-m39-lasm-full-suite-optional-mode-compare-lane.md`.
+   - [x] Added mode-compare section rendering in benchmark markdown reports:
+     - `publish_report.sh` now accepts optional `mode_compare.json` and renders `LASM Mode Comparison` summary lines (recommended mode, pass statuses, req/s delta/gain, p99 split, peak RSS delta),
+     - `run_full_benchmark_suite.sh` now forwards the mode-compare artifact into `publish_report.sh` when `--include-lasm-mode-compare` is enabled, so one top-level full-suite run emits both artifacts and report summary.
+     - documented in `docs/book/1256-m39-benchmark-report-mode-compare-section.md`.
    - [x] Added relay accept-loop saturation short-circuit for fallback dispatch scans:
      - in multi-sender proxy mode, when one fallback scan confirms all relay sender shards are saturated for the current accept batch, subsequent `TrySendError::Full` dispatches in that same batch skip redundant full fallback scans and immediately return deterministic saturation handling,
      - successful dispatches reset the batch-saturation hint so recovery back to normal fallback behavior stays immediate once capacity frees up.

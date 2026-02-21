@@ -132,6 +132,10 @@ if ! grep -q 'proxyClusterRelayPumpBatchMax=77' <<<"$out_mode"; then
   echo "missing delegated mode-compare relay-pump-batch override" >&2
   exit 1
 fi
+if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*analysis.json .*step-matrix.json .*sec4-lasm-cluster-mode-compare.json' <<<"$out_mode"; then
+  echo "missing publish command with mode-compare summary input" >&2
+  exit 1
+fi
 
 if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls unknown --endpoints ping >/dev/null 2>&1; then
   echo "expected invalid impl to fail via delegated validation" >&2

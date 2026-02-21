@@ -278,6 +278,7 @@ step_matrix_path="${summaries_dir}/step-matrix.json"
 report_md_path="${results_dir}/benchmark-report.md"
 manifest_path="${results_dir}/artifact-manifest.json"
 saturation_summary_path="${summaries_dir}/sec4-lasm-cluster-saturation-boost-summary.md"
+mode_compare_summary_path="${summaries_dir}/sec4-lasm-cluster-mode-compare.json"
 
 if [ -z "$sec_audit_path" ]; then
   candidate="${root_dir}/../baselines/sec-audit/default-secure-prod.hello.json"
@@ -387,37 +388,20 @@ if [ "${include_lasm_mode_compare}" = "true" ]; then
 fi
 
 echo "phase: publish combined report"
+publish_args=("$matrix_path" "$report_md_path" "${sec_audit_path:-}" "$analysis_path" "$step_matrix_path")
+if [ "${include_lasm_saturation}" = "true" ]; then
+  publish_args+=("$saturation_summary_path")
+fi
+if [ "${include_lasm_mode_compare}" = "true" ]; then
+  publish_args+=("$mode_compare_summary_path")
+fi
 if [ "$dry_run" = "true" ]; then
-  if [ "${include_lasm_saturation}" = "true" ]; then
-    if [ -n "$sec_audit_path" ]; then
-      echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path} ${analysis_path} ${step_matrix_path} ${saturation_summary_path}"
-    else
-      echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} \"\" ${analysis_path} ${step_matrix_path} ${saturation_summary_path}"
-    fi
-  else
-    if [ -n "$sec_audit_path" ]; then
-      echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} ${sec_audit_path} ${analysis_path} ${step_matrix_path}"
-    else
-      echo "run: ${root_dir}/scripts/publish_report.sh ${matrix_path} ${report_md_path} \"\" ${analysis_path} ${step_matrix_path}"
-    fi
-  fi
+  echo "run: ${root_dir}/scripts/publish_report.sh ${publish_args[*]}"
   echo "run: ${root_dir}/scripts/build_artifact_manifest.sh ${results_dir} ${manifest_path}"
   exit 0
 fi
 
-if [ "${include_lasm_saturation}" = "true" ]; then
-  if [ -n "$sec_audit_path" ]; then
-    "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "$sec_audit_path" "$analysis_path" "$step_matrix_path" "$saturation_summary_path"
-  else
-    "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "" "$analysis_path" "$step_matrix_path" "$saturation_summary_path"
-  fi
-else
-  if [ -n "$sec_audit_path" ]; then
-    "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "$sec_audit_path" "$analysis_path" "$step_matrix_path"
-  else
-    "${root_dir}/scripts/publish_report.sh" "$matrix_path" "$report_md_path" "" "$analysis_path" "$step_matrix_path"
-  fi
-fi
+"${root_dir}/scripts/publish_report.sh" "${publish_args[@]}"
 
 "${root_dir}/scripts/build_artifact_manifest.sh" "$results_dir" "$manifest_path"
 

@@ -17,7 +17,7 @@ analysis="$tmp/analysis.json"
 "$root_dir/scripts/analyze_matrix.sh" "$matrix" "$analysis" >/dev/null
 
 out="$tmp/report.md"
-"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" "$root_dir/scripts/testdata/sample-step-matrix.json" "$root_dir/scripts/testdata/sample-saturation-boost-summary.md" >/dev/null
+"$root_dir/scripts/publish_report.sh" "$matrix" "$out" "$root_dir/../baselines/sec-audit/default-secure-prod.hello.json" "$analysis" "$root_dir/scripts/testdata/sample-step-matrix.json" "$root_dir/scripts/testdata/sample-saturation-boost-summary.md" "$root_dir/scripts/testdata/sample-mode-compare.json" >/dev/null
 
 if ! grep -q '^# Benchmark Comparative Report (v0.1)$' "$out"; then
   echo "missing report title" >&2
@@ -111,6 +111,18 @@ if ! grep -q 'Recommended boost step: 4' "$out"; then
 fi
 if ! grep -q 'Selection mode: pass-first' "$out"; then
   echo "missing saturation boost selection mode summary" >&2
+  exit 1
+fi
+if ! grep -q '^## LASM Mode Comparison$' "$out"; then
+  echo "missing mode comparison section" >&2
+  exit 1
+fi
+if ! grep -q 'Recommended mode: fixed-reuse-port' "$out"; then
+  echo "missing mode comparison recommendation summary" >&2
+  exit 1
+fi
+if ! grep -q 'Requests/sec gain vs proxy: 59.21%' "$out"; then
+  echo "missing mode comparison gain summary" >&2
   exit 1
 fi
 
