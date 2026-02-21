@@ -1067,6 +1067,10 @@ Post-alpha track acceptance anchors:
      - relay worker selection now advances round-robin start index with direct wrapped arithmetic (`start + 1` with wrap) instead of prebuilding/reading a per-worker next-index vector,
      - removes worker-port-change vector rebuild overhead and per-dispatch lookup reads while preserving selection order semantics.
      - documented in `docs/book/1228-m39-lasm-cluster-direct-round-robin-next-index.md`.
+   - [x] Removed accept-loop sender next-index lookup vector and unified wrapped index progression helper:
+     - accept loop multi-relay dispatch now computes next relay sender index via `lasm_cluster_next_index_wrapped(...)` instead of a prebuilt sender next-index vector,
+     - fallback relay scan now also advances with the same wrapped helper, removing per-accept-loop sender-vector setup and per-step lookup reads while preserving relay scan order.
+     - documented in `docs/book/1229-m39-lasm-cluster-accept-fallback-direct-next-index-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

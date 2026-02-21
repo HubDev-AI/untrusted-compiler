@@ -8409,17 +8409,25 @@ enum LasmClusterRelayDispatchError {
 }
 
 #[inline(always)]
+fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
+    debug_assert!(count > 0);
+    if index + 1 == count {
+        0
+    } else {
+        index + 1
+    }
+}
+
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
-    relay_dispatch_next_index_by_sender: &[usize],
     start_index_wrapped: usize,
     mut saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     let sender_count = relay_senders.len();
     debug_assert!(sender_count > 1);
     debug_assert!(start_index_wrapped < sender_count);
-    debug_assert_eq!(relay_dispatch_next_index_by_sender.len(), sender_count);
     let mut scan_index = start_index_wrapped;
     let scan_attempts = sender_count.saturating_sub(1);
     for _ in 0..scan_attempts {
@@ -8433,7 +8441,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
         }
-        scan_index = relay_dispatch_next_index_by_sender[scan_index];
+        scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
     }
 
     if saw_live_sender {
@@ -8522,20 +8530,6 @@ fn run_lasm_cluster_accept_loop(
     } else {
         None
     };
-    let relay_dispatch_next_index_by_sender = if relay_sender_count > 1 {
-        let mut next_index_by_sender = Vec::with_capacity(relay_sender_count);
-        for sender_index in 0..relay_sender_count {
-            let next_index = if sender_index + 1 == relay_sender_count {
-                0
-            } else {
-                sender_index + 1
-            };
-            next_index_by_sender.push(next_index);
-        }
-        Some(next_index_by_sender)
-    } else {
-        None
-    };
     let mut relay_dispatch_cursor = if relay_sender_count > 1 {
         initial_dispatch_cursor % relay_sender_count
     } else {
@@ -8600,16 +8594,15 @@ fn run_lasm_cluster_accept_loop(
                 }
             }
         } else {
-            let relay_dispatch_next_index_by_sender = relay_dispatch_next_index_by_sender
-                .as_ref()
-                .expect("multi-relay accept path requires next-index lookup");
             while listener_accepted_in_batch < relay_accept_batch_max {
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
                         let stream_dispatch_start = relay_dispatch_cursor;
-                        let next_dispatch_index =
-                            relay_dispatch_next_index_by_sender[stream_dispatch_start];
+                        let next_dispatch_index = lasm_cluster_next_index_wrapped(
+                            stream_dispatch_start,
+                            relay_sender_count,
+                        );
                         relay_dispatch_cursor = next_dispatch_index;
 
                         match relay_senders[stream_dispatch_start].try_send(client_stream) {
@@ -8626,7 +8619,6 @@ fn run_lasm_cluster_accept_loop(
                                     dispatch_lasm_cluster_relay_stream_fallback_multi(
                                         stream,
                                         relay_senders,
-                                        relay_dispatch_next_index_by_sender,
                                         next_dispatch_index,
                                         saw_live_sender,
                                     );
@@ -9368,11 +9360,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         let start_index = relay_selection_reservation_next_index;
                         relay_selection_reservation_offset += 1;
                         relay_selection_reservation_next_index =
-                            if start_index + 1 == worker_port_count {
-                                0
-                            } else {
-                                start_index + 1
-                            };
+                            lasm_cluster_next_index_wrapped(start_index, worker_port_count);
                         if selection_lookup_is_identity {
                             start_index
                         } else {
