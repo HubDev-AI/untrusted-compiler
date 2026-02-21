@@ -8542,6 +8542,24 @@ fn realign_lasm_cluster_dispatch_cursor_to_live(
 }
 
 #[inline(always)]
+fn refresh_lasm_cluster_single_live_sender_index(
+    relay_sender_live: &[bool],
+    relay_live_sender_count: usize,
+    relay_single_live_sender_index: &mut Option<usize>,
+) {
+    if relay_live_sender_count != 1 {
+        *relay_single_live_sender_index = None;
+        return;
+    }
+    if let Some(index) = *relay_single_live_sender_index {
+        if relay_sender_live[index] {
+            return;
+        }
+    }
+    *relay_single_live_sender_index = lasm_cluster_next_live_sender_index(relay_sender_live, 0);
+}
+
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
@@ -8716,6 +8734,7 @@ fn run_lasm_cluster_accept_loop(
     };
     let mut relay_live_sender_count = relay_sender_count;
     let mut relay_all_senders_live = relay_sender_count > 1;
+    let mut relay_single_live_sender_index: Option<usize> = None;
 
     loop {
         if stop_flag.load(Ordering::Relaxed) {
@@ -8787,12 +8806,53 @@ fn run_lasm_cluster_accept_loop(
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
                         if !relay_all_senders_live {
-                            if relay_live_sender_count == 0
-                                || !realign_lasm_cluster_dispatch_cursor_to_live(
+                            if relay_live_sender_count == 0 {
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                    LasmClusterRelayDispatchError::Unavailable(client_stream),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    relay_dispatch_short_circuit_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                    &mut listener_dispatch_short_circuit_total_local,
+                                ) {
+                                    return Err(message);
+                                }
+                                continue;
+                            }
+                            if relay_live_sender_count == 1 {
+                                refresh_lasm_cluster_single_live_sender_index(
                                     relay_sender_live.as_slice(),
-                                    &mut relay_dispatch_cursor,
-                                )
-                            {
+                                    relay_live_sender_count,
+                                    &mut relay_single_live_sender_index,
+                                );
+                                let Some(single_live_index) = relay_single_live_sender_index else {
+                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                        LasmClusterRelayDispatchError::Unavailable(client_stream),
+                                        active_connections,
+                                        relay_saturation_events,
+                                        relay_saturation_events_total,
+                                        relay_dispatch_fallback_total,
+                                        relay_dispatch_short_circuit_total,
+                                        &mut listener_enqueued_local,
+                                        &mut listener_saturation_pending_local,
+                                        &mut listener_saturation_total_local,
+                                        &mut listener_dispatch_fallback_total_local,
+                                        &mut listener_dispatch_short_circuit_total_local,
+                                    ) {
+                                        return Err(message);
+                                    }
+                                    continue;
+                                };
+                                relay_dispatch_cursor = single_live_index;
+                            } else if !realign_lasm_cluster_dispatch_cursor_to_live(
+                                relay_sender_live.as_slice(),
+                                &mut relay_dispatch_cursor,
+                            ) {
                                 if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
                                     LasmClusterRelayDispatchError::Unavailable(client_stream),
                                     active_connections,
@@ -8852,6 +8912,11 @@ fn run_lasm_cluster_accept_loop(
                                         relay_live_sender_count =
                                             relay_live_sender_count.saturating_sub(1);
                                         relay_all_senders_live = false;
+                                        refresh_lasm_cluster_single_live_sender_index(
+                                            relay_sender_live.as_slice(),
+                                            relay_live_sender_count,
+                                            &mut relay_single_live_sender_index,
+                                        );
                                         (stream, false)
                                     }
                                 };
@@ -8867,6 +8932,7 @@ fn run_lasm_cluster_accept_loop(
                                     );
                                 if !relay_all_senders_live
                                     && relay_live_sender_count > 0
+                                    && relay_live_sender_count > 1
                                     && !relay_sender_live[relay_dispatch_cursor]
                                 {
                                     let _ = realign_lasm_cluster_dispatch_cursor_to_live(
@@ -8874,6 +8940,11 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_dispatch_cursor,
                                     );
                                 }
+                                refresh_lasm_cluster_single_live_sender_index(
+                                    relay_sender_live.as_slice(),
+                                    relay_live_sender_count,
+                                    &mut relay_single_live_sender_index,
+                                );
                                 match dispatch_result {
                                     Ok(()) => {
                                         listener_enqueued_local += 1;

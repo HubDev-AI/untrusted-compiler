@@ -1215,6 +1215,10 @@ Post-alpha track acceptance anchors:
      - multi-sender accept dispatch now short-circuits to deterministic unavailable handling when `relay_live_sender_count == 0` instead of running repeated live-scan lookups,
      - after fallback/primary disconnect events, dispatch cursor now realigns to a live shard once (when possible) so subsequent degraded-path dispatch avoids repeated full live-index scans.
      - documented in `docs/book/1263-m39-lasm-degraded-live-cursor-realignment.md`.
+   - [x] Added single-live-shard degraded dispatch fast path:
+     - when degraded mode has exactly one live relay shard (`relay_live_sender_count == 1`), accept dispatch now reuses cached `relay_single_live_sender_index` and pins dispatch cursor directly to it,
+     - avoids repeated generic live-shard scan lookups on each request in single-live-shard degraded states while preserving deterministic unavailable behavior if no live shard remains.
+     - documented in `docs/book/1264-m39-lasm-single-live-shard-dispatch-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
