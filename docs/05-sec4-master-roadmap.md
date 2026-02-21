@@ -1047,6 +1047,10 @@ Post-alpha track acceptance anchors:
      - single-relay accept path now maps `TrySendError::{Full,Disconnected}` through one shared error-mapping branch before dispatch-error handling,
      - multi-relay accept path now uses one shared `TrySendError` branch to drive fallback dispatch with derived `saw_live_sender`.
      - documented in `docs/book/1223-m39-lasm-cluster-accept-try-send-error-branch-unification.md`.
+   - [x] Switched changed-snapshot status writes to streamed temp-file serialization:
+     - status writer now writes changed payloads via `serde_json::to_writer` into a buffered temp file and flushes before atomic rename,
+     - removes changed-write `to_vec` allocation/copy path while preserving atomic file replacement semantics.
+     - documented in `docs/book/1224-m39-lasm-cluster-status-writer-streamed-tempfile-serialization.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

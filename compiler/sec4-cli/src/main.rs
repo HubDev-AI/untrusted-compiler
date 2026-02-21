@@ -15,7 +15,7 @@ use sec4_core::{
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -8349,12 +8349,18 @@ fn write_lasm_cluster_status_json(
         autoscale_scale_up_cooldown_remaining_ms,
         autoscale_scale_down_cooldown_remaining_ms,
     };
-    let encoded = serde_json::to_vec(&payload)
-        .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
-
-    fs::write(tmp_path, encoded).map_err(|err| {
+    let tmp_file = fs::File::create(tmp_path).map_err(|err| {
         format!(
-            "could not write cluster status json temporary file {}: {err}",
+            "could not create cluster status json temporary file {}: {err}",
+            tmp_path.display()
+        )
+    })?;
+    let mut tmp_writer = BufWriter::new(tmp_file);
+    serde_json::to_writer(&mut tmp_writer, &payload)
+        .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
+    tmp_writer.flush().map_err(|err| {
+        format!(
+            "could not flush cluster status json temporary file {}: {err}",
             tmp_path.display()
         )
     })?;
