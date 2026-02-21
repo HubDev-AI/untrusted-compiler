@@ -7624,6 +7624,7 @@ struct LasmClusterConfig {
     cluster_accept_workers: Option<usize>,
     cluster_relay_accept_batch_max: usize,
     cluster_relay_pump_batch_max: usize,
+    cluster_selection_reservation_min_chunk: usize,
     cluster_backend_connect_timeout_ms: u64,
     cluster_backend_connect_cooldown_ms: u64,
     cluster_status_json: Option<PathBuf>,
@@ -8022,6 +8023,10 @@ fn lasm_cluster_relay_pump_batch_max(config: &LasmClusterConfig) -> usize {
     config.cluster_relay_pump_batch_max.max(1)
 }
 
+fn lasm_cluster_selection_reservation_min_chunk(config: &LasmClusterConfig) -> usize {
+    config.cluster_selection_reservation_min_chunk.max(1)
+}
+
 enum LasmClusterUnavailableReason {
     NoHealthyWorkers,
     WorkerUnavailable,
@@ -8078,6 +8083,7 @@ struct LasmClusterStatusSnapshot {
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
+    relay_selection_reservation_min_chunk: usize,
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
@@ -8111,6 +8117,8 @@ impl PartialEq for LasmClusterStatusSnapshot {
             && self.relay_saturation_events_per_sec == other.relay_saturation_events_per_sec
             && self.relay_accept_batch_max == other.relay_accept_batch_max
             && self.relay_pump_batch_max == other.relay_pump_batch_max
+            && self.relay_selection_reservation_min_chunk
+                == other.relay_selection_reservation_min_chunk
             && self.relay_accept_workers == other.relay_accept_workers
             && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
             && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
@@ -8151,6 +8159,7 @@ struct LasmClusterStatusPayload<'a> {
     relay_saturation_events_per_sec: f64,
     relay_accept_batch_max: usize,
     relay_pump_batch_max: usize,
+    relay_selection_reservation_min_chunk: usize,
     relay_accept_workers: usize,
     relay_backend_connect_timeout_ms: u64,
     relay_backend_connect_cooldown_ms: u64,
@@ -8218,6 +8227,7 @@ fn write_lasm_cluster_status_json(
         relay_saturation_events_per_sec: snapshot.relay_saturation_events_per_sec,
         relay_accept_batch_max: snapshot.relay_accept_batch_max,
         relay_pump_batch_max: snapshot.relay_pump_batch_max,
+        relay_selection_reservation_min_chunk: snapshot.relay_selection_reservation_min_chunk,
         relay_accept_workers: snapshot.relay_accept_workers,
         relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
         relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
@@ -9758,6 +9768,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         lasm_cluster_proxy_queue_capacity(shared_config.as_ref(), relay_worker_count);
     let relay_accept_batch_max = lasm_cluster_relay_accept_batch_max(shared_config.as_ref());
     let relay_pump_batch_max = lasm_cluster_relay_pump_batch_max(shared_config.as_ref());
+    let relay_selection_reservation_min_chunk =
+        lasm_cluster_selection_reservation_min_chunk(shared_config.as_ref());
     let relay_queue_shard_capacity = relay_queue_capacity
         .saturating_add(relay_worker_count.saturating_sub(1))
         / relay_worker_count.max(1);
@@ -9790,6 +9802,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_backend_connect_cooldown = relay_backend_connect_cooldown;
         let relay_accept_batch_max = relay_accept_batch_max;
         let relay_pump_batch_max = relay_pump_batch_max;
+        let relay_selection_reservation_min_chunk = relay_selection_reservation_min_chunk;
         relay_handles.push(std::thread::spawn(move || {
             let relay_buffer_pool_max = relay_accept_batch_max.saturating_mul(4).max(64);
             let mut relay_connections: Vec<LasmClusterRelayPump> =
@@ -10008,8 +10021,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
                         {
-                            let reservation_chunk = relay_accept_batch_max
-                                .max(LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK);
+                            let reservation_chunk =
+                                relay_accept_batch_max.max(relay_selection_reservation_min_chunk);
                             let relay_selection_reservation_base = relay_selection_counter
                                 .fetch_add(reservation_chunk, Ordering::Relaxed);
                             relay_selection_reservation_len = reservation_chunk;
@@ -10358,6 +10371,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     relay_saturation_events_per_sec: saturation_per_sec,
                     relay_accept_batch_max: status_config.cluster_relay_accept_batch_max,
                     relay_pump_batch_max: status_config.cluster_relay_pump_batch_max,
+                    relay_selection_reservation_min_chunk: status_config
+                        .cluster_selection_reservation_min_chunk,
                     relay_accept_workers: status_relay_accept_workers,
                     relay_backend_connect_timeout_ms: status_config
                         .cluster_backend_connect_timeout_ms,
@@ -10942,6 +10957,10 @@ fn cmd_run_lasm_backend(
         cluster_relay_pump_batch_max,
         effective_cluster_relay_accept_batch_max,
     );
+    let effective_cluster_selection_reservation_min_chunk =
+        resolve_lasm_cluster_selection_reservation_min_chunk(
+            effective_cluster_relay_accept_batch_max,
+        );
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
@@ -11061,6 +11080,8 @@ fn cmd_run_lasm_backend(
             cluster_accept_workers: None,
             cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
             cluster_relay_pump_batch_max: effective_cluster_relay_pump_batch_max,
+            cluster_selection_reservation_min_chunk:
+                effective_cluster_selection_reservation_min_chunk,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: None,
@@ -11105,6 +11126,8 @@ fn cmd_run_lasm_backend(
             cluster_accept_workers,
             cluster_relay_accept_batch_max: effective_cluster_relay_accept_batch_max,
             cluster_relay_pump_batch_max: effective_cluster_relay_pump_batch_max,
+            cluster_selection_reservation_min_chunk:
+                effective_cluster_selection_reservation_min_chunk,
             cluster_backend_connect_timeout_ms,
             cluster_backend_connect_cooldown_ms,
             cluster_status_json: cluster_status_json.map(Path::to_path_buf),
@@ -12067,6 +12090,24 @@ fn resolve_lasm_cluster_relay_pump_batch_max(
         .filter(|parsed| *parsed > 0)
         .map(|parsed| parsed.clamp(1, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX))
         .unwrap_or(default_value)
+}
+
+fn resolve_lasm_cluster_selection_reservation_min_chunk(relay_accept_batch_max: usize) -> usize {
+    let default_value = LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK.max(1);
+    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK") else {
+        return default_value;
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return default_value;
+    }
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .map(|parsed| parsed.clamp(1, 65_536))
+        .unwrap_or(default_value)
+        .max(relay_accept_batch_max.max(1))
 }
 
 fn resolve_lasm_max_requests_per_connection(

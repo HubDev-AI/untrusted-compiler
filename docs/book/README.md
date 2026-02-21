@@ -1244,5 +1244,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1272-m39-lasm-degraded-fallback-cached-hint-fast-paths.md`
 - `1273-m39-lasm-no-live-telemetry-atomic-elision.md`
 - `1274-m39-lasm-fallback-live-count-atomic-dedup.md`
+- `1275-m39-lasm-selection-reservation-min-chunk-env-and-status.md`
 
 As milestones progress, chapters will be added and linked from this index.
