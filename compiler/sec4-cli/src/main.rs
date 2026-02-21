@@ -2,7 +2,6 @@ use arc_swap::ArcSwap;
 use base64::Engine;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use crossbeam_channel::{bounded, Sender, TrySendError};
-use postgres::Client as PostgresClient;
 use sec4_core::{
     analyze_entry, analyze_entry_with_allows, analyze_program_with_policy,
     build_security_map_with_allows, emit_program_with_backend, parse_source,
@@ -31,18 +30,14 @@ mod lasm_db_runtime_common;
 mod lasm_db_runtime_dispatch;
 mod lasm_db_runtime_postgres;
 mod lasm_db_runtime_sqlite;
+mod lasm_dynamic_state;
 
-use lasm_db_adapter_state::{
-    connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
-    ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
-    load_lasm_dynamic_db_records_from_sqlite,
+use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
+pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
+pub(crate) use lasm_dynamic_state::{
+    build_lasm_dynamic_response_state, persist_lasm_dynamic_users_to_disk, LasmDbRecord,
+    LasmDbRecordsAdapter, LasmDynamicResponseState, LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE,
 };
-use lasm_db_config::{
-    lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file,
-    resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
-    resolve_lasm_dynamic_db_tx_max_handles, resolve_lasm_dynamic_store_base,
-};
-use lasm_db_records_log::{lasm_db_record_to_json, load_lasm_dynamic_db_records_from_disk};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -1239,43 +1234,6 @@ struct LasmRouteMiddlewareRequirements {
     require_csrf: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
-enum LasmDbRecordsAdapter {
-    #[default]
-    RecordsLog,
-    Sqlite,
-    Postgres,
-}
-
-#[derive(Default)]
-struct LasmDynamicResponseState {
-    users_by_id: HashMap<String, serde_json::Value>,
-    users_store_path: Option<PathBuf>,
-    db_records: Vec<LasmDbRecord>,
-    db_records_adapter: LasmDbRecordsAdapter,
-    db_records_store_path: Option<PathBuf>,
-    db_records_sqlite_store_path: Option<PathBuf>,
-    db_records_sqlite_connection: Option<rusqlite::Connection>,
-    db_records_postgres_dsn: Option<String>,
-    db_records_postgres_client: Option<PostgresClient>,
-    db_tx_handles: HashMap<i64, i64>,
-    db_tx_max_handles: usize,
-    next_db_tx_handle: i64,
-    next_db_record_id: u64,
-}
-
-#[derive(Debug, Clone)]
-struct LasmDbRecord {
-    id: u64,
-    op: String,
-    db: i64,
-    template: String,
-    params: String,
-    tx: i64,
-    affected_rows: u64,
-    created_at_ms: u64,
-}
-
 const LASM_INTERNAL_AUTH_REQUIRE_HEADER: &str = "X-Sec4-Internal-Auth-Require";
 const LASM_INTERNAL_AUTH_REQUIRE_ROLE_HEADER: &str = "X-Sec4-Internal-Auth-Require-Role";
 const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
@@ -1289,155 +1247,6 @@ const LASM_INTERNAL_DB_PARAMS_HEADER: &str = "X-Sec4-Internal-Db-Params";
 const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
 const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
 const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
-const LASM_DYNAMIC_DB_POSTGRES_RECORDS_TABLE: &str = "sec4_lasm_db_records";
-
-fn build_lasm_dynamic_response_state(
-    explicit_db_base: Option<&Path>,
-    explicit_db_records_adapter: Option<LasmDbRecordsAdapter>,
-    explicit_db_postgres_dsn: Option<&str>,
-    explicit_db_tx_max_handles: Option<usize>,
-) -> Result<LasmDynamicResponseState, String> {
-    let base = resolve_lasm_dynamic_store_base(explicit_db_base);
-    let users_store_path = base.as_ref().map(|base| base.join("users.json"));
-    let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
-    let db_records_store_path = base.as_ref().map(|base| base.join("records.log"));
-    let db_records_sqlite_store_path = base.as_ref().map(|base| base.join("records.sqlite3"));
-    let db_records_postgres_dsn =
-        resolve_lasm_dynamic_db_postgres_dsn(db_records_adapter, explicit_db_postgres_dsn)?;
-    let mut db_records_sqlite_connection = None;
-    let mut db_records_postgres_client = None;
-    let users_by_id = users_store_path
-        .as_ref()
-        .map(|path| load_lasm_dynamic_users_from_disk(path.as_path()))
-        .unwrap_or_default();
-    let db_records = match db_records_adapter {
-        LasmDbRecordsAdapter::RecordsLog => db_records_store_path
-            .as_ref()
-            .map(|path| load_lasm_dynamic_db_records_from_disk(path.as_path()))
-            .unwrap_or_default(),
-        LasmDbRecordsAdapter::Sqlite => db_records_sqlite_store_path
-            .as_ref()
-            .map(|path| {
-                let records = load_lasm_dynamic_db_records_from_sqlite(path.as_path());
-                match connect_lasm_dynamic_db_records_sqlite(path.as_path()) {
-                    Ok(connection) => {
-                        db_records_sqlite_connection = Some(connection);
-                    }
-                    Err(err) => {
-                        eprintln!(
-                            "warning: LASM dynamic sqlite records connection bootstrap failed at `{}`: {err}",
-                            path.display()
-                        );
-                    }
-                }
-                records
-            })
-            .unwrap_or_default(),
-        LasmDbRecordsAdapter::Postgres => {
-            let dsn = db_records_postgres_dsn
-                .as_ref()
-                .ok_or_else(|| {
-                    "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set"
-                        .to_string()
-                })?
-                .as_str();
-            let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
-            ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
-            let records = load_lasm_dynamic_db_records_from_postgres(&mut client)?;
-            db_records_postgres_client = Some(client);
-            records
-        }
-    };
-    let next_db_record_id = db_records
-        .iter()
-        .map(|record| record.id)
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
-    let db_tx_max_handles = resolve_lasm_dynamic_db_tx_max_handles(explicit_db_tx_max_handles)?;
-    // Tx handles are runtime-local capabilities and must not be resurrected from persisted
-    // record history across process restarts.
-    let db_tx_handles = HashMap::new();
-    let next_db_tx_handle = 1;
-    Ok(LasmDynamicResponseState {
-        users_by_id,
-        users_store_path,
-        db_records,
-        db_records_adapter,
-        db_records_store_path,
-        db_records_sqlite_store_path,
-        db_records_sqlite_connection,
-        db_records_postgres_dsn,
-        db_records_postgres_client,
-        db_tx_handles,
-        db_tx_max_handles,
-        next_db_tx_handle,
-        next_db_record_id,
-    })
-}
-
-fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {
-    let raw = match fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return HashMap::new(),
-        Err(err) => {
-            eprintln!(
-                "warning: LASM dynamic users store load failed at `{}`: {err}",
-                path.display()
-            );
-            return HashMap::new();
-        }
-    };
-    let parsed: serde_json::Value = match serde_json::from_slice(&raw) {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!(
-                "warning: LASM dynamic users store parse failed at `{}`: {err}",
-                path.display()
-            );
-            return HashMap::new();
-        }
-    };
-    let Some(object) = parsed.as_object() else {
-        eprintln!(
-            "warning: LASM dynamic users store root must be a JSON object at `{}`",
-            path.display()
-        );
-        return HashMap::new();
-    };
-    object
-        .iter()
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect()
-}
-
-fn persist_lasm_dynamic_users_to_disk(state: &LasmDynamicResponseState) -> Result<(), String> {
-    let Some(path) = state.users_store_path.as_ref() else {
-        return Ok(());
-    };
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "could not create LASM dynamic users store directory `{}`: {err}",
-                parent.display()
-            )
-        })?;
-    }
-    let ordered = state
-        .users_by_id
-        .iter()
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let bytes = serde_json::to_vec_pretty(&ordered)
-        .map_err(|err| format!("could not serialize LASM dynamic users store: {err}"))?;
-    fs::write(path, bytes).map_err(|err| {
-        format!(
-            "could not write LASM dynamic users store `{}`: {err}",
-            path.display()
-        )
-    })?;
-    Ok(())
-}
 
 pub(crate) fn has_lasm_sql_non_trailing_statement_separator(query_template: &str) -> bool {
     let bytes = query_template.as_bytes();
