@@ -9058,27 +9058,41 @@ fn run_lasm_cluster_accept_loop(
                             }
                         }
                         let stream_dispatch_start = relay_dispatch_cursor;
-                        let next_dispatch_index = if !relay_all_senders_live
-                            && relay_live_sender_count == 2
-                        {
-                            if let Some((first_live, second_live)) = relay_dual_live_sender_indices
-                            {
-                                if stream_dispatch_start == first_live {
-                                    second_live
+                        let next_dispatch_wrapped = lasm_cluster_next_index_wrapped(
+                            stream_dispatch_start,
+                            relay_sender_count,
+                        );
+                        let next_dispatch_index = if !relay_all_senders_live {
+                            if relay_live_sender_count == 1 {
+                                stream_dispatch_start
+                            } else if relay_live_sender_count == 2 {
+                                if let Some((first_live, second_live)) =
+                                    relay_dual_live_sender_indices
+                                {
+                                    if stream_dispatch_start == first_live {
+                                        second_live
+                                    } else {
+                                        first_live
+                                    }
                                 } else {
-                                    first_live
+                                    next_dispatch_wrapped
                                 }
-                            } else {
-                                lasm_cluster_next_index_wrapped(
-                                    stream_dispatch_start,
-                                    relay_sender_count,
+                            } else if relay_sender_live[next_dispatch_wrapped]
+                                == LASM_CLUSTER_RELAY_SENDER_LIVE
+                            {
+                                next_dispatch_wrapped
+                            } else if let Some(next_live_index) =
+                                lasm_cluster_next_live_sender_index(
+                                    relay_sender_live.as_slice(),
+                                    next_dispatch_wrapped,
                                 )
+                            {
+                                next_live_index
+                            } else {
+                                next_dispatch_wrapped
                             }
                         } else {
-                            lasm_cluster_next_index_wrapped(
-                                stream_dispatch_start,
-                                relay_sender_count,
-                            )
+                            next_dispatch_wrapped
                         };
                         relay_dispatch_cursor = next_dispatch_index;
 

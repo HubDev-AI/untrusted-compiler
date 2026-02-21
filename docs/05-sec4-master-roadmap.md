@@ -1263,6 +1263,10 @@ Post-alpha track acceptance anchors:
      - relay worker backend-selection reservation chunk is now configurable via `SEC4_RT_LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK` (bounded and clamped against accept batch size),
      - cluster status JSON now emits resolved `relaySelectionReservationMinChunk` for operator observability during load tuning.
      - documented in `docs/book/1275-m39-lasm-selection-reservation-min-chunk-env-and-status.md`.
+   - [x] Added degraded dispatch cursor live-slot skipping for multi-live pools:
+     - in degraded mode with more than two live relay shards, accept-loop cursor advancement now skips dead next-slot indices and advances directly to the next known live shard,
+     - single-live degraded mode now keeps the dispatch cursor pinned to the current live shard instead of wrapping through dead slots between requests.
+     - documented in `docs/book/1276-m39-lasm-degraded-cursor-live-slot-skipping.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
