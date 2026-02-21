@@ -8316,6 +8316,51 @@ fn refresh_lasm_cluster_dual_live_sender_indices(
 }
 
 #[inline(always)]
+fn refresh_lasm_cluster_live_sender_hints(
+    relay_sender_live: &[u8],
+    relay_live_sender_count: usize,
+    relay_single_live_sender_index: &mut Option<usize>,
+    relay_dual_live_sender_indices: &mut Option<(usize, usize)>,
+) {
+    if relay_live_sender_count == 1 {
+        let mut single_live_index = if let Some(index) = *relay_single_live_sender_index {
+            if relay_sender_live[index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                Some(index)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if single_live_index.is_none() {
+            if let Some((first, second)) = *relay_dual_live_sender_indices {
+                if relay_sender_live[first] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                    single_live_index = Some(first);
+                } else if relay_sender_live[second] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                    single_live_index = Some(second);
+                }
+            }
+        }
+        if single_live_index.is_none() {
+            single_live_index = lasm_cluster_next_live_sender_index(relay_sender_live, 0);
+        }
+        *relay_single_live_sender_index = single_live_index;
+        *relay_dual_live_sender_indices = None;
+        return;
+    }
+    *relay_single_live_sender_index = None;
+    if relay_live_sender_count == 2 {
+        refresh_lasm_cluster_dual_live_sender_indices(
+            relay_sender_live,
+            relay_live_sender_count,
+            relay_dual_live_sender_indices,
+        );
+        return;
+    }
+    *relay_dual_live_sender_indices = None;
+}
+
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
     client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
@@ -8852,14 +8897,10 @@ fn run_lasm_cluster_accept_loop(
                                         relay_live_sender_count_observed
                                             .fetch_min(relay_live_sender_count, Ordering::Relaxed);
                                         relay_all_senders_live = false;
-                                        refresh_lasm_cluster_single_live_sender_index(
+                                        refresh_lasm_cluster_live_sender_hints(
                                             relay_sender_live.as_slice(),
                                             relay_live_sender_count,
                                             &mut relay_single_live_sender_index,
-                                        );
-                                        refresh_lasm_cluster_dual_live_sender_indices(
-                                            relay_sender_live.as_slice(),
-                                            relay_live_sender_count,
                                             &mut relay_dual_live_sender_indices,
                                         );
                                         (stream, false)
@@ -8920,14 +8961,10 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_dispatch_cursor,
                                     );
                                 }
-                                refresh_lasm_cluster_single_live_sender_index(
+                                refresh_lasm_cluster_live_sender_hints(
                                     relay_sender_live.as_slice(),
                                     relay_live_sender_count,
                                     &mut relay_single_live_sender_index,
-                                );
-                                refresh_lasm_cluster_dual_live_sender_indices(
-                                    relay_sender_live.as_slice(),
-                                    relay_live_sender_count,
                                     &mut relay_dual_live_sender_indices,
                                 );
                                 relay_live_sender_count_observed
