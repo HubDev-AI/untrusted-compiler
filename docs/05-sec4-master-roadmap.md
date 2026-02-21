@@ -1259,6 +1259,10 @@ Post-alpha track acceptance anchors:
      - accept-loop fallback now records primary relay-sender disconnect live-count changes through the existing end-of-fallback live-count delta branch, instead of issuing an immediate extra `fetch_min` before fallback completion,
      - keeps live telemetry semantics unchanged while removing duplicate disconnect-path atomic updates.
      - documented in `docs/book/1274-m39-lasm-fallback-live-count-atomic-dedup.md`.
+   - [x] Added env-tunable relay selection reservation chunk with status visibility:
+     - relay worker backend-selection reservation chunk is now configurable via `SEC4_RT_LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK` (bounded and clamped against accept batch size),
+     - cluster status JSON now emits resolved `relaySelectionReservationMinChunk` for operator observability during load tuning.
+     - documented in `docs/book/1275-m39-lasm-selection-reservation-min-chunk-env-and-status.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
