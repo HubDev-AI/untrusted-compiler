@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-21 | self | While extracting shared fallback send-attempt logic, I initially updated `scan_live_target_dynamic` on every non-dispatch attempt (including `Full`), which changed degraded-scan behavior. | When refactoring shared attempt helpers, gate dynamic live-target updates on actual live-count changes only (`before != after`) to preserve disconnect-only semantics. |
 | 2026-02-21 | self | I used a double-quoted `gh pr create --body` string containing backticks and zsh treated parts as command substitution again (`= not found` noise). | For PR bodies with backticks, write body text to a temp file or single-quoted heredoc and pass `--body-file` to `gh pr create`. |
 | 2026-02-21 | self | I ran two focused `cargo test` commands in parallel again while validating a LASM slice, causing avoidable build/package lock contention. | Keep Cargo runs strictly sequential; parallelize only read/search/documentation commands. |
 | 2026-02-21 | self | I implemented the dual-live relay accept-loop optimization and committed straight on local `dev` again before branching. | Treat each merge completion as mandatory branch creation: run `git branch --show-current` and immediately `git checkout -b codex/<next-slice>` before opening any file or patch tool. |

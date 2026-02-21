@@ -8371,6 +8371,32 @@ fn lasm_cluster_fallback_terminal_dispatch_error(
 }
 
 #[inline(always)]
+fn attempt_lasm_cluster_relay_send(
+    client_stream: TcpStream,
+    relay_senders: &[Sender<TcpStream>],
+    relay_sender_live: &mut [u8],
+    relay_live_sender_count: &mut usize,
+    relay_all_senders_live: &mut bool,
+    relay_index: usize,
+    saw_live_sender: &mut bool,
+) -> Result<(), TcpStream> {
+    debug_assert!(relay_index < relay_senders.len());
+    match relay_senders[relay_index].try_send(client_stream) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(next_stream)) => {
+            *saw_live_sender = true;
+            Err(next_stream)
+        }
+        Err(TrySendError::Disconnected(next_stream)) => {
+            relay_sender_live[relay_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
+            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
+            *relay_all_senders_live = false;
+            Err(next_stream)
+        }
+    }
+}
+
+#[inline(always)]
 fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
     debug_assert!(count > 0);
     if index + 1 == count {
@@ -8758,18 +8784,18 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let scan_slot_limit = sender_count.saturating_sub(1);
     if *relay_all_senders_live {
         for _ in 0..scan_slot_limit {
-            match relay_senders[scan_index].try_send(client_stream) {
-                Ok(()) => return Ok(()),
-                Err(TrySendError::Full(next_stream)) => {
-                    saw_live_sender = true;
-                    client_stream = next_stream;
-                }
-                Err(TrySendError::Disconnected(next_stream)) => {
-                    relay_sender_live[scan_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-                    *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-                    *relay_all_senders_live = false;
-                    client_stream = next_stream;
-                }
+            if let Err(next_stream) = attempt_lasm_cluster_relay_send(
+                client_stream,
+                relay_senders,
+                relay_sender_live,
+                relay_live_sender_count,
+                relay_all_senders_live,
+                scan_index,
+                &mut saw_live_sender,
+            ) {
+                client_stream = next_stream;
+            } else {
+                return Ok(());
             }
             scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
         }
@@ -8808,19 +8834,18 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             relay_next_live_sender_lookup,
             start_index_wrapped,
         ) {
-            let first_result = relay_senders[first_live_index].try_send(client_stream);
-            match first_result {
-                Ok(()) => return Ok(()),
-                Err(TrySendError::Full(next_stream)) => {
-                    saw_live_sender = true;
-                    client_stream = next_stream;
-                }
-                Err(TrySendError::Disconnected(next_stream)) => {
-                    relay_sender_live[first_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-                    *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-                    *relay_all_senders_live = false;
-                    client_stream = next_stream;
-                }
+            if let Err(next_stream) = attempt_lasm_cluster_relay_send(
+                client_stream,
+                relay_senders,
+                relay_sender_live,
+                relay_live_sender_count,
+                relay_all_senders_live,
+                first_live_index,
+                &mut saw_live_sender,
+            ) {
+                client_stream = next_stream;
+            } else {
+                return Ok(());
             }
             if *relay_live_sender_count == 0 {
                 return lasm_cluster_fallback_terminal_dispatch_error(
@@ -8877,19 +8902,22 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             continue;
         }
         scanned_live += 1;
-        match relay_senders[scan_index].try_send(client_stream) {
-            Ok(()) => return Ok(()),
-            Err(TrySendError::Full(next_stream)) => {
-                saw_live_sender = true;
-                client_stream = next_stream;
-            }
-            Err(TrySendError::Disconnected(next_stream)) => {
-                relay_sender_live[scan_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-                *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-                *relay_all_senders_live = false;
+        let live_sender_count_before_attempt = *relay_live_sender_count;
+        if let Err(next_stream) = attempt_lasm_cluster_relay_send(
+            client_stream,
+            relay_senders,
+            relay_sender_live,
+            relay_live_sender_count,
+            relay_all_senders_live,
+            scan_index,
+            &mut saw_live_sender,
+        ) {
+            if *relay_live_sender_count != live_sender_count_before_attempt {
                 scan_live_target_dynamic = relay_live_sender_count.saturating_sub(1);
-                client_stream = next_stream;
             }
+            client_stream = next_stream;
+        } else {
+            return Ok(());
         }
         if *relay_live_sender_count == 0 {
             return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
