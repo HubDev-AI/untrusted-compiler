@@ -1273,5 +1273,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1301-m39-lasm-fallback-single-target-helper-reuse.md`
 - `1302-m39-lasm-fallback-dual-second-live-fastpath.md`
 - `1303-m39-lasm-fallback-shared-send-attempt-helper.md`
+- `1304-m39-lasm-fallback-single-dual-shared-send-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.

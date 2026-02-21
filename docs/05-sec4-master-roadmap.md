@@ -1375,6 +1375,10 @@ Post-alpha track acceptance anchors:
      - added `attempt_lasm_cluster_relay_send(...)` and reused it in all-live fallback scan, dual-branch first attempt, and degraded general scan attempt path,
      - keeps disconnect/full handling centralized while preserving disconnect-driven dynamic target updates in degraded scans.
      - documented in `docs/book/1303-m39-lasm-fallback-shared-send-attempt-helper.md`.
+   - [x] Routed single/dual live fallback helpers through shared send-attempt helper:
+     - `dispatch_lasm_cluster_relay_stream_fallback_single_live(...)` and `dispatch_lasm_cluster_relay_stream_fallback_dual_live(...)` now delegate send/full/disconnect handling to `attempt_lasm_cluster_relay_send(...)`,
+     - preserves deterministic terminal-result semantics while centralizing fallback send handling across single/dual/multi paths.
+     - documented in `docs/book/1304-m39-lasm-fallback-single-dual-shared-send-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

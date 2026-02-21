@@ -8696,19 +8696,22 @@ fn dispatch_lasm_cluster_relay_stream_fallback_dual_live(
             *relay_live_sender_count,
         );
     }
-    match relay_senders[alternate_live_index].try_send(client_stream) {
+    let mut saw_live_sender_dynamic = saw_live_sender;
+    match attempt_lasm_cluster_relay_send(
+        client_stream,
+        relay_senders,
+        relay_sender_live,
+        relay_live_sender_count,
+        relay_all_senders_live,
+        alternate_live_index,
+        &mut saw_live_sender_dynamic,
+    ) {
         Ok(()) => Ok(()),
-        Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
-        Err(TrySendError::Disconnected(stream)) => {
-            relay_sender_live[alternate_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-            *relay_all_senders_live = false;
-            lasm_cluster_fallback_terminal_dispatch_error(
-                stream,
-                saw_live_sender,
-                *relay_live_sender_count,
-            )
-        }
+        Err(stream) => lasm_cluster_fallback_terminal_dispatch_error(
+            stream,
+            saw_live_sender_dynamic,
+            *relay_live_sender_count,
+        ),
     }
 }
 
@@ -8735,19 +8738,22 @@ fn dispatch_lasm_cluster_relay_stream_fallback_single_live(
             *relay_live_sender_count,
         );
     }
-    match relay_senders[single_live_index].try_send(client_stream) {
+    let mut saw_live_sender_dynamic = saw_live_sender;
+    match attempt_lasm_cluster_relay_send(
+        client_stream,
+        relay_senders,
+        relay_sender_live,
+        relay_live_sender_count,
+        relay_all_senders_live,
+        single_live_index,
+        &mut saw_live_sender_dynamic,
+    ) {
         Ok(()) => Ok(()),
-        Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
-        Err(TrySendError::Disconnected(stream)) => {
-            relay_sender_live[single_live_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-            *relay_all_senders_live = false;
-            lasm_cluster_fallback_terminal_dispatch_error(
-                stream,
-                saw_live_sender,
-                *relay_live_sender_count,
-            )
-        }
+        Err(stream) => lasm_cluster_fallback_terminal_dispatch_error(
+            stream,
+            saw_live_sender_dynamic,
+            *relay_live_sender_count,
+        ),
     }
 }
 
