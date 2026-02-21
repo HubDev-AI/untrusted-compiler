@@ -28,6 +28,8 @@ Options:
   --autoscale-saturation-boost-step <n>            LASM max scale-up workers per check when relay saturation is observed (default: 4)
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
+  --cluster-accept-workers <n>                     Optional relay accept-worker override
+  --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
   --out <path>                                     Output JSON path (default: results/summaries/sec4-lasm-cluster-capacity-probe.json)
   --skip-build                                     Skip sec4 binary rebuild
   --dry-run                                        Print execution plan only
@@ -59,6 +61,8 @@ autoscale_scale_down_step="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_STEP:-1}"
 autoscale_saturation_boost_step="${LASM_CAPACITY_AUTOSCALE_SATURATION_BOOST_STEP:-4}"
 cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
+cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
+cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
 skip_build="false"
 dry_run="false"
@@ -141,6 +145,14 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_queue="${2:-}"
       shift 2
       ;;
+    --cluster-accept-workers)
+      cluster_accept_workers="${2:-}"
+      shift 2
+      ;;
+    --cluster-relay-accept-batch-max)
+      cluster_relay_accept_batch_max="${2:-}"
+      shift 2
+      ;;
     --out)
       out_rel="${2:-}"
       shift 2
@@ -178,6 +190,14 @@ if [ -n "$cluster_relay_workers" ] && ! is_number "$cluster_relay_workers"; then
 fi
 if [ -n "$cluster_relay_queue" ] && ! is_number "$cluster_relay_queue"; then
   echo "cluster-relay-queue must be numeric, got: $cluster_relay_queue" >&2
+  exit 2
+fi
+if [ -n "$cluster_accept_workers" ] && ! is_number "$cluster_accept_workers"; then
+  echo "cluster-accept-workers must be numeric, got: $cluster_accept_workers" >&2
+  exit 2
+fi
+if [ -n "$cluster_relay_accept_batch_max" ] && ! is_number "$cluster_relay_accept_batch_max"; then
+  echo "cluster-relay-accept-batch-max must be numeric, got: $cluster_relay_accept_batch_max" >&2
   exit 2
 fi
 if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
@@ -235,6 +255,8 @@ sec4 LASM cluster capacity probe plan:
   autoscaleSaturationBoostStep=$autoscale_saturation_boost_step
   clusterRelayWorkers=${cluster_relay_workers:-auto}
   clusterRelayQueue=${cluster_relay_queue:-auto}
+  clusterAcceptWorkers=${cluster_accept_workers:-auto}
+  clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   skipBuild=$skip_build
   out=$out_path
 PLAN
@@ -282,6 +304,12 @@ if [ -n "$cluster_relay_workers" ]; then
 fi
 if [ -n "$cluster_relay_queue" ]; then
   run_args+=(--cluster-relay-queue "$cluster_relay_queue")
+fi
+if [ -n "$cluster_accept_workers" ]; then
+  run_args+=(--cluster-accept-workers "$cluster_accept_workers")
+fi
+if [ -n "$cluster_relay_accept_batch_max" ]; then
+  run_args+=(--cluster-relay-accept-batch-max "$cluster_relay_accept_batch_max")
 fi
 
 server_pid=""
@@ -410,6 +438,8 @@ jq -n \
   --argjson autoscaleSaturationBoostStep "$autoscale_saturation_boost_step" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
+  --arg acceptWorkers "${cluster_accept_workers:-auto}" \
+  --arg relayAcceptBatchMax "${cluster_relay_accept_batch_max:-auto}" \
   '{
     impl: $impl,
     projectPath: $projectPath,
@@ -434,7 +464,9 @@ jq -n \
       autoscaleScaleDownStep: $autoscaleScaleDownStep,
       autoscaleSaturationBoostStep: $autoscaleSaturationBoostStep,
       clusterRelayWorkers: $relayWorkers,
-      clusterRelayQueue: $relayQueue
+      clusterRelayQueue: $relayQueue,
+      clusterAcceptWorkers: $acceptWorkers,
+      clusterRelayAcceptBatchMax: $relayAcceptBatchMax
     },
     observed: {
       requests: $observedRequests,
