@@ -16583,6 +16583,152 @@ fn run_command_rejects_zero_db_max_tx_handles_override() {
 }
 
 #[test]
+fn run_command_rejects_db_postgres_statement_timeout_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-postgres-statement-timeout-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-postgres-statement-timeout-ms",
+        "1500",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-postgres-statement-timeout-ms is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
+        ),
+        "stderr should include deterministic lasm-only db-postgres-statement-timeout-ms guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_postgres_lock_timeout_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-postgres-lock-timeout");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-lock-timeout-ms",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-postgres-lock-timeout-ms override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-postgres-lock-timeout-ms must be >= 1"),
+        "stderr should include deterministic db-postgres-lock-timeout-ms validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_db_sqlite_busy_timeout_with_c_backend() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-busy-timeout-c-backend");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "c",
+        "--db-sqlite-busy-timeout-ms",
+        "1750",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when --db-sqlite-busy-timeout-ms is used on c backend"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sqlite-busy-timeout-ms is only supported with --backend lasm"),
+        "stderr should include deterministic lasm-only db-sqlite-busy-timeout-ms guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_zero_db_sqlite_busy_timeout_override() {
+    let project_dir = temp_dir("sec4-run-command-zero-db-sqlite-busy-timeout");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-sqlite-busy-timeout-ms",
+        "0",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail for zero --db-sqlite-busy-timeout-ms override"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains("run failed: --db-sqlite-busy-timeout-ms must be >= 1"),
+        "stderr should include deterministic db-sqlite-busy-timeout-ms validation message:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_maps_sqlite_duplicate_key_exec_to_conflict() {
     let project_dir = temp_dir("sec4-run-command-lasm-sqlite-exec-conflict");
     let db_base = project_dir.join("lasm-db");
