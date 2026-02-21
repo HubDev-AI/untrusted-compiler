@@ -66,8 +66,12 @@ require_target_contains_token "bench-full-saturation" "--saturation-cluster-acce
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-accept-batch-max"
 require_target_contains_token "bench-full-saturation" "--saturation-cluster-relay-pump-batch-max"
 require_target_contains_token "bench-full-saturation" '$(SATURATION_FIXED_REUSE_PORT_FLAG)'
+require_target_contains_token "bench-full-saturation" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full-saturation-dry" "--dry-run"
 require_target_contains_token "bench-full-saturation-dry" "--include-lasm-saturation"
+require_target_contains_token "bench-full-saturation-dry" '$(LASM_MODE_COMPARE_FLAG)'
+require_target_contains_token "bench-full" '$(LASM_MODE_COMPARE_FLAG)'
+require_target_contains_token "bench-full-dry" '$(LASM_MODE_COMPARE_FLAG)'
 require_target_contains_token "bench-full-saturation-throughput" '$(MAKE) bench-full-saturation'
 require_target_contains_token "bench-full-saturation-throughput" 'FULL_SATURATION_SKIP_VERIFY=true'
 require_target_contains_token "bench-full-saturation-throughput" 'LASM_CAPACITY_BOOST_STEPS="$(LASM_SATURATION_THROUGHPUT_BOOST_STEPS)"'

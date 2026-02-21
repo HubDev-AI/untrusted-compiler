@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<USAGE
 usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,decode,users-post,users-get] [--sec-audit path]
+          [--include-lasm-mode-compare]
           [--include-lasm-saturation] [--saturation-skip-verify] [--saturation-boost-steps csv]
           [--saturation-project-path path] [--saturation-duration duration] [--saturation-threads n]
           [--saturation-connections n] [--saturation-target-requests n]
@@ -20,6 +21,7 @@ dry_run="false"
 impls_csv="sec4,sec4-lasm,node,go,rust"
 endpoints_csv="ping,decode,users-post,users-get"
 sec_audit_path=""
+include_lasm_mode_compare="${LASM_INCLUDE_MODE_COMPARE:-false}"
 include_lasm_saturation="false"
 saturation_skip_verify="false"
 saturation_boost_steps_csv="${LASM_CAPACITY_BOOST_STEPS:-2,4,6}"
@@ -79,6 +81,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --include-lasm-saturation)
       include_lasm_saturation="true"
+      shift
+      ;;
+    --include-lasm-mode-compare)
+      include_lasm_mode_compare="true"
       shift
       ;;
     --saturation-skip-verify)
@@ -250,6 +256,14 @@ if [ "${include_lasm_saturation}" = "true" ] && ! contains_csv_token "${impls_cs
   echo "--include-lasm-saturation requires sec4-lasm in --impls" >&2
   exit 2
 fi
+if [ "${include_lasm_mode_compare}" = "true" ] && ! contains_csv_token "${impls_csv}" "sec4-lasm"; then
+  echo "--include-lasm-mode-compare requires sec4-lasm in --impls" >&2
+  exit 2
+fi
+if [ "${include_lasm_mode_compare}" != "true" ] && [ "${include_lasm_mode_compare}" != "false" ]; then
+  echo "include lasm mode compare must be true or false, got: ${include_lasm_mode_compare}" >&2
+  exit 2
+fi
 if [ "${saturation_fixed_reuse_port_mode}" != "true" ] && [ "${saturation_fixed_reuse_port_mode}" != "false" ]; then
   echo "saturation fixed reuse-port mode must be true or false, got: ${saturation_fixed_reuse_port_mode}" >&2
   exit 2
@@ -332,6 +346,44 @@ if [ "${include_lasm_saturation}" = "true" ]; then
     saturation_args+=(--dry-run)
   fi
   "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" "${saturation_args[@]}"
+fi
+
+if [ "${include_lasm_mode_compare}" = "true" ]; then
+  echo "phase: lasm mode compare"
+  mode_compare_args=(
+    --project-path "${saturation_project_path:-examples/lasm-alpha-full}"
+  )
+  if [ -n "${saturation_duration}" ]; then
+    mode_compare_args+=(--duration "${saturation_duration}")
+  fi
+  if [ -n "${saturation_threads}" ]; then
+    mode_compare_args+=(--threads "${saturation_threads}")
+  fi
+  if [ -n "${saturation_connections}" ]; then
+    mode_compare_args+=(--connections "${saturation_connections}")
+  fi
+  if [ -n "${saturation_target_requests}" ]; then
+    mode_compare_args+=(--target-requests "${saturation_target_requests}")
+  fi
+  if [ -n "${saturation_cluster_relay_workers}" ]; then
+    mode_compare_args+=(--cluster-relay-workers "${saturation_cluster_relay_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_queue}" ]; then
+    mode_compare_args+=(--cluster-relay-queue "${saturation_cluster_relay_queue}")
+  fi
+  if [ -n "${saturation_cluster_accept_workers}" ]; then
+    mode_compare_args+=(--cluster-accept-workers "${saturation_cluster_accept_workers}")
+  fi
+  if [ -n "${saturation_cluster_relay_accept_batch_max}" ]; then
+    mode_compare_args+=(--cluster-relay-accept-batch-max "${saturation_cluster_relay_accept_batch_max}")
+  fi
+  if [ -n "${saturation_cluster_relay_pump_batch_max}" ]; then
+    mode_compare_args+=(--cluster-relay-pump-batch-max "${saturation_cluster_relay_pump_batch_max}")
+  fi
+  if [ "$dry_run" = "true" ]; then
+    mode_compare_args+=(--dry-run)
+  fi
+  "${root_dir}/scripts/run_lasm_cluster_mode_compare.sh" "${mode_compare_args[@]}"
 fi
 
 echo "phase: publish combined report"

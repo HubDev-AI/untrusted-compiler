@@ -1169,6 +1169,11 @@ Post-alpha track acceptance anchors:
      - new `run_lasm_cluster_mode_compare.sh` runs paired proxy-relay and fixed-reuse-port probes under one workload profile and emits a combined comparison artifact (`recommendedMode`, throughput delta/gain, latency + memory snapshot),
      - Makefile now includes `lasm-cluster-mode-compare` target and script contracts for dry-run comparison planning.
      - documented in `docs/book/1252-m39-lasm-cluster-mode-compare-runner.md`.
+   - [x] Wired optional LASM mode-compare lane into full-suite orchestration:
+     - `run_full_benchmark_suite.sh` now supports `--include-lasm-mode-compare` and runs `run_lasm_cluster_mode_compare.sh` as a dedicated phase with existing LASM saturation tuning overrides forwarded (`duration`, `threads`, `connections`, target requests, relay/accept/batch knobs),
+     - deterministic guardrails now enforce `sec4-lasm` presence in `--impls` for mode-compare lane activation,
+     - Makefile full-suite targets (`bench-full*`, `bench-full-saturation*`) now forward `FULL_LASM_INCLUDE_MODE_COMPARE=true` via `--include-lasm-mode-compare`.
+     - documented in `docs/book/1253-m39-lasm-full-suite-optional-mode-compare-lane.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
