@@ -6,7 +6,12 @@ use crate::lasm_cluster_relay_topology::{
     lasm_cluster_next_index_wrapped, lasm_cluster_next_live_sender_index,
     lookup_lasm_cluster_next_live_sender_index, resolve_lasm_cluster_next_live_sender_index,
 };
-use crate::{LasmClusterRelayDispatchError, LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
+use crate::{LASM_CLUSTER_RELAY_SENDER_DEAD, LASM_CLUSTER_RELAY_SENDER_LIVE};
+
+pub(crate) enum LasmClusterRelayDispatchError {
+    Saturated(TcpStream),
+    Unavailable(TcpStream),
+}
 
 #[inline(always)]
 fn lasm_cluster_fallback_terminal_dispatch_error(

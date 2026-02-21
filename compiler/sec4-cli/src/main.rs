@@ -47,7 +47,7 @@ use lasm_cluster_relay_send::{
 use lasm_cluster_fallback_dispatch::{
     dispatch_lasm_cluster_relay_stream_fallback_dual_live,
     dispatch_lasm_cluster_relay_stream_fallback_multi,
-    dispatch_lasm_cluster_relay_stream_fallback_single_live,
+    dispatch_lasm_cluster_relay_stream_fallback_single_live, LasmClusterRelayDispatchError,
 };
 use lasm_cluster_relay_topology::{
     lasm_cluster_next_index_wrapped,
@@ -8367,11 +8367,6 @@ fn flush_lasm_cluster_active_connection_decrements(
         active_counter.fetch_sub(*decrements_local, Ordering::Relaxed);
         *decrements_local = 0;
     }
-}
-
-enum LasmClusterRelayDispatchError {
-    Saturated(TcpStream),
-    Unavailable(TcpStream),
 }
 
 #[inline(always)]
