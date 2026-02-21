@@ -1395,6 +1395,10 @@ Post-alpha track acceptance anchors:
       - moved `lasm_cluster_next_index_wrapped`, `lasm_cluster_next_live_sender_index`, `lookup_lasm_cluster_next_live_sender_index`, `resolve_lasm_cluster_next_live_sender_index`, and `realign_lasm_cluster_dispatch_cursor_to_live` into `compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`,
       - `main.rs` now imports topology helpers through module boundaries while preserving LASM cluster dispatch semantics.
       - documented in `docs/book/1308-m39-lasm-relay-topology-module-extraction.md`.
+   - [x] Moved relay live-hint refresh helpers into topology module:
+      - extracted `refresh_lasm_cluster_next_live_sender_lookup`, `refresh_lasm_cluster_single_live_sender_index`, `refresh_lasm_cluster_dual_live_sender_indices`, and `refresh_lasm_cluster_live_sender_hints` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_topology.rs`,
+      - accept-loop/fallback call-sites now consume these helpers from module imports, continuing LASM cluster decomposition without runtime behavior changes.
+      - documented in `docs/book/1309-m39-lasm-relay-live-hint-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
