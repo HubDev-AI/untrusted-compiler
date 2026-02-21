@@ -33,6 +33,7 @@ mod lasm_cluster_relay_topology;
 mod lasm_cluster_relay_worker_loop;
 mod lasm_cluster_runtime_config;
 mod lasm_cluster_status_json;
+mod lasm_cluster_status_writer;
 mod lasm_db_adapter_state;
 mod lasm_db_cli;
 mod lasm_db_config;
@@ -66,7 +67,7 @@ use lasm_cluster_runtime_config::{
     resolve_lasm_cluster_relay_accept_batch_max, resolve_lasm_cluster_relay_pump_batch_max,
     resolve_lasm_cluster_selection_reservation_min_chunk,
 };
-use lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
+use lasm_cluster_status_writer::{spawn_lasm_cluster_status_writer, LasmClusterStatusWriterConfig};
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
@@ -7816,143 +7817,33 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
     let autoscale_scale_up_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
     let autoscale_scale_down_cooldown_remaining_ms = Arc::new(AtomicU64::new(0));
 
-    let status_writer_handle = if let Some(status_path) = shared_config.cluster_status_json.clone()
-    {
-        let status_stop_flag = Arc::clone(&stop_flag);
-        let status_config = Arc::clone(&shared_config);
-        let status_active_connections = Arc::clone(&active_connections);
-        let status_saturation_events = Arc::clone(&relay_saturation_events);
-        let status_saturation_events_total = Arc::clone(&relay_saturation_events_total);
-        let status_worker_ports = Arc::clone(&worker_ports_snapshot);
-        let status_relay_worker_count = relay_worker_count;
-        let status_relay_queue_capacity = relay_queue_capacity;
-        let status_relay_queue_shard_capacity = relay_queue_shard_capacity;
-        let status_relay_accept_workers = relay_accept_worker_count;
-        let status_relay_dispatch_fallback_total = Arc::clone(&relay_dispatch_fallback_total);
-        let status_relay_dispatch_saturation_short_circuit_total =
-            Arc::clone(&relay_dispatch_saturation_short_circuit_total);
-        let status_relay_live_sender_count = Arc::clone(&relay_live_sender_count);
-        let status_autoscale_last_desired_instances = Arc::clone(&autoscale_last_desired_instances);
-        let status_autoscale_last_saturation_events = Arc::clone(&autoscale_last_saturation_events);
-        let status_autoscale_last_dynamic_boost_step =
-            Arc::clone(&autoscale_last_dynamic_boost_step);
-        let status_autoscale_scale_up_cooldown_remaining_ms =
-            Arc::clone(&autoscale_scale_up_cooldown_remaining_ms);
-        let status_autoscale_scale_down_cooldown_remaining_ms =
-            Arc::clone(&autoscale_scale_down_cooldown_remaining_ms);
-        let status_interval_ms = shared_config.autoscale_check_ms.clamp(100, 1000);
-        let status_interval_duration = Duration::from_millis(status_interval_ms);
-        let status_tmp_path = status_path.with_extension(format!(
-            "{}.tmp",
-            status_path
-                .extension()
-                .and_then(|value| value.to_str())
-                .unwrap_or("json")
-        ));
-        Some(std::thread::spawn(move || {
-            let mut last_saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
-            let mut last_dispatch_fallback_total =
-                status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
-            let mut last_dispatch_saturation_short_circuit_total =
-                status_relay_dispatch_saturation_short_circuit_total.load(Ordering::Relaxed);
-            let mut last_saturation_sample_at = Instant::now();
-            let mut last_status_snapshot: Option<LasmClusterStatusSnapshot> = None;
-            let mut status_parent_ready = false;
-            loop {
-                let sample_now = Instant::now();
-                let saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
-                let saturation_delta = saturation_total.saturating_sub(last_saturation_total);
-                let dispatch_fallback_total =
-                    status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
-                let dispatch_fallback_delta =
-                    dispatch_fallback_total.saturating_sub(last_dispatch_fallback_total);
-                let dispatch_saturation_short_circuit_total =
-                    status_relay_dispatch_saturation_short_circuit_total.load(Ordering::Relaxed);
-                let dispatch_saturation_short_circuit_delta =
-                    dispatch_saturation_short_circuit_total
-                        .saturating_sub(last_dispatch_saturation_short_circuit_total);
-                let elapsed_secs = sample_now
-                    .duration_since(last_saturation_sample_at)
-                    .as_secs_f64()
-                    .max(0.001);
-                let saturation_per_sec = (saturation_delta as f64) / elapsed_secs;
-                let dispatch_fallback_per_sec = (dispatch_fallback_delta as f64) / elapsed_secs;
-                let dispatch_saturation_short_circuit_per_sec =
-                    (dispatch_saturation_short_circuit_delta as f64) / elapsed_secs;
-                let worker_ports = status_worker_ports.load_full();
-                let worker_count = worker_ports.len();
-                let active_connections = status_active_connections.load(Ordering::Relaxed);
-                let active_connections_per_worker = if worker_count == 0 {
-                    0.0
-                } else {
-                    (active_connections as f64) / (worker_count as f64)
-                };
-                let status_snapshot = LasmClusterStatusSnapshot {
-                    listen_port: status_config.listen_port,
-                    min_instances: status_config.min_instances,
-                    max_instances: status_config.max_instances,
-                    worker_count,
-                    relay_worker_count: status_relay_worker_count,
-                    relay_queue_capacity: status_relay_queue_capacity,
-                    relay_queue_shard_capacity: status_relay_queue_shard_capacity,
-                    worker_ports,
-                    active_connections,
-                    active_connections_per_worker,
-                    relay_saturation_events_pending: status_saturation_events
-                        .load(Ordering::Relaxed),
-                    relay_saturation_events_total: saturation_total,
-                    relay_saturation_events_per_sec: saturation_per_sec,
-                    relay_accept_batch_max: status_config.cluster_relay_accept_batch_max,
-                    relay_pump_batch_max: status_config.cluster_relay_pump_batch_max,
-                    relay_selection_reservation_min_chunk: status_config
-                        .cluster_selection_reservation_min_chunk,
-                    relay_accept_workers: status_relay_accept_workers,
-                    relay_backend_connect_timeout_ms: status_config
-                        .cluster_backend_connect_timeout_ms,
-                    relay_backend_connect_cooldown_ms: status_config
-                        .cluster_backend_connect_cooldown_ms,
-                    relay_dispatch_fallback_total: dispatch_fallback_total,
-                    relay_dispatch_fallback_per_sec: dispatch_fallback_per_sec,
-                    relay_dispatch_saturation_short_circuit_total:
-                        dispatch_saturation_short_circuit_total,
-                    relay_dispatch_saturation_short_circuit_per_sec:
-                        dispatch_saturation_short_circuit_per_sec,
-                    relay_live_sender_count: status_relay_live_sender_count.load(Ordering::Relaxed),
-                    autoscale_desired_instances: status_autoscale_last_desired_instances
-                        .load(Ordering::Relaxed),
-                    autoscale_last_saturation_events: status_autoscale_last_saturation_events
-                        .load(Ordering::Relaxed),
-                    autoscale_last_dynamic_boost_step: status_autoscale_last_dynamic_boost_step
-                        .load(Ordering::Relaxed),
-                    autoscale_scale_up_cooldown_remaining_ms:
-                        status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
-                    autoscale_scale_down_cooldown_remaining_ms:
-                        status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
-                };
-                if let Err(err) = write_lasm_cluster_status_json(
-                    status_path.as_path(),
-                    status_tmp_path.as_path(),
-                    status_snapshot,
-                    &mut last_status_snapshot,
-                    &mut status_parent_ready,
-                ) {
-                    eprintln!("warning: LASM cluster status json write failed: {err}");
-                }
-                last_saturation_total = saturation_total;
-                last_dispatch_fallback_total = dispatch_fallback_total;
-                last_dispatch_saturation_short_circuit_total =
-                    dispatch_saturation_short_circuit_total;
-                last_saturation_sample_at = sample_now;
-
-                if status_stop_flag.load(Ordering::Relaxed) {
-                    break;
-                }
-                std::thread::sleep(status_interval_duration);
-            }
-        }))
-    } else {
-        None
-    };
+    let status_writer_handle = spawn_lasm_cluster_status_writer(LasmClusterStatusWriterConfig {
+        status_path: shared_config.cluster_status_json.clone(),
+        stop_flag: Arc::clone(&stop_flag),
+        shared_config: Arc::clone(&shared_config),
+        active_connections: Arc::clone(&active_connections),
+        relay_saturation_events: Arc::clone(&relay_saturation_events),
+        relay_saturation_events_total: Arc::clone(&relay_saturation_events_total),
+        worker_ports_snapshot: Arc::clone(&worker_ports_snapshot),
+        relay_worker_count,
+        relay_queue_capacity,
+        relay_queue_shard_capacity,
+        relay_accept_worker_count,
+        relay_dispatch_fallback_total: Arc::clone(&relay_dispatch_fallback_total),
+        relay_dispatch_saturation_short_circuit_total: Arc::clone(
+            &relay_dispatch_saturation_short_circuit_total,
+        ),
+        relay_live_sender_count: Arc::clone(&relay_live_sender_count),
+        autoscale_last_desired_instances: Arc::clone(&autoscale_last_desired_instances),
+        autoscale_last_saturation_events: Arc::clone(&autoscale_last_saturation_events),
+        autoscale_last_dynamic_boost_step: Arc::clone(&autoscale_last_dynamic_boost_step),
+        autoscale_scale_up_cooldown_remaining_ms: Arc::clone(
+            &autoscale_scale_up_cooldown_remaining_ms,
+        ),
+        autoscale_scale_down_cooldown_remaining_ms: Arc::clone(
+            &autoscale_scale_down_cooldown_remaining_ms,
+        ),
+    });
 
     let autoscale_enabled = shared_config.max_instances > shared_config.min_instances;
     let maintenance_interval_ms = lasm_cluster_maintenance_interval_ms(shared_config.as_ref());

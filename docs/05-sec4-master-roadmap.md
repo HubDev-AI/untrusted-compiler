@@ -1439,6 +1439,10 @@ Post-alpha track acceptance anchors:
       - moved relay worker thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_worker_loop.rs` (`spawn_lasm_cluster_relay_worker_loop`),
       - cluster orchestration now spawns relay workers via module boundary while preserving backend selection, unhealthy cooldown mapping, relay pump scheduling, and deterministic unavailable-response behavior.
       - documented in `docs/book/1319-m39-lasm-cluster-relay-worker-loop-module-extraction.md`.
+   - [x] Extracted LASM cluster status-writer thread loop into dedicated module:
+      - moved status-writer thread loop from `cmd_run_lasm_cluster(...)` in `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_writer.rs` (`spawn_lasm_cluster_status_writer`, `LasmClusterStatusWriterConfig`),
+      - cluster orchestration now wires status-writer dependencies through a typed module config while preserving unchanged-snapshot skip behavior and deterministic status payload emission cadence.
+      - documented in `docs/book/1320-m39-lasm-cluster-status-writer-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
