@@ -1287,6 +1287,10 @@ Post-alpha track acceptance anchors:
      - `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now accepts optional next-live lookup state and uses cached live-index resolution in degraded scan branches (`scan_live_target` 0/1/2),
      - keeps scan fallback behavior for stale/missing cache entries while reducing repeated degraded live-index scans during fallback dispatch.
      - documented in `docs/book/1281-m39-lasm-fallback-multi-next-live-cache-usage.md`.
+   - [x] Added explicit cache-eligibility gating for fallback lookup usage:
+     - accept-loop now precomputes whether next-live lookup storage exists and passes cached lookup state into fallback-multi only while degraded live-shard count remains above two,
+     - avoids per-fallback lookup-option churn and skips unnecessary cache refresh/use paths once runtime transitions into dedicated single/dual live fast paths.
+     - documented in `docs/book/1282-m39-lasm-fallback-cache-eligibility-gating.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
