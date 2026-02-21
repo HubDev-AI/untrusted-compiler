@@ -9192,15 +9192,15 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let unhealthy_prune_interval =
                 Duration::from_millis(LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS);
             let mut selected_worker_ports_snapshot = relay_worker_ports.load_full();
+            let mut selected_worker_port_count = selected_worker_ports_snapshot.len();
             let mut selected_worker_backend_addrs: Vec<std::net::SocketAddr> =
-                Vec::with_capacity(selected_worker_ports_snapshot.len());
+                Vec::with_capacity(selected_worker_port_count);
             rebuild_lasm_cluster_worker_backend_addrs(
                 selected_worker_ports_snapshot.as_ref(),
                 &mut selected_worker_backend_addrs,
             );
-            unhealthy_ports_until_by_index.resize(selected_worker_ports_snapshot.len(), None);
-            connect_warning_next_allowed_by_index
-                .resize(selected_worker_ports_snapshot.len(), None);
+            unhealthy_ports_until_by_index.resize(selected_worker_port_count, None);
+            connect_warning_next_allowed_by_index.resize(selected_worker_port_count, None);
             let mut selection_lookup: Vec<usize> = Vec::new();
             let mut selection_has_healthy_backends = false;
             let mut selection_lookup_is_identity = false;
@@ -9226,6 +9226,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             let previous_connect_warning_next_allowed_by_index =
                                 std::mem::take(&mut connect_warning_next_allowed_by_index);
                             selected_worker_ports_snapshot = Arc::clone(&snapshot);
+                            selected_worker_port_count = selected_worker_ports_snapshot.len();
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
                                 &mut selected_worker_backend_addrs,
@@ -9298,6 +9299,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             let previous_connect_warning_next_allowed_by_index =
                                 std::mem::take(&mut connect_warning_next_allowed_by_index);
                             selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
+                            selected_worker_port_count = selected_worker_ports_snapshot.len();
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
                                 &mut selected_worker_backend_addrs,
@@ -9318,8 +9320,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             };
                             selection_lookup_dirty = true;
                         }
-                        let worker_ports = selected_worker_ports_snapshot.as_ref();
-                        let worker_port_count = worker_ports.len();
+                        let worker_port_count = selected_worker_port_count;
                         if selection_lookup_dirty
                             || (!selection_lookup_is_identity
                                 && selection_lookup.len() != worker_port_count)
@@ -9334,8 +9335,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             selection_lookup_dirty = false;
                         }
                     }
-                    let worker_ports = selected_worker_ports_snapshot.as_ref();
-                    let worker_port_count = worker_ports.len();
+                    let worker_port_count = selected_worker_port_count;
                     let selected_backend_index = if worker_port_count == 0
                         || !selection_has_healthy_backends
                     {
@@ -9443,7 +9443,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 None => true,
                             };
                             if warning_allowed {
-                                let selected_backend_port = worker_ports[selected_backend_index];
+                                let selected_backend_port =
+                                    selected_worker_ports_snapshot[selected_backend_index];
                                 eprintln!(
                                     "warning: LASM cluster worker {} connect failed: {}",
                                     selected_backend_port, err
