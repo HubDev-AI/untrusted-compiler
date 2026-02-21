@@ -1059,6 +1059,10 @@ Post-alpha track acceptance anchors:
      - status writer now accepts `LasmClusterStatusSnapshot` by value and moves it into `last_snapshot` after a successful write,
      - removes per-write snapshot clone overhead while preserving unchanged-snapshot skip and status-file contract behavior.
      - documented in `docs/book/1226-m39-lasm-cluster-status-snapshot-move-handoff.md`.
+   - [x] Added single-backend relay dispatch fast path:
+     - relay worker selection now short-circuits to backend index `0` when only one worker port is available,
+     - skips reservation-counter `fetch_add` and next-index rotation bookkeeping in the single-backend case while preserving selection semantics for multi-backend clusters.
+     - documented in `docs/book/1227-m39-lasm-cluster-single-backend-selection-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
