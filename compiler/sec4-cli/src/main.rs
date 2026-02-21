@@ -8890,55 +8890,75 @@ fn run_lasm_cluster_accept_loop(
                                 continue;
                             }
                             if relay_live_sender_count == 1 {
-                                refresh_lasm_cluster_single_live_sender_index(
-                                    relay_sender_live.as_slice(),
-                                    relay_live_sender_count,
-                                    &mut relay_single_live_sender_index,
-                                );
-                                let Some(single_live_index) = relay_single_live_sender_index else {
-                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                        LasmClusterRelayDispatchError::Unavailable(client_stream),
-                                        active_connections,
-                                        relay_saturation_events,
-                                        relay_saturation_events_total,
-                                        relay_dispatch_fallback_total,
-                                        relay_dispatch_short_circuit_total,
-                                        &mut listener_enqueued_local,
-                                        &mut listener_saturation_pending_local,
-                                        &mut listener_saturation_total_local,
-                                        &mut listener_dispatch_fallback_total_local,
-                                        &mut listener_dispatch_short_circuit_total_local,
-                                    ) {
-                                        return Err(message);
-                                    }
-                                    continue;
+                                let single_live_index = if let Some(index) =
+                                    relay_single_live_sender_index
+                                {
+                                    index
+                                } else {
+                                    refresh_lasm_cluster_single_live_sender_index(
+                                        relay_sender_live.as_slice(),
+                                        relay_live_sender_count,
+                                        &mut relay_single_live_sender_index,
+                                    );
+                                    let Some(index) = relay_single_live_sender_index else {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_dispatch_error(
+                                                LasmClusterRelayDispatchError::Unavailable(
+                                                    client_stream,
+                                                ),
+                                                active_connections,
+                                                relay_saturation_events,
+                                                relay_saturation_events_total,
+                                                relay_dispatch_fallback_total,
+                                                relay_dispatch_short_circuit_total,
+                                                &mut listener_enqueued_local,
+                                                &mut listener_saturation_pending_local,
+                                                &mut listener_saturation_total_local,
+                                                &mut listener_dispatch_fallback_total_local,
+                                                &mut listener_dispatch_short_circuit_total_local,
+                                            )
+                                        {
+                                            return Err(message);
+                                        }
+                                        continue;
+                                    };
+                                    index
                                 };
                                 relay_dispatch_cursor = single_live_index;
                             } else if relay_live_sender_count == 2 {
-                                refresh_lasm_cluster_dual_live_sender_indices(
-                                    relay_sender_live.as_slice(),
-                                    relay_live_sender_count,
-                                    &mut relay_dual_live_sender_indices,
-                                );
-                                let Some((first_live, second_live)) =
+                                let (first_live, second_live) = if let Some(indices) =
                                     relay_dual_live_sender_indices
-                                else {
-                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
-                                        LasmClusterRelayDispatchError::Unavailable(client_stream),
-                                        active_connections,
-                                        relay_saturation_events,
-                                        relay_saturation_events_total,
-                                        relay_dispatch_fallback_total,
-                                        relay_dispatch_short_circuit_total,
-                                        &mut listener_enqueued_local,
-                                        &mut listener_saturation_pending_local,
-                                        &mut listener_saturation_total_local,
-                                        &mut listener_dispatch_fallback_total_local,
-                                        &mut listener_dispatch_short_circuit_total_local,
-                                    ) {
-                                        return Err(message);
-                                    }
-                                    continue;
+                                {
+                                    indices
+                                } else {
+                                    refresh_lasm_cluster_dual_live_sender_indices(
+                                        relay_sender_live.as_slice(),
+                                        relay_live_sender_count,
+                                        &mut relay_dual_live_sender_indices,
+                                    );
+                                    let Some(indices) = relay_dual_live_sender_indices else {
+                                        if let Err(message) =
+                                            handle_lasm_cluster_accept_dispatch_error(
+                                                LasmClusterRelayDispatchError::Unavailable(
+                                                    client_stream,
+                                                ),
+                                                active_connections,
+                                                relay_saturation_events,
+                                                relay_saturation_events_total,
+                                                relay_dispatch_fallback_total,
+                                                relay_dispatch_short_circuit_total,
+                                                &mut listener_enqueued_local,
+                                                &mut listener_saturation_pending_local,
+                                                &mut listener_saturation_total_local,
+                                                &mut listener_dispatch_fallback_total_local,
+                                                &mut listener_dispatch_short_circuit_total_local,
+                                            )
+                                        {
+                                            return Err(message);
+                                        }
+                                        continue;
+                                    };
+                                    indices
                                 };
                                 if relay_dispatch_cursor != first_live
                                     && relay_dispatch_cursor != second_live
