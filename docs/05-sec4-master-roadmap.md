@@ -1055,6 +1055,10 @@ Post-alpha track acceptance anchors:
      - status writer now caches successful parent-directory readiness and avoids repeated `create_dir_all` on each changed write,
      - tempfile creation now retries parent-dir initialization when `NotFound` occurs (for parent-dir removal recovery).
      - documented in `docs/book/1225-m39-lasm-cluster-status-parent-readiness-cache.md`.
+   - [x] Removed changed-write status snapshot clone in writer handoff:
+     - status writer now accepts `LasmClusterStatusSnapshot` by value and moves it into `last_snapshot` after a successful write,
+     - removes per-write snapshot clone overhead while preserving unchanged-snapshot skip and status-file contract behavior.
+     - documented in `docs/book/1226-m39-lasm-cluster-status-snapshot-move-handoff.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
