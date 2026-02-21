@@ -30,6 +30,7 @@ mod lasm_cluster_fallback_dispatch;
 mod lasm_cluster_relay_pump;
 mod lasm_cluster_relay_send;
 mod lasm_cluster_relay_topology;
+mod lasm_cluster_runtime_config;
 mod lasm_cluster_status_json;
 mod lasm_db_adapter_state;
 mod lasm_db_cli;
@@ -57,6 +58,17 @@ use lasm_cluster_backend_selection::{
 };
 use lasm_cluster_relay_pump::{LasmClusterRelayPump, LasmClusterRelayPumpStep};
 use lasm_cluster_relay_topology::lasm_cluster_next_index_wrapped;
+use lasm_cluster_runtime_config::{
+    desired_lasm_cluster_instances, lasm_cluster_accept_worker_count,
+    lasm_cluster_backend_connect_cooldown, lasm_cluster_backend_connect_timeout,
+    lasm_cluster_maintenance_interval_ms, lasm_cluster_proxy_queue_capacity,
+    lasm_cluster_proxy_worker_count, lasm_cluster_relay_accept_batch_max,
+    lasm_cluster_relay_pump_batch_max, lasm_cluster_remaining_cooldown_ms,
+    lasm_cluster_selection_reservation_min_chunk,
+    refresh_lasm_cluster_worker_ports_snapshot_if_changed,
+    resolve_lasm_cluster_relay_accept_batch_max, resolve_lasm_cluster_relay_pump_batch_max,
+    resolve_lasm_cluster_selection_reservation_min_chunk,
+};
 use lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
@@ -7912,142 +7924,6 @@ fn recover_lasm_cluster_min_workers(
     }
 }
 
-fn lasm_cluster_maintenance_interval_ms(config: &LasmClusterConfig) -> u64 {
-    config.autoscale_check_ms.clamp(100, 500)
-}
-
-fn lasm_cluster_backend_connect_timeout(config: &LasmClusterConfig) -> Duration {
-    Duration::from_millis(config.cluster_backend_connect_timeout_ms.max(25))
-}
-
-fn lasm_cluster_backend_connect_cooldown(config: &LasmClusterConfig) -> Duration {
-    Duration::from_millis(config.cluster_backend_connect_cooldown_ms.max(25))
-}
-
-fn refresh_lasm_cluster_worker_ports_snapshot_if_changed(
-    state: &LasmClusterState,
-    snapshot: &Arc<ArcSwap<Vec<u16>>>,
-    last_published_ports: &mut Vec<u16>,
-) {
-    if state.workers.len() == last_published_ports.len()
-        && state
-            .workers
-            .iter()
-            .zip(last_published_ports.iter())
-            .all(|(worker, port)| worker.port == *port)
-    {
-        return;
-    }
-
-    last_published_ports.clear();
-    last_published_ports.extend(state.workers.iter().map(|worker| worker.port));
-    if last_published_ports
-        .windows(2)
-        .any(|window| window[0] > window[1])
-    {
-        last_published_ports.sort_unstable();
-    }
-    snapshot.store(Arc::new(last_published_ports.clone()));
-}
-
-fn lasm_cluster_remaining_cooldown_ms(
-    now: Instant,
-    last_at: Option<Instant>,
-    cooldown_ms: u64,
-) -> u64 {
-    let Some(last_at) = last_at else {
-        return 0;
-    };
-    let elapsed_ms = now
-        .duration_since(last_at)
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64;
-    cooldown_ms.saturating_sub(elapsed_ms)
-}
-
-fn desired_lasm_cluster_instances(
-    active_connections: usize,
-    min_instances: usize,
-    max_instances: usize,
-    target_connections_per_instance: usize,
-) -> usize {
-    let needed = if active_connections == 0 {
-        min_instances
-    } else {
-        active_connections.saturating_add(target_connections_per_instance.saturating_sub(1))
-            / target_connections_per_instance
-    };
-    needed.clamp(min_instances, max_instances)
-}
-
-fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
-    if let Some(value) = config.cluster_relay_workers {
-        return value;
-    }
-    let host_parallelism = std::thread::available_parallelism()
-        .map(|value| value.get())
-        .unwrap_or(4)
-        .max(1);
-    let instance_hint = config.max_instances.max(config.min_instances).max(1);
-    let mut relay_hint = if instance_hint <= 1 {
-        1
-    } else {
-        // Keep auto relay sizing conservative in multi-instance mode:
-        // short capacity probes show lower relay-thread counts reduce contention
-        // versus ceil(sqrt(...)) defaults under current cluster topology.
-        ((instance_hint as f64).sqrt() as usize).max(2)
-    };
-    relay_hint = relay_hint.min(host_parallelism);
-    relay_hint.clamp(1, 16)
-}
-
-fn lasm_cluster_proxy_queue_capacity(config: &LasmClusterConfig, worker_count: usize) -> usize {
-    if let Some(value) = config.cluster_relay_queue {
-        return value;
-    }
-    config
-        .target_connections_per_instance
-        .max(1)
-        .saturating_mul(config.max_instances.max(1))
-        .max(worker_count.saturating_mul(2))
-        .min(65_536)
-}
-
-fn lasm_cluster_accept_worker_count(
-    config: &LasmClusterConfig,
-    relay_worker_count: usize,
-) -> usize {
-    if let Some(value) = config.cluster_accept_workers {
-        return value;
-    }
-    let default_value = relay_worker_count.max(1).min(4);
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_ACCEPT_WORKERS") else {
-        return default_value;
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return default_value;
-    }
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|parsed| *parsed > 0)
-        .map(|parsed| parsed.clamp(1, relay_worker_count.max(1).min(16)))
-        .unwrap_or(default_value)
-}
-
-fn lasm_cluster_relay_accept_batch_max(config: &LasmClusterConfig) -> usize {
-    config.cluster_relay_accept_batch_max.max(1)
-}
-
-fn lasm_cluster_relay_pump_batch_max(config: &LasmClusterConfig) -> usize {
-    config.cluster_relay_pump_batch_max.max(1)
-}
-
-fn lasm_cluster_selection_reservation_min_chunk(config: &LasmClusterConfig) -> usize {
-    config.cluster_selection_reservation_min_chunk.max(1)
-}
-
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
@@ -10465,72 +10341,6 @@ fn resolve_lasm_cluster_backend_connect_cooldown_ms(
         .filter(|parsed| *parsed > 0)
         .map(|parsed| parsed.clamp(25, 10_000))
         .unwrap_or(default_value)
-}
-
-fn resolve_lasm_cluster_relay_accept_batch_max(explicit_override: Option<usize>) -> usize {
-    let default_value = 64_usize;
-    if let Some(value) = explicit_override {
-        return value.clamp(1, 4_096);
-    }
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_RELAY_ACCEPT_BATCH_MAX") else {
-        return default_value;
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return default_value;
-    }
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|parsed| *parsed > 0)
-        .map(|parsed| parsed.clamp(1, 4_096))
-        .unwrap_or(default_value)
-}
-
-fn resolve_lasm_cluster_relay_pump_batch_max(
-    explicit_override: Option<usize>,
-    relay_accept_batch_max: usize,
-) -> usize {
-    let default_value = relay_accept_batch_max
-        .saturating_mul(LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER)
-        .clamp(
-            LASM_CLUSTER_RELAY_PUMP_BATCH_MIN,
-            LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
-        );
-    if let Some(value) = explicit_override {
-        return value.clamp(1, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX);
-    }
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_RELAY_PUMP_BATCH_MAX") else {
-        return default_value;
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return default_value;
-    }
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|parsed| *parsed > 0)
-        .map(|parsed| parsed.clamp(1, LASM_CLUSTER_RELAY_PUMP_BATCH_MAX))
-        .unwrap_or(default_value)
-}
-
-fn resolve_lasm_cluster_selection_reservation_min_chunk(relay_accept_batch_max: usize) -> usize {
-    let default_value = LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK.max(1);
-    let Ok(raw) = std::env::var("SEC4_RT_LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK") else {
-        return default_value;
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return default_value;
-    }
-    value
-        .parse::<usize>()
-        .ok()
-        .filter(|parsed| *parsed > 0)
-        .map(|parsed| parsed.clamp(1, 65_536))
-        .unwrap_or(default_value)
-        .max(relay_accept_batch_max.max(1))
 }
 
 fn resolve_lasm_max_requests_per_connection(
