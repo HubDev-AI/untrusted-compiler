@@ -24,6 +24,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod lasm_db_adapter_state;
 mod lasm_db_config;
+mod lasm_db_headers;
 mod lasm_db_plan;
 mod lasm_db_records_log;
 mod lasm_db_runtime_common;
@@ -33,6 +34,11 @@ mod lasm_db_runtime_sqlite;
 mod lasm_dynamic_state;
 
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
+pub(crate) use lasm_db_headers::{
+    clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
+    LASM_INTERNAL_DB_OP_HEADER, LASM_INTERNAL_DB_PARAMS_HEADER, LASM_INTERNAL_DB_ROW_SCHEMA_HEADER,
+    LASM_INTERNAL_DB_TEMPLATE_HEADER, LASM_INTERNAL_DB_TX_DB_HEADER, LASM_INTERNAL_DB_TX_HEADER,
+};
 pub(crate) use lasm_db_records_log::lasm_db_record_to_json;
 pub(crate) use lasm_dynamic_state::{
     build_lasm_dynamic_response_state, persist_lasm_dynamic_users_to_disk, LasmDbRecord,
@@ -1240,13 +1246,6 @@ const LASM_INTERNAL_AUTH_MIDDLEWARE_REQUIRE_HEADER: &str =
     "X-Sec4-Internal-Auth-Middleware-Require";
 const LASM_INTERNAL_CSRF_REQUIRE_HEADER: &str = "X-Sec4-Internal-Csrf-Require";
 const LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER: &str = "X-Sec4-Internal-Error-Code";
-const LASM_INTERNAL_DB_OP_HEADER: &str = "X-Sec4-Internal-Db-Op";
-const LASM_INTERNAL_DB_HANDLE_HEADER: &str = "X-Sec4-Internal-Db";
-const LASM_INTERNAL_DB_TEMPLATE_HEADER: &str = "X-Sec4-Internal-Db-Template";
-const LASM_INTERNAL_DB_PARAMS_HEADER: &str = "X-Sec4-Internal-Db-Params";
-const LASM_INTERNAL_DB_TX_HEADER: &str = "X-Sec4-Internal-Db-Tx";
-const LASM_INTERNAL_DB_TX_DB_HEADER: &str = "X-Sec4-Internal-Db-Tx-Db";
-const LASM_INTERNAL_DB_ROW_SCHEMA_HEADER: &str = "X-Sec4-Internal-Db-Row-Schema";
 
 pub(crate) fn has_lasm_sql_non_trailing_statement_separator(query_template: &str) -> bool {
     let bytes = query_template.as_bytes();
@@ -12666,13 +12665,7 @@ fn clear_lasm_internal_response_markers(response: &mut sec4_core::HttpResponse) 
     response
         .headers
         .remove(LASM_INTERNAL_RUNTIME_ERROR_CODE_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_OP_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_HANDLE_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_TEMPLATE_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_PARAMS_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_TX_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_TX_DB_HEADER);
-    response.headers.remove(LASM_INTERNAL_DB_ROW_SCHEMA_HEADER);
+    clear_lasm_internal_db_response_markers(&mut response.headers);
 }
 
 fn materialize_lasm_internal_runtime_error_envelope(
