@@ -8838,6 +8838,13 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     client_stream = next_stream;
                 }
             }
+            if *relay_live_sender_count == 0 {
+                return lasm_cluster_fallback_terminal_dispatch_error(
+                    client_stream,
+                    saw_live_sender,
+                    *relay_live_sender_count,
+                );
+            }
             if let Some(second_live_index) = resolve_lasm_cluster_next_live_sender_index(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
