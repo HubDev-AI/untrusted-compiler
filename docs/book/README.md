@@ -1207,5 +1207,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1235-m39-lasm-cluster-flush-guard-dedup.md`
 - `1236-m39-lasm-cluster-selection-lookup-all-unhealthy-fast-fail.md`
 - `1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`
+- `1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`
 
 As milestones progress, chapters will be added and linked from this index.

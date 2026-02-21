@@ -8188,7 +8188,7 @@ fn write_lasm_cluster_unavailable_response(
         .map_err(|err| format!("could not write LASM cluster overload response: {err}"))
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 struct LasmClusterStatusSnapshot {
     listen_port: u16,
     min_instances: usize,
@@ -8214,6 +8214,38 @@ struct LasmClusterStatusSnapshot {
     autoscale_last_dynamic_boost_step: usize,
     autoscale_scale_up_cooldown_remaining_ms: u64,
     autoscale_scale_down_cooldown_remaining_ms: u64,
+}
+
+impl PartialEq for LasmClusterStatusSnapshot {
+    fn eq(&self, other: &Self) -> bool {
+        self.listen_port == other.listen_port
+            && self.min_instances == other.min_instances
+            && self.max_instances == other.max_instances
+            && self.worker_count == other.worker_count
+            && self.relay_worker_count == other.relay_worker_count
+            && self.relay_queue_capacity == other.relay_queue_capacity
+            && self.relay_queue_shard_capacity == other.relay_queue_shard_capacity
+            && (Arc::ptr_eq(&self.worker_ports, &other.worker_ports)
+                || self.worker_ports.as_slice() == other.worker_ports.as_slice())
+            && self.active_connections == other.active_connections
+            && self.active_connections_per_worker == other.active_connections_per_worker
+            && self.relay_saturation_events_pending == other.relay_saturation_events_pending
+            && self.relay_saturation_events_total == other.relay_saturation_events_total
+            && self.relay_saturation_events_per_sec == other.relay_saturation_events_per_sec
+            && self.relay_accept_batch_max == other.relay_accept_batch_max
+            && self.relay_accept_workers == other.relay_accept_workers
+            && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
+            && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
+            && self.relay_dispatch_fallback_total == other.relay_dispatch_fallback_total
+            && self.relay_dispatch_fallback_per_sec == other.relay_dispatch_fallback_per_sec
+            && self.autoscale_desired_instances == other.autoscale_desired_instances
+            && self.autoscale_last_saturation_events == other.autoscale_last_saturation_events
+            && self.autoscale_last_dynamic_boost_step == other.autoscale_last_dynamic_boost_step
+            && self.autoscale_scale_up_cooldown_remaining_ms
+                == other.autoscale_scale_up_cooldown_remaining_ms
+            && self.autoscale_scale_down_cooldown_remaining_ms
+                == other.autoscale_scale_down_cooldown_remaining_ms
+    }
 }
 
 #[derive(serde::Serialize)]
