@@ -109,6 +109,43 @@ if ! grep -q "keepClusterStatusJson=true" <<<"$out_keep_status"; then
   exit 1
 fi
 
+out_fixed="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --fixed-reuse-port-mode \
+  --instances 3 \
+  --autoscale-max-instances 9 \
+  --port 19093 \
+  2>&1)"
+if ! grep -q "fixedReusePortMode=true" <<<"$out_fixed"; then
+  echo "lasm capacity probe dry-run missing fixed reuse-port mode marker" >&2
+  exit 1
+fi
+if ! grep -q "autoscaleMaxInstances=3" <<<"$out_fixed"; then
+  echo "lasm capacity probe fixed reuse-port mode should force autoscale max to instances" >&2
+  exit 1
+fi
+if ! grep -q "clusterStatusJson=n/a (fixed-reuse-port-mode)" <<<"$out_fixed"; then
+  echo "lasm capacity probe fixed reuse-port mode should suppress cluster status artifact path" >&2
+  exit 1
+fi
+
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --fixed-reuse-port-mode --cluster-relay-workers 2 >/tmp/lasm-capacity-probe-fixed-invalid-relay-workers.log 2>&1; then
+  echo "lasm capacity probe accepted relay workers override in fixed reuse-port mode" >&2
+  exit 1
+fi
+if ! grep -q "cluster-relay-workers is not supported in fixed-reuse-port-mode" /tmp/lasm-capacity-probe-fixed-invalid-relay-workers.log; then
+  echo "lasm capacity probe missing fixed-mode relay-workers diagnostic" >&2
+  exit 1
+fi
+if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --fixed-reuse-port-mode --keep-cluster-status-json >/tmp/lasm-capacity-probe-fixed-invalid-status.log 2>&1; then
+  echo "lasm capacity probe accepted keep-cluster-status-json in fixed reuse-port mode" >&2
+  exit 1
+fi
+if ! grep -q "keep-cluster-status-json is not supported in fixed-reuse-port-mode" /tmp/lasm-capacity-probe-fixed-invalid-status.log; then
+  echo "lasm capacity probe missing fixed-mode keep-status diagnostic" >&2
+  exit 1
+fi
+
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --request-header invalid >/tmp/lasm-capacity-probe-invalid.log 2>&1; then
   echo "lasm capacity probe accepted invalid request header" >&2
   exit 1

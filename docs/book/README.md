@@ -1220,5 +1220,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1248-m39-lasm-cluster-relay-pump-batch-override-and-telemetry.md`
 - `1249-m39-lasm-saturation-suite-relay-pump-batch-forwarding.md`
 - `1250-m39-lasm-saturation-summary-relay-pump-batch-columns.md`
+- `1251-m39-lasm-fixed-reuse-port-probe-and-saturation-forwarding.md`
 
 As milestones progress, chapters will be added and linked from this index.

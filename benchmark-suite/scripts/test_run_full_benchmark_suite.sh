@@ -93,6 +93,16 @@ if ! grep -q 'autoscaleSaturationBoostStep=5' <<<"$tuned_sat"; then
   exit 1
 fi
 
+fixed_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-fixed-reuse-port-mode --saturation-boost-steps 2,4 --saturation-skip-verify)"
+if ! grep -q 'fixedReusePortMode=true' <<<"$fixed_sat"; then
+  echo "missing delegated saturation fixed reuse-port mode marker" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleMaxInstances=4' <<<"$fixed_sat"; then
+  echo "missing delegated saturation fixed-mode autoscale max override" >&2
+  exit 1
+fi
+
 if "$root_dir/scripts/run_full_benchmark_suite.sh" --dry-run --impls unknown --endpoints ping >/dev/null 2>&1; then
   echo "expected invalid impl to fail via delegated validation" >&2
   exit 1
