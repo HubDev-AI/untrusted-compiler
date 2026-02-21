@@ -1319,6 +1319,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi general degraded scan now tracks dynamic `scan_live_target` and updates it after disconnect-driven live-count drops inside the loop,
      - avoids iterating against stale pre-disconnect live-target counts while preserving bounded scan semantics.
      - documented in `docs/book/1289-m39-lasm-fallback-dynamic-scan-live-target.md`.
+   - [x] Removed optional lookup plumbing from fallback-multi resolver path:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` and `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now use direct lookup-slice input (`&[usize]`) with empty-slice fallback semantics instead of option-wrapped lookup references,
+     - simplifies hot-path branch shape and avoids repeated option wrapping at fallback call sites.
+     - documented in `docs/book/1290-m39-lasm-fallback-lookup-slice-plumbing.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
