@@ -1231,6 +1231,10 @@ Post-alpha track acceptance anchors:
      - capacity probe summaries now include `run.clusterRelayLiveSenderCountResolved` from cluster status snapshots,
      - saturation matrix/analyzer/summary and mode-compare/report outputs now thread and render relay live-shard metrics for operator comparison.
      - documented in `docs/book/1267-m39-lasm-live-shard-telemetry-artifact-propagation.md`.
+   - [x] Added all-live fast path to fallback dispatch scan loop:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi` now bypasses dead-shard checks while relay pool is known healthy and iterates direct fallback sends for `sender_count > 2`,
+     - degraded dead-shard-aware scan path remains active once any disconnection is observed.
+     - documented in `docs/book/1268-m39-lasm-fallback-all-live-scan-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -1237,5 +1237,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1265-m39-lasm-relay-live-byte-flag-tracking.md`
 - `1266-m39-lasm-cluster-status-relay-live-shard-telemetry.md`
 - `1267-m39-lasm-live-shard-telemetry-artifact-propagation.md`
+- `1268-m39-lasm-fallback-all-live-scan-fast-path.md`
 
 As milestones progress, chapters will be added and linked from this index.
