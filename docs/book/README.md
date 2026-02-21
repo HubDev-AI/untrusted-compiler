@@ -1250,5 +1250,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1278-m39-lasm-next-live-lookup-linear-refresh.md`
 - `1279-m39-lasm-next-live-lookup-sparse-activation.md`
 - `1280-m39-lasm-disconnect-hint-invalidation.md`
+- `1281-m39-lasm-fallback-multi-next-live-cache-usage.md`
 
 As milestones progress, chapters will be added and linked from this index.
