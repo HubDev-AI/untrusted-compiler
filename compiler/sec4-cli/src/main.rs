@@ -25,6 +25,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod lasm_db_adapter_state;
 mod lasm_db_cli;
+mod lasm_cluster_relay_send;
 mod lasm_db_config;
 mod lasm_db_headers;
 mod lasm_db_plan;
@@ -38,6 +39,9 @@ mod lasm_request_template;
 mod lasm_sql_safety;
 
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
+use lasm_cluster_relay_send::{
+    attempt_lasm_cluster_relay_send, attempt_lasm_cluster_relay_send_single,
+};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -8367,46 +8371,6 @@ fn lasm_cluster_fallback_terminal_dispatch_error(
         Err(LasmClusterRelayDispatchError::Saturated(client_stream))
     } else {
         Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
-    }
-}
-
-#[inline(always)]
-fn attempt_lasm_cluster_relay_send(
-    client_stream: TcpStream,
-    relay_senders: &[Sender<TcpStream>],
-    relay_sender_live: &mut [u8],
-    relay_live_sender_count: &mut usize,
-    relay_all_senders_live: &mut bool,
-    relay_index: usize,
-    saw_live_sender: &mut bool,
-) -> Result<(), TcpStream> {
-    debug_assert!(relay_index < relay_senders.len());
-    match relay_senders[relay_index].try_send(client_stream) {
-        Ok(()) => Ok(()),
-        Err(TrySendError::Full(next_stream)) => {
-            *saw_live_sender = true;
-            Err(next_stream)
-        }
-        Err(TrySendError::Disconnected(next_stream)) => {
-            relay_sender_live[relay_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
-            *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
-            *relay_all_senders_live = false;
-            Err(next_stream)
-        }
-    }
-}
-
-#[inline(always)]
-fn attempt_lasm_cluster_relay_send_single(
-    client_stream: TcpStream,
-    relay_sender: &Sender<TcpStream>,
-) -> Result<(), LasmClusterRelayDispatchError> {
-    match relay_sender.try_send(client_stream) {
-        Ok(()) => Ok(()),
-        Err(TrySendError::Full(stream)) => Err(LasmClusterRelayDispatchError::Saturated(stream)),
-        Err(TrySendError::Disconnected(stream)) => {
-            Err(LasmClusterRelayDispatchError::Unavailable(stream))
-        }
     }
 }
 

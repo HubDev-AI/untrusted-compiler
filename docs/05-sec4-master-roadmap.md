@@ -1387,6 +1387,10 @@ Post-alpha track acceptance anchors:
      - extracted `attempt_lasm_cluster_relay_send_single(...)` to centralize single-sender `try_send` error mapping (`Saturated`/`Unavailable`),
      - single-sender accept loop now delegates dispatch mapping through the helper before existing accept-dispatch error handling.
      - documented in `docs/book/1306-m39-lasm-single-sender-dispatch-helper.md`.
+   - [x] Extracted relay send-attempt helpers into dedicated module:
+      - moved `attempt_lasm_cluster_relay_send(...)` and `attempt_lasm_cluster_relay_send_single(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_send.rs`,
+      - `main.rs` now imports relay send helpers through module boundaries, continuing multi-file LASM runtime decomposition without semantic changes.
+      - documented in `docs/book/1307-m39-lasm-relay-send-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
