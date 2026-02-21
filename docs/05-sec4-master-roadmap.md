@@ -1071,6 +1071,10 @@ Post-alpha track acceptance anchors:
      - accept loop multi-relay dispatch now computes next relay sender index via `lasm_cluster_next_index_wrapped(...)` instead of a prebuilt sender next-index vector,
      - fallback relay scan now also advances with the same wrapped helper, removing per-accept-loop sender-vector setup and per-step lookup reads while preserving relay scan order.
      - documented in `docs/book/1229-m39-lasm-cluster-accept-fallback-direct-next-index-helper.md`.
+   - [x] Cached selected worker-port count in relay dispatch loop:
+     - relay worker loop now maintains `selected_worker_port_count` alongside the selected worker-port snapshot and updates it only when snapshot identity changes,
+     - selection rebuild and backend-index selection now use the cached count instead of repeated `selected_worker_ports_snapshot.as_ref().len()` reads in the hot path.
+     - documented in `docs/book/1230-m39-lasm-cluster-cached-selected-worker-port-count.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
