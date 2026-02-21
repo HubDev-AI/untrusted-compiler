@@ -1283,6 +1283,10 @@ Post-alpha track acceptance anchors:
      - on primary relay-sender disconnect, accept-loop fallback now invalidates cached single/dual live-hint slots immediately instead of refreshing them in-place,
      - hint refresh remains centralized in existing post-fallback live-count-change path, avoiding duplicate disconnect-path hint scans while preserving deterministic fallback selection.
      - documented in `docs/book/1280-m39-lasm-disconnect-hint-invalidation.md`.
+   - [x] Routed fallback-multi live-index selection through cached next-live lookup when available:
+     - `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now accepts optional next-live lookup state and uses cached live-index resolution in degraded scan branches (`scan_live_target` 0/1/2),
+     - keeps scan fallback behavior for stale/missing cache entries while reducing repeated degraded live-index scans during fallback dispatch.
+     - documented in `docs/book/1281-m39-lasm-fallback-multi-next-live-cache-usage.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -8445,6 +8445,24 @@ fn lookup_lasm_cluster_next_live_sender_index(
 }
 
 #[inline(always)]
+fn resolve_lasm_cluster_next_live_sender_index(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: Option<&[usize]>,
+    start_index_wrapped: usize,
+) -> Option<usize> {
+    if let Some(lookup) = relay_next_live_sender_lookup {
+        if !lookup.is_empty() && lookup.len() == relay_sender_live.len() {
+            return lookup_lasm_cluster_next_live_sender_index(
+                relay_sender_live,
+                lookup,
+                start_index_wrapped,
+            );
+        }
+    }
+    lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
+}
+
+#[inline(always)]
 fn realign_lasm_cluster_dispatch_cursor_to_live(
     relay_sender_live: &[u8],
     relay_dispatch_cursor: &mut usize,
@@ -8644,6 +8662,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
     relay_sender_live: &mut [u8],
+    relay_next_live_sender_lookup: Option<&[usize]>,
     relay_live_sender_count: &mut usize,
     relay_all_senders_live: &mut bool,
     start_index_wrapped: usize,
@@ -8706,9 +8725,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     }
     let scan_live_target = relay_live_sender_count.saturating_sub(1);
     if scan_live_target == 0 {
-        if let Some(live_index) =
-            lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
-        {
+        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            start_index_wrapped,
+        ) {
             match relay_senders[live_index].try_send(client_stream) {
                 Ok(()) => return Ok(()),
                 Err(TrySendError::Full(next_stream)) => {
@@ -8730,9 +8751,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         };
     }
     if scan_live_target == 2 {
-        if let Some(first_live_index) =
-            lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
-        {
+        if let Some(first_live_index) = resolve_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            start_index_wrapped,
+        ) {
             let first_result = relay_senders[first_live_index].try_send(client_stream);
             match first_result {
                 Ok(()) => return Ok(()),
@@ -8747,8 +8770,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     client_stream = next_stream;
                 }
             }
-            if let Some(second_live_index) = lasm_cluster_next_live_sender_index(
+            if let Some(second_live_index) = resolve_lasm_cluster_next_live_sender_index(
                 relay_sender_live,
+                relay_next_live_sender_lookup,
                 lasm_cluster_next_index_wrapped(first_live_index, sender_count),
             ) {
                 match relay_senders[second_live_index].try_send(client_stream) {
@@ -8773,9 +8797,11 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         };
     }
     if scan_live_target == 1 {
-        if let Some(live_index) =
-            lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
-        {
+        if let Some(live_index) = resolve_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            start_index_wrapped,
+        ) {
             match relay_senders[live_index].try_send(client_stream) {
                 Ok(()) => return Ok(()),
                 Err(TrySendError::Full(next_stream)) => {
@@ -9214,6 +9240,12 @@ fn run_lasm_cluster_accept_loop(
                                         (stream, false)
                                     }
                                 };
+                                let fallback_next_live_lookup =
+                                    if relay_next_live_sender_lookup.is_empty() {
+                                        None
+                                    } else {
+                                        Some(relay_next_live_sender_lookup.as_slice())
+                                    };
                                 let dispatch_result = if !relay_all_senders_live
                                     && relay_live_sender_count == 2
                                 {
@@ -9251,6 +9283,7 @@ fn run_lasm_cluster_accept_loop(
                                             stream,
                                             relay_senders,
                                             relay_sender_live.as_mut_slice(),
+                                            fallback_next_live_lookup,
                                             &mut relay_live_sender_count,
                                             &mut relay_all_senders_live,
                                             next_dispatch_index,
@@ -9284,6 +9317,7 @@ fn run_lasm_cluster_accept_loop(
                                             stream,
                                             relay_senders,
                                             relay_sender_live.as_mut_slice(),
+                                            fallback_next_live_lookup,
                                             &mut relay_live_sender_count,
                                             &mut relay_all_senders_live,
                                             next_dispatch_index,
@@ -9295,6 +9329,7 @@ fn run_lasm_cluster_accept_loop(
                                         stream,
                                         relay_senders,
                                         relay_sender_live.as_mut_slice(),
+                                        fallback_next_live_lookup,
                                         &mut relay_live_sender_count,
                                         &mut relay_all_senders_live,
                                         next_dispatch_index,
