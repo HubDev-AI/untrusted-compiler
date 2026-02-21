@@ -1241,5 +1241,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1269-m39-lasm-accept-fallback-live-hint-refresh-elision.md`
 - `1270-m39-lasm-degraded-single-dual-hint-cache-reuse.md`
 - `1271-m39-lasm-single-live-degraded-fallback-dispatch-fix.md`
+- `1272-m39-lasm-degraded-fallback-cached-hint-fast-paths.md`
 
 As milestones progress, chapters will be added and linked from this index.

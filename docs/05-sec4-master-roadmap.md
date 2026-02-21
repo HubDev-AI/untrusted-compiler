@@ -1247,6 +1247,10 @@ Post-alpha track acceptance anchors:
      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now handles `scan_live_target == 0` by attempting the remaining live shard once before returning deterministic saturated/unavailable errors,
      - prevents false immediate unavailable outcomes when exactly one live shard remains in pools with more than two relay senders.
      - documented in `docs/book/1271-m39-lasm-single-live-degraded-fallback-dispatch-fix.md`.
+   - [x] Added cached-hint fallback dispatch fast paths for degraded single/dual live states:
+     - accept-loop fallback selection now refreshes missing single/dual live hints once and prefers dedicated `dispatch_lasm_cluster_relay_stream_fallback_single_live` / `dispatch_lasm_cluster_relay_stream_fallback_dual_live` paths before generic fallback scans,
+     - reduces degraded fallback scan overhead while preserving deterministic saturated/unavailable envelopes and liveness updates.
+     - documented in `docs/book/1272-m39-lasm-degraded-fallback-cached-hint-fast-paths.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
