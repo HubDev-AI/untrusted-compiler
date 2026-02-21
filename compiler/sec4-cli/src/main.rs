@@ -8451,7 +8451,8 @@ fn resolve_lasm_cluster_next_live_sender_index(
     start_index_wrapped: usize,
 ) -> Option<usize> {
     if let Some(lookup) = relay_next_live_sender_lookup {
-        if !lookup.is_empty() && lookup.len() == relay_sender_live.len() {
+        debug_assert_eq!(lookup.len(), relay_sender_live.len());
+        if !lookup.is_empty() {
             return lookup_lasm_cluster_next_live_sender_index(
                 relay_sender_live,
                 lookup,

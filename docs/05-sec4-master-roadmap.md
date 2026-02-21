@@ -1291,6 +1291,10 @@ Post-alpha track acceptance anchors:
      - accept-loop now precomputes whether next-live lookup storage exists and passes cached lookup state into fallback-multi only while degraded live-shard count remains above two,
      - avoids per-fallback lookup-option churn and skips unnecessary cache refresh/use paths once runtime transitions into dedicated single/dual live fast paths.
      - documented in `docs/book/1282-m39-lasm-fallback-cache-eligibility-gating.md`.
+   - [x] Removed redundant runtime cache-shape guard in next-live resolver hot path:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` now relies on debug assertions for cache-shape invariants and avoids per-call runtime length comparison before cache lookup dispatch,
+     - preserves existing fallback-to-scan behavior when cache is absent while reducing branch work in cached degraded lookup paths.
+     - documented in `docs/book/1283-m39-lasm-next-live-resolver-runtime-check-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
