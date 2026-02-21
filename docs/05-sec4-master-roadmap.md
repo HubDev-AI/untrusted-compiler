@@ -1431,6 +1431,10 @@ Post-alpha track acceptance anchors:
       - moved cluster sizing/timing/env resolver helpers from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_runtime_config.rs` (proxy worker/queue sizing, accept-worker sizing, relay accept/pump batch helpers, selection min-chunk helper, backend connect timeout/cooldown, autoscale cooldown helpers),
       - `main.rs` now imports runtime-config helper surface from module boundaries while preserving existing runtime behavior and diagnostics.
       - documented in `docs/book/1317-m39-lasm-cluster-runtime-config-module-extraction.md`.
+   - [x] Extracted LASM cluster worker lifecycle helpers into dedicated module:
+      - moved cluster worker lifecycle helpers from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_lifecycle.rs` (`compute_lasm_cluster_base_port`, worker spawn/wait helpers, prune/recover/stop helpers, reuse-port listener bind, reuse-port cluster runner),
+      - cluster orchestration now imports lifecycle helpers through module boundaries while preserving worker startup/recovery semantics and reuse-port behavior.
+      - documented in `docs/book/1318-m39-lasm-cluster-lifecycle-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
