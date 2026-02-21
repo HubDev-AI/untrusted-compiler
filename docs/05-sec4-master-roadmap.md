@@ -1415,6 +1415,14 @@ Post-alpha track acceptance anchors:
       - moved `LasmClusterStatusSnapshot` and `write_lasm_cluster_status_json(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_status_json.rs`,
       - status-writer thread now depends on a dedicated status-json module while preserving unchanged-snapshot skip behavior and deterministic payload shape.
       - documented in `docs/book/1313-m39-lasm-cluster-status-json-module-extraction.md`.
+   - [x] Extracted LASM cluster accept loop into dedicated module:
+      - moved `run_lasm_cluster_accept_loop(...)` from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_accept_loop.rs`,
+      - accept-loop orchestration now imports dispatch/fallback/topology helpers from module boundaries while preserving queue saturation, fallback dispatch, and counter flush behavior.
+      - documented in `docs/book/1314-m39-lasm-cluster-accept-loop-module-extraction.md`.
+   - [x] Extracted LASM relay pump types into dedicated module:
+      - moved `LasmClusterRelayPumpStep` and `LasmClusterRelayPump` (+ impl) from `main.rs` into `compiler/sec4-cli/src/lasm_cluster_relay_pump.rs`,
+      - relay worker loop now consumes relay pump types through module boundaries while preserving proxy relay buffer/pump semantics.
+      - documented in `docs/book/1315-m39-lasm-cluster-relay-pump-module-extraction.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
