@@ -9099,7 +9099,7 @@ fn run_lasm_cluster_accept_loop(
                             }
                             Err(send_error) => {
                                 listener_dispatch_fallback_total_local += 1;
-                                let mut live_count_before_fallback = relay_live_sender_count;
+                                let live_count_before_fallback = relay_live_sender_count;
                                 let (stream, saw_live_sender) = match send_error {
                                     TrySendError::Full(stream) => (stream, true),
                                     TrySendError::Disconnected(stream) => {
@@ -9107,8 +9107,6 @@ fn run_lasm_cluster_accept_loop(
                                             LASM_CLUSTER_RELAY_SENDER_DEAD;
                                         relay_live_sender_count =
                                             relay_live_sender_count.saturating_sub(1);
-                                        relay_live_sender_count_observed
-                                            .fetch_min(relay_live_sender_count, Ordering::Relaxed);
                                         relay_all_senders_live = false;
                                         refresh_lasm_cluster_live_sender_hints(
                                             relay_sender_live.as_slice(),
@@ -9116,7 +9114,6 @@ fn run_lasm_cluster_accept_loop(
                                             &mut relay_single_live_sender_index,
                                             &mut relay_dual_live_sender_indices,
                                         );
-                                        live_count_before_fallback = relay_live_sender_count;
                                         (stream, false)
                                     }
                                 };
