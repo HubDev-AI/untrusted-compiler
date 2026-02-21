@@ -1251,6 +1251,10 @@ Post-alpha track acceptance anchors:
      - accept-loop fallback selection now refreshes missing single/dual live hints once and prefers dedicated `dispatch_lasm_cluster_relay_stream_fallback_single_live` / `dispatch_lasm_cluster_relay_stream_fallback_dual_live` paths before generic fallback scans,
      - reduces degraded fallback scan overhead while preserving deterministic saturated/unavailable envelopes and liveness updates.
      - documented in `docs/book/1272-m39-lasm-degraded-fallback-cached-hint-fast-paths.md`.
+   - [x] Elided redundant no-live telemetry atomic updates in accept loop:
+     - when `relay_live_sender_count == 0`, accept-loop dispatch now skips repeated per-request `relay_live_sender_count_observed.fetch_min(0)` writes,
+     - live-count telemetry remains correct because transition-to-zero is already recorded when liveness changes.
+     - documented in `docs/book/1273-m39-lasm-no-live-telemetry-atomic-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

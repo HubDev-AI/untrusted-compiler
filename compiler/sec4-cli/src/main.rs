@@ -8934,7 +8934,6 @@ fn run_lasm_cluster_accept_loop(
                         listener_accepted_in_batch += 1;
                         if !relay_all_senders_live {
                             if relay_live_sender_count == 0 {
-                                relay_live_sender_count_observed.fetch_min(0, Ordering::Relaxed);
                                 if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
                                     LasmClusterRelayDispatchError::Unavailable(client_stream),
                                     active_connections,
