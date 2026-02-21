@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
+.PHONY: help db-up db-down db-schema env preflight preflight-dry bench-ping bench-decode bench-users bench-users-get bench-profile bench-step-profile analyze-step-profile compare-step-matrix bench-step-matrix bench-step-matrix-dry bench-matrix bench-matrix-dry bench-full bench-full-dry bench-full-saturation bench-full-saturation-dry bench-full-saturation-throughput bench-full-saturation-throughput-dry bench-full-saturation-latency bench-full-saturation-latency-dry bench-full-saturation-presets bench-full-saturation-presets-dry sec4-capacity-probe lasm-cluster-capacity-probe lasm-cluster-mode-compare lasm-cluster-saturation-boost-matrix lasm-cluster-saturation-boost-analyze lasm-cluster-saturation-boost-verify lasm-cluster-saturation-boost-summary lasm-cluster-saturation-boost-bundle artifact-manifest verify-bundle summarize report compare compare-matrix analyze-matrix publish-report test-scripts test-services
 
 IMPL ?= sec4
 IMPLS ?= sec4,sec4-lasm,node,go,rust
@@ -88,6 +88,7 @@ help:
 	@echo "  bench-full-saturation-presets-dry Print both preset full-suite+saturation plans"
 	@echo "  sec4-capacity-probe Run sec4 capacity probe (service build + load + peak RSS capture)"
 	@echo "  lasm-cluster-capacity-probe Run sec4 LASM cluster capacity probe (sec4 run + load + peak RSS capture)"
+	@echo "  lasm-cluster-mode-compare Run proxy-relay vs fixed reuse-port capacity comparison"
 	@echo "  lasm-cluster-saturation-boost-matrix Run LASM cluster capacity probe matrix across saturation boost-step values"
 	@echo "  lasm-cluster-saturation-boost-analyze Analyze LASM saturation boost matrix and pick recommended boost step"
 	@echo "  lasm-cluster-saturation-boost-verify Run matrix + analysis and verify one recommended boost-step follow-up probe"
@@ -252,6 +253,9 @@ sec4-capacity-probe:
 lasm-cluster-capacity-probe:
 	scripts/run_lasm_cluster_capacity_probe.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(FIXED_REUSE_PORT_FLAG)
 
+lasm-cluster-mode-compare:
+	scripts/run_lasm_cluster_mode_compare.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)"
+
 lasm-cluster-saturation-boost-matrix:
 	scripts/run_lasm_cluster_saturation_boost_matrix.sh --project-path "$(LASM_CAPACITY_PROJECT_PATH)" --target-requests "$(LASM_CAPACITY_TARGET_REQUESTS)" --boost-steps "$(LASM_CAPACITY_BOOST_STEPS)" --cluster-relay-workers "$(LASM_CAPACITY_CLUSTER_RELAY_WORKERS)" --cluster-relay-queue "$(LASM_CAPACITY_CLUSTER_RELAY_QUEUE)" --cluster-accept-workers "$(LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS)" --cluster-relay-accept-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX)" --cluster-relay-pump-batch-max "$(LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX)" $(FIXED_REUSE_PORT_FLAG) --out "$(LASM_SATURATION_MATRIX)" --analysis-out "$(LASM_SATURATION_ANALYSIS)"
 
@@ -302,6 +306,7 @@ publish-report:
 test-scripts:
 	scripts/test_run_sec4_capacity_probe.sh
 	scripts/test_run_lasm_cluster_capacity_probe.sh
+	scripts/test_run_lasm_cluster_mode_compare.sh
 	scripts/test_run_lasm_cluster_saturation_boost_matrix.sh
 	scripts/test_run_lasm_cluster_saturation_boost_bundle.sh
 	scripts/test_analyze_lasm_cluster_saturation_boost_matrix.sh

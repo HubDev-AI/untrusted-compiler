@@ -1165,6 +1165,10 @@ Post-alpha track acceptance anchors:
      - saturation matrix + bundle + full-suite + Makefile forwarding now thread fixed-mode toggles end-to-end,
      - short local sample (`20s`, `8t/256c`, `/health`) measured `~120.5k req/s` in fixed reuse-port mode vs `~77.6k req/s` proxy-relay mode in this environment.
      - documented in `docs/book/1251-m39-lasm-fixed-reuse-port-probe-and-saturation-forwarding.md`.
+   - [x] Added deterministic proxy-vs-fixed LASM mode comparison runner:
+     - new `run_lasm_cluster_mode_compare.sh` runs paired proxy-relay and fixed-reuse-port probes under one workload profile and emits a combined comparison artifact (`recommendedMode`, throughput delta/gain, latency + memory snapshot),
+     - Makefile now includes `lasm-cluster-mode-compare` target and script contracts for dry-run comparison planning.
+     - documented in `docs/book/1252-m39-lasm-cluster-mode-compare-runner.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

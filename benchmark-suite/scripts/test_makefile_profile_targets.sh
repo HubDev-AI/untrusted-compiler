@@ -90,5 +90,6 @@ require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-ful
 require_target_contains_token "bench-full-saturation-presets" '$(MAKE) bench-full-saturation-latency'
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-throughput-dry'
 require_target_contains_token "bench-full-saturation-presets-dry" '$(MAKE) bench-full-saturation-latency-dry'
+require_target_contains_token "lasm-cluster-mode-compare" "run_lasm_cluster_mode_compare.sh"
 
 echo "makefile profile target test passed"
