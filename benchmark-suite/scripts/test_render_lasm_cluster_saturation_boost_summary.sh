@@ -31,7 +31,11 @@ cat >"${matrix}" <<'JSON'
       "pass": true,
       "requests": 1260000,
       "requestsPerSec": 63000,
-      "peakRssKb": 12500
+      "peakRssKb": 12500,
+      "p99": "4.20ms",
+      "clusterRelayWorkersResolved": 2,
+      "clusterAcceptWorkersResolved": 2,
+      "clusterRelayAcceptBatchMaxResolved": 64
     },
     {
       "saturationBoostStep": 6,
@@ -59,7 +63,11 @@ cat >"${analysis}" <<'JSON'
       "pass": true,
       "requests": 1260000,
       "requestsPerSec": 63000,
-      "peakRssKb": 12500
+      "peakRssKb": 12500,
+      "p99": "4.20ms",
+      "clusterRelayWorkersResolved": 2,
+      "clusterAcceptWorkersResolved": 2,
+      "clusterRelayAcceptBatchMaxResolved": 64
     },
     {
       "saturationBoostStep": 2,
@@ -85,7 +93,12 @@ cat >"${verify}" <<'JSON'
   "pass": true,
   "requestsTargetMet": true,
   "run": {
-    "autoscaleSaturationBoostStep": 4
+    "autoscaleSaturationBoostStep": 4,
+    "clusterRelayWorkersResolved": 2,
+    "clusterAcceptWorkersResolved": 2,
+    "clusterRelayAcceptBatchMaxResolved": 64,
+    "clusterRelayQueueCapacityResolved": 2048,
+    "clusterRelayQueueShardCapacityResolved": 1024
   },
   "observed": {
     "requests": 1280000,
@@ -111,7 +124,7 @@ if ! grep -q '^## Ranked Runs$' "${out}"; then
   echo "summary missing ranked runs section" >&2
   exit 1
 fi
-if ! grep -q '| 1 | 4 | true | 63000 | 1260000 | 12500 |' "${out}"; then
+if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 |' "${out}"; then
   echo "summary missing ranked run row for recommended step" >&2
   exit 1
 fi
@@ -121,6 +134,10 @@ if ! grep -q '^## Recommended Step Verification$' "${out}"; then
 fi
 if ! grep -q '^- Requests/sec: 64000$' "${out}"; then
   echo "summary missing verification throughput line" >&2
+  exit 1
+fi
+if ! grep -q '^- Relay workers (resolved): 2$' "${out}"; then
+  echo "summary missing verification resolved relay worker line" >&2
   exit 1
 fi
 

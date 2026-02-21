@@ -1215,5 +1215,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`
 - `1244-m39-lasm-saturation-analysis-p99-and-resolved-metadata.md`
 - `1245-m39-lasm-capacity-probe-status-artifact-cleanup-default.md`
+- `1246-m39-lasm-saturation-summary-p99-resolved-columns.md`
 
 As milestones progress, chapters will be added and linked from this index.
