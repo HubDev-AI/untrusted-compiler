@@ -8678,18 +8678,14 @@ fn run_lasm_cluster_accept_loop(
         }
         listener_idle_spins = 0;
 
-        if listener_enqueued_local > 0 {
-            flush_lasm_cluster_active_connection_increments(
-                active_connections,
-                &mut listener_enqueued_local,
-            );
-        }
-        if listener_dispatch_fallback_total_local > 0 {
-            flush_lasm_cluster_dispatch_fallback_total(
-                relay_dispatch_fallback_total,
-                &mut listener_dispatch_fallback_total_local,
-            );
-        }
+        flush_lasm_cluster_active_connection_increments(
+            active_connections,
+            &mut listener_enqueued_local,
+        );
+        flush_lasm_cluster_dispatch_fallback_total(
+            relay_dispatch_fallback_total,
+            &mut listener_dispatch_fallback_total_local,
+        );
     }
 
     flush_lasm_cluster_saturation_counters(
@@ -9511,20 +9507,16 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     }
                 }
 
-                if saturation_events_pending_local > 0 || saturation_events_total_local > 0 {
-                    flush_lasm_cluster_saturation_counters(
-                        &relay_saturation_events,
-                        &relay_saturation_events_total,
-                        &mut saturation_events_pending_local,
-                        &mut saturation_events_total_local,
-                    );
-                }
-                if active_connection_decrements_local > 0 {
-                    flush_lasm_cluster_active_connection_decrements(
-                        &relay_active,
-                        &mut active_connection_decrements_local,
-                    );
-                }
+                flush_lasm_cluster_saturation_counters(
+                    &relay_saturation_events,
+                    &relay_saturation_events_total,
+                    &mut saturation_events_pending_local,
+                    &mut saturation_events_total_local,
+                );
+                flush_lasm_cluster_active_connection_decrements(
+                    &relay_active,
+                    &mut active_connection_decrements_local,
+                );
 
                 if receiver_closed && relay_connections.is_empty() {
                     break;
