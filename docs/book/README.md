@@ -1281,5 +1281,7 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1309-m39-lasm-relay-live-hint-module-extraction.md`
 - `1310-m39-lasm-fallback-dispatch-module-extraction.md`
 - `1311-m39-lasm-fallback-error-enum-module-ownership.md`
+- `1312-m39-lasm-accept-dispatch-module-extraction.md`
+- `1313-m39-lasm-cluster-status-json-module-extraction.md`
 
 As milestones progress, chapters will be added and linked from this index.

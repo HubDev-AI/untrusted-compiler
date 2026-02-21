@@ -15,7 +15,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::fs;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -23,11 +23,13 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-mod lasm_db_adapter_state;
-mod lasm_db_cli;
+mod lasm_cluster_accept_dispatch;
+mod lasm_cluster_fallback_dispatch;
 mod lasm_cluster_relay_send;
 mod lasm_cluster_relay_topology;
-mod lasm_cluster_fallback_dispatch;
+mod lasm_cluster_status_json;
+mod lasm_db_adapter_state;
+mod lasm_db_cli;
 mod lasm_db_config;
 mod lasm_db_headers;
 mod lasm_db_plan;
@@ -40,21 +42,29 @@ mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
 
-use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
-use lasm_cluster_relay_send::{
-    attempt_lasm_cluster_relay_send, attempt_lasm_cluster_relay_send_single,
+use lasm_cluster_accept_dispatch::{
+    flush_lasm_cluster_active_connection_decrements,
+    flush_lasm_cluster_active_connection_increments, flush_lasm_cluster_dispatch_fallback_total,
+    flush_lasm_cluster_dispatch_short_circuit_total, flush_lasm_cluster_saturation_counters,
+    handle_lasm_cluster_accept_dispatch_error, write_lasm_cluster_unavailable_response,
+    LasmClusterUnavailableReason, LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH,
 };
 use lasm_cluster_fallback_dispatch::{
     dispatch_lasm_cluster_relay_stream_fallback_dual_live,
     dispatch_lasm_cluster_relay_stream_fallback_multi,
     dispatch_lasm_cluster_relay_stream_fallback_single_live, LasmClusterRelayDispatchError,
 };
-use lasm_cluster_relay_topology::{
-    lasm_cluster_next_index_wrapped,
-    lookup_lasm_cluster_next_live_sender_index, realign_lasm_cluster_dispatch_cursor_to_live,
-    refresh_lasm_cluster_dual_live_sender_indices, refresh_lasm_cluster_live_sender_hints,
-    refresh_lasm_cluster_next_live_sender_lookup, refresh_lasm_cluster_single_live_sender_index,
+use lasm_cluster_relay_send::{
+    attempt_lasm_cluster_relay_send, attempt_lasm_cluster_relay_send_single,
 };
+use lasm_cluster_relay_topology::{
+    lasm_cluster_next_index_wrapped, lookup_lasm_cluster_next_live_sender_index,
+    realign_lasm_cluster_dispatch_cursor_to_live, refresh_lasm_cluster_dual_live_sender_indices,
+    refresh_lasm_cluster_live_sender_hints, refresh_lasm_cluster_next_live_sender_lookup,
+    refresh_lasm_cluster_single_live_sender_index,
+};
+use lasm_cluster_status_json::{write_lasm_cluster_status_json, LasmClusterStatusSnapshot};
+use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -8044,266 +8054,8 @@ fn lasm_cluster_selection_reservation_min_chunk(config: &LasmClusterConfig) -> u
     config.cluster_selection_reservation_min_chunk.max(1)
 }
 
-enum LasmClusterUnavailableReason {
-    NoHealthyWorkers,
-    WorkerUnavailable,
-    RelaySaturated,
-    RelayUnavailable,
-}
-
-const LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 54\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"no healthy workers\"}";
-const LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 54\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"worker unavailable\"}";
-const LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 59\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay saturated\"}";
-const LASM_CLUSTER_UNAVAILABLE_RELAY_UNAVAILABLE_RESPONSE: &[u8] = b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: 61\r\nConnection: close\r\n\r\n{\"ok\":false,\"status\":503,\"error\":\"cluster relay unavailable\"}";
-
-fn lasm_cluster_unavailable_response(reason: LasmClusterUnavailableReason) -> &'static [u8] {
-    match reason {
-        LasmClusterUnavailableReason::NoHealthyWorkers => {
-            LASM_CLUSTER_UNAVAILABLE_NO_HEALTHY_WORKERS_RESPONSE
-        }
-        LasmClusterUnavailableReason::WorkerUnavailable => {
-            LASM_CLUSTER_UNAVAILABLE_WORKER_UNAVAILABLE_RESPONSE
-        }
-        LasmClusterUnavailableReason::RelaySaturated => {
-            LASM_CLUSTER_UNAVAILABLE_RELAY_SATURATED_RESPONSE
-        }
-        LasmClusterUnavailableReason::RelayUnavailable => {
-            LASM_CLUSTER_UNAVAILABLE_RELAY_UNAVAILABLE_RESPONSE
-        }
-    }
-}
-
-fn write_lasm_cluster_unavailable_response(
-    client: &mut TcpStream,
-    reason: LasmClusterUnavailableReason,
-) -> Result<(), String> {
-    let response = lasm_cluster_unavailable_response(reason);
-    client
-        .write_all(response)
-        .map_err(|err| format!("could not write LASM cluster overload response: {err}"))
-}
-
-#[derive(Clone, Debug)]
-struct LasmClusterStatusSnapshot {
-    listen_port: u16,
-    min_instances: usize,
-    max_instances: usize,
-    worker_count: usize,
-    relay_worker_count: usize,
-    relay_queue_capacity: usize,
-    relay_queue_shard_capacity: usize,
-    worker_ports: Arc<Vec<u16>>,
-    active_connections: usize,
-    active_connections_per_worker: f64,
-    relay_saturation_events_pending: usize,
-    relay_saturation_events_total: u64,
-    relay_saturation_events_per_sec: f64,
-    relay_accept_batch_max: usize,
-    relay_pump_batch_max: usize,
-    relay_selection_reservation_min_chunk: usize,
-    relay_accept_workers: usize,
-    relay_backend_connect_timeout_ms: u64,
-    relay_backend_connect_cooldown_ms: u64,
-    relay_dispatch_fallback_total: u64,
-    relay_dispatch_fallback_per_sec: f64,
-    relay_dispatch_saturation_short_circuit_total: u64,
-    relay_dispatch_saturation_short_circuit_per_sec: f64,
-    relay_live_sender_count: usize,
-    autoscale_desired_instances: usize,
-    autoscale_last_saturation_events: usize,
-    autoscale_last_dynamic_boost_step: usize,
-    autoscale_scale_up_cooldown_remaining_ms: u64,
-    autoscale_scale_down_cooldown_remaining_ms: u64,
-}
-
-impl PartialEq for LasmClusterStatusSnapshot {
-    fn eq(&self, other: &Self) -> bool {
-        self.listen_port == other.listen_port
-            && self.min_instances == other.min_instances
-            && self.max_instances == other.max_instances
-            && self.worker_count == other.worker_count
-            && self.relay_worker_count == other.relay_worker_count
-            && self.relay_queue_capacity == other.relay_queue_capacity
-            && self.relay_queue_shard_capacity == other.relay_queue_shard_capacity
-            && (Arc::ptr_eq(&self.worker_ports, &other.worker_ports)
-                || self.worker_ports.as_slice() == other.worker_ports.as_slice())
-            && self.active_connections == other.active_connections
-            && self.active_connections_per_worker == other.active_connections_per_worker
-            && self.relay_saturation_events_pending == other.relay_saturation_events_pending
-            && self.relay_saturation_events_total == other.relay_saturation_events_total
-            && self.relay_saturation_events_per_sec == other.relay_saturation_events_per_sec
-            && self.relay_accept_batch_max == other.relay_accept_batch_max
-            && self.relay_pump_batch_max == other.relay_pump_batch_max
-            && self.relay_selection_reservation_min_chunk
-                == other.relay_selection_reservation_min_chunk
-            && self.relay_accept_workers == other.relay_accept_workers
-            && self.relay_backend_connect_timeout_ms == other.relay_backend_connect_timeout_ms
-            && self.relay_backend_connect_cooldown_ms == other.relay_backend_connect_cooldown_ms
-            && self.relay_dispatch_fallback_total == other.relay_dispatch_fallback_total
-            && self.relay_dispatch_fallback_per_sec == other.relay_dispatch_fallback_per_sec
-            && self.relay_dispatch_saturation_short_circuit_total
-                == other.relay_dispatch_saturation_short_circuit_total
-            && self.relay_dispatch_saturation_short_circuit_per_sec
-                == other.relay_dispatch_saturation_short_circuit_per_sec
-            && self.relay_live_sender_count == other.relay_live_sender_count
-            && self.autoscale_desired_instances == other.autoscale_desired_instances
-            && self.autoscale_last_saturation_events == other.autoscale_last_saturation_events
-            && self.autoscale_last_dynamic_boost_step == other.autoscale_last_dynamic_boost_step
-            && self.autoscale_scale_up_cooldown_remaining_ms
-                == other.autoscale_scale_up_cooldown_remaining_ms
-            && self.autoscale_scale_down_cooldown_remaining_ms
-                == other.autoscale_scale_down_cooldown_remaining_ms
-    }
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LasmClusterStatusPayload<'a> {
-    mode: &'static str,
-    updated_at_ms: u64,
-    listen_port: u16,
-    min_instances: usize,
-    max_instances: usize,
-    worker_count: usize,
-    relay_worker_count: usize,
-    relay_queue_capacity: usize,
-    relay_queue_shard_capacity: usize,
-    worker_ports: &'a [u16],
-    active_connections: usize,
-    active_connections_per_worker: f64,
-    relay_saturation_events_pending: usize,
-    relay_saturation_events_total: u64,
-    relay_saturation_events_per_sec: f64,
-    relay_accept_batch_max: usize,
-    relay_pump_batch_max: usize,
-    relay_selection_reservation_min_chunk: usize,
-    relay_accept_workers: usize,
-    relay_backend_connect_timeout_ms: u64,
-    relay_backend_connect_cooldown_ms: u64,
-    relay_dispatch_fallback_total: u64,
-    relay_dispatch_fallback_per_sec: f64,
-    relay_dispatch_saturation_short_circuit_total: u64,
-    relay_dispatch_saturation_short_circuit_per_sec: f64,
-    relay_live_sender_count: usize,
-    autoscale_desired_instances: usize,
-    autoscale_last_saturation_events: usize,
-    autoscale_last_dynamic_boost_step: usize,
-    autoscale_scale_up_cooldown_remaining_ms: u64,
-    autoscale_scale_down_cooldown_remaining_ms: u64,
-}
-
-fn write_lasm_cluster_status_json(
-    path: &Path,
-    tmp_path: &Path,
-    snapshot: LasmClusterStatusSnapshot,
-    last_snapshot: &mut Option<LasmClusterStatusSnapshot>,
-    status_parent_ready: &mut bool,
-) -> Result<(), String> {
-    if last_snapshot
-        .as_ref()
-        .map(|previous| previous == &snapshot)
-        .unwrap_or(false)
-    {
-        return Ok(());
-    }
-
-    let ensure_status_parent_dir = |ready: &mut bool| -> Result<(), String> {
-        if *ready {
-            return Ok(());
-        }
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).map_err(|err| {
-                    format!(
-                        "could not create cluster status json parent directory {}: {err}",
-                        parent.display()
-                    )
-                })?;
-            }
-        }
-        *ready = true;
-        Ok(())
-    };
-    ensure_status_parent_dir(status_parent_ready)?;
-
-    let payload = LasmClusterStatusPayload {
-        mode: "lasm-cluster",
-        updated_at_ms: lasm_now_ms(),
-        listen_port: snapshot.listen_port,
-        min_instances: snapshot.min_instances,
-        max_instances: snapshot.max_instances,
-        worker_count: snapshot.worker_count,
-        relay_worker_count: snapshot.relay_worker_count,
-        relay_queue_capacity: snapshot.relay_queue_capacity,
-        relay_queue_shard_capacity: snapshot.relay_queue_shard_capacity,
-        worker_ports: snapshot.worker_ports.as_slice(),
-        active_connections: snapshot.active_connections,
-        active_connections_per_worker: snapshot.active_connections_per_worker,
-        relay_saturation_events_pending: snapshot.relay_saturation_events_pending,
-        relay_saturation_events_total: snapshot.relay_saturation_events_total,
-        relay_saturation_events_per_sec: snapshot.relay_saturation_events_per_sec,
-        relay_accept_batch_max: snapshot.relay_accept_batch_max,
-        relay_pump_batch_max: snapshot.relay_pump_batch_max,
-        relay_selection_reservation_min_chunk: snapshot.relay_selection_reservation_min_chunk,
-        relay_accept_workers: snapshot.relay_accept_workers,
-        relay_backend_connect_timeout_ms: snapshot.relay_backend_connect_timeout_ms,
-        relay_backend_connect_cooldown_ms: snapshot.relay_backend_connect_cooldown_ms,
-        relay_dispatch_fallback_total: snapshot.relay_dispatch_fallback_total,
-        relay_dispatch_fallback_per_sec: snapshot.relay_dispatch_fallback_per_sec,
-        relay_dispatch_saturation_short_circuit_total: snapshot
-            .relay_dispatch_saturation_short_circuit_total,
-        relay_dispatch_saturation_short_circuit_per_sec: snapshot
-            .relay_dispatch_saturation_short_circuit_per_sec,
-        relay_live_sender_count: snapshot.relay_live_sender_count,
-        autoscale_desired_instances: snapshot.autoscale_desired_instances,
-        autoscale_last_saturation_events: snapshot.autoscale_last_saturation_events,
-        autoscale_last_dynamic_boost_step: snapshot.autoscale_last_dynamic_boost_step,
-        autoscale_scale_up_cooldown_remaining_ms: snapshot.autoscale_scale_up_cooldown_remaining_ms,
-        autoscale_scale_down_cooldown_remaining_ms: snapshot
-            .autoscale_scale_down_cooldown_remaining_ms,
-    };
-    let tmp_file = match fs::File::create(tmp_path) {
-        Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            *status_parent_ready = false;
-            ensure_status_parent_dir(status_parent_ready)?;
-            fs::File::create(tmp_path).map_err(|retry_err| {
-                format!(
-                    "could not create cluster status json temporary file {}: {retry_err}",
-                    tmp_path.display()
-                )
-            })?
-        }
-        Err(err) => {
-            return Err(format!(
-                "could not create cluster status json temporary file {}: {err}",
-                tmp_path.display()
-            ));
-        }
-    };
-    let mut tmp_writer = BufWriter::new(tmp_file);
-    serde_json::to_writer(&mut tmp_writer, &payload)
-        .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
-    tmp_writer.flush().map_err(|err| {
-        format!(
-            "could not flush cluster status json temporary file {}: {err}",
-            tmp_path.display()
-        )
-    })?;
-    fs::rename(tmp_path, path).map_err(|err| {
-        format!(
-            "could not move cluster status json temporary file {} to {}: {err}",
-            tmp_path.display(),
-            path.display()
-        )
-    })?;
-    *last_snapshot = Some(snapshot);
-    Ok(())
-}
-
 const LASM_CLUSTER_RELAY_BUFFER_BYTES: usize = 16 * 1024;
 const LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS: u64 = 1000;
-const LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH: usize = 8;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
 const LASM_CLUSTER_IDLE_SLEEP_MICROS: u64 = 250;
@@ -8313,121 +8065,6 @@ const LASM_CLUSTER_RELAY_PUMP_BATCH_MIN: usize = 64;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
 const LASM_CLUSTER_RELAY_SENDER_LIVE: u8 = 1;
 const LASM_CLUSTER_RELAY_SENDER_DEAD: u8 = 0;
-
-#[inline(always)]
-fn flush_lasm_cluster_saturation_counters(
-    pending_counter: &AtomicUsize,
-    total_counter: &AtomicU64,
-    pending_local: &mut usize,
-    total_local: &mut u64,
-) {
-    if *pending_local > 0 {
-        pending_counter.fetch_add(*pending_local, Ordering::Relaxed);
-        *pending_local = 0;
-    }
-    if *total_local > 0 {
-        total_counter.fetch_add(*total_local, Ordering::Relaxed);
-        *total_local = 0;
-    }
-}
-
-#[inline(always)]
-fn flush_lasm_cluster_dispatch_fallback_total(counter: &AtomicU64, total_local: &mut u64) {
-    if *total_local > 0 {
-        counter.fetch_add(*total_local, Ordering::Relaxed);
-        *total_local = 0;
-    }
-}
-
-#[inline(always)]
-fn flush_lasm_cluster_dispatch_short_circuit_total(counter: &AtomicU64, total_local: &mut u64) {
-    if *total_local > 0 {
-        counter.fetch_add(*total_local, Ordering::Relaxed);
-        *total_local = 0;
-    }
-}
-
-#[inline(always)]
-fn flush_lasm_cluster_active_connection_increments(
-    active_counter: &AtomicUsize,
-    increments_local: &mut usize,
-) {
-    if *increments_local > 0 {
-        active_counter.fetch_add(*increments_local, Ordering::Relaxed);
-        *increments_local = 0;
-    }
-}
-
-#[inline(always)]
-fn flush_lasm_cluster_active_connection_decrements(
-    active_counter: &AtomicUsize,
-    decrements_local: &mut usize,
-) {
-    if *decrements_local > 0 {
-        active_counter.fetch_sub(*decrements_local, Ordering::Relaxed);
-        *decrements_local = 0;
-    }
-}
-
-#[inline(always)]
-fn handle_lasm_cluster_accept_dispatch_error(
-    dispatch_error: LasmClusterRelayDispatchError,
-    active_connections: &AtomicUsize,
-    relay_saturation_events: &AtomicUsize,
-    relay_saturation_events_total: &AtomicU64,
-    relay_dispatch_fallback_total: &AtomicU64,
-    relay_dispatch_short_circuit_total: &AtomicU64,
-    listener_enqueued_local: &mut usize,
-    listener_saturation_pending_local: &mut usize,
-    listener_saturation_total_local: &mut u64,
-    listener_dispatch_fallback_total_local: &mut u64,
-    listener_dispatch_short_circuit_total_local: &mut u64,
-) -> Result<(), String> {
-    match dispatch_error {
-        LasmClusterRelayDispatchError::Saturated(mut stream) => {
-            *listener_saturation_pending_local += 1;
-            *listener_saturation_total_local += 1;
-            let _ = write_lasm_cluster_unavailable_response(
-                &mut stream,
-                LasmClusterUnavailableReason::RelaySaturated,
-            );
-            if *listener_saturation_pending_local >= LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH {
-                flush_lasm_cluster_saturation_counters(
-                    relay_saturation_events,
-                    relay_saturation_events_total,
-                    listener_saturation_pending_local,
-                    listener_saturation_total_local,
-                );
-            }
-            Ok(())
-        }
-        LasmClusterRelayDispatchError::Unavailable(mut stream) => {
-            let _ = write_lasm_cluster_unavailable_response(
-                &mut stream,
-                LasmClusterUnavailableReason::RelayUnavailable,
-            );
-            flush_lasm_cluster_active_connection_increments(
-                active_connections,
-                listener_enqueued_local,
-            );
-            flush_lasm_cluster_saturation_counters(
-                relay_saturation_events,
-                relay_saturation_events_total,
-                listener_saturation_pending_local,
-                listener_saturation_total_local,
-            );
-            flush_lasm_cluster_dispatch_fallback_total(
-                relay_dispatch_fallback_total,
-                listener_dispatch_fallback_total_local,
-            );
-            flush_lasm_cluster_dispatch_short_circuit_total(
-                relay_dispatch_short_circuit_total,
-                listener_dispatch_short_circuit_total_local,
-            );
-            Err("LASM cluster relay worker pool disconnected unexpectedly".to_string())
-        }
-    }
-}
 
 fn run_lasm_cluster_accept_loop(
     listener: &TcpListener,
@@ -8490,9 +8127,10 @@ fn run_lasm_cluster_accept_loop(
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
-                        if let Err(dispatch_error) =
-                            attempt_lasm_cluster_relay_send_single(client_stream, relay_single_sender)
-                        {
+                        if let Err(dispatch_error) = attempt_lasm_cluster_relay_send_single(
+                            client_stream,
+                            relay_single_sender,
+                        ) {
                             if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
                                 dispatch_error,
                                 active_connections,
@@ -8753,16 +8391,15 @@ fn run_lasm_cluster_accept_loop(
                                 );
                             }
                             let live_count_after_primary_dispatch = relay_live_sender_count;
-                                let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
-                                    && relay_live_sender_count > 2
-                                {
-                                    relay_next_live_sender_lookup.as_slice()
-                                } else {
-                                    &[]
-                                };
-                                let dispatch_result = if !relay_all_senders_live
-                                    && relay_live_sender_count == 2
-                                {
+                            let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
+                                && relay_live_sender_count > 2
+                            {
+                                relay_next_live_sender_lookup.as_slice()
+                            } else {
+                                &[]
+                            };
+                            let dispatch_result =
+                                if !relay_all_senders_live && relay_live_sender_count == 2 {
                                     let dual_live_indices =
                                         if let Some(indices) = relay_dual_live_sender_indices {
                                             Some(indices)
@@ -8850,68 +8487,65 @@ fn run_lasm_cluster_accept_loop(
                                         saw_live_sender,
                                     )
                                 };
-                                if !relay_all_senders_live
-                                    && relay_live_sender_count > 0
-                                    && relay_live_sender_count > 1
-                                    && relay_sender_live[relay_dispatch_cursor]
-                                        == LASM_CLUSTER_RELAY_SENDER_DEAD
+                            if !relay_all_senders_live
+                                && relay_live_sender_count > 0
+                                && relay_live_sender_count > 1
+                                && relay_sender_live[relay_dispatch_cursor]
+                                    == LASM_CLUSTER_RELAY_SENDER_DEAD
+                            {
+                                let _ = realign_lasm_cluster_dispatch_cursor_to_live(
+                                    relay_sender_live.as_slice(),
+                                    &mut relay_dispatch_cursor,
+                                );
+                            }
+                            if relay_live_sender_count != live_count_before_fallback {
+                                refresh_lasm_cluster_live_sender_hints(
+                                    relay_sender_live.as_slice(),
+                                    relay_live_sender_count,
+                                    &mut relay_single_live_sender_index,
+                                    &mut relay_dual_live_sender_indices,
+                                );
+                                if relay_live_sender_count > 2
+                                    && relay_has_next_live_sender_lookup
+                                    && relay_live_sender_count != live_count_after_primary_dispatch
                                 {
-                                    let _ = realign_lasm_cluster_dispatch_cursor_to_live(
+                                    refresh_lasm_cluster_next_live_sender_lookup(
                                         relay_sender_live.as_slice(),
-                                        &mut relay_dispatch_cursor,
+                                        relay_next_live_sender_lookup.as_mut_slice(),
                                     );
                                 }
-                                if relay_live_sender_count != live_count_before_fallback {
-                                    refresh_lasm_cluster_live_sender_hints(
-                                        relay_sender_live.as_slice(),
-                                        relay_live_sender_count,
-                                        &mut relay_single_live_sender_index,
-                                        &mut relay_dual_live_sender_indices,
-                                    );
-                                    if relay_live_sender_count > 2
-                                        && relay_has_next_live_sender_lookup
-                                        && relay_live_sender_count
-                                            != live_count_after_primary_dispatch
-                                    {
-                                        refresh_lasm_cluster_next_live_sender_lookup(
-                                            relay_sender_live.as_slice(),
-                                            relay_next_live_sender_lookup.as_mut_slice(),
-                                        );
-                                    }
-                                    relay_live_sender_count_observed
-                                        .fetch_min(relay_live_sender_count, Ordering::Relaxed);
+                                relay_live_sender_count_observed
+                                    .fetch_min(relay_live_sender_count, Ordering::Relaxed);
+                            }
+                            match dispatch_result {
+                                Ok(()) => {
+                                    listener_enqueued_local += 1;
+                                    listener_all_senders_saturated_in_batch = false;
                                 }
-                                match dispatch_result {
-                                    Ok(()) => {
-                                        listener_enqueued_local += 1;
-                                        listener_all_senders_saturated_in_batch = false;
+                                Err(dispatch_error) => {
+                                    if matches!(
+                                        &dispatch_error,
+                                        LasmClusterRelayDispatchError::Saturated(_)
+                                    ) {
+                                        listener_all_senders_saturated_in_batch = true;
                                     }
-                                    Err(dispatch_error) => {
-                                        if matches!(
-                                            &dispatch_error,
-                                            LasmClusterRelayDispatchError::Saturated(_)
-                                        ) {
-                                            listener_all_senders_saturated_in_batch = true;
-                                        }
-                                        if let Err(message) =
-                                            handle_lasm_cluster_accept_dispatch_error(
-                                                dispatch_error,
-                                                active_connections,
-                                                relay_saturation_events,
-                                                relay_saturation_events_total,
-                                                relay_dispatch_fallback_total,
-                                                relay_dispatch_short_circuit_total,
-                                                &mut listener_enqueued_local,
-                                                &mut listener_saturation_pending_local,
-                                                &mut listener_saturation_total_local,
-                                                &mut listener_dispatch_fallback_total_local,
-                                                &mut listener_dispatch_short_circuit_total_local,
-                                            )
-                                        {
-                                            return Err(message);
-                                        }
+                                    if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                        dispatch_error,
+                                        active_connections,
+                                        relay_saturation_events,
+                                        relay_saturation_events_total,
+                                        relay_dispatch_fallback_total,
+                                        relay_dispatch_short_circuit_total,
+                                        &mut listener_enqueued_local,
+                                        &mut listener_saturation_pending_local,
+                                        &mut listener_saturation_total_local,
+                                        &mut listener_dispatch_fallback_total_local,
+                                        &mut listener_dispatch_short_circuit_total_local,
+                                    ) {
+                                        return Err(message);
                                     }
                                 }
+                            }
                         } else {
                             listener_enqueued_local += 1;
                             listener_all_senders_saturated_in_batch = false;
