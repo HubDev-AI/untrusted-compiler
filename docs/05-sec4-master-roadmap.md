@@ -1303,6 +1303,10 @@ Post-alpha track acceptance anchors:
      - when primary relay send fails with `Disconnected`, accept-loop now refreshes next-live lookup cache before entering fallback dispatch (for eligible multi-live cache states),
      - reduces stale-cache fallback scans within the same request’s fallback path while preserving post-fallback live-count refresh behavior.
      - documented in `docs/book/1285-m39-lasm-primary-disconnect-immediate-next-live-refresh.md`.
+   - [x] Avoided duplicate next-live cache refresh after primary-disconnect fallback flows:
+     - accept-loop now tracks live-count immediately after primary dispatch and skips post-fallback next-live cache refresh when fallback did not change live-count beyond already-refreshed primary-disconnect state,
+     - keeps post-fallback refresh active when fallback introduces additional disconnect-driven live-count changes.
+     - documented in `docs/book/1286-m39-lasm-duplicate-post-fallback-cache-refresh-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
