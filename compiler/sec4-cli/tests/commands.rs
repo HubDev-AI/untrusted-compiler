@@ -16729,6 +16729,86 @@ fn run_command_rejects_zero_db_sqlite_busy_timeout_override() {
 }
 
 #[test]
+fn run_command_rejects_db_sqlite_busy_timeout_with_postgres_adapter() {
+    let project_dir = temp_dir("sec4-run-command-db-sqlite-timeout-postgres-adapter");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-sqlite-busy-timeout-ms",
+        "1200",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when sqlite busy timeout is paired with explicit postgres adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: --db-sqlite-busy-timeout-ms requires --db-adapter sqlite when adapter is set explicitly"
+        ),
+        "stderr should include deterministic sqlite timeout adapter guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_mixed_db_timeout_overrides_without_explicit_adapter() {
+    let project_dir = temp_dir("sec4-run-command-mixed-db-timeout-overrides");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-postgres-statement-timeout-ms",
+        "1500",
+        "--db-sqlite-busy-timeout-ms",
+        "900",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when mixed adapter timeout overrides are provided without explicit adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: db timeout overrides target different adapters; set --db-adapter explicitly"
+        ),
+        "stderr should include deterministic mixed-timeout override guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
 fn run_command_lasm_backend_maps_sqlite_duplicate_key_exec_to_conflict() {
     let project_dir = temp_dir("sec4-run-command-lasm-sqlite-exec-conflict");
     let db_base = project_dir.join("lasm-db");
