@@ -1198,5 +1198,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1226-m39-lasm-cluster-status-snapshot-move-handoff.md`
 - `1227-m39-lasm-cluster-single-backend-selection-fast-path.md`
 - `1228-m39-lasm-cluster-direct-round-robin-next-index.md`
+- `1229-m39-lasm-cluster-accept-fallback-direct-next-index-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.
