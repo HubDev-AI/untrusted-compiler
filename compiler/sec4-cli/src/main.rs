@@ -8101,7 +8101,10 @@ fn lasm_cluster_proxy_worker_count(config: &LasmClusterConfig) -> usize {
     let mut relay_hint = if instance_hint <= 1 {
         1
     } else {
-        ((instance_hint as f64).sqrt().ceil() as usize).max(2)
+        // Keep auto relay sizing conservative in multi-instance mode:
+        // short capacity probes show lower relay-thread counts reduce contention
+        // versus ceil(sqrt(...)) defaults under current cluster topology.
+        ((instance_hint as f64).sqrt() as usize).max(2)
     };
     relay_hint = relay_hint.min(host_parallelism);
     relay_hint.clamp(1, 16)
