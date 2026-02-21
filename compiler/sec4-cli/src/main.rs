@@ -8978,6 +8978,9 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     if worker_port_count == 0 {
         return (false, false);
     }
+    if unhealthy_port_count >= worker_port_count {
+        return (false, false);
+    }
     if unhealthy_port_count == 0 {
         return (true, true);
     }

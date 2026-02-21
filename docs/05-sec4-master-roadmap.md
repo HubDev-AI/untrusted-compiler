@@ -1095,6 +1095,10 @@ Post-alpha track acceptance anchors:
      - accept loop and relay worker loop now call inline flush helpers unconditionally each cycle,
      - relies on existing helper-local zero checks to skip atomic updates, removing duplicate outer branch checks from hot loop tails.
      - documented in `docs/book/1235-m39-lasm-cluster-flush-guard-dedup.md`.
+   - [x] Added all-unhealthy fast-fail in backend selection lookup rebuild:
+     - `rebuild_lasm_cluster_backend_selection_lookup` now short-circuits when `unhealthy_port_count >= worker_port_count`,
+     - avoids unnecessary unhealthy-index scan work when no healthy backend exists.
+     - documented in `docs/book/1236-m39-lasm-cluster-selection-lookup-all-unhealthy-fast-fail.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
