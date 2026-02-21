@@ -1195,6 +1195,10 @@ Post-alpha track acceptance anchors:
      - LASM cluster accept loop now tracks disconnected relay sender shards and skips known-dead shards when choosing primary dispatch targets and fallback scans,
      - fallback dispatch now marks disconnected shards as dead and short-circuits unavailable results when all shards are disconnected, reducing repeated `TrySendError::Disconnected` churn in degraded states.
      - documented in `docs/book/1258-m39-lasm-relay-shard-liveness-tracking.md`.
+   - [x] Reduced backend-selection round-robin counter atomic contention in relay workers:
+     - relay worker selection reservation now allocates a larger minimum chunk (`LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK`, 64) instead of always reserving only `relay_accept_batch_max`,
+     - keeps deterministic round-robin reservation semantics while reducing `fetch_add` frequency on the shared `relay_selection_counter` hot path under load.
+     - documented in `docs/book/1259-m39-lasm-relay-selection-reservation-chunk-sizing.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

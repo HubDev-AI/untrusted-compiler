@@ -8430,6 +8430,7 @@ const LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH: usize = 8;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
 const LASM_CLUSTER_IDLE_SLEEP_MICROS: u64 = 250;
+const LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK: usize = 64;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER: usize = 4;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MIN: usize = 64;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
@@ -9569,9 +9570,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
                         {
+                            let reservation_chunk = relay_accept_batch_max
+                                .max(LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK);
                             let relay_selection_reservation_base = relay_selection_counter
-                                .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
-                            relay_selection_reservation_len = relay_accept_batch_max;
+                                .fetch_add(reservation_chunk, Ordering::Relaxed);
+                            relay_selection_reservation_len = reservation_chunk;
                             relay_selection_reservation_offset = 0;
                             relay_selection_reservation_worker_port_count = worker_port_count;
                             relay_selection_reservation_next_index =

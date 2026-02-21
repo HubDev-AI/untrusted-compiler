@@ -1228,5 +1228,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1256-m39-benchmark-report-mode-compare-section.md`
 - `1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`
 - `1258-m39-lasm-relay-shard-liveness-tracking.md`
+- `1259-m39-lasm-relay-selection-reservation-chunk-sizing.md`
 
 As milestones progress, chapters will be added and linked from this index.
