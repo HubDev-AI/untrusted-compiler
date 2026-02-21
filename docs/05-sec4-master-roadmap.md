@@ -1323,6 +1323,10 @@ Post-alpha track acceptance anchors:
      - `resolve_lasm_cluster_next_live_sender_index(...)` and `dispatch_lasm_cluster_relay_stream_fallback_multi(...)` now use direct lookup-slice input (`&[usize]`) with empty-slice fallback semantics instead of option-wrapped lookup references,
      - simplifies hot-path branch shape and avoids repeated option wrapping at fallback call sites.
      - documented in `docs/book/1290-m39-lasm-fallback-lookup-slice-plumbing.md`.
+   - [x] Added start-index-live short-circuit in next-live resolver:
+     - `resolve_lasm_cluster_next_live_sender_index(...)` now returns immediately when `start_index_wrapped` is already live before cache lookup or scan fallback,
+     - reduces resolver overhead in degraded dispatch paths that already point at a live relay shard.
+     - documented in `docs/book/1291-m39-lasm-next-live-resolver-start-index-fast-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -8462,6 +8462,14 @@ fn resolve_lasm_cluster_next_live_sender_index(
     relay_next_live_sender_lookup: &[usize],
     start_index_wrapped: usize,
 ) -> Option<usize> {
+    if relay_sender_live
+        .get(start_index_wrapped)
+        .copied()
+        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
+        == LASM_CLUSTER_RELAY_SENDER_LIVE
+    {
+        return Some(start_index_wrapped);
+    }
     if !relay_next_live_sender_lookup.is_empty() {
         debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
         return lookup_lasm_cluster_next_live_sender_index(
