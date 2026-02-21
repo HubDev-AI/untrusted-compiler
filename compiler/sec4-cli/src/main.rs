@@ -8380,6 +8380,33 @@ fn lasm_cluster_forward_distance_wrapped(start: usize, end: usize, count: usize)
 }
 
 #[inline(always)]
+fn advance_lasm_cluster_fallback_scan_index(
+    relay_sender_live: &[u8],
+    relay_next_live_sender_lookup: &[usize],
+    current_index: usize,
+) -> (usize, usize) {
+    let sender_count = relay_sender_live.len();
+    debug_assert!(sender_count > 0);
+    debug_assert!(current_index < sender_count);
+
+    let next_scan_start = lasm_cluster_next_index_wrapped(current_index, sender_count);
+    let next_scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+        next_scan_start
+    } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+        relay_sender_live,
+        relay_next_live_sender_lookup,
+        next_scan_start,
+    ) {
+        next_live_index
+    } else {
+        next_scan_start
+    };
+    let advanced_slots =
+        lasm_cluster_forward_distance_wrapped(current_index, next_scan_index, sender_count).max(1);
+    (next_scan_index, advanced_slots)
+}
+
+#[inline(always)]
 fn lasm_cluster_next_live_sender_index(
     relay_sender_live: &[u8],
     start_index_wrapped: usize,
@@ -8846,25 +8873,12 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let mut scanned_live = 0usize;
     while scanned_slots < scan_slot_limit && scanned_live < scan_live_target_dynamic {
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
-            let previous_scan_index = scan_index;
-            let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-            scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
-                next_scan_start
-            } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+            let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
-                next_scan_start,
-            ) {
-                next_live_index
-            } else {
-                next_scan_start
-            };
-            let advanced_slots = lasm_cluster_forward_distance_wrapped(
-                previous_scan_index,
                 scan_index,
-                sender_count,
-            )
-            .max(1);
+            );
+            scan_index = next_scan_index;
             scanned_slots = scanned_slots.saturating_add(advanced_slots);
             continue;
         }
@@ -8886,22 +8900,12 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         if scanned_live >= scan_live_target_dynamic {
             break;
         }
-        let previous_scan_index = scan_index;
-        let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-        scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
-            next_scan_start
-        } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+        let (next_scan_index, advanced_slots) = advance_lasm_cluster_fallback_scan_index(
             relay_sender_live,
             relay_next_live_sender_lookup,
-            next_scan_start,
-        ) {
-            next_live_index
-        } else {
-            next_scan_start
-        };
-        let advanced_slots =
-            lasm_cluster_forward_distance_wrapped(previous_scan_index, scan_index, sender_count)
-                .max(1);
+            scan_index,
+        );
+        scan_index = next_scan_index;
         scanned_slots = scanned_slots.saturating_add(advanced_slots);
     }
 
