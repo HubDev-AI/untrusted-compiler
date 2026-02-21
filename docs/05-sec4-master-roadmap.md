@@ -1129,6 +1129,10 @@ Post-alpha track acceptance anchors:
      - `run_lasm_cluster_capacity_probe.sh` now writes a per-run `--cluster-status-json` artifact and records resolved relay/accept/queue runtime fields in probe summary JSON (`*Resolved` run fields),
      - keeps requested vs resolved relay settings visible in one deterministic probe artifact for tuning loops.
      - documented in `docs/book/1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`.
+   - [x] Upgraded saturation matrix/analyzer output with latency tie-break metadata:
+     - matrix run items now propagate probe `p99` plus resolved relay/accept/queue fields from per-step probe summaries,
+     - analyzer now normalizes `p99` durations (`us`/`ms`/`s`) into numeric `p99Ms` and uses it as a ranking tie-break after pass/throughput ordering.
+     - documented in `docs/book/1244-m39-lasm-saturation-analysis-p99-and-resolved-metadata.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
