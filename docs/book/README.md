@@ -1259,5 +1259,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1287-m39-lasm-fallback-jump-distance-accounting.md`
 - `1288-m39-lasm-fallback-next-slot-live-fast-path.md`
 - `1289-m39-lasm-fallback-dynamic-scan-live-target.md`
+- `1290-m39-lasm-fallback-lookup-slice-plumbing.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -8459,18 +8459,16 @@ fn lookup_lasm_cluster_next_live_sender_index(
 #[inline(always)]
 fn resolve_lasm_cluster_next_live_sender_index(
     relay_sender_live: &[u8],
-    relay_next_live_sender_lookup: Option<&[usize]>,
+    relay_next_live_sender_lookup: &[usize],
     start_index_wrapped: usize,
 ) -> Option<usize> {
-    if let Some(lookup) = relay_next_live_sender_lookup {
-        debug_assert_eq!(lookup.len(), relay_sender_live.len());
-        if !lookup.is_empty() {
-            return lookup_lasm_cluster_next_live_sender_index(
-                relay_sender_live,
-                lookup,
-                start_index_wrapped,
-            );
-        }
+    if !relay_next_live_sender_lookup.is_empty() {
+        debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
+        return lookup_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            start_index_wrapped,
+        );
     }
     lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
 }
@@ -8675,7 +8673,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
     relay_sender_live: &mut [u8],
-    relay_next_live_sender_lookup: Option<&[usize]>,
+    relay_next_live_sender_lookup: &[usize],
     relay_live_sender_count: &mut usize,
     relay_all_senders_live: &mut bool,
     start_index_wrapped: usize,
@@ -9303,9 +9301,9 @@ fn run_lasm_cluster_accept_loop(
                                 let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
                                     && relay_live_sender_count > 2
                                 {
-                                    Some(relay_next_live_sender_lookup.as_slice())
+                                    relay_next_live_sender_lookup.as_slice()
                                 } else {
-                                    None
+                                    &[]
                                 };
                                 let dispatch_result = if !relay_all_senders_live
                                     && relay_live_sender_count == 2
