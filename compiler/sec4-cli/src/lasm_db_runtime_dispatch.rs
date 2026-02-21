@@ -312,11 +312,27 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
 
             let (record, affected_rows) = match dynamic_state.lock() {
                 Ok(mut state) => {
-                    let mut affected_rows = 0u64;
-                    let existing_tx_binding = match &tx_source {
-                        ExecTxSource::AllocateFromDb(_) => None,
-                        ExecTxSource::ExistingTx(tx) => {
-                            let Some(db) = state.db_tx_handles.get(tx).copied() else {
+                    let (db, tx, allocated_tx_handle) = match tx_source {
+                        ExecTxSource::AllocateFromDb(db_value) => {
+                            let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, db_value)
+                            else {
+                                set_lasm_json_response(
+                                    response,
+                                    500,
+                                    &lasm_error_envelope(
+                                        "DB.TX_INTERNAL",
+                                        "internal",
+                                        "db.tx runtime failure",
+                                        500,
+                                        trace_id,
+                                    ),
+                                );
+                                return true;
+                            };
+                            (db_value, tx_value, Some(tx_value))
+                        }
+                        ExecTxSource::ExistingTx(tx_value) => {
+                            let Some(db_value) = state.db_tx_handles.get(&tx_value).copied() else {
                                 set_lasm_json_response(
                                     response,
                                     400,
@@ -330,9 +346,10 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                                 );
                                 return true;
                             };
-                            Some((db, *tx))
+                            (db_value, tx_value, None)
                         }
                     };
+                    let mut affected_rows = 0u64;
                     if state.db_records_adapter == LasmDbRecordsAdapter::Postgres {
                         let postgres_params = parse_lasm_postgres_query_params(params.as_str());
                         let postgres_affected_rows = match run_lasm_postgres_exec_tx(
@@ -342,6 +359,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         ) {
                             Ok(value) => value,
                             Err(message) => {
+                                if let Some(tx_handle) = allocated_tx_handle {
+                                    state.db_tx_handles.remove(&tx_handle);
+                                }
                                 let (status, code, kind) =
                                     classify_lasm_db_runtime_error("execTx", message.as_str());
                                 set_lasm_json_response(
@@ -367,6 +387,9 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         ) {
                             Ok(value) => value,
                             Err(message) => {
+                                if let Some(tx_handle) = allocated_tx_handle {
+                                    state.db_tx_handles.remove(&tx_handle);
+                                }
                                 let (status, code, kind) =
                                     classify_lasm_db_runtime_error("execTx", message.as_str());
                                 set_lasm_json_response(
@@ -385,28 +408,6 @@ pub(crate) fn apply_lasm_internal_db_operation_materialization(
                         };
                         affected_rows = sqlite_affected_rows;
                     }
-                    let (db, tx) = match tx_source {
-                        ExecTxSource::AllocateFromDb(db_value) => {
-                            let Some(tx_value) = allocate_lasm_db_tx_handle(&mut state, db_value)
-                            else {
-                                set_lasm_json_response(
-                                    response,
-                                    500,
-                                    &lasm_error_envelope(
-                                        "DB.TX_INTERNAL",
-                                        "internal",
-                                        "db.tx runtime failure",
-                                        500,
-                                        trace_id,
-                                    ),
-                                );
-                                return true;
-                            };
-                            (db_value, tx_value)
-                        }
-                        ExecTxSource::ExistingTx(_) => existing_tx_binding
-                            .expect("existing tx binding should be validated before execution"),
-                    };
                     let record = LasmDbRecord {
                         id: state.next_db_record_id,
                         op: "execTx".to_string(),
