@@ -1383,6 +1383,10 @@ Post-alpha track acceptance anchors:
      - multi-sender accept path now routes primary relay send through `attempt_lasm_cluster_relay_send(...)`, keeping full/disconnect transitions centralized before saturation short-circuit and fallback dispatch routing,
      - preserves saturated short-circuit behavior and disconnect-driven hint/lookup refresh semantics.
      - documented in `docs/book/1305-m39-lasm-accept-primary-shared-send-helper.md`.
+   - [x] Added single-sender accept dispatch helper:
+     - extracted `attempt_lasm_cluster_relay_send_single(...)` to centralize single-sender `try_send` error mapping (`Saturated`/`Unavailable`),
+     - single-sender accept loop now delegates dispatch mapping through the helper before existing accept-dispatch error handling.
+     - documented in `docs/book/1306-m39-lasm-single-sender-dispatch-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
