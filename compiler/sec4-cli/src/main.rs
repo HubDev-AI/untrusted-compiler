@@ -11598,7 +11598,7 @@ fn apply_lasm_dynamic_response_materialization(
 
     apply_lasm_text_placeholder_materialization(response, request, path_params);
     apply_lasm_header_placeholder_materialization(response, request, path_params);
-    if apply_lasm_internal_db_operation_materialization(
+    if lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
         response,
         request,
         path_params,
@@ -12915,22 +12915,6 @@ fn resolve_lasm_user_lookup_email(request: &LasmRunRequest) -> Option<String> {
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-fn apply_lasm_internal_db_operation_materialization(
-    response: &mut sec4_core::HttpResponse,
-    request: &LasmRunRequest,
-    path_params: &BTreeMap<String, String>,
-    dynamic_state: &Mutex<LasmDynamicResponseState>,
-    trace_id: &str,
-) -> bool {
-    lasm_db_runtime_dispatch::apply_lasm_internal_db_operation_materialization(
-        response,
-        request,
-        path_params,
-        dynamic_state,
-        trace_id,
-    )
 }
 
 fn set_lasm_json_response(
