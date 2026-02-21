@@ -1295,6 +1295,10 @@ Post-alpha track acceptance anchors:
      - `resolve_lasm_cluster_next_live_sender_index(...)` now relies on debug assertions for cache-shape invariants and avoids per-call runtime length comparison before cache lookup dispatch,
      - preserves existing fallback-to-scan behavior when cache is absent while reducing branch work in cached degraded lookup paths.
      - documented in `docs/book/1283-m39-lasm-next-live-resolver-runtime-check-elision.md`.
+   - [x] Added dead-slot jump-ahead in fallback-multi degraded scan loop:
+     - in fallback-multi `scan_live_target > 2` path, dead-slot encounters now jump to next live candidate using the existing next-live resolver instead of stepping one dead slot at a time,
+     - reduces repeated dead-slot checks in degraded sparse-live pools while preserving deterministic fallback bounds and saturated/unavailable outcomes.
+     - documented in `docs/book/1284-m39-lasm-fallback-dead-slot-jump-ahead.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

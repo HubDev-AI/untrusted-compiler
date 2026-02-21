@@ -8827,7 +8827,16 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let mut scanned_live = 0usize;
     while scanned_slots < scan_slot_limit && scanned_live < scan_live_target {
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
-            scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+            let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+            scan_index = if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+                relay_sender_live,
+                relay_next_live_sender_lookup,
+                next_scan_start,
+            ) {
+                next_live_index
+            } else {
+                next_scan_start
+            };
             scanned_slots += 1;
             continue;
         }
