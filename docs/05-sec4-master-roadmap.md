@@ -1343,6 +1343,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi general degraded scan now returns deterministic unavailable as soon as disconnect handling drops `relay_live_sender_count` to zero inside the scan loop,
      - avoids extra loop-control/jump bookkeeping after terminal no-live transitions while preserving saturated/unavailable envelope semantics.
      - documented in `docs/book/1295-m39-lasm-fallback-immediate-no-live-exit.md`.
+   - [x] Skipped final scan-index advancement when fallback scan budget is exhausted:
+     - fallback-multi degraded general scan now exits before calling scan-index advancement helper when `scanned_slots + 1` already reaches `scan_slot_limit`,
+     - applies to both dead-slot and post-attempt advancement branches to avoid terminal helper lookups that cannot feed another loop iteration.
+     - documented in `docs/book/1296-m39-lasm-fallback-skip-final-scan-advance.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
