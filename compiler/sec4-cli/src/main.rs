@@ -8275,6 +8275,7 @@ fn write_lasm_cluster_status_json(
     autoscale_scale_up_cooldown_remaining_ms: u64,
     autoscale_scale_down_cooldown_remaining_ms: u64,
     last_snapshot: &mut Option<LasmClusterStatusSnapshot>,
+    status_parent_ready: &mut bool,
 ) -> Result<(), String> {
     let snapshot = LasmClusterStatusSnapshot {
         listen_port,
@@ -8310,16 +8311,24 @@ fn write_lasm_cluster_status_json(
         return Ok(());
     }
 
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|err| {
-                format!(
-                    "could not create cluster status json parent directory {}: {err}",
-                    parent.display()
-                )
-            })?;
+    let ensure_status_parent_dir = |ready: &mut bool| -> Result<(), String> {
+        if *ready {
+            return Ok(());
         }
-    }
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).map_err(|err| {
+                    format!(
+                        "could not create cluster status json parent directory {}: {err}",
+                        parent.display()
+                    )
+                })?;
+            }
+        }
+        *ready = true;
+        Ok(())
+    };
+    ensure_status_parent_dir(status_parent_ready)?;
 
     let payload = LasmClusterStatusPayload {
         mode: "lasm-cluster",
@@ -8349,12 +8358,25 @@ fn write_lasm_cluster_status_json(
         autoscale_scale_up_cooldown_remaining_ms,
         autoscale_scale_down_cooldown_remaining_ms,
     };
-    let tmp_file = fs::File::create(tmp_path).map_err(|err| {
-        format!(
-            "could not create cluster status json temporary file {}: {err}",
-            tmp_path.display()
-        )
-    })?;
+    let tmp_file = match fs::File::create(tmp_path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            *status_parent_ready = false;
+            ensure_status_parent_dir(status_parent_ready)?;
+            fs::File::create(tmp_path).map_err(|retry_err| {
+                format!(
+                    "could not create cluster status json temporary file {}: {retry_err}",
+                    tmp_path.display()
+                )
+            })?
+        }
+        Err(err) => {
+            return Err(format!(
+                "could not create cluster status json temporary file {}: {err}",
+                tmp_path.display()
+            ));
+        }
+    };
     let mut tmp_writer = BufWriter::new(tmp_file);
     serde_json::to_writer(&mut tmp_writer, &payload)
         .map_err(|err| format!("could not encode cluster status json payload: {err}"))?;
@@ -9633,6 +9655,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 status_relay_dispatch_fallback_total.load(Ordering::Relaxed);
             let mut last_saturation_sample_at = Instant::now();
             let mut last_status_snapshot: Option<LasmClusterStatusSnapshot> = None;
+            let mut status_parent_ready = false;
             loop {
                 let sample_now = Instant::now();
                 let saturation_total = status_saturation_events_total.load(Ordering::Relaxed);
@@ -9683,6 +9706,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                     status_autoscale_scale_up_cooldown_remaining_ms.load(Ordering::Relaxed),
                     status_autoscale_scale_down_cooldown_remaining_ms.load(Ordering::Relaxed),
                     &mut last_status_snapshot,
+                    &mut status_parent_ready,
                 ) {
                     eprintln!("warning: LASM cluster status json write failed: {err}");
                 }
