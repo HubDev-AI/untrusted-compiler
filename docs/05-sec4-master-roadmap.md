@@ -1327,6 +1327,10 @@ Post-alpha track acceptance anchors:
      - `resolve_lasm_cluster_next_live_sender_index(...)` now returns immediately when `start_index_wrapped` is already live before cache lookup or scan fallback,
      - reduces resolver overhead in degraded dispatch paths that already point at a live relay shard.
      - documented in `docs/book/1291-m39-lasm-next-live-resolver-start-index-fast-path.md`.
+   - [x] Added early-break on dynamic live-target shrink in fallback general scan:
+     - fallback-multi general degraded scan now exits before post-attempt jump work when disconnect-driven live-target reduction makes current `scanned_live` already sufficient,
+     - avoids unnecessary next-index resolution/jump bookkeeping after target shrink while preserving deterministic fallback outcomes.
+     - documented in `docs/book/1292-m39-lasm-fallback-early-break-on-target-shrink.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
