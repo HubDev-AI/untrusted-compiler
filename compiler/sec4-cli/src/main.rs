@@ -9351,11 +9351,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             relay_selection_reservation_len = relay_accept_batch_max;
                             relay_selection_reservation_offset = 0;
                             relay_selection_reservation_worker_port_count = worker_port_count;
-                            relay_selection_reservation_next_index = if worker_port_count <= 1 {
-                                0
-                            } else {
-                                relay_selection_reservation_base % worker_port_count
-                            };
+                            relay_selection_reservation_next_index =
+                                relay_selection_reservation_base % worker_port_count;
                         }
                         let start_index = relay_selection_reservation_next_index;
                         relay_selection_reservation_offset += 1;
@@ -9443,11 +9440,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 None => true,
                             };
                             if warning_allowed {
-                                let selected_backend_port =
-                                    selected_worker_ports_snapshot[selected_backend_index];
                                 eprintln!(
                                     "warning: LASM cluster worker {} connect failed: {}",
-                                    selected_backend_port, err
+                                    backend_addr.port(),
+                                    err
                                 );
                                 *warning_next_allowed_entry =
                                     Some(now + relay_warning_throttle_duration);

@@ -1079,6 +1079,10 @@ Post-alpha track acceptance anchors:
      - relay worker snapshot-update branches now use `std::mem::replace` to move out the previous selected snapshot while installing the new snapshot, instead of cloning both old/new arcs,
      - keeps unhealthy-port remap semantics unchanged while reducing reference-count update overhead on worker-port snapshot refreshes.
      - documented in `docs/book/1231-m39-lasm-cluster-worker-port-snapshot-replace-handoff.md`.
+   - [x] Removed redundant connect-failure warning index read and unreachable reservation branch:
+     - relay worker connect-failure warning now uses already-selected `backend_addr.port()` instead of re-indexing selected worker-port snapshots,
+     - relay reservation refill in multi-backend path now assigns `base % worker_port_count` directly (removing an unreachable `worker_port_count <= 1` branch).
+     - documented in `docs/book/1232-m39-lasm-cluster-connect-warning-port-and-reservation-branch-simplification.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
