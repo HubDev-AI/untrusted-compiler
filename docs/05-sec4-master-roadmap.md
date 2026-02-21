@@ -1186,6 +1186,11 @@ Post-alpha track acceptance anchors:
      - cluster status snapshots now expose `relayDispatchSaturationShortCircuitTotal` and `relayDispatchSaturationShortCircuitPerSec` alongside existing dispatch fallback telemetry,
      - accept-loop short-circuit handling now increments and flushes a dedicated counter so saturation shortcut behavior is observable during probe tuning.
      - documented in `docs/book/1255-m39-lasm-cluster-short-circuit-status-telemetry.md`.
+   - [x] Propagated relay short-circuit telemetry through benchmark artifacts and report summaries:
+     - LASM capacity probe summaries now persist `clusterRelayDispatchSaturationShortCircuitTotal` and `clusterRelayDispatchSaturationShortCircuitPerSec` in `run.*` fields when cluster status telemetry is available,
+     - saturation matrix/analyzer/summary scripts now carry and render short-circuit totals/per-sec values in ranked rows and verification sections,
+     - mode-compare comparison JSON + markdown report section now include short-circuit total signals alongside throughput/latency deltas.
+     - documented in `docs/book/1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

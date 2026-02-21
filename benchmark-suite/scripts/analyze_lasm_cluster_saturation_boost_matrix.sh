@@ -27,7 +27,9 @@ if ! jq -e '
       (has("requests") and (.requests | type == "number") and .requests >= 0) and
       (has("requestsPerSec") and (.requestsPerSec | type == "number") and .requestsPerSec >= 0) and
       (has("peakRssKb") and (.peakRssKb | type == "number") and .peakRssKb >= 0) and
-      ((has("p99") | not) or (.p99 | type == "string"))
+      ((has("p99") | not) or (.p99 | type == "string")) and
+      ((has("clusterRelayDispatchSaturationShortCircuitTotal") | not) or (.clusterRelayDispatchSaturationShortCircuitTotal == null) or (.clusterRelayDispatchSaturationShortCircuitTotal | type == "number")) and
+      ((has("clusterRelayDispatchSaturationShortCircuitPerSec") | not) or (.clusterRelayDispatchSaturationShortCircuitPerSec == null) or (.clusterRelayDispatchSaturationShortCircuitPerSec | type == "number"))
     )
 ' "${matrix_path}" >/dev/null; then
   echo "matrix runs contain invalid fields: ${matrix_path}" >&2
@@ -62,6 +64,8 @@ jq -n \
       clusterRelayPumpBatchMaxResolved: (.clusterRelayPumpBatchMaxResolved // null),
       clusterRelayQueueCapacityResolved: (.clusterRelayQueueCapacityResolved // null),
       clusterRelayQueueShardCapacityResolved: (.clusterRelayQueueShardCapacityResolved // null),
+      clusterRelayDispatchSaturationShortCircuitTotal: (.clusterRelayDispatchSaturationShortCircuitTotal // null),
+      clusterRelayDispatchSaturationShortCircuitPerSec: (.clusterRelayDispatchSaturationShortCircuitPerSec // null),
       summaryFile: .summaryFile
     })) as $rows
   | ($rows

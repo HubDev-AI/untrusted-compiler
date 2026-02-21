@@ -1226,5 +1226,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1254-m39-lasm-cluster-accept-fallback-saturation-short-circuit.md`
 - `1255-m39-lasm-cluster-short-circuit-status-telemetry.md`
 - `1256-m39-benchmark-report-mode-compare-section.md`
+- `1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -448,6 +448,8 @@ resolved_relay_accept_batch_max="null"
 resolved_relay_pump_batch_max="null"
 resolved_relay_queue_capacity="null"
 resolved_relay_queue_shard_capacity="null"
+resolved_relay_dispatch_short_circuit_total="null"
+resolved_relay_dispatch_short_circuit_per_sec="null"
 if [ -f "$raw_file" ]; then
   observed_requests_raw="$(awk '/requests in/ {gsub(/,/,"",$1); print $1; exit}' "$raw_file")"
   if is_number "$observed_requests_raw"; then
@@ -492,6 +494,14 @@ if [ -f "$status_json_file" ]; then
   status_relay_queue_shard_capacity="$(jq -r '.relayQueueShardCapacity // empty' "$status_json_file" 2>/dev/null || true)"
   if is_number "$status_relay_queue_shard_capacity"; then
     resolved_relay_queue_shard_capacity="$status_relay_queue_shard_capacity"
+  fi
+  status_relay_dispatch_short_circuit_total="$(jq -r '.relayDispatchSaturationShortCircuitTotal // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_dispatch_short_circuit_total"; then
+    resolved_relay_dispatch_short_circuit_total="$status_relay_dispatch_short_circuit_total"
+  fi
+  status_relay_dispatch_short_circuit_per_sec="$(jq -r '.relayDispatchSaturationShortCircuitPerSec // empty' "$status_json_file" 2>/dev/null || true)"
+  if is_number "$status_relay_dispatch_short_circuit_per_sec"; then
+    resolved_relay_dispatch_short_circuit_per_sec="$status_relay_dispatch_short_circuit_per_sec"
   fi
 fi
 
@@ -540,6 +550,8 @@ jq -n \
   --argjson resolvedRelayPumpBatchMax "$resolved_relay_pump_batch_max" \
   --argjson resolvedRelayQueueCapacity "$resolved_relay_queue_capacity" \
   --argjson resolvedRelayQueueShardCapacity "$resolved_relay_queue_shard_capacity" \
+  --argjson resolvedRelayDispatchShortCircuitTotal "$resolved_relay_dispatch_short_circuit_total" \
+  --argjson resolvedRelayDispatchShortCircuitPerSec "$resolved_relay_dispatch_short_circuit_per_sec" \
   --arg relayWorkers "${cluster_relay_workers:-auto}" \
   --arg relayQueue "${cluster_relay_queue:-auto}" \
   --arg acceptWorkers "${cluster_accept_workers:-auto}" \
@@ -579,7 +591,9 @@ jq -n \
       clusterRelayAcceptBatchMaxResolved: $resolvedRelayAcceptBatchMax,
       clusterRelayPumpBatchMaxResolved: $resolvedRelayPumpBatchMax,
       clusterRelayQueueCapacityResolved: $resolvedRelayQueueCapacity,
-      clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity
+      clusterRelayQueueShardCapacityResolved: $resolvedRelayQueueShardCapacity,
+      clusterRelayDispatchSaturationShortCircuitTotal: $resolvedRelayDispatchShortCircuitTotal,
+      clusterRelayDispatchSaturationShortCircuitPerSec: $resolvedRelayDispatchShortCircuitPerSec
     },
     observed: {
       requests: $observedRequests,
