@@ -11,24 +11,17 @@ use crate::{
 };
 use postgres::{Client as PostgresClient, NoTls};
 use rusqlite::{params, Connection};
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
+pub(crate) const LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT: u64 = 2000;
+pub(crate) const LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT: u64 = 5000;
+pub(crate) const LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT: u64 = 2000;
+pub(crate) const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
 
 fn lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms: u64) -> u64 {
     timeout_ms.saturating_add(999).saturating_div(1000).max(1)
-}
-
-fn resolve_lasm_postgres_connect_timeout_seconds() -> u64 {
-    let timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT);
-    lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms)
 }
 
 fn build_lasm_postgres_connect_dsn(dsn: &str, connect_timeout_seconds: u64) -> String {
@@ -166,7 +159,10 @@ pub(crate) fn load_lasm_dynamic_db_records_from_sqlite(path: &Path) -> Vec<LasmD
     records
 }
 
-pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Connection, String> {
+pub(crate) fn connect_lasm_dynamic_db_records_sqlite(
+    path: &Path,
+    busy_timeout_ms: u64,
+) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
             format!(
@@ -181,11 +177,7 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Conn
             path.display()
         )
     })?;
-    let busy_timeout_ms = env::var("SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(2000);
+    let busy_timeout_ms = busy_timeout_ms.max(1);
     connection
         .busy_timeout(Duration::from_millis(busy_timeout_ms))
         .map_err(|err| {
@@ -213,21 +205,17 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Conn
 
 pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     dsn: &str,
+    statement_timeout_ms: u64,
+    lock_timeout_ms: u64,
+    connect_timeout_ms: u64,
 ) -> Result<PostgresClient, String> {
-    let connect_timeout_seconds = resolve_lasm_postgres_connect_timeout_seconds();
+    let connect_timeout_seconds =
+        lasm_postgres_connect_timeout_seconds_from_ms(connect_timeout_ms.max(1));
     let connect_dsn = build_lasm_postgres_connect_dsn(dsn, connect_timeout_seconds);
     let mut client = PostgresClient::connect(connect_dsn.as_str(), NoTls)
         .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))?;
-    let statement_timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(5000);
-    let lock_timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(2000);
+    let statement_timeout_ms = statement_timeout_ms.max(1);
+    let lock_timeout_ms = lock_timeout_ms.max(1);
     let timeout_settings = format!(
         "SET statement_timeout = {statement_timeout_ms}; SET lock_timeout = {lock_timeout_ms};"
     );
@@ -545,7 +533,10 @@ pub(crate) fn persist_lasm_dynamic_db_record_append_to_sqlite(
         return Ok(());
     };
     if state.db_records_sqlite_connection.is_none() {
-        let connection = connect_lasm_dynamic_db_records_sqlite(path.as_path())?;
+        let connection = connect_lasm_dynamic_db_records_sqlite(
+            path.as_path(),
+            state.db_sqlite_busy_timeout_ms.max(1),
+        )?;
         state.db_records_sqlite_connection = Some(connection);
     }
     let id = i64::try_from(record.id).map_err(|_| {

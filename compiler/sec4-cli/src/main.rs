@@ -12514,13 +12514,25 @@ fn apply_lasm_dynamic_response_materialization(
             );
         }
         "DbListRecordsResponse" => {
-            let (records, adapter, tx_handle_count, tx_handle_capacity) = match dynamic_state.lock()
-            {
+            let (
+                records,
+                adapter,
+                tx_handle_count,
+                tx_handle_capacity,
+                postgres_statement_timeout_ms,
+                postgres_lock_timeout_ms,
+                postgres_connect_timeout_ms,
+                sqlite_busy_timeout_ms,
+            ) = match dynamic_state.lock() {
                 Ok(state) => (
                     state.db_records.clone(),
                     lasm_db_records_adapter_label(state.db_records_adapter),
                     state.db_tx_handles.len(),
                     state.db_tx_max_handles,
+                    state.db_postgres_statement_timeout_ms,
+                    state.db_postgres_lock_timeout_ms,
+                    state.db_postgres_connect_timeout_ms,
+                    state.db_sqlite_busy_timeout_ms,
                 ),
                 Err(_) => {
                     set_lasm_json_response(
@@ -12537,13 +12549,6 @@ fn apply_lasm_dynamic_response_materialization(
                     return;
                 }
             };
-            let postgres_statement_timeout_ms =
-                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS");
-            let postgres_lock_timeout_ms =
-                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS");
-            let postgres_connect_timeout_ms =
-                parse_lasm_env_u64("SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS");
-            let sqlite_busy_timeout_ms = parse_lasm_env_u64("SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS");
             let affected_rows_total = records
                 .iter()
                 .fold(0u64, |acc, record| acc.saturating_add(record.affected_rows));
@@ -12750,15 +12755,6 @@ fn parse_lasm_env_bool(name: &str) -> Option<bool> {
         return Some(false);
     }
     None
-}
-
-fn parse_lasm_env_u64(name: &str) -> Option<u64> {
-    let value = std::env::var(name).ok()?;
-    value
-        .trim()
-        .parse::<u64>()
-        .ok()
-        .filter(|parsed| *parsed > 0)
 }
 
 fn lasm_effective_csrf_enabled(policy_enabled: bool, policy_mode: &str) -> bool {
