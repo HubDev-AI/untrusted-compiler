@@ -8883,6 +8883,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
         }
+        if scanned_live >= scan_live_target_dynamic {
+            break;
+        }
         let previous_scan_index = scan_index;
         let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
         scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
