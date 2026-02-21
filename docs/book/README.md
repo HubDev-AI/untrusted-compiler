@@ -1275,5 +1275,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1303-m39-lasm-fallback-shared-send-attempt-helper.md`
 - `1304-m39-lasm-fallback-single-dual-shared-send-helper.md`
 - `1305-m39-lasm-accept-primary-shared-send-helper.md`
+- `1306-m39-lasm-single-sender-dispatch-helper.md`
 
 As milestones progress, chapters will be added and linked from this index.
