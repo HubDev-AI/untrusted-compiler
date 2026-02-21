@@ -1156,6 +1156,10 @@ Post-alpha track acceptance anchors:
      - full benchmark suite + Makefile saturation targets now forward `--saturation-cluster-relay-pump-batch-max` / `LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX`,
      - dry-run contract tests for matrix/bundle/full-suite/make presets now assert relay pump-batch visibility end-to-end.
      - documented in `docs/book/1249-m39-lasm-saturation-suite-relay-pump-batch-forwarding.md`.
+   - [x] Exposed relay pump-batch resolved telemetry in saturation analysis/summary artifacts:
+     - analyzer now carries `clusterRelayPumpBatchMaxResolved` through ranked runs,
+     - markdown summary probe profile/ranked table/recommendation/verify sections now report relay pump-batch requested/resolved values.
+     - documented in `docs/book/1250-m39-lasm-saturation-summary-relay-pump-batch-columns.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

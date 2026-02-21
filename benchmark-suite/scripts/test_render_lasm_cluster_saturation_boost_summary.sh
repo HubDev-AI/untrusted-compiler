@@ -15,7 +15,8 @@ cat >"${matrix}" <<'JSON'
     "duration": "40s",
     "threads": 8,
     "connections": 256,
-    "targetRequests": 1000000
+    "targetRequests": 1000000,
+    "clusterRelayPumpBatchMax": "256"
   },
   "boostSteps": [2, 4, 6],
   "runs": [
@@ -35,7 +36,8 @@ cat >"${matrix}" <<'JSON'
       "p99": "4.20ms",
       "clusterRelayWorkersResolved": 2,
       "clusterAcceptWorkersResolved": 2,
-      "clusterRelayAcceptBatchMaxResolved": 64
+      "clusterRelayAcceptBatchMaxResolved": 64,
+      "clusterRelayPumpBatchMaxResolved": 256
     },
     {
       "saturationBoostStep": 6,
@@ -67,7 +69,8 @@ cat >"${analysis}" <<'JSON'
       "p99": "4.20ms",
       "clusterRelayWorkersResolved": 2,
       "clusterAcceptWorkersResolved": 2,
-      "clusterRelayAcceptBatchMaxResolved": 64
+      "clusterRelayAcceptBatchMaxResolved": 64,
+      "clusterRelayPumpBatchMaxResolved": 256
     },
     {
       "saturationBoostStep": 2,
@@ -97,6 +100,7 @@ cat >"${verify}" <<'JSON'
     "clusterRelayWorkersResolved": 2,
     "clusterAcceptWorkersResolved": 2,
     "clusterRelayAcceptBatchMaxResolved": 64,
+    "clusterRelayPumpBatchMaxResolved": 256,
     "clusterRelayQueueCapacityResolved": 2048,
     "clusterRelayQueueShardCapacityResolved": 1024
   },
@@ -124,7 +128,11 @@ if ! grep -q '^## Ranked Runs$' "${out}"; then
   echo "summary missing ranked runs section" >&2
   exit 1
 fi
-if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 |' "${out}"; then
+if ! grep -q '^- Relay pump batch max: 256$' "${out}"; then
+  echo "summary missing probe profile relay pump batch line" >&2
+  exit 1
+fi
+if ! grep -q '| 1 | 4 | true | 63000 | 4.20ms | 1260000 | 12500 | 2 | 2 | 64 | 256 |' "${out}"; then
   echo "summary missing ranked run row for recommended step" >&2
   exit 1
 fi
@@ -138,6 +146,10 @@ if ! grep -q '^- Requests/sec: 64000$' "${out}"; then
 fi
 if ! grep -q '^- Relay workers (resolved): 2$' "${out}"; then
   echo "summary missing verification resolved relay worker line" >&2
+  exit 1
+fi
+if ! grep -q '^- Relay pump batch max (resolved): 256$' "${out}"; then
+  echo "summary missing verification relay pump batch line" >&2
   exit 1
 fi
 
