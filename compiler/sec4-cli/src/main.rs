@@ -118,6 +118,10 @@ enum Commands {
         db_postgres_dsn_file: Option<PathBuf>,
         #[arg(long)]
         db_max_tx_handles: Option<u64>,
+        #[arg(long)]
+        db_postgres_statement_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_postgres_lock_timeout_ms: Option<u64>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -509,6 +513,8 @@ fn main() {
             db_postgres_dsn,
             db_postgres_dsn_file,
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -546,6 +552,8 @@ fn main() {
             db_postgres_dsn.as_deref(),
             db_postgres_dsn_file.as_deref(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -6802,6 +6810,8 @@ fn cmd_run(
     db_postgres_dsn: Option<&str>,
     db_postgres_dsn_file: Option<&Path>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -6955,8 +6965,28 @@ fn cmd_run(
         eprintln!("run failed: --db-max-tx-handles is only supported with --backend lasm");
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_postgres_statement_timeout_ms.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-statement-timeout-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
+    if backend != RunBackend::Lasm && db_postgres_lock_timeout_ms.is_some() {
+        eprintln!(
+            "run failed: --db-postgres-lock-timeout-ms is only supported with --backend lasm"
+        );
+        return Err(2);
+    }
     if db_max_tx_handles == Some(0) {
         eprintln!("run failed: --db-max-tx-handles must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_statement_timeout_ms == Some(0) {
+        eprintln!("run failed: --db-postgres-statement-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if db_postgres_lock_timeout_ms == Some(0) {
+        eprintln!("run failed: --db-postgres-lock-timeout-ms must be >= 1");
         return Err(2);
     }
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
@@ -7171,6 +7201,8 @@ fn cmd_run(
             effective_db_adapter,
             explicit_db_postgres_dsn.as_deref(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -7520,6 +7552,8 @@ struct LasmClusterConfig {
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<String>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -7618,6 +7652,16 @@ fn spawn_lasm_cluster_worker(
     push_optional_path_run_arg(&mut cmd, "--db-base", config.db_base.as_deref());
     push_optional_db_adapter_run_arg(&mut cmd, config.db_adapter);
     push_optional_u64_run_arg(&mut cmd, "--db-max-tx-handles", config.db_max_tx_handles);
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-statement-timeout-ms",
+        config.db_postgres_statement_timeout_ms,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-postgres-lock-timeout-ms",
+        config.db_postgres_lock_timeout_ms,
+    );
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
     }
@@ -10463,6 +10507,8 @@ fn cmd_run_lasm_backend(
     db_adapter: Option<RunDbAdapter>,
     db_postgres_dsn: Option<&str>,
     db_max_tx_handles: Option<u64>,
+    db_postgres_statement_timeout_ms: Option<u64>,
+    db_postgres_lock_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10685,6 +10731,18 @@ fn cmd_run_lasm_backend(
 
     let max_instances = autoscale_max_instances.unwrap_or(instances);
     let explicit_db_postgres_dsn = db_postgres_dsn.map(ToOwned::to_owned);
+    if let Some(timeout_ms) = db_postgres_statement_timeout_ms {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
+            timeout_ms.to_string(),
+        );
+    }
+    if let Some(timeout_ms) = db_postgres_lock_timeout_ms {
+        std::env::set_var(
+            "SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS",
+            timeout_ms.to_string(),
+        );
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -10755,6 +10813,8 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -10797,6 +10857,8 @@ fn cmd_run_lasm_backend(
             db_adapter,
             db_postgres_dsn: explicit_db_postgres_dsn.clone(),
             db_max_tx_handles,
+            db_postgres_statement_timeout_ms,
+            db_postgres_lock_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
