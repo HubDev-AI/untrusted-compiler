@@ -26,7 +26,8 @@ if ! jq -e '
       (has("pass") and (.pass | type == "boolean")) and
       (has("requests") and (.requests | type == "number") and .requests >= 0) and
       (has("requestsPerSec") and (.requestsPerSec | type == "number") and .requestsPerSec >= 0) and
-      (has("peakRssKb") and (.peakRssKb | type == "number") and .peakRssKb >= 0)
+      (has("peakRssKb") and (.peakRssKb | type == "number") and .peakRssKb >= 0) and
+      ((has("p99") | not) or (.p99 | type == "string"))
     )
 ' "${matrix_path}" >/dev/null; then
   echo "matrix runs contain invalid fields: ${matrix_path}" >&2
@@ -39,6 +40,13 @@ jq -n \
   --arg sourceMatrix "${matrix_path}" \
   --slurpfile matrix "${matrix_path}" \
   '
+  def p99_to_ms:
+    if (.p99 | type) != "string" then 1000000000000
+    elif (.p99 | test("^[0-9]+(\\.[0-9]+)?ms$")) then (.p99 | sub("ms$"; "") | tonumber)
+    elif (.p99 | test("^[0-9]+(\\.[0-9]+)?us$")) then ((.p99 | sub("us$"; "") | tonumber) / 1000)
+    elif (.p99 | test("^[0-9]+(\\.[0-9]+)?s$")) then ((.p99 | sub("s$"; "") | tonumber) * 1000)
+    else 1000000000000
+    end;
   ($matrix[0]) as $m
   | ($m.runs | map({
       saturationBoostStep: .saturationBoostStep,
@@ -46,12 +54,20 @@ jq -n \
       requests: .requests,
       requestsPerSec: .requestsPerSec,
       peakRssKb: .peakRssKb,
+      p99: (.p99 // ""),
+      p99Ms: p99_to_ms,
+      clusterRelayWorkersResolved: (.clusterRelayWorkersResolved // null),
+      clusterAcceptWorkersResolved: (.clusterAcceptWorkersResolved // null),
+      clusterRelayAcceptBatchMaxResolved: (.clusterRelayAcceptBatchMaxResolved // null),
+      clusterRelayQueueCapacityResolved: (.clusterRelayQueueCapacityResolved // null),
+      clusterRelayQueueShardCapacityResolved: (.clusterRelayQueueShardCapacityResolved // null),
       summaryFile: .summaryFile
     })) as $rows
   | ($rows
       | sort_by([
           (if .pass then 0 else 1 end),
           (-.requestsPerSec),
+          (.p99Ms),
           (-.requests),
           (.peakRssKb),
           (.saturationBoostStep)

@@ -355,13 +355,25 @@ for step in "${boost_steps[@]}"; do
       --argjson requests "$(jq '.observed.requests' "${step_out}")" \
       --argjson requestsPerSec "$(jq '.observed.requestsPerSec' "${step_out}")" \
       --argjson peakRssKb "$(jq '.observed.peakRssKb' "${step_out}")" \
+      --arg p99 "$(jq -r '.observed.p99 // ""' "${step_out}")" \
+      --argjson clusterRelayWorkersResolved "$(jq '.run.clusterRelayWorkersResolved // null' "${step_out}")" \
+      --argjson clusterAcceptWorkersResolved "$(jq '.run.clusterAcceptWorkersResolved // null' "${step_out}")" \
+      --argjson clusterRelayAcceptBatchMaxResolved "$(jq '.run.clusterRelayAcceptBatchMaxResolved // null' "${step_out}")" \
+      --argjson clusterRelayQueueCapacityResolved "$(jq '.run.clusterRelayQueueCapacityResolved // null' "${step_out}")" \
+      --argjson clusterRelayQueueShardCapacityResolved "$(jq '.run.clusterRelayQueueShardCapacityResolved // null' "${step_out}")" \
       '{
         saturationBoostStep: $saturationBoostStep,
         summaryFile: $summaryFile,
         pass: $pass,
         requests: $requests,
         requestsPerSec: $requestsPerSec,
-        peakRssKb: $peakRssKb
+        peakRssKb: $peakRssKb,
+        p99: $p99,
+        clusterRelayWorkersResolved: $clusterRelayWorkersResolved,
+        clusterAcceptWorkersResolved: $clusterAcceptWorkersResolved,
+        clusterRelayAcceptBatchMaxResolved: $clusterRelayAcceptBatchMaxResolved,
+        clusterRelayQueueCapacityResolved: $clusterRelayQueueCapacityResolved,
+        clusterRelayQueueShardCapacityResolved: $clusterRelayQueueShardCapacityResolved
       }'
     )"
     runs_json="$(jq --argjson item "${run_item}" '. + [$item]' <<<"${runs_json}")"

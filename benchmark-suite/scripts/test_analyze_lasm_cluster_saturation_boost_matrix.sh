@@ -111,6 +111,42 @@ if ! jq -e '.rankedRuns | map(.saturationBoostStep) == [4, 6, 2]' "${analysis_no
   exit 1
 fi
 
+matrix_p99_tie="$tmp/saturation-matrix-p99-tie.json"
+cat >"${matrix_p99_tie}" <<'JSON'
+{
+  "impl": "sec4-lasm-cluster",
+  "runs": [
+    {
+      "saturationBoostStep": 2,
+      "pass": true,
+      "requests": 1250000,
+      "requestsPerSec": 62500,
+      "peakRssKb": 12000,
+      "p99": "6.10ms"
+    },
+    {
+      "saturationBoostStep": 4,
+      "pass": true,
+      "requests": 1250000,
+      "requestsPerSec": 62500,
+      "peakRssKb": 12000,
+      "p99": "5.40ms"
+    }
+  ]
+}
+JSON
+
+analysis_p99_tie="$tmp/analysis-p99-tie.json"
+"${root_dir}/scripts/analyze_lasm_cluster_saturation_boost_matrix.sh" "${matrix_p99_tie}" "${analysis_p99_tie}" >/dev/null
+if ! jq -e '.summary.recommendedBoostStep == 4' "${analysis_p99_tie}" >/dev/null; then
+  echo "analysis should prefer lower p99 when throughput and pass state tie" >&2
+  exit 1
+fi
+if ! jq -e '.rankedRuns | map(.saturationBoostStep) == [4, 2]' "${analysis_p99_tie}" >/dev/null; then
+  echo "analysis ranking order mismatch for p99 tie-break mode" >&2
+  exit 1
+fi
+
 matrix_empty="$tmp/saturation-matrix-empty.json"
 cat >"${matrix_empty}" <<'JSON'
 {

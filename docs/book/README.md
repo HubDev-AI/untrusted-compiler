@@ -1213,5 +1213,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1241-m39-lasm-cluster-capacity-probe-accept-worker-batch-overrides.md`
 - `1242-m39-lasm-saturation-suite-accept-path-override-forwarding.md`
 - `1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`
+- `1244-m39-lasm-saturation-analysis-p99-and-resolved-metadata.md`
 
 As milestones progress, chapters will be added and linked from this index.
