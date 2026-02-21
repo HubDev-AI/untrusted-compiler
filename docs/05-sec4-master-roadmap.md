@@ -1267,6 +1267,10 @@ Post-alpha track acceptance anchors:
      - in degraded mode with more than two live relay shards, accept-loop cursor advancement now skips dead next-slot indices and advances directly to the next known live shard,
      - single-live degraded mode now keeps the dispatch cursor pinned to the current live shard instead of wrapping through dead slots between requests.
      - documented in `docs/book/1276-m39-lasm-degraded-cursor-live-slot-skipping.md`.
+   - [x] Added cached next-live index lookup for degraded relay dispatch:
+     - accept-loop degraded cursor realignment and next-index advancement now reuse a precomputed `next live relay index` lookup table instead of per-request scan lookups when dead slots exist,
+     - lookup cache refreshes only when relay liveness changes (disconnect path), preserving deterministic degraded dispatch behavior while reducing repeated live-scan overhead.
+     - documented in `docs/book/1277-m39-lasm-degraded-next-live-lookup-cache.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

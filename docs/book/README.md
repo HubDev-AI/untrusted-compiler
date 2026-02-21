@@ -1246,5 +1246,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1274-m39-lasm-fallback-live-count-atomic-dedup.md`
 - `1275-m39-lasm-selection-reservation-min-chunk-env-and-status.md`
 - `1276-m39-lasm-degraded-cursor-live-slot-skipping.md`
+- `1277-m39-lasm-degraded-next-live-lookup-cache.md`
 
 As milestones progress, chapters will be added and linked from this index.
