@@ -1,0 +1,36 @@
+{
+  "version": "0.1",
+  "run": {
+    "projectPath": "examples/lasm-alpha-full",
+    "requestPath": "/health",
+    "requestHeader": "Authorization: Bearer token123",
+    "duration": "40s",
+    "threads": 8,
+    "connections": 256,
+    "targetRequests": 1000000
+  },
+  "proxy": {
+    "pass": true,
+    "observed": {
+      "requestsPerSec": 76000.0,
+      "p99": "7.20ms",
+      "peakRssKb": 21000
+    }
+  },
+  "fixed": {
+    "pass": true,
+    "observed": {
+      "requestsPerSec": 121000.0,
+      "p99": "2.90ms",
+      "peakRssKb": 19800
+    }
+  },
+  "comparison": {
+    "recommendedMode": "fixed-reuse-port",
+    "requestsPerSecDelta": 45000.0,
+    "requestsPerSecGainPctVsProxy": 59.21,
+    "p99ProxyMs": 7.2,
+    "p99FixedMs": 2.9,
+    "peakRssDeltaKb": -1200
+  }
+}

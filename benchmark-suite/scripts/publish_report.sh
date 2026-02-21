@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 6 ]; then
-  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json] [saturation_summary.md]" >&2
+if [ "$#" -lt 2 ] || [ "$#" -gt 7 ]; then
+  echo "usage: $0 <compare_matrix.json> <out_report.md> [sec_audit.json] [analysis.json] [step_matrix.json] [saturation_summary.md] [mode_compare.json]" >&2
   exit 2
 fi
 
@@ -12,6 +12,7 @@ sec_audit_path="${3:-}"
 analysis_path="${4:-}"
 step_matrix_path="${5:-}"
 saturation_summary_path="${6:-}"
+mode_compare_path="${7:-}"
 
 if [ ! -f "$matrix_path" ]; then
   echo "compare matrix file not found: ${matrix_path}" >&2
@@ -47,6 +48,14 @@ if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Recommended boost step:
 fi
 if [ -n "$saturation_summary_path" ] && ! grep -Fq -- '- Selection mode:' "$saturation_summary_path"; then
   echo "saturation summary missing selection mode line: ${saturation_summary_path}" >&2
+  exit 2
+fi
+if [ -n "$mode_compare_path" ] && [ ! -f "$mode_compare_path" ]; then
+  echo "mode compare file not found: ${mode_compare_path}" >&2
+  exit 2
+fi
+if [ -n "$mode_compare_path" ] && [ "$(jq -r '.comparison.recommendedMode // empty' "$mode_compare_path")" = "" ]; then
+  echo "mode compare missing comparison.recommendedMode: ${mode_compare_path}" >&2
   exit 2
 fi
 
@@ -108,6 +117,9 @@ fi
   fi
   if [ -n "$saturation_summary_path" ]; then
     echo "- Saturation summary source: ${saturation_summary_path}"
+  fi
+  if [ -n "$mode_compare_path" ]; then
+    echo "- Mode compare source: ${mode_compare_path}"
   fi
   echo
 
@@ -280,6 +292,40 @@ fi
     fi
   else
     echo "- No saturation-summary artifact provided."
+  fi
+  echo
+
+  echo "## LASM Mode Comparison"
+  echo
+  if [ -n "$mode_compare_path" ]; then
+    mode_compare_recommended_mode="$(jq -r '.comparison.recommendedMode // "n/a"' "$mode_compare_path")"
+    mode_compare_proxy_pass="$(jq -r '.proxy.pass // false | tostring' "$mode_compare_path")"
+    mode_compare_fixed_pass="$(jq -r '.fixed.pass // false | tostring' "$mode_compare_path")"
+    mode_compare_proxy_reqps="$(jq -r '.proxy.observed.requestsPerSec // "n/a"' "$mode_compare_path")"
+    mode_compare_fixed_reqps="$(jq -r '.fixed.observed.requestsPerSec // "n/a"' "$mode_compare_path")"
+    mode_compare_reqps_delta="$(jq -r '.comparison.requestsPerSecDelta // "n/a"' "$mode_compare_path")"
+    mode_compare_reqps_gain_pct="$(jq -r 'if (.comparison.requestsPerSecGainPctVsProxy // null) == null then "n/a" else (((((.comparison.requestsPerSecGainPctVsProxy) * 100) | round) / 100) | tostring) end' "$mode_compare_path")"
+    mode_compare_p99_proxy_ms="$(jq -r '.comparison.p99ProxyMs // "n/a"' "$mode_compare_path")"
+    mode_compare_p99_fixed_ms="$(jq -r '.comparison.p99FixedMs // "n/a"' "$mode_compare_path")"
+    mode_compare_peak_rss_delta_kb="$(jq -r '.comparison.peakRssDeltaKb // "n/a"' "$mode_compare_path")"
+
+    echo "- Mode compare source: ${mode_compare_path}"
+    echo "- Recommended mode: ${mode_compare_recommended_mode}"
+    echo "- Proxy pass: ${mode_compare_proxy_pass}"
+    echo "- Fixed reuse-port pass: ${mode_compare_fixed_pass}"
+    echo "- Proxy requests/sec: ${mode_compare_proxy_reqps}"
+    echo "- Fixed requests/sec: ${mode_compare_fixed_reqps}"
+    echo "- Requests/sec delta (fixed-proxy): ${mode_compare_reqps_delta}"
+    if [ "$mode_compare_reqps_gain_pct" != "n/a" ]; then
+      echo "- Requests/sec gain vs proxy: ${mode_compare_reqps_gain_pct}%"
+    else
+      echo "- Requests/sec gain vs proxy: n/a"
+    fi
+    echo "- p99 proxy ms: ${mode_compare_p99_proxy_ms}"
+    echo "- p99 fixed ms: ${mode_compare_p99_fixed_ms}"
+    echo "- Peak RSS delta KB (fixed-proxy): ${mode_compare_peak_rss_delta_kb}"
+  else
+    echo "- No mode-compare artifact provided."
   fi
 } > "$out_path"
 
