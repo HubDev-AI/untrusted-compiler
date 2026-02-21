@@ -8841,7 +8841,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
             let previous_scan_index = scan_index;
             let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-            scan_index = if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+            scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+                next_scan_start
+            } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
                 relay_sender_live,
                 relay_next_live_sender_lookup,
                 next_scan_start,
@@ -8875,7 +8877,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
         }
         let previous_scan_index = scan_index;
         let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-        scan_index = if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+        scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
+            next_scan_start
+        } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
             relay_sender_live,
             relay_next_live_sender_lookup,
             next_scan_start,
