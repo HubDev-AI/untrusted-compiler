@@ -16,6 +16,37 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+const LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT: u64 = 2000;
+
+fn lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms: u64) -> u64 {
+    timeout_ms.saturating_add(999).saturating_div(1000).max(1)
+}
+
+fn resolve_lasm_postgres_connect_timeout_seconds() -> u64 {
+    let timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT);
+    lasm_postgres_connect_timeout_seconds_from_ms(timeout_ms)
+}
+
+fn build_lasm_postgres_connect_dsn(dsn: &str, connect_timeout_seconds: u64) -> String {
+    let trimmed = dsn.trim();
+    if trimmed.contains("connect_timeout=") {
+        return trimmed.to_string();
+    }
+    if trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://") {
+        if trimmed.contains('?') {
+            format!("{trimmed}&connect_timeout={connect_timeout_seconds}")
+        } else {
+            format!("{trimmed}?connect_timeout={connect_timeout_seconds}")
+        }
+    } else {
+        format!("{trimmed} connect_timeout={connect_timeout_seconds}")
+    }
+}
+
 pub(crate) fn ensure_lasm_dynamic_db_records_sqlite_schema(
     connection: &Connection,
 ) -> rusqlite::Result<()> {
@@ -183,7 +214,9 @@ pub(crate) fn connect_lasm_dynamic_db_records_sqlite(path: &Path) -> Result<Conn
 pub(crate) fn connect_lasm_dynamic_db_records_postgres(
     dsn: &str,
 ) -> Result<PostgresClient, String> {
-    let mut client = PostgresClient::connect(dsn, NoTls)
+    let connect_timeout_seconds = resolve_lasm_postgres_connect_timeout_seconds();
+    let connect_dsn = build_lasm_postgres_connect_dsn(dsn, connect_timeout_seconds);
+    let mut client = PostgresClient::connect(connect_dsn.as_str(), NoTls)
         .map_err(|err| format!("could not connect LASM dynamic postgres records store: {err}"))?;
     let statement_timeout_ms = env::var("SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS")
         .ok()
@@ -204,6 +237,52 @@ pub(crate) fn connect_lasm_dynamic_db_records_postgres(
             format!("could not configure LASM dynamic postgres session timeouts: {err}")
         })?;
     Ok(client)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_lasm_postgres_connect_dsn, lasm_postgres_connect_timeout_seconds_from_ms};
+
+    #[test]
+    fn postgres_connect_timeout_seconds_rounds_up_from_millis() {
+        assert_eq!(lasm_postgres_connect_timeout_seconds_from_ms(1), 1);
+        assert_eq!(lasm_postgres_connect_timeout_seconds_from_ms(1000), 1);
+        assert_eq!(lasm_postgres_connect_timeout_seconds_from_ms(1001), 2);
+    }
+
+    #[test]
+    fn postgres_connect_dsn_injects_timeout_for_url_without_query() {
+        let rewritten = build_lasm_postgres_connect_dsn("postgres://u:p@localhost/db", 2);
+        assert_eq!(rewritten, "postgres://u:p@localhost/db?connect_timeout=2");
+    }
+
+    #[test]
+    fn postgres_connect_dsn_injects_timeout_for_url_with_query() {
+        let rewritten =
+            build_lasm_postgres_connect_dsn("postgres://u:p@localhost/db?sslmode=disable", 3);
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?sslmode=disable&connect_timeout=3"
+        );
+    }
+
+    #[test]
+    fn postgres_connect_dsn_injects_timeout_for_keyword_dsn() {
+        let rewritten = build_lasm_postgres_connect_dsn("host=localhost dbname=sec4", 5);
+        assert_eq!(rewritten, "host=localhost dbname=sec4 connect_timeout=5");
+    }
+
+    #[test]
+    fn postgres_connect_dsn_preserves_existing_connect_timeout() {
+        let rewritten = build_lasm_postgres_connect_dsn(
+            "postgres://u:p@localhost/db?connect_timeout=9&sslmode=disable",
+            2,
+        );
+        assert_eq!(
+            rewritten,
+            "postgres://u:p@localhost/db?connect_timeout=9&sslmode=disable"
+        );
+    }
 }
 
 pub(crate) fn ensure_lasm_dynamic_db_records_postgres_schema(
