@@ -1133,6 +1133,10 @@ Post-alpha track acceptance anchors:
      - matrix run items now propagate probe `p99` plus resolved relay/accept/queue fields from per-step probe summaries,
      - analyzer now normalizes `p99` durations (`us`/`ms`/`s`) into numeric `p99Ms` and uses it as a ranking tie-break after pass/throughput ordering.
      - documented in `docs/book/1244-m39-lasm-saturation-analysis-p99-and-resolved-metadata.md`.
+   - [x] Added capacity-probe status artifact cleanup by default:
+     - `run_lasm_cluster_capacity_probe.sh` now cleans per-run status-json artifacts unless `--keep-cluster-status-json` is set,
+     - dry-run plan/test flow now makes keep-mode explicit for deterministic operator usage.
+     - documented in `docs/book/1245-m39-lasm-capacity-probe-status-artifact-cleanup-default.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

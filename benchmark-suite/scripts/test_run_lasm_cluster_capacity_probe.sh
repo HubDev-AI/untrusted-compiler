@@ -85,6 +85,24 @@ if ! grep -q "clusterStatusJson=${root_dir}/results/raw/sec4-lasm-cluster-capaci
   echo "lasm capacity probe dry-run missing resolved cluster status json path" >&2
   exit 1
 fi
+if ! grep -q "keepClusterStatusJson=false" <<<"$out"; then
+  echo "lasm capacity probe dry-run missing keep-cluster-status-json default marker" >&2
+  exit 1
+fi
+
+out_keep_status="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
+  --dry-run \
+  --keep-cluster-status-json \
+  --port 19092 \
+  2>&1)"
+if ! grep -q "clusterStatusJson=${root_dir}/results/raw/sec4-lasm-cluster-capacity-status-19092.json" <<<"$out_keep_status"; then
+  echo "lasm capacity probe dry-run missing keep-mode status json path" >&2
+  exit 1
+fi
+if ! grep -q "keepClusterStatusJson=true" <<<"$out_keep_status"; then
+  echo "lasm capacity probe dry-run missing keep-cluster-status-json enable marker" >&2
+  exit 1
+fi
 
 if "${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" --dry-run --request-header invalid >/tmp/lasm-capacity-probe-invalid.log 2>&1; then
   echo "lasm capacity probe accepted invalid request header" >&2
