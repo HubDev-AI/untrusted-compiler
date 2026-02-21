@@ -8505,18 +8505,46 @@ fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
 }
 
 #[inline(always)]
+fn lasm_cluster_next_live_sender_index(
+    relay_sender_live: &[bool],
+    start_index_wrapped: usize,
+) -> Option<usize> {
+    let sender_count = relay_sender_live.len();
+    debug_assert!(sender_count > 0);
+    debug_assert!(start_index_wrapped < sender_count);
+    let mut scan_index = start_index_wrapped;
+    for _ in 0..sender_count {
+        if relay_sender_live[scan_index] {
+            return Some(scan_index);
+        }
+        scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+    }
+    None
+}
+
+#[inline(always)]
 fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
+    relay_sender_live: &mut [bool],
+    relay_live_sender_count: &mut usize,
     start_index_wrapped: usize,
     mut saw_live_sender: bool,
 ) -> Result<(), LasmClusterRelayDispatchError> {
     let sender_count = relay_senders.len();
     debug_assert!(sender_count > 1);
+    debug_assert_eq!(relay_sender_live.len(), sender_count);
     debug_assert!(start_index_wrapped < sender_count);
+    if *relay_live_sender_count == 0 {
+        return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
+    }
     let mut scan_index = start_index_wrapped;
     let scan_attempts = sender_count.saturating_sub(1);
     for _ in 0..scan_attempts {
+        if !relay_sender_live[scan_index] {
+            scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+            continue;
+        }
         match relay_senders[scan_index].try_send(client_stream) {
             Ok(()) => return Ok(()),
             Err(TrySendError::Full(next_stream)) => {
@@ -8524,13 +8552,15 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
             Err(TrySendError::Disconnected(next_stream)) => {
+                relay_sender_live[scan_index] = false;
+                *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
                 client_stream = next_stream;
             }
         }
         scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
     }
 
-    if saw_live_sender {
+    if saw_live_sender && *relay_live_sender_count > 0 {
         Err(LasmClusterRelayDispatchError::Saturated(client_stream))
     } else {
         Err(LasmClusterRelayDispatchError::Unavailable(client_stream))
@@ -8629,6 +8659,12 @@ fn run_lasm_cluster_accept_loop(
     } else {
         0
     };
+    let mut relay_sender_live = if relay_sender_count > 1 {
+        vec![true; relay_sender_count]
+    } else {
+        Vec::new()
+    };
+    let mut relay_live_sender_count = relay_sender_count;
 
     loop {
         if stop_flag.load(Ordering::Relaxed) {
@@ -8699,7 +8735,30 @@ fn run_lasm_cluster_accept_loop(
                 match listener.accept() {
                     Ok((client_stream, _)) => {
                         listener_accepted_in_batch += 1;
-                        let stream_dispatch_start = relay_dispatch_cursor;
+                        let stream_dispatch_start = match lasm_cluster_next_live_sender_index(
+                            relay_sender_live.as_slice(),
+                            relay_dispatch_cursor,
+                        ) {
+                            Some(index) => index,
+                            None => {
+                                if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
+                                    LasmClusterRelayDispatchError::Unavailable(client_stream),
+                                    active_connections,
+                                    relay_saturation_events,
+                                    relay_saturation_events_total,
+                                    relay_dispatch_fallback_total,
+                                    relay_dispatch_short_circuit_total,
+                                    &mut listener_enqueued_local,
+                                    &mut listener_saturation_pending_local,
+                                    &mut listener_saturation_total_local,
+                                    &mut listener_dispatch_fallback_total_local,
+                                    &mut listener_dispatch_short_circuit_total_local,
+                                ) {
+                                    return Err(message);
+                                }
+                                continue;
+                            }
+                        };
                         let next_dispatch_index = lasm_cluster_next_index_wrapped(
                             stream_dispatch_start,
                             relay_sender_count,
@@ -8735,12 +8794,19 @@ fn run_lasm_cluster_accept_loop(
                                 listener_dispatch_fallback_total_local += 1;
                                 let (stream, saw_live_sender) = match send_error {
                                     TrySendError::Full(stream) => (stream, true),
-                                    TrySendError::Disconnected(stream) => (stream, false),
+                                    TrySendError::Disconnected(stream) => {
+                                        relay_sender_live[stream_dispatch_start] = false;
+                                        relay_live_sender_count =
+                                            relay_live_sender_count.saturating_sub(1);
+                                        (stream, false)
+                                    }
                                 };
                                 let dispatch_result =
                                     dispatch_lasm_cluster_relay_stream_fallback_multi(
                                         stream,
                                         relay_senders,
+                                        relay_sender_live.as_mut_slice(),
+                                        &mut relay_live_sender_count,
                                         next_dispatch_index,
                                         saw_live_sender,
                                     );

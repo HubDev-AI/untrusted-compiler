@@ -1191,6 +1191,10 @@ Post-alpha track acceptance anchors:
      - saturation matrix/analyzer/summary scripts now carry and render short-circuit totals/per-sec values in ranked rows and verification sections,
      - mode-compare comparison JSON + markdown report section now include short-circuit total signals alongside throughput/latency deltas.
      - documented in `docs/book/1257-m39-lasm-short-circuit-telemetry-artifact-propagation.md`.
+   - [x] Added relay-sender liveness tracking in accept-dispatch fallback path:
+     - LASM cluster accept loop now tracks disconnected relay sender shards and skips known-dead shards when choosing primary dispatch targets and fallback scans,
+     - fallback dispatch now marks disconnected shards as dead and short-circuits unavailable results when all shards are disconnected, reducing repeated `TrySendError::Disconnected` churn in degraded states.
+     - documented in `docs/book/1258-m39-lasm-relay-shard-liveness-tracking.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
