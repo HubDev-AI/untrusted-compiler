@@ -122,6 +122,8 @@ enum Commands {
         db_postgres_statement_timeout_ms: Option<u64>,
         #[arg(long)]
         db_postgres_lock_timeout_ms: Option<u64>,
+        #[arg(long)]
+        db_sqlite_busy_timeout_ms: Option<u64>,
         #[arg(long, default_value_t = 1)]
         instances: usize,
         #[arg(long)]
@@ -515,6 +517,7 @@ fn main() {
             db_max_tx_handles,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -554,6 +557,7 @@ fn main() {
             db_max_tx_handles,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -6812,6 +6816,7 @@ fn cmd_run(
     db_max_tx_handles: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
+    db_sqlite_busy_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -6977,6 +6982,10 @@ fn cmd_run(
         );
         return Err(2);
     }
+    if backend != RunBackend::Lasm && db_sqlite_busy_timeout_ms.is_some() {
+        eprintln!("run failed: --db-sqlite-busy-timeout-ms is only supported with --backend lasm");
+        return Err(2);
+    }
     if db_max_tx_handles == Some(0) {
         eprintln!("run failed: --db-max-tx-handles must be >= 1");
         return Err(2);
@@ -6987,6 +6996,10 @@ fn cmd_run(
     }
     if db_postgres_lock_timeout_ms == Some(0) {
         eprintln!("run failed: --db-postgres-lock-timeout-ms must be >= 1");
+        return Err(2);
+    }
+    if db_sqlite_busy_timeout_ms == Some(0) {
+        eprintln!("run failed: --db-sqlite-busy-timeout-ms must be >= 1");
         return Err(2);
     }
     if db_postgres_dsn.is_some() && db_postgres_dsn_file.is_some() {
@@ -7203,6 +7216,7 @@ fn cmd_run(
             db_max_tx_handles,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             instances,
             autoscale_max_instances,
             autoscale_target_connections,
@@ -7554,6 +7568,7 @@ struct LasmClusterConfig {
     db_max_tx_handles: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
+    db_sqlite_busy_timeout_ms: Option<u64>,
     min_instances: usize,
     max_instances: usize,
     target_connections_per_instance: usize,
@@ -7661,6 +7676,11 @@ fn spawn_lasm_cluster_worker(
         &mut cmd,
         "--db-postgres-lock-timeout-ms",
         config.db_postgres_lock_timeout_ms,
+    );
+    push_optional_u64_run_arg(
+        &mut cmd,
+        "--db-sqlite-busy-timeout-ms",
+        config.db_sqlite_busy_timeout_ms,
     );
     if let Some(dsn) = config.db_postgres_dsn.as_deref() {
         cmd.env("SEC4_RT_LASM_DB_POSTGRES_DSN", dsn);
@@ -10509,6 +10529,7 @@ fn cmd_run_lasm_backend(
     db_max_tx_handles: Option<u64>,
     db_postgres_statement_timeout_ms: Option<u64>,
     db_postgres_lock_timeout_ms: Option<u64>,
+    db_sqlite_busy_timeout_ms: Option<u64>,
     instances: usize,
     autoscale_max_instances: Option<usize>,
     autoscale_target_connections: Option<usize>,
@@ -10743,6 +10764,12 @@ fn cmd_run_lasm_backend(
             timeout_ms.to_string(),
         );
     }
+    if let Some(timeout_ms) = db_sqlite_busy_timeout_ms {
+        std::env::set_var(
+            "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
+            timeout_ms.to_string(),
+        );
+    }
     if max_instances < instances {
         eprintln!("run failed: --autoscale-max-instances must be >= --instances");
         return Err(2);
@@ -10815,6 +10842,7 @@ fn cmd_run_lasm_backend(
             db_max_tx_handles,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance: autoscale_target_connections
@@ -10859,6 +10887,7 @@ fn cmd_run_lasm_backend(
             db_max_tx_handles,
             db_postgres_statement_timeout_ms,
             db_postgres_lock_timeout_ms,
+            db_sqlite_busy_timeout_ms,
             min_instances: instances,
             max_instances,
             target_connections_per_instance,
