@@ -9,7 +9,7 @@ usage: $0 [--dry-run] [--impls sec4,sec4-lasm,node,go,rust,c] [--endpoints ping,
           [--saturation-connections n] [--saturation-target-requests n]
           [--saturation-cluster-relay-workers n] [--saturation-cluster-relay-queue n]
           [--saturation-cluster-accept-workers n] [--saturation-cluster-relay-accept-batch-max n]
-          [--saturation-cluster-relay-pump-batch-max n]
+          [--saturation-cluster-relay-pump-batch-max n] [--saturation-fixed-reuse-port-mode]
 
 Runs fixed-target matrix + step-load matrix and emits a combined markdown report
 with step-load signals included.
@@ -33,6 +33,7 @@ saturation_cluster_relay_queue=""
 saturation_cluster_accept_workers=""
 saturation_cluster_relay_accept_batch_max=""
 saturation_cluster_relay_pump_batch_max=""
+saturation_fixed_reuse_port_mode="${LASM_CAPACITY_FIXED_REUSE_PORT_MODE:-false}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -216,6 +217,10 @@ while [ "$#" -gt 0 ]; do
       saturation_cluster_relay_pump_batch_max="${1#--saturation-cluster-relay-pump-batch-max=}"
       shift
       ;;
+    --saturation-fixed-reuse-port-mode)
+      saturation_fixed_reuse_port_mode="true"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -243,6 +248,10 @@ contains_csv_token() {
 
 if [ "${include_lasm_saturation}" = "true" ] && ! contains_csv_token "${impls_csv}" "sec4-lasm"; then
   echo "--include-lasm-saturation requires sec4-lasm in --impls" >&2
+  exit 2
+fi
+if [ "${saturation_fixed_reuse_port_mode}" != "true" ] && [ "${saturation_fixed_reuse_port_mode}" != "false" ]; then
+  echo "saturation fixed reuse-port mode must be true or false, got: ${saturation_fixed_reuse_port_mode}" >&2
   exit 2
 fi
 
@@ -312,6 +321,9 @@ if [ "${include_lasm_saturation}" = "true" ]; then
   fi
   if [ -n "${saturation_cluster_relay_pump_batch_max}" ]; then
     saturation_args+=(--cluster-relay-pump-batch-max "${saturation_cluster_relay_pump_batch_max}")
+  fi
+  if [ "${saturation_fixed_reuse_port_mode}" = "true" ]; then
+    saturation_args+=(--fixed-reuse-port-mode)
   fi
   if [ "${saturation_skip_verify}" = "true" ]; then
     saturation_args+=(--skip-verify)

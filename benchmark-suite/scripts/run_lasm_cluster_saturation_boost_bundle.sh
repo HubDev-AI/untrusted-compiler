@@ -27,6 +27,7 @@ Options:
   --autoscale-scale-down-cooldown-ms <n>           LASM scale-down cooldown (default: 2000)
   --autoscale-scale-up-step <n>                    LASM max scale-up workers per autoscale check (default: 2)
   --autoscale-scale-down-step <n>                  LASM max scale-down workers per autoscale check (default: 1)
+  --fixed-reuse-port-mode                          Run probes in fixed reuse-port cluster mode
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
   --cluster-accept-workers <n>                     Optional relay accept-worker override
@@ -59,6 +60,7 @@ autoscale_scale_up_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_COOLDOWN_MS:-
 autoscale_scale_down_cooldown_ms="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_COOLDOWN_MS:-2000}"
 autoscale_scale_up_step="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_STEP:-2}"
 autoscale_scale_down_step="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_STEP:-1}"
+fixed_reuse_port_mode="${LASM_CAPACITY_FIXED_REUSE_PORT_MODE:-false}"
 cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
 cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
@@ -143,6 +145,10 @@ while [ "$#" -gt 0 ]; do
       autoscale_scale_down_step="${2:-}"
       shift 2
       ;;
+    --fixed-reuse-port-mode)
+      fixed_reuse_port_mode="true"
+      shift
+      ;;
     --cluster-relay-workers)
       cluster_relay_workers="${2:-}"
       shift 2
@@ -203,6 +209,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ "${fixed_reuse_port_mode}" != "true" ] && [ "${fixed_reuse_port_mode}" != "false" ]; then
+  echo "fixed-reuse-port-mode must be true or false, got: ${fixed_reuse_port_mode}" >&2
+  exit 2
+fi
+
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 repo_root="$(cd "${root_dir}/.." && pwd)"
 matrix_script="${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh"
@@ -244,6 +255,7 @@ sec4 LASM saturation boost bundle plan:
   connections=${connections}
   targetRequests=${target_requests}
   boostSteps=${boost_steps_csv}
+  fixedReusePortMode=${fixed_reuse_port_mode}
   clusterRelayWorkers=${cluster_relay_workers:-auto}
   clusterRelayQueue=${cluster_relay_queue:-auto}
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
@@ -280,6 +292,9 @@ matrix_cmd=(
   --out "${matrix_out_path}"
   --analysis-out "${analysis_out_path}"
 )
+if [ "${fixed_reuse_port_mode}" = "true" ]; then
+  matrix_cmd+=(--fixed-reuse-port-mode)
+fi
 
 if [ "${verify_recommended}" = "true" ]; then
   matrix_cmd+=(--verify-recommended --verify-out "${verify_out_path}")

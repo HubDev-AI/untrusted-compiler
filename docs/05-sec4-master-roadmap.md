@@ -1160,6 +1160,11 @@ Post-alpha track acceptance anchors:
      - analyzer now carries `clusterRelayPumpBatchMaxResolved` through ranked runs,
      - markdown summary probe profile/ranked table/recommendation/verify sections now report relay pump-batch requested/resolved values.
      - documented in `docs/book/1250-m39-lasm-saturation-summary-relay-pump-batch-columns.md`.
+   - [x] Added fixed reuse-port mode support across LASM capacity/saturation orchestration:
+     - `run_lasm_cluster_capacity_probe.sh` now supports `--fixed-reuse-port-mode` with deterministic guardrails (forces `autoscaleMaxInstances=instances`, rejects relay-proxy-only flags, suppresses cluster-status artifact wiring),
+     - saturation matrix + bundle + full-suite + Makefile forwarding now thread fixed-mode toggles end-to-end,
+     - short local sample (`20s`, `8t/256c`, `/health`) measured `~120.5k req/s` in fixed reuse-port mode vs `~77.6k req/s` proxy-relay mode in this environment.
+     - documented in `docs/book/1251-m39-lasm-fixed-reuse-port-probe-and-saturation-forwarding.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

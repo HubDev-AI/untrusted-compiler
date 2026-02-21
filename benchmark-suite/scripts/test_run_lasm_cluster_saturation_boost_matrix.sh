@@ -104,6 +104,22 @@ if grep -q 'analysisCmd=' <<<"$out_skip_analysis"; then
   exit 1
 fi
 
+out_fixed="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" \
+  --dry-run \
+  --fixed-reuse-port-mode \
+  --boost-steps 2,4 \
+  --instances 3 \
+  --autoscale-max-instances 9 \
+  2>&1)"
+if ! grep -q 'fixedReusePortMode=true' <<<"$out_fixed"; then
+  echo "saturation boost matrix dry-run missing fixed reuse-port mode marker" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleMaxInstances=3' <<<"$out_fixed"; then
+  echo "saturation boost matrix dry-run missing delegated fixed-mode autoscale max override" >&2
+  exit 1
+fi
+
 if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_matrix.sh" --dry-run --skip-analysis --verify-recommended >/tmp/lasm-sat-boost-matrix-invalid-verify.log 2>&1; then
   echo "saturation boost matrix accepted verify-recommended with skip-analysis" >&2
   exit 1

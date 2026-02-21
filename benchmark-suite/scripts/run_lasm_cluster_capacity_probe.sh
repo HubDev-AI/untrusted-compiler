@@ -26,6 +26,7 @@ Options:
   --autoscale-scale-up-step <n>                    LASM max scale-up workers per autoscale check (default: 2)
   --autoscale-scale-down-step <n>                  LASM max scale-down workers per autoscale check (default: 1)
   --autoscale-saturation-boost-step <n>            LASM max scale-up workers per check when relay saturation is observed (default: 4)
+  --fixed-reuse-port-mode                          Run fixed reuse-port cluster mode (forces autoscale-max-instances=instances; relay proxy tuning flags are disallowed)
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
   --cluster-accept-workers <n>                     Optional relay accept-worker override
@@ -67,6 +68,7 @@ cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
 cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 cluster_relay_pump_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_PUMP_BATCH_MAX:-}"
 out_rel="${LASM_CAPACITY_OUT:-results/summaries/sec4-lasm-cluster-capacity-probe.json}"
+fixed_reuse_port_mode="${LASM_CAPACITY_FIXED_REUSE_PORT_MODE:-false}"
 skip_build="false"
 dry_run="false"
 keep_cluster_status_json="false"
@@ -140,6 +142,10 @@ while [ "$#" -gt 0 ]; do
     --autoscale-saturation-boost-step)
       autoscale_saturation_boost_step="${2:-}"
       shift 2
+      ;;
+    --fixed-reuse-port-mode)
+      fixed_reuse_port_mode="true"
+      shift
       ;;
     --cluster-relay-workers)
       cluster_relay_workers="${2:-}"
@@ -216,9 +222,40 @@ if [ -n "$cluster_relay_pump_batch_max" ] && ! is_number "$cluster_relay_pump_ba
   echo "cluster-relay-pump-batch-max must be numeric, got: $cluster_relay_pump_batch_max" >&2
   exit 2
 fi
+if [ "$fixed_reuse_port_mode" != "true" ] && [ "$fixed_reuse_port_mode" != "false" ]; then
+  echo "fixed-reuse-port-mode must be true or false, got: $fixed_reuse_port_mode" >&2
+  exit 2
+fi
 if [ -z "$request_header" ] || [[ "$request_header" != *:* ]]; then
   echo "request-header must include ':' (example: Authorization: Bearer token123)" >&2
   exit 2
+fi
+if [ "$fixed_reuse_port_mode" = "true" ]; then
+  autoscale_max_instances="$instances"
+  if [ -n "$cluster_relay_workers" ]; then
+    echo "cluster-relay-workers is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
+  if [ -n "$cluster_relay_queue" ]; then
+    echo "cluster-relay-queue is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
+  if [ -n "$cluster_accept_workers" ]; then
+    echo "cluster-accept-workers is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
+  if [ -n "$cluster_relay_accept_batch_max" ]; then
+    echo "cluster-relay-accept-batch-max is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
+  if [ -n "$cluster_relay_pump_batch_max" ]; then
+    echo "cluster-relay-pump-batch-max is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
+  if [ "$keep_cluster_status_json" = "true" ]; then
+    echo "keep-cluster-status-json is not supported in fixed-reuse-port-mode" >&2
+    exit 2
+  fi
 fi
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -270,12 +307,13 @@ sec4 LASM cluster capacity probe plan:
   autoscaleScaleUpStep=$autoscale_scale_up_step
   autoscaleScaleDownStep=$autoscale_scale_down_step
   autoscaleSaturationBoostStep=$autoscale_saturation_boost_step
+  fixedReusePortMode=$fixed_reuse_port_mode
   clusterRelayWorkers=${cluster_relay_workers:-auto}
   clusterRelayQueue=${cluster_relay_queue:-auto}
   clusterAcceptWorkers=${cluster_accept_workers:-auto}
   clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   clusterRelayPumpBatchMax=${cluster_relay_pump_batch_max:-auto}
-  clusterStatusJson=${status_json_file}
+  clusterStatusJson=$(if [ "$fixed_reuse_port_mode" = "true" ]; then printf "%s" "n/a (fixed-reuse-port-mode)"; else printf "%s" "$status_json_file"; fi)
   keepClusterStatusJson=${keep_cluster_status_json}
   skipBuild=$skip_build
   out=$out_path
@@ -318,8 +356,10 @@ run_args=(
   --autoscale-scale-up-step "$autoscale_scale_up_step"
   --autoscale-scale-down-step "$autoscale_scale_down_step"
   --autoscale-saturation-boost-step "$autoscale_saturation_boost_step"
-  --cluster-status-json "$status_json_file"
 )
+if [ "$fixed_reuse_port_mode" != "true" ]; then
+  run_args+=(--cluster-status-json "$status_json_file")
+fi
 if [ -n "$cluster_relay_workers" ]; then
   run_args+=(--cluster-relay-workers "$cluster_relay_workers")
 fi
@@ -493,6 +533,7 @@ jq -n \
   --argjson autoscaleScaleUpStep "$autoscale_scale_up_step" \
   --argjson autoscaleScaleDownStep "$autoscale_scale_down_step" \
   --argjson autoscaleSaturationBoostStep "$autoscale_saturation_boost_step" \
+  --argjson fixedReusePortMode "$fixed_reuse_port_mode" \
   --argjson resolvedRelayWorkerCount "$resolved_relay_worker_count" \
   --argjson resolvedRelayAcceptWorkers "$resolved_relay_accept_workers" \
   --argjson resolvedRelayAcceptBatchMax "$resolved_relay_accept_batch_max" \
@@ -527,6 +568,7 @@ jq -n \
       autoscaleScaleUpStep: $autoscaleScaleUpStep,
       autoscaleScaleDownStep: $autoscaleScaleDownStep,
       autoscaleSaturationBoostStep: $autoscaleSaturationBoostStep,
+      fixedReusePortMode: $fixedReusePortMode,
       clusterRelayWorkers: $relayWorkers,
       clusterRelayQueue: $relayQueue,
       clusterAcceptWorkers: $acceptWorkers,
@@ -548,7 +590,7 @@ jq -n \
     artifacts: {
       raw: $rawFile,
       serverLog: $serverLog,
-      clusterStatusJson: $statusJsonFile
+      clusterStatusJson: (if $fixedReusePortMode then null else $statusJsonFile end)
     }
   }' >"$out_path"
 

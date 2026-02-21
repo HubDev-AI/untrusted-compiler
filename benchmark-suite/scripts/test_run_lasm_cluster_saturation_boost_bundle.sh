@@ -62,6 +62,22 @@ if ! grep -q "summaryCmd=${root_dir}/scripts/render_lasm_cluster_saturation_boos
   exit 1
 fi
 
+out_fixed="$("${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" \
+  --dry-run \
+  --fixed-reuse-port-mode \
+  --instances 3 \
+  --autoscale-max-instances 9 \
+  --summary-out results/summaries/custom-saturation-boost-summary-fixed.md \
+  2>&1)"
+if ! grep -q 'fixedReusePortMode=true' <<<"$out_fixed"; then
+  echo "saturation boost bundle dry-run missing fixed reuse-port mode marker" >&2
+  exit 1
+fi
+if ! grep -q 'autoscaleMaxInstances=3' <<<"$out_fixed"; then
+  echo "saturation boost bundle dry-run missing delegated fixed-mode autoscale max override" >&2
+  exit 1
+fi
+
 if "${root_dir}/scripts/run_lasm_cluster_saturation_boost_bundle.sh" --dry-run --boost-steps 2,abc >/tmp/lasm-sat-boost-bundle-invalid-shape.log 2>&1; then
   echo "saturation boost bundle accepted invalid boost-step shape" >&2
   exit 1
