@@ -9194,7 +9194,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_offset = 0_usize;
             let mut relay_selection_reservation_next_index = 0_usize;
             let mut relay_selection_reservation_worker_port_count = 0_usize;
-            let mut relay_selection_next_index_by_worker: Vec<usize> = Vec::new();
             let mut unhealthy_prune_next_at: Option<Instant> = None;
             let relay_warning_throttle_duration =
                 Duration::from_millis(LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS);
@@ -9355,18 +9354,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
                         {
-                            if relay_selection_reservation_worker_port_count != worker_port_count {
-                                relay_selection_next_index_by_worker.clear();
-                                relay_selection_next_index_by_worker.resize(worker_port_count, 0);
-                                for worker_index in 0..worker_port_count {
-                                    relay_selection_next_index_by_worker[worker_index] =
-                                        if worker_index + 1 == worker_port_count {
-                                            0
-                                        } else {
-                                            worker_index + 1
-                                        };
-                                }
-                            }
                             let relay_selection_reservation_base = relay_selection_counter
                                 .fetch_add(relay_accept_batch_max, Ordering::Relaxed);
                             relay_selection_reservation_len = relay_accept_batch_max;
@@ -9380,12 +9367,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         }
                         let start_index = relay_selection_reservation_next_index;
                         relay_selection_reservation_offset += 1;
-                        debug_assert_eq!(
-                            relay_selection_next_index_by_worker.len(),
-                            worker_port_count
-                        );
                         relay_selection_reservation_next_index =
-                            relay_selection_next_index_by_worker[start_index];
+                            if start_index + 1 == worker_port_count {
+                                0
+                            } else {
+                                start_index + 1
+                            };
                         if selection_lookup_is_identity {
                             start_index
                         } else {
