@@ -8927,7 +8927,7 @@ fn run_lasm_cluster_accept_loop(
     } else {
         Vec::new()
     };
-    let mut relay_next_live_sender_lookup = if relay_sender_count > 1 {
+    let mut relay_next_live_sender_lookup = if relay_sender_count > 2 {
         (0..relay_sender_count).collect::<Vec<usize>>()
     } else {
         Vec::new()
@@ -9323,10 +9323,14 @@ fn run_lasm_cluster_accept_loop(
                                         &mut relay_single_live_sender_index,
                                         &mut relay_dual_live_sender_indices,
                                     );
-                                    refresh_lasm_cluster_next_live_sender_lookup(
-                                        relay_sender_live.as_slice(),
-                                        relay_next_live_sender_lookup.as_mut_slice(),
-                                    );
+                                    if relay_live_sender_count > 2
+                                        && !relay_next_live_sender_lookup.is_empty()
+                                    {
+                                        refresh_lasm_cluster_next_live_sender_lookup(
+                                            relay_sender_live.as_slice(),
+                                            relay_next_live_sender_lookup.as_mut_slice(),
+                                        );
+                                    }
                                     relay_live_sender_count_observed
                                         .fetch_min(relay_live_sender_count, Ordering::Relaxed);
                                 }

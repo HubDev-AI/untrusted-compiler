@@ -1275,6 +1275,10 @@ Post-alpha track acceptance anchors:
      - `refresh_lasm_cluster_next_live_sender_lookup(...)` now builds per-slot next-live indices in one reverse sweep anchored at the first live shard instead of calling a full scan per slot,
      - preserves deterministic lookup semantics while reducing liveness-change refresh overhead from repeated scan lookups.
      - documented in `docs/book/1278-m39-lasm-next-live-lookup-linear-refresh.md`.
+   - [x] Scoped next-live lookup cache to multi-live degraded pools only:
+     - accept-loop now allocates/maintains `relay_next_live_sender_lookup` only when relay pool size is greater than two,
+     - liveness-change refresh now skips next-live lookup rebuild once degraded live-shard count drops to `<=2`, where dedicated single/dual paths already handle dispatch.
+     - documented in `docs/book/1279-m39-lasm-next-live-lookup-sparse-activation.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

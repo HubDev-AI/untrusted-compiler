@@ -1248,5 +1248,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1276-m39-lasm-degraded-cursor-live-slot-skipping.md`
 - `1277-m39-lasm-degraded-next-live-lookup-cache.md`
 - `1278-m39-lasm-next-live-lookup-linear-refresh.md`
+- `1279-m39-lasm-next-live-lookup-sparse-activation.md`
 
 As milestones progress, chapters will be added and linked from this index.
