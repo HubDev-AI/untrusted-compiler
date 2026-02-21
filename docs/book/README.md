@@ -1200,5 +1200,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1228-m39-lasm-cluster-direct-round-robin-next-index.md`
 - `1229-m39-lasm-cluster-accept-fallback-direct-next-index-helper.md`
 - `1230-m39-lasm-cluster-cached-selected-worker-port-count.md`
+- `1231-m39-lasm-cluster-worker-port-snapshot-replace-handoff.md`
 
 As milestones progress, chapters will be added and linked from this index.

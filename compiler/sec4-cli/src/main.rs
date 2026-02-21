@@ -9220,12 +9220,11 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         let snapshot = relay_worker_ports.load_full();
                         if !Arc::ptr_eq(&selected_worker_ports_snapshot, &snapshot) {
                             let previous_ports_snapshot =
-                                Arc::clone(&selected_worker_ports_snapshot);
+                                std::mem::replace(&mut selected_worker_ports_snapshot, snapshot);
                             let previous_unhealthy_ports_until_by_index =
                                 std::mem::take(&mut unhealthy_ports_until_by_index);
                             let previous_connect_warning_next_allowed_by_index =
                                 std::mem::take(&mut connect_warning_next_allowed_by_index);
-                            selected_worker_ports_snapshot = Arc::clone(&snapshot);
                             selected_worker_port_count = selected_worker_ports_snapshot.len();
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),
@@ -9261,7 +9260,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         } else {
                             Some(now + unhealthy_prune_interval)
                         };
-                        worker_ports_snapshot = Some(snapshot);
+                        worker_ports_snapshot = Some(Arc::clone(&selected_worker_ports_snapshot));
                     }
                 }
                 loop {
@@ -9292,13 +9291,14 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         if !Arc::ptr_eq(&selected_worker_ports_snapshot, worker_ports_snapshot_ref)
                         {
                             let now = Instant::now();
-                            let previous_ports_snapshot =
-                                Arc::clone(&selected_worker_ports_snapshot);
+                            let previous_ports_snapshot = std::mem::replace(
+                                &mut selected_worker_ports_snapshot,
+                                Arc::clone(worker_ports_snapshot_ref),
+                            );
                             let previous_unhealthy_ports_until_by_index =
                                 std::mem::take(&mut unhealthy_ports_until_by_index);
                             let previous_connect_warning_next_allowed_by_index =
                                 std::mem::take(&mut connect_warning_next_allowed_by_index);
-                            selected_worker_ports_snapshot = Arc::clone(worker_ports_snapshot_ref);
                             selected_worker_port_count = selected_worker_ports_snapshot.len();
                             rebuild_lasm_cluster_worker_backend_addrs(
                                 selected_worker_ports_snapshot.as_ref(),

@@ -1075,6 +1075,10 @@ Post-alpha track acceptance anchors:
      - relay worker loop now maintains `selected_worker_port_count` alongside the selected worker-port snapshot and updates it only when snapshot identity changes,
      - selection rebuild and backend-index selection now use the cached count instead of repeated `selected_worker_ports_snapshot.as_ref().len()` reads in the hot path.
      - documented in `docs/book/1230-m39-lasm-cluster-cached-selected-worker-port-count.md`.
+   - [x] Reduced relay worker-port snapshot replacement clone churn:
+     - relay worker snapshot-update branches now use `std::mem::replace` to move out the previous selected snapshot while installing the new snapshot, instead of cloning both old/new arcs,
+     - keeps unhealthy-port remap semantics unchanged while reducing reference-count update overhead on worker-port snapshot refreshes.
+     - documented in `docs/book/1231-m39-lasm-cluster-worker-port-snapshot-replace-handoff.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
