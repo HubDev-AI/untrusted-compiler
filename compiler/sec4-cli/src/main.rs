@@ -8368,6 +8368,18 @@ fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
 }
 
 #[inline(always)]
+fn lasm_cluster_forward_distance_wrapped(start: usize, end: usize, count: usize) -> usize {
+    debug_assert!(count > 0);
+    debug_assert!(start < count);
+    debug_assert!(end < count);
+    if end >= start {
+        end - start
+    } else {
+        count - start + end
+    }
+}
+
+#[inline(always)]
 fn lasm_cluster_next_live_sender_index(
     relay_sender_live: &[u8],
     start_index_wrapped: usize,
@@ -8827,6 +8839,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let mut scanned_live = 0usize;
     while scanned_slots < scan_slot_limit && scanned_live < scan_live_target {
         if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
+            let previous_scan_index = scan_index;
             let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
             scan_index = if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
                 relay_sender_live,
@@ -8837,7 +8850,13 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
             } else {
                 next_scan_start
             };
-            scanned_slots += 1;
+            let advanced_slots = lasm_cluster_forward_distance_wrapped(
+                previous_scan_index,
+                scan_index,
+                sender_count,
+            )
+            .max(1);
+            scanned_slots = scanned_slots.saturating_add(advanced_slots);
             continue;
         }
         scanned_live += 1;
@@ -8854,8 +8873,21 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
         }
-        scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-        scanned_slots += 1;
+        let previous_scan_index = scan_index;
+        let next_scan_start = lasm_cluster_next_index_wrapped(scan_index, sender_count);
+        scan_index = if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            next_scan_start,
+        ) {
+            next_live_index
+        } else {
+            next_scan_start
+        };
+        let advanced_slots =
+            lasm_cluster_forward_distance_wrapped(previous_scan_index, scan_index, sender_count)
+                .max(1);
+        scanned_slots = scanned_slots.saturating_add(advanced_slots);
     }
 
     if saw_live_sender && *relay_live_sender_count > 0 {

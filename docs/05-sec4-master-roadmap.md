@@ -1307,6 +1307,10 @@ Post-alpha track acceptance anchors:
      - accept-loop now tracks live-count immediately after primary dispatch and skips post-fallback next-live cache refresh when fallback did not change live-count beyond already-refreshed primary-disconnect state,
      - keeps post-fallback refresh active when fallback introduces additional disconnect-driven live-count changes.
      - documented in `docs/book/1286-m39-lasm-duplicate-post-fallback-cache-refresh-elision.md`.
+   - [x] Added jump-distance accounting for degraded fallback scan progression:
+     - fallback-multi degraded scan loop now advances `scanned_slots` by wrapped jump distance when cursor jumps to next live candidate (dead-slot and post-attempt advancement paths),
+     - preserves bounded traversal semantics while reducing repeated loop iterations in sparse-live degraded pools.
+     - documented in `docs/book/1287-m39-lasm-fallback-jump-distance-accounting.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
