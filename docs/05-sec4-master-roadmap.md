@@ -1112,6 +1112,11 @@ Post-alpha track acceptance anchors:
      - new auto heuristic uses bounded sublinear instance hint (`ceil(sqrt(max(min_instances, max_instances)))`, min `2` for multi-instance, clamped by host parallelism and `1..16` hard bound).
      - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~68.6k req/s` (`p99 11.99ms`) to `~75.5k req/s` (`p99 6.41ms`) under default auto relay settings with the same config envelope.
      - documented in `docs/book/1239-m39-lasm-cluster-auto-relay-worker-sizing-fix.md`.
+   - [x] Tuned auto relay-worker default from ceil-sqrt to floor-sqrt for multi-instance mode:
+     - auto relay sizing now uses `max(2, floor(sqrt(max(min_instances, max_instances))))` for multi-instance configs (single-instance remains `1`),
+     - keeps existing host-parallelism and `1..16` clamps unchanged while biasing lower default relay thread counts to reduce hot-path contention.
+     - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~75.5k req/s` (`p99 6.41ms`) to `~77.8k req/s` (`p99 5.35ms`) under default auto relay settings with the same config envelope.
+     - documented in `docs/book/1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

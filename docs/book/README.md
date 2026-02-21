@@ -1209,5 +1209,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`
 - `1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`
 - `1239-m39-lasm-cluster-auto-relay-worker-sizing-fix.md`
+- `1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`
 
 As milestones progress, chapters will be added and linked from this index.
