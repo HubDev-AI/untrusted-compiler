@@ -8387,6 +8387,9 @@ const LASM_CLUSTER_SATURATION_COUNTER_FLUSH_BATCH: usize = 8;
 const LASM_CLUSTER_UNHEALTHY_PRUNE_INTERVAL_MS: u64 = 2;
 const LASM_CLUSTER_IDLE_SPIN_THRESHOLD: u32 = 32;
 const LASM_CLUSTER_IDLE_SLEEP_MICROS: u64 = 250;
+const LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER: usize = 4;
+const LASM_CLUSTER_RELAY_PUMP_BATCH_MIN: usize = 64;
+const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
 
 #[inline(always)]
 fn flush_lasm_cluster_saturation_counters(
@@ -9196,6 +9199,12 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
         let relay_accept_batch_max = relay_accept_batch_max;
         relay_handles.push(std::thread::spawn(move || {
             let relay_buffer_pool_max = relay_accept_batch_max.saturating_mul(4).max(64);
+            let relay_pump_batch_max = relay_accept_batch_max
+                .saturating_mul(LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER)
+                .clamp(
+                    LASM_CLUSTER_RELAY_PUMP_BATCH_MIN,
+                    LASM_CLUSTER_RELAY_PUMP_BATCH_MAX,
+                );
             let mut relay_connections: Vec<LasmClusterRelayPump> =
                 Vec::with_capacity(relay_accept_batch_max.max(1));
             let mut relay_buffer_pool: Vec<(Vec<u8>, Vec<u8>)> =
@@ -9214,6 +9223,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut relay_selection_reservation_offset = 0_usize;
             let mut relay_selection_reservation_next_index = 0_usize;
             let mut relay_selection_reservation_worker_port_count = 0_usize;
+            let mut relay_pump_cursor = 0_usize;
             let mut unhealthy_prune_next_at: Option<Instant> = None;
             let relay_warning_throttle_duration =
                 Duration::from_millis(LASM_CLUSTER_RELAY_WARNING_THROTTLE_MS);
@@ -9500,41 +9510,111 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                 }
 
                 let mut progressed = false;
-                let mut index = 0_usize;
-                while index < relay_connections.len() {
-                    match relay_connections[index].pump_once() {
-                        Ok(LasmClusterRelayPumpStep::Progressed) => {
-                            progressed = true;
-                            index += 1;
-                        }
-                        Ok(LasmClusterRelayPumpStep::Idle) => {
-                            index += 1;
-                        }
-                        Ok(LasmClusterRelayPumpStep::Complete) => {
-                            let relay = relay_connections.swap_remove(index);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
+                if relay_connections.len() <= relay_pump_batch_max {
+                    let mut index = 0_usize;
+                    while index < relay_connections.len() {
+                        match relay_connections[index].pump_once() {
+                            Ok(LasmClusterRelayPumpStep::Progressed) => {
+                                progressed = true;
+                                index += 1;
                             }
-                            active_connection_decrements_local += 1;
-                            progressed = true;
+                            Ok(LasmClusterRelayPumpStep::Idle) => {
+                                index += 1;
+                            }
+                            Ok(LasmClusterRelayPumpStep::Complete) => {
+                                let relay = relay_connections.swap_remove(index);
+                                if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                    relay_buffer_pool.push(relay.into_buffers());
+                                }
+                                active_connection_decrements_local += 1;
+                                progressed = true;
+                            }
+                            Err(err) => {
+                                let now = Instant::now();
+                                let warning_allowed = match pump_warning_next_allowed {
+                                    Some(next_allowed_at) => now >= next_allowed_at,
+                                    None => true,
+                                };
+                                if warning_allowed {
+                                    eprintln!("warning: LASM cluster relay pump failed: {err}");
+                                    pump_warning_next_allowed =
+                                        Some(now + relay_warning_throttle_duration);
+                                }
+                                let relay = relay_connections.swap_remove(index);
+                                if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                    relay_buffer_pool.push(relay.into_buffers());
+                                }
+                                active_connection_decrements_local += 1;
+                                progressed = true;
+                            }
                         }
-                        Err(err) => {
-                            let now = Instant::now();
-                            let warning_allowed = match pump_warning_next_allowed {
-                                Some(next_allowed_at) => now >= next_allowed_at,
-                                None => true,
-                            };
-                            if warning_allowed {
-                                eprintln!("warning: LASM cluster relay pump failed: {err}");
-                                pump_warning_next_allowed =
-                                    Some(now + relay_warning_throttle_duration);
+                    }
+                    relay_pump_cursor = 0;
+                } else {
+                    let mut pumped = 0_usize;
+                    while pumped < relay_pump_batch_max {
+                        if relay_connections.is_empty() {
+                            relay_pump_cursor = 0;
+                            break;
+                        }
+                        if relay_pump_cursor >= relay_connections.len() {
+                            relay_pump_cursor = 0;
+                        }
+                        let relay_len_before_step = relay_connections.len();
+                        match relay_connections[relay_pump_cursor].pump_once() {
+                            Ok(LasmClusterRelayPumpStep::Progressed) => {
+                                progressed = true;
+                                relay_pump_cursor = lasm_cluster_next_index_wrapped(
+                                    relay_pump_cursor,
+                                    relay_len_before_step,
+                                );
+                                pumped += 1;
                             }
-                            let relay = relay_connections.swap_remove(index);
-                            if relay_buffer_pool.len() < relay_buffer_pool_max {
-                                relay_buffer_pool.push(relay.into_buffers());
+                            Ok(LasmClusterRelayPumpStep::Idle) => {
+                                relay_pump_cursor = lasm_cluster_next_index_wrapped(
+                                    relay_pump_cursor,
+                                    relay_len_before_step,
+                                );
+                                pumped += 1;
                             }
-                            active_connection_decrements_local += 1;
-                            progressed = true;
+                            Ok(LasmClusterRelayPumpStep::Complete) => {
+                                let relay = relay_connections.swap_remove(relay_pump_cursor);
+                                if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                    relay_buffer_pool.push(relay.into_buffers());
+                                }
+                                if relay_pump_cursor >= relay_connections.len()
+                                    && !relay_connections.is_empty()
+                                {
+                                    relay_pump_cursor = 0;
+                                }
+                                active_connection_decrements_local += 1;
+                                progressed = true;
+                                pumped += 1;
+                            }
+                            Err(err) => {
+                                let now = Instant::now();
+                                let warning_allowed = match pump_warning_next_allowed {
+                                    Some(next_allowed_at) => now >= next_allowed_at,
+                                    None => true,
+                                };
+                                if warning_allowed {
+                                    eprintln!("warning: LASM cluster relay pump failed: {err}");
+                                    pump_warning_next_allowed =
+                                        Some(now + relay_warning_throttle_duration);
+                                }
+                                let relay = relay_connections.swap_remove(relay_pump_cursor);
+                                if relay_buffer_pool.len() < relay_buffer_pool_max {
+                                    relay_buffer_pool.push(relay.into_buffers());
+                                }
+                                if relay_pump_cursor >= relay_connections.len()
+                                    && !relay_connections.is_empty()
+                                {
+                                    relay_pump_cursor = 0;
+                                }
+                                active_connection_decrements_local += 1;
+                                progressed = true;
+                                pumped += 1;
+                            }
                         }
                     }
                 }
