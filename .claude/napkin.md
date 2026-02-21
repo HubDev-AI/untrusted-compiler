@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-21 | self | During dynamic-state module extraction I forgot to branch after merge and committed directly on local `dev` again before opening a PR. | Enforce a pre-edit hard gate right after every merge: run `git branch --show-current`; if `dev`, immediately `git checkout -b codex/<slice>` before any read/edit/commit commands. |
 | 2026-02-21 | self | After PR #464 merge switched local checkout back to `dev`, I started the next telemetry slice and committed on `dev` again before branching. | Keep a hard pre-commit gate every slice: run `git branch --show-current`; if it is `dev`, create `codex/*` first. If it happens, immediately branch from the commit and repoint local `dev` to `origin/dev` before pushing. |
 | 2026-02-21 | self | After merging PR #460, I again started the next slice on local `dev` before creating the next `codex/*` branch. | Treat post-merge branch creation as a hard gate: immediately create the next `codex/*` branch before any reads/edits. |
 | 2026-02-21 | self | After merging PR #459, I started the next fixed-reuse-port slice on local `dev` again before creating a `codex/*` branch. | Immediately after every merge, run `git branch --show-current` and create the next `codex/*` branch before any file edits. |
