@@ -26,6 +26,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 mod lasm_db_adapter_state;
 mod lasm_db_cli;
 mod lasm_cluster_relay_send;
+mod lasm_cluster_relay_topology;
 mod lasm_db_config;
 mod lasm_db_headers;
 mod lasm_db_plan;
@@ -41,6 +42,11 @@ mod lasm_sql_safety;
 use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_cluster_relay_send::{
     attempt_lasm_cluster_relay_send, attempt_lasm_cluster_relay_send_single,
+};
+use lasm_cluster_relay_topology::{
+    lasm_cluster_next_index_wrapped, lasm_cluster_next_live_sender_index,
+    lookup_lasm_cluster_next_live_sender_index, realign_lasm_cluster_dispatch_cursor_to_live,
+    resolve_lasm_cluster_next_live_sender_index,
 };
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
@@ -8375,16 +8381,6 @@ fn lasm_cluster_fallback_terminal_dispatch_error(
 }
 
 #[inline(always)]
-fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
-    debug_assert!(count > 0);
-    if index + 1 == count {
-        0
-    } else {
-        index + 1
-    }
-}
-
-#[inline(always)]
 fn lasm_cluster_forward_distance_wrapped(start: usize, end: usize, count: usize) -> usize {
     debug_assert!(count > 0);
     debug_assert!(start < count);
@@ -8433,24 +8429,6 @@ fn advance_lasm_cluster_fallback_scan_index(
 }
 
 #[inline(always)]
-fn lasm_cluster_next_live_sender_index(
-    relay_sender_live: &[u8],
-    start_index_wrapped: usize,
-) -> Option<usize> {
-    let sender_count = relay_sender_live.len();
-    debug_assert!(sender_count > 0);
-    debug_assert!(start_index_wrapped < sender_count);
-    let mut scan_index = start_index_wrapped;
-    for _ in 0..sender_count {
-        if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
-            return Some(scan_index);
-        }
-        scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
-    }
-    None
-}
-
-#[inline(always)]
 fn refresh_lasm_cluster_next_live_sender_lookup(
     relay_sender_live: &[u8],
     relay_next_live_sender_lookup: &mut [usize],
@@ -8486,69 +8464,6 @@ fn refresh_lasm_cluster_next_live_sender_lookup(
             next_live_index = wrapped_index;
         }
         relay_next_live_sender_lookup[wrapped_index] = next_live_index;
-    }
-}
-
-#[inline(always)]
-fn lookup_lasm_cluster_next_live_sender_index(
-    relay_sender_live: &[u8],
-    relay_next_live_sender_lookup: &[usize],
-    start_index_wrapped: usize,
-) -> Option<usize> {
-    debug_assert_eq!(relay_sender_live.len(), relay_next_live_sender_lookup.len());
-    if relay_sender_live.is_empty() {
-        return None;
-    }
-    debug_assert!(start_index_wrapped < relay_sender_live.len());
-    let cached_index = relay_next_live_sender_lookup[start_index_wrapped];
-    if cached_index < relay_sender_live.len()
-        && relay_sender_live[cached_index] == LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
-        return Some(cached_index);
-    }
-    lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
-}
-
-#[inline(always)]
-fn resolve_lasm_cluster_next_live_sender_index(
-    relay_sender_live: &[u8],
-    relay_next_live_sender_lookup: &[usize],
-    start_index_wrapped: usize,
-) -> Option<usize> {
-    if relay_sender_live
-        .get(start_index_wrapped)
-        .copied()
-        .unwrap_or(LASM_CLUSTER_RELAY_SENDER_DEAD)
-        == LASM_CLUSTER_RELAY_SENDER_LIVE
-    {
-        return Some(start_index_wrapped);
-    }
-    if !relay_next_live_sender_lookup.is_empty() {
-        debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
-        return lookup_lasm_cluster_next_live_sender_index(
-            relay_sender_live,
-            relay_next_live_sender_lookup,
-            start_index_wrapped,
-        );
-    }
-    lasm_cluster_next_live_sender_index(relay_sender_live, start_index_wrapped)
-}
-
-#[inline(always)]
-fn realign_lasm_cluster_dispatch_cursor_to_live(
-    relay_sender_live: &[u8],
-    relay_dispatch_cursor: &mut usize,
-) -> bool {
-    debug_assert!(!relay_sender_live.is_empty());
-    if relay_sender_live[*relay_dispatch_cursor] == LASM_CLUSTER_RELAY_SENDER_LIVE {
-        return true;
-    }
-    match lasm_cluster_next_live_sender_index(relay_sender_live, *relay_dispatch_cursor) {
-        Some(index) => {
-            *relay_dispatch_cursor = index;
-            true
-        }
-        None => false,
     }
 }
 
