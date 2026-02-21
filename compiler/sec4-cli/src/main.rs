@@ -8434,6 +8434,8 @@ const LASM_CLUSTER_SELECTION_RESERVATION_MIN_CHUNK: usize = 64;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MULTIPLIER: usize = 4;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MIN: usize = 64;
 const LASM_CLUSTER_RELAY_PUMP_BATCH_MAX: usize = 4096;
+const LASM_CLUSTER_RELAY_SENDER_LIVE: u8 = 1;
+const LASM_CLUSTER_RELAY_SENDER_DEAD: u8 = 0;
 
 #[inline(always)]
 fn flush_lasm_cluster_saturation_counters(
@@ -8507,7 +8509,7 @@ fn lasm_cluster_next_index_wrapped(index: usize, count: usize) -> usize {
 
 #[inline(always)]
 fn lasm_cluster_next_live_sender_index(
-    relay_sender_live: &[bool],
+    relay_sender_live: &[u8],
     start_index_wrapped: usize,
 ) -> Option<usize> {
     let sender_count = relay_sender_live.len();
@@ -8515,7 +8517,7 @@ fn lasm_cluster_next_live_sender_index(
     debug_assert!(start_index_wrapped < sender_count);
     let mut scan_index = start_index_wrapped;
     for _ in 0..sender_count {
-        if relay_sender_live[scan_index] {
+        if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
             return Some(scan_index);
         }
         scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
@@ -8525,11 +8527,11 @@ fn lasm_cluster_next_live_sender_index(
 
 #[inline(always)]
 fn realign_lasm_cluster_dispatch_cursor_to_live(
-    relay_sender_live: &[bool],
+    relay_sender_live: &[u8],
     relay_dispatch_cursor: &mut usize,
 ) -> bool {
     debug_assert!(!relay_sender_live.is_empty());
-    if relay_sender_live[*relay_dispatch_cursor] {
+    if relay_sender_live[*relay_dispatch_cursor] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         return true;
     }
     match lasm_cluster_next_live_sender_index(relay_sender_live, *relay_dispatch_cursor) {
@@ -8543,7 +8545,7 @@ fn realign_lasm_cluster_dispatch_cursor_to_live(
 
 #[inline(always)]
 fn refresh_lasm_cluster_single_live_sender_index(
-    relay_sender_live: &[bool],
+    relay_sender_live: &[u8],
     relay_live_sender_count: usize,
     relay_single_live_sender_index: &mut Option<usize>,
 ) {
@@ -8552,7 +8554,7 @@ fn refresh_lasm_cluster_single_live_sender_index(
         return;
     }
     if let Some(index) = *relay_single_live_sender_index {
-        if relay_sender_live[index] {
+        if relay_sender_live[index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
             return;
         }
     }
@@ -8563,7 +8565,7 @@ fn refresh_lasm_cluster_single_live_sender_index(
 fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     mut client_stream: TcpStream,
     relay_senders: &[Sender<TcpStream>],
-    relay_sender_live: &mut [bool],
+    relay_sender_live: &mut [u8],
     relay_live_sender_count: &mut usize,
     relay_all_senders_live: &mut bool,
     start_index_wrapped: usize,
@@ -8578,7 +8580,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     }
     if sender_count == 2 {
         let alternate_index = start_index_wrapped;
-        if relay_sender_live[alternate_index] {
+        if relay_sender_live[alternate_index] == LASM_CLUSTER_RELAY_SENDER_LIVE {
             match relay_senders[alternate_index].try_send(client_stream) {
                 Ok(()) => return Ok(()),
                 Err(TrySendError::Full(next_stream)) => {
@@ -8586,7 +8588,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                     client_stream = next_stream;
                 }
                 Err(TrySendError::Disconnected(next_stream)) => {
-                    relay_sender_live[alternate_index] = false;
+                    relay_sender_live[alternate_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
                     *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
                     *relay_all_senders_live = false;
                     client_stream = next_stream;
@@ -8605,7 +8607,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
     let mut scanned_slots = 0usize;
     let mut scanned_live = 0usize;
     while scanned_slots < scan_slot_limit && scanned_live < scan_live_target {
-        if !relay_sender_live[scan_index] {
+        if relay_sender_live[scan_index] == LASM_CLUSTER_RELAY_SENDER_DEAD {
             scan_index = lasm_cluster_next_index_wrapped(scan_index, sender_count);
             scanned_slots += 1;
             continue;
@@ -8618,7 +8620,7 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
             Err(TrySendError::Disconnected(next_stream)) => {
-                relay_sender_live[scan_index] = false;
+                relay_sender_live[scan_index] = LASM_CLUSTER_RELAY_SENDER_DEAD;
                 *relay_live_sender_count = relay_live_sender_count.saturating_sub(1);
                 *relay_all_senders_live = false;
                 client_stream = next_stream;
@@ -8728,7 +8730,7 @@ fn run_lasm_cluster_accept_loop(
         0
     };
     let mut relay_sender_live = if relay_sender_count > 1 {
-        vec![true; relay_sender_count]
+        vec![LASM_CLUSTER_RELAY_SENDER_LIVE; relay_sender_count]
     } else {
         Vec::new()
     };
@@ -8908,7 +8910,8 @@ fn run_lasm_cluster_accept_loop(
                                 let (stream, saw_live_sender) = match send_error {
                                     TrySendError::Full(stream) => (stream, true),
                                     TrySendError::Disconnected(stream) => {
-                                        relay_sender_live[stream_dispatch_start] = false;
+                                        relay_sender_live[stream_dispatch_start] =
+                                            LASM_CLUSTER_RELAY_SENDER_DEAD;
                                         relay_live_sender_count =
                                             relay_live_sender_count.saturating_sub(1);
                                         relay_all_senders_live = false;
@@ -8933,7 +8936,8 @@ fn run_lasm_cluster_accept_loop(
                                 if !relay_all_senders_live
                                     && relay_live_sender_count > 0
                                     && relay_live_sender_count > 1
-                                    && !relay_sender_live[relay_dispatch_cursor]
+                                    && relay_sender_live[relay_dispatch_cursor]
+                                        == LASM_CLUSTER_RELAY_SENDER_DEAD
                                 {
                                     let _ = realign_lasm_cluster_dispatch_cursor_to_live(
                                         relay_sender_live.as_slice(),
