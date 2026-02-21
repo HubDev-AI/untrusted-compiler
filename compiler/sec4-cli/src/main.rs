@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 mod lasm_db_adapter_state;
+mod lasm_db_cli;
 mod lasm_db_config;
 mod lasm_db_headers;
 mod lasm_db_plan;
@@ -35,6 +36,7 @@ mod lasm_dynamic_state;
 mod lasm_request_template;
 mod lasm_sql_safety;
 
+use lasm_db_cli::{push_optional_db_adapter_run_arg, run_db_adapter_to_lasm_db_records_adapter};
 use lasm_db_config::{lasm_db_records_adapter_label, load_lasm_db_postgres_dsn_from_file};
 pub(crate) use lasm_db_headers::{
     clear_lasm_internal_db_response_markers, LASM_INTERNAL_DB_HANDLE_HEADER,
@@ -7573,28 +7575,6 @@ fn push_optional_u64_run_arg(cmd: &mut Command, flag: &str, value: Option<u64>) 
 fn push_optional_path_run_arg(cmd: &mut Command, flag: &str, value: Option<&Path>) {
     if let Some(value) = value {
         cmd.arg(flag).arg(value);
-    }
-}
-
-fn run_db_adapter_arg_value(adapter: RunDbAdapter) -> &'static str {
-    match adapter {
-        RunDbAdapter::RecordsLog => "records-log",
-        RunDbAdapter::Sqlite => "sqlite",
-        RunDbAdapter::Postgres => "postgres",
-    }
-}
-
-fn run_db_adapter_to_lasm_db_records_adapter(adapter: RunDbAdapter) -> LasmDbRecordsAdapter {
-    match adapter {
-        RunDbAdapter::RecordsLog => LasmDbRecordsAdapter::RecordsLog,
-        RunDbAdapter::Sqlite => LasmDbRecordsAdapter::Sqlite,
-        RunDbAdapter::Postgres => LasmDbRecordsAdapter::Postgres,
-    }
-}
-
-fn push_optional_db_adapter_run_arg(cmd: &mut Command, value: Option<RunDbAdapter>) {
-    if let Some(value) = value {
-        cmd.arg("--db-adapter").arg(run_db_adapter_arg_value(value));
     }
 }
 
