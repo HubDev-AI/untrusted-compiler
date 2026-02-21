@@ -1335,6 +1335,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi now centralizes dead-slot and post-attempt jump progression into `advance_lasm_cluster_fallback_scan_index(...)`,
      - preserves existing jump-distance accounting and next-live resolver semantics while reducing duplicated hot-path branch logic.
      - documented in `docs/book/1293-m39-lasm-fallback-scan-index-advance-helper.md`.
+   - [x] Added direct lookup/scan path in fallback scan-advance helper:
+     - `advance_lasm_cluster_fallback_scan_index(...)` now uses direct lookup-slice (`lookup_lasm_cluster_next_live_sender_index`) or direct scan (`lasm_cluster_next_live_sender_index`) paths after dead wrapped-next detection, instead of routing back through the generic resolver helper,
+     - removes redundant resolver branching in helper-level hot-path advancement while preserving fallback semantics.
+     - documented in `docs/book/1294-m39-lasm-fallback-scan-helper-direct-lookup-path.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

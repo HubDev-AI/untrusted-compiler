@@ -8392,11 +8392,20 @@ fn advance_lasm_cluster_fallback_scan_index(
     let next_scan_start = lasm_cluster_next_index_wrapped(current_index, sender_count);
     let next_scan_index = if relay_sender_live[next_scan_start] == LASM_CLUSTER_RELAY_SENDER_LIVE {
         next_scan_start
-    } else if let Some(next_live_index) = resolve_lasm_cluster_next_live_sender_index(
-        relay_sender_live,
-        relay_next_live_sender_lookup,
-        next_scan_start,
-    ) {
+    } else if !relay_next_live_sender_lookup.is_empty() {
+        debug_assert_eq!(relay_next_live_sender_lookup.len(), relay_sender_live.len());
+        if let Some(next_live_index) = lookup_lasm_cluster_next_live_sender_index(
+            relay_sender_live,
+            relay_next_live_sender_lookup,
+            next_scan_start,
+        ) {
+            next_live_index
+        } else {
+            next_scan_start
+        }
+    } else if let Some(next_live_index) =
+        lasm_cluster_next_live_sender_index(relay_sender_live, next_scan_start)
+    {
         next_live_index
     } else {
         next_scan_start
