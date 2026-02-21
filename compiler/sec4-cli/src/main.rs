@@ -9261,6 +9261,7 @@ fn run_lasm_cluster_accept_loop(
                                         relay_next_live_sender_lookup.as_mut_slice(),
                                     );
                                 }
+                                let live_count_after_primary_dispatch = relay_live_sender_count;
                                 let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
                                     && relay_live_sender_count > 2
                                 {
@@ -9378,6 +9379,8 @@ fn run_lasm_cluster_accept_loop(
                                     );
                                     if relay_live_sender_count > 2
                                         && relay_has_next_live_sender_lookup
+                                        && relay_live_sender_count
+                                            != live_count_after_primary_dispatch
                                     {
                                         refresh_lasm_cluster_next_live_sender_lookup(
                                             relay_sender_live.as_slice(),
