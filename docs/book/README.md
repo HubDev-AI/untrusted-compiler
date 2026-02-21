@@ -1223,5 +1223,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1251-m39-lasm-fixed-reuse-port-probe-and-saturation-forwarding.md`
 - `1252-m39-lasm-cluster-mode-compare-runner.md`
 - `1253-m39-lasm-full-suite-optional-mode-compare-lane.md`
+- `1254-m39-lasm-cluster-accept-fallback-saturation-short-circuit.md`
 
 As milestones progress, chapters will be added and linked from this index.

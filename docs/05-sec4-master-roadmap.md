@@ -1174,6 +1174,10 @@ Post-alpha track acceptance anchors:
      - deterministic guardrails now enforce `sec4-lasm` presence in `--impls` for mode-compare lane activation,
      - Makefile full-suite targets (`bench-full*`, `bench-full-saturation*`) now forward `FULL_LASM_INCLUDE_MODE_COMPARE=true` via `--include-lasm-mode-compare`.
      - documented in `docs/book/1253-m39-lasm-full-suite-optional-mode-compare-lane.md`.
+   - [x] Added relay accept-loop saturation short-circuit for fallback dispatch scans:
+     - in multi-sender proxy mode, when one fallback scan confirms all relay sender shards are saturated for the current accept batch, subsequent `TrySendError::Full` dispatches in that same batch skip redundant full fallback scans and immediately return deterministic saturation handling,
+     - successful dispatches reset the batch-saturation hint so recovery back to normal fallback behavior stays immediate once capacity frees up.
+     - documented in `docs/book/1254-m39-lasm-cluster-accept-fallback-saturation-short-circuit.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
