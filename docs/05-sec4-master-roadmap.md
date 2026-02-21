@@ -1371,6 +1371,10 @@ Post-alpha track acceptance anchors:
      - fallback-multi `scan_live_target == 2` branch now checks the wrapped second-start slot directly before resolver lookup, and dispatches via the shared single-live helper,
      - avoids redundant second-attempt resolver work on adjacent-live paths while preserving deterministic fallback semantics.
      - documented in `docs/book/1302-m39-lasm-fallback-dual-second-live-fastpath.md`.
+   - [x] Extracted shared relay send-attempt helper in fallback multi hot path:
+     - added `attempt_lasm_cluster_relay_send(...)` and reused it in all-live fallback scan, dual-branch first attempt, and degraded general scan attempt path,
+     - keeps disconnect/full handling centralized while preserving disconnect-driven dynamic target updates in degraded scans.
+     - documented in `docs/book/1303-m39-lasm-fallback-shared-send-attempt-helper.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
