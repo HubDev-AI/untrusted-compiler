@@ -9586,7 +9586,7 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
             let mut selection_lookup: Vec<usize> = Vec::new();
             let mut selection_has_healthy_backends = false;
             let mut selection_lookup_is_identity = false;
-            let mut selection_two_way_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+            let mut selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
             let mut selection_lookup_dirty = true;
 
             loop {
@@ -9712,33 +9712,35 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                                 selection_lookup.clear();
                                 selection_has_healthy_backends = false;
                                 selection_lookup_is_identity = false;
-                                selection_two_way_single_healthy_index =
-                                    LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                                selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                             } else if unhealthy_port_count == 0 {
                                 selection_lookup.clear();
                                 selection_has_healthy_backends = true;
                                 selection_lookup_is_identity = true;
-                                selection_two_way_single_healthy_index =
-                                    LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                                selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                             } else if worker_port_count == 1 {
                                 selection_lookup.clear();
                                 selection_has_healthy_backends = false;
                                 selection_lookup_is_identity = true;
-                                selection_two_way_single_healthy_index =
-                                    LASM_CLUSTER_SELECTION_LOOKUP_NONE;
-                            } else if worker_port_count == 2 && unhealthy_port_count == 1 {
+                                selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                            } else if unhealthy_port_count + 1 == worker_port_count {
                                 selection_lookup.clear();
-                                selection_has_healthy_backends = true;
-                                selection_lookup_is_identity = false;
-                                selection_two_way_single_healthy_index =
-                                    if unhealthy_ports_until_by_index[0].is_none() {
-                                        0
-                                    } else {
-                                        1
-                                    };
+                                if let Some(single_healthy_index) = unhealthy_ports_until_by_index
+                                    .iter()
+                                    .take(worker_port_count)
+                                    .position(|entry| entry.is_none())
+                                {
+                                    selection_has_healthy_backends = true;
+                                    selection_lookup_is_identity = false;
+                                    selection_single_healthy_index = single_healthy_index;
+                                } else {
+                                    selection_has_healthy_backends = false;
+                                    selection_lookup_is_identity = false;
+                                    selection_single_healthy_index =
+                                        LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                                }
                             } else {
-                                selection_two_way_single_healthy_index =
-                                    LASM_CLUSTER_SELECTION_LOOKUP_NONE;
+                                selection_single_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
                                 (selection_has_healthy_backends, selection_lookup_is_identity) =
                                     rebuild_lasm_cluster_backend_selection_lookup(
                                         worker_port_count,
@@ -9777,11 +9779,10 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             lasm_cluster_next_index_wrapped(start_index, worker_port_count);
                         if selection_lookup_is_identity {
                             start_index
-                        } else if worker_port_count == 2
-                            && selection_two_way_single_healthy_index
-                                != LASM_CLUSTER_SELECTION_LOOKUP_NONE
+                        } else if selection_single_healthy_index
+                            != LASM_CLUSTER_SELECTION_LOOKUP_NONE
                         {
-                            selection_two_way_single_healthy_index
+                            selection_single_healthy_index
                         } else {
                             debug_assert_eq!(selection_lookup.len(), worker_port_count);
                             selection_lookup[start_index]
