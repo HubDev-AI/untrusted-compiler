@@ -85,16 +85,17 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
   echo "- Threads: $(jq -r '.run.threads // "unknown"' "${matrix_path}")"
   echo "- Connections: $(jq -r '.run.connections // "unknown"' "${matrix_path}")"
   echo "- Target requests: $(jq -r '.run.targetRequests // "unknown"' "${matrix_path}")"
+  echo "- Relay pump batch max: $(jq -r '.run.clusterRelayPumpBatchMax // "unknown"' "${matrix_path}")"
   echo
 
   echo "## Ranked Runs"
   echo
-  echo "| Rank | Boost Step | Pass | Requests/sec | p99 | Requests | Peak RSS (KB) | Relay Workers (resolved) | Accept Workers (resolved) | Accept Batch (resolved) |"
-  echo "|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|"
+  echo "| Rank | Boost Step | Pass | Requests/sec | p99 | Requests | Peak RSS (KB) | Relay Workers (resolved) | Accept Workers (resolved) | Accept Batch (resolved) | Pump Batch (resolved) |"
+  echo "|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|"
   jq -r '
     .rankedRuns
     | to_entries[]
-    | "| \(.key + 1) | \(.value.saturationBoostStep) | \(.value.pass) | \(.value.requestsPerSec) | \((.value.p99 // "n/a")) | \(.value.requests) | \(.value.peakRssKb) | \((.value.clusterRelayWorkersResolved // "n/a")) | \((.value.clusterAcceptWorkersResolved // "n/a")) | \((.value.clusterRelayAcceptBatchMaxResolved // "n/a")) |"
+    | "| \(.key + 1) | \(.value.saturationBoostStep) | \(.value.pass) | \(.value.requestsPerSec) | \((.value.p99 // "n/a")) | \(.value.requests) | \(.value.peakRssKb) | \((.value.clusterRelayWorkersResolved // "n/a")) | \((.value.clusterAcceptWorkersResolved // "n/a")) | \((.value.clusterRelayAcceptBatchMaxResolved // "n/a")) | \((.value.clusterRelayPumpBatchMaxResolved // "n/a")) |"
   ' "${analysis_path}"
   echo
 
@@ -103,7 +104,7 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
   jq -r --arg step "${recommended_step}" '
     .rankedRuns[]
     | select((.saturationBoostStep | tostring) == $step)
-    | "- selected row: pass=\(.pass), requestsPerSec=\(.requestsPerSec), p99=\(.p99 // "unknown"), requests=\(.requests), peakRssKb=\(.peakRssKb), resolvedRelayWorkers=\(.clusterRelayWorkersResolved // "n/a"), resolvedAcceptWorkers=\(.clusterAcceptWorkersResolved // "n/a"), resolvedAcceptBatch=\(.clusterRelayAcceptBatchMaxResolved // "n/a")"
+    | "- selected row: pass=\(.pass), requestsPerSec=\(.requestsPerSec), p99=\(.p99 // "unknown"), requests=\(.requests), peakRssKb=\(.peakRssKb), resolvedRelayWorkers=\(.clusterRelayWorkersResolved // "n/a"), resolvedAcceptWorkers=\(.clusterAcceptWorkersResolved // "n/a"), resolvedAcceptBatch=\(.clusterRelayAcceptBatchMaxResolved // "n/a"), resolvedPumpBatch=\(.clusterRelayPumpBatchMaxResolved // "n/a")"
   ' "${analysis_path}"
   echo
 
@@ -120,6 +121,7 @@ selection_mode="$(jq -r '.summary.selectionMode // "unknown"' "${analysis_path}"
     echo "- Relay workers (resolved): $(jq -r '.run.clusterRelayWorkersResolved // "unknown"' "${verify_path}")"
     echo "- Accept workers (resolved): $(jq -r '.run.clusterAcceptWorkersResolved // "unknown"' "${verify_path}")"
     echo "- Accept batch max (resolved): $(jq -r '.run.clusterRelayAcceptBatchMaxResolved // "unknown"' "${verify_path}")"
+    echo "- Relay pump batch max (resolved): $(jq -r '.run.clusterRelayPumpBatchMaxResolved // "unknown"' "${verify_path}")"
     echo "- Relay queue capacity (resolved): $(jq -r '.run.clusterRelayQueueCapacityResolved // "unknown"' "${verify_path}")"
     echo "- Relay queue shard capacity (resolved): $(jq -r '.run.clusterRelayQueueShardCapacityResolved // "unknown"' "${verify_path}")"
     echo

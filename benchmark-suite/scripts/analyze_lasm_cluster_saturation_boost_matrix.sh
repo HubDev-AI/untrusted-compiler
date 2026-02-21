@@ -59,6 +59,7 @@ jq -n \
       clusterRelayWorkersResolved: (.clusterRelayWorkersResolved // null),
       clusterAcceptWorkersResolved: (.clusterAcceptWorkersResolved // null),
       clusterRelayAcceptBatchMaxResolved: (.clusterRelayAcceptBatchMaxResolved // null),
+      clusterRelayPumpBatchMaxResolved: (.clusterRelayPumpBatchMaxResolved // null),
       clusterRelayQueueCapacityResolved: (.clusterRelayQueueCapacityResolved // null),
       clusterRelayQueueShardCapacityResolved: (.clusterRelayQueueShardCapacityResolved // null),
       summaryFile: .summaryFile
