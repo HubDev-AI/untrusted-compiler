@@ -54,7 +54,10 @@ fn lasm_dynamic_sqlite_runtime_connection_mut(
             .db_records_sqlite_store_path
             .as_ref()
             .ok_or_else(|| "sqlite records store path unavailable".to_string())?;
-        let connection = connect_lasm_dynamic_db_records_sqlite(path.as_path())?;
+        let connection = connect_lasm_dynamic_db_records_sqlite(
+            path.as_path(),
+            state.db_sqlite_busy_timeout_ms.max(1),
+        )?;
         state.db_records_sqlite_connection = Some(connection);
     }
     state

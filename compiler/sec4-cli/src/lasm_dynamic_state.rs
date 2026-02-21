@@ -1,7 +1,9 @@
 use crate::lasm_db_adapter_state::{
     connect_lasm_dynamic_db_records_postgres, connect_lasm_dynamic_db_records_sqlite,
     ensure_lasm_dynamic_db_records_postgres_schema, load_lasm_dynamic_db_records_from_postgres,
-    load_lasm_dynamic_db_records_from_sqlite,
+    load_lasm_dynamic_db_records_from_sqlite, LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
+    LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT, LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT,
+    LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
 };
 use crate::lasm_db_config::{
     resolve_lasm_dynamic_db_postgres_dsn, resolve_lasm_dynamic_db_records_adapter,
@@ -10,6 +12,7 @@ use crate::lasm_db_config::{
 use crate::lasm_db_records_log::load_lasm_dynamic_db_records_from_disk;
 use postgres::Client as PostgresClient;
 use std::collections::{BTreeMap, HashMap};
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,6 +49,10 @@ pub(crate) struct LasmDynamicResponseState {
     pub(crate) db_records_postgres_client: Option<PostgresClient>,
     pub(crate) db_tx_handles: HashMap<i64, i64>,
     pub(crate) db_tx_max_handles: usize,
+    pub(crate) db_postgres_statement_timeout_ms: u64,
+    pub(crate) db_postgres_lock_timeout_ms: u64,
+    pub(crate) db_postgres_connect_timeout_ms: u64,
+    pub(crate) db_sqlite_busy_timeout_ms: u64,
     pub(crate) next_db_tx_handle: i64,
     pub(crate) next_db_record_id: u64,
 }
@@ -58,6 +65,22 @@ pub(crate) fn build_lasm_dynamic_response_state(
     explicit_db_postgres_dsn: Option<&str>,
     explicit_db_tx_max_handles: Option<usize>,
 ) -> Result<LasmDynamicResponseState, String> {
+    let db_postgres_statement_timeout_ms = resolve_lasm_env_positive_u64(
+        "SEC4_RT_LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS",
+        LASM_DB_POSTGRES_STATEMENT_TIMEOUT_MS_DEFAULT,
+    );
+    let db_postgres_lock_timeout_ms = resolve_lasm_env_positive_u64(
+        "SEC4_RT_LASM_DB_POSTGRES_LOCK_TIMEOUT_MS",
+        LASM_DB_POSTGRES_LOCK_TIMEOUT_MS_DEFAULT,
+    );
+    let db_postgres_connect_timeout_ms = resolve_lasm_env_positive_u64(
+        "SEC4_RT_LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS",
+        LASM_DB_POSTGRES_CONNECT_TIMEOUT_MS_DEFAULT,
+    );
+    let db_sqlite_busy_timeout_ms = resolve_lasm_env_positive_u64(
+        "SEC4_RT_LASM_SQLITE_BUSY_TIMEOUT_MS",
+        LASM_DB_SQLITE_BUSY_TIMEOUT_MS_DEFAULT,
+    );
     let base = resolve_lasm_dynamic_store_base(explicit_db_base);
     let users_store_path = base.as_ref().map(|base| base.join("users.json"));
     let db_records_adapter = resolve_lasm_dynamic_db_records_adapter(explicit_db_records_adapter);
@@ -80,7 +103,8 @@ pub(crate) fn build_lasm_dynamic_response_state(
             .as_ref()
             .map(|path| {
                 let records = load_lasm_dynamic_db_records_from_sqlite(path.as_path());
-                match connect_lasm_dynamic_db_records_sqlite(path.as_path()) {
+                match connect_lasm_dynamic_db_records_sqlite(path.as_path(), db_sqlite_busy_timeout_ms)
+                {
                     Ok(connection) => {
                         db_records_sqlite_connection = Some(connection);
                     }
@@ -102,7 +126,12 @@ pub(crate) fn build_lasm_dynamic_response_state(
                         .to_string()
                 })?
                 .as_str();
-            let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+            let mut client = connect_lasm_dynamic_db_records_postgres(
+                dsn,
+                db_postgres_statement_timeout_ms,
+                db_postgres_lock_timeout_ms,
+                db_postgres_connect_timeout_ms,
+            )?;
             ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
             let records = load_lasm_dynamic_db_records_from_postgres(&mut client)?;
             db_records_postgres_client = Some(client);
@@ -130,9 +159,21 @@ pub(crate) fn build_lasm_dynamic_response_state(
         db_records_postgres_client,
         db_tx_handles,
         db_tx_max_handles,
+        db_postgres_statement_timeout_ms,
+        db_postgres_lock_timeout_ms,
+        db_postgres_connect_timeout_ms,
+        db_sqlite_busy_timeout_ms,
         next_db_tx_handle,
         next_db_record_id,
     })
+}
+
+fn resolve_lasm_env_positive_u64(name: &str, default_value: u64) -> u64 {
+    env::var(name)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_value)
 }
 
 fn load_lasm_dynamic_users_from_disk(path: &Path) -> HashMap<String, serde_json::Value> {

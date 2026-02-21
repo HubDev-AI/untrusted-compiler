@@ -128,7 +128,12 @@ pub(crate) fn reconnect_lasm_dynamic_postgres_client(
     let dsn = state.db_records_postgres_dsn.as_deref().ok_or_else(|| {
         "db adapter postgres requires SEC4_RT_LASM_DB_POSTGRES_DSN to be set".to_string()
     })?;
-    let mut client = connect_lasm_dynamic_db_records_postgres(dsn)?;
+    let mut client = connect_lasm_dynamic_db_records_postgres(
+        dsn,
+        state.db_postgres_statement_timeout_ms.max(1),
+        state.db_postgres_lock_timeout_ms.max(1),
+        state.db_postgres_connect_timeout_ms.max(1),
+    )?;
     ensure_lasm_dynamic_db_records_postgres_schema(&mut client)?;
     state.db_records_postgres_client = Some(client);
     Ok(())
