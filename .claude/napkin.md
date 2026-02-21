@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|-----------------|--------------------|
+| 2026-02-21 | self | I ran two focused `cargo test` commands in parallel again while validating a LASM slice, causing avoidable build/package lock contention. | Keep Cargo runs strictly sequential; parallelize only read/search/documentation commands. |
 | 2026-02-21 | self | I implemented the dual-live relay accept-loop optimization and committed straight on local `dev` again before branching. | Treat each merge completion as mandatory branch creation: run `git branch --show-current` and immediately `git checkout -b codex/<next-slice>` before opening any file or patch tool. |
 | 2026-02-21 | self | After merging PR #484 I started the next DB-header extraction directly on local `dev` and committed before branching. | After every merge, run an immediate branch gate command pair before any edits: `git branch --show-current` then `git checkout -b codex/<next-slice>` when on `dev`. |
 | 2026-02-21 | self | During dynamic-state module extraction I forgot to branch after merge and committed directly on local `dev` again before opening a PR. | Enforce a pre-edit hard gate right after every merge: run `git branch --show-current`; if `dev`, immediately `git checkout -b codex/<slice>` before any read/edit/commit commands. |
