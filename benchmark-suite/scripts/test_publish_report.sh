@@ -129,6 +129,14 @@ if ! grep -q 'Relay short-circuit total proxy: 18' "$out"; then
   echo "missing mode comparison short-circuit proxy summary" >&2
   exit 1
 fi
+if ! grep -q 'Relay live sender count proxy: 4' "$out"; then
+  echo "missing mode comparison live sender proxy summary" >&2
+  exit 1
+fi
+if ! grep -q 'Relay live sender count delta (fixed-proxy): n/a' "$out"; then
+  echo "missing mode comparison live sender delta summary" >&2
+  exit 1
+fi
 if ! grep -q 'Relay short-circuit total delta (fixed-proxy): n/a' "$out"; then
   echo "missing mode comparison short-circuit delta summary" >&2
   exit 1

@@ -13,7 +13,8 @@
     "pass": true,
     "run": {
       "clusterRelayDispatchSaturationShortCircuitTotal": 18,
-      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1
+      "clusterRelayDispatchSaturationShortCircuitPerSec": 3.1,
+      "clusterRelayLiveSenderCountResolved": 4
     },
     "observed": {
       "requestsPerSec": 76000.0,
@@ -25,7 +26,8 @@
     "pass": true,
     "run": {
       "clusterRelayDispatchSaturationShortCircuitTotal": null,
-      "clusterRelayDispatchSaturationShortCircuitPerSec": null
+      "clusterRelayDispatchSaturationShortCircuitPerSec": null,
+      "clusterRelayLiveSenderCountResolved": null
     },
     "observed": {
       "requestsPerSec": 121000.0,
@@ -44,6 +46,9 @@
     "relayDispatchShortCircuitTotalFixed": null,
     "relayDispatchShortCircuitPerSecProxy": 3.1,
     "relayDispatchShortCircuitPerSecFixed": null,
+    "relayLiveSenderCountProxy": 4,
+    "relayLiveSenderCountFixed": null,
+    "relayLiveSenderCountDelta": null,
     "relayDispatchShortCircuitTotalDelta": null
   }
 }
