@@ -1099,6 +1099,10 @@ Post-alpha track acceptance anchors:
      - `rebuild_lasm_cluster_backend_selection_lookup` now short-circuits when `unhealthy_port_count >= worker_port_count`,
      - avoids unnecessary unhealthy-index scan work when no healthy backend exists.
      - documented in `docs/book/1236-m39-lasm-cluster-selection-lookup-all-unhealthy-fast-fail.md`.
+   - [x] Removed per-iteration optional-index reads from selection lookup rebuild:
+     - lookup rebuild now reads unhealthy markers with direct indexed access (`unhealthy_ports_until_by_index[index]`) and a debug precondition on slice length,
+     - removes repeated bounds/option combinator overhead in selection lookup scan loops.
+     - documented in `docs/book/1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

@@ -1206,5 +1206,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1234-m39-lasm-cluster-healthy-state-selection-lookup-bypass.md`
 - `1235-m39-lasm-cluster-flush-guard-dedup.md`
 - `1236-m39-lasm-cluster-selection-lookup-all-unhealthy-fast-fail.md`
+- `1237-m39-lasm-cluster-selection-lookup-direct-index-read.md`
 
 As milestones progress, chapters will be added and linked from this index.

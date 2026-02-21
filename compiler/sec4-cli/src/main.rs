@@ -8974,6 +8974,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     unhealthy_port_count: usize,
     lookup: &mut Vec<usize>,
 ) -> (bool, bool) {
+    debug_assert!(unhealthy_ports_until_by_index.len() >= worker_port_count);
     lookup.clear();
     if worker_port_count == 0 {
         return (false, false);
@@ -8989,11 +8990,7 @@ fn rebuild_lasm_cluster_backend_selection_lookup(
     let mut first_healthy_index: Option<usize> = None;
     let mut next_healthy_index = LASM_CLUSTER_SELECTION_LOOKUP_NONE;
     for index in (0..worker_port_count).rev() {
-        if unhealthy_ports_until_by_index
-            .get(index)
-            .and_then(|value| *value)
-            .is_none()
-        {
+        if unhealthy_ports_until_by_index[index].is_none() {
             next_healthy_index = index;
             first_healthy_index = Some(index);
         }
