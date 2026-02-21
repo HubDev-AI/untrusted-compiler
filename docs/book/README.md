@@ -1210,5 +1210,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1238-m39-lasm-cluster-status-snapshot-pointer-aware-equality.md`
 - `1239-m39-lasm-cluster-auto-relay-worker-sizing-fix.md`
 - `1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`
+- `1241-m39-lasm-cluster-capacity-probe-accept-worker-batch-overrides.md`
 
 As milestones progress, chapters will be added and linked from this index.

@@ -1117,6 +1117,10 @@ Post-alpha track acceptance anchors:
      - keeps existing host-parallelism and `1..16` clamps unchanged while biasing lower default relay thread counts to reduce hot-path contention.
      - short capacity probe (`20s`, `8t/256c`, `/health`) improved from `~75.5k req/s` (`p99 6.41ms`) to `~77.8k req/s` (`p99 5.35ms`) under default auto relay settings with the same config envelope.
      - documented in `docs/book/1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`.
+   - [x] Extended LASM cluster capacity probe with accept-path override controls:
+     - `run_lasm_cluster_capacity_probe.sh` now supports explicit `--cluster-accept-workers` and `--cluster-relay-accept-batch-max` flags (plus env counterparts),
+     - probe dry-run output + summary JSON now include both fields for deterministic tuning artifact capture.
+     - documented in `docs/book/1241-m39-lasm-cluster-capacity-probe-accept-worker-batch-overrides.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,

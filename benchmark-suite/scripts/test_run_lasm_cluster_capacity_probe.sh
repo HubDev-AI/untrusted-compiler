@@ -24,6 +24,8 @@ out="$("${root_dir}/scripts/run_lasm_cluster_capacity_probe.sh" \
   --autoscale-saturation-boost-step 6 \
   --cluster-relay-workers 9 \
   --cluster-relay-queue 999 \
+  --cluster-accept-workers 4 \
+  --cluster-relay-accept-batch-max 321 \
   --out results/summaries/custom-lasm-capacity.json \
   2>&1)"
 
@@ -65,6 +67,14 @@ if ! grep -q 'clusterRelayWorkers=9' <<<"$out"; then
 fi
 if ! grep -q 'clusterRelayQueue=999' <<<"$out"; then
   echo "lasm capacity probe dry-run missing relay queue output" >&2
+  exit 1
+fi
+if ! grep -q 'clusterAcceptWorkers=4' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing accept workers output" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayAcceptBatchMax=321' <<<"$out"; then
+  echo "lasm capacity probe dry-run missing relay accept batch output" >&2
   exit 1
 fi
 if ! grep -q "out=${root_dir}/results/summaries/custom-lasm-capacity.json" <<<"$out"; then
