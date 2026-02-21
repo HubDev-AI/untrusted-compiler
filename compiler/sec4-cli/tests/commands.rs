@@ -16874,7 +16874,49 @@ fn run_command_rejects_mixed_db_timeout_overrides_without_explicit_adapter() {
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
     assert!(
         stderr.contains(
-            "run failed: db timeout overrides target different adapters; set --db-adapter explicitly"
+            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
+        ),
+        "stderr should include deterministic mixed-timeout override guidance:\n{stderr}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("temp project cleanup should succeed");
+}
+
+#[test]
+fn run_command_rejects_mixed_db_timeout_overrides_with_explicit_adapter() {
+    let project_dir = temp_dir("sec4-run-command-mixed-db-timeout-overrides-explicit");
+    let project_path = project_dir
+        .to_str()
+        .expect("temp project path should be valid utf-8")
+        .to_string();
+
+    let output = run_cli(&[
+        "run",
+        "--path",
+        &project_path,
+        "--backend",
+        "lasm",
+        "--db-adapter",
+        "postgres",
+        "--db-postgres-statement-timeout-ms",
+        "1500",
+        "--db-sqlite-busy-timeout-ms",
+        "900",
+    ]);
+    assert!(
+        !output.status.success(),
+        "run command should fail when mixed adapter timeout overrides are combined even with explicit adapter"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "run command should exit with deterministic invalid-flag status"
+    );
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf-8");
+    assert!(
+        stderr.contains(
+            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
         ),
         "stderr should include deterministic mixed-timeout override guidance:\n{stderr}"
     );

@@ -7027,13 +7027,9 @@ fn cmd_run(
         || db_postgres_lock_timeout_ms.is_some()
         || db_postgres_connect_timeout_ms.is_some();
     let sqlite_runtime_overrides = db_sqlite_busy_timeout_ms.is_some();
-    if backend == RunBackend::Lasm
-        && postgres_runtime_overrides
-        && sqlite_runtime_overrides
-        && db_adapter.is_none()
-    {
+    if backend == RunBackend::Lasm && postgres_runtime_overrides && sqlite_runtime_overrides {
         eprintln!(
-            "run failed: db timeout overrides target different adapters; set --db-adapter explicitly"
+            "run failed: postgres and sqlite timeout overrides cannot be combined in the same run"
         );
         return Err(2);
     }
