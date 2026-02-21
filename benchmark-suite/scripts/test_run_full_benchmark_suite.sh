@@ -43,7 +43,7 @@ if ! grep -q 'publish_report.sh .*compare-matrix.json .*benchmark-report.md .*an
   exit 1
 fi
 
-tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-skip-verify)"
+tuned_sat="$($root_dir/scripts/run_full_benchmark_suite.sh --dry-run --impls sec4-lasm --endpoints ping --include-lasm-saturation --saturation-boost-steps 3,5 --saturation-project-path examples/hello --saturation-duration 55s --saturation-threads 3 --saturation-connections 99 --saturation-target-requests 12345 --saturation-cluster-relay-workers 11 --saturation-cluster-relay-queue 222 --saturation-cluster-accept-workers 4 --saturation-cluster-relay-accept-batch-max 333 --saturation-skip-verify)"
 if ! grep -q 'projectPath=examples/hello' <<<"$tuned_sat"; then
   echo "missing delegated saturation project-path override" >&2
   exit 1
@@ -70,6 +70,14 @@ if ! grep -q 'clusterRelayWorkers=11' <<<"$tuned_sat"; then
 fi
 if ! grep -q 'clusterRelayQueue=222' <<<"$tuned_sat"; then
   echo "missing delegated saturation relay-queue override" >&2
+  exit 1
+fi
+if ! grep -q 'clusterAcceptWorkers=4' <<<"$tuned_sat"; then
+  echo "missing delegated saturation accept-workers override" >&2
+  exit 1
+fi
+if ! grep -q 'clusterRelayAcceptBatchMax=333' <<<"$tuned_sat"; then
+  echo "missing delegated saturation relay-accept-batch override" >&2
   exit 1
 fi
 if ! grep -q 'autoscaleSaturationBoostStep=3' <<<"$tuned_sat"; then

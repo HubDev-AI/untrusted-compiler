@@ -29,6 +29,8 @@ Options:
   --autoscale-scale-down-step <n>                  LASM max scale-down workers per autoscale check (default: 1)
   --cluster-relay-workers <n>                      Optional relay worker override
   --cluster-relay-queue <n>                        Optional relay queue override
+  --cluster-accept-workers <n>                     Optional relay accept-worker override
+  --cluster-relay-accept-batch-max <n>             Optional relay accept batch max override
   --skip-verify                                    Skip recommended-step follow-up probe
   --matrix-out <path>                              Matrix summary output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json)
   --analysis-out <path>                            Analysis output path (default: results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json)
@@ -58,6 +60,8 @@ autoscale_scale_up_step="${LASM_CAPACITY_AUTOSCALE_SCALE_UP_STEP:-2}"
 autoscale_scale_down_step="${LASM_CAPACITY_AUTOSCALE_SCALE_DOWN_STEP:-1}"
 cluster_relay_workers="${LASM_CAPACITY_CLUSTER_RELAY_WORKERS:-}"
 cluster_relay_queue="${LASM_CAPACITY_CLUSTER_RELAY_QUEUE:-}"
+cluster_accept_workers="${LASM_CAPACITY_CLUSTER_ACCEPT_WORKERS:-}"
+cluster_relay_accept_batch_max="${LASM_CAPACITY_CLUSTER_RELAY_ACCEPT_BATCH_MAX:-}"
 boost_steps_csv="${LASM_CAPACITY_SATURATION_BOOST_STEPS:-2,4,6}"
 matrix_out_rel="${LASM_CAPACITY_SATURATION_MATRIX_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-matrix.json}"
 analysis_out_rel="${LASM_CAPACITY_SATURATION_ANALYSIS_OUT:-results/summaries/sec4-lasm-cluster-saturation-boost-analysis.json}"
@@ -145,6 +149,14 @@ while [ "$#" -gt 0 ]; do
       cluster_relay_queue="${2:-}"
       shift 2
       ;;
+    --cluster-accept-workers)
+      cluster_accept_workers="${2:-}"
+      shift 2
+      ;;
+    --cluster-relay-accept-batch-max)
+      cluster_relay_accept_batch_max="${2:-}"
+      shift 2
+      ;;
     --skip-verify)
       verify_recommended="false"
       shift
@@ -226,6 +238,10 @@ sec4 LASM saturation boost bundle plan:
   connections=${connections}
   targetRequests=${target_requests}
   boostSteps=${boost_steps_csv}
+  clusterRelayWorkers=${cluster_relay_workers:-auto}
+  clusterRelayQueue=${cluster_relay_queue:-auto}
+  clusterAcceptWorkers=${cluster_accept_workers:-auto}
+  clusterRelayAcceptBatchMax=${cluster_relay_accept_batch_max:-auto}
   verifyRecommended=${verify_recommended}
   matrixOut=${matrix_out_path}
   analysisOut=${analysis_out_path}
@@ -266,6 +282,12 @@ if [ -n "${cluster_relay_workers}" ]; then
 fi
 if [ -n "${cluster_relay_queue}" ]; then
   matrix_cmd+=(--cluster-relay-queue "${cluster_relay_queue}")
+fi
+if [ -n "${cluster_accept_workers}" ]; then
+  matrix_cmd+=(--cluster-accept-workers "${cluster_accept_workers}")
+fi
+if [ -n "${cluster_relay_accept_batch_max}" ]; then
+  matrix_cmd+=(--cluster-relay-accept-batch-max "${cluster_relay_accept_batch_max}")
 fi
 if [ "${skip_build}" = "true" ]; then
   matrix_cmd+=(--skip-build)
