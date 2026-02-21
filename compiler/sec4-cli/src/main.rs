@@ -9759,6 +9759,8 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                         LASM_CLUSTER_SELECTION_LOOKUP_NONE
                     } else if worker_port_count == 1 {
                         0
+                    } else if selection_single_healthy_index != LASM_CLUSTER_SELECTION_LOOKUP_NONE {
+                        selection_single_healthy_index
                     } else {
                         if relay_selection_reservation_offset >= relay_selection_reservation_len
                             || relay_selection_reservation_worker_port_count != worker_port_count
@@ -9779,10 +9781,6 @@ fn cmd_run_lasm_cluster(config: LasmClusterConfig) -> Result<(), i32> {
                             lasm_cluster_next_index_wrapped(start_index, worker_port_count);
                         if selection_lookup_is_identity {
                             start_index
-                        } else if selection_single_healthy_index
-                            != LASM_CLUSTER_SELECTION_LOOKUP_NONE
-                        {
-                            selection_single_healthy_index
                         } else {
                             debug_assert_eq!(selection_lookup.len(), worker_port_count);
                             selection_lookup[start_index]
