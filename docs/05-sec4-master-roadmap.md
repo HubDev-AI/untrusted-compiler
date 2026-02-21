@@ -1235,6 +1235,10 @@ Post-alpha track acceptance anchors:
      - `dispatch_lasm_cluster_relay_stream_fallback_multi` now bypasses dead-shard checks while relay pool is known healthy and iterates direct fallback sends for `sender_count > 2`,
      - degraded dead-shard-aware scan path remains active once any disconnection is observed.
      - documented in `docs/book/1268-m39-lasm-fallback-all-live-scan-fast-path.md`.
+   - [x] Elided redundant live-hint refresh and relay-live telemetry atomics after fallback dispatch:
+     - accept-loop fallback handling now tracks live-shard count before fallback and refreshes single/dual-live hints plus `relay_live_sender_count` telemetry only when fallback actually changes live-shard count,
+     - removes repeated live-hint scans and `fetch_min` atomics on saturated-but-live fallback paths while preserving degraded/disconnect correctness.
+     - documented in `docs/book/1269-m39-lasm-accept-fallback-live-hint-refresh-elision.md`.
    - [ ] Continue performance tuning: current cluster load measurements are well below 1M req/s target, so proxy/runtime hot-path optimization remains open.
 4. [x] Progress DB adapters behind the same intrinsic surface:
    - keep file adapter (`records.log`) for alpha path,
