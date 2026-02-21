@@ -8906,6 +8906,9 @@ fn dispatch_lasm_cluster_relay_stream_fallback_multi(
                 client_stream = next_stream;
             }
         }
+        if *relay_live_sender_count == 0 {
+            return Err(LasmClusterRelayDispatchError::Unavailable(client_stream));
+        }
         if scanned_live >= scan_live_target_dynamic {
             break;
         }

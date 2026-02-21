@@ -1264,5 +1264,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1292-m39-lasm-fallback-early-break-on-target-shrink.md`
 - `1293-m39-lasm-fallback-scan-index-advance-helper.md`
 - `1294-m39-lasm-fallback-scan-helper-direct-lookup-path.md`
+- `1295-m39-lasm-fallback-immediate-no-live-exit.md`
 
 As milestones progress, chapters will be added and linked from this index.
