@@ -1204,5 +1204,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1232-m39-lasm-cluster-connect-warning-port-and-reservation-branch-simplification.md`
 - `1233-m39-lasm-cluster-trivial-worker-count-selection-lookup-bypass.md`
 - `1234-m39-lasm-cluster-healthy-state-selection-lookup-bypass.md`
+- `1235-m39-lasm-cluster-flush-guard-dedup.md`
 
 As milestones progress, chapters will be added and linked from this index.
