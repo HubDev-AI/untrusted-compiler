@@ -1212,5 +1212,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1240-m39-lasm-cluster-auto-relay-worker-floor-sqrt-tuning.md`
 - `1241-m39-lasm-cluster-capacity-probe-accept-worker-batch-overrides.md`
 - `1242-m39-lasm-saturation-suite-accept-path-override-forwarding.md`
+- `1243-m39-lasm-capacity-probe-cluster-status-resolved-fields.md`
 
 As milestones progress, chapters will be added and linked from this index.
