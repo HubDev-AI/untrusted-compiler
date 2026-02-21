@@ -1232,5 +1232,6 @@ This folder is the long-form, chapter-oriented documentation track for Untrusted
 - `1260-m39-lasm-fallback-live-shard-scan-budget.md`
 - `1261-m39-lasm-all-live-relay-fast-path.md`
 - `1262-m39-lasm-two-sender-fallback-fast-path.md`
+- `1263-m39-lasm-degraded-live-cursor-realignment.md`
 
 As milestones progress, chapters will be added and linked from this index.
