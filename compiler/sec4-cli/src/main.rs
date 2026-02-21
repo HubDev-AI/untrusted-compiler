@@ -9295,14 +9295,18 @@ fn run_lasm_cluster_accept_loop(
                         };
                         relay_dispatch_cursor = next_dispatch_index;
 
-                        match relay_senders[stream_dispatch_start].try_send(client_stream) {
-                            Ok(()) => {
-                                listener_enqueued_local += 1;
-                                listener_all_senders_saturated_in_batch = false;
-                            }
-                            Err(TrySendError::Full(stream))
-                                if listener_all_senders_saturated_in_batch =>
-                            {
+                        let live_count_before_primary_dispatch = relay_live_sender_count;
+                        let mut saw_live_sender = false;
+                        if let Err(stream) = attempt_lasm_cluster_relay_send(
+                            client_stream,
+                            relay_senders,
+                            relay_sender_live.as_mut_slice(),
+                            &mut relay_live_sender_count,
+                            &mut relay_all_senders_live,
+                            stream_dispatch_start,
+                            &mut saw_live_sender,
+                        ) {
+                            if listener_all_senders_saturated_in_batch && saw_live_sender {
                                 if let Err(message) = handle_lasm_cluster_accept_dispatch_error(
                                     LasmClusterRelayDispatchError::Saturated(stream),
                                     active_connections,
@@ -9319,34 +9323,26 @@ fn run_lasm_cluster_accept_loop(
                                     return Err(message);
                                 }
                                 listener_dispatch_short_circuit_total_local += 1;
+                                continue;
                             }
-                            Err(send_error) => {
-                                listener_dispatch_fallback_total_local += 1;
-                                let live_count_before_fallback = relay_live_sender_count;
-                                let (stream, saw_live_sender, primary_disconnected) =
-                                    match send_error {
-                                        TrySendError::Full(stream) => (stream, true, false),
-                                        TrySendError::Disconnected(stream) => {
-                                            relay_sender_live[stream_dispatch_start] =
-                                                LASM_CLUSTER_RELAY_SENDER_DEAD;
-                                            relay_live_sender_count =
-                                                relay_live_sender_count.saturating_sub(1);
-                                            relay_all_senders_live = false;
-                                            relay_single_live_sender_index = None;
-                                            relay_dual_live_sender_indices = None;
-                                            (stream, false, true)
-                                        }
-                                    };
-                                if primary_disconnected
-                                    && relay_has_next_live_sender_lookup
-                                    && relay_live_sender_count > 2
-                                {
-                                    refresh_lasm_cluster_next_live_sender_lookup(
-                                        relay_sender_live.as_slice(),
-                                        relay_next_live_sender_lookup.as_mut_slice(),
-                                    );
-                                }
-                                let live_count_after_primary_dispatch = relay_live_sender_count;
+                            listener_dispatch_fallback_total_local += 1;
+                            let live_count_before_fallback = relay_live_sender_count;
+                            let primary_disconnected =
+                                relay_live_sender_count != live_count_before_primary_dispatch;
+                            if primary_disconnected {
+                                relay_single_live_sender_index = None;
+                                relay_dual_live_sender_indices = None;
+                            }
+                            if primary_disconnected
+                                && relay_has_next_live_sender_lookup
+                                && relay_live_sender_count > 2
+                            {
+                                refresh_lasm_cluster_next_live_sender_lookup(
+                                    relay_sender_live.as_slice(),
+                                    relay_next_live_sender_lookup.as_mut_slice(),
+                                );
+                            }
+                            let live_count_after_primary_dispatch = relay_live_sender_count;
                                 let fallback_next_live_lookup = if relay_has_next_live_sender_lookup
                                     && relay_live_sender_count > 2
                                 {
@@ -9506,7 +9502,9 @@ fn run_lasm_cluster_accept_loop(
                                         }
                                     }
                                 }
-                            }
+                        } else {
+                            listener_enqueued_local += 1;
+                            listener_all_senders_saturated_in_batch = false;
                         }
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
